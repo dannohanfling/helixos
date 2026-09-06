@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { eveningCloseAction, morningCheckinAction } from "@/lib/actions/daily";
+import type { DailyLog } from "@/db/schema";
 import { completeCurriculumDayAction } from "@/lib/actions/pathway";
 import { setContentStatusAction } from "@/lib/actions/content";
 import { todayData } from "@/lib/queries/today";
@@ -349,8 +350,8 @@ function LockInForm({ openTasks, today, defaultIntention }: { openTasks: { id: s
   );
 }
 
-function CloseForm({ log }: { log: { dmsStarted: number; conversations: number; callsBooked: number; callsHeld: number; posts: number; offersMade: number; newLeads: number; cashCollected: number; start: string | null; stop: string | null; keep: string | null; win: string | null; gratitude: string | null } | null }) {
-  const n = (key: keyof NonNullable<typeof log>, label: string, hint: string) => (
+function CloseForm({ log }: { log: DailyLog | null }) {
+  const n = (key: keyof DailyLog, label: string, hint: string) => (
     <label key={key} className="block">
       <span className="label">{label}</span>
       <input className="field tabular" name={key} type="number" min={0} step={key === "cashCollected" ? 1 : 1} inputMode="numeric" defaultValue={log ? Number(log[key] ?? 0) : 0} />
@@ -386,6 +387,33 @@ function CloseForm({ log }: { log: { dmsStarted: number; conversations: number; 
       <Field label="Grateful for (optional)">
         <input className="field" name="gratitude" defaultValue={log?.gratitude ?? ""} />
       </Field>
+      <details className="rounded-lg border p-3" open={Boolean(log && (log.webinarRegs || log.webinarShows || log.applications))}>
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">🎤 Webinar funnel (optional)</summary>
+        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {n("webinarRegs", "Registrations", "")}
+          {n("webinarShows", "Show-ups", "")}
+          {n("replayViews", "Replay views", "")}
+          {n("applications", "Applications", "")}
+        </div>
+      </details>
+      <details className="rounded-lg border p-3" open={Boolean(log && (log.proofPosts || log.ctaPosts || log.beliefPosts))}>
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">✍️ Content mix (optional)</summary>
+        <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {n("proofPosts", "Proof posts", "")}
+          {n("ctaPosts", "CTA posts", "")}
+          {n("beliefPosts", "Belief posts", "")}
+          {n("storiesCreated", "Stories", "")}
+          {n("referralAsks", "Referral asks", "")}
+        </div>
+      </details>
+      <details className="rounded-lg border p-3" open={Boolean(log && (log.revContent || log.revWebinar || log.revDm))}>
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">💵 Revenue by source (optional)</summary>
+        <div className="mt-2 grid grid-cols-3 gap-3">
+          {n("revContent", "From content ($)", "")}
+          {n("revWebinar", "From webinar ($)", "")}
+          {n("revDm", "From DMs ($)", "")}
+        </div>
+      </details>
       <button className="btn btn-accent" type="submit">
         Close the day
       </button>

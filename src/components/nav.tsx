@@ -14,6 +14,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/tasks", label: "Tasks", icon: "✅" },
       { href: "/content", label: "Content", icon: "✍️", hint: "post + repurpose" },
       { href: "/conversations", label: "DMs", icon: "💬" },
+      { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
     ],
   },
   {
@@ -22,6 +23,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/webinars", label: "Webinars", icon: "🎤", hint: "wizard" },
       { href: "/offers", label: "Offers", icon: "🎁", hint: "wizard" },
       { href: "/pathway", label: "Pathway", icon: "🛣️" },
+      { href: "/courses", label: "Courses", icon: "📚" },
+      { href: "/doctrine", label: "Doctrine", icon: "🏛️", hint: "principles" },
+      { href: "/proof", label: "Proof Bank", icon: "🏆" },
     ],
   },
   {
@@ -32,6 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/numbers", label: "Numbers", icon: "📊" },
       { href: "/rewards", label: "Rewards", icon: "🏆" },
       { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
+      { href: "/integrations", label: "Integrations", icon: "🔌", coachOnly: true },
     ],
   },
 ];

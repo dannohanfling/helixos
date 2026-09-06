@@ -6,6 +6,7 @@ import { db, schema } from "@/db";
 import { CLIENT_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { addDays, nowIso } from "@/lib/dates";
+import { background, pushContact } from "@/lib/integrations";
 import { ctx, num, opt, refresh, str } from "./common";
 
 async function own(id: string, userId: string) {
@@ -40,6 +41,7 @@ export async function createClientRecordAction(formData: FormData): Promise<void
     avatarEmoji: str(formData, "avatarEmoji") || "🙂",
   });
   if (contactId) await db.update(schema.contacts).set({ stage: "client" }).where(and(eq(schema.contacts.id, contactId), eq(schema.contacts.userId, userId)));
+  background(pushContact({ workspaceId, userId }, { name, email: opt(formData, "email"), phone: opt(formData, "phone"), stage: "client", source: "HelixOS client" }));
   refresh();
   redirect(`/clients/${id}`);
 }

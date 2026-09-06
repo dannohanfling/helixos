@@ -4,30 +4,23 @@ import type { Viewer } from "@/lib/auth";
 import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
 import { tierProgress } from "@/lib/engine/tiers";
+import { simplePath } from "@/lib/engine/pathway";
 import { logFor, streakFor } from "./daily";
 import { STEPS, nextStep, webinarProgress } from "@/lib/engine/webinar";
 import { totalPoints } from "./points";
 
+/** The one pathway task to show today: revisions first, then the next must-do on the simple path. */
 export async function nextPathwayTask(userId: string) {
-  const rows = await db
-    .select({
-      key: schema.libraryTasks.key,
-      name: schema.libraryTasks.name,
-      points: schema.libraryTasks.points,
-      stageKey: schema.libraryTasks.stageKey,
-      status: schema.pathwayProgress.status,
-    })
-    .from(schema.pathwayProgress)
-    .innerJoin(schema.libraryTasks, eq(schema.libraryTasks.key, schema.pathwayProgress.libraryTaskKey))
-    .innerJoin(schema.pathwayStages, eq(schema.pathwayStages.key, schema.libraryTasks.stageKey))
-    .where(and(eq(schema.pathwayProgress.userId, userId), inArray(schema.pathwayProgress.status, ["todo", "revision"])))
-    .orderBy(
-      sql`case ${schema.libraryTasks.priority} when 'must' then 0 when 'should' then 1 when 'nice' then 2 else 3 end`,
-      asc(schema.pathwayStages.order),
-      asc(schema.libraryTasks.order),
-    )
-    .limit(1);
-  return rows[0] ?? null;
+  const [stages, library, progress] = await Promise.all([
+    db.query.pathwayStages.findMany({ orderBy: asc(schema.pathwayStages.order) }),
+    db.query.libraryTasks.findMany(),
+    db.query.pathwayProgress.findMany({ where: eq(schema.pathwayProgress.userId, userId) }),
+  ]);
+  const path = simplePath(stages, library, progress);
+  const t = path.now[0];
+  if (!t) return null;
+  const status = progress.find((p) => p.libraryTaskKey === t.key)?.status ?? "todo";
+  return { key: t.key, name: t.name, points: t.points, stageKey: t.stageKey, status };
 }
 
 export async function currentCurriculumDay(userId: string) {

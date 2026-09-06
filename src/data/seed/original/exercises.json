@@ -1,0 +1,541 @@
+[
+ {
+  "name": "Client Pathway Blueprint",
+  "program": "Accelerator",
+  "type": "Full",
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Accelerator",
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Evergreen CTA Plug-In – Add a clear CTA to every post or platform you show up on.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Your First Offer Blueprint",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Smart",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Upsell & Referral Prompt Template – Learn exactly when and how to invite repeat or referral clients.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Share to Attract",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Smart",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Brand Story Framework",
+  "program": "Accelerator",
+  "type": "Full",
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Accelerator",
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Funnel Flow Map – Design your freebie → nurture → CTA journey with intentional touchpoints.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "✅ KBB Match: Time Audit & Calendar Design – Design your week with CEO blocks and creative space.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Omnichannel Planning Sprint – Create 4 weeks of strategic content tied to your framework.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Content Mapping Sprint",
+  "program": "Accelerator",
+  "type": "Full",
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Accelerator",
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": "KBB page 14-16",
+  "summary": null
+ },
+ {
+  "name": "✅ KBB Match: Delegation Starter List – Identify what to remove from your plate so you can scale.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Speak Your Clients Language",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Smart",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Avatar Mapping",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Magnetic Messaging",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "The Evolve Omega Roadmap",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Here",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Offer Clarity Formula",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Magnetic Messaging",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": "By the end of this mini-course, you’ll have:\n A clear, pain-to-promise offer statement\n An aligned client avatar you’re excited to serve\n A magnetic event idea that positions you as the go-to expert",
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "✅ KBB Match: Offer Stack + Revenue Map – Plan your revenue goals by offer and pricing.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Visibility Engine Calendar – Build a 30-day plan using content pillars + platform flows.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Chatbot Follow-Up Sequence Activity",
+  "program": "Accelerator",
+  "type": "Full",
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Accelerator",
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Nail Your Aligned Niche & Avatar",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Smart",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "✅ KBB Match: Commitment Chart – Build content momentum using timed action sprints.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Core Values and Community Culture",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Here",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Welcome to Evolve Omega",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Here",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "SOP Snapshot Starter – Begin documenting your repeatable tasks to prep for hiring or outsourcing.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Get Your Evolve Omega Pass",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Here",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Your Next Steps",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Start Here",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Event Title + Promise",
+  "program": "Launch Pad",
+  "type": "Mini",
+  "course": "Magnetic Messaging",
+  "contentType": null,
+  "prospectType": [
+   "Info Collectors"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Plan Your Conversion Event",
+  "program": "Accelerator",
+  "type": "Full",
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Accelerator",
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "✅ KBB Match: Hook, Story, Close Framework – Write copy that converts using a proven structure.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "✅ KBB Match: Needle Movers Reflection – Identify what’s working and double down on repeatable success.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Visibility Amplifier Exercise",
+  "program": "Accelerator",
+  "type": "Full",
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Accelerator",
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Superpower Alignment Exercise",
+  "program": "Accelerator",
+  "type": "Full",
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Accelerator",
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "✅ KBB Match: Client Success Pathway Map – Define your client journey from start to finish.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Repurpose Like a Pro – Turn one post into 3–5 content assets across multiple channels.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Automation Message Builder – Write your 3-part chatbot follow-up to guide leads into action.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "Onboarding Experience Audit – Build an automated or manual system to welcome new clients with clarity.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "✅ KBB Match: 7 Levels Deep (Refresher) – Reconnect with your mission and why you lead.",
+  "program": "Academy",
+  "type": null,
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ },
+ {
+  "name": "The Signature Offer Clarity Builder",
+  "program": "Accelerator",
+  "type": "Full",
+  "course": null,
+  "contentType": null,
+  "prospectType": [
+   "Accelerator",
+   "Academy",
+   "Elite",
+   "Lux"
+  ],
+  "outcome": null,
+  "notes": null,
+  "summary": null
+ }
+]

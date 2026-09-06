@@ -1,0 +1,74 @@
+[
+ {
+  "name": "Create a CRM pipeline",
+  "passThreshold": 85,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Create a QA checklist and run it",
+  "passThreshold": 90,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Complete a simulated client handoff task",
+  "passThreshold": 95,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Submit a loom walkthrough of the finished system",
+  "passThreshold": 90,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Load reminder SMS",
+  "passThreshold": 85,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Diagnose and fix a broken workflow",
+  "passThreshold": 95,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Load a 5-email sequence",
+  "passThreshold": 85,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Map the full customer journey",
+  "passThreshold": 90,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Set up automations for registration and follow-up",
+  "passThreshold": 90,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Build a mock funnel",
+  "passThreshold": 85,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Build a mock chatbot",
+  "passThreshold": 90,
+  "evidenceType": null,
+  "module": null
+ },
+ {
+  "name": "Prepare a client-ready implementation tracker",
+  "passThreshold": 85,
+  "evidenceType": null,
+  "module": null
+ }
+]

@@ -16,6 +16,8 @@ import analogies from "@/data/seed/webinar/analogies.json";
 import objections from "@/data/seed/webinar/objections.json";
 import beliefsSeed from "@/data/seed/webinar/beliefs.json";
 import offerComponentsExample from "@/data/seed/webinar/offer_components_example.json";
+import { seedLibraryWave2 } from "./seed-library2";
+import { seedDemoWave2 } from "./seed-demo2";
 
 type LibraryRow = (typeof library)[number];
 
@@ -89,6 +91,7 @@ export async function seedLibrary(): Promise<void> {
     console.log(`Library assets: ${rows.length}`);
   }
   console.log(`Library: ${stages.length} stages, ${library.length} tasks, ${curriculum.length} curriculum days, ${dmLibrary.length} DM templates`);
+  await seedLibraryWave2();
 }
 
 const DEMO_SLUG = "evolve-omega-demo";
@@ -98,7 +101,7 @@ async function wipeDemo(): Promise<void> {
   if (!ws) return;
   const members = await db.query.memberships.findMany({ where: eq(schema.memberships.workspaceId, ws.id) });
   const userIds = members.map((m) => m.userId);
-  const byWs = [schema.tasks, schema.contentItems, schema.contacts, schema.dailyLogs, schema.pointsLedger, schema.pathwayProgress, schema.curriculumProgress, schema.goals, schema.rewardClaims, schema.offers, schema.webinars, schema.clientRecords, schema.memberships] as const;
+  const byWs = [schema.tasks, schema.contentItems, schema.contacts, schema.dailyLogs, schema.pointsLedger, schema.pathwayProgress, schema.curriculumProgress, schema.goals, schema.rewardClaims, schema.offers, schema.webinars, schema.clientRecords, schema.proofs, schema.groups, schema.targets, schema.lessonProgress, schema.certSubmissions, schema.integrations, schema.syncEvents, schema.memberships] as const;
   if (userIds.length) await db.delete(schema.libraryAssets).where(inArray(schema.libraryAssets.userId, userIds));
   for (const t of byWs) await db.delete(t).where(eq(t.workspaceId, ws.id));
   await db.delete(schema.dmTemplates).where(eq(schema.dmTemplates.workspaceId, ws.id));
@@ -142,6 +145,7 @@ export async function seedDemo(): Promise<void> {
   await seedClientActivity(wsId, clientId, today, { days: 24, missDays: [addDays(today, -9), addDays(today, -16)], intensity: 1 });
   await seedBusinessAssets(wsId, clientId, today);
   await seedClientActivity(wsId, client2Id, today, { days: 50, missDays: [today, addDays(today, -1), addDays(today, -2), addDays(today, -3), addDays(today, -4)], intensity: 0.6 });
+  await seedDemoWave2(wsId, clientId, client2Id, today);
   console.log("Demo workspace ready. Coach: coach@demo.helixos.app / demo1234 · Client: client@demo.helixos.app / demo1234 · Client invite code: ACADEMY1");
 }
 

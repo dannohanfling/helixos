@@ -46,6 +46,11 @@ export const memberships = sqliteTable(
     passWebhookUrl: text("pass_webhook_url"),
     passHashtag: text("pass_hashtag"),
     passCommunityUrl: text("pass_community_url"),
+    certEnabled: integer("cert_enabled", { mode: "boolean" }).notNull().default(false),
+    eoPassUrl: text("eo_pass_url"),
+    eoPassSerial: text("eo_pass_serial"),
+    eoPassInstalledAt: text("eo_pass_installed_at"),
+    eoPassLastPushAt: text("eo_pass_last_push_at"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("memberships_ws_user").on(t.workspaceId, t.userId)],
@@ -227,6 +232,18 @@ export const dailyLogs = sqliteTable(
     win: text("win"),
     gratitude: text("gratitude"),
     streakDay: integer("streak_day").notNull().default(0),
+    webinarRegs: integer("webinar_regs").notNull().default(0),
+    webinarShows: integer("webinar_shows").notNull().default(0),
+    replayViews: integer("replay_views").notNull().default(0),
+    applications: integer("applications").notNull().default(0),
+    revContent: real("rev_content").notNull().default(0),
+    revWebinar: real("rev_webinar").notNull().default(0),
+    revDm: real("rev_dm").notNull().default(0),
+    proofPosts: integer("proof_posts").notNull().default(0),
+    ctaPosts: integer("cta_posts").notNull().default(0),
+    beliefPosts: integer("belief_posts").notNull().default(0),
+    storiesCreated: integer("stories_created").notNull().default(0),
+    referralAsks: integer("referral_asks").notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("daily_logs_user_date").on(t.userId, t.date)],
@@ -526,7 +543,7 @@ export const readinessReviews = sqliteTable("readiness_reviews", {
 });
 
 /** Story / analogy / objection / belief bank. workspaceId null = ships with the template. */
-export const ASSET_TYPES = ["story", "analogy", "objection", "belief"] as const;
+export const ASSET_TYPES = ["story", "analogy", "objection", "belief", "framework"] as const;
 
 export const libraryAssets = sqliteTable(
   "library_assets",
@@ -543,6 +560,7 @@ export const libraryAssets = sqliteTable(
     reframe: text("reframe"),
     proof: text("proof"),
     isExample: integer("is_example", { mode: "boolean" }).notNull().default(false),
+    extra: text("extra", { mode: "json" }).$type<Record<string, string | null>>().notNull().default({}),
     createdAt: createdAt(),
   },
   (t) => [index("assets_type").on(t.type, t.workspaceId)],
@@ -572,6 +590,7 @@ export const contentVariants = sqliteTable(
       .references(() => contentItems.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull(),
     channel: text("channel", { enum: CHANNELS }).notNull(),
+    groupId: text("group_id").notNull().default(""),
     body: text("body").notNull(),
     subject: text("subject"),
     status: text("status", { enum: ["draft", "scheduled", "posted", "skipped"] }).notNull().default("draft"),
@@ -585,7 +604,7 @@ export const contentVariants = sqliteTable(
     generatedBy: text("generated_by").notNull().default("rules"),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("variants_item_channel").on(t.contentItemId, t.channel)],
+  (t) => [uniqueIndex("variants_item_channel_group").on(t.contentItemId, t.channel, t.groupId)],
 );
 
 /* ───────────────────────── The client's own clients ───────────────────────── */
@@ -675,3 +694,232 @@ export type ContentVariant = typeof contentVariants.$inferSelect;
 export type ClientRecord = typeof clientRecords.$inferSelect;
 export type ClientCheckin = typeof clientCheckins.$inferSelect;
 export type MemberPoint = typeof memberPoints.$inferSelect;
+
+/* ───────────────────────── Doctrine, proof, groups, targets ───────────────────────── */
+
+export const principles = sqliteTable("principles", {
+  code: text("code").primaryKey(),
+  order: integer("order").notNull().default(0),
+  symbol: text("symbol"),
+  greekName: text("greek_name"),
+  name: text("name").notNull(),
+  summary: text("summary"),
+  doctrine: text("doctrine"),
+  greekStory: text("greek_story"),
+  stoicStory: text("stoic_story"),
+  businessCase: text("business_case"),
+  publicFigureStory: text("public_figure_story"),
+  scienceAnchor: text("science_anchor"),
+  personalStory: text("personal_story"),
+  clientStory: text("client_story"),
+  reelScript: text("reel_script"),
+  trainingOutline: text("training_outline"),
+  salesPositioning: text("sales_positioning"),
+  layer: text("layer"),
+  phase: text("phase"),
+  pillar: text("pillar"),
+  hookAngle: text("hook_angle"),
+});
+
+export const PROOF_TYPES = ["result", "testimonial", "screenshot", "case_study", "stat", "story"] as const;
+
+export const proofs = sqliteTable(
+  "proofs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    type: text("type", { enum: PROOF_TYPES }).notNull().default("result"),
+    who: text("who"),
+    problemBefore: text("problem_before"),
+    shift: text("shift"),
+    resultAfter: text("result_after"),
+    beliefBroken: text("belief_broken", { enum: ["vehicle", "internal", "external", "none"] }).notNull().default("none"),
+    shortVersion: text("short_version"),
+    longVersion: text("long_version"),
+    hook: text("hook"),
+    punchline: text("punchline"),
+    link: text("link"),
+    clientRecordId: text("client_record_id"),
+    status: text("status", { enum: ["draft", "approved"] }).notNull().default("draft"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("proofs_user").on(t.userId, t.status)],
+);
+
+export const GROUP_KINDS = ["own", "member", "prospect"] as const;
+
+export const groups = sqliteTable(
+  "groups",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    url: text("url"),
+    kind: text("kind", { enum: GROUP_KINDS }).notNull().default("member"),
+    rank: integer("rank").notNull().default(0),
+    mission: text("mission"),
+    description: text("description"),
+    audience: text("audience"),
+    adminName: text("admin_name"),
+    adminValues: text("admin_values"),
+    rules: text("rules"),
+    postingNorms: text("posting_norms"),
+    whatWorks: text("what_works"),
+    memberCount: integer("member_count"),
+    postsPerDay: integer("posts_per_day"),
+    rating: integer("rating"),
+    lastPostedAt: text("last_posted_at"),
+    notes: text("notes"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("groups_user_kind").on(t.userId, t.kind, t.rank)],
+);
+
+export const targets = sqliteTable(
+  "targets",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    month: text("month").notNull(),
+    metric: text("metric").notNull(),
+    target: real("target").notNull().default(0),
+  },
+  (t) => [uniqueIndex("targets_user_month_metric").on(t.userId, t.month, t.metric)],
+);
+
+/* ───────────────────────── Courses & certification ───────────────────────── */
+
+export const courses = sqliteTable("courses", {
+  id: id(),
+  workspaceId: text("workspace_id"),
+  program: text("program").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  order: integer("order").notNull().default(0),
+  tier: text("tier"),
+});
+
+export const lessons = sqliteTable(
+  "lessons",
+  {
+    id: id(),
+    courseId: text("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    order: integer("order").notNull().default(0),
+    name: text("name").notNull(),
+    objective: text("objective"),
+    prompts: text("prompts"),
+    resources: text("resources"),
+    week: text("week"),
+    stageKey: text("stage_key"),
+    points: integer("points").notNull().default(15),
+  },
+  (t) => [index("lessons_course").on(t.courseId, t.order)],
+);
+
+export const lessonProgress = sqliteTable(
+  "lesson_progress",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    lessonId: text("lesson_id").notNull(),
+    completedAt: text("completed_at").notNull().default(sql`(datetime('now'))`),
+    note: text("note"),
+  },
+  (t) => [uniqueIndex("lesson_progress_user_lesson").on(t.userId, t.lessonId)],
+);
+
+export const certModules = sqliteTable("cert_modules", {
+  id: id(),
+  order: integer("order").notNull().default(0),
+  name: text("name").notNull(),
+  objective: text("objective"),
+});
+
+export const certDeliverables = sqliteTable(
+  "cert_deliverables",
+  {
+    id: id(),
+    moduleId: text("module_id")
+      .notNull()
+      .references(() => certModules.id, { onDelete: "cascade" }),
+    order: integer("order").notNull().default(0),
+    name: text("name").notNull(),
+    evidenceType: text("evidence_type"),
+    passThreshold: integer("pass_threshold").notNull().default(85),
+  },
+  (t) => [index("cert_deliverables_module").on(t.moduleId, t.order)],
+);
+
+export const certSubmissions = sqliteTable(
+  "cert_submissions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    deliverableId: text("deliverable_id").notNull(),
+    url: text("url"),
+    notes: text("notes"),
+    status: text("status", { enum: ["submitted", "passed", "revise"] }).notNull().default("submitted"),
+    score: integer("score"),
+    feedback: text("feedback"),
+    reviewedBy: text("reviewed_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("cert_submissions_user").on(t.userId, t.deliverableId)],
+);
+
+/* ───────────────────────── Integrations ───────────────────────── */
+
+export const PROVIDERS = ["community_loyalty", "gohighlevel"] as const;
+
+export const integrations = sqliteTable(
+  "integrations",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    provider: text("provider", { enum: PROVIDERS }).notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+    config: text("config", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
+    inboundSecret: text("inbound_secret"),
+    lastSyncAt: text("last_sync_at"),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("integrations_ws_provider").on(t.workspaceId, t.provider)],
+);
+
+export const syncEvents = sqliteTable(
+  "sync_events",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id"),
+    provider: text("provider").notNull(),
+    direction: text("direction", { enum: ["out", "in"] }).notNull(),
+    event: text("event").notNull(),
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
+    status: text("status", { enum: ["sent", "received", "failed", "skipped"] }).notNull(),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("sync_events_ws").on(t.workspaceId, t.createdAt)],
+);
+
+export type Principle = typeof principles.$inferSelect;
+export type Proof = typeof proofs.$inferSelect;
+export type Group = typeof groups.$inferSelect;
+export type Target = typeof targets.$inferSelect;
+export type Course = typeof courses.$inferSelect;
+export type Lesson = typeof lessons.$inferSelect;
+export type CertModule = typeof certModules.$inferSelect;
+export type CertDeliverable = typeof certDeliverables.$inferSelect;
+export type CertSubmission = typeof certSubmissions.$inferSelect;
+export type Integration = typeof integrations.$inferSelect;
+export type SyncEvent = typeof syncEvents.$inferSelect;

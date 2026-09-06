@@ -4,6 +4,8 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
 import { setClientPassAction } from "@/lib/actions/coach";
+import { setCertEnabledAction } from "@/lib/actions/courses";
+import { setMemberPassAction } from "@/lib/actions/integrations";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
@@ -124,6 +126,30 @@ export default async function CoachPage() {
           ) : (
             <Empty icon="👥" title="No clients yet" hint="Share your invite link from Settings." />
           )}
+        </Card>
+        <Card title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
+          {rows.length ? (
+            <ul className="divide-y">
+              {rows.map((r) => (
+                <li key={r.m.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                  <span className="w-36 truncate font-medium">{r.u?.avatarEmoji} {r.u?.name}</span>
+                  <form action={setCertEnabledAction}>
+                    <input type="hidden" name="membershipId" value={r.m.id} />
+                    <button className={`btn btn-xs ${r.m.certEnabled ? "btn-accent" : "btn-ghost"}`} type="submit" name="enabled" value={r.m.certEnabled ? "0" : "1"} title="Certification track">
+                      🎓 {r.m.certEnabled ? "cert on" : "cert off"}
+                    </button>
+                  </form>
+                  <form action={setMemberPassAction} className="flex flex-1 flex-wrap items-center gap-1">
+                    <input type="hidden" name="membershipId" value={r.m.id} />
+                    <input className="field min-w-40 flex-1 py-1 text-xs" name="eoPassUrl" placeholder="Evolve Omega pass link" defaultValue={r.m.eoPassUrl ?? ""} />
+                    <input className="field w-28 py-1 text-xs" name="eoPassSerial" placeholder="serial" defaultValue={r.m.eoPassSerial ?? ""} />
+                    <button className="btn btn-ghost btn-xs" type="submit">Save</button>
+                    <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </Card>
         <div className="space-y-4">
           <Card title="Verify submissions" action={<Badge tone="accent">{submitted.length}</Badge>}>

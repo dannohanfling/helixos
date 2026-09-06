@@ -8,6 +8,7 @@ import { newId } from "@/lib/ids";
 import { addDays, nowIso } from "@/lib/dates";
 import { POINTS } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
+import { background, pushContact } from "@/lib/integrations";
 import { ctx, opt, refresh, str } from "./common";
 
 export async function createContactAction(formData: FormData): Promise<void> {
@@ -87,9 +88,11 @@ export async function updateContactAction(formData: FormData): Promise<void> {
     .where(eq(schema.contacts.id, id));
   if (stage === "call_booked" && contact.stage !== "call_booked") {
     await award({ workspaceId, userId }, "call", POINTS.callBooked, `Call booked with ${contact.name}`, `call:${id}`);
+    background(pushContact({ workspaceId, userId }, { name: contact.name, stage: "call_booked", source: contact.source }));
   }
   if (stage === "client" && contact.stage !== "client") {
     await award({ workspaceId, userId }, "call", POINTS.newClient, `New client: ${contact.name}`, `client:${id}`);
+    background(pushContact({ workspaceId, userId }, { name: contact.name, stage: "client", source: contact.source }));
   }
   void v;
   refresh();

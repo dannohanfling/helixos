@@ -71,6 +71,21 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
     newLeads: num(formData, "newLeads"),
     cashCollected: num(formData, "cashCollected"),
   };
+  // Optional groups. Left collapsed, they simply stay at zero.
+  const extra = {
+    webinarRegs: num(formData, "webinarRegs"),
+    webinarShows: num(formData, "webinarShows"),
+    replayViews: num(formData, "replayViews"),
+    applications: num(formData, "applications"),
+    proofPosts: num(formData, "proofPosts"),
+    ctaPosts: num(formData, "ctaPosts"),
+    beliefPosts: num(formData, "beliefPosts"),
+    storiesCreated: num(formData, "storiesCreated"),
+    referralAsks: num(formData, "referralAsks"),
+    revContent: num(formData, "revContent"),
+    revWebinar: num(formData, "revWebinar"),
+    revDm: num(formData, "revDm"),
+  };
   const firstClose = !log.eveningDoneAt;
   const closed = await closedDates(userId);
   const streakDay = firstClose ? weeklyStreakDay(closed, today) : log.streakDay;
@@ -79,6 +94,7 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
     .update(schema.dailyLogs)
     .set({
       ...numbers,
+      ...extra,
       start: opt(formData, "start"),
       stop: opt(formData, "stop"),
       keep: opt(formData, "keep"),

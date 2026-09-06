@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import type { POINT_TYPES } from "@/db/schema";
+import { background, pushPoints } from "@/lib/integrations";
 
 export type PointType = (typeof POINT_TYPES)[number];
 
@@ -34,7 +35,9 @@ export async function award(
     .insert(schema.pointsLedger)
     .values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, type, points, reason, refId: refId ?? null })
     .onConflictDoNothing();
-  return (res.rowsAffected ?? 0) > 0;
+  const inserted = (res.rowsAffected ?? 0) > 0;
+  if (inserted && points > 0) background(pushPoints(ctx, points, reason));
+  return inserted;
 }
 
 export async function recentLedger(userId: string, limit = 30) {

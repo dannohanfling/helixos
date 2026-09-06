@@ -2,6 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { claimRewardAction } from "@/lib/actions/settings";
+import { markPassInstalledAction, sendTestPushAction } from "@/lib/actions/integrations";
 import { Badge, Card, PageHeader, Progress } from "@/components/ui";
 import { TIERS, TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { leaderboard, recentLedger, totalPoints } from "@/lib/queries/points";
@@ -66,6 +67,35 @@ export default async function RewardsPage() {
           </ol>
         </Card>
       </div>
+
+      <Card className="mb-4" title="🎫 My Evolve Omega pass" action={v.membership.eoPassInstalledAt ? <Badge tone="good">installed</Badge> : v.membership.eoPassUrl ? <Badge tone="accent">ready to add</Badge> : <Badge tone="neutral">coming</Badge>}>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="text-ink-2">Your pass lives in your phone wallet. Points you earn here land on it, and it&apos;s how your coach reaches you between calls.</p>
+            <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink-3">
+              {v.membership.eoPassSerial ? <span>Serial {v.membership.eoPassSerial}</span> : null}
+              {v.membership.eoPassLastPushAt ? <span>· last message {formatDateTime(v.membership.eoPassLastPushAt, v.workspace.timezone)}</span> : null}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {v.membership.eoPassUrl ? (
+              <a href={v.membership.eoPassUrl} target="_blank" rel="noreferrer" className="btn btn-accent btn-sm">Add to wallet ↗</a>
+            ) : (
+              <span className="text-xs text-ink-3">Your coach will send your pass link.</span>
+            )}
+            {v.membership.eoPassUrl && !v.membership.eoPassInstalledAt ? (
+              <form action={markPassInstalledAction}>
+                <button className="btn btn-ghost btn-sm" type="submit">I added it</button>
+              </form>
+            ) : null}
+            {v.membership.eoPassSerial ? (
+              <form action={sendTestPushAction}>
+                <button className="btn btn-ghost btn-sm" type="submit">Send me a test push</button>
+              </form>
+            ) : null}
+          </div>
+        </div>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Prizes you unlock">

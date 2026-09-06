@@ -25,9 +25,10 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, v.user.id)) });
   if (!offer) notFound();
-  const [components, objections] = await Promise.all([
+  const [components, objections, proofs] = await Promise.all([
     db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, id), orderBy: asc(schema.offerComponents.order) }),
     assetsFor(v.workspace.id, v.user.id, "objection"),
+    db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
   const r = scoreOffer(offer, components);
   const onePager = offerOnePager(offer, components);
@@ -161,6 +162,19 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
                       </li>
                     ))}
                   </ul>
+                  {proofs.length ? (
+                    <>
+                      <div className="label mt-3">Answer with proof</div>
+                      <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
+                        {proofs.map((pr) => (
+                          <li key={pr.id} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
+                            <span className="line-clamp-2">{pr.shortVersion ?? pr.name}</span>
+                            <CopyButton text={pr.shortVersion ?? pr.name} label="Copy" className="btn btn-ghost btn-xs" />
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
                 </div>
               </div>
             </Card>

@@ -13,13 +13,20 @@ see who's on track, verify pathway work, and nudge who's gone quiet.
 | **Tasks** | Top 3, overdue, due today, upcoming, repeating habits, points per task | 📌 TasksOS |
 | **Content** | Idea → Creating → Ready → Scheduled → Posted board, calendar, posted performance | ✍️ ContentOS (statuses, types, platforms) |
 | **DMs** | Contact pipeline (reached out → replied → conversation → call booked → client), thread log, follow-up dates, template picker with token fill | 📣 DM Conversations, 💌 DM Library, 🆕 LeadsOS |
-| **Pathway** | 7 stages × 215 tasks with teaching copy, proof submission, coach verification, plus the 30-day curriculum | 🛣️ Success Pathway Stages, 🏆 Success Task Library, 📆 30-Day Curriculum |
-| **Numbers** | Weekly stat tiles with deltas, 12-week bar chart, consistency calendar, top posts | 📊 Daily Activity Log, #️⃣ KPIs |
+| **Pathway** | Simple by design: one stage at a time, at most 3 must-do steps open, extras folded away, "waiting on coach" shown separately; whole map one click away. Plus the 30-day curriculum, courses and the certification track | 🛣️ Success Pathway Stages, 🏆 Success Task Library, 📆 30-Day Curriculum |
+| **Numbers** | Monthly targets with pace (ahead / on / behind), weekly stat tiles with deltas, 12-week bar chart, consistency calendar, top posts; optional close groups roll up (webinar funnel, content mix, revenue by source) | 📊 Daily Activity Log, #️⃣ KPIs, 🎯 Monthly Targets |
 | **Rewards** | Points, 9 tiers (Artisan → Olympian), prize ladder, spendable rewards, weekly leaderboard, ledger | 🏅 Community Tiers, 🎁 Prize Ladder, 🎁 Pass Rewards, 📒 Points Ledger |
 | **Coach** | Client roster with today's status, streak, tier, pathway progress; verify queue; who needs a nudge; Elite / Community Pass toggle | 🎓 Client Success Path, 🛣️ Success Pathway |
 | **Webinars** | 7-step wizard: foundation → 3 belief breaks → 20-section script (5 acts) with story/analogy/objection banks → offer mapping → deck outline → 11-point readiness review → run + debrief numbers. Ships with "The Leaky Webinar" as a worked example. | 🖥️ WebinarOS: 🎭 Acts, 📑 Webinar Sections, 🪜 Wizard Stages, 📖 Story Bank, 🎨 Analogies, 🗣️ Objections, 💡 Beliefs, ✅ Readiness Reviews, 🖼️ Slide Blueprints |
 | **Offers** | Offer wizard (avatar, promise, mechanism, 3–5 step path, container, price, guarantee, fit, top 5 objections) + stack builder with belief-break tags + a live optimizer score with fixes + one-pager export | 🎁 OffersOS, 🎁 Offer Components |
-| **Repurpose** | One post → 10 channel-native drafts (FB personal / page / your group / other groups / stories / Instagram / Threads / LinkedIn / email / Skool), per-channel posted tracking and numbers; optional Claude polish | 📮 Content Distribution |
+| **Distribute** | One post → your group first, then your top 3 prospecting groups (each draft shaped to that group's mission, admin values and rules, with an alignment checklist), then 8 more channels (FB personal / page / stories / Instagram / Threads / LinkedIn / email / Skool); per-channel posted tracking; optional Claude polish | 📮 Content Distribution, 👥 Facebook Groups |
+| **Groups** | My group · groups I'm a member of · top 3 to prospect in (ranked slots + bench). Group profiles (mission, audience, admin, admin values, rules, norms, what works) with a readiness score; rules are read automatically (no links, no promo, ask admin first) | 👥 Facebook Groups |
+| **Doctrine** | The Ω principles: doctrine, Greek/Stoic/business/public-figure stories, and a one-click post, reel script, or 10-minute training from each | 🏛️ Principles |
+| **Proof Bank** | Results, testimonials, screenshots, stats, case studies with before / shift / after, the belief each breaks, a paste-ready one-liner and a slide version. Capture wins straight from client check-ins. Approved proofs show up in the webinar script step and the offer objections | 🏆 Proof / Wins |
+| **Courses** | Launch Pad mini-courses, the Accelerator 6-week build (one course per week, tied to pathway stages), Academy exercises; lesson completion earns points | 📚 Curriculum, 🧩 Exercises |
+| **Certification** | 6 modules × 12 deliverables, each with its own pass threshold; submit evidence, coach scores it, pass or revise. Unlocked per client by the coach | 🎓 Certification |
+| **Integrations** (coach) | Community Loyalty and the Omnichannel Marketing System (GoHighLevel): config, test ping, inbound webhook URL + secret, sync log. Points earned in HelixOS push to each member's Evolve Omega pass; booked calls and new clients push to GHL contacts/pipeline; inbound rewards and bookings flow back | ⚙️ Integrations |
+| **My Evolve Omega pass** | Every member's own wallet pass: add-to-wallet link, install status, test push; coach broadcasts to the whole cohort | 🎟️ Passes |
 | **Clients** | The client's own clients: 90-day goal, fear, roadblock, cadence, check-ins (wins, blockers, support, next step, 1–10 scores, cash, NPS), trend sparklines, next call; convert from DM conversations | 🧔 ClientsOS, 📲 Check-Ins, ⚡ Progress, 🔢 NPS |
 | **Community Pass** (Elite) | The client's own loyalty engine: pass settings, member leaderboard on the same 9 tiers, award points (pushes to their Community Loyalty webhook), daily hashtag post, 30-day curriculum to send | ⚙️ HelixOS Config, 📒 Points Ledger, 🏅 Community Tiers, 📆 30-Day Curriculum |
 
@@ -34,8 +41,8 @@ see who's on track, verify pathway work, and nudge who's gone quiet.
 
 ### Optional: Claude drafting
 
-Set `ANTHROPIC_API_KEY` and two buttons light up: "Draft this section for me" in the Webinar Wizard and "Generate with Claude" on the
-repurpose page. Both run through `src/lib/ai.ts` (official SDK, `claude-opus-5`, streaming). Without a key everything still works:
+Set `ANTHROPIC_API_KEY` and the "✨ With Claude" buttons light up: "Draft this section for me" in the Webinar Wizard, channel and
+group-aligned drafts on the Distribute page, and post / reel / training drafts from any principle. Both run through `src/lib/ai.ts` (official SDK, `claude-opus-5`, streaming). Without a key everything still works:
 webinar sections start from the worked example and repurposing uses deterministic channel rules in `src/lib/engine/repurpose.ts`.
 
 ## Run it
@@ -61,6 +68,7 @@ npm run lint
 npm test                    # engine unit tests (streaks, tiers, points, next best action)
 npx tsx scripts/smoke.ts          # Playwright walkthrough of the daily loop; writes ./screenshots
 npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, clients, community pass
+npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks
 ```
 
 ## Stack

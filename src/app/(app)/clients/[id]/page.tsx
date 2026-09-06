@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { CLIENT_STATUSES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { awardMemberPointsAction, deleteClientRecordAction, logCheckinAction, updateClientRecordAction } from "@/lib/actions/clients";
+import { proofFromCheckinAction } from "@/lib/actions/proofs";
 import { Sparkline } from "@/components/charts";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { formatDate, formatDateTime } from "@/lib/dates";
@@ -122,8 +123,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                       </span>
                     </div>
                     {x.wins ? (
-                      <p className="mt-1">
-                        <span className="font-semibold">Wins:</span> {x.wins}
+                      <p className="mt-1 flex items-start justify-between gap-2">
+                        <span>
+                          <span className="font-semibold">Wins:</span> {x.wins}
+                        </span>
+                        <form action={proofFromCheckinAction} className="shrink-0">
+                          <input type="hidden" name="checkinId" value={x.id} />
+                          <button className="btn btn-ghost btn-xs" type="submit" title="Save this win to your Proof Bank">🏆 Proof</button>
+                        </form>
                       </p>
                     ) : null}
                     {x.blockers ? (

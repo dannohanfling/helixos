@@ -3,9 +3,11 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { BarChart, Sparkline, StreakCalendar } from "@/components/charts";
-import { Card, PageHeader } from "@/components/ui";
+import { Badge, Card, Disclosure, PageHeader, Progress } from "@/components/ui";
+import { setTargetsAction } from "@/lib/actions/targets";
 import { addDays, formatDate, isWeekday, rangeDays, startOfWeek } from "@/lib/dates";
 import { logsBetween } from "@/lib/queries/daily";
+import { TARGET_METRICS, daysInMonth, monthOf, monthProgress } from "@/lib/engine/targets";
 
 export const metadata = { title: "Numbers" };
 
@@ -30,13 +32,24 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
   const prevStart = addDays(weekStart, -7);
   const from12 = addDays(thisMonday, -7 * 11);
 
-  const [logs, weekLogs, prevLogs, posted, ledger] = await Promise.all([
+  const month = monthOf(v.today);
+  const [logs, weekLogs, prevLogs, posted, ledger, monthLogs, targetRows] = await Promise.all([
     logsBetween(v.user.id, from12, v.today),
     logsBetween(v.user.id, weekStart, weekEnd),
     logsBetween(v.user.id, prevStart, addDays(prevStart, 6)),
     db.query.contentItems.findMany({ where: and(eq(schema.contentItems.userId, v.user.id), eq(schema.contentItems.status, "posted")), orderBy: desc(schema.contentItems.engagements), limit: 5 }),
     db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, v.user.id), gte(schema.pointsLedger.createdAt, from12)) }),
+    logsBetween(v.user.id, `${month}-01`, `${month}-${String(daysInMonth(month)).padStart(2, "0")}`),
+    db.query.targets.findMany({ where: and(eq(schema.targets.userId, v.user.id), eq(schema.targets.month, month)) }),
   ]);
+  const targetMap = Object.fromEntries(targetRows.map((t) => [t.metric, t.target]));
+  const progress = monthProgress(monthLogs as unknown as Record<string, number>[], targetMap, month, v.today);
+  const hasTargets = progress.some((p) => p.target > 0);
+  const funnel = { regs: monthLogs.reduce((a, l) => a + l.webinarRegs, 0), shows: monthLogs.reduce((a, l) => a + l.webinarShows, 0), replays: monthLogs.reduce((a, l) => a + l.replayViews, 0), apps: monthLogs.reduce((a, l) => a + l.applications, 0) };
+  const mix = { proof: monthLogs.reduce((a, l) => a + l.proofPosts, 0), cta: monthLogs.reduce((a, l) => a + l.ctaPosts, 0), belief: monthLogs.reduce((a, l) => a + l.beliefPosts, 0), stories: monthLogs.reduce((a, l) => a + l.storiesCreated, 0), referrals: monthLogs.reduce((a, l) => a + l.referralAsks, 0) };
+  const rev = { content: monthLogs.reduce((a, l) => a + l.revContent, 0), webinar: monthLogs.reduce((a, l) => a + l.revWebinar, 0), dm: monthLogs.reduce((a, l) => a + l.revDm, 0) };
+  const revTotal = rev.content + rev.webinar + rev.dm;
+  const monthLabel = formatDate(`${month}-01`, { month: "long", year: "numeric" });
 
   const sum = (rows: typeof logs, k: Metric) => rows.reduce((a, r) => a + Number(r[k] ?? 0), 0);
   const fmt = (m: (typeof METRICS)[number], n: number) => (m.money ? `$${n.toLocaleString()}` : n.toLocaleString());
@@ -84,6 +97,63 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
           </div>
         }
       />
+
+      <Card className="mb-4" title={`${monthLabel} · targets`} action={<span className="text-xs text-ink-3">{hasTargets ? "actual vs target, paced to today" : "set targets to see pace"}</span>}>
+        {hasTargets ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {progress
+              .filter((p) => p.target > 0)
+              .map((p) => (
+                <div key={p.key} className="rounded-lg bg-surface-2 p-3">
+                  <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+                    <span>{p.label}</span>
+                    <Badge tone={p.pace === "ahead" ? "good" : p.pace === "on" ? "accent" : "warn"}>{p.pace === "ahead" ? "ahead" : p.pace === "on" ? "on pace" : "behind"}</Badge>
+                  </div>
+                  <div className="mt-1 text-xl font-semibold leading-none tabular">
+                    {p.money ? `$${p.actual.toLocaleString()}` : p.actual.toLocaleString()} <span className="text-xs font-normal text-ink-3">/ {p.money ? `$${p.target.toLocaleString()}` : p.target.toLocaleString()}</span>
+                  </div>
+                  <div className="mt-2"><Progress value={p.pct} tone={p.pace === "ahead" ? "good" : p.pace === "on" ? "accent" : "warn"} height={5} /></div>
+                  <div className="mt-1 text-[10px] text-ink-3">expected by today: {p.money ? `$${p.expected.toLocaleString()}` : p.expected}</div>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-2">Pick two or three numbers that matter this month. The scoreboard tells you if you&apos;re on pace, not just what you did.</p>
+        )}
+        <Disclosure summary={<span className="text-xs text-ink-3 underline">{hasTargets ? "Edit targets" : "Set this month's targets"}</span>} className="mt-3">
+          <form action={setTargetsAction} className="mt-2 space-y-3">
+            <input type="hidden" name="month" value={month} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {TARGET_METRICS.map((m) => (
+                <label key={m.key} className="block">
+                  <span className="label">{m.label}</span>
+                  <input className="field tabular py-1 text-sm" name={m.key} type="number" min={0} defaultValue={targetMap[m.key] ?? ""} placeholder="0" />
+                </label>
+              ))}
+            </div>
+            <button className="btn btn-primary btn-sm" type="submit">Save targets</button>
+          </form>
+        </Disclosure>
+        {funnel.regs || funnel.shows || mix.proof || mix.cta || mix.belief || revTotal ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
+            <div className="rounded-lg border p-3">
+              <div className="label">Webinar funnel · month</div>
+              <div className="tabular">{funnel.regs} registered → {funnel.shows} showed{funnel.regs ? ` (${Math.round((funnel.shows / funnel.regs) * 100)}%)` : ""} → {funnel.apps} applied</div>
+              <div className="text-xs text-ink-3">{funnel.replays} replay views</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="label">Content mix · month</div>
+              <div className="tabular">🏆 {mix.proof} proof · 📣 {mix.cta} CTA · 🧠 {mix.belief} belief</div>
+              <div className="text-xs text-ink-3">{mix.stories} stories · {mix.referrals} referral asks</div>
+            </div>
+            <div className="rounded-lg border p-3">
+              <div className="label">Revenue by source · month</div>
+              <div className="tabular">${revTotal.toLocaleString()} total</div>
+              <div className="text-xs text-ink-3">content ${rev.content.toLocaleString()} · webinar ${rev.webinar.toLocaleString()} · DMs ${rev.dm.toLocaleString()}</div>
+            </div>
+          </div>
+        ) : null}
+      </Card>
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         {METRICS.map((m) => {

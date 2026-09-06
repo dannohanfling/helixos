@@ -1,0 +1,74 @@
+[
+ {
+  "name": "Post on behalf of client restaurants",
+  "status": "Managing",
+  "revenue": 0,
+  "type": "Content Creation",
+  "impact": "⭐️ High",
+  "energy": null
+ },
+ {
+  "name": "Ascension",
+  "status": "Managing",
+  "revenue": 25000,
+  "type": "Sales Opportunity",
+  "impact": "🚀 Very High",
+  "energy": null
+ },
+ {
+  "name": "Post in other groups",
+  "status": "Managing",
+  "revenue": 0,
+  "type": "Content Creation",
+  "impact": "👌 Medium",
+  "energy": null
+ },
+ {
+  "name": "Inviting Followers to Personal Profile",
+  "status": "Managing",
+  "revenue": 0,
+  "type": "Brand Awareness",
+  "impact": "🤌 Low",
+  "energy": null
+ },
+ {
+  "name": "MOF Coaching Calls",
+  "status": "Managing",
+  "revenue": 0,
+  "type": "Skill Growth",
+  "impact": "🚀 Very High",
+  "energy": null
+ },
+ {
+  "name": "Managing the FB Group",
+  "status": "Delegated",
+  "revenue": 0,
+  "type": "Fulfillment",
+  "impact": "⭐️ High",
+  "energy": null
+ },
+ {
+  "name": "Sales Calls",
+  "status": "Managing",
+  "revenue": 10000,
+  "type": "Sales Opportunity",
+  "impact": "🚀 Very High",
+  "energy": null
+ },
+ {
+  "name": "Coaching Calls with Students",
+  "status": "Managing",
+  "revenue": 0,
+  "type": "Fulfillment",
+  "impact": "⭐️ High",
+  "energy": null
+ },
+ {
+  "name": "Inviting Members to Group",
+  "status": "Managing",
+  "revenue": 0,
+  "type": "Lead Generation",
+  "impact": "🤌 Low",
+  "energy": null
+ }
+]

@@ -19,17 +19,19 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
   const sp = await searchParams;
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) notFound();
-  const [sections, beliefs, reviews, offers, assets] = await Promise.all([
+  const [sections, beliefs, reviews, offers, assets, proofs] = await Promise.all([
     db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, id), orderBy: asc(schema.webinarSections.order) }),
     db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) }),
     db.query.readinessReviews.findMany({ where: eq(schema.readinessReviews.webinarId, id), orderBy: desc(schema.readinessReviews.createdAt) }),
     db.query.offers.findMany({ where: eq(schema.offers.userId, v.user.id) }),
     assetsFor(v.workspace.id, v.user.id),
+    db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
   const review = reviews[0] ?? null;
   const progress = webinarProgress(w, sections, beliefs, review);
   const step = (STEPS.find((s) => s.key === sp.step)?.key ?? nextStep(progress.steps)) as StepKey;
   const stories = assets.filter((a) => a.type === "story");
+  const frameworks = assets.filter((a) => a.type === "framework").sort((a, b) => (a.extra.priority === "High" ? 0 : 1) - (b.extra.priority === "High" ? 0 : 1) || a.name.localeCompare(b.name));
   const offer = w.offerId ? offers.find((o) => o.id === w.offerId) : undefined;
   const components = offer ? await db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, offer.id), orderBy: asc(schema.offerComponents.order) }) : [];
 
@@ -338,6 +340,44 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                   <p className="mt-2 text-ink-3">{tpl.exampleTransition}</p>
                 </div>
               </details>
+              <Disclosure summary={<span className="text-xs text-ink-3 underline">Frameworks, metaphors and proof ({frameworks.length + proofs.length})</span>}>
+                <div className="mt-2 grid w-full gap-3 sm:grid-cols-2">
+                  <div>
+                    <div className="label">Frameworks and metaphors</div>
+                    <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
+                      {frameworks.map((f) => (
+                        <li key={f.id} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
+                          <span className="min-w-0">
+                            <span className="font-semibold">{f.name}</span>
+                            {f.extra.stage ? <span className="text-ink-3"> · {f.extra.stage}</span> : null}
+                            <span className="block text-ink-2 line-clamp-2">{f.summary ?? f.body}</span>
+                          </span>
+                          <CopyButton text={[f.summary, f.body, f.extra.transitionIn ? `In: ${f.extra.transitionIn}` : "", f.extra.transitionOut ? `Out: ${f.extra.transitionOut}` : ""].filter(Boolean).join("\n\n")} label="Copy" className="btn btn-ghost btn-xs" />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="label">Approved proof</div>
+                    {proofs.length ? (
+                      <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
+                        {proofs.map((pr) => (
+                          <li key={pr.id} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
+                            <span className="min-w-0">
+                              <span className="font-semibold">{pr.name}</span>
+                              {pr.beliefBroken !== "none" ? <span className="text-ink-3"> · breaks {pr.beliefBroken}</span> : null}
+                              <span className="block text-ink-2 line-clamp-2">{pr.shortVersion ?? pr.resultAfter}</span>
+                            </span>
+                            <CopyButton text={pr.longVersion ?? pr.shortVersion ?? pr.name} label="Copy" className="btn btn-ghost btn-xs" />
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-ink-3">Approve proofs in the <Link href="/proof" className="underline">Proof Bank</Link> and they show up here.</p>
+                    )}
+                  </div>
+                </div>
+              </Disclosure>
               {tpl.assetType ? (
                 <Disclosure summary={<span className="text-xs text-ink-3 underline">+ Add a {tpl.assetType} to your bank</span>}>
                   <div className="card p-4">

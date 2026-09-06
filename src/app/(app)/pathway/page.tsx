@@ -3,18 +3,14 @@ import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { completeCurriculumDayAction, submitPathwayTaskAction } from "@/lib/actions/pathway";
-import { Badge, Card, Empty, Field, PageHeader, Progress } from "@/components/ui";
+import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
+import { OPEN_LIMIT, simplePath } from "@/lib/engine/pathway";
+import type { LibraryTask, PathwayProgress } from "@/db/schema";
 
 export const metadata = { title: "Pathway" };
 
 const EFFORT: Record<string, string> = { quick: "⚡ < 15 min", medium: "🕐 30–60 min", heavy: "🏋️ 1–3 hrs", deep: "🏔️ half-day+" };
-const PRIORITY: Record<string, { label: string; tone: "danger" | "accent" | "neutral" }> = {
-  must: { label: "Must do", tone: "danger" },
-  should: { label: "Should do", tone: "accent" },
-  nice: { label: "Nice to have", tone: "neutral" },
-  optional: { label: "Optional", tone: "neutral" },
-};
 const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "good" | "warn" }> = {
   todo: { label: "To do", tone: "neutral" },
   submitted: { label: "Waiting on coach", tone: "accent" },
@@ -22,112 +18,148 @@ const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "good
   verified: { label: "Verified", tone: "good" },
 };
 
-export default async function PathwayPage({ searchParams }: { searchParams: Promise<{ task?: string; stage?: string; filter?: string }> }) {
+function TaskLink({ t, st, selected, extra = false }: { t: LibraryTask; st: string; selected: boolean; extra?: boolean }) {
+  return (
+    <li>
+      <Link href={`/pathway?task=${t.key}`} className={`flex items-start gap-3 rounded-lg px-2 py-2.5 hover:bg-surface-2 ${selected ? "bg-accent-soft" : ""}`}>
+        <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${st === "verified" ? "border-good bg-good text-white" : st === "submitted" ? "border-accent text-accent" : st === "revision" ? "border-warn text-warn" : "border-line"}`}>
+          {st === "verified" ? "✓" : st === "submitted" ? "…" : st === "revision" ? "!" : ""}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={`block text-sm font-medium ${st === "verified" ? "text-ink-2 line-through decoration-line" : ""}`}>{t.name}</span>
+          <span className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-ink-3">
+            <span>+{t.points} pts</span>
+            <span>· {EFFORT[t.effort]}</span>
+            {st === "revision" ? <Badge tone="warn">Coach asked for a tweak</Badge> : extra ? <Badge tone="neutral">Extra</Badge> : null}
+          </span>
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+export default async function PathwayPage({ searchParams }: { searchParams: Promise<{ task?: string; stage?: string; view?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
-  const [stages, library, progress, curriculum, curriculumDone] = await Promise.all([
+  const [stages, library, progress, curriculum, curriculumDone, courses] = await Promise.all([
     db.query.pathwayStages.findMany({ orderBy: asc(schema.pathwayStages.order) }),
     db.query.libraryTasks.findMany({ orderBy: asc(schema.libraryTasks.order) }),
     db.query.pathwayProgress.findMany({ where: eq(schema.pathwayProgress.userId, v.user.id) }),
     db.query.curriculumDays.findMany({ orderBy: asc(schema.curriculumDays.day) }),
     db.query.curriculumProgress.findMany({ where: eq(schema.curriculumProgress.userId, v.user.id) }),
+    db.query.courses.findMany(),
   ]);
-  const progByKey = new Map(progress.map((p) => [p.libraryTaskKey, p]));
+  const progByKey = new Map<string, PathwayProgress>(progress.map((p) => [p.libraryTaskKey, p]));
   const statusOf = (key: string) => progByKey.get(key)?.status ?? "todo";
-  const stageStats = stages.map((s) => {
-    const tasks = library.filter((t) => t.stageKey === s.key);
-    const verified = tasks.filter((t) => statusOf(t.key) === "verified");
-    const pts = verified.reduce((a, t) => a + t.points, 0);
-    const total = tasks.reduce((a, t) => a + t.points, 0);
-    return { stage: s, tasks, verified: verified.length, pts, total, pct: tasks.length ? Math.round((verified.length / tasks.length) * 100) : 0 };
-  });
-  const firstIncomplete = stageStats.find((s) => s.verified < s.tasks.length)?.stage.key ?? stages[0]?.key;
-  const openStageKey = sp.stage ?? (sp.task ? library.find((t) => t.key === sp.task)?.stageKey : undefined) ?? firstIncomplete;
-  const openStage = stageStats.find((s) => s.stage.key === openStageKey);
+  const path = simplePath(stages, library, progress);
+  const currentStage = stages.find((s) => s.key === path.stageKey) ?? stages[0];
+  const fullMap = sp.view === "all";
+  const viewStageKey = sp.stage ?? path.stageKey;
+  const viewStage = stages.find((s) => s.key === viewStageKey) ?? currentStage;
   const selected = sp.task ? library.find((t) => t.key === sp.task) : undefined;
   const selectedProg = selected ? progByKey.get(selected.key) : undefined;
-  const revisions = progress.filter((p) => p.status === "revision");
-  const filterRevision = sp.filter === "revision";
-  const visibleTasks = filterRevision ? library.filter((t) => statusOf(t.key) === "revision") : (openStage?.tasks ?? []);
+  const stageStats = stages.map((s) => {
+    const tasks = library.filter((t) => t.stageKey === s.key);
+    const core = tasks.filter((t) => t.priority === "must");
+    const pathTasks = core.length ? core : tasks.filter((t) => t.priority === "should");
+    const done = pathTasks.filter((t) => statusOf(t.key) === "verified").length;
+    return { stage: s, done, total: pathTasks.length, pct: pathTasks.length ? Math.round((done / pathTasks.length) * 100) : 0 };
+  });
   const doneDays = new Set(curriculumDone.map((c) => c.day));
   const nextDay = curriculum.find((c) => !doneDays.has(c.day));
   const totalVerified = progress.filter((p) => p.status === "verified").length;
+  const pathDone = stageStats.reduce((a, s) => a + s.done, 0);
+  const pathTotal = stageStats.reduce((a, s) => a + s.total, 0);
+  const stageTasks = library.filter((t) => t.stageKey === viewStage?.key);
+  const courseLink = courses.find((c) => c.program === "Launch Pad") ? "/courses" : null;
 
   return (
     <>
-      <PageHeader title="Your pathway" subtitle={`${totalVerified} of ${library.length} tasks verified. Seven stages. One asset at a time.`} />
+      <PageHeader
+        title="Your pathway"
+        subtitle={path.allDone ? "Every stage done. You're the case study now." : `Stage ${(currentStage?.order ?? 0)} of ${stages.length}: ${currentStage?.name}. ${pathDone} of ${pathTotal} path steps verified. One thing at a time.`}
+        action={
+          <div className="flex flex-wrap gap-2 text-xs">
+            {v.membership.certEnabled ? <Link href="/certification" className="btn btn-soft btn-sm">🎓 Certification</Link> : null}
+            {courseLink ? <Link href={courseLink} className="btn btn-ghost btn-sm">📚 Courses</Link> : null}
+            <Link href={fullMap ? "/pathway" : "/pathway?view=all"} className="btn btn-ghost btn-sm">{fullMap ? "Simple view" : "Whole map"}</Link>
+          </div>
+        }
+      />
 
-      {/* Stage strip */}
-      <div className="mb-4 grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
+      {/* Stage strip: compact, just where you are */}
+      <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1">
         {stageStats.map((s) => {
-          const active = s.stage.key === openStageKey && !filterRevision;
-          const done = s.verified === s.tasks.length && s.tasks.length > 0;
+          const isCurrent = s.stage.key === path.stageKey;
+          const done = s.total > 0 && s.done === s.total;
           return (
-            <Link key={s.stage.key} href={`/pathway?stage=${s.stage.key}`} className={`rounded-xl border p-3 text-left transition hover:border-ink ${active ? "border-accent bg-accent-soft" : done ? "bg-good-soft" : "bg-surface"}`}>
-              <div className="text-lg">{s.stage.icon}</div>
-              <div className="mt-1 truncate text-xs font-semibold">{s.stage.name}</div>
-              <div className="mt-1 text-[11px] text-ink-3">
-                {s.verified}/{s.tasks.length} · {s.pts} pts
-              </div>
-              <div className="mt-1.5">
-                <Progress value={s.pct} tone={done ? "good" : "accent"} height={4} />
-              </div>
+            <Link key={s.stage.key} href={fullMap ? `/pathway?view=all&stage=${s.stage.key}` : `/pathway?stage=${s.stage.key}`} title={`${s.stage.name}: ${s.done}/${s.total}`} className={`flex min-w-[7.5rem] shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs transition hover:border-ink ${isCurrent ? "border-accent bg-accent-soft" : done ? "bg-good-soft" : "bg-surface opacity-70"}`}>
+              <span className="text-base">{done ? "✅" : s.stage.icon}</span>
+              <span className="min-w-0">
+                <span className="block truncate font-semibold">{s.stage.name}</span>
+                <span className="block text-[10px] text-ink-3">{s.done}/{s.total}</span>
+              </span>
             </Link>
           );
         })}
       </div>
 
-      {revisions.length && !filterRevision ? (
-        <Link href="/pathway?filter=revision" className="mb-4 block rounded-xl border border-warn bg-warn-soft px-4 py-3 text-sm">
-          ✏️ Your coach asked for a tweak on {revisions.length} {revisions.length === 1 ? "task" : "tasks"}. <span className="font-semibold underline">See feedback →</span>
-        </Link>
-      ) : null}
-
       <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
         <div className="space-y-4">
-          <Card
-            title={filterRevision ? "Needs a tweak" : `${openStage?.stage.icon ?? ""} ${openStage?.stage.name ?? "Stage"}`}
-            action={openStage ? <span className="text-xs text-ink-3">{openStage.stage.expectedDuration}</span> : null}
-          >
-            {openStage && !filterRevision ? (
-              <div className="mb-3 space-y-1 text-sm">
-                <p className="font-medium">{openStage.stage.tagline}</p>
-                <p className="text-ink-2">{openStage.stage.description}</p>
-                {openStage.stage.exitCriteria ? (
-                  <p className="text-xs text-ink-3">
-                    <span className="font-semibold">Done when:</span> {openStage.stage.exitCriteria}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-            {visibleTasks.length ? (
+          {!fullMap ? (
+            <>
+              <Card title={`${currentStage?.icon ?? ""} Now`} action={<span className="text-xs text-ink-3">up to {OPEN_LIMIT} open at a time</span>}>
+                {currentStage ? <p className="mb-3 text-sm text-ink-2">{currentStage.tagline}</p> : null}
+                {path.now.length ? (
+                  <ol className="-mx-2 divide-y">
+                    {path.now.map((t) => {
+                      const lib = library.find((l) => l.key === t.key)!;
+                      return <TaskLink key={t.key} t={lib} st={statusOf(t.key)} selected={selected?.key === t.key} />;
+                    })}
+                  </ol>
+                ) : path.allDone ? (
+                  <Empty icon="🏔️" title="Top of the mountain" hint="Every path step is verified. Keep the daily loop going." />
+                ) : (
+                  <Empty icon="⏳" title="All submitted" hint="Your coach is reviewing. New steps unlock as they verify." />
+                )}
+                {path.remaining > 0 ? <p className="mt-3 text-xs text-ink-3">{path.remaining} more in this stage unlock as you finish these.</p> : null}
+              </Card>
+              {path.waiting.length ? (
+                <Card title="Waiting on your coach">
+                  <ol className="-mx-2 divide-y">
+                    {path.waiting.map((t) => {
+                      const lib = library.find((l) => l.key === t.key)!;
+                      return <TaskLink key={t.key} t={lib} st="submitted" selected={selected?.key === t.key} />;
+                    })}
+                  </ol>
+                </Card>
+              ) : null}
+              {path.extras.total ? (
+                <Disclosure summary={<span className="text-sm text-ink-2">Extras for this stage ({path.extras.done}/{path.extras.total}) · optional</span>} className="card p-4">
+                  <p className="mt-2 mb-1 text-xs text-ink-3">Nice-to-haves. They earn points but never block the next stage.</p>
+                  <ol className="-mx-2 divide-y">
+                    {path.extras.tasks.map((t) => {
+                      const lib = library.find((l) => l.key === t.key)!;
+                      return <TaskLink key={t.key} t={lib} st={statusOf(t.key)} selected={selected?.key === t.key} extra />;
+                    })}
+                  </ol>
+                </Disclosure>
+              ) : null}
+            </>
+          ) : (
+            <Card title={`${viewStage?.icon ?? ""} ${viewStage?.name ?? "Stage"}`} action={<span className="text-xs text-ink-3">{viewStage?.expectedDuration}</span>}>
+              {viewStage ? (
+                <div className="mb-3 space-y-1 text-sm">
+                  <p className="font-medium">{viewStage.tagline}</p>
+                  <p className="text-ink-2">{viewStage.description}</p>
+                  {viewStage.exitCriteria ? <p className="text-xs text-ink-3"><span className="font-semibold">Done when:</span> {viewStage.exitCriteria}</p> : null}
+                </div>
+              ) : null}
               <ol className="-mx-2 divide-y">
-                {visibleTasks.map((t) => {
-                  const st = statusOf(t.key);
-                  const isSel = selected?.key === t.key;
-                  return (
-                    <li key={t.key}>
-                      <Link href={`/pathway?task=${t.key}${filterRevision ? "&filter=revision" : ""}`} className={`flex items-start gap-3 px-2 py-2.5 hover:bg-surface-2 ${isSel ? "bg-accent-soft" : ""}`}>
-                        <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${st === "verified" ? "border-good bg-good text-white" : st === "submitted" ? "border-accent text-accent" : st === "revision" ? "border-warn text-warn" : "border-line"}`}>
-                          {st === "verified" ? "✓" : st === "submitted" ? "…" : st === "revision" ? "!" : ""}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className={`block text-sm font-medium ${st === "verified" ? "text-ink-2" : ""}`}>{t.name}</span>
-                          <span className="mt-0.5 flex flex-wrap gap-1.5 text-[11px] text-ink-3">
-                            <span>+{t.points} pts</span>
-                            <span>· {EFFORT[t.effort]}</span>
-                            <Badge tone={PRIORITY[t.priority].tone}>{PRIORITY[t.priority].label}</Badge>
-                          </span>
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
+                {stageTasks.map((t) => <TaskLink key={t.key} t={t} st={statusOf(t.key)} selected={selected?.key === t.key} extra={t.priority !== "must"} />)}
               </ol>
-            ) : (
-              <Empty icon="🧭" title="Nothing here" />
-            )}
-          </Card>
+            </Card>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -197,11 +229,11 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
             </Card>
           ) : (
             <Card>
-              <Empty icon="👈" title="Pick a task" hint="Each one comes with why it matters, how to do it, and what it unlocks." />
+              <Empty icon="👈" title="Pick the top one" hint="Each step comes with why it matters, how to do it, and what it unlocks. Do one. Submit it. The next one appears." />
             </Card>
           )}
 
-          <Card id="curriculum" title="30-day build" action={<span className="text-xs text-ink-3">{doneDays.size}/30 days</span>}>
+          <Card id="curriculum" title="30-day build" action={<span className="text-xs text-ink-3">{doneDays.size}/30 days · {totalVerified} tasks verified</span>}>
             {nextDay ? (
               <div className="mb-3 rounded-lg bg-surface-2 p-3">
                 <div className="flex items-center justify-between">
@@ -232,6 +264,9 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
             </div>
           </Card>
         </div>
+      </div>
+      <div className="mt-3">
+        <Progress value={pathTotal ? Math.round((pathDone / pathTotal) * 100) : 0} tone="good" height={4} />
       </div>
     </>
   );

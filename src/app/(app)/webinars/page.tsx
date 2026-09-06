@@ -3,7 +3,7 @@ import { asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { createWebinarAction, duplicateExampleAction } from "@/lib/actions/webinars";
-import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
+import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { STEPS, nextStep, webinarProgress } from "@/lib/engine/webinar";
 import { formatDate } from "@/lib/dates";
 

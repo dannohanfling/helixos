@@ -74,7 +74,7 @@ async function main() {
   await page.waitForURL(/\/content\//);
   await page.click('a:has-text("Repurpose")');
   await page.waitForURL(/\/repurpose/);
-  await expectText(page, "One post, ten channels", "repurpose");
+  await expectText(page, "Everywhere else", "repurpose");
   await submit(page, 'button:has-text("Generate drafts")');
   await expectText(page, "Threads", "variants");
   await shot(page, "w07-repurpose");
