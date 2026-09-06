@@ -14,7 +14,11 @@
     "db:bootstrap": "tsx --tsconfig tsconfig.json scripts/bootstrap.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "import:airtable": "tsx --tsconfig tsconfig.json scripts/import-airtable.ts"
+    "import:airtable": "tsx --tsconfig tsconfig.json scripts/import-airtable.ts",
+    "verify": "scripts/verify.sh",
+    "smoke": "scripts/smoke.sh",
+    "release": "scripts/release.sh",
+    "dev:server": "scripts/dev-server.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
