@@ -1,0 +1,83 @@
+[
+ {
+  "level": 1,
+  "name": "Artisan",
+  "minPoints": 0,
+  "maxPoints": 99,
+  "color": "Stone",
+  "welcome": "Welcome, Artisan. You're at the workbench. Every master started here. Show up. Do the work. Your first quest begins now.",
+  "signal": "Entry point. Every new member starts here. No action required — just joining makes you an Artisan.\n\nSignal: Fresh member. Watch for first quest completion to confirm active engagement."
+ },
+ {
+  "level": 2,
+  "name": "Philosopher",
+  "minPoints": 100,
+  "maxPoints": 499,
+  "color": "Ocean",
+  "welcome": "You made Philosopher. You stopped just reading and started thinking. Thinking is cheap. Keep showing up — the work is where the shift happens.",
+  "signal": "First real commitment. 100 points takes a few deliberate actions. Member is engaging, not just watching.\n\nSignal: Active. Worth a personal note or a mention in the group."
+ },
+ {
+  "level": 3,
+  "name": "Sage",
+  "minPoints": 500,
+  "maxPoints": 1499,
+  "color": "Forest",
+  "welcome": "Sage. You've been at this long enough to know what works and what's noise. Your voice in the group matters more now. Use it.",
+  "signal": "Consistent contributor. 500 points means weeks of showing up. This is where lurkers become known faces.\n\nSignal: Engaged regular. Likely already recognized in the group. Consider for testimonial requests."
+ },
+ {
+  "level": 4,
+  "name": "Alchemist",
+  "minPoints": 1500,
+  "maxPoints": 2999,
+  "color": "Amber",
+  "welcome": "Alchemist. You're turning attention into something real. That's not small. Most don't get here. Keep going.",
+  "signal": "Deep commitment. 1,500 points is weeks of streaks and serious effort. This member is building something real.\n\nSignal: Near Academy-ready. Start watching for the right moment to open a conversation."
+ },
+ {
+  "level": 5,
+  "name": "Sentinel",
+  "minPoints": 3000,
+  "maxPoints": 7499,
+  "color": "Bronze",
+  "welcome": "Sentinel. You stand guard over your own progress. Discipline built this. You've earned what comes next — if you want it.",
+  "signal": "⭐ ACADEMY INVITE TRIGGER ⭐\n\n3,000 points means a member has proven discipline over weeks. They're doing the work. They're ready for more structure.\n\nAction: Reach out personally. Invite them into Academy — or at minimum an intro conversation. This is the conversion moment built into the system."
+ },
+ {
+  "level": 6,
+  "name": "Centurion",
+  "minPoints": 7500,
+  "maxPoints": 14999,
+  "color": "Garnet",
+  "welcome": "Centurion. 100 battles. You've walked the work month after month. This isn't beginner territory anymore — you're leading, whether you feel it or not.",
+  "signal": "⭐ ACCELERATOR CONVERSATION TRIGGER ⭐\n\n7,500 points is months of serious work. A Centurion has stamina. They've built real habits. They're not flaky — they're ready to scale.\n\nAction: Personal Accelerator conversation. Not a pitch — a recognition. \"You've earned this.\""
+ },
+ {
+  "level": 7,
+  "name": "Oracle",
+  "minPoints": 15000,
+  "maxPoints": 29999,
+  "color": "Violet",
+  "welcome": "Oracle. You see through the noise now. You know what works because you've done it. Your insight is a gift to the community — share it loudly.",
+  "signal": "Rare air. Oracle means this member is in the top ~2% of community engagement. Deep advocates, likely already paying clients or about to be.\n\nSignal: Super fan. Treat as insider. Consider for case study, testimonial spotlight, or JV opportunities."
+ },
+ {
+  "level": 8,
+  "name": "Titan",
+  "minPoints": 30000,
+  "maxPoints": 59999,
+  "color": "Sky",
+  "welcome": "Titan. You carry what most won't even try to pick up. Years of work. Few make it this far. Know that we see it.",
+  "signal": "Legendary status. Titans are rare. This is multi-year commitment territory. Almost certainly already deep inside premium programs.\n\nSignal: Ride-or-die. Public recognition, in-person invitations, inner circle access."
+ },
+ {
+  "level": 9,
+  "name": "Olympian",
+  "minPoints": 60000,
+  "maxPoints": null,
+  "color": "Rose",
+  "welcome": "Olympian. You stand on the mountain. The air is different up here. You didn't get here by luck — you built it, one deliberate step at a time.",
+  "signal": "The summit. Olympian is reserved for the most committed members over the longest time horizon. Essentially co-builders of the community.\n\nSignal: Inner circle. Personal relationship with Danno. Likely speakers, partners, or long-tenured Luxe clients."
+ }
+]

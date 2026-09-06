@@ -1,0 +1,30 @@
+[
+ {
+  "name": "Onboarding Champion",
+  "pointsRequired": 250,
+  "description": "You got clean out of the gate. Here's your first win — a custom Canva-made graphic celebrating your Academy start, plus a shout-out in the community.",
+  "tier": "Bronze",
+  "status": "Active"
+ },
+ {
+  "name": "System Builder",
+  "pointsRequired": 750,
+  "description": "You built the engine AND the community. Claim a 1-on-1 strategy call with Danno to sharpen your first conversion event.",
+  "tier": "Silver",
+  "status": "Active"
+ },
+ {
+  "name": "Event Runner",
+  "pointsRequired": 1500,
+  "description": "You ran it, you optimized it, you committed to event #2. Earn a Luxe-level hot seat — Danno reviews your live system top-to-bottom on a private call.",
+  "tier": "Gold",
+  "status": "Active"
+ },
+ {
+  "name": "Engine Owner",
+  "pointsRequired": 3000,
+  "description": "You've built a real engine. Your reward — featured case study inside Evolve Omega, plus a done-for-you Canva pitch asset you can use to attract JV partners.",
+  "tier": "Diamond",
+  "status": "Active"
+ }
+]

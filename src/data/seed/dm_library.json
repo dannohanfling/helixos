@@ -1,0 +1,188 @@
+[
+ {
+  "name": "Insider Check-In — DM 1 — Casual Streak Question",
+  "sequence": "Insider Check-In (Assumed Pass Holder)",
+  "step": 1,
+  "branch": null,
+  "purpose": "Recognition / See Them",
+  "body": "Hey [Name] — quick one. How's the streak going?",
+  "whyItWorks": "One line. Sent like asking a friend. Specific enough that they know what you're talking about IF they have the pass. Vague enough that if they don't, they ask 'the streak?' — which is the opening you want.",
+  "whenToSend": "First message in insider check-in sequence. Use on members you genuinely think SHOULD already be in the system. Casual confidence of 'I figured you were in' only works when it's plausibly true.",
+  "tokens": [
+   "[Name]"
+  ],
+  "universal": true
+ },
+ {
+  "name": "Insider Check-In — DM 2A — Active Member Encouragement",
+  "sequence": "Insider Check-In (Assumed Pass Holder)",
+  "step": 2,
+  "branch": "A: Active member with pass",
+  "purpose": "Encouragement / Active Member",
+  "body": "Nice. Day 5 is the big one — 160 points just for that day. Let me know when you hit it.",
+  "whyItWorks": "No ask. Just relationship-deepening. They feel seen. You're now in casual ongoing contact.",
+  "whenToSend": "Send when their response to DM 1 indicates they're active (e.g. 'going strong, on day 4').",
+  "tokens": [],
+  "universal": true
+ },
+ {
+  "name": "Insider Check-In — DM 2B — Comeback Nudge",
+  "sequence": "Insider Check-In (Assumed Pass Holder)",
+  "step": 2,
+  "branch": "B: Has pass but fell off",
+  "purpose": "Comeback / Re-engagement",
+  "body": "Happens. The system doesn't punish pauses, just resets the streak. Mondays are easiest to restart — that's day 1 again. You in for next Monday?",
+  "whyItWorks": "Removes the shame of falling off. Gives them a low-friction return path. 'You in?' makes it feel like a friendly bet, not pressure.",
+  "whenToSend": "Send when their response to DM 1 indicates they have pass but haven't been active (e.g. 'honestly, I've been slacking').",
+  "tokens": [],
+  "universal": true
+ },
+ {
+  "name": "Insider Check-In — DM 2C — The Pivot (Wait You're Not In)",
+  "sequence": "Insider Check-In (Assumed Pass Holder)",
+  "step": 2,
+  "branch": "C: Doesn't have pass yet",
+  "purpose": "Pivot / 'Wait, You're Not In?'",
+  "body": "Oh — I figured you were in already. The community pass. Most of the people I see active in the group have it.\n\nIt's how the system tracks who's actually showing up — daily hashtag posts, trials, leads captured, that kind of thing. People earn their way into different things based on what they do.\n\nWant me to send you yours? Takes 30 seconds to install.",
+  "whyItWorks": "'I figured you were in already' — the assumption is the whole play. Not accusatory. Surprised. 'Most of the people I see active in the group have it' — social proof, casual. 'Want me to send you yours?' — possessive language. It's THEIRS, they just haven't picked it up. This is the highest-converting line in the entire sequence.",
+  "whenToSend": "Send when their response to DM 1 is 'wait, what streak?' or any version of confusion. This is the conversion moment.",
+  "tokens": [],
+  "universal": true
+ },
+ {
+  "name": "Insider Check-In — DM 3 — Door Open After Yes",
+  "sequence": "Insider Check-In (Assumed Pass Holder)",
+  "step": 3,
+  "branch": null,
+  "purpose": "Door Open / Deliver Pass",
+  "body": "Here:\n\n[Pass URL]\n\nInstall takes 30 seconds. Daily hashtag is the easiest way to start earning. The pattern will make sense fast.",
+  "whyItWorks": "Same friction-light delivery as proactive outreach DM 4. One link. Clear action. No fluff.",
+  "whenToSend": "Send right after they say yes to DM 2C.",
+  "tokens": [
+   "[Pass URL]"
+  ],
+  "universal": true
+ },
+ {
+  "name": "Insider Check-In — DM 4 — System Pinged Me Check-In",
+  "sequence": "Insider Check-In (Assumed Pass Holder)",
+  "step": 4,
+  "branch": null,
+  "purpose": "Follow-Up / Nudge Progress",
+  "body": "[Name] — system shows you're at [Points] points / [Tier]. Nice progress. Quick question: have you started a chatbot trial yet?",
+  "whyItWorks": "'The system shows...' — the system is doing the noticing. You're just reporting. Removes the 'are you tracking me?' ick because the answer is yes — that's the whole point. Specific points/tier reference makes it feel custom and earned. The pivot to 'have you started X yet?' assumes the next move is obvious.",
+  "whenToSend": "3-5 days after pass install, regardless of which path they took (active member, comeback, or new pivot).",
+  "tokens": [
+   "[Name]",
+   "[Points]",
+   "[Tier]"
+  ],
+  "universal": true
+ },
+ {
+  "name": "Proactive Outreach — DM 1 — Specific Recognition",
+  "sequence": "Proactive Outreach (Recognition-First)",
+  "step": 1,
+  "branch": null,
+  "purpose": "Recognition / See Them",
+  "body": "Hey [Name] —\n\nNoticed you've been showing up in the group consistently. Saw your comment on [Specific Post Reference] last week — that landed.\n\nJust wanted to say I see it. Most people in groups this size disappear into the scroll. You haven't.\n\nNot asking for anything. Just acknowledging.",
+  "whyItWorks": "No ask. No link. No CTA. Just recognition with one specific anchor point that proves you actually saw them. ~80% of recipients respond. Specificity is load-bearing — [Specific Post Reference] has to be real or it reads as templated.",
+  "whenToSend": "First message in proactive outreach. Send to active community members posting/commenting/attending lives in past 30 days. Don't send to inactive members; reads as spam.",
+  "tokens": [
+   "[Name]",
+   "[Specific Post Reference]"
+  ],
+  "universal": true
+ },
+ {
+  "name": "Proactive Outreach — DM 2 — Light Question",
+  "sequence": "Proactive Outreach (Recognition-First)",
+  "step": 2,
+  "branch": null,
+  "purpose": "Light Question / Info Gather",
+  "body": "Appreciate that.\n\nQuick question while we're here — what are you actually building right now? Like the thing you're working on that you'd want to see take off this year?",
+  "whyItWorks": "Positions you as curious, not selling. Their answer tells you exactly which lane they fit into in the system (Avatar work? Offer building? Lead gen? Conversion?). Information is gold for everything that follows.",
+  "whenToSend": "Send only AFTER they respond to DM 1. Most respond with 'thanks, that means a lot' — then hit them with this. People love being asked about their work by someone they respect.",
+  "tokens": [],
+  "universal": true
+ },
+ {
+  "name": "Proactive Outreach — DM 3A — Stuck on Offer/Messaging",
+  "sequence": "Proactive Outreach (Recognition-First)",
+  "step": 3,
+  "branch": "A: Stuck on offer/messaging",
+  "purpose": "Tailored Pivot / Meet Where They Are",
+  "body": "Got it. That part's the one most people skip past — and then the rest doesn't work because of it.\n\nQuick thing. We've been running something in the community that walks people through it in 5 short trials. The first one is just nailing the avatar. Takes about an hour. Most people who do it tell me it's the first time they've actually seen their buyer clearly.\n\nIf you want, I can send you the door to it. No pitch, no upsell. It's part of how we run things now.",
+  "whyItWorks": "Meets them where they are. The pass becomes a door to what they already said they need, not a generic invitation. 'It's part of how we run things now' reinforces the system is established. 'No pitch, no upsell' disarms defenses (must be true).",
+  "whenToSend": "Send only when their answer to DM 2 indicates struggling with offer clarity, messaging, avatar, or positioning.",
+  "tokens": [],
+  "universal": false
+ },
+ {
+  "name": "Proactive Outreach — DM 3B — Stuck on Traffic/Leads",
+  "sequence": "Proactive Outreach (Recognition-First)",
+  "step": 3,
+  "branch": "B: Stuck on traffic/leads",
+  "purpose": "Tailored Pivot / Meet Where They Are",
+  "body": "Yeah, that's the bottleneck most people hit. Audience exists, just doesn't move.\n\nWe've been running a chatbot trial in the community — 30 days, fully built out, captures leads while you're doing other things. A few people in the group hit 10+ leads in their first month. Fully free.\n\nWant me to send you the door?",
+  "whyItWorks": "References real proof point (the 10+ leads result). 'Fully free' removes the 'is this a paid funnel?' suspicion. Question close is gentler than statement.",
+  "whenToSend": "Send when their answer to DM 2 is about leads, traffic, or audience activation issues.",
+  "tokens": [],
+  "universal": false
+ },
+ {
+  "name": "Proactive Outreach — DM 3C — Stuck on Conversion",
+  "sequence": "Proactive Outreach (Recognition-First)",
+  "step": 3,
+  "branch": "C: Stuck on conversion/closing",
+  "purpose": "Tailored Pivot / Meet Where They Are",
+  "body": "That one's structural. People can have a great offer and great traffic and still not convert because the journey's broken.\n\nWe've been running a full system in the community where members earn their way into a Gameplan Call once they've done some of the foundational work. It's not for everyone — most people don't get there — but the ones who do tend to know exactly what to fix by the end of the call.\n\nWant me to send you the door to start?",
+  "whyItWorks": "Names the real diagnosis ('the journey's broken' — not the offer, not the traffic). 'Not for everyone — most people don't get there' creates earned exclusivity without arrogance. The Gameplan Call is the destination, not the offer.",
+  "whenToSend": "Send when their answer to DM 2 is about closing, conversion rates, or sales process struggles.",
+  "tokens": [],
+  "universal": true
+ },
+ {
+  "name": "Proactive Outreach — DM 4 — Door Open",
+  "sequence": "Proactive Outreach (Recognition-First)",
+  "step": 4,
+  "branch": null,
+  "purpose": "Door Open / Deliver Pass",
+  "body": "Here it is.\n\n[Pass URL]\n\nInstall takes 30 seconds. Once you're in, the system will start tracking what you do. Daily hashtag in the group is the easiest way to start earning points. The pattern will make sense in about a week.\n\nIf you have questions while you're in, just message me here.",
+  "whyItWorks": "Friction-light. One link. Clear next action. The '30 seconds' sets expectation. 'Pattern will make sense in about a week' plants a seed of curiosity for what comes next. The 'message me here' reopens the channel.",
+  "whenToSend": "Send after they say yes to DM 3 (any branch).",
+  "tokens": [
+   "[Pass URL]"
+  ],
+  "universal": true
+ },
+ {
+  "name": "Proactive Outreach — DM 5 — Follow-Up Check",
+  "sequence": "Proactive Outreach (Recognition-First)",
+  "step": 5,
+  "branch": null,
+  "purpose": "Follow-Up / Nudge Progress",
+  "body": "Hey [Name] — saw you installed the pass, just checking in.\n\nHave you posted with the hashtag yet? It's the fastest way to start showing up on the leaderboard. Day 1 is 10 points, Day 5 is 160 by itself.\n\nIf you want, I can tell you what the next move is for someone at your level.",
+  "whyItWorks": "Light accountability without pressure. Specific instruction (the hashtag is the easiest first action). The closing line ('tell you what the next move is for someone at your level') implies the system already has a read on them — which it does, if AI Prospect Analysis has run.",
+  "whenToSend": "3-5 days after DM 4, only if they installed the pass but haven't engaged with the system yet.",
+  "tokens": [
+   "[Name]"
+  ],
+  "universal": true
+ },
+ {
+  "name": "Tier Approach — Heads Up Within Range",
+  "sequence": "Tier Approach Heads-Up",
+  "step": 1,
+  "branch": null,
+  "purpose": "Heads-Up / Tier Approach",
+  "body": "[Name] — you're [Points to Next Tier] points from Sage. That's the tier where the Gameplan Call door opens.\n\nCouple of ways to close it: full streak this week is 310. Trial 4 if you haven't done it yet is another 100. You'd cross over by Friday.\n\nJust a heads up.",
+  "whyItWorks": "Hyper-specific number ('73 points') feels custom, system-driven. Names what unlocks ('Gameplan Call door opens') makes the milestone concrete. Gives them the math. 'Just a heads up' closes warm, no pressure. This converts more Gameplan Calls than any other touchpoint in the system.",
+  "whenToSend": "When LeadsOS shows the member is within 50-150 points of the next tier (especially Sage, Sentinel, or Centurion — where doors open).",
+  "tokens": [
+   "[Name]",
+   "[Points to Next Tier]"
+  ],
+  "universal": true
+ }
+]

@@ -1,0 +1,302 @@
+[
+ {
+  "day": 1,
+  "week": "Week 1 — Foundation",
+  "title": "Define Your Buyer Avatar",
+  "type": "Think / Define",
+  "instructions": "Write down who you serve. Not 'business owners.' One specific person. What they want. What they fear. What they've already tried that didn't work.\n\nKeep it under one page. Save it where you can find it again.",
+  "estTime": "30-60 min",
+  "points": 100,
+  "why": "Without a clear avatar, every message you write is for everyone, which means it's for no one. This is the foundation everything else builds on."
+ },
+ {
+  "day": 2,
+  "week": "Week 1 — Foundation",
+  "title": "Write Your Big Promise",
+  "type": "Write / Build",
+  "instructions": "One sentence. What transformation do you promise your buyer? From what state to what state? In what timeframe?\n\nIt should be specific enough to be measurable. Vague enough not to be unethical.",
+  "estTime": "15-30 min",
+  "points": 100,
+  "why": "Your Big Promise is what people buy. Get this right and the rest of the offer writes itself."
+ },
+ {
+  "day": 3,
+  "week": "Week 1 — Foundation",
+  "title": "Post Your First Daily Hashtag",
+  "type": "Post / Share",
+  "instructions": "Post one short update in the community using the hashtag. What you're working on today. What you finished yesterday.\n\nDay 1 of your streak. Tomorrow is day 2. Day 5 is worth 160 points by itself.",
+  "estTime": "5-10 min",
+  "points": 10,
+  "why": "Builds the rhythm. The compounding effect of streaks is the engine that climbs the tier ladder."
+ },
+ {
+  "day": 4,
+  "week": "Week 1 — Foundation",
+  "title": "Build Your Framework",
+  "type": "Write / Build",
+  "instructions": "Map the journey from your buyer's current state to your Big Promise. What are the 3-5 stages they pass through? Name each one.\n\nThis becomes your method. Your IP. The thing only you teach.",
+  "estTime": "30-60 min",
+  "points": 100,
+  "why": "Without a framework, you're a generalist competing on price. With one, you're a specialist commanding premium fees."
+ },
+ {
+  "day": 5,
+  "week": "Week 1 — Foundation",
+  "title": "Daily Hashtag — Day 2 of Streak",
+  "type": "Post / Share",
+  "instructions": "Post your hashtag update for today. Day 2 = 20 points.\n\nKeep it short. Done is better than perfect.",
+  "estTime": "5-10 min",
+  "points": 20,
+  "why": "Day 2 of the streak doubles your points. The compounding starts here."
+ },
+ {
+  "day": 6,
+  "week": "Week 1 — Foundation",
+  "title": "Choose Your Offer Container",
+  "type": "Think / Define",
+  "instructions": "Decide how you'll deliver the transformation. Course? Group coaching? 1-on-1? Done-for-you? Hybrid?\n\nPick one. You can change it later. Right now, just choose.",
+  "estTime": "15-30 min",
+  "points": 100,
+  "why": "Decision is the unblock. Most people stall here for months. You won't."
+ },
+ {
+  "day": 7,
+  "week": "Week 1 — Foundation",
+  "title": "Daily Hashtag — Day 3 of Streak",
+  "type": "Post / Share",
+  "instructions": "Post your hashtag update. Day 3 = 40 points.\n\nNotice how the system is starting to feel like a rhythm. That's the goal.",
+  "estTime": "5-10 min",
+  "points": 40,
+  "why": "End of Week 1 — you've defined who you serve, what you promise, the journey you take them on, and the container you deliver in. That's more than most people do in a year."
+ },
+ {
+  "day": 8,
+  "week": "Week 2 — Build",
+  "title": "Crush Your Top Objection",
+  "type": "Write / Build",
+  "instructions": "What's the #1 reason your buyer would say no? Write it down. Then write your honest response to it. Not a sales tactic. The truth.\n\nThis becomes a piece of content. We'll publish it later this week.",
+  "estTime": "15-30 min",
+  "points": 100,
+  "why": "Objections are unspoken until you address them. Speaking to them first makes buyers feel understood, not sold."
+ },
+ {
+  "day": 9,
+  "week": "Week 2 — Build",
+  "title": "Daily Hashtag — Day 4 of Streak",
+  "type": "Post / Share",
+  "instructions": "Day 4 = 80 points. You're 1 day away from the 160-point payoff.\n\nTell us what you're shipping today.",
+  "estTime": "5-10 min",
+  "points": 80,
+  "why": "Day 4 is where most people quit. If you're here, you're already different from most people in this community."
+ },
+ {
+  "day": 10,
+  "week": "Week 2 — Build",
+  "title": "Write Your Lead Magnet",
+  "type": "Write / Build",
+  "instructions": "Create one short resource your buyer would trade their email for. A checklist. A swipe file. A 5-minute guide.\n\nIt should solve a problem that's downstream of their biggest pain. Not the whole pain. A piece of it.",
+  "estTime": "30-60 min",
+  "points": 50,
+  "why": "Lead magnets are the entry door to your world. Make the door narrow enough to be useful, wide enough to invite people in."
+ },
+ {
+  "day": 11,
+  "week": "Week 2 — Build",
+  "title": "Daily Hashtag — Day 5 = 160 points",
+  "type": "Post / Share",
+  "instructions": "Day 5 of the streak. 160 points just for this one post.\n\nIf you've made it the full week, your streak total is 310. That's almost halfway to Philosopher tier.",
+  "estTime": "5-10 min",
+  "points": 160,
+  "why": "Day 5 proves the system works. The biggest reward of the week, earned by people who showed up every day."
+ },
+ {
+  "day": 12,
+  "week": "Week 2 — Build",
+  "title": "Activate Your Chatbot Trial",
+  "type": "Ship / Launch",
+  "instructions": "Set up your free 30-day chatbot trial. Get it live on your social profile.\n\nThe bot captures leads while you're doing other things. By the end of this month, you should have at least one lead from it.",
+  "estTime": "30-60 min",
+  "points": 100,
+  "why": "Lead capture without lead capture infrastructure is hope. This is the system that turns hope into a list."
+ },
+ {
+  "day": 13,
+  "week": "Week 2 — Build",
+  "title": "Publish Your Top Objection Post",
+  "type": "Ship / Launch",
+  "instructions": "Take the objection response you wrote on Day 8. Post it publicly. Your audience. Not the community.\n\nFormat: name the objection, give your honest take, end with a question to invite conversation.",
+  "estTime": "15-30 min",
+  "points": 50,
+  "why": "Publishing is when work becomes business. Until you ship, you have a private journal."
+ },
+ {
+  "day": 14,
+  "week": "Week 2 — Build",
+  "title": "Engage — Comment on 5 Posts",
+  "type": "Engage / DM",
+  "instructions": "Find 5 posts from your ideal buyers (in groups, on LinkedIn, wherever they live online). Comment with something useful. Not 'great post.' A real contribution.\n\n5 comments = 5 chances to be noticed by someone who needs what you do.",
+  "estTime": "30-60 min",
+  "points": 50,
+  "why": "Visibility compounds. People remember those who showed up in conversations long before they ever sold them anything."
+ },
+ {
+  "day": 15,
+  "week": "Week 3 — Launch",
+  "title": "Refine Your Offer Stack",
+  "type": "Write / Build",
+  "instructions": "Take your Big Promise, your Framework, and your Offer Container. Bundle them into one clear offer.\n\nWhat's included. What it costs. What the bonuses are. What the guarantee is. Half a page max.",
+  "estTime": "30-60 min",
+  "points": 100,
+  "why": "A complete offer is what you sell. Not a service. Not a coaching session. The whole thing as one package."
+ },
+ {
+  "day": 16,
+  "week": "Week 3 — Launch",
+  "title": "Daily Hashtag — Week 3 Day 1",
+  "type": "Post / Share",
+  "instructions": "Restart your streak this Monday. Day 1 = 10 points. By Friday you'll have 310 again.\n\nThis is the rhythm now. Mondays are restart day.",
+  "estTime": "5-10 min",
+  "points": 10,
+  "why": "Streaks reset weekly. Mondays are the reset. This is by design — keeps the bar achievable."
+ },
+ {
+  "day": 17,
+  "week": "Week 3 — Launch",
+  "title": "Reach Out to 3 People in Your Audience",
+  "type": "Engage / DM",
+  "instructions": "Send 3 personal DMs to people in your audience. Not a pitch. A genuine 'I noticed your work on X.'\n\nThey don't have to respond. You just have to send.",
+  "estTime": "15-30 min",
+  "points": 75,
+  "why": "Cold outreach to warm relationships compounds. Three a day for a month = 90 new conversations."
+ },
+ {
+  "day": 18,
+  "week": "Week 3 — Launch",
+  "title": "Write Your Sales Page Draft",
+  "type": "Write / Build",
+  "instructions": "Draft a single sales page for your offer. Headline. Promise. Who it's for. What's included. The transformation. Price. CTA.\n\nDoesn't have to be pretty. Has to be clear.",
+  "estTime": "1+ hour",
+  "points": 100,
+  "why": "The sales page is where strangers become customers. Until you have one, you can't sell at scale."
+ },
+ {
+  "day": 19,
+  "week": "Week 3 — Launch",
+  "title": "Daily Hashtag — Day 4 (80 pts)",
+  "type": "Post / Share",
+  "instructions": "Day 4 of this week's streak. 80 points. You've earned 150 this week from posts alone.\n\nShare a behind-the-scenes look at the sales page you drafted yesterday.",
+  "estTime": "5-10 min",
+  "points": 80,
+  "why": "Sharing your build process creates accountability and quietly markets your offer at the same time."
+ },
+ {
+  "day": 20,
+  "week": "Week 3 — Launch",
+  "title": "Publish Your Lead Magnet Live",
+  "type": "Ship / Launch",
+  "instructions": "Get your lead magnet live somewhere a human can opt in. A landing page. A link in your bio. A pinned post.\n\nUgly version is fine. Live is better than perfect.",
+  "estTime": "30-60 min",
+  "points": 100,
+  "why": "A lead magnet sitting in your Google Drive collects no leads. Live = visible. Visible = working."
+ },
+ {
+  "day": 21,
+  "week": "Week 3 — Launch",
+  "title": "Reach Out to 3 More + First Lead Captured",
+  "type": "Engage / DM",
+  "instructions": "Three more DMs today. Different people. Same warmth.\n\nIf the chatbot has captured your first lead by today, that's 250 bonus points unlocked. Check your dashboard.",
+  "estTime": "15-30 min",
+  "points": 100,
+  "why": "The end of Week 3 is the inflection point. Most members start seeing the first real outputs of the system here."
+ },
+ {
+  "day": 22,
+  "week": "Week 4 — Momentum",
+  "title": "Reflect — What's Working After 3 Weeks?",
+  "type": "Review / Reflect",
+  "instructions": "Look back at the last 21 days. Write down: what's working. What you avoided. What surprised you.\n\nDon't change anything yet. Just look at it honestly.",
+  "estTime": "15-30 min",
+  "points": 50,
+  "why": "Reflection is where momentum becomes wisdom. Without it, you're just busy."
+ },
+ {
+  "day": 23,
+  "week": "Week 4 — Momentum",
+  "title": "Daily Hashtag + Quote a Win",
+  "type": "Post / Share",
+  "instructions": "Today's hashtag post: name one specific win from the last 3 weeks. A new lead. A clearer offer. A streak you kept.\n\nWins compound when you say them out loud.",
+  "estTime": "5-10 min",
+  "points": 20,
+  "why": "Public wins build identity. Identity is the engine of consistency."
+ },
+ {
+  "day": 24,
+  "week": "Week 4 — Momentum",
+  "title": "Refine Based on Reflection",
+  "type": "Write / Build",
+  "instructions": "Take what you noticed on Day 22. Pick ONE thing to change this week. Just one.\n\nBetter to fix one thing well than break five things badly.",
+  "estTime": "15-30 min",
+  "points": 50,
+  "why": "Refinement is the long game. Most coaches blow up their business by changing everything at once."
+ },
+ {
+  "day": 25,
+  "week": "Week 4 — Momentum",
+  "title": "Daily Hashtag — Day 3 (40 pts)",
+  "type": "Post / Share",
+  "instructions": "Day 3 of this week. 40 points. Tell us what you refined.\n\nShowing your work is your work.",
+  "estTime": "5-10 min",
+  "points": 40,
+  "why": "Naming what you're refining makes it real and makes you accountable."
+ },
+ {
+  "day": 26,
+  "week": "Week 4 — Momentum",
+  "title": "Send Your Offer to 3 Warm Contacts",
+  "type": "Engage / DM",
+  "instructions": "Pick 3 people who are clearly in your buyer audience and might say yes. Send them your offer directly. Personally. Conversationally.\n\nNot a pitch. An invitation.",
+  "estTime": "15-30 min",
+  "points": 100,
+  "why": "Until you've directly asked 3 warm contacts, you don't know if your offer works. This is the test."
+ },
+ {
+  "day": 27,
+  "week": "Week 4 — Momentum",
+  "title": "Daily Hashtag — Day 5 (160 pts)",
+  "type": "Post / Share",
+  "instructions": "Your fourth full streak. 160 points. Total streak points this week: 310. Total over the 30 days from streaks alone: potentially 1,240.\n\nThat's nearly Alchemist tier from posting alone.",
+  "estTime": "5-10 min",
+  "points": 160,
+  "why": "Show members what's possible. The math of compounding is what makes this system different from any other."
+ },
+ {
+  "day": 28,
+  "week": "Week 4 — Momentum",
+  "title": "Capture 10 Leads Milestone Push",
+  "type": "Ship / Launch",
+  "instructions": "By today, you should be approaching (or past) 10 leads captured. If you are, you've unlocked the 300-point milestone.\n\nIf you're not there yet, that's the goal for the next 7 days. Reach out, share your lead magnet, drive traffic.",
+  "estTime": "30-60 min",
+  "points": 100,
+  "why": "10 leads is the threshold where the system has visibly worked. It's the proof point Members tell stories about."
+ },
+ {
+  "day": 29,
+  "week": "Week 4 — Momentum",
+  "title": "Plan Your Next 30 Days",
+  "type": "Review / Reflect",
+  "instructions": "Look at where you are. Your points. Your tier. Your offer. Your leads.\n\nWrite the next 30 days. What ONE outcome would matter most? Plan backward from that.",
+  "estTime": "30-60 min",
+  "points": 75,
+  "why": "Curriculum ends. Habits continue. The next 30 days are yours to design."
+ },
+ {
+  "day": 30,
+  "week": "Week 4 — Momentum",
+  "title": "Celebrate — 30 Days In, Tier Earned",
+  "type": "Review / Reflect",
+  "instructions": "Post a recap in the community. What you built. What tier you reached. What you learned about yourself.\n\nThis isn't a victory lap. It's marking the threshold of becoming the kind of business owner who finishes things.",
+  "estTime": "15-30 min",
+  "points": 100,
+  "why": "Identity shift requires acknowledgment. Without it, the 30 days were just a checklist. With it, they're a turning point."
+ }
+]
