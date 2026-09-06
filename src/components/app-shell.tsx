@@ -17,7 +17,7 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
             <div className="text-[11px] text-ink-3">{viewer.workspace.name}</div>
           </div>
         </Link>
-        <SideNav role={viewer.role} />
+        <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} />
         <div className="mt-auto space-y-3 px-2">
           <div className="rounded-xl bg-surface-2 p-3 text-xs">
             <div className="flex items-center justify-between">

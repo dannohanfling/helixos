@@ -116,7 +116,8 @@ async function main() {
   await m.goto(`${base}/login`);
   await m.click('button:has-text("As a client")');
   await m.waitForURL(/\/today/);
-  await m.goto(`${base}/more`);
+  const moreRes = await m.goto(`${base}/more`);
+  if (!moreRes || moreRes.status() !== 200) throw new Error(`/more returned ${moreRes?.status()}`);
   await m.screenshot({ path: "screenshots/w12-mobile-more.png" });
   console.log("✓ w12-mobile-more");
 

@@ -5,7 +5,19 @@ export type Prog = { libraryTaskKey: string; status: "todo" | "submitted" | "rev
 
 export const OPEN_LIMIT = 3;
 
-export function simplePath(stages: { key: string; order: number }[], library: LibTask[], progress: Prog[]) {
+/**
+ * Onboarding admin: the contract, the payment, the intake form, access confirmations and the kickoff call. By the time a client
+ * is inside the app these are done or the coach's job, so they never lead the client-facing path. They stay in the library as
+ * optional extras, visible on the whole map, never as "your next step".
+ */
+export const ADMIN_ONBOARDING_KEYS = new Set(["rec3EDSai6DGpoSuH", "recNzletnqB7Puu0A", "recCwbntdJ4Lx4dCN", "recQ9p5TpZUbE4UTe", "recKlRTN3LqILSJYe", "recROMPBY7WWLyW3e"]);
+
+export function clientFacing<T extends LibTask>(library: T[]): T[] {
+  return library.map((t) => (ADMIN_ONBOARDING_KEYS.has(t.key) ? { ...t, priority: "optional" as const } : t));
+}
+
+export function simplePath(stages: { key: string; order: number }[], rawLibrary: LibTask[], progress: Prog[]) {
+  const library = clientFacing(rawLibrary);
   const status = new Map(progress.map((p) => [p.libraryTaskKey, p.status]));
   const st = (k: string) => status.get(k) ?? "todo";
   const ordered = stages.slice().sort((a, b) => a.order - b.order);

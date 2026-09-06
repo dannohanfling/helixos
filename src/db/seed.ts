@@ -11,6 +11,7 @@ import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { POINTS, closeActivityPoints, contentPoints } from "@/lib/engine/points";
 import { SECTION_TEMPLATES } from "@/lib/engine/webinar";
 import { repurposeAll } from "@/lib/engine/repurpose";
+import { ADMIN_ONBOARDING_KEYS } from "@/lib/engine/pathway";
 import stories from "@/data/seed/webinar/stories.json";
 import analogies from "@/data/seed/webinar/analogies.json";
 import objections from "@/data/seed/webinar/objections.json";
@@ -39,7 +40,7 @@ export async function seedLibrary(): Promise<void> {
       submissionType: t.submissionType as schema.LibraryTask["submissionType"],
       points: t.points,
       effort: t.effort as schema.LibraryTask["effort"],
-      priority: t.priority as schema.LibraryTask["priority"],
+      priority: ADMIN_ONBOARDING_KEYS.has(t.key) ? ("optional" as const) : (t.priority as schema.LibraryTask["priority"]),
       unlocks: t.unlocks ?? null,
       trainingUrl: t.trainingUrl ?? null,
     };

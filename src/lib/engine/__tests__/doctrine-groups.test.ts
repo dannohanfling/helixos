@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { alignPost, groupReadiness, readRules } from "../groups";
-import { simplePath } from "../pathway";
+import { ADMIN_ONBOARDING_KEYS, clientFacing, simplePath } from "../pathway";
 import { daysInMonth, monthProgress } from "../targets";
 import { principlePost, principleReel, principleTraining } from "../doctrine";
 
@@ -80,5 +80,18 @@ describe("doctrine", () => {
     expect(principleReel(p)).toMatch(/HOOK/);
     expect(principleReel(p)).toContain('comment "PROTEROS"');
     expect(principleTraining(p)).toMatch(/^1\. Name it/);
+  });
+});
+
+describe("onboarding admin tasks never lead the client path", () => {
+  it("demotes the contract, payment, intake, access and kickoff tasks to optional extras", () => {
+    const stages = [{ key: "onboarding", order: 1 }, { key: "community", order: 2 }];
+    const admin = Array.from(ADMIN_ONBOARDING_KEYS).map((key, i) => ({ key, stageKey: "onboarding", order: i + 1, name: `admin ${i}`, points: 10, priority: "must" as const }));
+    const lib = [...admin, { key: "pick-home", stageKey: "onboarding", order: 4, name: "Choose where your community will live", points: 25, priority: "must" as const }];
+    expect(clientFacing(lib).filter((t) => t.priority === "must").map((t) => t.key)).toEqual(["pick-home"]);
+    const p = simplePath(stages, lib, []);
+    expect(p.now.map((t) => t.key)).toEqual(["pick-home"]);
+    expect(p.extras.total).toBe(admin.length);
+    expect(p.now.some((t) => ADMIN_ONBOARDING_KEYS.has(t.key))).toBe(false);
   });
 });

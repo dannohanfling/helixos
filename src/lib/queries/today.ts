@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { addDays } from "@/lib/dates";
@@ -36,7 +36,7 @@ export async function todayData(v: Viewer) {
   const workspaceId = v.workspace.id;
   const tomorrow = addDays(today, 1);
 
-  const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal] =
+  const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal, everLockedIn] =
     await Promise.all([
       logFor(workspaceId, userId, today),
       streakFor(workspaceId, userId, today),
@@ -92,6 +92,7 @@ export async function todayData(v: Viewer) {
       nextPathwayTask(userId),
       currentCurriculumDay(userId),
       db.query.goals.findFirst({ where: and(eq(schema.goals.userId, userId), eq(schema.goals.primary, true)) }),
+      db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.workspaceId, workspaceId), eq(schema.dailyLogs.userId, userId), isNotNull(schema.dailyLogs.morningDoneAt)) }),
     ]);
 
   const clientRecords = await db.query.clientRecords.findMany({ where: and(eq(schema.clientRecords.userId, userId), eq(schema.clientRecords.status, "active")) });
@@ -159,6 +160,8 @@ export async function todayData(v: Viewer) {
     pathwayNext,
     curriculumDay,
     goal: goal ?? null,
+    /** Never locked in: Today shows the welcome card instead of the next-action block. */
+    firstSession: !everLockedIn,
     actions,
     snapshot,
   };

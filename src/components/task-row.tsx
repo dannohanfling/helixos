@@ -1,6 +1,7 @@
 import type { Task } from "@/db/schema";
 import { deleteTaskAction, rescheduleTaskAction, setFocusAction, toggleTaskAction } from "@/lib/actions/tasks";
 import { addDays, relativeDay } from "@/lib/dates";
+import { ConfirmButton } from "./confirm-button";
 
 const CATEGORY_ICON: Record<string, string> = { sales: "💬", content: "✍️", community: "👥", system: "⚙️", admin: "🗂️", fulfillment: "🤝" };
 
@@ -34,26 +35,26 @@ export function TaskRow({ task, today, compact = false }: { task: Task; today: s
         </div>
       </div>
       {!done ? (
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+        <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition group-hover:opacity-100 focus-within:opacity-100" data-testid="task-controls">
           <form action={setFocusAction}>
             <input type="hidden" name="id" value={task.id} />
             <input type="hidden" name="on" value={isFocus ? "0" : "1"} />
-            <button className="btn btn-ghost btn-xs" type="submit" title={isFocus ? "Remove from top 3" : "Make it a top 3"}>
+            <button className="btn btn-ghost btn-xs task-control" type="submit" title={isFocus ? "Remove from top 3" : "Make it a top 3"} aria-label={isFocus ? "Remove from top 3" : "Make it a top 3"}>
               {isFocus ? "☆" : "★"}
             </button>
           </form>
           <form action={rescheduleTaskAction}>
             <input type="hidden" name="id" value={task.id} />
             <input type="hidden" name="dueDate" value={addDays(today, 1)} />
-            <button className="btn btn-ghost btn-xs" type="submit" title="Move to tomorrow">
+            <button className="btn btn-ghost btn-xs task-control" type="submit" title="Move to tomorrow" aria-label="Move to tomorrow">
               ↷
             </button>
           </form>
           <form action={deleteTaskAction}>
             <input type="hidden" name="id" value={task.id} />
-            <button className="btn btn-ghost btn-xs" type="submit" title="Delete">
+            <ConfirmButton className="btn btn-ghost btn-xs task-control" title="Delete" message={`Delete "${task.title}"? This can't be undone.`}>
               ✕
-            </button>
+            </ConfirmButton>
           </form>
         </div>
       ) : null}

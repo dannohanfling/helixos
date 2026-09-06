@@ -19,7 +19,7 @@ export async function seedNewClient(workspaceId: string, userId: string): Promis
     workspaceId,
     userId,
     title: "Cash collected this month",
-    target: 5000,
+    target: 0, // not set: Today hides the bar until the client chooses a number on Settings
     actual: 0,
     unit: "$",
     period: "This month",

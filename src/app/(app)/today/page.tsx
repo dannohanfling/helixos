@@ -57,6 +57,31 @@ export default async function TodayPage() {
         </div>
       </div>
 
+      {d.firstSession ? (
+        <section className="card mb-5 border-accent p-5" style={{ background: "var(--accent-soft)" }} data-testid="welcome">
+          <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Welcome to HelixOS</div>
+          <div className="mt-1 text-xl font-bold">One loop, every weekday. That&apos;s the whole system.</div>
+          <ol className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+            <li className="rounded-lg bg-surface p-3">
+              <b>1 · Lock in</b>
+              <div className="text-ink-2">60 seconds. Pick your top 3 for today.</div>
+            </li>
+            <li className="rounded-lg bg-surface p-3">
+              <b>2 · Do the work</b>
+              <div className="text-ink-2">Post, reach out, follow up. Tick things off as you go.</div>
+            </li>
+            <li className="rounded-lg bg-surface p-3">
+              <b>3 · Close the day</b>
+              <div className="text-ink-2">90 seconds. Your numbers and your win.</div>
+            </li>
+          </ol>
+          <p className="mt-3 text-sm text-ink-2">Points, streaks and your pathway all come from that loop. Your top 3 for today are already waiting below.</p>
+          <a href="#checkin" className="btn btn-primary mt-3">
+            Lock in your first day
+          </a>
+        </section>
+      ) : null}
+
       {/* Next best action */}
       <section className="mb-5 grid gap-3 md:grid-cols-[1.4fr_1fr]">
         <div className={`card p-5 ${primary.tone === "warning" ? "border-warn" : "border-accent"}`} style={{ background: primary.tone === "warning" ? "var(--warn-soft)" : "var(--accent-soft)" }}>
@@ -89,7 +114,7 @@ export default async function TodayPage() {
               <li className="text-sm text-ink-2">That&apos;s the whole list. Nice.</li>
             )}
           </ul>
-          {d.goal ? (
+          {d.goal && d.goal.target > 0 ? (
             <div className="mt-4 border-t pt-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-ink-2">{d.goal.title}</span>
@@ -103,7 +128,11 @@ export default async function TodayPage() {
                 <Progress value={goalPct} tone={goalPct >= 100 ? "good" : "accent"} height={6} />
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="mt-4 border-t pt-3 text-xs text-ink-3">
+              <Link href="/settings" className="underline">Set your one goal</Link> and it shows here, filled by the cash you log in the close.
+            </div>
+          )}
         </div>
       </section>
 

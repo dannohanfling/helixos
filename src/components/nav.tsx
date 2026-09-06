@@ -1,51 +1,11 @@
 "use client";
 
+import { NAV_GROUPS, type NavItem } from "./nav-groups";
+const STORAGE_KEY = "helix.nav.collapsed";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useSyncExternalStore } from "react";
-
-export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; hint?: string };
-export type NavGroup = { label: string; items: NavItem[] };
-
-export const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Daily",
-    items: [
-      { href: "/today", label: "Today", icon: "☀️" },
-      { href: "/tasks", label: "Tasks", icon: "✅" },
-      { href: "/content", label: "Content", icon: "✍️", hint: "post + repurpose" },
-      { href: "/library", label: "Library", icon: "🗂️", hint: "swipes + hooks" },
-      { href: "/conversations", label: "DMs", icon: "💬" },
-      { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
-    ],
-  },
-  {
-    label: "Build",
-    items: [
-      { href: "/webinars", label: "Webinars", icon: "🎤", hint: "wizard" },
-      { href: "/offers", label: "Offers", icon: "🎁", hint: "wizard" },
-      { href: "/pathway", label: "Pathway", icon: "🛣️" },
-      { href: "/courses", label: "Courses", icon: "📚" },
-      { href: "/doctrine", label: "Doctrine", icon: "🏛️", hint: "principles" },
-      { href: "/proof", label: "Proof Bank", icon: "🏆" },
-    ],
-  },
-  {
-    label: "Grow",
-    items: [
-      { href: "/clients", label: "Clients", icon: "🤝", hint: "your clients" },
-      { href: "/community", label: "Community Pass", icon: "🎟️", passOnly: true, hint: "Elite" },
-      { href: "/numbers", label: "Numbers", icon: "📊" },
-      { href: "/rewards", label: "Rewards", icon: "🏆" },
-      { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
-      { href: "/integrations", label: "Integrations", icon: "🔌", coachOnly: true },
-    ],
-  },
-];
-
-export const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
-
-const STORAGE_KEY = "helix.nav.collapsed";
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
@@ -80,7 +40,7 @@ function writeCollapsed(next: Record<string, boolean>) {
   listeners.forEach((l) => l());
 }
 
-export function SideNav({ role }: { role: "coach" | "client" }) {
+export function SideNav({ role, passEnabled }: { role: "coach" | "client"; passEnabled: boolean }) {
   const pathname = usePathname();
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const collapsed = useMemo<Record<string, boolean>>(() => {
@@ -94,7 +54,7 @@ export function SideNav({ role }: { role: "coach" | "client" }) {
   return (
     <nav className="space-y-2">
       {NAV_GROUPS.map((g) => {
-        const items = g.items.filter((n) => !n.coachOnly || role === "coach");
+        const items = g.items.filter((n) => (!n.coachOnly || role === "coach") && (!n.passOnly || passEnabled));
         const activeItem = items.find((n) => isActive(pathname, n.href));
         const open = !collapsed[g.label];
         return (
