@@ -75,7 +75,7 @@ npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simpl
 npx tsx scripts/smoke-composer.ts  # Composer, per-channel previews, one-click schedule everywhere, collapsible nav
 npx tsx scripts/smoke-library.ts   # Library browse, search, use in composer, save to library, coach share
 npx tsx scripts/smoke-auth.ts     # /setup token gate + 404s, forgot → reset with session invalidation, change password (needs a current `next build`)
-npx tsx scripts/smoke-ghl.ts       # Agency token → client sub-account → accounts → channel map → schedule → status sync, against scripts/mock-ghl.ts
+npx tsx scripts/smoke-ghl.ts       # Client's own Private Integration token → 401 / 403 / wrong-location reasons → accounts → channel map → schedule → status sync, against scripts/mock-ghl.ts
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
 
