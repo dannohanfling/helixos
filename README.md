@@ -69,6 +69,7 @@ npm test                    # engine unit tests (streaks, tiers, points, next be
 npx tsx scripts/smoke.ts          # Playwright walkthrough of the daily loop; writes ./screenshots
 npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, clients, community pass
 npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks
+npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
 
 ## Stack
