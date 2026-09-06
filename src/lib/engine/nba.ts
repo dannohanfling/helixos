@@ -16,6 +16,8 @@ export type Snapshot = {
   curriculumDay: { day: number; title: string; points: number } | null;
   streakAlive: boolean;
   runningStreak: number;
+  clientsDueCheckin?: number;
+  webinarInProgress?: { id: string; title: string; step: string; stepLabel: string } | null;
 };
 
 export type Action = {
@@ -101,6 +103,26 @@ export function nextBestActions(s: Snapshot): Action[] {
       href: "/tasks",
       cta: "Work the list",
       tone: "primary",
+    });
+  }
+  if (s.clientsDueCheckin) {
+    out.push({
+      key: "clients",
+      title: `${s.clientsDueCheckin} of your clients ${s.clientsDueCheckin === 1 ? "is" : "are"} due for a check-in`,
+      why: "Retention is a rhythm. Wins first, then blockers, then one next step.",
+      href: "/clients?filter=due",
+      cta: "Check in",
+      tone: "primary",
+    });
+  }
+  if (s.webinarInProgress) {
+    out.push({
+      key: "webinar",
+      title: `Webinar: ${s.webinarInProgress.title} · next up ${s.webinarInProgress.stepLabel}`,
+      why: "Twenty minutes a day on the build beats a weekend of panic.",
+      href: `/webinars/${s.webinarInProgress.id}?step=${s.webinarInProgress.step}`,
+      cta: "Keep building",
+      tone: "neutral",
     });
   }
   if (s.curriculumDay) {

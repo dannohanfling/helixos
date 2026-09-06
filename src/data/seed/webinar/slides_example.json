@@ -1,0 +1,92 @@
+[
+ {
+  "order": 1,
+  "name": "Leaky Webinar Cover",
+  "slideType": "🎬 Cover",
+  "section": "🎬 Hook",
+  "headline": "Why most coaching webinars leak buyers (and how to plug them)",
+  "body": "Big bold title slide. No bullets. Just the hook and your name.",
+  "visual": "Cracked bucket dripping leads on a dark background. Title in white. Your name + photo bottom-right."
+ },
+ {
+  "order": 2,
+  "name": "The 4-Day Decay",
+  "slideType": "📊 Diagram",
+  "section": "😣 Problem Frame",
+  "headline": "Most webinars lose 70% of buyers in the first 4 days",
+  "body": "Show the decay curve. Day 1 to Day 7. Most coaches never run a replay sequence — so the buyers who weren't ready on day one just... vanish.",
+  "visual": "Line chart sloping down hard from Day 1 to Day 7. Annotate the gap between Day 2 and Day 7 as the 'ghost zone.'"
+ },
+ {
+  "order": 3,
+  "name": "What If You Could Plug The Leak",
+  "slideType": "📝 Bullets",
+  "section": "🚪 Opportunity Frame",
+  "headline": "A webinar that keeps selling for 14 days, not 90 minutes",
+  "body": "Three things change everything:\n• Replays that re-pitch (not just re-air)\n• DMs that wake up cold leads\n• Email sequences tied to behavior, not time",
+  "visual": "Clean three-icon row across the slide. One icon per bullet. Generous whitespace."
+ },
+ {
+  "order": 4,
+  "name": "The Omnichannel Loop",
+  "slideType": "📊 Diagram",
+  "section": "⚙️ Mechanism-Vehicle",
+  "headline": "Meet the Omnichannel Loop — your 14-day buyer recovery system",
+  "body": "A circular flow that turns one webinar into 14 days of selling: Live Webinar → Replay 1 → DM Nudge → Replay 2 → Bonus Drop → Closeout.",
+  "visual": "Hand-drawn loop with arrows. Each station gets a tiny icon. Friendly and human, not corporate."
+ },
+ {
+  "order": 5,
+  "name": "The Math Behind The Loop",
+  "slideType": "🏆 Proof",
+  "section": "🏆 Proof Block",
+  "headline": "Coaches running the loop close 2.3x more buyers per registrant",
+  "body": "Stat callout. Source: 47 client cohorts, 2024–2025.",
+  "visual": "One huge number. '2.3x' in giant typeface filling the slide. Source line in small text bottom-left."
+ },
+ {
+  "order": 6,
+  "name": "Marisol's $48k Recovery",
+  "slideType": "💬 Story",
+  "section": "📚 Case Study",
+  "headline": "One coach. Same offer. New loop. +$48k.",
+  "body": "Marisol had a 90-minute webinar that did $11k. Same offer wrapped in the loop did $59k over 14 days. Nothing about the offer changed — just the system around it.",
+  "visual": "Before/after revenue bars side by side. Photo of Marisol on the right. Quote from her below in italics."
+ },
+ {
+  "order": 7,
+  "name": "Why I'm The One Teaching This",
+  "slideType": "💬 Story",
+  "section": "🎓 Credibility",
+  "headline": "I've built loops for 100+ coaching offers — and broken plenty too",
+  "body": "Two sentences on me. One sentence on what I'm not (a guru). One sentence on why I care about getting this right.",
+  "visual": "Photo of me at the whiteboard, mid-teach. Same energy as the recent FB post. Three small logo strips below: clients, podcasts, results."
+ },
+ {
+  "order": 8,
+  "name": "Introducing OmnichannelOS",
+  "slideType": "🎬 Cover",
+  "section": "🔁 Offer Transition",
+  "headline": "Introducing OmnichannelOS",
+  "body": "If you don't want to spend 6 months building this from scratch — we already did. Here's the system.",
+  "visual": "Big logo reveal slide. Dark background. Logo lockup centered. Tagline below in muted gold."
+ },
+ {
+  "order": 9,
+  "name": "What You Get Inside",
+  "slideType": "🎁 Offer",
+  "section": "🎁 Offer Stack",
+  "headline": "Everything you need to run the loop on day one",
+  "body": "Five-piece stack:\n• The Loop Templates ($X)\n• The Replay Sequence Library ($X)\n• The DM Scripts Vault ($X)\n• 1:1 Onboarding ($X)\n• 90-Day Coaching Pod ($X)\n\nTotal value $X — your investment $Y.",
+  "visual": "Stack visual. Each item gets its own row with a checkmark and a price. Strikethrough on total value. Big arrow pointing to your actual price."
+ },
+ {
+  "order": 10,
+  "name": "Q&A + Claim Your Spot",
+  "slideType": "🎯 CTA",
+  "section": "❓ Q&A",
+  "headline": "Drop your question in chat — and grab your spot",
+  "body": "Two parallel paths: ask a question in the chat OR click the link to claim your seat. Bonus expires when this webinar ends.",
+  "visual": "Split screen. Left half: 'Ask anything.' Right half: 'Claim your spot →' with a giant arrow. Countdown timer in the corner."
+ }
+]

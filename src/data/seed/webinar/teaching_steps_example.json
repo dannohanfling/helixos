@@ -1,0 +1,86 @@
+[
+ {
+  "act": "external",
+  "order": 1,
+  "name": "Run a 7-day decay check on every channel",
+  "what": "Every Monday, pull performance data from the last 7 days for every channel in your Synchronized Journey — sends, opens, clicks, replies, conversions. Compare to the same channel's prior 7 days. Flag any channel that's under 60% of last week's numbers or above 110%.",
+  "why": "Channel decay doesn't announce itself. It creeps. By the time you notice your open rates are way down, you've already burned 3 weeks of spend on a dying channel. A 7-day decay check catches the slide before it becomes a cliff. The Synchronized Journey makes this cheap — all your data is already in one memory layer."
+ },
+ {
+  "act": "external",
+  "order": 2,
+  "name": "Cut budget from any channel below 60% of last month",
+  "what": "Any channel flagged as decaying — below 60% of its prior 30-day baseline — gets its budget cut automatically that same Monday. Not paused for review. Not flagged for a meeting. Cut. The Synchronized Journey sees the decay signal and reduces spend there without you touching anything.",
+  "why": "Human operators hesitate on cuts. \"Maybe it'll bounce back.\" \"Let me wait one more week.\" That hesitation costs you real money every month. Automation doesn't hesitate. The cut happens Monday at 9am, whether you believe in the channel or not. The data gets to decide, not your feelings about the channel."
+ },
+ {
+  "act": "external",
+  "order": 3,
+  "name": "Double down on the one channel above 110%",
+  "what": "Any channel flagged as surging — above 110% of its prior 30-day baseline — gets its budget doubled that same Monday. Automatically. The Synchronized Journey compounds attention where attention is moving, without waiting for you to notice.",
+  "why": "Most operators are too late to the surging channel. By the time they notice it's working, the easy money on that channel is gone. Automating the double-down captures the full curve — you're in early, you're in heavy, you're out when it decays. Following attention beats predicting it, every single time."
+ },
+ {
+  "act": "external",
+  "order": 4,
+  "name": "Set a 30-day rotation so the pipeline never gets stuck",
+  "what": "Every 30 days, the decay/surge rotation resets to zero and runs fresh. No channel holds budget by default. No channel stays cut forever. Past-30-days performance dictates the next 30 days. Set it once in the Synchronized Journey config and let it run.",
+  "why": "Without the rotation reset, you get stuck. A channel that was dying 6 months ago stays cut forever, even when it would be working again. A channel that was surging a year ago stays overfunded. The 30-day reset means your pipeline keeps re-reading the market fresh. The environment changes. Your pipeline should too."
+ },
+ {
+  "act": "vehicle",
+  "order": 1,
+  "name": "Give every lead a single source of truth",
+  "what": "Every lead needs ONE central record — a Lead State — that every channel reads from and writes to. Not one record in your email tool, another in your CRM, another in your SMS platform. One. Brain. For. The. Lead.",
+  "why": "Without a single source of truth, every channel is operating on its own copy of the lead — and those copies drift. Person opens email, forgets, clicks SMS three weeks later, and gets treated like a stranger. Pipeline amnesia is always a data architecture problem first."
+ },
+ {
+  "act": "vehicle",
+  "order": 2,
+  "name": "Make every channel read AND write to the Lead State",
+  "what": "Every channel (Email, SMS, DM, Events, Social, Wallet) must both read from the Lead State to personalize outreach, AND write back to the Lead State when the lead interacts. Read-only integrations are why your \"omnichannel\" still feels like six disconnected systems.",
+  "why": "One-way data flow is the #1 reason \"integrated\" stacks still feel fragmented. If your SMS tool doesn't update the lead's state when they reply, the next email goes out like nothing happened. Bidirectional sync is the difference between a system and a stack."
+ },
+ {
+  "act": "vehicle",
+  "order": 3,
+  "name": "Map the six friction leaks and plug them in order",
+  "what": "The six places pipelines lose memory: Confusion, Weak Reminders, No Memory, Repeat Questions, Bad Transitions, Generic Follow-Up. You need to know which leak is yours before you plug a thing. Diagnose, then fix. In order.",
+  "why": "Most teams try to \"improve their funnel\" without knowing which leak is bleeding the most. They upgrade email copy when the real issue is repeat questions on SMS. Diagnosis first, sequenced fixes second — otherwise you're patching the wrong hole."
+ },
+ {
+  "act": "vehicle",
+  "order": 4,
+  "name": "Install the recycle loop for 'not yets'",
+  "what": "42% of your highest-LTV buyers will say \"not yet\" before they say yes. You need a defined recycle path that moves them out of the active funnel WITHOUT losing them. They shouldn't disappear into a graveyard folder — they should re-enter the top of the funnel on a different cadence.",
+  "why": "Without a recycle loop, your pipeline treats 'no' and 'not yet' the same — both end up in the same dead list. But 'not yet' is the highest-intent cohort you have. Losing them to a flat archive is the single most expensive architectural mistake in most funnels."
+ },
+ {
+  "act": "internal",
+  "order": 1,
+  "name": "Plant the Lead State first. Don't touch automations yet.",
+  "what": "Week 1 of the Synchronized Install Protocol is the Lead State and nothing else. Open your CRM or Airtable. Stand up the single memory record schema — lead ID, current state, last touch date, recycle flag. Don't connect any channels yet. Don't wire any automations. Just plant the table. Import your existing leads in with default state = \"Unknown\" and let the schema exist for 72 hours before you touch it.",
+  "why": "The #1 reason Synchronized Journey installs fail is people try to build the pipeline AND the memory at the same time. The memory has to come first, fully, with nothing wired to it. If you skip this, the automations you build in Week 2 and 3 will be writing to a schema that's still moving underneath them. Plant first. Wire second. Always."
+ },
+ {
+  "act": "internal",
+  "order": 2,
+  "name": "Wire in three channels. Skip the other three for now.",
+  "what": "Week 2. Pick the three channels you already use most — for most clients that's Email, SMS, and DM. Connect ONLY those three to the Lead State. Every channel reads from the state before sending. Every channel writes its outcome back after sending. Don't wire Post, Event, or Wallet yet. Three channels, both directions. That's the whole Week 2 goal.",
+  "why": "Installing six channels at once is how you end up with six half-working connections. Three channels fully wired beats six channels half-wired every single time. You can always add channels four through six in Month 2. You cannot un-break a tangled install."
+ },
+ {
+  "act": "internal",
+  "order": 3,
+  "name": "Drop in the pre-built 48-hour reminder. Don't write your own.",
+  "what": "Week 3. Use the pre-built 48-hour reminder sequence — 3 emails, 2 SMS, 1 DM, tested across 47 installs. Copy it in as-written. Change only the merge tags for your business name and CTA link. Do not rewrite the copy. Do not \"improve\" the subject lines. Schedule the first send 48 hours after a lead enters state \"Not Yet.\"",
+  "why": "The sequence has been A/B tested at scale. Your version of it, written at 11pm by a tired business owner who just finished a client call, will convert worse — guaranteed. The template works because 47 people didn't touch it. Don't be the first one who does. Use it as-written for 30 days, THEN personalize."
+ },
+ {
+  "act": "internal",
+  "order": 4,
+  "name": "Flip the recycle loop ON. Don't optimize yet.",
+  "what": "Week 4. Turn on the recycle loop — the automation that moves any lead who's been in state \"Not Yet\" for 60+ days back into the active sequence. Set it to run weekly. Do not touch the cadence, the trigger threshold, or the messaging for 30 days. Let it run untouched.",
+  "why": "The recycle loop is where the \"not yets\" convert to buyers — but only if you give it room to cook. Most installers see the first week of recycle data and immediately start tweaking. That's how you break it before it has a chance to work. Ship the defaults. Watch for 30 days. Optimize from data, not from vibes."
+ }
+]

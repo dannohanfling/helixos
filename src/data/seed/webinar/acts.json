@@ -1,0 +1,72 @@
+[
+ {
+  "key": "opening",
+  "order": 0,
+  "name": "🎬 Opening Frame",
+  "category": "Opening",
+  "beliefType": "Frame",
+  "purpose": "Earn attention and set the stage before any belief-shifting begins. The goal is rapport, a big promise, and just enough credibility that the audience grants you the next 60 minutes. No teaching yet.",
+  "coachingPrompt": "This is the runway. You have about 5 minutes to do three things: (1) Hook — open a loop they need to close, (2) Promise — tell them exactly what they'll walk away with, (3) Credibility — give them one concrete reason to trust you. Resist the urge to teach here. If you start shifting belief in the Opening Frame, you burn the energy you need for Acts 1–3.",
+  "tooltip": "Hook, promise, and credibility. No teaching. Earn the next 60 minutes.",
+  "beliefFrom": "N/A — no belief break happens in the Opening Frame",
+  "beliefTo": "N/A — belief work begins in Act 1",
+  "example": "\"If you've ever run a launch that did 'okay' and then watched 80% of those leads vanish by Friday — you don't have a traffic problem or an offer problem. You have a memory problem. In the next 75 minutes I'm going to show you exactly how to give your pipeline a brain.\"",
+  "soundbite": "Your pipeline doesn't need more traffic. It needs a memory."
+ },
+ {
+  "key": "vehicle",
+  "order": 1,
+  "name": "🎯 Act 1 — Vehicle",
+  "category": "Act",
+  "beliefType": "Vehicle",
+  "purpose": "Shift belief in the vehicle — the client's unique mechanism. The audience has tried things before that didn't work, so they assume this is another version of the same. Act 1 proves the vehicle itself is different in kind, not degree.",
+  "coachingPrompt": "Act 1 is where you introduce YOUR named mechanism — the unique framework, system, or approach you teach. The audience's default belief is: \"I've tried similar things and they didn't work. Why would this be different?\" Your job here is not to prove YOU are different (that's credibility). Your job is to prove the VEHICLE is different — that what they tried before has a structural flaw your mechanism fixes.\n\nAct 1 runs through 5 sub-sections: Problem Frame (name the enemy — why the old vehicle is broken), Opportunity Frame (reframe what's possible once the enemy is defeated), Mechanism Reveal (introduce your named framework), Proof Block (aggregate proof the mechanism works), Case Study (one client story in depth).\n\nThe mechanism needs a name. Not \"my approach to X\" — a capital-letter proprietary name like the Synchronized Journey Framework or Off-Market Opportunity Matrix. Naming it makes it memorable, quotable, and yours.",
+  "tooltip": "Prove your mechanism is structurally different from what they've tried — not just better.",
+  "beliefFrom": "I've tried similar systems/strategies/approaches before and they didn't work for me.",
+  "beliefTo": "This is a different vehicle — not a better version of what I tried. It works on a different principle.",
+  "example": "Vehicle: The Synchronized Journey Framework.\n\nOld way: Running 6 disconnected channels (email, SMS, DMs, events, posts, wallet) that each have their own \"memory\" of the lead — a leaky bucket with 6 holes.\n\nNew way: One central Lead State that every channel reads from and writes to. Six channels, one memory, one remembered journey.\n\nThe proof that this is a different vehicle (not just \"better email automation\"): the problem it solves (pipeline amnesia) literally cannot be solved by improving any single channel. Only a hub-and-spoke architecture fixes it.",
+  "soundbite": "One brain. Six channels. One remembered journey."
+ },
+ {
+  "key": "internal",
+  "order": 2,
+  "name": "💪 Act 2 — Internal",
+  "category": "Act",
+  "beliefType": "Internal",
+  "purpose": "Shift belief in themselves. Even if the audience believes your mechanism works, they quietly believe THEY can't pull it off. Act 2 dismantles the self-doubt and replaces it with a formula that does the heavy lifting.",
+  "coachingPrompt": "Act 2 handles the most dangerous objection — the one the audience never says out loud: \"Even if this works, I can't do it.\" They'll tell themselves it's because they're not technical enough, disciplined enough, smart enough, experienced enough, or the right personality type. Your job is to name that self-doubt out loud (they feel seen), then replace it with a formula they can follow.\n\nThe key move: you are NOT telling them to work harder or believe in themselves. You're telling them the formula does the work — they just need to follow the steps. This is a massive relief. They don't need to become someone else, they just need to execute a process.\n\nAct 2 runs through the same 5 sub-sections as Act 1, applied to the internal belief: Problem Frame (name the self-doubt), Opportunity Frame (reframe what becomes possible without needing to be a genius), Mechanism Reveal (reveal the formula/process that makes it executable), Proof Block (show people like them succeeding), Case Study (one client who thought they couldn't and did).\n\nThe case study is critical here. Pick someone whose STARTING state matches your audience's self-doubt — the freelancer who thought she wasn't techy, the founder who thought she wasn't a marketer. Not the superstar.",
+  "tooltip": "Dismantle the secret self-doubt. Replace it with \"the formula does the work, I just follow it.\"",
+  "beliefFrom": "Even if the system works, I'm not skilled / smart / disciplined / technical / experienced enough to pull it off.",
+  "beliefTo": "I don't need to become someone else. The formula does the heavy lifting — I just follow the steps.",
+  "example": "Internal belief: \"I'm not technical enough to set up an omnichannel system.\"\n\nJenny's story: Freelancer, paid for ClickFunnels, stared at the empty dashboard for 6 months. Thought she wasn't cut out for this. When she finally had a step-by-step formula (not a blank dashboard), she built her first funnel in 48 hours and her client made $30K on the first campaign.\n\nThe reframe: she didn't suddenly become technical. She stopped trying to invent and started following. The formula carried her.\n\nSoundbite: \"Forget the fear, focus on the formula.\"",
+  "soundbite": "You don't need to invent it. You need to install it."
+ },
+ {
+  "key": "external",
+  "order": 3,
+  "name": "🌍 Act 3 — External",
+  "category": "Act",
+  "beliefType": "External",
+  "purpose": "Shift belief in the environment. Even if the audience believes the vehicle works AND they can execute it, they still blame outside forces — market saturation, timing, competition, economy, algorithm. Act 3 reframes those external forces as either irrelevant or an advantage.",
+  "coachingPrompt": "Act 3 handles the final objection layer — the external forces the audience uses as cover. \"The market is too saturated.\" \"My niche is different.\" \"The economy is bad.\" \"Big players will crush me.\" \"The algorithm changed.\" \"I'm too late.\"\n\nThese are the hardest objections to handle because they feel true. The market IS saturated in most niches. Competitors ARE spending more on ads. The key is NOT to argue these facts — it's to reframe what those facts actually mean.\n\nThe classic move: turn the external obstacle into an advantage. Saturation means buyers are educated and ready. Big competitors' big budgets make them slow. Algorithm changes punish the mass players and reward the targeted ones. You're not saying the obstacle isn't real — you're saying it's a tailwind for players who use your approach.\n\nAct 3 runs through the same 5 sub-sections: Problem Frame (name the external force they blame), Opportunity Frame (reframe it as hidden advantage), Mechanism Reveal (show how your approach turns the obstacle into leverage), Proof Block (show proof in crowded/hard markets), Case Study (one client who won in the worst conditions).\n\nThe soundbite for Act 3 should reframe the fight itself: \"Connection over competition.\" \"You don't need to outspend them, you need to outsmart them.\" \"Stop fighting for attention, start earning trust.\"",
+  "tooltip": "Reframe the external obstacle as an advantage. Don't argue the facts — argue the meaning.",
+  "beliefFrom": "The market is too saturated / timing is wrong / competitors have more resources / I'm too late.",
+  "beliefTo": "There's always room for a differentiated, connection-based approach. In fact, a crowded market is proof there's demand — I just need to show up differently.",
+  "example": "External belief: \"The marketing space is oversaturated. I can't compete with the big agencies.\"\n\nJessica's story: Small business owner, watched competitors spend thousands on ads, felt invisible. Built a \"Buzz Bot\" (her named mechanism) that doubled her following and automated testimonials. She didn't outspend anyone — she built a direct, personal channel the big agencies couldn't replicate.\n\nThe reframe: the big players' scale is their weakness. They can't be personal. You can. Saturation is a signal of buyer demand — you just need a different door in.\n\nSoundbite: \"Connection over competition — every time.\"",
+  "soundbite": "Their broken channels are your moat."
+ },
+ {
+  "key": "closing",
+  "order": 4,
+  "name": "🎭 Closing Frame",
+  "category": "Closing",
+  "beliefType": "Frame",
+  "purpose": "Transition from teaching to offer, present the stack, close, and handle Q&A. All three acts have already done the belief work — the Closing Frame converts belief into action. No new teaching, no new belief breaks.",
+  "coachingPrompt": "By the time you reach the Closing Frame, the audience's three core objections (vehicle, internal, external) have already been dismantled. Your job here is to make the offer the logical next step, not a sales pitch.\n\nThe Closing Frame runs 3 sub-sections: Offer Transition (bridge from teaching to offer — \"now that you've seen what's possible, here's how to actually install it\"), Offer Stack + CTA (present the components, anchor value, drop price, reverse risk), Q&A + Close (handle remaining friction, restack urgency, close with a callback to the opening hook).\n\nThe most important move in the Closing Frame: link each offer component back to one of the three belief breaks. Component 1 solves the Vehicle problem. Component 2 solves the Internal problem. Component 3 solves the External problem. This makes the offer feel inevitable — it's not three features, it's three locks matching three keys the audience just accepted.\n\nRest the voice here. The teaching is done. The Closing Frame is paced, confident, and specific. Scarcity and urgency should be real, not manufactured.",
+  "tooltip": "No new teaching. Transition, stack, close. Link each offer component to one of the three belief breaks.",
+  "beliefFrom": "N/A — belief work completed in Acts 1–3",
+  "beliefTo": "N/A — the Closing Frame converts belief into decision",
+  "example": "\"Here's exactly what's in the box. One: full WebinarOS Wizard access (solves the Vehicle — you get the framework installed). Two: Install Sprint, 3 sessions with my team (solves the Internal — we carry the technical load). Three: Lifetime community and template library (solves the External — you win the ongoing competitive game). Total value on this slide is $7,497. If that's a fit, next step is a 20-minute call with my team. Link is on screen now.\"",
+  "soundbite": "The last pipeline you'll ever build."
+ }
+]

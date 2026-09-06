@@ -14,6 +14,7 @@
     "import:airtable": "tsx --tsconfig tsconfig.json scripts/import-airtable.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "@libsql/client": "^0.18.0",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",

@@ -1,0 +1,29 @@
+[
+ {
+  "type": "belief",
+  "name": "Vehicle: Synchronized Journey beats duct-taped funnels",
+  "beliefType": "Vehicle",
+  "body": "I just need better ads / a better funnel / a hotter offer — the tools I have are fine.",
+  "howWeHandleIt": "The bottleneck isn't the tool, it's the lack of synchronized memory across channels. A Synchronized Journey makes a modest offer outperform a hot offer on duct tape.",
+  "proof": "Case study: client went from 11% show-up to 38% show-up without changing ads, just by installing Lead State + state-based reminders.",
+  "universal": false
+ },
+ {
+  "type": "belief",
+  "name": "External: Not-yet is not never",
+  "beliefType": "External",
+  "body": "If they don't buy in the launch window, they're dead leads. I have to go get new ones.",
+  "howWeHandleIt": "State-based follow-up and the Infinite Pipeline Loop turn every \"not yet\" into a future yes. Your highest-LTV clients are usually the ones who said no the first time.",
+  "proof": "Data: 42% of converted clients in the last 12 months had said no on a prior event and re-entered via replay or nurture.",
+  "universal": false
+ },
+ {
+  "type": "belief",
+  "name": "Internal: I'm capable of running a remembered pipeline",
+  "beliefType": "Internal",
+  "body": "I'm not technical enough / my team isn't big enough / I always break automations.",
+  "howWeHandleIt": "If a pipeline is modeled as Lead State, you don't maintain automations — you maintain one source of truth, and everything else reads from it. It's simpler, not more complex.",
+  "proof": "Origin story: the moment I stopped rebuilding Zaps for every launch and started treating the lead as the database.",
+  "universal": false
+ }
+]

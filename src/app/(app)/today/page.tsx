@@ -37,7 +37,7 @@ export default async function TodayPage() {
   const boardTasks = [...d.overdueTasks, ...d.dueTasks.filter((t) => t.focusDate !== v.today)];
   const goalPct = d.goal ? Math.round((d.goal.actual / Math.max(d.goal.target, 1)) * 100) : 0;
   const primary = d.actions[0];
-  const rest = d.actions.slice(1, 4);
+  const rest = d.actions.slice(1, 6);
 
   return (
     <>

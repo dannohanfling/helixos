@@ -3,6 +3,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
+import { setClientPassAction } from "@/lib/actions/coach";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
@@ -66,7 +67,8 @@ export default async function CoachPage() {
                     <th className="py-2 pr-3">Streak</th>
                     <th className="py-2 pr-3">Tier</th>
                     <th className="py-2 pr-3 text-right">Pathway</th>
-                    <th className="py-2 text-right">Last active</th>
+                    <th className="py-2 pr-3 text-right">Last active</th>
+                    <th className="py-2 text-right">Tier</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -92,7 +94,7 @@ export default async function CoachPage() {
                         {r.verified}/{library.length}
                         {r.waiting ? <Badge tone="accent">{r.waiting} waiting</Badge> : null}
                       </td>
-                      <td className="py-2 text-right text-xs">
+                      <td className="py-2 pr-3 text-right text-xs">
                         {r.lastActive ? (
                           <span className={r.daysSilent >= 3 ? "font-semibold text-warn" : "text-ink-2"}>
                             {r.daysSilent === 0 ? "today" : r.daysSilent === 1 ? "yesterday" : `${r.daysSilent}d ago`}
@@ -100,6 +102,19 @@ export default async function CoachPage() {
                         ) : (
                           <span className="text-danger">never</span>
                         )}
+                      </td>
+                      <td className="py-2 text-right text-xs">
+                        <form action={setClientPassAction} className="flex items-center justify-end gap-1">
+                          <input type="hidden" name="membershipId" value={r.m.id} />
+                          <select className="field w-auto py-1 text-xs" name="programTier" defaultValue={r.m.programTier}>
+                            {["Accelerator", "Academy", "Elite", "Luxe"].map((t) => (
+                              <option key={t}>{t}</option>
+                            ))}
+                          </select>
+                          <button className={`btn btn-xs ${r.m.passEnabled ? "btn-accent" : "btn-ghost"}`} type="submit" name="enabled" value={r.m.passEnabled ? "0" : "1"} title="Community Pass">
+                            🎟️ {r.m.passEnabled ? "on" : "off"}
+                          </button>
+                        </form>
                       </td>
                     </tr>
                   ))}

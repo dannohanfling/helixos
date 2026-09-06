@@ -8,6 +8,13 @@
       "when": 1788706076957,
       "tag": "0000_lyrical_boomer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788708559538,
+      "tag": "0001_wizards_clients",
+      "breakpoints": true
     }
   ]
 }

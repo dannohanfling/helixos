@@ -5,6 +5,7 @@ import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
 import { tierProgress } from "@/lib/engine/tiers";
 import { logFor, streakFor } from "./daily";
+import { STEPS, nextStep, webinarProgress } from "@/lib/engine/webinar";
 import { totalPoints } from "./points";
 
 export async function nextPathwayTask(userId: string) {
@@ -99,6 +100,23 @@ export async function todayData(v: Viewer) {
       db.query.goals.findFirst({ where: and(eq(schema.goals.userId, userId), eq(schema.goals.primary, true)) }),
     ]);
 
+  const clientRecords = await db.query.clientRecords.findMany({ where: and(eq(schema.clientRecords.userId, userId), eq(schema.clientRecords.status, "active")) });
+  const clientsDueCheckin = clientRecords.filter((c) => {
+    const base = c.lastCheckinAt ?? c.startDate;
+    return !base || addDays(base, c.checkinCadenceDays) <= today;
+  }).length;
+  const building = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["draft", "building"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) });
+  let webinarInProgress: Snapshot["webinarInProgress"] = null;
+  if (building) {
+    const [secs, bels] = await Promise.all([
+      db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, building.id) }),
+      db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, building.id) }),
+    ]);
+    const p = webinarProgress(building, secs, bels, null);
+    const step = nextStep(p.steps);
+    webinarInProgress = { id: building.id, title: building.title, step, stepLabel: STEPS.find((s) => s.key === step)?.label ?? step };
+  }
+
   const snapshot: Snapshot = {
     today,
     hour,
@@ -115,6 +133,8 @@ export async function todayData(v: Viewer) {
     curriculumDay: curriculumDay ? { day: curriculumDay.day, title: curriculumDay.title, points: curriculumDay.points } : null,
     streakAlive: streak.running > 0,
     runningStreak: streak.running,
+    clientsDueCheckin,
+    webinarInProgress,
   };
   const actions: Action[] = nextBestActions(snapshot);
 

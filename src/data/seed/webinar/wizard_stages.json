@@ -1,0 +1,92 @@
+[
+ {
+  "order": 1,
+  "name": "Foundation",
+  "description": "Lock the non-negotiables: who this webinar is for, what transformation it promises, what they'll buy at the end.",
+  "inputs": "Ideal audience, current problem, desired result, mechanism/vehicle name, offer type, CTA type, working title.",
+  "output": "Sharpened promise statement, 3 candidate titles, one-sentence positioning, core tension hook.",
+  "validation": "All 6 foundation fields filled + promise is specific, measurable, time-bound.",
+  "notes": "Deliverables: Workshop record with Promise, Audience, Problem, Result, Mechanism, CTA populated. Blocks: Cannot advance until Promise + Audience + Desired Result are non-empty. Lens: Aligned Invitation Model — Person x Problem x Desired Result must overlap before anything else is built."
+ },
+ {
+  "order": 2,
+  "name": "Audience & Belief Mapping",
+  "description": "Map what the audience currently believes and what they must believe by the end in order to buy.",
+  "inputs": "Current beliefs (vehicle / internal / external), objections, fears, prior attempts that failed, identity labels they use.",
+  "output": "3-layer belief shift map (Old to New for Vehicle, Internal, External), objection list with reframes, target identity statement.",
+  "validation": "Each belief has Old State, New State, Proof required, and a Story slot identified.",
+  "notes": "Deliverables: Minimum 3 Belief records (V/I/E) and 3+ Objection records linked to Workshop. Blocks: Cannot advance until at least one belief per layer (V/I/E) is drafted. Lens: Pre-Belief Engine + Buyer Readiness Triangle — Trust x Clarity x Relevance anchor each belief shift."
+ },
+ {
+  "order": 3,
+  "name": "Structure",
+  "description": "Lay out the full section architecture of the live event — the skeleton the rest of the build hangs on.",
+  "inputs": "Preferred length, opener style, desired pacing, must-include moments.",
+  "output": "Ordered list of 10-14 Webinar Sections (Hook > Credibility > Origin > Problem > Opportunity > Mechanism > Teaching Blocks > Belief Shifts > Proof > Case Study > Offer > CTA > Q&A > Close) with purpose + duration per section.",
+  "validation": "All sections have type + purpose; total duration matches target; at least one belief is assigned to each teaching block.",
+  "notes": "Deliverables: Full set of Webinar Section records linked to Workshop, each with Purpose + Duration + Section Type. Blocks: Cannot advance until every belief has at least one section carrying it. Lens: Event Ecosystem Model — the live event is the hub; sections are spokes of belief-shift work."
+ },
+ {
+  "order": 4,
+  "name": "Stories",
+  "description": "Attach a story to every belief shift so persuasion happens through experience, not argument.",
+  "inputs": "Personal stories, client stories, origin story, failure stories, contrarian moments.",
+  "output": "Story drafts in 4-beat form (Setup > Tension > Turn > Lesson), flagship origin story, story-to-belief mapping.",
+  "validation": "Every belief-shift section has at least 1 linked story; origin story placed in Credibility/Origin section.",
+  "notes": "Deliverables: Story Bank records linked to the Webinar Sections where they belong. Blocks: Cannot advance until every belief shift has a story attached. Lens: Pre-Belief Engine — belief moves via narrative first, logic second."
+ },
+ {
+  "order": 5,
+  "name": "Analogies",
+  "description": "Build the visual/verbal analogies that make the mechanism undeniable and memorable.",
+  "inputs": "What concept confuses people most, what everyday thing it resembles, preferred doodle style.",
+  "output": "One-line analogy + extended version + smart-board doodle description for each key concept.",
+  "validation": "Mechanism reveal has flagship analogy; every abstract belief shift has a concrete analogy.",
+  "notes": "Deliverables: Analogy records linked to Sections (esp. Mechanism Reveal + Teaching Blocks). Blocks: Cannot advance until the mechanism has at least one flagship analogy. Lens: Show-Up Equation — analogies raise Anticipation and Relevance before the live."
+ },
+ {
+  "order": 6,
+  "name": "Proof / Research",
+  "description": "Assemble the evidence stack — data, screenshots, testimonials, case studies — that makes the promise believable.",
+  "inputs": "Client results, screenshots, data sources, expert quotes, prior press, metrics.",
+  "output": "Proof inventory mapped to each belief; case study drafts in Before > Pivot > After format; proof-gap list.",
+  "validation": "Every belief has at least 1 piece of proof; at least 1 full case study exists; no unsubstantiated claims.",
+  "notes": "Deliverables: Research + Case Study + Testimonial records linked to Sections and Beliefs. Blocks: Cannot advance until every core belief has linked proof. Lens: Buyer Readiness Triangle — Trust leg is built here."
+ },
+ {
+  "order": 7,
+  "name": "Offer Builder",
+  "description": "Engineer the offer: core deliverable, bonuses, guarantee, price, stack order, so the CTA is the obvious next step.",
+  "inputs": "What they deliver, price point, bonuses available, guarantee stance, urgency elements.",
+  "output": "Offer stack with perceived value per component, bonus naming, guarantee language, price anchoring, CTA script.",
+  "validation": "Stack has core + 3 or more bonuses + guarantee; perceived value is 5x price or greater; every objection is handled by something in the stack.",
+  "notes": "Deliverables: Offer record + Offer Components linked + CTA Type set on Workshop. Blocks: Cannot advance until offer stack is closed and priced. Lens: Aligned Invitation — the offer must be the literal answer to Person x Problem x Desired Result."
+ },
+ {
+  "order": 8,
+  "name": "Script Builder",
+  "description": "Write the live-delivery script section by section, stitching stories, analogies, proof, and the offer into one movement.",
+  "inputs": "Voice preferences, soundbites they love, banned phrases, delivery style.",
+  "output": "Full section-by-section Talking Script + Transition In/Out + Soundbite per section + offer transition + CTA close.",
+  "validation": "Every section has Talking Script + Transition In + Transition Out + at least one Soundbite.",
+  "notes": "Deliverables: Scripts linked to each Webinar Section; full Workshop script exportable. Blocks: Cannot advance until every section Status is Drafted or higher. Lens: Micro-Commitment Ladder — the script builds small yeses toward the CTA."
+ },
+ {
+  "order": 9,
+  "name": "Slide Blueprint",
+  "description": "Design the slide deck that carries the script visually — one idea per slide, analogies as doodles, offer as stack.",
+  "inputs": "Brand colors, preferred aesthetic, willingness to use doodles/photos.",
+  "output": "Slide Blueprints with On-Slide Copy + Speaker Notes + Visual Direction per slide, matched to script beats.",
+  "validation": "Every section has at least 1 slide; mechanism reveal, proof stack, and offer stack each have dedicated slides.",
+  "notes": "Deliverables: Slide Blueprint records linked to Sections; complete blueprint exportable for design. Blocks: Cannot advance until every section has at least one slide blueprint. Lens: Friction Leak Map — visual clarity prevents leaks during the live."
+ },
+ {
+  "order": 10,
+  "name": "Readiness Review",
+  "description": "Grade the full build across 11 dimensions, surface gaps, and decide: presentation-ready, needs work, or not ready.",
+  "inputs": "Final self-assessment, confidence level, open worries.",
+  "output": "Readiness Review record with ratings for Promise Clarity, Audience Specificity, V/I/E Belief Handled, Proof Sufficiency, Story Placement, Offer Clarity, CTA Alignment, Objection Handling, Likely To Convert; Biggest Gaps; Next Actions; Overall Verdict.",
+  "validation": "All 11 rating fields completed; Verdict set; if not passing, Next Actions filled.",
+  "notes": "Deliverables: Readiness Review record linked to Workshop; Wizard Status on Workshop set to Ready or Flagship if verdict clears. Blocks: This is the final gate — Workshop cannot be marked Ready without a passing Readiness Review. Lens: State-Based Follow-Up Matrix — even post-review, not-ready webinars get replay/nurture paths, not deletion."
+ }
+]

@@ -1,0 +1,74 @@
+[
+ {
+  "name": "WebinarOS Wizard Access",
+  "type": "core",
+  "description": "The full 10-stage guided build wizard with dependency logic, readiness scoring, and AI generation at every stage.",
+  "perceivedValue": 4997,
+  "order": 1,
+  "problemItSolves": "Eliminates the 'blank page' problem and the per-launch rebuild tax.",
+  "oneLiner": "The full WebinarOS wizard — idea to Ready in 10 guided stages."
+ },
+ {
+  "name": "Synchronized Journey Install Sprint",
+  "type": "bonus",
+  "description": "3-session install sprint where we set up Lead State, state-based reminders, and the recycle loop on your existing stack.",
+  "perceivedValue": 2500,
+  "order": 2,
+  "problemItSolves": "Removes 'I'll never find time to implement it' as a reason to stall.",
+  "oneLiner": "We install the Synchronized Journey on your stack in 3 sessions."
+ },
+ {
+  "name": "Office Hours Pass",
+  "type": "bonus",
+  "description": "Drop-in Q&A every other Friday with Danno. Bring your loop, your stuck spot, your dumb question — leave with a fix.",
+  "perceivedValue": 1500,
+  "order": null,
+  "problemItSolves": null,
+  "oneLiner": null
+ },
+ {
+  "name": "90-Day Coaching Pod",
+  "type": "core",
+  "description": "Twice-monthly group coaching with Danno + a private community of operators running the loop. You ship faster when you're not building alone.",
+  "perceivedValue": 4997,
+  "order": null,
+  "problemItSolves": null,
+  "oneLiner": null
+ },
+ {
+  "name": "Slide Blueprint Vault",
+  "type": "core",
+  "description": "60+ slide blueprints sorted by Section (Hook, Problem Frame, Proof Block, Offer Stack, etc). Steal the structure, drop in your story. No more blank-deck panic.",
+  "perceivedValue": 1497,
+  "order": null,
+  "problemItSolves": null,
+  "oneLiner": null
+ },
+ {
+  "name": "Replay Sequence Library",
+  "type": "bonus",
+  "description": "Pre-written replay-day emails (Day 1, Day 4, Day 7, Day 11) calibrated to behavior signals from your CRM. Plug them into any ESP.",
+  "perceivedValue": 997,
+  "order": null,
+  "problemItSolves": null,
+  "oneLiner": null
+ },
+ {
+  "name": "Done-With-You Onboarding Sprint",
+  "type": "core",
+  "description": "Three 90-minute working sessions where we install your HelixOS base, wire your first webinar through the loop, and ship your first replay sequence — together.",
+  "perceivedValue": 2997,
+  "order": null,
+  "problemItSolves": null,
+  "oneLiner": null
+ },
+ {
+  "name": "DM Scripts Vault",
+  "type": "bonus",
+  "description": "30+ DM scripts sorted by lead temperature (Hot/Warm/Cold) and intent signal (Commented, Registered, No-Show). Copy, tweak the name, send.",
+  "perceivedValue": 497,
+  "order": null,
+  "problemItSolves": null,
+  "oneLiner": null
+ }
+]
