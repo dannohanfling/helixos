@@ -8,6 +8,7 @@ import { setTargetsAction } from "@/lib/actions/targets";
 import { addDays, formatDate, isWeekday, rangeDays, startOfWeek } from "@/lib/dates";
 import { logsBetween } from "@/lib/queries/daily";
 import { TARGET_METRICS, daysInMonth, monthOf, monthProgress } from "@/lib/engine/targets";
+import { PILLARS, lastMonths, pillarSummary } from "@/lib/engine/pillars";
 
 export const metadata = { title: "Numbers" };
 
@@ -33,7 +34,8 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
   const from12 = addDays(thisMonday, -7 * 11);
 
   const month = monthOf(v.today);
-  const [logs, weekLogs, prevLogs, posted, ledger, monthLogs, targetRows] = await Promise.all([
+  const sixMonths = lastMonths(month, 6);
+  const [logs, weekLogs, prevLogs, posted, ledger, monthLogs, targetRows, pillarLogs] = await Promise.all([
     logsBetween(v.workspace.id, v.user.id, from12, v.today),
     logsBetween(v.workspace.id, v.user.id, weekStart, weekEnd),
     logsBetween(v.workspace.id, v.user.id, prevStart, addDays(prevStart, 6)),
@@ -41,6 +43,7 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
     db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, v.workspace.id), eq(schema.pointsLedger.userId, v.user.id), gte(schema.pointsLedger.createdAt, from12)) }),
     logsBetween(v.workspace.id, v.user.id, `${month}-01`, `${month}-${String(daysInMonth(month)).padStart(2, "0")}`),
     db.query.targets.findMany({ where: and(eq(schema.targets.userId, v.user.id), eq(schema.targets.month, month)) }),
+    logsBetween(v.workspace.id, v.user.id, `${sixMonths[0]}-01`, v.today),
   ]);
   const targetMap = Object.fromEntries(targetRows.map((t) => [t.metric, t.target]));
   const progress = monthProgress(monthLogs as unknown as Record<string, number>[], targetMap, month, v.today);
@@ -50,6 +53,7 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
   const rev = { content: monthLogs.reduce((a, l) => a + l.revContent, 0), webinar: monthLogs.reduce((a, l) => a + l.revWebinar, 0), dm: monthLogs.reduce((a, l) => a + l.revDm, 0) };
   const revTotal = rev.content + rev.webinar + rev.dm;
   const monthLabel = formatDate(`${month}-01`, { month: "long", year: "numeric" });
+  const pillars = pillarSummary(pillarLogs, month);
 
   const sum = (rows: typeof logs, k: Metric) => rows.reduce((a, r) => a + Number(r[k] ?? 0), 0);
   const fmt = (m: (typeof METRICS)[number], n: number) => (m.money ? `$${n.toLocaleString()}` : n.toLocaleString());
@@ -153,6 +157,68 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
             </div>
           </div>
         ) : null}
+      </Card>
+
+      <Card className="mb-4" title={`Revenue by pillar · ${monthLabel}`} action={<span className="text-xs text-ink-3">from your evening close</span>} id="pillars">
+        <p className="mb-3 text-sm text-ink-2">
+          Which of the things you&apos;re building is actually making you money.{" "}
+          {pillars.leader ? (
+            <>
+              This month it&apos;s <b>{pillars.leader.label.toLowerCase()}</b> at ${pillars.leader.revenue.toLocaleString()} ({pillars.leader.share}%).
+            </>
+          ) : null}{" "}
+          <span className="text-ink-3">{pillars.honesty}</span>
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3" data-testid="pillars">
+          {pillars.current.pillars.map((p) => (
+            <div key={p.key} className="rounded-lg border p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">
+                  {p.icon} {p.label}
+                </span>
+                <span className="tabular text-xs text-ink-3">{p.share}%</span>
+              </div>
+              <div className="mt-1 text-xl font-semibold tabular">${p.revenue.toLocaleString()}</div>
+              <Progress value={p.share} tone={pillars.leader?.key === p.key ? "good" : "accent"} height={6} />
+              <div className="mt-2 text-xs text-ink-3">{p.activity.map((a) => `${a.value.toLocaleString()} ${a.label}`).join(" · ")}</div>
+              <div className="mt-1 text-[11px] text-ink-3">{PILLARS.find((x) => x.key === p.key)?.teaches}</div>
+            </div>
+          ))}
+        </div>
+        {pillars.withData.length > 1 ? (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs tabular">
+              <thead className="text-left uppercase tracking-wide text-ink-3">
+                <tr>
+                  <th className="py-1 pr-3">Month</th>
+                  <th className="py-1 pr-3 text-right">Total</th>
+                  {PILLARS.map((p) => (
+                    <th key={p.key} className="py-1 pr-3 text-right">
+                      {p.icon} {p.label.split(" ")[0]}
+                    </th>
+                  ))}
+                  <th className="py-1 text-right">Closed days</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pillars.withData.map((m) => (
+                  <tr key={m.month} className="border-t">
+                    <td className="py-1 pr-3">{formatDate(`${m.month}-01`, { month: "short", year: "2-digit" })}</td>
+                    <td className="py-1 pr-3 text-right font-medium">${m.total.toLocaleString()}</td>
+                    {m.pillars.map((p) => (
+                      <td key={p.key} className="py-1 pr-3 text-right">
+                        ${p.revenue.toLocaleString()} <span className="text-ink-3">({p.share}%)</span>
+                      </td>
+                    ))}
+                    <td className="py-1 text-right text-ink-3">{m.closedDays}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-ink-3">The month-by-month trend appears once two months have closed days.</p>
+        )}
       </Card>
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">

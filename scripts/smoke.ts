@@ -125,6 +125,8 @@ async function main() {
   // Numbers, rewards, settings
   await page.goto(`${base}/numbers`);
   await expectText(page, "last 12 weeks", "numbers");
+  await expectText(page, "Revenue by pillar", "revenue by pillar");
+  if ((await page.locator('[data-testid="pillars"] > div').count()) !== 3) throw new Error("expected three pillar cards");
   await shot(page, "11-numbers");
   await page.goto(`${base}/rewards`);
   await expectText(page, "The ladder", "rewards");
