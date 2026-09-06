@@ -113,7 +113,7 @@ export async function seedDemo(): Promise<void> {
   ]);
 
   await seedClientActivity(wsId, clientId, today, { days: 24, missDays: [addDays(today, -9), addDays(today, -16)], intensity: 1 });
-  await seedClientActivity(wsId, client2Id, today, { days: 50, missDays: [addDays(today, -1), addDays(today, -2), addDays(today, -3), addDays(today, -4)], intensity: 0.6 });
+  await seedClientActivity(wsId, client2Id, today, { days: 50, missDays: [today, addDays(today, -1), addDays(today, -2), addDays(today, -3), addDays(today, -4)], intensity: 0.6 });
   console.log("Demo workspace ready. Coach: coach@demo.helixos.app / demo1234 · Client: client@demo.helixos.app / demo1234 · Client invite code: ACADEMY1");
 }
 
