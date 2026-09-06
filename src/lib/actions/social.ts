@@ -2,36 +2,22 @@
 
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { requireCoach } from "@/lib/auth";
 import { nowIso } from "@/lib/dates";
-import { newId } from "@/lib/ids";
 import { connectionFor, getPost, refreshAccounts, upsertConnection } from "@/lib/ghl";
 import { PUBLISHABLE } from "@/lib/engine/ghl-map";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
-/** Who the change is for: the signed-in member, or (coach only) a member picked on the Integrations page. */
-async function target(formData: FormData) {
-  const c = await ctx();
-  const forUser = opt(formData, "forUserId");
-  if (forUser && forUser !== c.userId) {
-    const coach = await requireCoach();
-    const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, coach.workspace.id), eq(schema.memberships.userId, forUser)) });
-    if (!m) throw new Error("Member not found");
-    return { workspaceId: coach.workspace.id, userId: forUser, byCoach: true };
-  }
-  return { workspaceId: c.workspaceId, userId: c.userId, byCoach: c.v.role === "coach" };
-}
-
-/** Saves the sub-account details and pulls its connected accounts. Members can't bind themselves to a sub-account they don't hold a token for. */
+/** Saves the member's own sub-account and validates the token against GoHighLevel right away. Errors carry the real reason. */
 export async function connectGhlAction(formData: FormData): Promise<void> {
-  const t = await target(formData);
+  const { workspaceId, userId } = await ctx();
   const locationId = str(formData, "locationId");
+  const ghlUserId = opt(formData, "ghlUserId");
   if (!locationId) return;
-  const r = await upsertConnection({ ...t, locationId, ghlUserId: opt(formData, "ghlUserId"), manualToken: opt(formData, "manualToken") });
+  const r = await upsertConnection({ workspaceId, userId, locationId, ghlUserId, manualToken: opt(formData, "manualToken") });
   if (!r.ok) {
-    const existing = await connectionFor(t.userId);
+    const existing = await connectionFor(userId);
     if (existing) await db.update(schema.socialConnections).set({ lastError: r.error }).where(eq(schema.socialConnections.id, existing.id));
-    else await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: t.workspaceId, userId: t.userId, provider: "gohighlevel", locationId, coachAssigned: false, ghlUserId: opt(formData, "ghlUserId"), lastError: r.error });
+    else await db.insert(schema.socialConnections).values({ id: crypto.randomUUID(), workspaceId, userId, provider: "gohighlevel", locationId, ghlUserId, lastError: r.error });
     refresh();
     return;
   }
@@ -39,17 +25,17 @@ export async function connectGhlAction(formData: FormData): Promise<void> {
   refresh();
 }
 
-export async function refreshGhlAccountsAction(formData: FormData): Promise<void> {
-  const t = await target(formData);
-  const conn = await connectionFor(t.userId);
+export async function refreshGhlAccountsAction(): Promise<void> {
+  const { userId } = await ctx();
+  const conn = await connectionFor(userId);
   if (conn) await refreshAccounts(conn);
   refresh();
 }
 
 /** Channel → account choices from the mapping form. Empty means "don't auto-publish this channel". */
 export async function setGhlMappingAction(formData: FormData): Promise<void> {
-  const t = await target(formData);
-  const conn = await connectionFor(t.userId);
+  const { userId } = await ctx();
+  const conn = await connectionFor(userId);
   if (!conn) return;
   const mapping: Record<string, string> = {};
   for (const ch of Object.keys(PUBLISHABLE)) {
@@ -60,9 +46,9 @@ export async function setGhlMappingAction(formData: FormData): Promise<void> {
   refresh();
 }
 
-export async function disconnectGhlAction(formData: FormData): Promise<void> {
-  const t = await target(formData);
-  await db.delete(schema.socialConnections).where(and(eq(schema.socialConnections.userId, t.userId), eq(schema.socialConnections.provider, "gohighlevel")));
+export async function disconnectGhlAction(): Promise<void> {
+  const { userId } = await ctx();
+  await db.delete(schema.socialConnections).where(and(eq(schema.socialConnections.userId, userId), eq(schema.socialConnections.provider, "gohighlevel")));
   refresh();
 }
 

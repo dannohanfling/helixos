@@ -20,7 +20,7 @@ export default async function SettingsPage() {
     <>
       <PageHeader title="Settings" />
       <Card className="mb-4" title="🚀 Publishing (your GoHighLevel sub-account)">
-        <p className="mb-3 text-sm text-ink-2">Connect your sub-account once. Posts you schedule in the composer land in your Social Planner and go out on their own. Points, DMs and everything else stay in HelixOS.</p>
+        <p className="mb-3 text-sm text-ink-2">Connect your own GoHighLevel sub-account once. Posts you schedule in the composer land in your Social Planner and go out on their own. Your token is encrypted and only ever used for your sub-account.</p>
         <GhlConnect conn={conn ?? null} tz={v.workspace.timezone} />
       </Card>
       <div className="grid gap-4 lg:grid-cols-2">

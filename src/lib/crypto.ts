@@ -28,10 +28,15 @@ export function seal(plain: string | null | undefined): string | null {
 export function open(value: string | null | undefined): string | null {
   if (!value) return value ?? null;
   if (!value.startsWith(PREFIX)) return value;
-  const [iv, tag, ct] = value.slice(PREFIX.length).split(".");
-  const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(iv, "base64url"));
-  decipher.setAuthTag(Buffer.from(tag, "base64url"));
-  return Buffer.concat([decipher.update(Buffer.from(ct, "base64url")), decipher.final()]).toString("utf8");
+  try {
+    const [iv, tag, ct] = value.slice(PREFIX.length).split(".");
+    const decipher = createDecipheriv("aes-256-gcm", key(), Buffer.from(iv, "base64url"));
+    decipher.setAuthTag(Buffer.from(tag, "base64url"));
+    return Buffer.concat([decipher.update(Buffer.from(ct, "base64url")), decipher.final()]).toString("utf8");
+  } catch {
+    // Sealed under a different ENCRYPTION_KEY / SESSION_SECRET. Treat as missing so the user is asked to paste it again.
+    return null;
+  }
 }
 
 export function isSealed(value: string | null | undefined): boolean {

@@ -26,16 +26,8 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
   gohighlevel: {
     name: "Omnichannel Marketing System (GoHighLevel)",
     icon: "📡",
-    blurb: "Contacts, pipelines, SMS and email. Booked calls and new clients become contacts and opportunities in your sub-account.",
-    fields: [
-      { key: "apiUrl", label: "API base URL", hint: "https://services.leadconnectorhq.com" },
-      { key: "apiKey", label: "Private integration token", secret: true },
-      { key: "locationId", label: "Location (sub-account) ID" },
-      { key: "pipelineId", label: "Pipeline ID", hint: "Where booked calls land" },
-      { key: "stageId", label: "Pipeline stage ID" },
-      { key: "webhookUrl", label: "Inbound webhook URL (optional)", hint: "A GHL workflow webhook to post events into" },
-      { key: "companyId", label: "Agency (company) ID", hint: "Lets HelixOS mint a 24-hour token for each client's sub-account from the agency token" },
-    ],
+    blurb: "Social Planner publishing and contacts, through each client's own sub-account. Every member pastes their own location-level Private Integration token on Settings → Publishing; nothing agency-level is needed or stored.",
+    fields: [{ key: "apiUrl", label: "API base URL (advanced)", hint: "https://services.leadconnectorhq.com" }],
   },
 };
 
@@ -115,15 +107,20 @@ export async function pushPoints(ctx: { workspaceId: string; userId: string }, p
   await send(ctx.workspaceId, ctx.userId, "community_loyalty", "points.add", "/v1/points", { programId: integ.config.programId ?? "", serial: m.eoPassSerial, points: Math.round(points * rate), reason });
 }
 
-/** A booked call or a new client becomes a GoHighLevel contact (and an opportunity when a pipeline is set). */
+/** A booked call or a new client becomes a contact in the member's own GoHighLevel sub-account (their token needs contacts.write; skipped with a note otherwise). */
 export async function pushContact(ctx: { workspaceId: string; userId: string }, contact: { name: string; email?: string | null; phone?: string | null; stage: string; source?: string | null }): Promise<void> {
   const integ = await getIntegration(ctx.workspaceId, "gohighlevel");
   if (!integ?.enabled) return;
-  const [firstName, ...rest] = contact.name.split(" ");
-  const ok = await send(ctx.workspaceId, ctx.userId, "gohighlevel", "contact.upsert", "/contacts/upsert", { locationId: integ.config.locationId ?? "", firstName, lastName: rest.join(" "), email: contact.email ?? undefined, phone: contact.phone ?? undefined, source: contact.source ?? "HelixOS", tags: ["helixos", contact.stage] });
-  if (ok && integ.config.pipelineId && contact.stage === "call_booked") {
-    await send(ctx.workspaceId, ctx.userId, "gohighlevel", "opportunity.create", "/opportunities/", { locationId: integ.config.locationId ?? "", pipelineId: integ.config.pipelineId, pipelineStageId: integ.config.stageId ?? "", name: `${contact.name} · call`, status: "open", source: "HelixOS" });
+  const { connectionFor, upsertContact } = await import("@/lib/ghl");
+  const conn = await connectionFor(ctx.userId);
+  const payload = { name: contact.name, stage: contact.stage };
+  if (!conn) {
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "contact.upsert", payload, status: "skipped", note: "Member hasn't connected their sub-account on Settings" });
+    return;
   }
+  const r = await upsertContact(conn, contact);
+  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "contact.upsert", payload, status: r.ok ? "sent" : "failed", note: r.ok ? `Contact ${r.data.id || "upserted"} in ${conn.locationId}` : r.error });
+  if (r.ok) await db.update(schema.integrations).set({ lastSyncAt: nowIso() }).where(eq(schema.integrations.id, integ.id));
 }
 
 /**

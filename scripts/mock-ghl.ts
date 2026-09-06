@@ -1,4 +1,7 @@
-/** A tiny stand-in for the GoHighLevel API (the four calls HelixOS makes), for smoke tests. `npx tsx scripts/mock-ghl.ts 4010` */
+/**
+ * A tiny stand-in for the GoHighLevel API (the calls HelixOS makes), for smoke tests. `npx tsx scripts/mock-ghl.ts 4010`
+ * Tokens: `pit-<locationId>` works for that location; `pit-noscope` is valid but lacks Social Planner scopes; anything else is 401.
+ */
 import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? 4010);
@@ -16,16 +19,18 @@ createServer((req, res) => {
       res.writeHead(code, { "content-type": "application/json" });
       res.end(JSON.stringify(body));
     };
-    if (!auth.startsWith("Bearer ") || version !== "2021-07-28") return json(401, { message: "Unauthorized" });
-    if (req.method === "POST" && url === "/oauth/locationToken") {
-      const form = new URLSearchParams(Buffer.concat(chunks).toString());
-      if (auth !== "Bearer agency-token") return json(401, { message: "Invalid agency token" });
-      return json(200, { access_token: `loc-token-${form.get("locationId")}`, token_type: "Bearer", expires_in: 86399, scope: "socialplanner/post.write" });
+    if (!auth.startsWith("Bearer ") || version !== "2021-07-28") return json(401, { message: "Invalid JWT" });
+    const token = auth.slice(7);
+    if (url.startsWith("/contacts/upsert") && req.method === "POST") {
+      if (!token.startsWith("pit-") || token === "pit-noscope") return json(401, { message: "Invalid JWT" });
+      return json(200, { contact: { id: `contact_${++n}` } });
     }
     const m = url.match(/^\/social-media-posting\/([^/]+)\/(accounts|posts)(?:\/([^/?]+))?/);
     if (!m) return json(404, { message: "Not found" });
     const [, loc, kind, id] = m;
-    if (auth !== `Bearer loc-token-${loc}` && auth !== "Bearer pit-token") return json(401, { message: "Invalid location token" });
+    if (token === "pit-noscope") return json(403, { message: "The token does not have access to this scope: socialplanner/account.readonly" });
+    if (!token.startsWith("pit-")) return json(401, { message: "Invalid JWT" });
+    if (token !== `pit-${loc}`) return json(404, { message: `Location not found: ${loc}` });
     if (kind === "accounts" && req.method === "GET") {
       return json(200, {
         success: true,
@@ -45,7 +50,7 @@ createServer((req, res) => {
     }
     if (kind === "posts" && req.method === "POST" && !id) {
       const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
-      if (!Array.isArray(body.accountIds) || !body.accountIds.length || !body.type || !body.userId) return json(422, { message: "accountIds, type and userId are required" });
+      if (!Array.isArray(body.accountIds) || !body.accountIds.length || !body.type) return json(422, { message: "accountIds and type are required" });
       const _id = `post_${++n}`;
       posts.set(_id, { _id, ...body, error: null, postId: null });
       return json(201, { success: true, statusCode: 201, message: "Post created", results: { post: posts.get(_id) } });

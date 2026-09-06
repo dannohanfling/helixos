@@ -1,4 +1,4 @@
-/** End-to-end: agency token → per-client sub-account → accounts → channel map → schedule → Social Planner → status sync, against scripts/mock-ghl.ts. */
+/** End-to-end: a member's own Private Integration token → validation with real reasons → channel map → schedule → Social Planner → status sync, against scripts/mock-ghl.ts. */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
 
@@ -17,6 +17,11 @@ async function submit(page: Page, selector: string) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(400);
 }
+async function saveConnection(page: Page, locationId: string, token: string) {
+  await page.fill('input[name="locationId"]', locationId);
+  await page.fill('input[name="manualToken"]', token);
+  await submit(page, 'button:has-text("Connect and check"), button:has-text("Save and check")');
+}
 
 async function main() {
   const mock = spawn("npx", ["tsx", "scripts/mock-ghl.ts", String(mockPort)], { stdio: "ignore" });
@@ -29,65 +34,45 @@ async function main() {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
 
-    // A member must not be able to bind themselves to someone else's sub-account and mint an agency token for it
-    await page.goto(`${base}/login`);
-    await page.fill('input[name="email"]', "client2@demo.helixos.app");
-    await page.fill('input[name="password"]', "demo1234");
-    await Promise.all([page.waitForURL(/\/today/), page.click('button[type="submit"]:has-text("Sign in")')]);
-    await page.goto(`${base}/settings`);
-    await page.fill('input[name="locationId"]', "loc_maya");
-    await submit(page, 'button:has-text("Connect"), button:has-text("Save and refresh")');
-    await expectText(page, "Paste your sub-account", "member blocked from foreign location");
-    await page.fill('input[name="locationId"]', "loc_jordan");
-    await page.fill('input[name="manualToken"]', "pit-token");
-    await submit(page, 'button:has-text("Save and refresh")');
-    await expectText(page, "own token", "member connected with own token");
-    console.log("✓ member cannot hijack another sub-account; own token works");
-    await page.goto(`${base}/settings`);
-    await page.click('button:has-text("Log out")');
-    await page.waitForURL(/\/login/);
-
-
-    // Coach: point the agency integration at the mock
+    // Coach: enable GoHighLevel and point it at the mock (no agency token anywhere)
     await page.goto(`${base}/login`);
     await page.click('button:has-text("As the coach")');
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/integrations`);
     const ghlForm = page.locator('form:has(input[name="provider"][value="gohighlevel"])').first();
+    if ((await ghlForm.locator('input[name="apiKey"], input[name="companyId"]').count()) !== 0) throw new Error("agency token / company ID fields must be gone");
     await ghlForm.locator('input[name="enabled"]').check();
     await ghlForm.locator('input[name="apiUrl"]').fill(`http://localhost:${mockPort}`);
-    await ghlForm.locator('input[name="apiKey"]').fill("agency-token");
-    await ghlForm.locator('input[name="companyId"]').fill("agency_demo");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), ghlForm.locator('button:has-text("Save")').click()]);
     await page.waitForLoadState("networkidle");
-    await expectText(page, "Client sub-accounts", "coach sub-accounts card");
-    // Coach connects Jordan's sub-account from here
-    await page.locator('summary:has-text("Jordan Lee")').click();
-    const jordan = page.locator('details:has(summary:has-text("Jordan Lee")) form:has(input[name="locationId"])').first();
-    await jordan.locator('input[name="locationId"]').fill("loc_jordan");
-    await jordan.locator('input[name="ghlUserId"]').fill("user_jordan");
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), jordan.locator('button:has-text("Connect"), button:has-text("Save and refresh")').first().click()]);
-    await page.waitForLoadState("networkidle");
-    await expectText(page, "5 accounts", "coach-side accounts fetched");
-    console.log("✓ coach connected a client sub-account");
+    await expectText(page, "Client sub-accounts", "coach sees connection status list");
+    console.log("✓ coach: GoHighLevel enabled without any agency credential");
 
-    // Client: connect own sub-account on Settings (token minted from the agency token)
+    // Member: token validation with real reasons
     await page.goto(`${base}/settings`);
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
     await page.click('button:has-text("As a client")');
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/settings`);
-    await expectText(page, "Publishing (your GoHighLevel sub-account)", "settings publishing card");
-    await submit(page, 'button:has-text("Save and refresh")');
-    await expectText(page, "5 accounts", "client accounts fetched");
+    await expectText(page, "Private Integrations → Create new integration", "guidance shown");
+    await expectText(page, "socialplanner/post.write", "scopes listed");
+    await saveConnection(page, "loc_maya", "wrong-token");
+    await expectText(page, "rejected the token (401)", "bad token reason");
+    await saveConnection(page, "loc_maya", "pit-noscope");
+    await expectText(page, "missing Social Planner permissions (403)", "missing scope reason");
+    await saveConnection(page, "loc_other", "pit-loc_maya");
+    await expectText(page, "doesn't match this token", "wrong location reason");
+    await saveConnection(page, "loc_maya", "pit-loc_maya");
+    await expectText(page, "connected · 5 accounts", "valid token connected");
     await expectText(page, "5/5 channels will auto-publish", "auto-mapped");
     await page.selectOption('select[name="map_linkedin"]', "");
     await submit(page, 'button:has-text("Save channel map")');
     await expectText(page, "4/5 channels will auto-publish", "map saved");
     await page.screenshot({ path: "screenshots/g01-settings-ghl.png", fullPage: true });
+    console.log("✓ member: 401, 403 and wrong-location reasons shown; valid token connects and maps");
 
-    // Schedule from the composer
+    // Publish through the Social Planner
     await page.goto(`${base}/content/compose`);
     await page.fill('input[placeholder^="Working title"]', "GHL end to end");
     await page.fill('input[placeholder^="Hook"]', "Twelve minutes on Tuesday.");
@@ -104,9 +89,9 @@ async function main() {
     await submit(page, 'button:has-text("Check status")');
     await expectText(page, "Social Planner: published", "status synced");
     await page.screenshot({ path: "screenshots/g02-distribute-ghl.png", fullPage: true });
-    console.log("✓ scheduled through the Social Planner and synced status");
+    console.log("✓ scheduled through the Social Planner with the member's token and synced status");
 
-    // Coach sees it in the sync log
+    // Coach sees it in the sync log and the status list
     await page.goto(`${base}/settings`);
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
@@ -114,7 +99,8 @@ async function main() {
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/integrations`);
     await expectText(page, "Scheduled via Social Planner", "sync log sent");
-    console.log("✓ sync log");
+    await expectText(page, "4/5 channels", "coach status list");
+    console.log("✓ sync log and status list");
   } finally {
     await browser.close();
     mock.kill();

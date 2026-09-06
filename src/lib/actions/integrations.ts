@@ -42,6 +42,11 @@ export async function testIntegrationAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
   const provider = PROVIDERS.find((p) => p === str(formData, "provider")) as Provider | undefined;
   if (!provider) return;
+  if (provider === "gohighlevel") {
+    await logSync({ workspaceId: coach.workspace.id, userId: coach.user.id, provider, direction: "out", event: "ping", status: "skipped", note: "GoHighLevel has no agency credential to ping. Each member's token is checked when they save it on Settings." });
+    refresh();
+    return;
+  }
   const integ = await getIntegration(coach.workspace.id, provider);
   const target = integ?.enabled ? resolveApiUrl(provider, integ.config.apiUrl) : { ok: false as const, error: "Enable the integration and set an API URL first" };
   if (!integ || !target.ok) {

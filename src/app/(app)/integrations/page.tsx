@@ -6,7 +6,6 @@ import { broadcastPassAction, clearSyncLogAction, rotateInboundSecretAction, sav
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
 import { PROVIDER_META } from "@/lib/integrations";
-import { GhlConnect } from "@/components/ghl-connect";
 import { readiness } from "@/lib/engine/ghl-map";
 import { formatDateTime } from "@/lib/dates";
 
@@ -84,31 +83,23 @@ export default async function IntegrationsPage() {
         })}
       </div>
 
-      <Card className="mt-4" title="🚀 Client sub-accounts (Social Planner)" action={<span className="text-xs text-ink-3">{conns.length}/{members.length} connected</span>}>
-        <p className="mb-3 text-sm text-ink-2">Each client publishes through their own sub-account under your agency. Enter their location ID and GHL user ID here or let them do it on their Settings page. HelixOS mints a 24-hour location token from your agency token whenever it needs one.</p>
-        <div className="divide-y">
+      <Card className="mt-4" title="🚀 Client sub-accounts (Social Planner)" action={<span className="text-xs text-ink-3">{conns.filter((c) => c.accounts.length && !c.lastError).length}/{members.length} connected</span>}>
+        <p className="mb-3 text-sm text-ink-2">Each client publishes through their own sub-account with their own Private Integration token, entered on their Settings → Publishing page (the steps are written there). You can see who is connected; you can&apos;t see or enter their tokens.</p>
+        <ul className="divide-y text-sm">
           {members.map((m) => {
             const c = connOf.get(m.userId) ?? null;
             const r = c ? readiness(c.mapping) : null;
+            const ok = Boolean(c && c.accounts.length && !c.lastError);
             return (
-              <Disclosure
-                key={m.id}
-                summary={
-                  <span className="flex items-center gap-3 py-1 text-sm">
-                    <span className="w-40 truncate font-medium">{userName.get(m.userId) ?? m.userId}</span>
-                    <Badge tone={c?.lastError ? "danger" : r && r.mapped ? "good" : c ? "accent" : "neutral"}>{c?.lastError ? "error" : r ? `${r.mapped}/${r.total} channels` : "not connected"}</Badge>
-                    {c ? <span className="text-xs text-ink-3">{c.locationId}</span> : null}
-                  </span>
-                }
-                className="py-1"
-              >
-                <div className="pb-3 pl-1">
-                  <GhlConnect conn={c} forUserId={m.userId} tz={v.workspace.timezone} compact />
-                </div>
-              </Disclosure>
+              <li key={m.id} className="flex flex-wrap items-center gap-3 py-2">
+                <span className="w-40 truncate font-medium">{userName.get(m.userId) ?? m.userId}</span>
+                <Badge tone={c?.lastError ? "danger" : ok ? "good" : c ? "accent" : "neutral"}>{c?.lastError ? "token problem" : ok ? `${r?.mapped}/${r?.total} channels` : c ? "no accounts yet" : "not connected"}</Badge>
+                {c ? <span className="text-xs text-ink-3">{c.locationId}</span> : null}
+                {c?.lastError ? <span className="min-w-0 flex-1 truncate text-xs text-ink-3">{c.lastError}</span> : null}
+              </li>
             );
           })}
-        </div>
+        </ul>
       </Card>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.4fr]">

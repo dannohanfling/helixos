@@ -919,7 +919,7 @@ export const syncEvents = sqliteTable(
   (t) => [index("sync_events_ws").on(t.workspaceId, t.createdAt)],
 );
 
-/** One member's GoHighLevel sub-account for publishing: location, user, cached location token, connected accounts and the channel map. */
+/** One member's GoHighLevel sub-account for publishing: location, user, their own encrypted Private Integration token, connected accounts and the channel map. */
 export const socialConnections = sqliteTable(
   "social_connections",
   {
@@ -928,12 +928,9 @@ export const socialConnections = sqliteTable(
     userId: text("user_id").notNull(),
     provider: text("provider").notNull().default("gohighlevel"),
     locationId: text("location_id").notNull(),
-    /** True when the coach set the location. Only then may the agency token mint a token for it. A member's own private token is the other proof. */
-    coachAssigned: integer("coach_assigned", { mode: "boolean" }).notNull().default(false),
     ghlUserId: text("ghl_user_id"),
+    /** The member's own location-level Private Integration token, encrypted at rest. The only credential the GoHighLevel integration uses. */
     manualToken: text("manual_token"),
-    accessToken: text("access_token"),
-    tokenExpiresAt: text("token_expires_at"),
     accounts: text("accounts", { mode: "json" }).$type<SocialAccount[]>().notNull().default([]),
     mapping: text("mapping", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     connectedAt: text("connected_at"),
