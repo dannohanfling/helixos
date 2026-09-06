@@ -1,0 +1,87 @@
+[
+  {
+    "name": "Hot leads or ghosts?",
+    "text": "Are you getting hot leads — or are you just collecting email addresses that ghost you the moment you follow up?",
+    "painPoint": "Follow-Up"
+  },
+  {
+    "name": "Growing or grinding?",
+    "text": "Is your business actually growing — or are you just grinding harder every month to hit the same number?",
+    "painPoint": "Backend Systems"
+  },
+  {
+    "name": "Serving or selling?",
+    "text": "Are you serving your people — or just selling at them until they tune you out?",
+    "painPoint": "Community"
+  },
+  {
+    "name": "Leads coming in or leaking out?",
+    "text": "Are your leads coming in — or are they quietly leaking out between the ad and the offer?",
+    "painPoint": "Registration"
+  },
+  {
+    "name": "System or memory?",
+    "text": "Is your follow-up a system — or just you remembering to text people back?",
+    "painPoint": "Follow-Up"
+  },
+  {
+    "name": "Community or audience?",
+    "text": "Do you have a community — or do you just have an audience?",
+    "painPoint": "Community"
+  },
+  {
+    "name": "Pipeline or guessing game?",
+    "text": "Do you have a sales pipeline — or is every launch a guessing game?",
+    "painPoint": "Conversion"
+  },
+  {
+    "name": "Content or conversion?",
+    "text": "Are you creating content that converts — or are you just posting more into the void and hoping something lands?",
+    "painPoint": "Conversion"
+  },
+  {
+    "name": "Launching or hoping?",
+    "text": "Do you have a launch playbook — or are you just hoping this one hits different?",
+    "painPoint": "Conversion"
+  },
+  {
+    "name": "Scaling or surviving?",
+    "text": "Are you actually scaling — or are you just surviving another month on the hustle that built this?",
+    "painPoint": "Backend Systems"
+  },
+  {
+    "name": "Audience or assets?",
+    "text": "Do you own your audience — or do you just rent attention on platforms that could change the rules tomorrow?",
+    "painPoint": "Community"
+  },
+  {
+    "name": "Serving fans or selling strangers?",
+    "text": "Are you serving fans who already trust you — or still trying to sell strangers who barely know your name?",
+    "painPoint": "Community"
+  },
+  {
+    "name": "Funnels or friction?",
+    "text": "Do you have a funnel — or just a bunch of friction points dressed up in fancy software?",
+    "painPoint": "Registration"
+  },
+  {
+    "name": "Trusted or tolerated?",
+    "text": "Is your list waiting to hear from you — or just tolerating your emails until they unsubscribe?",
+    "painPoint": "Follow-Up"
+  },
+  {
+    "name": "Business or demanding job?",
+    "text": "Is what you've built actually a business — or is it a very demanding job that only works when you show up?",
+    "painPoint": "Backend Systems"
+  },
+  {
+    "name": "Architected or assembled?",
+    "text": "Is your business architected — or just assembled from whatever tools you bought along the way?",
+    "painPoint": "Backend Systems"
+  },
+  {
+    "name": "Converting or collecting?",
+    "text": "Are your webinars actually converting — or are they just collecting people who sign up, never show up, and never buy?",
+    "painPoint": "Show-Up"
+  }
+]

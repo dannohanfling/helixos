@@ -14,7 +14,9 @@ type Initial = { id?: string; title?: string; hook?: string; body?: string; hasC
 const EMOJI = ["🔥", "✅", "👇", "💡", "🙌", "❤️", "👉", "⚡", "🎯", "😅", "🤝", "📌"];
 const DEFAULT_SELECTED: TargetKey[] = ["ch:fb_personal", "ch:instagram", "ch:threads", "ch:linkedin"];
 
-export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial }) {
+type Snippet = { id: string; title: string; text: string };
+
+export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[] } }) {
   const router = useRouter();
   const targets = useMemo(() => [...groupTargets(groups), ...channelTargets()], [groups]);
   const byKey = useMemo(() => new Map(targets.map((t) => [t.key, t])), [targets]);
@@ -198,9 +200,26 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                 <button type="button" className="btn btn-ghost btn-xs" onClick={() => insert(hashtagsFor(src))}>
                   # Hashtags
                 </button>
-                <button type="button" className="btn btn-ghost btn-xs" onClick={() => insert("Comment \"more\" and I'll send you the full breakdown.")}>
-                  + CTA line
-                </button>
+                {snippets?.hooks.length ? (
+                  <select className="field w-auto py-1 text-xs" value="" onChange={(e) => { const h = snippets.hooks.find((x) => x.id === e.target.value); if (h) setHook(h.text); }} aria-label="Pick a hook from the library">
+                    <option value="">🪝 Hook from library</option>
+                    {snippets.hooks.map((h) => (
+                      <option key={h.id} value={h.id}>{h.title}</option>
+                    ))}
+                  </select>
+                ) : null}
+                {snippets?.ctas.length ? (
+                  <select className="field w-auto py-1 text-xs" value="" onChange={(e) => { const c = snippets.ctas.find((x) => x.id === e.target.value); if (c) { insert(c.text); setHasCta(true); } }} aria-label="Pick a CTA from the library">
+                    <option value="">🎯 CTA from library</option>
+                    {snippets.ctas.map((c) => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => insert("Comment \"more\" and I'll send you the full breakdown.")}>
+                    + CTA line
+                  </button>
+                )}
                 <label className="ml-auto flex items-center gap-1.5 text-xs">
                   <input type="checkbox" checked={hasCta} onChange={(e) => setHasCta(e.target.checked)} /> Has a call to action
                 </label>

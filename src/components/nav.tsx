@@ -14,6 +14,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/today", label: "Today", icon: "☀️" },
       { href: "/tasks", label: "Tasks", icon: "✅" },
       { href: "/content", label: "Content", icon: "✍️", hint: "post + repurpose" },
+      { href: "/library", label: "Library", icon: "🗂️", hint: "swipes + hooks" },
       { href: "/conversations", label: "DMs", icon: "💬" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
     ],

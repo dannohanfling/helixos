@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { deleteContentAction } from "@/lib/actions/content";
+import { saveContentToLibraryAction } from "@/lib/actions/library";
 import { ContentForm } from "@/components/content-form";
 import { CopyButton } from "@/components/copy-button";
 import { Card, PageHeader } from "@/components/ui";
@@ -32,6 +33,10 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
               Every version
             </Link>
             {fullText ? <CopyButton text={fullText} label="Copy post" /> : null}
+            <form action={saveContentToLibraryAction}>
+              <input type="hidden" name="contentItemId" value={item.id} />
+              <button className="btn btn-ghost btn-sm" type="submit" title="Keep this post as a template in your library">🗂️ Save to library</button>
+            </form>
             <form action={deleteContentAction}>
               <input type="hidden" name="id" value={item.id} />
               <button className="btn btn-ghost btn-sm" type="submit">

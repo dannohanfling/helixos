@@ -943,6 +943,41 @@ export const socialConnections = sqliteTable(
 export type SocialAccount = { id: string; name: string; platform: string; type: string; isExpired: boolean; avatar?: string | null };
 export type SocialConnection = typeof socialConnections.$inferSelect;
 
+/** The Content Library: shared templates (workspace null = master, or coach-published) and each member's own saved posts. */
+export const LIBRARY_KINDS = ["post", "hook", "cta", "pattern"] as const;
+
+export const libraryPosts = sqliteTable(
+  "library_posts",
+  {
+    id: id(),
+    workspaceId: text("workspace_id"),
+    userId: text("user_id"),
+    kind: text("kind", { enum: LIBRARY_KINDS }).notNull().default("post"),
+    shared: integer("shared", { mode: "boolean" }).notNull().default(false),
+    title: text("title").notNull(),
+    contentType: text("content_type"),
+    pillar: text("pillar"),
+    angle: text("angle"),
+    hook: text("hook"),
+    body: text("body").notNull().default(""),
+    cta: text("cta"),
+    hasCta: integer("has_cta", { mode: "boolean" }).notNull().default(false),
+    useWhen: text("use_when"),
+    whyItWorks: text("why_it_works"),
+    example: text("example"),
+    tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default([]),
+    source: text("source").notNull().default("master"),
+    sourceContentId: text("source_content_id"),
+    engagements: integer("engagements").notNull().default(0),
+    leads: integer("leads").notNull().default(0),
+    usedCount: integer("used_count").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("library_posts_scope").on(t.workspaceId, t.userId, t.kind)],
+);
+
+export type LibraryPost = typeof libraryPosts.$inferSelect;
+
 export type Principle = typeof principles.$inferSelect;
 export type Proof = typeof proofs.$inferSelect;
 export type Group = typeof groups.$inferSelect;

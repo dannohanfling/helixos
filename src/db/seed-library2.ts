@@ -8,6 +8,10 @@ import accelerator from "@/data/seed/original/curriculum_accelerator.json";
 import exercises from "@/data/seed/original/exercises.json";
 import certModulesJson from "@/data/seed/original/certification_modules.json";
 import certDeliverablesJson from "@/data/seed/original/certification_deliverables.json";
+import hooksJson from "@/data/seed/library/hooks.json";
+import ctasJson from "@/data/seed/library/ctas.json";
+import patternsJson from "@/data/seed/library/patterns.json";
+import swipesJson from "@/data/seed/library/swipes.json";
 
 type P = (typeof principlesJson)[number];
 type F = (typeof frameworksJson)[number];
@@ -175,7 +179,26 @@ export async function seedCertification(): Promise<void> {
   console.log(`Certification: ${ordered.length} modules, ${count} deliverables`);
 }
 
+const TYPE_MAP: Record<string, string> = { "Value Post": "Quick Win / Pro-Tip", Quote: "Belief Shifting Post", "Short Bait": "CTA Post", "Written Post": "CTA Post", "Story Post": "Story Post" };
+
+/** Shared swipe files: hooks, CTAs, post patterns and proven posts from the master and original bases. Loads once. */
+export async function seedContentLibrary(): Promise<void> {
+  const existing = await db.select({ id: schema.libraryPosts.id }).from(schema.libraryPosts).where(eq(schema.libraryPosts.source, "master"));
+  if (existing.length) return;
+  const rows: (typeof schema.libraryPosts.$inferInsert)[] = [];
+  for (const h of hooksJson) rows.push({ id: newId(), kind: "hook", shared: true, title: h.name, hook: h.text, body: h.text, pillar: h.painPoint, tags: [h.painPoint], source: "master" });
+  for (const c of ctasJson) rows.push({ id: newId(), kind: "cta", shared: true, title: c.name, cta: c.text, body: c.text, hasCta: true, source: "master" });
+  for (const p of patternsJson) rows.push({ id: newId(), kind: "pattern", shared: true, title: p.name, contentType: p.contentType, hook: p.hook, body: p.body, cta: p.cta, hasCta: true, useWhen: p.useWhen, whyItWorks: p.whyItWorks, example: p.example, tags: p.tags, source: "master" });
+  for (const sw of swipesJson as { title: string; hook: string | null; body: string; contentType: string | null; pillar: string | null; angle: string | null; ctaType: string | null; engagements: number | null; notes: string | null; audienceStage: string | null }[]) {
+    const hasCta = Boolean(sw.ctaType && !/no cta/i.test(sw.ctaType));
+    rows.push({ id: newId(), kind: "post", shared: true, title: sw.title, contentType: sw.contentType ? (TYPE_MAP[sw.contentType] ?? sw.contentType) : null, pillar: sw.pillar, angle: sw.angle, hook: sw.hook ?? null, body: sw.body, hasCta, useWhen: sw.audienceStage ? `Audience: ${sw.audienceStage}` : null, whyItWorks: sw.notes, tags: [sw.pillar, sw.angle, sw.ctaType].filter((x): x is string => Boolean(x)), engagements: sw.engagements ?? 0, source: "master" });
+  }
+  await db.insert(schema.libraryPosts).values(rows);
+  console.log(`Content library: ${rows.length} shared entries`);
+}
+
 export async function seedLibraryWave2(): Promise<void> {
+  await seedContentLibrary();
   await seedDoctrine();
   await seedFrameworks();
   await seedCourses();

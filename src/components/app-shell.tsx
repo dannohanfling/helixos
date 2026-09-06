@@ -9,7 +9,7 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
   const tier = tierProgress(points);
   return (
     <div className="min-h-screen md:flex">
-      <aside className="hidden w-60 shrink-0 flex-col border-r bg-surface px-3 py-4 md:flex md:sticky md:top-0 md:h-screen">
+      <aside className="hidden w-60 shrink-0 flex-col overflow-y-auto border-r bg-surface px-3 py-4 md:flex md:sticky md:top-0 md:h-screen">
         <Link href="/today" className="mb-5 flex items-center gap-2 px-2">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-ink text-bg text-sm font-black">H</span>
           <div className="leading-tight">

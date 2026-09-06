@@ -6,13 +6,19 @@ import { connectionFor } from "@/lib/ghl";
 import { readiness } from "@/lib/engine/ghl-map";
 import type { GroupTarget } from "@/lib/engine/compose";
 import type { Persona } from "@/components/channel-previews";
+import { visibleLibrary } from "./library-posts";
 
 /** Everything the composer needs: the user's groups (own + top 3 + members), persona for previews, AI and Social Planner state. */
 export async function composerContext(v: Viewer) {
-  const [groups, conn] = await Promise.all([
+  const [groups, conn, lib] = await Promise.all([
     db.query.groups.findMany({ where: eq(schema.groups.userId, v.user.id), orderBy: [asc(schema.groups.kind), asc(schema.groups.rank), asc(schema.groups.name)] }),
     connectionFor(v.user.id),
+    visibleLibrary(v.workspace.id, v.user.id),
   ]);
+  const snippets = {
+    hooks: lib.filter((p) => p.kind === "hook").map((p) => ({ id: p.id, title: p.title, text: p.hook ?? p.body })),
+    ctas: lib.filter((p) => p.kind === "cta").map((p) => ({ id: p.id, title: p.title, text: p.cta ?? p.body })),
+  };
   const ordered: GroupTarget[] = [
     ...groups.filter((g) => g.kind === "own"),
     ...groups.filter((g) => g.kind === "prospect" && g.rank >= 1 && g.rank <= 3).sort((a, b) => a.rank - b.rank),
@@ -31,5 +37,6 @@ export async function composerContext(v: Viewer) {
     today: v.today,
     aiEnabled: aiEnabled(),
     socialConnected: Boolean(conn && readiness(conn.mapping).mapped > 0),
+    snippets,
   };
 }
