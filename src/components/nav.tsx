@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo, useSyncExternalStore } from "react";
 
 export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; hint?: string };
 export type NavGroup = { label: string; items: NavItem[] };
@@ -43,33 +44,91 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
+const STORAGE_KEY = "helix.nav.collapsed";
+
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+// A tiny external store over localStorage so the server render (all open) and the client agree without an effect.
+const listeners = new Set<() => void>();
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    listeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+function getSnapshot(): string {
+  try {
+    return localStorage.getItem(STORAGE_KEY) ?? "{}";
+  } catch {
+    return "{}";
+  }
+}
+function getServerSnapshot(): string {
+  return "{}";
+}
+function writeCollapsed(next: Record<string, boolean>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* storage unavailable: nothing to persist */
+  }
+  listeners.forEach((l) => l());
+}
+
 export function SideNav({ role }: { role: "coach" | "client" }) {
   const pathname = usePathname();
+  const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const collapsed = useMemo<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(raw) as Record<string, boolean>;
+    } catch {
+      return {};
+    }
+  }, [raw]);
+  const toggle = (label: string) => writeCollapsed({ ...collapsed, [label]: !collapsed[label] });
   return (
-    <nav className="space-y-3">
-      {NAV_GROUPS.map((g) => (
-        <div key={g.label}>
-          <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-3">{g.label}</div>
-          <div className="flex flex-col gap-0.5">
-            {g.items
-              .filter((n) => !n.coachOnly || role === "coach")
-              .map((n) => (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition ${isActive(pathname, n.href) ? "bg-surface-2 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}
-                >
-                  <span className="w-5 text-center text-base">{n.icon}</span>
-                  {n.label}
-                </Link>
-              ))}
+    <nav className="space-y-2">
+      {NAV_GROUPS.map((g) => {
+        const items = g.items.filter((n) => !n.coachOnly || role === "coach");
+        const activeItem = items.find((n) => isActive(pathname, n.href));
+        const open = !collapsed[g.label];
+        return (
+          <div key={g.label}>
+            <button
+              type="button"
+              onClick={() => toggle(g.label)}
+              aria-expanded={open}
+              className="flex w-full items-center justify-between rounded-md px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink-3 hover:bg-surface-2 hover:text-ink"
+            >
+              <span>
+                {g.label}
+                {!open && activeItem ? <span className="ml-2 normal-case tracking-normal text-ink-2">· {activeItem.label}</span> : null}
+              </span>
+              <span className={`text-[10px] transition-transform ${open ? "rotate-0" : "-rotate-90"}`} aria-hidden>
+                ▾
+              </span>
+            </button>
+            {open ? (
+              <div className="flex flex-col gap-0.5">
+                {items.map((n) => (
+                  <Link
+                    key={n.href}
+                    href={n.href}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition ${isActive(pathname, n.href) ? "bg-surface-2 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}
+                  >
+                    <span className="w-5 text-center text-base">{n.icon}</span>
+                    {n.label}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </nav>
   );
 }

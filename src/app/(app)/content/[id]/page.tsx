@@ -25,8 +25,11 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
         }
         action={
           <div className="flex gap-2">
-            <Link href={`/content/${item.id}/repurpose`} className="btn btn-accent btn-sm">
-              ♻️ Repurpose to 10 channels
+            <Link href={`/content/${item.id}/compose`} className="btn btn-accent btn-sm">
+              ♻️ Redistribute
+            </Link>
+            <Link href={`/content/${item.id}/repurpose`} className="btn btn-soft btn-sm">
+              Every version
             </Link>
             {fullText ? <CopyButton text={fullText} label="Copy post" /> : null}
             <form action={deleteContentAction}>

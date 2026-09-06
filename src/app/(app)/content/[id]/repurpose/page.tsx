@@ -6,6 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { aiEnabled } from "@/lib/ai";
 import { generateVariantsAction, updateVariantAction } from "@/lib/actions/variants";
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
+import { distributeAllAction } from "@/lib/actions/compose";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
@@ -120,6 +121,22 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
           </span>
         }
       />
+
+      <Card className="mb-4" title="One click: everywhere" action={<Link href={`/content/${item.id}/compose`} className="text-xs underline">Open in composer</Link>}>
+        <form action={distributeAllAction} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="contentItemId" value={item.id} />
+          <p className="w-full text-sm text-ink-2">Drafts every channel plus your group and top 3 prospecting groups, then schedules them 45 minutes apart in the order that builds momentum: your group first, profile and Instagram next, long-form last. Channels publish through the Social Planner when GoHighLevel is connected; group posts wait for you to paste.</p>
+          <label className="block">
+            <span className="label">Start date</span>
+            <input className="field" name="startDate" type="date" defaultValue={v.today} />
+          </label>
+          <label className="block">
+            <span className="label">Time</span>
+            <input className="field" name="startTime" type="time" defaultValue="09:00" />
+          </label>
+          <button className="btn btn-accent" type="submit">🚀 Schedule everywhere</button>
+        </form>
+      </Card>
 
       {/* Groups first: this is where the conversations start */}
       <Card title="Groups" action={<Link href="/groups" className="text-xs underline">Manage groups</Link>}>

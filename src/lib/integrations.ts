@@ -33,6 +33,7 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
       { key: "pipelineId", label: "Pipeline ID", hint: "Where booked calls land" },
       { key: "stageId", label: "Pipeline stage ID" },
       { key: "webhookUrl", label: "Inbound webhook URL (optional)", hint: "A GHL workflow webhook to post events into" },
+      { key: "socialAccounts", label: "Social Planner accounts", hint: "channel=accountId, comma separated. e.g. fb_page=abc123, instagram=def456, linkedin=ghi789" },
     ],
   },
 };
@@ -96,6 +97,39 @@ export async function pushContact(ctx: { workspaceId: string; userId: string }, 
   if (ok && integ.config.pipelineId && contact.stage === "call_booked") {
     await send(ctx.workspaceId, ctx.userId, "gohighlevel", "opportunity.create", "/opportunities/", { locationId: integ.config.locationId ?? "", pipelineId: integ.config.pipelineId, pipelineStageId: integ.config.stageId ?? "", name: `${contact.name} · call`, status: "open", source: "HelixOS" });
   }
+}
+
+/** Reads the "channel=accountId" mapping for the GoHighLevel Social Planner. */
+export function socialAccountMap(config: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const pair of (config.socialAccounts ?? "").split(/[,\n]/)) {
+    const [k, v] = pair.split("=").map((x) => x.trim());
+    if (k && v) out[k] = v;
+  }
+  return out;
+}
+
+/** Schedules (or posts) one channel variant through the GoHighLevel Social Planner. Skips with a note when the channel has no account mapped. */
+export async function pushSocialPost(ctx: { workspaceId: string; userId: string }, post: { channel: string; body: string; postAt: string | null; mediaUrl?: string | null; title?: string }): Promise<boolean> {
+  const integ = await getIntegration(ctx.workspaceId, "gohighlevel");
+  if (!integ?.enabled) {
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt }, status: "skipped", note: "GoHighLevel not enabled" });
+    return false;
+  }
+  const accountId = socialAccountMap(integ.config)[post.channel];
+  if (!accountId) {
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt }, status: "skipped", note: `No Social Planner account mapped for ${post.channel}` });
+    return false;
+  }
+  return send(ctx.workspaceId, ctx.userId, "gohighlevel", "social.schedule", `/social-media-posting/${integ.config.locationId ?? ""}/posts`, {
+    accountIds: [accountId],
+    summary: post.body,
+    media: post.mediaUrl ? [{ url: post.mediaUrl }] : [],
+    status: post.postAt ? "scheduled" : "published",
+    scheduleDate: post.postAt ?? undefined,
+    title: post.title,
+    source: "HelixOS",
+  });
 }
 
 /** A push notification to one member's Evolve Omega pass. */

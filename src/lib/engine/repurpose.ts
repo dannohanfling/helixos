@@ -35,7 +35,7 @@ function truncate(text: string, max: number): string {
   return (at > max * 0.6 ? cut.slice(0, at + 1) : cut).trim() + (at > max * 0.6 ? "" : "…");
 }
 
-function hashtagsFor(src: SourceContent): string {
+export function hashtagsFor(src: SourceContent): string {
   const words = `${src.title} ${src.hook ?? ""}`.toLowerCase().match(/[a-z]{5,}/g) ?? [];
   const stop = new Set(["their", "about", "these", "those", "there", "which", "would", "could", "should", "every", "still", "after", "before", "because", "while", "where", "being", "other"]);
   const picked = [...new Set(words.filter((w) => !stop.has(w)))].slice(0, 4).map((w) => `#${w}`);

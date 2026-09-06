@@ -72,7 +72,7 @@ async function main() {
   await page.goto(`${base}/content?view=posted`);
   await page.click('a:has-text("Why most diets fail")');
   await page.waitForURL(/\/content\//);
-  await page.click('a:has-text("Repurpose")');
+  await page.click('a:has-text("Every version")');
   await page.waitForURL(/\/repurpose/);
   await expectText(page, "Everywhere else", "repurpose");
   await submit(page, 'button:has-text("Generate drafts")');

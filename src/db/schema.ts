@@ -140,6 +140,7 @@ export const contentItems = sqliteTable(
     postAt: text("post_at"),
     postedAt: text("posted_at"),
     postLink: text("post_link"),
+    mediaUrl: text("media_url"),
     engagements: integer("engagements").notNull().default(0),
     views: integer("views").notNull().default(0),
     leads: integer("leads").notNull().default(0),

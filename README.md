@@ -19,6 +19,7 @@ see who's on track, verify pathway work, and nudge who's gone quiet.
 | **Coach** | Client roster with today's status, streak, tier, pathway progress; verify queue; who needs a nudge; Elite / Community Pass toggle | 🎓 Client Success Path, 🛣️ Success Pathway |
 | **Webinars** | 7-step wizard: foundation → 3 belief breaks → 20-section script (5 acts) with story/analogy/objection banks → offer mapping → deck outline → 11-point readiness review → run + debrief numbers. Ships with "The Leaky Webinar" as a worked example. | 🖥️ WebinarOS: 🎭 Acts, 📑 Webinar Sections, 🪜 Wizard Stages, 📖 Story Bank, 🎨 Analogies, 🗣️ Objections, 💡 Beliefs, ✅ Readiness Reviews, 🖼️ Slide Blueprints |
 | **Offers** | Offer wizard (avatar, promise, mechanism, 3–5 step path, container, price, guarantee, fit, top 5 objections) + stack builder with belief-break tags + a live optimizer score with fixes + one-pager export | 🎁 OffersOS, 🎁 Offer Components |
+| **Composer** | HighLevel-style post builder: pick channels and groups as chips, write once, toggle "customize for each channel" to edit any version, live preview of exactly how it renders on Facebook, Instagram, Threads, LinkedIn, email, Stories, Skool and each group; stagger schedule 45 min apart in a momentum order; Save for later / Post now / Schedule; optional Claude pass that shapes every version for comments and DMs | 📮 Content Distribution |
 | **Distribute** | One post → your group first, then your top 3 prospecting groups (each draft shaped to that group's mission, admin values and rules, with an alignment checklist), then 8 more channels (FB personal / page / stories / Instagram / Threads / LinkedIn / email / Skool); per-channel posted tracking; optional Claude polish | 📮 Content Distribution, 👥 Facebook Groups |
 | **Groups** | My group · groups I'm a member of · top 3 to prospect in (ranked slots + bench). Group profiles (mission, audience, admin, admin values, rules, norms, what works) with a readiness score; rules are read automatically (no links, no promo, ask admin first) | 👥 Facebook Groups |
 | **Doctrine** | The Ω principles: doctrine, Greek/Stoic/business/public-figure stories, and a one-click post, reel script, or 10-minute training from each | 🏛️ Principles |
@@ -69,6 +70,7 @@ npm test                    # engine unit tests (streaks, tiers, points, next be
 npx tsx scripts/smoke.ts          # Playwright walkthrough of the daily loop; writes ./screenshots
 npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, clients, community pass
 npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks
+npx tsx scripts/smoke-composer.ts  # Composer, per-channel previews, one-click schedule everywhere, collapsible nav
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
 

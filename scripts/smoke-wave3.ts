@@ -75,7 +75,7 @@ async function main() {
 
   // Distribution with group sections
   await page.goto(`${base}/content`);
-  await page.click('a[href^="/content/"]:has-text("12-minute")').catch(async () => page.click('main a[href^="/content/"]'));
+  await page.click('a[href^="/content/"]:has-text("12-minute")').catch(async () => page.click('main a[href^="/content/"]:not([href*="compose"])'));
   await page.waitForURL(/\/content\/[^/]+$/);
   await page.goto(page.url() + "/repurpose");
   await expectText(page, "Top 3 to prospect in", "repurpose sections");

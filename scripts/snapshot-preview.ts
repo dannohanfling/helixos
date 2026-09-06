@@ -91,7 +91,6 @@ async function main() {
   console.log(`coach pages: ${snaps.length - before}`);
   await browser.close();
 
-  const esc = (s: string) => s.replace(/<\/script/gi, "<\\/script");
   const pages = snaps.map((s) => `<template data-route="${s.route.replace(/"/g, "&quot;")}" data-title="${s.title.replace(/"/g, "&quot;")}">${s.html}</template>`).join("\n");
   const doc = `<title>HelixOS Preview</title>
 <style>${css}</style>

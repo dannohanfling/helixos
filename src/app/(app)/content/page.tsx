@@ -74,11 +74,14 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
         title="Content"
         subtitle={`${thisWeek} posted this week. Done beats perfect.`}
         action={
-          <Disclosure summary={<span className="btn btn-primary btn-sm">+ New content</span>}>
-            <div className="card p-4">
-              <ContentForm today={v.today} />
-            </div>
-          </Disclosure>
+          <div className="flex items-center gap-2">
+            <Link href="/content/compose" className="btn btn-primary btn-sm">✍️ New post</Link>
+            <Disclosure summary={<span className="btn btn-ghost btn-sm">Quick idea</span>}>
+              <div className="card p-4">
+                <ContentForm today={v.today} />
+              </div>
+            </Disclosure>
+          </div>
         }
       />
       <Tabs items={tabs} current={view} />
