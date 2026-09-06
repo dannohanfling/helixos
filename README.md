@@ -70,6 +70,16 @@ Demo logins (or use the buttons on the login page):
 npm run typecheck
 npm run lint
 npm test                    # engine unit tests (streaks, tiers, points, next best action)
+# The gate. Exits non-zero on the first failure; nothing is piped through tail/head, so a red check can never green-light a commit.
+npm run verify              # tsc + eslint + vitest            (scripts/verify.sh; add --build for next build)
+npm run dev:server start    # dev server on :3000 with every setting the walks need (scripts/dev-server.sh)
+npm run smoke -- ladders ai # reseed + one or more Playwright walks (scripts/smoke.sh; "all" runs every walk)
+npm run release             # verify --build, restart the server, every walk. Commit only after: scripts/release.sh && git commit …
+# Never edit a scripts/*.sh file while it is running: bash reads a script incrementally, so a mid-run edit corrupts the tail of the
+# run (it once turned the last line into "us,: command not found"). The scripts wrap their body in main() so the whole file is
+# parsed before anything executes, which protects against it; not editing them mid-run protects against everything else.
+
+# The walks, run one at a time by scripts/smoke.sh (each reseeds first):
 npx tsx scripts/smoke.ts          # Playwright walkthrough of the daily loop; writes ./screenshots
 npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, clients, community pass
 npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks (header + Ed25519 signature), data export
@@ -111,7 +121,7 @@ Per-client HelixOS bases can be pointed at from **Settings → Workspace → Air
 ## Going live (Vercel + Turso)
 
 1. Create a Turso database and copy its URL and auth token. Create a Vercel project from this repo.
-2. Vercel → Environment Variables: `SESSION_SECRET`, `DATABASE_URL` (libsql://…), `DATABASE_AUTH_TOKEN`, `APP_URL`, `CRON_SECRET`, and optionally `RESEND_API_KEY` + `EMAIL_FROM`. Leave `DEMO_LOGIN` unset so the demo buttons stay hidden.
+2. Vercel → Environment Variables: `SESSION_SECRET`, `DATABASE_URL` (libsql://…), `DATABASE_AUTH_TOKEN`, `APP_URL`, `CRON_SECRET`, and `SENDGRID_API_KEY` + `EMAIL_FROM` (reminders and password resets; without them emails are logged, not sent). Leave `DEMO_LOGIN` unset so the demo buttons stay hidden.
 3. Deploy. The `vercel-build` script runs `npm run db:migrate` against `DATABASE_URL` and then builds; migrations never run from a request, and the build never opens the database. `vercel.json` schedules the hourly reminder cron.
 4. Create your real workspace once, in the browser. Set `SETUP_TOKEN` in Vercel to a long random string, redeploy, then open `https://your-app/setup?token=THAT_STRING` and fill in the form: workspace name, your name, email, password, timezone. It creates the workspace and your coach login, loads the library (no demo data), signs you in, and shows the client and coach invite links once. The page is a 404 whenever `SETUP_TOKEN` is unset, the token is wrong, or a workspace already exists. Remove `SETUP_TOKEN` afterwards.
 
@@ -119,7 +129,7 @@ Per-client HelixOS bases can be pointed at from **Settings → Workspace → Air
 
 5. Log in as coach → Integrations: turn GoHighLevel on (no credential needed), enter the Community Loyalty key. Send a client their invite link. Each client connects their own GoHighLevel sub-account from Settings → Publishing.
 
-Accounts: `/forgot` emails a single-use reset link (60 minutes, token stored as a sha256 hash, Resend required in production); `/reset/[token]` sets the new password and signs every other session out; Settings has change-password with the current password required. Both routes are rate-limited per IP and per email.
+Accounts: `/forgot` emails a single-use reset link (60 minutes, token stored as a sha256 hash, SendGrid required in production); `/reset/[token]` sets the new password and signs every other session out; Settings has change-password with the current password required. Both routes are rate-limited per IP and per email.
 
 Security notes: `SESSION_SECRET` is required in production (the app refuses to start sessions without it). Per-client GoHighLevel Private Integration tokens and the Community Loyalty key are encrypted at rest with AES-256-GCM under `ENCRYPTION_KEY` (falls back to `SESSION_SECRET`). There is no agency-level GoHighLevel credential anywhere: a client's token can only reach their own sub-account, so no member can publish or read as another. Integrations may only call approved HTTPS hosts (`services.leadconnectorhq.com`, `api.communityloyalty.app`, plus `INTEGRATION_URL_ALLOWLIST`). The cron endpoint refuses every call when `CRON_SECRET` is unset. Login is limited to 8 attempts per email and 30 per IP per 15 minutes; join to 20 per IP. Every export from `src/lib/actions` must be a `*Action` (ESLint enforces it) because "use server" exports are public endpoints. Inbound webhooks authenticate with the per-workspace secret in the `x-helix-secret` header (never the query string, which lands in hosting and CDN logs); only the secret's sha256 is stored and it is shown once when created. GoHighLevel marketplace-app webhooks are instead verified by their Ed25519 `x-ghl-signature` against `GHL_WEBHOOK_PUBLIC_KEY`, with the sub-account matched by `locationId`. Every response carries a Content Security Policy, HSTS, `Referrer-Policy` and `nosniff` (no frame-ancestors / X-Frame-Options, so the app can be embedded in GoHighLevel). Points, streaks, daily logs and coach roll-ups are scoped by workspace as well as user, so a user in two workspaces never sees data cross over. Library entries chosen in a form are re-checked against the member's scope before they are read.
 
@@ -130,7 +140,7 @@ Data export: every member can download everything they own from Settings → You
 - **Database**: keep `DATABASE_URL=file:./data/helixos.db` on a persistent disk (Fly, Railway, a VPS), or point it at
   Turso (`libsql://…` + `DATABASE_AUTH_TOKEN`) for serverless hosts like Vercel.
 - **Reminders**: schedule `GET /api/cron/reminders` hourly with `Authorization: Bearer $CRON_SECRET`.
-  Add `RESEND_API_KEY` and `EMAIL_FROM` to actually send; without them, emails are logged.
+  Add `SENDGRID_API_KEY` and `EMAIL_FROM` (`HelixOS <helixos@evolveomega.com>`, on a domain verified in SendGrid) to actually send; without them, emails are logged. One bad recipient or provider error is logged per member and never stops the run.
 - **Sessions**: set a long random `SESSION_SECRET`. Set `APP_URL` so invite links and emails point at the right host.
 
 ## Onboarding a new client

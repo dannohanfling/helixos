@@ -126,7 +126,7 @@ async function resetWalk(browser: Browser) {
   await page.click('button:has-text("Send reset link")');
   await expectText(page, "If that email has an account", "generic reply for known email");
   const link = await page.locator('[data-testid="dev-reset-link"]').getAttribute("href");
-  if (!link) throw new Error("dev reset link not shown (RESEND_API_KEY must be unset in dev)");
+  if (!link) throw new Error("dev reset link not shown (SENDGRID_API_KEY must be unset in dev)");
   await page.goto(link);
   await page.fill('input[name="password"]', "brand-new-pass-1");
   await page.fill('input[name="confirm"]', "brand-new-pass-1");

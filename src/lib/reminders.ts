@@ -4,7 +4,19 @@ import { hourInTz, todayInTz } from "@/lib/dates";
 import { runningStreak, streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { sendEmail } from "@/lib/email";
 
-export type ReminderResult = { userId: string; email: string; kind: "morning" | "evening" | "comeback"; delivery: "sent" | "logged" };
+export type ReminderResult = { userId: string; email: string; kind: "morning" | "evening" | "comeback"; delivery: "sent" | "logged" | "failed"; error?: string };
+
+/** One bad address or one provider error must never take down the run: the failure is logged with the member and the loop goes on. */
+async function deliver(out: ReminderResult[], m: { userId: string }, email: string, kind: ReminderResult["kind"], subject: string, text: string): Promise<void> {
+  try {
+    const delivery = await sendEmail(email, subject, text);
+    out.push({ userId: m.userId, email, kind, delivery });
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`[reminders] ${kind} to member ${m.userId} failed: ${error}`);
+    out.push({ userId: m.userId, email, kind, delivery: "failed", error });
+  }
+}
 
 /**
  * Decides who gets a nudge right now. Idempotent per hour: the cron can run every hour
@@ -38,16 +50,14 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
         const text = comeback
           ? `Happens. The system doesn't punish pauses, it just resets the streak.\n\nDay 1 is 10 points. By Friday it's 310.\n\nLock in: ${appUrl}/today`
           : `Pick your top 3. Set your energy. 60 seconds, +10 points.\n\n${streak > 0 ? `Your ${streak}-day streak is alive. ` : ""}Lock in: ${appUrl}/today`;
-        const delivery = await sendEmail(user.email, subject, text);
-        out.push({ userId: user.id, email: user.email, kind: comeback ? "comeback" : "morning", delivery });
+        await deliver(out, m, user.email, comeback ? "comeback" : "morning", subject, text);
       }
       if (wantsEvening && !log?.eveningDoneAt) {
         const day = weeklyStreakDay(closed, today);
         const bonus = streakBonus(day);
         const subject = bonus ? `Close the day: +20 and a ${bonus}-point streak bonus` : `${first}, close the day`;
         const text = `Log your numbers. Name the win. It takes 90 seconds.\n\n${bonus ? `Today is streak day ${day}: +${bonus} on top of +20.\n\n` : ""}Close: ${appUrl}/today#close`;
-        const delivery = await sendEmail(user.email, subject, text);
-        out.push({ userId: user.id, email: user.email, kind: "evening", delivery });
+        await deliver(out, m, user.email, "evening", subject, text);
       }
     }
   }

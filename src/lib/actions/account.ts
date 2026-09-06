@@ -61,7 +61,7 @@ export async function setupAction(_prev: SetupState, formData: FormData): Promis
 export async function forgotAction(_prev: ForgotState, formData: FormData): Promise<ForgotState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email.includes("@")) return { error: "Enter the email you log in with." };
-  if (!emailConfigured() && process.env.NODE_ENV === "production") return { error: "Password reset email isn't set up on this server yet (RESEND_API_KEY). Ask your coach to reset your password for you." };
+  if (!emailConfigured() && process.env.NODE_ENV === "production") return { error: "Password reset email isn't set up on this server yet (SENDGRID_API_KEY). Ask your coach to reset your password for you." };
   const ip = await clientIp();
   const [ipOk, emailOk] = await Promise.all([allow(`forgot:ip:${ip}`, 10, 15 * 60000), allow(`forgot:email:${email}`, 3, 15 * 60000)]);
   const message = "If that email has an account, a reset link is on its way. It works for 60 minutes.";
