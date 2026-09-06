@@ -33,7 +33,7 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
       { key: "pipelineId", label: "Pipeline ID", hint: "Where booked calls land" },
       { key: "stageId", label: "Pipeline stage ID" },
       { key: "webhookUrl", label: "Inbound webhook URL (optional)", hint: "A GHL workflow webhook to post events into" },
-      { key: "socialAccounts", label: "Social Planner accounts", hint: "channel=accountId, comma separated. e.g. fb_page=abc123, instagram=def456, linkedin=ghi789" },
+      { key: "companyId", label: "Agency (company) ID", hint: "Lets HelixOS mint a 24-hour token for each client's sub-account from the agency token" },
     ],
   },
 };
@@ -99,37 +99,37 @@ export async function pushContact(ctx: { workspaceId: string; userId: string }, 
   }
 }
 
-/** Reads the "channel=accountId" mapping for the GoHighLevel Social Planner. */
-export function socialAccountMap(config: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const pair of (config.socialAccounts ?? "").split(/[,\n]/)) {
-    const [k, v] = pair.split("=").map((x) => x.trim());
-    if (k && v) out[k] = v;
-  }
-  return out;
-}
-
-/** Schedules (or posts) one channel variant through the GoHighLevel Social Planner. Skips with a note when the channel has no account mapped. */
-export async function pushSocialPost(ctx: { workspaceId: string; userId: string }, post: { channel: string; body: string; postAt: string | null; mediaUrl?: string | null; title?: string }): Promise<boolean> {
-  const integ = await getIntegration(ctx.workspaceId, "gohighlevel");
-  if (!integ?.enabled) {
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt }, status: "skipped", note: "GoHighLevel not enabled" });
+/**
+ * Publishes one channel version through the member's own GoHighLevel sub-account (Social Planner).
+ * Writes GHL's post id and status back onto the variant so the Distribute page can show what happened.
+ */
+export async function pushSocialPost(ctx: { workspaceId: string; userId: string }, post: { variantId: string; channel: string; body: string; postAt: string | null; mediaUrl?: string | null; title?: string; followUpComment?: string | null }): Promise<boolean> {
+  const { connectionFor, createPost } = await import("@/lib/ghl");
+  const { PUBLISHABLE, mediaTypeFor, postTypeFor } = await import("@/lib/engine/ghl-map");
+  const channel = post.channel as keyof typeof PUBLISHABLE;
+  const skip = async (note: string) => {
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt }, status: "skipped", note });
+    await db.update(schema.contentVariants).set({ externalStatus: "manual", externalError: note, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
+    return false;
+  };
+  if (!PUBLISHABLE[channel]?.via) return skip(PUBLISHABLE[channel]?.note ?? "This channel is posted by hand");
+  const conn = await connectionFor(ctx.userId);
+  if (!conn) return skip("Connect your GoHighLevel sub-account in Settings to auto-publish");
+  const accountId = conn.mapping[post.channel];
+  if (!accountId) return skip(`No ${PUBLISHABLE[channel].note} chosen for this channel in Settings`);
+  if (channel === "stories" && !post.mediaUrl) return skip("Stories need a photo or video");
+  const scheduleDate = post.postAt ? new Date(post.postAt).toISOString() : null;
+  const r = await createPost(conn, { accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: post.mediaUrl ? [{ url: post.mediaUrl, type: mediaTypeFor(post.mediaUrl) }] : [], followUpComment: post.followUpComment });
+  if (!r.ok) {
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt, accountId }, status: "failed", note: r.error });
+    await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: r.error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
+    await db.update(schema.socialConnections).set({ lastError: r.error }).where(eq(schema.socialConnections.id, conn.id));
     return false;
   }
-  const accountId = socialAccountMap(integ.config)[post.channel];
-  if (!accountId) {
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt }, status: "skipped", note: `No Social Planner account mapped for ${post.channel}` });
-    return false;
-  }
-  return send(ctx.workspaceId, ctx.userId, "gohighlevel", "social.schedule", `/social-media-posting/${integ.config.locationId ?? ""}/posts`, {
-    accountIds: [accountId],
-    summary: post.body,
-    media: post.mediaUrl ? [{ url: post.mediaUrl }] : [],
-    status: post.postAt ? "scheduled" : "published",
-    scheduleDate: post.postAt ?? undefined,
-    title: post.title,
-    source: "HelixOS",
-  });
+  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt, accountId, ghlPostId: r.data.id }, status: "sent", note: `${scheduleDate ? "Scheduled" : "Published"} via Social Planner · ${r.data.id}` });
+  await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: scheduleDate ? "scheduled" : "published", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
+  await db.update(schema.socialConnections).set({ lastSyncAt: nowIso(), lastError: null }).where(eq(schema.socialConnections.id, conn.id));
+  return true;
 }
 
 /** A push notification to one member's Evolve Omega pass. */

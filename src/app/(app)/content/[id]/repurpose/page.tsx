@@ -7,6 +7,7 @@ import { aiEnabled } from "@/lib/ai";
 import { generateVariantsAction, updateVariantAction } from "@/lib/actions/variants";
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
 import { distributeAllAction } from "@/lib/actions/compose";
+import { syncPostStatusAction } from "@/lib/actions/social";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
@@ -39,6 +40,19 @@ function VariantForm({ var_, maxChars, email = false }: { var_: ContentVariant; 
           Save
         </button>
       </div>
+      {var_.externalStatus ? (
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <Badge tone={var_.externalStatus === "published" ? "good" : var_.externalStatus === "failed" ? "danger" : var_.externalStatus === "manual" ? "neutral" : "accent"}>
+            {var_.externalStatus === "manual" ? "paste by hand" : `Social Planner: ${var_.externalStatus}`}
+          </Badge>
+          {var_.externalError ? <span className="text-ink-3">{var_.externalError}</span> : null}
+          {var_.externalId ? (
+            <button className="btn btn-ghost btn-xs" type="submit" formAction={syncPostStatusAction}>
+              Check status
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {var_.status === "posted" ? (
         <div className="grid grid-cols-4 gap-2">
           {(["reactions", "comments", "dms", "leads"] as const).map((k) => (

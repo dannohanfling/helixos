@@ -6,17 +6,21 @@ import { broadcastPassAction, clearSyncLogAction, rotateInboundSecretAction, sav
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
 import { PROVIDER_META } from "@/lib/integrations";
+import { GhlConnect } from "@/components/ghl-connect";
+import { readiness } from "@/lib/engine/ghl-map";
 import { formatDateTime } from "@/lib/dates";
 
 export const metadata = { title: "Integrations" };
 
 export default async function IntegrationsPage() {
   const v = await requireCoach();
-  const [rows, events, members] = await Promise.all([
+  const [rows, events, members, conns] = await Promise.all([
     db.query.integrations.findMany({ where: eq(schema.integrations.workspaceId, v.workspace.id) }),
     db.query.syncEvents.findMany({ where: eq(schema.syncEvents.workspaceId, v.workspace.id), orderBy: desc(schema.syncEvents.createdAt), limit: 40 }),
     db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client")) }),
+    db.query.socialConnections.findMany({ where: eq(schema.socialConnections.workspaceId, v.workspace.id) }),
   ]);
+  const connOf = new Map(conns.map((c) => [c.userId, c]));
   const users = members.length ? await db.query.users.findMany({ where: inArray(schema.users.id, members.map((m) => m.userId)) }) : [];
   const userName = new Map(users.map((u) => [u.id, u.name]));
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
@@ -79,6 +83,33 @@ export default async function IntegrationsPage() {
           );
         })}
       </div>
+
+      <Card className="mt-4" title="🚀 Client sub-accounts (Social Planner)" action={<span className="text-xs text-ink-3">{conns.length}/{members.length} connected</span>}>
+        <p className="mb-3 text-sm text-ink-2">Each client publishes through their own sub-account under your agency. Enter their location ID and GHL user ID here or let them do it on their Settings page. HelixOS mints a 24-hour location token from your agency token whenever it needs one.</p>
+        <div className="divide-y">
+          {members.map((m) => {
+            const c = connOf.get(m.userId) ?? null;
+            const r = c ? readiness(c.mapping) : null;
+            return (
+              <Disclosure
+                key={m.id}
+                summary={
+                  <span className="flex items-center gap-3 py-1 text-sm">
+                    <span className="w-40 truncate font-medium">{userName.get(m.userId) ?? m.userId}</span>
+                    <Badge tone={c?.lastError ? "danger" : r && r.mapped ? "good" : c ? "accent" : "neutral"}>{c?.lastError ? "error" : r ? `${r.mapped}/${r.total} channels` : "not connected"}</Badge>
+                    {c ? <span className="text-xs text-ink-3">{c.locationId}</span> : null}
+                  </span>
+                }
+                className="py-1"
+              >
+                <div className="pb-3 pl-1">
+                  <GhlConnect conn={c} forUserId={m.userId} tz={v.workspace.timezone} compact />
+                </div>
+              </Disclosure>
+            );
+          })}
+        </div>
+      </Card>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
         <Card title="🎫 Evolve Omega passes" action={<span className="text-xs text-ink-3">{installed}/{withPass} installed · {members.length} members</span>}>

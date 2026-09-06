@@ -91,7 +91,7 @@ async function main() {
   await page.waitForURL(/\/today/);
   await page.goto(`${base}/integrations`);
   await expectText(page, "social.schedule", "social planner logged");
-  await expectText(page, "Social Planner accounts", "social field");
+  await expectText(page, "Client sub-accounts", "sub-accounts card");
 
   await browser.close();
   if (failures.length) throw new Error(`Errors:\n${failures.join("\n")}`);

@@ -101,7 +101,7 @@ async function wipeDemo(): Promise<void> {
   if (!ws) return;
   const members = await db.query.memberships.findMany({ where: eq(schema.memberships.workspaceId, ws.id) });
   const userIds = members.map((m) => m.userId);
-  const byWs = [schema.tasks, schema.contentItems, schema.contacts, schema.dailyLogs, schema.pointsLedger, schema.pathwayProgress, schema.curriculumProgress, schema.goals, schema.rewardClaims, schema.offers, schema.webinars, schema.clientRecords, schema.proofs, schema.groups, schema.targets, schema.lessonProgress, schema.certSubmissions, schema.integrations, schema.syncEvents, schema.memberships] as const;
+  const byWs = [schema.tasks, schema.contentItems, schema.contacts, schema.dailyLogs, schema.pointsLedger, schema.pathwayProgress, schema.curriculumProgress, schema.goals, schema.rewardClaims, schema.offers, schema.webinars, schema.clientRecords, schema.proofs, schema.groups, schema.targets, schema.lessonProgress, schema.certSubmissions, schema.integrations, schema.syncEvents, schema.socialConnections, schema.memberships] as const;
   if (userIds.length) await db.delete(schema.libraryAssets).where(inArray(schema.libraryAssets.userId, userIds));
   for (const t of byWs) await db.delete(t).where(eq(t.workspaceId, ws.id));
   await db.delete(schema.dmTemplates).where(eq(schema.dmTemplates.workspaceId, ws.id));

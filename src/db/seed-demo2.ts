@@ -82,13 +82,22 @@ export async function seedDemoWave2(wsId: string, mayaId: string, jordanId: stri
   // Integrations: configured but off, so nothing leaves the demo. Secrets are placeholders.
   await db.insert(schema.integrations).values([
     { id: newId(), workspaceId: wsId, provider: "community_loyalty", enabled: false, config: { apiUrl: "https://api.communityloyalty.app", programId: "evolve-omega", pointsRate: "1" }, inboundSecret: "hx_demo_community_loyalty_secret" },
-    { id: newId(), workspaceId: wsId, provider: "gohighlevel", enabled: false, config: { apiUrl: "https://services.leadconnectorhq.com", locationId: "loc_demo", pipelineId: "pipe_demo", stageId: "stage_booked" }, inboundSecret: "hx_demo_ghl_secret" },
+    { id: newId(), workspaceId: wsId, provider: "gohighlevel", enabled: false, config: { apiUrl: "https://services.leadconnectorhq.com", companyId: "agency_demo", locationId: "loc_demo", pipelineId: "pipe_demo", stageId: "stage_booked" }, inboundSecret: "hx_demo_ghl_secret" },
   ]);
   await db.insert(schema.syncEvents).values([
     { id: newId(), workspaceId: wsId, userId: mayaId, provider: "community_loyalty", direction: "out", event: "points.add", payload: { serial: "EO-0001-MT", points: 20, reason: "Closed the day" }, status: "skipped", note: "Integration disabled", createdAt: `${addDays(today, -1)}T03:10:00.000Z` },
     { id: newId(), workspaceId: wsId, userId: mayaId, provider: "community_loyalty", direction: "in", event: "pass.installed", payload: { serial: "EO-0001-MT", email: "client@demo.helixos.app" }, status: "received", note: "Pass marked installed", createdAt: `${addDays(today, -22)}T18:00:00.000Z` },
     { id: newId(), workspaceId: wsId, userId: mayaId, provider: "gohighlevel", direction: "out", event: "contact.upsert", payload: { firstName: "Priya", lastName: "Natarajan", tags: ["helixos", "client"] }, status: "skipped", note: "Integration disabled", createdAt: `${addDays(today, -2)}T17:30:00.000Z` },
   ]);
+
+  // Maya's sub-account, as it looks after a successful account refresh
+  const demoAccounts = [
+    { id: "loc_maya_fbpage_1", name: "Torres Nutrition Coaching", platform: "facebook", type: "page", isExpired: false },
+    { id: "loc_maya_fbgroup_1", name: "Busy Moms Who Actually Lose It", platform: "facebook", type: "group", isExpired: false },
+    { id: "loc_maya_ig_1", name: "@torresnutrition", platform: "instagram", type: "business", isExpired: false },
+    { id: "loc_maya_li_1", name: "Maya Torres", platform: "linkedin", type: "profile", isExpired: false },
+  ];
+  await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: wsId, userId: mayaId, provider: "gohighlevel", locationId: "loc_maya", ghlUserId: "user_maya", accounts: demoAccounts, mapping: { fb_page: "loc_maya_fbpage_1", fb_group: "loc_maya_fbgroup_1", instagram: "loc_maya_ig_1", stories: "loc_maya_ig_1", linkedin: "loc_maya_li_1" }, connectedAt: `${addDays(today, -20)}T18:00:00.000Z`, lastSyncAt: `${addDays(today, -1)}T18:00:00.000Z` });
 
   // Group-aligned drafts for Maya's top posted item
   const posted = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.userId, mayaId), eq(schema.contentItems.status, "posted")) });

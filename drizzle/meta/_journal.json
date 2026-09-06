@@ -29,6 +29,13 @@
       "when": 1788714270780,
       "tag": "0003_compose_media",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788715890245,
+      "tag": "0004_social_connections",
+      "breakpoints": true
     }
   ]
 }

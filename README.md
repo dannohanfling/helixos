@@ -26,7 +26,8 @@ see who's on track, verify pathway work, and nudge who's gone quiet.
 | **Proof Bank** | Results, testimonials, screenshots, stats, case studies with before / shift / after, the belief each breaks, a paste-ready one-liner and a slide version. Capture wins straight from client check-ins. Approved proofs show up in the webinar script step and the offer objections | 🏆 Proof / Wins |
 | **Courses** | Launch Pad mini-courses, the Accelerator 6-week build (one course per week, tied to pathway stages), Academy exercises; lesson completion earns points | 📚 Curriculum, 🧩 Exercises |
 | **Certification** | 6 modules × 12 deliverables, each with its own pass threshold; submit evidence, coach scores it, pass or revise. Unlocked per client by the coach | 🎓 Certification |
-| **Integrations** (coach) | Community Loyalty and the Omnichannel Marketing System (GoHighLevel): config, test ping, inbound webhook URL + secret, sync log. Points earned in HelixOS push to each member's Evolve Omega pass; booked calls and new clients push to GHL contacts/pipeline; inbound rewards and bookings flow back | ⚙️ Integrations |
+| **Integrations** (coach) | Community Loyalty and the Omnichannel Marketing System (GoHighLevel): agency token + company ID, test ping, inbound webhook URL + secret, sync log. Points earned in HelixOS push to each member's Evolve Omega pass; booked calls and new clients push to GHL contacts/pipeline; inbound rewards and bookings flow back | ⚙️ Integrations |
+| **Publishing** (per client) | Each client connects their own GoHighLevel sub-account (location ID + user ID, on Settings or by the coach on Integrations). HelixOS mints a 24-hour location token from the agency token, lists the sub-account's connected pages and profiles, auto-maps channels, and every scheduled channel post goes to that client's Social Planner. Status syncs back onto the version ("Check status"). Verified against HighLevel's OpenAPI: `/oauth/locationToken`, `/social-media-posting/{locationId}/accounts`, `…/posts`, `…/posts/{id}` | 📡 Social Planner |
 | **My Evolve Omega pass** | Every member's own wallet pass: add-to-wallet link, install status, test push; coach broadcasts to the whole cohort | 🎟️ Passes |
 | **Clients** | The client's own clients: 90-day goal, fear, roadblock, cadence, check-ins (wins, blockers, support, next step, 1–10 scores, cash, NPS), trend sparklines, next call; convert from DM conversations | 🧔 ClientsOS, 📲 Check-Ins, ⚡ Progress, 🔢 NPS |
 | **Community Pass** (Elite) | The client's own loyalty engine: pass settings, member leaderboard on the same 9 tiers, award points (pushes to their Community Loyalty webhook), daily hashtag post, 30-day curriculum to send | ⚙️ HelixOS Config, 📒 Points Ledger, 🏅 Community Tiers, 📆 30-Day Curriculum |
@@ -71,6 +72,7 @@ npx tsx scripts/smoke.ts          # Playwright walkthrough of the daily loop; wr
 npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, clients, community pass
 npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks
 npx tsx scripts/smoke-composer.ts  # Composer, per-channel previews, one-click schedule everywhere, collapsible nav
+npx tsx scripts/smoke-ghl.ts       # Agency token → client sub-account → accounts → channel map → schedule → status sync, against scripts/mock-ghl.ts
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
 

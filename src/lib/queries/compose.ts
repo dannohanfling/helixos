@@ -2,15 +2,16 @@ import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { aiEnabled } from "@/lib/ai";
-import { getIntegration, socialAccountMap } from "@/lib/integrations";
+import { connectionFor } from "@/lib/ghl";
+import { readiness } from "@/lib/engine/ghl-map";
 import type { GroupTarget } from "@/lib/engine/compose";
 import type { Persona } from "@/components/channel-previews";
 
 /** Everything the composer needs: the user's groups (own + top 3 + members), persona for previews, AI and Social Planner state. */
 export async function composerContext(v: Viewer) {
-  const [groups, ghl] = await Promise.all([
+  const [groups, conn] = await Promise.all([
     db.query.groups.findMany({ where: eq(schema.groups.userId, v.user.id), orderBy: [asc(schema.groups.kind), asc(schema.groups.rank), asc(schema.groups.name)] }),
-    getIntegration(v.workspace.id, "gohighlevel"),
+    connectionFor(v.user.id),
   ]);
   const ordered: GroupTarget[] = [
     ...groups.filter((g) => g.kind === "own"),
@@ -29,6 +30,6 @@ export async function composerContext(v: Viewer) {
     hashtag: v.membership.passHashtag,
     today: v.today,
     aiEnabled: aiEnabled(),
-    socialConnected: Boolean(ghl?.enabled && Object.keys(socialAccountMap(ghl.config)).length),
+    socialConnected: Boolean(conn && readiness(conn.mapping).mapped > 0),
   };
 }

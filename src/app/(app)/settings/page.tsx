@@ -4,6 +4,8 @@ import { requireViewer } from "@/lib/auth";
 import { rotateInviteAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
+import { GhlConnect } from "@/components/ghl-connect";
+import { connectionFor } from "@/lib/ghl";
 
 export const metadata = { title: "Settings" };
 
@@ -11,11 +13,15 @@ const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "
 
 export default async function SettingsPage() {
   const v = await requireViewer();
-  const goal = await db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) });
+  const [goal, conn] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id)]);
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   return (
     <>
       <PageHeader title="Settings" />
+      <Card className="mb-4" title="🚀 Publishing (your GoHighLevel sub-account)">
+        <p className="mb-3 text-sm text-ink-2">Connect your sub-account once. Posts you schedule in the composer land in your Social Planner and go out on their own. Points, DMs and everything else stay in HelixOS.</p>
+        <GhlConnect conn={conn ?? null} tz={v.workspace.timezone} />
+      </Card>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="You">
           <form action={updateProfileAction} className="space-y-3">

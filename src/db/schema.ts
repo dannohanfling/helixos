@@ -603,6 +603,10 @@ export const contentVariants = sqliteTable(
     dms: integer("dms").notNull().default(0),
     leads: integer("leads").notNull().default(0),
     generatedBy: text("generated_by").notNull().default("rules"),
+    externalId: text("external_id"),
+    externalStatus: text("external_status"),
+    externalError: text("external_error"),
+    externalSyncedAt: text("external_synced_at"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("variants_item_channel_group").on(t.contentItemId, t.channel, t.groupId)],
@@ -912,6 +916,32 @@ export const syncEvents = sqliteTable(
   },
   (t) => [index("sync_events_ws").on(t.workspaceId, t.createdAt)],
 );
+
+/** One member's GoHighLevel sub-account for publishing: location, user, cached location token, connected accounts and the channel map. */
+export const socialConnections = sqliteTable(
+  "social_connections",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    provider: text("provider").notNull().default("gohighlevel"),
+    locationId: text("location_id").notNull(),
+    ghlUserId: text("ghl_user_id"),
+    manualToken: text("manual_token"),
+    accessToken: text("access_token"),
+    tokenExpiresAt: text("token_expires_at"),
+    accounts: text("accounts", { mode: "json" }).$type<SocialAccount[]>().notNull().default([]),
+    mapping: text("mapping", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
+    connectedAt: text("connected_at"),
+    lastSyncAt: text("last_sync_at"),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("social_connections_user_provider").on(t.userId, t.provider)],
+);
+
+export type SocialAccount = { id: string; name: string; platform: string; type: string; isExpired: boolean; avatar?: string | null };
+export type SocialConnection = typeof socialConnections.$inferSelect;
 
 export type Principle = typeof principles.$inferSelect;
 export type Proof = typeof proofs.$inferSelect;

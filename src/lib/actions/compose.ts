@@ -68,8 +68,9 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     const row = { body: t.body, subject: t.subject ?? null, status: vStatus as "posted" | "scheduled" | "draft", postAt: payload.mode === "schedule" ? (t.postAt ?? firstAt) : null, postedAt: payload.mode === "now" ? nowIso() : null, generatedBy: "composer" };
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, id), eq(schema.contentVariants.channel, t.channel), eq(schema.contentVariants.groupId, groupId)) });
     if (existing?.status === "posted" && payload.mode !== "now") continue;
+    const variantId = existing?.id ?? newId();
     if (existing) await db.update(schema.contentVariants).set(row).where(eq(schema.contentVariants.id, existing.id));
-    else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: id, userId, channel: t.channel, groupId, ...row });
+    else await db.insert(schema.contentVariants).values({ id: variantId, contentItemId: id, userId, channel: t.channel, groupId, ...row });
     if (vStatus === "scheduled") scheduled++;
     if (vStatus === "posted") {
       posted++;
@@ -78,7 +79,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     // Groups are posted by hand (Facebook has no group-posting API); channels go through the Social Planner when it's mapped.
     if (!groupId && vStatus !== "draft") {
       pushed++;
-      background(pushSocialPost({ workspaceId, userId }, { channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, title }));
+      background(pushSocialPost({ workspaceId, userId }, { variantId, channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, title }));
     }
   }
   if (payload.mode === "now") await award({ workspaceId, userId }, "content", contentPoints(payload.hasCta), `Posted: ${title}`, `content:${id}`);
