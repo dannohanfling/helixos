@@ -45,7 +45,7 @@ see who's on track, verify pathway work, and nudge who's gone quiet.
 
 ### Optional: Claude drafting
 
-Set `ANTHROPIC_API_KEY` and the "✨ With Claude" buttons light up: "Draft this section for me" in the Webinar Wizard, channel and
+Each member connects their **own** Anthropic or OpenAI API key on Settings → AI drafting (there is no house key and Evolve Omega pays for no client AI). Once connected, the ✨ buttons light up: "Draft this section for me" in the Webinar Wizard, channel and group polish in the composer, doctrine content, and comment ladders. Job size picks the model (long-form drafting on the strong tier, polish on the light tier), every call is logged with token counts and estimated cost (visible to the member on Settings and to the coach on /coach), and a per-member daily cap stops a runaway loop from spending a client's money. Keys are validated with one tiny real call on save, stored AES-256-GCM encrypted, and shown again only as provider + last four. Without a key every feature keeps working with rule-based drafts.
 group-aligned drafts on the Distribute page, and post / reel / training drafts from any principle. Both run through `src/lib/ai.ts` (official SDK, `claude-opus-5`, streaming). Without a key everything still works:
 webinar sections start from the worked example and repurposing uses deterministic channel rules in `src/lib/engine/repurpose.ts`.
 
@@ -77,6 +77,7 @@ npx tsx scripts/smoke-composer.ts  # Composer, per-channel previews, one-click s
 npx tsx scripts/smoke-library.ts   # Library browse, search, use in composer, save to library, coach share
 npx tsx scripts/smoke-auth.ts     # /setup token gate + 404s, forgot → reset with session invalidation, change password (needs a current `next build`)
 npx tsx scripts/smoke-ghl.ts       # Client's own Private Integration token → 401 / 403 / wrong-location reasons → accounts → channel map → schedule → status sync, against scripts/mock-ghl.ts
+npx tsx scripts/smoke-ai.ts          # Bring-your-own AI key: 401 / no-billing / wrong-provider reasons, a ✨ feature on the member's key, usage for member and coach, daily cap + override (needs AI_BASE_URL=http://localhost:4020 and scripts/mock-ai.ts)
 npx tsx scripts/smoke-ladders.ts     # Ladder facts, skeleton + checklist blocks, finished ladder clears, live hour, Airtable copy, composer hand-off
 npx tsx scripts/smoke-headers.ts     # Every page as client and coach under the Content Security Policy: no violations, no page errors
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
@@ -110,7 +111,7 @@ Per-client HelixOS bases can be pointed at from **Settings → Workspace → Air
 ## Going live (Vercel + Turso)
 
 1. Create a Turso database and copy its URL and auth token. Create a Vercel project from this repo.
-2. Vercel → Environment Variables: `SESSION_SECRET`, `DATABASE_URL` (libsql://…), `DATABASE_AUTH_TOKEN`, `APP_URL`, `CRON_SECRET`, and optionally `RESEND_API_KEY` + `EMAIL_FROM`, `ANTHROPIC_API_KEY`. Leave `DEMO_LOGIN` unset so the demo buttons stay hidden.
+2. Vercel → Environment Variables: `SESSION_SECRET`, `DATABASE_URL` (libsql://…), `DATABASE_AUTH_TOKEN`, `APP_URL`, `CRON_SECRET`, and optionally `RESEND_API_KEY` + `EMAIL_FROM`. Leave `DEMO_LOGIN` unset so the demo buttons stay hidden.
 3. Deploy. The `vercel-build` script runs `npm run db:migrate` against `DATABASE_URL` and then builds; migrations never run from a request, and the build never opens the database. `vercel.json` schedules the hourly reminder cron.
 4. Create your real workspace once, in the browser. Set `SETUP_TOKEN` in Vercel to a long random string, redeploy, then open `https://your-app/setup?token=THAT_STRING` and fill in the form: workspace name, your name, email, password, timezone. It creates the workspace and your coach login, loads the library (no demo data), signs you in, and shows the client and coach invite links once. The page is a 404 whenever `SETUP_TOKEN` is unset, the token is wrong, or a workspace already exists. Remove `SETUP_TOKEN` afterwards.
 

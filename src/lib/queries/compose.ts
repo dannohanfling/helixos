@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
-import { aiEnabled } from "@/lib/ai";
+import { hasAiKey } from "@/lib/ai";
 import { connectionFor } from "@/lib/ghl";
 import { readiness } from "@/lib/engine/ghl-map";
 import type { GroupTarget } from "@/lib/engine/compose";
@@ -35,7 +35,7 @@ export async function composerContext(v: Viewer) {
     persona,
     hashtag: v.membership.passHashtag,
     today: v.today,
-    aiEnabled: aiEnabled(),
+    aiEnabled: await hasAiKey(),
     socialConnected: Boolean(conn && readiness(conn.mapping).mapped > 0),
     snippets,
   };

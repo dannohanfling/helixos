@@ -101,6 +101,7 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
     `You adapt one coaching post for several channels so each version is native to where it's read and built to earn comments, shares and DMs. ${VOICE} Return ONLY a JSON object keyed by target key, each value {"body": string, "subject"?: string (email only)}. Keep every version inside its character limit.`,
     `Author: ${v.user.name}. Business: ${v.membership.businessName ?? ""}. Promise: ${v.membership.bigPromise ?? ""}\n\nSource title: ${input.title}\nHook: ${input.hook}\nBody:\n${input.body}\nHas CTA: ${input.hasCta}\n\nTargets:\n${lines.join("\n\n")}`,
     8000,
+    { feature: "composer_polish" },
   );
   if (!text) return {};
   try {

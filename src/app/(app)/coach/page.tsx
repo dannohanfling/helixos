@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
 import { setClientPassAction } from "@/lib/actions/coach";
 import { setCertEnabledAction } from "@/lib/actions/courses";
 import { setMemberPassAction } from "@/lib/actions/integrations";
+import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
+import { money, rollup } from "@/lib/engine/ai-usage";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
@@ -26,6 +28,13 @@ export default async function CoachPage() {
     db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), eq(schema.pathwayProgress.status, "submitted")), orderBy: desc(schema.pathwayProgress.submittedAt) }),
     db.query.libraryTasks.findMany(),
   ]);
+  const monthStart = `${v.today.slice(0, 7)}-01`;
+  const [aiCreds, aiRows] = await Promise.all([
+    db.query.aiCredentials.findMany({ where: eq(schema.aiCredentials.workspaceId, wsId) }),
+    db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.workspaceId, wsId), gte(schema.aiUsage.createdAt, monthStart)) }),
+  ]);
+  const credOf = new Map(aiCreds.map((c) => [c.userId, c]));
+  const usageOf = (userId: string) => rollup(aiRows.filter((r) => r.userId === userId));
   const libByKey = new Map(library.map((l) => [l.key, l]));
   const userById = new Map(users.map((u) => [u.id, u]));
   const rows = members
@@ -195,6 +204,34 @@ export default async function CoachPage() {
             ) : (
               <Empty icon="🎉" title="Queue is clear" />
             )}
+          </Card>
+          <Card title="AI keys and usage" action={<span className="text-xs text-ink-3">{aiCreds.filter((c) => !c.lastError).length}/{members.length} connected</span>}>
+            <p className="mb-2 text-xs text-ink-2">Every client runs the ✨ features on their own Anthropic or OpenAI key. You pay nothing; this shows who can actually use them when you&apos;re teaching, and roughly what they&apos;re spending this month.</p>
+            <ul className="divide-y text-sm" data-testid="coach-ai">
+              {rows.map((r) => {
+                const c = credOf.get(r.m.userId);
+                const u = usageOf(r.m.userId);
+                return (
+                  <li key={r.m.id} className="flex flex-wrap items-center gap-2 py-1.5">
+                    <span className="w-32 truncate">{r.u?.name}</span>
+                    {c && !c.lastError ? <Badge tone="good">{c.provider} ····{c.last4}</Badge> : c ? <Badge tone="danger">key problem</Badge> : <Badge tone="neutral">no key</Badge>}
+                    <span className="tabular text-xs text-ink-3">{u.calls} calls · {money(u.costUsd)}</span>
+                    <form action={toggleAiCapExemptAction} className="ml-auto">
+                      <input type="hidden" name="membershipId" value={r.m.id} />
+                      <button className={`btn btn-xs ${r.m.aiCapExempt ? "btn-accent" : "btn-ghost"}`} type="submit" title="Lift the daily cap for this client">
+                        {r.m.aiCapExempt ? "cap lifted" : "cap on"}
+                      </button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+            <form action={setAiCapAction} className="mt-3 flex items-center gap-2 text-xs">
+              <label className="label">Daily cap per client</label>
+              <input className="field w-20 py-1 text-sm" name="cap" type="number" min={1} max={1000} defaultValue={v.workspace.aiDailyCap} />
+              <button className="btn btn-soft btn-xs" type="submit">Save</button>
+              <span className="text-ink-3">calls per day, on their own key. Stops a runaway loop from spending a client&apos;s money.</span>
+            </form>
           </Card>
           <Card title="Who needs a nudge">
             {atRisk.length ? (

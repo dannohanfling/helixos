@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { aiEnabled } from "@/lib/ai";
+import { hasAiKey } from "@/lib/ai";
 import { createLadderAction, deleteLadderAction } from "@/lib/actions/ladders";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
 import { LADDER_FORMATS, cadenceNotes, checkScore, checklist } from "@/lib/engine/ladder";
@@ -30,6 +30,7 @@ export default async function LaddersPage() {
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
+  const ai = await hasAiKey();
   const keywords = profile?.keywords.filter((k) => k.keyword) ?? [];
   const lastLaunch = list.map((l) => l.launchedAt).filter(Boolean).sort().at(-1) ?? null;
   const slot = nextSlot(v.today);
@@ -98,9 +99,9 @@ export default async function LaddersPage() {
               </div>
               <div className="flex items-center gap-3 sm:col-span-2">
                 <button className="btn btn-primary" type="submit">
-                  {aiEnabled() ? "Write the ladder" : "Build the skeleton"}
+                  {ai ? "Write the ladder" : "Build the skeleton"}
                 </button>
-                <span className="text-xs text-ink-3">{aiEnabled() ? "Claude drafts every field from your facts and approved proof. You edit, the checklist keeps it honest." : "Claude drafting isn't configured, so you get the full structure with every blank marked. Fill it in; the checklist keeps it honest."}</span>
+                <span className="text-xs text-ink-3">{ai ? "AI drafts every field from your facts and approved proof, on your own key. You edit, the checklist keeps it honest." : <>No AI key connected, so you get the full structure with every blank marked. <Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have it drafted for you.</>}</span>
               </div>
             </form>
           </Card>

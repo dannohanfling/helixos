@@ -80,7 +80,7 @@ async function generate(workspaceId: string, userId: string, brief: Brief): Prom
   ]);
   const member = { name: user?.name ?? "the coach", businessName: membership?.businessName, bigPromise: membership?.bigPromise, brandVoice: workspace?.brandVoice };
   const system = `${masterBlock(profile ?? null, proofs, member)}\n\n${outputContract()}`;
-  const text = await draft(system, perPostInput(brief), 8000);
+  const text = await draft(system, perPostInput(brief), 8000, { feature: "ladder" });
   if (text) {
     const parsed = parseLadderOutput(text);
     if (parsed.rungs.length >= 3 && parsed.copy) return { parsed, generatedBy: "claude" };

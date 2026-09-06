@@ -117,6 +117,7 @@ export async function generateGroupVariantsAction(formData: FormData): Promise<v
         `You adapt one coaching post for a specific Facebook group so it fits that group's mission, the admin's values, and its rules. ${VOICE} ${aligned.ctaAllowed ? "A soft call to action is allowed." : "No pitch, no links, no call to action: pure value and a question."} Return only the post.`,
         `Group: ${g.name}\nMission: ${g.mission ?? ""}\nDescription: ${g.description ?? ""}\nAudience: ${g.audience ?? ""}\nAdmin: ${g.adminName ?? ""}. What the admin values: ${g.adminValues ?? ""}\nRules: ${g.rules ?? ""}\nPosting norms: ${g.postingNorms ?? ""}\nWhat works here: ${g.whatWorks ?? ""}\n\nSource post title: ${item.title}\nHook: ${item.hook ?? ""}\nBody:\n${item.body ?? ""}\n\nRule-based draft to improve:\n${aligned.body}`,
         2500,
+        { feature: "group_variant" },
       );
       if (ai) {
         body = ai;

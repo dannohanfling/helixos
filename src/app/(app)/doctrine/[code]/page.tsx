@@ -3,7 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { aiEnabled } from "@/lib/ai";
+import { hasAiKey } from "@/lib/ai";
 import { principleToContentAction } from "@/lib/actions/doctrine";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Disclosure, PageHeader, Tabs } from "@/components/ui";
@@ -26,6 +26,7 @@ function Block({ label, text }: { label: string; text: string | null }) {
 }
 
 export default async function PrinciplePage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ tab?: string }> }) {
+  const ai = await hasAiKey();
   const v = await requireViewer();
   const { code } = await params;
   const sp = await searchParams;
@@ -98,7 +99,7 @@ export default async function PrinciplePage({ params, searchParams }: { params: 
                 <input type="hidden" name="code" value={p.code} />
                 <input type="hidden" name="kind" value={c.kind} />
                 <button className="btn btn-accent btn-sm" type="submit">Turn into content</button>
-                {aiEnabled() ? (
+                {ai ? (
                   <button className="btn btn-soft btn-sm" type="submit" name="ai" value="1">✨ With Claude</button>
                 ) : null}
               </form>

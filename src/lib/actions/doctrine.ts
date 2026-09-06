@@ -23,6 +23,7 @@ export async function principleToContentAction(formData: FormData): Promise<void
       `You turn a business principle into ${kind === "post" ? "a Facebook post" : kind === "reel" ? "a 60-second reel script with timestamps" : "a 10-minute training outline"}. ${VOICE} Return only the ${kind === "post" ? "post" : kind === "reel" ? "script" : "outline"}, no preamble.`,
       `Principle: ${p.symbol ?? ""} ${p.greekName ?? ""} ${p.name}\nDoctrine: ${p.doctrine ?? p.summary ?? ""}\nStories to draw from:\n${[p.publicFigureStory, p.businessCase, p.greekStory, p.clientStory].filter(Boolean).join("\n\n---\n\n").slice(0, 6000)}\nBusiness: ${v.membership.businessName ?? ""}. Promise: ${v.membership.bigPromise ?? ""}\n\nRule-based draft to improve:\n${body}`,
       3000,
+      { feature: "principle_content" },
     );
     if (ai) body = ai;
   }

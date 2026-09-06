@@ -3,7 +3,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { aiEnabled } from "@/lib/ai";
+import { hasAiKey } from "@/lib/ai";
 import { deleteWebinarAction, draftSectionAction, linkOfferAction, saveReadinessAction, updateRunAction, updateSectionAction, updateWebinarBeliefsAction, updateWebinarFoundationAction } from "@/lib/actions/webinars";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/components/ui";
@@ -17,6 +17,7 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
+  const ai = await hasAiKey();
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) notFound();
   const [sections, beliefs, reviews, offers, assets, proofs] = await Promise.all([
@@ -328,9 +329,9 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
               <form action={draftSectionAction}>
                 <input type="hidden" name="id" value={w.id} />
                 <input type="hidden" name="sectionKey" value={section.sectionKey} />
-                <input type="hidden" name="mode" value={aiEnabled() ? "ai" : "example"} />
+                <input type="hidden" name="mode" value={ai ? "ai" : "example"} />
                 <button className="btn btn-soft btn-sm" type="submit">
-                  {aiEnabled() ? "✨ Draft this section for me" : "Start from the example"}
+                  {ai ? "✨ Draft this section for me" : "Start from the example"}
                 </button>
               </form>
               <details className="text-xs">

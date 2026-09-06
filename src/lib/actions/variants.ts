@@ -32,6 +32,7 @@ export async function generateVariantsAction(formData: FormData): Promise<void> 
       `You repurpose one piece of coaching content into channel-native drafts. ${VOICE} Return ONLY a JSON object keyed by channel key, each value {"body": string, "subject"?: string}. Respect each channel's max length and link rules.`,
       `Source title: ${item.title}\nHook: ${item.hook ?? ""}\nBody:\n${item.body ?? ""}\nHas CTA: ${item.hasCta}\n\nChannels:\n${specs.map((s) => `- ${s.key}: ${s.label}. ${s.tone} Max ${s.maxChars} chars. Links: ${s.links}.`).join("\n")}\n\nRule-based starting drafts you may improve:\n${JSON.stringify(Object.fromEntries(drafts.map((d) => [d.channel, d])))}`,
       8000,
+      { feature: "repurpose" },
     );
     if (text) {
       try {

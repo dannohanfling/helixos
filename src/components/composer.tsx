@@ -100,12 +100,12 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       const res = await polishTargetsAction({ title: src.title, hook, body, hasCta, targets: chosen.map((t) => ({ key: t.key, channel: t.channel, groupId: t.groupId, body: draftFor(src, t).body })) });
       const n = Object.keys(res).length;
       if (!n) {
-        setNotice("Claude didn't return drafts. Check ANTHROPIC_API_KEY, or keep the rule-based versions.");
+        setNotice("No AI drafts came back. Check your AI key on Settings (it may be past today's cap), or keep the rule-based versions.");
         return;
       }
       setCustomize(true);
       setOverrides((o) => ({ ...o, ...res }));
-      setNotice(`Claude rewrote ${n} versions in your voice. Review each tab, then schedule.`);
+      setNotice(`AI rewrote ${n} versions in your voice. Review each tab, then schedule.`);
     });
 
   const preview = previewTab === "all" ? chosen : chosen.filter((t) => t.key === previewTab);
@@ -186,9 +186,9 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                     ✨ AI: shape for every channel
                   </button>
                 ) : (
-                  <span className="rounded-lg bg-surface-2 px-2 py-1 text-[11px] text-ink-3" title="Add ANTHROPIC_API_KEY to unlock">
-                    ✨ AI polish needs ANTHROPIC_API_KEY
-                  </span>
+                  <a href="/settings#ai" className="rounded-lg bg-surface-2 px-2 py-1 text-[11px] text-ink-3 underline" title="Connect your own Anthropic or OpenAI key">
+                    ✨ Connect your AI key in Settings
+                  </a>
                 )}
                 <span className="mx-1 h-5 w-px bg-line" />
                 {EMOJI.map((e) => (

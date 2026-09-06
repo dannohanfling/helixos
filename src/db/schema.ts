@@ -14,6 +14,8 @@ export const workspaces = sqliteTable("workspaces", {
   clientInviteCode: text("client_invite_code").notNull().unique(),
   coachInviteCode: text("coach_invite_code").notNull().unique(),
   airtableBaseId: text("airtable_base_id"),
+  /** Soft cap on AI calls per member per day, on the member's own key. A runaway loop on a client's money gets blamed on HelixOS. */
+  aiDailyCap: integer("ai_daily_cap").notNull().default(40),
   createdAt: createdAt(),
 });
 
@@ -53,6 +55,8 @@ export const memberships = sqliteTable(
     eoPassSerial: text("eo_pass_serial"),
     eoPassInstalledAt: text("eo_pass_installed_at"),
     eoPassLastPushAt: text("eo_pass_last_push_at"),
+    /** Coach override of the workspace's daily AI cap for this member. */
+    aiCapExempt: integer("ai_cap_exempt", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("memberships_ws_user").on(t.workspaceId, t.userId)],
@@ -949,6 +953,45 @@ export const ladders = sqliteTable(
   (t) => [index("ladders_user").on(t.userId, t.status)],
 );
 
+/* ───────────────────────── Bring-your-own AI ───────────────────────── */
+
+export const AI_PROVIDERS = ["anthropic", "openai"] as const;
+
+/** A member's own API key, encrypted at rest. Shown again only as provider + last four. */
+export const aiCredentials = sqliteTable(
+  "ai_credentials",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    provider: text("provider", { enum: AI_PROVIDERS }).notNull(),
+    keyEncrypted: text("key_encrypted").notNull(),
+    last4: text("last4").notNull().default(""),
+    lastValidatedAt: text("last_validated_at"),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("ai_credentials_ws_user").on(t.workspaceId, t.userId)],
+);
+
+/** One row per AI call: who, which key, which feature, how many tokens, what it probably cost. */
+export const aiUsage = sqliteTable(
+  "ai_usage",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    provider: text("provider", { enum: AI_PROVIDERS }).notNull(),
+    model: text("model").notNull(),
+    feature: text("feature").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ai_usage_user_at").on(t.userId, t.createdAt), index("ai_usage_ws_at").on(t.workspaceId, t.createdAt)],
+);
+
 /* ───────────────────────── Integrations ───────────────────────── */
 
 export const PROVIDERS = ["community_loyalty", "gohighlevel"] as const;
@@ -1081,3 +1124,5 @@ export type Integration = typeof integrations.$inferSelect;
 export type SyncEvent = typeof syncEvents.$inferSelect;
 export type LadderProfile = typeof ladderProfiles.$inferSelect;
 export type Ladder = typeof ladders.$inferSelect;
+export type AiCredential = typeof aiCredentials.$inferSelect;
+export type AiUsage = typeof aiUsage.$inferSelect;

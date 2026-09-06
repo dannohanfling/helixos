@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { aiEnabled } from "@/lib/ai";
+import { hasAiKey } from "@/lib/ai";
 import { markRungAction, regenerateLadderAction, sendLadderToComposerAction, setLadderStatusAction, updateLadderAction } from "@/lib/actions/ladders";
 import { CopyButton } from "@/components/copy-button";
 import { LiveClock } from "@/components/rung-runner";
@@ -47,6 +47,7 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
+  const ai = await hasAiKey();
   const fmt = formatFor(l.format);
   const checks = checklist(l, profile ?? null, proofs);
   const score = checkScore(checks);
@@ -60,7 +61,7 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
           <span className="flex flex-wrap items-center gap-2">
             <Link href="/content/ladders" className="hover:underline">← Ladders</Link>
             <Badge tone={l.status === "ready" ? "good" : l.status === "live" ? "accent" : "neutral"}>{l.status}</Badge>
-            <span>{fmt.name} · {l.audience} audience · keyword {l.keyword} · {l.generatedBy === "claude" ? "drafted by Claude" : l.generatedBy === "scaffold" ? "skeleton, fill the blanks" : l.generatedBy}</span>
+            <span>{fmt.name} · {l.audience} audience · keyword {l.keyword} · {l.generatedBy === "claude" ? "drafted by AI" : l.generatedBy === "scaffold" ? "skeleton, fill the blanks" : l.generatedBy}</span>
           </span>
         }
         action={
@@ -222,7 +223,7 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
               ) : null}
             </dl>
             {fmt.stopRule ? <p className="mt-2 rounded-lg bg-warn-soft p-2 text-xs">Stop rule: {fmt.stopRule}</p> : null}
-            <Disclosure summary={<span className="mt-3 inline-block text-xs underline">{aiEnabled() ? "Edit the brief and regenerate" : "Regenerate the skeleton"}</span>}>
+            <Disclosure summary={<span className="mt-3 inline-block text-xs underline">{ai ? "Edit the brief and regenerate" : "Regenerate the skeleton"}</span>}>
               <form action={regenerateLadderAction} className="mt-2 space-y-2">
                 <input type="hidden" name="id" value={l.id} />
                 <Field label="Topic">

@@ -3,7 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { aiEnabled } from "@/lib/ai";
+import { hasAiKey } from "@/lib/ai";
 import { generateVariantsAction, updateVariantAction } from "@/lib/actions/variants";
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
 import { distributeAllAction } from "@/lib/actions/compose";
@@ -118,7 +118,7 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
   const everywhere = CHANNEL_SPECS.filter((c) => !(own.length && c.key === "fb_group") && !(top3.length && c.key === "other_groups"));
   const posted = variants.filter((x) => x.status === "posted").length;
   const reach = variants.reduce((a, x) => ({ reactions: a.reactions + x.reactions, comments: a.comments + x.comments, dms: a.dms + x.dms, leads: a.leads + x.leads }), { reactions: 0, comments: 0, dms: 0, leads: 0 });
-  const ai = aiEnabled();
+  const ai = await hasAiKey();
 
   return (
     <>
@@ -168,7 +168,7 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button className="btn btn-accent" type="submit">Generate group drafts</button>
-              {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With Claude</button> : null}
+              {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With AI</button> : null}
             </div>
           </form>
         ) : (
@@ -212,7 +212,7 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button className="btn btn-accent" type="submit">Generate drafts</button>
-            {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With Claude</button> : <span className="text-xs text-ink-3">Add ANTHROPIC_API_KEY to let Claude polish each draft in your voice.</span>}
+            {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With AI</button> : <span className="text-xs text-ink-3"><Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have each draft polished in your voice.</span>}
           </div>
         </form>
       </Card>

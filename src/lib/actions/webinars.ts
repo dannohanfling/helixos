@@ -125,6 +125,8 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
       ]
         .filter(Boolean)
         .join("\n\n"),
+      2000,
+      { feature: "webinar_section" },
     );
   }
   if (!text) {
