@@ -97,7 +97,7 @@ export async function seedDemoWave2(wsId: string, mayaId: string, jordanId: stri
     { id: "loc_maya_ig_1", name: "@torresnutrition", platform: "instagram", type: "business", isExpired: false },
     { id: "loc_maya_li_1", name: "Maya Torres", platform: "linkedin", type: "profile", isExpired: false },
   ];
-  await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: wsId, userId: mayaId, provider: "gohighlevel", locationId: "loc_maya", ghlUserId: "user_maya", accounts: demoAccounts, mapping: { fb_page: "loc_maya_fbpage_1", fb_group: "loc_maya_fbgroup_1", instagram: "loc_maya_ig_1", stories: "loc_maya_ig_1", linkedin: "loc_maya_li_1" }, connectedAt: `${addDays(today, -20)}T18:00:00.000Z`, lastSyncAt: `${addDays(today, -1)}T18:00:00.000Z` });
+  await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: wsId, userId: mayaId, provider: "gohighlevel", locationId: "loc_maya", coachAssigned: true, ghlUserId: "user_maya", accounts: demoAccounts, mapping: { fb_page: "loc_maya_fbpage_1", fb_group: "loc_maya_fbgroup_1", instagram: "loc_maya_ig_1", stories: "loc_maya_ig_1", linkedin: "loc_maya_li_1" }, connectedAt: `${addDays(today, -20)}T18:00:00.000Z`, lastSyncAt: `${addDays(today, -1)}T18:00:00.000Z` });
 
   // Group-aligned drafts for Maya's top posted item
   const posted = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.userId, mayaId), eq(schema.contentItems.status, "posted")) });

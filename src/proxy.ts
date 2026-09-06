@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/session";
 
-const PUBLIC = ["/login", "/join", "/demo", "/api/cron", "/api/health"];
+// Inbound machine endpoints authenticate with their own secrets, never a browser session.
+const PUBLIC = ["/login", "/join", "/demo", "/api/cron", "/api/health", "/api/webhooks"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

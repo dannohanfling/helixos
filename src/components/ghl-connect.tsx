@@ -13,8 +13,8 @@ export function GhlConnect({ conn, forUserId, tz, compact = false }: { conn: Soc
     <div className="space-y-3">
       <form action={connectGhlAction} className={`grid gap-2 ${compact ? "sm:grid-cols-[1fr_1fr_1fr_auto]" : "sm:grid-cols-2"}`}>
         {hidden}
-        <Field label="Sub-account (location) ID" hint={compact ? undefined : "Settings → Business Profile in the client's sub-account"}>
-          <input className="field" name="locationId" defaultValue={conn?.locationId ?? ""} required placeholder="ve9EPM428h8vShlRW1KT" />
+        <Field label="Sub-account (location) ID" hint={compact ? undefined : conn?.coachAssigned && !forUserId ? "Assigned by your coach. To use a different sub-account, paste its private integration token." : "Settings → Business Profile in the client's sub-account"}>
+          <input className="field" name="locationId" defaultValue={conn?.locationId ?? ""} required placeholder="ve9EPM428h8vShlRW1KT" readOnly={Boolean(conn?.coachAssigned && !forUserId && !conn?.manualToken)} />
         </Field>
         <Field label="GHL user ID" hint={compact ? undefined : "The sub-account user posts are created as (Settings → My Staff → the user's ID)"}>
           <input className="field" name="ghlUserId" defaultValue={conn?.ghlUserId ?? ""} placeholder="Lx1EI6YIgQYMQi0ytFXv" />
@@ -30,6 +30,7 @@ export function GhlConnect({ conn, forUserId, tz, compact = false }: { conn: Soc
         <>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge tone={conn.lastError ? "danger" : conn.accounts.length ? "good" : "neutral"}>{conn.lastError ? "error" : conn.accounts.length ? `${conn.accounts.length} accounts` : "no accounts yet"}</Badge>
+            {conn.coachAssigned ? <span className="text-ink-3">· assigned by coach</span> : conn.manualToken ? <span className="text-ink-3">· own token</span> : null}
             <span className="text-ink-3">{ready.mapped}/{ready.total} channels will auto-publish</span>
             {conn.lastSyncAt ? <span className="text-ink-3">· checked {formatDateTime(conn.lastSyncAt, tz)}</span> : null}
             {conn.lastError ? <span className="text-danger">· {conn.lastError}</span> : null}

@@ -29,6 +29,25 @@ async function main() {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
 
+    // A member must not be able to bind themselves to someone else's sub-account and mint an agency token for it
+    await page.goto(`${base}/login`);
+    await page.fill('input[name="email"]', "client2@demo.helixos.app");
+    await page.fill('input[name="password"]', "demo1234");
+    await Promise.all([page.waitForURL(/\/today/), page.click('button[type="submit"]:has-text("Sign in")')]);
+    await page.goto(`${base}/settings`);
+    await page.fill('input[name="locationId"]', "loc_maya");
+    await submit(page, 'button:has-text("Connect"), button:has-text("Save and refresh")');
+    await expectText(page, "Paste your sub-account", "member blocked from foreign location");
+    await page.fill('input[name="locationId"]', "loc_jordan");
+    await page.fill('input[name="manualToken"]', "pit-token");
+    await submit(page, 'button:has-text("Save and refresh")');
+    await expectText(page, "own token", "member connected with own token");
+    console.log("✓ member cannot hijack another sub-account; own token works");
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+
+
     // Coach: point the agency integration at the mock
     await page.goto(`${base}/login`);
     await page.click('button:has-text("As the coach")');

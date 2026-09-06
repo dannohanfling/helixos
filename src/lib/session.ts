@@ -11,7 +11,11 @@ export type SessionPayload = {
 };
 
 function secret(): Uint8Array {
-  const s = process.env.SESSION_SECRET ?? "dev-only-secret-change-me-please-32chars";
+  const s = process.env.SESSION_SECRET;
+  if (!s || s.length < 32) {
+    if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET must be set (32+ characters) in production. Refusing to sign sessions with a default.");
+    return new TextEncoder().encode("dev-only-secret-change-me-please-32chars");
+  }
   return new TextEncoder().encode(s);
 }
 

@@ -926,6 +926,8 @@ export const socialConnections = sqliteTable(
     userId: text("user_id").notNull(),
     provider: text("provider").notNull().default("gohighlevel"),
     locationId: text("location_id").notNull(),
+    /** True when the coach set the location. Only then may the agency token mint a token for it. A member's own private token is the other proof. */
+    coachAssigned: integer("coach_assigned", { mode: "boolean" }).notNull().default(false),
     ghlUserId: text("ghl_user_id"),
     manualToken: text("manual_token"),
     accessToken: text("access_token"),

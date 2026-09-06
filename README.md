@@ -119,6 +119,8 @@ It loads the library (no demo data), prints the client and coach invite links, a
 
 5. Log in as coach → Integrations: agency token + company ID for GoHighLevel, Community Loyalty key. Send a client their invite link.
 
+Security notes: `SESSION_SECRET` is required in production (the app refuses to start sessions without it). The agency GoHighLevel token is only ever used for a sub-account the coach assigned to that member on Integrations; a member can otherwise connect only with their own private integration token. Inbound webhooks authenticate with their per-workspace secret and are exempt from the login redirect.
+
 ## Deploying
 
 - **Database**: keep `DATABASE_URL=file:./data/helixos.db` on a persistent disk (Fly, Railway, a VPS), or point it at

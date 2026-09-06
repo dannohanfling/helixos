@@ -43,6 +43,13 @@
       "when": 1788718037404,
       "tag": "0005_content_library",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788720363496,
+      "tag": "0006_coach_assigned",
+      "breakpoints": true
     }
   ]
 }

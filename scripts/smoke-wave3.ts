@@ -146,10 +146,11 @@ async function main() {
   await expectText(page, "Programs and passes", "coach programs card");
   await shot(page, "x13-coach");
 
-  // Inbound webhook
-  const res = await page.request.post(`${base}/api/webhooks/community-loyalty?secret=hx_demo_community_loyalty_secret`, { data: { event: "points.earned", email: "client@demo.helixos.app", points: 15, reason: "Referred a friend", id: "evt-smoke-1" } });
+  // Inbound webhook: from a fresh context with no session cookie, exactly like GHL or Community Loyalty would call it
+  const machine = await (await browser.newContext()).newPage();
+  const res = await machine.request.post(`${base}/api/webhooks/community-loyalty?secret=hx_demo_community_loyalty_secret`, { data: { event: "points.earned", email: "client@demo.helixos.app", points: 15, reason: "Referred a friend", id: "evt-smoke-1" } });
   if (!res.ok()) throw new Error(`webhook ${res.status()}`);
-  const bad = await page.request.post(`${base}/api/webhooks/ghl?secret=wrong`, { data: {} });
+  const bad = await machine.request.post(`${base}/api/webhooks/ghl?secret=wrong`, { data: {} });
   if (bad.status() !== 401) throw new Error(`webhook should reject bad secret, got ${bad.status()}`);
   console.log("✓ webhooks");
 

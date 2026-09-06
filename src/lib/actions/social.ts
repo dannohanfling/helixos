@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { nowIso } from "@/lib/dates";
+import { newId } from "@/lib/ids";
 import { connectionFor, getPost, refreshAccounts, upsertConnection } from "@/lib/ghl";
 import { PUBLISHABLE } from "@/lib/engine/ghl-map";
 import { ctx, opt, refresh, str } from "./common";
@@ -16,18 +17,25 @@ async function target(formData: FormData) {
     const coach = await requireCoach();
     const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, coach.workspace.id), eq(schema.memberships.userId, forUser)) });
     if (!m) throw new Error("Member not found");
-    return { workspaceId: coach.workspace.id, userId: forUser };
+    return { workspaceId: coach.workspace.id, userId: forUser, byCoach: true };
   }
-  return { workspaceId: c.workspaceId, userId: c.userId };
+  return { workspaceId: c.workspaceId, userId: c.userId, byCoach: c.v.role === "coach" };
 }
 
-/** Saves the sub-account details and pulls its connected accounts. */
+/** Saves the sub-account details and pulls its connected accounts. Members can't bind themselves to a sub-account they don't hold a token for. */
 export async function connectGhlAction(formData: FormData): Promise<void> {
   const t = await target(formData);
   const locationId = str(formData, "locationId");
   if (!locationId) return;
-  const conn = await upsertConnection({ ...t, locationId, ghlUserId: opt(formData, "ghlUserId"), manualToken: opt(formData, "manualToken") });
-  await refreshAccounts(conn);
+  const r = await upsertConnection({ ...t, locationId, ghlUserId: opt(formData, "ghlUserId"), manualToken: opt(formData, "manualToken") });
+  if (!r.ok) {
+    const existing = await connectionFor(t.userId);
+    if (existing) await db.update(schema.socialConnections).set({ lastError: r.error }).where(eq(schema.socialConnections.id, existing.id));
+    else await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: t.workspaceId, userId: t.userId, provider: "gohighlevel", locationId, coachAssigned: false, ghlUserId: opt(formData, "ghlUserId"), lastError: r.error });
+    refresh();
+    return;
+  }
+  await refreshAccounts(r.data);
   refresh();
 }
 

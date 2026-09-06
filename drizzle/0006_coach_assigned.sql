@@ -1,0 +1,1 @@
+ALTER TABLE `social_connections` ADD `coach_assigned` integer DEFAULT false NOT NULL;

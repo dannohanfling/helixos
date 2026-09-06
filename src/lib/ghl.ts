@@ -49,6 +49,8 @@ export async function locationToken(conn: SocialConnection): Promise<GhlResult<{
   const integ = await getIntegration(conn.workspaceId, "gohighlevel");
   const base = integ?.config.apiUrl || "https://services.leadconnectorhq.com";
   if (conn.manualToken) return { ok: true, data: { token: conn.manualToken, base } };
+  // The agency token can reach every sub-account under the agency. It is only used for a location the coach assigned to this member.
+  if (!conn.coachAssigned) return { ok: false, error: "Ask your coach to assign your sub-account on Integrations, or paste your own private integration token" };
   if (conn.accessToken && conn.tokenExpiresAt && new Date(conn.tokenExpiresAt).getTime() - Date.now() > 5 * 60000) return { ok: true, data: { token: conn.accessToken, base } };
   if (!integ?.enabled) return { ok: false, error: "GoHighLevel is turned off on the Integrations page" };
   if (!integ.config.apiKey || !integ.config.companyId) return { ok: false, error: "Agency token or company ID missing on the Integrations page" };
@@ -116,17 +118,33 @@ export async function getPost(conn: SocialConnection, id: string): Promise<GhlRe
   return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null } };
 }
 
-/** Creates or updates the member's connection row (coach or the member themselves). */
-export async function upsertConnection(input: { workspaceId: string; userId: string; locationId: string; ghlUserId: string | null; manualToken: string | null }): Promise<SocialConnection> {
+/**
+ * Creates or updates a member's connection.
+ * Coach: may set any location; it becomes coach-assigned, which is what allows agency-token minting.
+ * Member: may only change the location when supplying their own private token (proof of access). A coach-assigned location stays put.
+ */
+export async function upsertConnection(input: { workspaceId: string; userId: string; locationId: string; ghlUserId: string | null; manualToken: string | null; byCoach: boolean }): Promise<GhlResult<SocialConnection>> {
   const existing = await connectionFor(input.userId);
+  const token = input.manualToken ?? existing?.manualToken ?? null;
+  let locationId = input.locationId;
+  let coachAssigned = existing?.coachAssigned ?? false;
+  if (input.byCoach) {
+    coachAssigned = true;
+  } else if (existing?.coachAssigned && existing.locationId !== input.locationId) {
+    if (!token) return { ok: false, error: "Your coach assigned this sub-account. To use a different one, paste its private integration token." };
+    coachAssigned = false;
+  } else if (!existing?.coachAssigned && !token) {
+    return { ok: false, error: "Paste your sub-account's private integration token, or ask your coach to assign the sub-account from Integrations." };
+  }
+  if (!input.byCoach && existing?.coachAssigned && !input.manualToken) locationId = existing.locationId;
   if (existing) {
-    const changedLocation = existing.locationId !== input.locationId;
+    const changedLocation = existing.locationId !== locationId;
     await db
       .update(schema.socialConnections)
-      .set({ locationId: input.locationId, ghlUserId: input.ghlUserId, manualToken: input.manualToken ?? existing.manualToken, ...(changedLocation ? { accessToken: null, tokenExpiresAt: null, accounts: [], mapping: {} } : {}), lastError: null })
+      .set({ locationId, coachAssigned, ghlUserId: input.ghlUserId, manualToken: token, ...(changedLocation ? { accessToken: null, tokenExpiresAt: null, accounts: [], mapping: {} } : {}), lastError: null })
       .where(eq(schema.socialConnections.id, existing.id));
   } else {
-    await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: input.workspaceId, userId: input.userId, provider: "gohighlevel", locationId: input.locationId, ghlUserId: input.ghlUserId, manualToken: input.manualToken });
+    await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: input.workspaceId, userId: input.userId, provider: "gohighlevel", locationId, coachAssigned, ghlUserId: input.ghlUserId, manualToken: token });
   }
-  return (await connectionFor(input.userId))!;
+  return { ok: true, data: (await connectionFor(input.userId))! };
 }
