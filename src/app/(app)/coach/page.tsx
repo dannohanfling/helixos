@@ -20,9 +20,9 @@ export default async function CoachPage() {
   const userIds = members.map((m) => m.userId);
   const [users, logs, points, verified, submitted, library] = await Promise.all([
     userIds.length ? db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [],
-    userIds.length ? db.query.dailyLogs.findMany({ where: inArray(schema.dailyLogs.userId, userIds) }) : [],
-    userIds.length ? db.select({ userId: schema.pointsLedger.userId, points: schema.pointsLedger.points }).from(schema.pointsLedger).where(inArray(schema.pointsLedger.userId, userIds)) : [],
-    userIds.length ? db.query.pathwayProgress.findMany({ where: and(inArray(schema.pathwayProgress.userId, userIds), eq(schema.pathwayProgress.status, "verified")) }) : [],
+    userIds.length ? db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.workspaceId, wsId), inArray(schema.dailyLogs.userId, userIds)) }) : [],
+    userIds.length ? db.select({ userId: schema.pointsLedger.userId, points: schema.pointsLedger.points }).from(schema.pointsLedger).where(and(eq(schema.pointsLedger.workspaceId, wsId), inArray(schema.pointsLedger.userId, userIds))) : [],
+    userIds.length ? db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), inArray(schema.pathwayProgress.userId, userIds), eq(schema.pathwayProgress.status, "verified")) }) : [],
     db.query.pathwayProgress.findMany({ where: and(eq(schema.pathwayProgress.workspaceId, wsId), eq(schema.pathwayProgress.status, "submitted")), orderBy: desc(schema.pathwayProgress.submittedAt) }),
     db.query.libraryTasks.findMany(),
   ]);
@@ -139,6 +139,9 @@ export default async function CoachPage() {
                       🎓 {r.m.certEnabled ? "cert on" : "cert off"}
                     </button>
                   </form>
+                  <a className="btn btn-ghost btn-xs" href={`/api/export?format=json&user=${r.m.userId}`} download title="Everything this client has put in, as one JSON file (for offboarding)">
+                    ⬇ export
+                  </a>
                   <form action={setMemberPassAction} className="flex flex-1 flex-wrap items-center gap-1">
                     <input type="hidden" name="membershipId" value={r.m.id} />
                     <input className="field min-w-40 flex-1 py-1 text-xs" name="eoPassUrl" placeholder="Evolve Omega pass link" defaultValue={r.m.eoPassUrl ?? ""} />

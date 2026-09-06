@@ -28,7 +28,7 @@ const ENERGY = ["", "Dragging", "Slow", "Steady", "Bright", "On fire"];
 export default async function TodayPage() {
   const v = await requireViewer();
   const d = await todayData(v);
-  const closed = await closedDates(v.user.id);
+  const closed = await closedDates(v.workspace.id, v.user.id);
   const streakDayIfClosedNow = d.log?.eveningDoneAt ? d.log.streakDay : weeklyStreakDay(closed, v.today);
   const bonusIfClosedNow = streakBonus(streakDayIfClosedNow);
   const morningDone = Boolean(d.log?.morningDoneAt);

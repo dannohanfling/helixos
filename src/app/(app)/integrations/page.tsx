@@ -1,11 +1,12 @@
+import { cookies } from "next/headers";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { PROVIDERS } from "@/db/schema";
 import { requireCoach } from "@/lib/auth";
-import { broadcastPassAction, clearSyncLogAction, rotateInboundSecretAction, saveIntegrationAction, testIntegrationAction } from "@/lib/actions/integrations";
+import { broadcastPassAction, clearSyncLogAction, hideInboundSecretAction, rotateInboundSecretAction, saveIntegrationAction, testIntegrationAction } from "@/lib/actions/integrations";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
-import { PROVIDER_META } from "@/lib/integrations";
+import { INBOUND_SECRET_COOKIE, PROVIDER_META } from "@/lib/integrations";
 import { readiness } from "@/lib/engine/ghl-map";
 import { formatDateTime } from "@/lib/dates";
 
@@ -23,6 +24,14 @@ export default async function IntegrationsPage() {
   const users = members.length ? await db.query.users.findMany({ where: inArray(schema.users.id, members.map((m) => m.userId)) }) : [];
   const userName = new Map(users.map((u) => [u.id, u.name]));
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  // A secret just created or rotated is shown once, from a 10-minute cookie; only its hash is in the database.
+  let fresh: { provider: string; secret: string } | null = null;
+  try {
+    const raw = (await cookies()).get(INBOUND_SECRET_COOKIE)?.value;
+    fresh = raw ? (JSON.parse(raw) as { provider: string; secret: string }) : null;
+  } catch {
+    fresh = null;
+  }
   const withPass = members.filter((m) => m.eoPassSerial).length;
   const installed = members.filter((m) => m.eoPassInstalledAt).length;
   return (
@@ -59,22 +68,33 @@ export default async function IntegrationsPage() {
                 </form>
                 <form action={rotateInboundSecretAction}>
                   <input type="hidden" name="provider" value={p} />
-                  <button className="btn btn-ghost btn-xs" type="submit">{row?.inboundSecret ? "Rotate inbound secret" : "Create inbound secret"}</button>
+                  <button className="btn btn-ghost btn-xs" type="submit">{row?.inboundSecretHash ? "Rotate inbound secret" : "Create inbound secret"}</button>
                 </form>
               </div>
               <Disclosure summary={<span className="text-xs text-ink-3 underline">Inbound webhook</span>} className="mt-3">
                 <div className="mt-2 space-y-2 text-xs">
-                  <p className="text-ink-2">Point {meta.name.split(" (")[0]} at this URL. Send the secret as the <code>x-helix-secret</code> header or <code>?secret=</code>.</p>
+                  <p className="text-ink-2">Point {meta.name.split(" (")[0]} at this URL. Send the secret as the <code>x-helix-secret</code> header. It is not accepted in the URL, because URLs end up in server logs.</p>
                   <div className="flex items-center gap-2">
                     <code className="min-w-0 flex-1 truncate rounded bg-surface-2 px-2 py-1">{hook}</code>
                     <CopyButton text={hook} label="Copy" className="btn btn-ghost btn-xs" />
                   </div>
-                  {row?.inboundSecret ? (
-                    <div className="flex items-center gap-2">
-                      <code className="min-w-0 flex-1 truncate rounded bg-surface-2 px-2 py-1">{row.inboundSecret}</code>
-                      <CopyButton text={row.inboundSecret} label="Copy" className="btn btn-ghost btn-xs" />
+                  {fresh?.provider === p ? (
+                    <div className="space-y-1 rounded-lg border border-warn bg-warn-soft p-2" data-testid="inbound-secret">
+                      <div className="flex items-center gap-2">
+                        <code className="min-w-0 flex-1 truncate rounded bg-surface-2 px-2 py-1">{fresh.secret}</code>
+                        <CopyButton text={fresh.secret} label="Copy" className="btn btn-ghost btn-xs" />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Copy it now. It is shown once and only its fingerprint is stored.</span>
+                        <form action={hideInboundSecretAction}>
+                          <button className="underline" type="submit">I&apos;ve copied it</button>
+                        </form>
+                      </div>
                     </div>
+                  ) : row?.inboundSecretHash ? (
+                    <p className="text-ink-3">A secret is set. It can&apos;t be shown again; rotate it if you need a new one.</p>
                   ) : null}
+                  {p === "gohighlevel" ? <p className="text-ink-3">Marketplace-app webhooks signed with <code>x-ghl-signature</code> are verified with the app&apos;s public key (GHL_WEBHOOK_PUBLIC_KEY) instead of the secret; workflow webhooks use the header above.</p> : null}
                   <p className="text-ink-3">{p === "community_loyalty" ? "Events: pass.installed (email or serial), points.earned (email, points, reason)." : "Events: contact.created, appointment.booked (email, full_name, startTime)."}</p>
                 </div>
               </Disclosure>

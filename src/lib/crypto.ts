@@ -2,7 +2,7 @@
  * Secrets at rest. AES-256-GCM with a key derived from ENCRYPTION_KEY (or SESSION_SECRET when that's all that is set).
  * Values are stored as `enc:v1:<iv>.<tag>.<ciphertext>` (base64url). Anything without the prefix is returned as-is so older rows keep working.
  */
-import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createPublicKey, randomBytes, timingSafeEqual, verify as verifySignature } from "node:crypto";
 
 const PREFIX = "enc:v1:";
 
@@ -57,4 +57,32 @@ export function safeEqual(a: string, b: string): boolean {
     return false;
   }
   return timingSafeEqual(ab, bb);
+}
+
+/** One-way fingerprint for secrets that only ever need to be matched, never read back (inbound webhook secrets). */
+export function hashSecret(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+
+/**
+ * Verifies an Ed25519 signature over the raw request body, the way GoHighLevel signs marketplace webhooks (`x-ghl-signature`, base64).
+ * The public key may be PEM, or the raw 32-byte key as base64 or hex, matching what the HighLevel developer portal shows.
+ */
+export function verifyEd25519(rawBody: Buffer | string, signatureB64: string, publicKey: string): boolean {
+  try {
+    const trimmed = publicKey.trim();
+    let key;
+    if (trimmed.includes("-----BEGIN")) key = createPublicKey({ key: trimmed, format: "pem" });
+    else {
+      const raw = /^[0-9a-fA-F]{64}$/.test(trimmed) ? Buffer.from(trimmed, "hex") : Buffer.from(trimmed, "base64");
+      const der = raw.length === 32 ? Buffer.concat([ED25519_SPKI_PREFIX, raw]) : raw;
+      key = createPublicKey({ key: der, format: "der", type: "spki" });
+    }
+    const body = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody, "utf8");
+    return verifySignature(null, body, key, Buffer.from(signatureB64, "base64"));
+  } catch {
+    return false;
+  }
 }

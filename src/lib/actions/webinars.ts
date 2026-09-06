@@ -9,6 +9,7 @@ import { nowIso } from "@/lib/dates";
 import { VOICE, draft } from "@/lib/ai";
 import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, readinessScore } from "@/lib/engine/webinar";
 import { award } from "@/lib/queries/points";
+import { assetFor } from "@/lib/queries/library";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 async function own(webinarId: string, userId: string) {
@@ -67,12 +68,13 @@ export async function updateWebinarBeliefsAction(formData: FormData): Promise<vo
 }
 
 export async function updateSectionAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { workspaceId, userId } = await ctx();
   const id = str(formData, "id");
   const sectionKey = str(formData, "sectionKey");
   await own(id, userId);
   const status = (["todo", "drafted", "final"] as const).find((s) => s === str(formData, "status"));
   const script = opt(formData, "script");
+  const asset = await assetFor(workspaceId, userId, opt(formData, "assetId"));
   await db
     .update(schema.webinarSections)
     .set({
@@ -80,7 +82,7 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
       keyPoints: opt(formData, "keyPoints"),
       transitionIn: opt(formData, "transitionIn"),
       transitionOut: opt(formData, "transitionOut"),
-      assetId: opt(formData, "assetId"),
+      assetId: asset?.id ?? null,
       durationMin: Math.max(1, num(formData, "durationMin") || 4),
       status: status ?? (script && script.length > 40 ? "drafted" : "todo"),
     })
@@ -92,14 +94,14 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
 
 /** Drafts a section script. With Claude: from the foundation, belief map, chosen asset and the example. Without: adapts the example. */
 export async function draftSectionAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { workspaceId, userId } = await ctx();
   const id = str(formData, "id");
   const sectionKey = str(formData, "sectionKey");
   const w = await own(id, userId);
   const tpl = SECTION_TEMPLATES.find((t) => t.key === sectionKey);
   if (!tpl) return;
   const section = await db.query.webinarSections.findFirst({ where: and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)) });
-  const asset = section?.assetId ? await db.query.libraryAssets.findFirst({ where: eq(schema.libraryAssets.id, section.assetId) }) : null;
+  const asset = await assetFor(workspaceId, userId, section?.assetId);
   const beliefs = await db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) });
   const act = ACTS.find((a) => a.key === tpl.act)!;
   const belief = beliefs.find((b) => b.type === tpl.act);

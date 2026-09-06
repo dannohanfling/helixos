@@ -65,7 +65,7 @@ export async function claimRewardAction(formData: FormData): Promise<void> {
   const name = str(formData, "name");
   const cost = num(formData, "cost");
   if (!name) return;
-  const points = await totalPoints(userId);
+  const points = await totalPoints(workspaceId, userId);
   if (cost > 0 && points < cost) return;
   await db.insert(schema.rewardClaims).values({ id: newId(), workspaceId, userId, rewardName: name, pointsSpent: cost });
   if (cost > 0) {

@@ -5,7 +5,7 @@ import { newId } from "@/lib/ids";
 import { addDays } from "@/lib/dates";
 import { alignPost } from "@/lib/engine/groups";
 import { monthOf } from "@/lib/engine/targets";
-import { seal } from "@/lib/crypto";
+import { hashSecret, seal } from "@/lib/crypto";
 
 export async function seedDemoWave2(wsId: string, mayaId: string, jordanId: string, today: string): Promise<void> {
   // Groups for Maya: her own, four she's in, three she's prospecting in, one on the bench.
@@ -82,8 +82,8 @@ export async function seedDemoWave2(wsId: string, mayaId: string, jordanId: stri
 
   // Integrations: configured but off, so nothing leaves the demo. Secrets are placeholders.
   await db.insert(schema.integrations).values([
-    { id: newId(), workspaceId: wsId, provider: "community_loyalty", enabled: false, config: { apiUrl: "https://api.communityloyalty.app", programId: "evolve-omega", pointsRate: "1" }, inboundSecret: "hx_demo_community_loyalty_secret" },
-    { id: newId(), workspaceId: wsId, provider: "gohighlevel", enabled: false, config: { apiUrl: "https://services.leadconnectorhq.com" }, inboundSecret: "hx_demo_ghl_secret" },
+    { id: newId(), workspaceId: wsId, provider: "community_loyalty", enabled: false, config: { apiUrl: "https://api.communityloyalty.app", programId: "evolve-omega", pointsRate: "1" }, inboundSecretHash: hashSecret("hx_demo_community_loyalty_secret") },
+    { id: newId(), workspaceId: wsId, provider: "gohighlevel", enabled: false, config: { apiUrl: "https://services.leadconnectorhq.com" }, inboundSecretHash: hashSecret("hx_demo_ghl_secret") },
   ]);
   await db.insert(schema.syncEvents).values([
     { id: newId(), workspaceId: wsId, userId: mayaId, provider: "community_loyalty", direction: "out", event: "points.add", payload: { serial: "EO-0001-MT", points: 20, reason: "Closed the day" }, status: "skipped", note: "Integration disabled", createdAt: `${addDays(today, -1)}T03:10:00.000Z` },

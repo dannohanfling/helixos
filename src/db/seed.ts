@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "./index";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
@@ -114,7 +114,28 @@ async function wipeDemo(): Promise<void> {
   await db.delete(schema.workspaces).where(eq(schema.workspaces.id, ws.id));
 }
 
+/**
+ * The demo workspace ships with known logins (coach@demo.helixos.app / demo1234), so it must never land in a real database.
+ * Refused on production, on a remote database, and whenever a real (non-demo) workspace already exists. ALLOW_DEMO_SEED=1 overrides
+ * the first two for a deliberate staging seed; nothing overrides the third.
+ */
+export function assertDemoSeedEnvironment(): void {
+  const url = process.env.DATABASE_URL ?? "file:./data/helixos.db";
+  const remote = !url.startsWith("file:") && !url.startsWith(":memory:");
+  const override = process.env.ALLOW_DEMO_SEED === "1";
+  if ((process.env.NODE_ENV === "production" || remote) && !override) {
+    throw new Error(`Refusing to seed the demo workspace: ${remote ? `DATABASE_URL points at a remote database (${url.split("@").pop()})` : "NODE_ENV is production"}. It creates the coach@demo.helixos.app / demo1234 login. Use \`npm run db:seed -- --library-only\` for the content library, or set ALLOW_DEMO_SEED=1 for a staging database you mean to wipe.`);
+  }
+}
+
+export async function assertNoRealWorkspace(): Promise<void> {
+  const real = await db.query.workspaces.findFirst({ where: ne(schema.workspaces.slug, DEMO_SLUG) });
+  if (real) throw new Error(`Refusing to seed the demo workspace: this database already has a real workspace ("${real.name}"). Use \`npm run db:seed -- --library-only\`.`);
+}
+
 export async function seedDemo(): Promise<void> {
+  assertDemoSeedEnvironment();
+  await assertNoRealWorkspace();
   await wipeDemo();
   await db.delete(schema.rateLimits); // a reseed is a fresh start for login and reset attempt counters too
   const tz = "America/Los_Angeles";
@@ -558,9 +579,11 @@ async function seedClientActivity(
 }
 
 async function main() {
+  const libraryOnly = process.argv.includes("--library-only");
+  if (!libraryOnly) assertDemoSeedEnvironment(); // before touching the database at all
   await ensureMigrated();
   await seedLibrary();
-  if (!process.argv.includes("--library-only")) await seedDemo();
+  if (!libraryOnly) await seedDemo();
 }
 
 // Only run when invoked directly (`npm run db:seed`); scripts/bootstrap.ts imports seedLibrary without seeding the demo.

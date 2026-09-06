@@ -34,12 +34,12 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
 
   const month = monthOf(v.today);
   const [logs, weekLogs, prevLogs, posted, ledger, monthLogs, targetRows] = await Promise.all([
-    logsBetween(v.user.id, from12, v.today),
-    logsBetween(v.user.id, weekStart, weekEnd),
-    logsBetween(v.user.id, prevStart, addDays(prevStart, 6)),
+    logsBetween(v.workspace.id, v.user.id, from12, v.today),
+    logsBetween(v.workspace.id, v.user.id, weekStart, weekEnd),
+    logsBetween(v.workspace.id, v.user.id, prevStart, addDays(prevStart, 6)),
     db.query.contentItems.findMany({ where: and(eq(schema.contentItems.userId, v.user.id), eq(schema.contentItems.status, "posted")), orderBy: desc(schema.contentItems.engagements), limit: 5 }),
-    db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, v.user.id), gte(schema.pointsLedger.createdAt, from12)) }),
-    logsBetween(v.user.id, `${month}-01`, `${month}-${String(daysInMonth(month)).padStart(2, "0")}`),
+    db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, v.workspace.id), eq(schema.pointsLedger.userId, v.user.id), gte(schema.pointsLedger.createdAt, from12)) }),
+    logsBetween(v.workspace.id, v.user.id, `${month}-01`, `${month}-${String(daysInMonth(month)).padStart(2, "0")}`),
     db.query.targets.findMany({ where: and(eq(schema.targets.userId, v.user.id), eq(schema.targets.month, month)) }),
   ]);
   const targetMap = Object.fromEntries(targetRows.map((t) => [t.metric, t.target]));

@@ -87,7 +87,7 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
     revDm: num(formData, "revDm"),
   };
   const firstClose = !log.eveningDoneAt;
-  const closed = await closedDates(userId);
+  const closed = await closedDates(workspaceId, userId);
   const streakDay = firstClose ? weeklyStreakDay(closed, today) : log.streakDay;
 
   await db

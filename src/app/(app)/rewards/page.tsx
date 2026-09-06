@@ -17,9 +17,9 @@ const TYPE_ICON: Record<string, string> = { checkin: "☀️", close: "🌙", st
 export default async function RewardsPage() {
   const v = await requireViewer();
   const [points, ledger, claims, board] = await Promise.all([
-    totalPoints(v.user.id),
-    recentLedger(v.user.id, 25),
-    db.query.rewardClaims.findMany({ where: eq(schema.rewardClaims.userId, v.user.id), orderBy: desc(schema.rewardClaims.createdAt) }),
+    totalPoints(v.workspace.id, v.user.id),
+    recentLedger(v.workspace.id, v.user.id, 25),
+    db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, v.workspace.id), eq(schema.rewardClaims.userId, v.user.id)), orderBy: desc(schema.rewardClaims.createdAt) }),
     leaderboard(v.workspace.id, `${startOfWeek(v.today)}T00:00:00`),
   ]);
   const tier = tierProgress(points);

@@ -1,8 +1,12 @@
 /** Smoke walk for doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations and the EO pass. Run with the dev server up. */
+import { createPrivateKey, sign } from "node:crypto";
 import { chromium, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
 const base = process.argv[2] ?? "http://localhost:3000";
+/** Throwaway Ed25519 pair for the signed-webhook check. Start the dev server with GHL_WEBHOOK_PUBLIC_KEY set to the public half. */
+const SMOKE_GHL_PUBLIC_KEY = "LcZjV/epRdfWK7Ah/K3pR4K5ulVZRnaRt6vHVnshlMg=";
+const SMOKE_GHL_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJRyao0LTanJUp2y74dA69WrRmLTzSUbFFr4VOzwI02j\n-----END PRIVATE KEY-----\n";
 mkdirSync("screenshots", { recursive: true });
 
 async function expectText(page: Page, text: string, label: string) {
@@ -134,6 +138,16 @@ async function main() {
   await page.goto(`${base}/integrations`);
   await expectText(page, "Community Loyalty", "integrations");
   await expectText(page, "GoHighLevel", "ghl");
+  // Rotate the Community Loyalty inbound secret: shown once, hidden on request, and the old one stops working (checked below).
+  await submit(page, 'form:has(input[name="provider"][value="community_loyalty"]) ~ div button:has-text("Rotate inbound secret"), form:has(input[name="provider"][value="community_loyalty"]) ~ div button:has-text("Create inbound secret")');
+  await page.locator('summary:has-text("Inbound webhook")').first().click().catch(() => null);
+  const shown = page.locator('[data-testid="inbound-secret"] code').first();
+  await shown.waitFor({ timeout: 10000 });
+  const rotatedSecret = (await shown.textContent())?.trim() ?? "";
+  if (!/^hx_[A-Za-z0-9_-]{32}$/.test(rotatedSecret)) throw new Error(`rotated secret not shown, got "${rotatedSecret}"`);
+  await submit(page, 'button:has-text("I\'ve copied it")');
+  if ((await page.locator('[data-testid="inbound-secret"]').count()) !== 0) throw new Error("secret still visible after hiding");
+  await expectText(page, "can't be shown again", "secret hidden");
   await shot(page, "x12-integrations");
   await page.fill('textarea[name="body"]', "Call in 30. Bring one win.");
   await submit(page, 'button:has-text("Push to passes")');
@@ -146,13 +160,59 @@ async function main() {
   await expectText(page, "Programs and passes", "coach programs card");
   await shot(page, "x13-coach");
 
-  // Inbound webhook: from a fresh context with no session cookie, exactly like GHL or Community Loyalty would call it
+  // Inbound webhooks: from a fresh context with no session cookie, exactly like GHL or Community Loyalty would call it.
+  // The secret is only accepted as a header (never in the URL) and only its hash is stored.
   const machine = await (await browser.newContext()).newPage();
-  const res = await machine.request.post(`${base}/api/webhooks/community-loyalty?secret=hx_demo_community_loyalty_secret`, { data: { event: "points.earned", email: "client@demo.helixos.app", points: 15, reason: "Referred a friend", id: "evt-smoke-1" } });
+  const res = await machine.request.post(`${base}/api/webhooks/community-loyalty`, { headers: { "x-helix-secret": rotatedSecret }, data: { event: "points.earned", email: "client@demo.helixos.app", points: 15, reason: "Referred a friend", id: "evt-smoke-1" } });
   if (!res.ok()) throw new Error(`webhook ${res.status()}`);
-  const bad = await machine.request.post(`${base}/api/webhooks/ghl?secret=wrong`, { data: {} });
+  const old = await machine.request.post(`${base}/api/webhooks/community-loyalty`, { headers: { "x-helix-secret": "hx_demo_community_loyalty_secret" }, data: { event: "points.earned", email: "client@demo.helixos.app", points: 15 } });
+  if (old.status() !== 401) throw new Error(`rotated-away secret must be refused, got ${old.status()}`);
+  const inUrl = await machine.request.post(`${base}/api/webhooks/community-loyalty?secret=hx_demo_community_loyalty_secret`, { data: { event: "points.earned", email: "client@demo.helixos.app", points: 15 } });
+  if (inUrl.status() !== 401) throw new Error(`webhook must refuse a secret in the query string, got ${inUrl.status()}`);
+  const bad = await machine.request.post(`${base}/api/webhooks/ghl`, { headers: { "x-helix-secret": "wrong" }, data: {} });
   if (bad.status() !== 401) throw new Error(`webhook should reject bad secret, got ${bad.status()}`);
+  // GoHighLevel marketplace signature (Ed25519 over the raw body). The dev server must run with GHL_WEBHOOK_PUBLIC_KEY=<SMOKE_GHL_PUBLIC_KEY>.
+  const signedBody = JSON.stringify({ type: "AppointmentCreate", locationId: "loc_maya", email: "client@demo.helixos.app", full_name: "Signed Lead", appointment: { startTime: "2030-01-02T17:00:00.000Z" } });
+  void SMOKE_GHL_PUBLIC_KEY;
+  const signature = sign(null, Buffer.from(signedBody), createPrivateKey(SMOKE_GHL_PRIVATE_KEY)).toString("base64");
+  const signed = await machine.request.post(`${base}/api/webhooks/ghl`, { headers: { "x-ghl-signature": signature, "content-type": "application/json" }, data: signedBody });
+  if (signed.status() === 401 && /not configured/.test(await signed.text())) console.log("  (skipped signed-webhook check: start the dev server with GHL_WEBHOOK_PUBLIC_KEY to cover it)");
+  else if (!signed.ok()) throw new Error(`signed webhook ${signed.status()} ${await signed.text()}`);
+  else {
+    const tampered = await machine.request.post(`${base}/api/webhooks/ghl`, { headers: { "x-ghl-signature": signature, "content-type": "application/json" }, data: signedBody.replace("Signed Lead", "Forged Lead") });
+    if (tampered.status() !== 401) throw new Error(`tampered signed webhook should be 401, got ${tampered.status()}`);
+    console.log("  signed webhook accepted, tampered body rejected");
+  }
   console.log("✓ webhooks");
+
+  // Per-client data export: the member's own, and the coach exporting a client (never the other way round)
+  const exp = await page.request.get(`${base}/api/export?format=json`);
+  if (!exp.ok()) throw new Error(`export ${exp.status()}`);
+  const dump = (await exp.json()) as Record<string, unknown[]>;
+  for (const k of ["profile", "leads", "content", "daily_logs", "points"]) if (!Array.isArray(dump[k])) throw new Error(`export missing ${k}`);
+  if (JSON.stringify(dump).includes("passwordHash") || JSON.stringify(dump).includes("manualToken")) throw new Error("export leaked a secret column");
+  const csv = await page.request.get(`${base}/api/export?format=csv&table=leads`);
+  if (!csv.ok() || !(csv.headers()["content-type"] ?? "").includes("text/csv")) throw new Error("csv export failed");
+  await page.goto(`${base}/coach`);
+  const clientExportHref = await page.locator('li:has-text("Maya") a[href^="/api/export?format=json&user="]').first().getAttribute("href");
+  if (!clientExportHref) throw new Error("coach page has no per-client export link");
+  const clientDump = (await (await page.request.get(`${base}${clientExportHref}`)).json()) as Record<string, unknown[]>;
+  if (!(clientDump.leads as unknown[]).length || !(clientDump.daily_logs as unknown[]).length) throw new Error("coach export of a client came back empty");
+  const clientUserId = new URL(clientExportHref, base).searchParams.get("user")!;
+  const coachDump = (await (await page.request.get(`${base}/api/export?format=json`)).json()) as { profile: { id: string }[] };
+  // As the client: own export works, exporting someone else is refused
+  const clientPage = await (await browser.newContext()).newPage();
+  await clientPage.goto(`${base}/login`);
+  await clientPage.click('button:has-text("As a client")');
+  await clientPage.waitForURL(/\/today/);
+  const ownExport = await clientPage.request.get(`${base}/api/export?format=json`);
+  const own = (await ownExport.json()) as { profile: { id: string }[]; leads: unknown[] };
+  if (own.profile[0]?.id !== clientUserId || !own.leads.length) throw new Error("client's own export is wrong");
+  const forbidden = await clientPage.request.get(`${base}/api/export?format=json&user=${coachDump.profile[0].id}`);
+  if (forbidden.status() !== 403) throw new Error(`client exporting another member must be 403, got ${forbidden.status()}`);
+  const anon = await machine.request.get(`${base}/api/export?format=json`, { maxRedirects: 0 });
+  if (anon.status() !== 401 && !(anon.status() >= 300 && anon.status() < 400 && /\/login/.test(anon.headers().location ?? ""))) throw new Error(`anonymous export must be refused, got ${anon.status()}`);
+  console.log(`✓ export (coach: own + client with ${(clientDump.leads as unknown[]).length} leads; client: own only; anonymous refused)`);
 
   await browser.close();
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);

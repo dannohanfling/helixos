@@ -894,12 +894,13 @@ export const integrations = sqliteTable(
     provider: text("provider", { enum: PROVIDERS }).notNull(),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
     config: text("config", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
-    inboundSecret: text("inbound_secret"),
+    /** sha256 of the inbound webhook secret. The secret itself is shown once when created and never stored. */
+    inboundSecretHash: text("inbound_secret_hash"),
     lastSyncAt: text("last_sync_at"),
     lastError: text("last_error"),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("integrations_ws_provider").on(t.workspaceId, t.provider)],
+  (t) => [uniqueIndex("integrations_ws_provider").on(t.workspaceId, t.provider), index("integrations_inbound_hash").on(t.inboundSecretHash)],
 );
 
 export const syncEvents = sqliteTable(

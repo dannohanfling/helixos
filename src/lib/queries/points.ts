@@ -6,19 +6,20 @@ import { background, pushPoints } from "@/lib/integrations";
 
 export type PointType = (typeof POINT_TYPES)[number];
 
-export async function totalPoints(userId: string): Promise<number> {
+/** Every read here is scoped to (workspace, user): a user can belong to more than one workspace and points never cross over. */
+export async function totalPoints(workspaceId: string, userId: string): Promise<number> {
   const [row] = await db
     .select({ total: sql<number>`coalesce(sum(${schema.pointsLedger.points}), 0)` })
     .from(schema.pointsLedger)
-    .where(eq(schema.pointsLedger.userId, userId));
+    .where(and(eq(schema.pointsLedger.workspaceId, workspaceId), eq(schema.pointsLedger.userId, userId)));
   return Number(row?.total ?? 0);
 }
 
-export async function pointsSince(userId: string, sinceIso: string): Promise<number> {
+export async function pointsSince(workspaceId: string, userId: string, sinceIso: string): Promise<number> {
   const [row] = await db
     .select({ total: sql<number>`coalesce(sum(${schema.pointsLedger.points}), 0)` })
     .from(schema.pointsLedger)
-    .where(and(eq(schema.pointsLedger.userId, userId), sql`${schema.pointsLedger.createdAt} >= ${sinceIso}`));
+    .where(and(eq(schema.pointsLedger.workspaceId, workspaceId), eq(schema.pointsLedger.userId, userId), sql`${schema.pointsLedger.createdAt} >= ${sinceIso}`));
   return Number(row?.total ?? 0);
 }
 
@@ -40,9 +41,9 @@ export async function award(
   return inserted;
 }
 
-export async function recentLedger(userId: string, limit = 30) {
+export async function recentLedger(workspaceId: string, userId: string, limit = 30) {
   return db.query.pointsLedger.findMany({
-    where: eq(schema.pointsLedger.userId, userId),
+    where: and(eq(schema.pointsLedger.workspaceId, workspaceId), eq(schema.pointsLedger.userId, userId)),
     orderBy: desc(schema.pointsLedger.createdAt),
     limit,
   });

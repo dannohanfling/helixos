@@ -11,6 +11,9 @@ import { open } from "@/lib/crypto";
 
 export type Provider = (typeof PROVIDERS)[number];
 
+/** Cookie that carries a just-created inbound webhook secret to the Integrations page, once (10 minutes). */
+export const INBOUND_SECRET_COOKIE = "helix_inbound_secret";
+
 export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb: string; fields: { key: string; label: string; hint?: string; secret?: boolean }[] }> = {
   community_loyalty: {
     name: "Community Loyalty",

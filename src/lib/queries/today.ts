@@ -33,13 +33,14 @@ export async function currentCurriculumDay(userId: string) {
 export async function todayData(v: Viewer) {
   const { user, today, hour } = v;
   const userId = user.id;
+  const workspaceId = v.workspace.id;
   const tomorrow = addDays(today, 1);
 
   const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal] =
     await Promise.all([
-      logFor(userId, today),
-      streakFor(userId, today),
-      totalPoints(userId),
+      logFor(workspaceId, userId, today),
+      streakFor(workspaceId, userId, today),
+      totalPoints(workspaceId, userId),
       db.query.tasks.findMany({
         where: and(eq(schema.tasks.userId, userId), eq(schema.tasks.focusDate, today)),
         orderBy: [asc(schema.tasks.status), asc(schema.tasks.createdAt)],

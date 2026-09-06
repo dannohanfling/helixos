@@ -1,4 +1,14 @@
-/** Inbound webhook handling shared by the Community Loyalty and GoHighLevel routes. */
+/**
+ * Inbound webhook handling shared by the Community Loyalty and GoHighLevel routes.
+ *
+ * Two ways a call proves itself:
+ *  1. `x-helix-secret` header: the per-workspace inbound secret from the Integrations page. Only its sha256 is stored, so the
+ *     row is found by hashing what was presented. This is what a GoHighLevel workflow "Webhook" action or Community Loyalty sends
+ *     (they can only attach static headers). The secret is never accepted in the query string: URLs end up in hosting and CDN logs.
+ *  2. `x-ghl-signature` header: GoHighLevel's Ed25519 signature over the raw body, sent for marketplace-app webhooks. Verified with
+ *     GHL_WEBHOOK_PUBLIC_KEY (from the HighLevel developer portal). The sub-account is identified by the payload's `locationId`,
+ *     matched against a member's connected sub-account. Nothing secret is stored on our side for this path.
+ */
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
@@ -6,7 +16,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { logSync, type Provider } from "@/lib/integrations";
 import { award } from "@/lib/queries/points";
-import { safeEqual } from "@/lib/crypto";
+import { hashSecret, verifyEd25519 } from "@/lib/crypto";
 
 type Body = Record<string, unknown>;
 const s = (v: unknown) => (typeof v === "string" ? v : typeof v === "number" ? String(v) : "");
@@ -23,24 +33,53 @@ async function memberByEmailOrSerial(workspaceId: string, email: string, serial:
   return undefined;
 }
 
+type Auth = { integ: schema.Integration; via: "secret" | "signature"; member?: schema.Membership };
+
+/** Resolves the workspace integration the call is for, or a 401 response. */
+async function authenticate(provider: Provider, request: Request, raw: string, body: Body): Promise<Auth | Response> {
+  const secret = request.headers.get("x-helix-secret") ?? "";
+  if (secret) {
+    const integ = await db.query.integrations.findFirst({ where: and(eq(schema.integrations.provider, provider), eq(schema.integrations.inboundSecretHash, hashSecret(secret))) });
+    if (!integ) return NextResponse.json({ error: "unknown secret" }, { status: 401 });
+    return { integ, via: "secret" };
+  }
+  const signature = request.headers.get("x-ghl-signature") ?? "";
+  if (provider === "gohighlevel" && signature) {
+    const publicKey = process.env.GHL_WEBHOOK_PUBLIC_KEY ?? "";
+    if (!publicKey) return NextResponse.json({ error: "signature verification is not configured (GHL_WEBHOOK_PUBLIC_KEY)" }, { status: 401 });
+    if (!verifyEd25519(raw, signature, publicKey)) return NextResponse.json({ error: "bad signature" }, { status: 401 });
+    const locationId = s(body.locationId);
+    const conn = locationId ? await db.query.socialConnections.findFirst({ where: and(eq(schema.socialConnections.provider, "gohighlevel"), eq(schema.socialConnections.locationId, locationId)) }) : undefined;
+    if (!conn) return NextResponse.json({ error: "no member has connected this location" }, { status: 401 });
+    const [integ, member] = await Promise.all([
+      db.query.integrations.findFirst({ where: and(eq(schema.integrations.workspaceId, conn.workspaceId), eq(schema.integrations.provider, provider)) }),
+      db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, conn.workspaceId), eq(schema.memberships.userId, conn.userId)) }),
+    ]);
+    if (!integ || !member) return NextResponse.json({ error: "integration not set up for this workspace" }, { status: 401 });
+    return { integ, via: "signature", member };
+  }
+  if (new URL(request.url).searchParams.has("secret")) return NextResponse.json({ error: "send the secret as the x-helix-secret header, not in the URL" }, { status: 401 });
+  return NextResponse.json({ error: "missing x-helix-secret header" }, { status: 401 });
+}
+
 export async function handleInbound(provider: Provider, request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const secret = request.headers.get("x-helix-secret") ?? url.searchParams.get("secret") ?? "";
-  if (!secret) return NextResponse.json({ error: "missing secret" }, { status: 401 });
-  const integ = await db.query.integrations.findFirst({ where: and(eq(schema.integrations.provider, provider), eq(schema.integrations.inboundSecret, secret)) });
-  if (!integ?.inboundSecret || !safeEqual(integ.inboundSecret, secret)) return NextResponse.json({ error: "unknown secret" }, { status: 401 });
+  const raw = await request.text();
   let body: Body = {};
   try {
-    body = (await request.json()) as Body;
+    body = raw ? (JSON.parse(raw) as Body) : {};
   } catch {
     body = {};
   }
+  if (!body || typeof body !== "object" || Array.isArray(body)) body = {};
+  const auth = await authenticate(provider, request, raw, body);
+  if (auth instanceof Response) return auth;
+  const { integ } = auth;
   const event = s(body.event ?? body.type ?? body.eventType) || "unknown";
   const email = s(body.email ?? (body.contact as Body | undefined)?.email).toLowerCase();
   const serial = s(body.serial ?? body.passSerial);
-  const member = await memberByEmailOrSerial(integ.workspaceId, email, serial);
+  const member = auth.member ?? (await memberByEmailOrSerial(integ.workspaceId, email, serial));
   const ctx = member ? { workspaceId: integ.workspaceId, userId: member.userId } : null;
-  let note = member ? "Matched member" : "No matching member";
+  let note = member ? `Matched member (${auth.via})` : "No matching member";
 
   if (provider === "community_loyalty") {
     if (member && /pass\.(installed|added)/.test(event)) {
@@ -53,12 +92,14 @@ export async function handleInbound(provider: Provider, request: Request): Promi
     }
   } else if (provider === "gohighlevel") {
     if (ctx && /contact|opportunity|appointment/i.test(event)) {
+      const appt = (body.appointment as Body | undefined) ?? {};
       const name = s(body.full_name ?? body.name ?? `${s(body.first_name ?? body.firstName)} ${s(body.last_name ?? body.lastName)}`).trim();
+      const callAt = s(body.startTime ?? body.appointmentTime ?? appt.startTime);
       if (name) {
-        const existing = await db.query.contacts.findFirst({ where: and(eq(schema.contacts.userId, ctx.userId), eq(schema.contacts.name, name)) });
+        const existing = await db.query.contacts.findFirst({ where: and(eq(schema.contacts.workspaceId, ctx.workspaceId), eq(schema.contacts.userId, ctx.userId), eq(schema.contacts.name, name)) });
         const stage = /appointment/i.test(event) ? ("call_booked" as const) : ("new" as const);
-        if (existing) await db.update(schema.contacts).set({ stage: existing.stage === "client" ? "client" : stage, callAt: s(body.startTime ?? body.appointmentTime) || existing.callAt }).where(eq(schema.contacts.id, existing.id));
-        else await db.insert(schema.contacts).values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, name, platform: "Other", stage, source: "GoHighLevel", callAt: s(body.startTime ?? body.appointmentTime) || null });
+        if (existing) await db.update(schema.contacts).set({ stage: existing.stage === "client" ? "client" : stage, callAt: callAt || existing.callAt }).where(eq(schema.contacts.id, existing.id));
+        else await db.insert(schema.contacts).values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, name, platform: "Other", stage, source: "GoHighLevel", callAt: callAt || null });
         note = existing ? `Updated contact ${name}` : `Created contact ${name}`;
       }
     }

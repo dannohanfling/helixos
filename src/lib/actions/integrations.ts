@@ -6,9 +6,18 @@ import { PROVIDERS } from "@/db/schema";
 import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { PROVIDER_META, getIntegration, logSync, pushPassMessage, resolveApiUrl, type Provider } from "@/lib/integrations";
-import { open, randomSecret, seal } from "@/lib/crypto";
+import { INBOUND_SECRET_COOKIE, PROVIDER_META, getIntegration, logSync, pushPassMessage, resolveApiUrl, type Provider } from "@/lib/integrations";
+import { cookies } from "next/headers";
+import { hashSecret, open, randomSecret, seal } from "@/lib/crypto";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
+
+/** The inbound secret is stored only as a hash. The plaintext rides in a short-lived cookie so the Integrations page can show it once. */
+async function issueInboundSecret(provider: Provider): Promise<string> {
+  const secret = randomSecret();
+  const jar = await cookies();
+  jar.set(INBOUND_SECRET_COOKIE, JSON.stringify({ provider, secret }), { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/integrations", maxAge: 600 });
+  return hashSecret(secret);
+}
 
 export async function saveIntegrationAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
@@ -23,7 +32,7 @@ export async function saveIntegrationAction(formData: FormData): Promise<void> {
   }
   const enabled = str(formData, "enabled") === "1";
   if (existing) await db.update(schema.integrations).set({ enabled, config, lastError: null }).where(eq(schema.integrations.id, existing.id));
-  else await db.insert(schema.integrations).values({ id: newId(), workspaceId: coach.workspace.id, provider, enabled, config, inboundSecret: randomSecret() });
+  else await db.insert(schema.integrations).values({ id: newId(), workspaceId: coach.workspace.id, provider, enabled, config, inboundSecretHash: await issueInboundSecret(provider) });
   refresh();
 }
 
@@ -32,8 +41,16 @@ export async function rotateInboundSecretAction(formData: FormData): Promise<voi
   const provider = PROVIDERS.find((p) => p === str(formData, "provider"));
   if (!provider) return;
   const existing = await getIntegration(coach.workspace.id, provider);
-  if (existing) await db.update(schema.integrations).set({ inboundSecret: randomSecret() }).where(eq(schema.integrations.id, existing.id));
-  else await db.insert(schema.integrations).values({ id: newId(), workspaceId: coach.workspace.id, provider, enabled: false, config: {}, inboundSecret: randomSecret() });
+  const inboundSecretHash = await issueInboundSecret(provider);
+  if (existing) await db.update(schema.integrations).set({ inboundSecretHash }).where(eq(schema.integrations.id, existing.id));
+  else await db.insert(schema.integrations).values({ id: newId(), workspaceId: coach.workspace.id, provider, enabled: false, config: {}, inboundSecretHash });
+  refresh();
+}
+
+/** "I've copied it": drops the one-time cookie so the secret is gone from the page. */
+export async function hideInboundSecretAction(): Promise<void> {
+  await requireCoach();
+  (await cookies()).delete({ name: INBOUND_SECRET_COOKIE, path: "/integrations" });
   refresh();
 }
 

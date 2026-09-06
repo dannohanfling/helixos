@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await requireViewer();
-  const [points, streak] = await Promise.all([totalPoints(viewer.user.id), streakFor(viewer.user.id, viewer.today)]);
+  const [points, streak] = await Promise.all([totalPoints(viewer.workspace.id, viewer.user.id), streakFor(viewer.workspace.id, viewer.user.id, viewer.today)]);
   return (
     <AppShell viewer={viewer} points={points} streak={streak.running}>
       {children}

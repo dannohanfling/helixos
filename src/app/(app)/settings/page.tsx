@@ -59,6 +59,16 @@ export default async function SettingsPage() {
             </button>
           </form>
         </Card>
+        <Card title="Your data">
+          <p className="text-sm text-ink-2">Everything you&apos;ve put into HelixOS belongs to you. Download it any time; it&apos;s the same file you&apos;d get when you leave.</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-sm">
+            <a className="btn btn-primary btn-sm" href="/api/export?format=json" download>Download everything (JSON)</a>
+            <a className="btn btn-ghost btn-sm" href="/api/export?format=csv&table=leads" download>Leads (CSV)</a>
+            <a className="btn btn-ghost btn-sm" href="/api/export?format=csv&table=content" download>Content (CSV)</a>
+            <a className="btn btn-ghost btn-sm" href="/api/export?format=csv&table=client_records" download>Client records (CSV)</a>
+          </div>
+          <p className="mt-2 text-xs text-ink-3">Passwords and your GoHighLevel token are never included.</p>
+        </Card>
         <Card title="Your one goal">
           <form action={updateGoalAction} className="space-y-3">
             <Field label="Goal">

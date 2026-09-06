@@ -53,7 +53,7 @@ webinar sections start from the worked example and repurposing uses deterministi
 ```bash
 cp .env.example .env        # set SESSION_SECRET
 npm install
-npm run db:seed             # creates data/helixos.db, loads the library, and a demo workspace
+npm run db:seed             # creates data/helixos.db, loads the library, and a demo workspace (refuses on production / remote databases, or once a real workspace exists)
 npm run dev                 # http://localhost:3000
 ```
 
@@ -71,11 +71,12 @@ npm run lint
 npm test                    # engine unit tests (streaks, tiers, points, next best action)
 npx tsx scripts/smoke.ts          # Playwright walkthrough of the daily loop; writes ./screenshots
 npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, clients, community pass
-npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks
+npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks (header + Ed25519 signature), data export
 npx tsx scripts/smoke-composer.ts  # Composer, per-channel previews, one-click schedule everywhere, collapsible nav
 npx tsx scripts/smoke-library.ts   # Library browse, search, use in composer, save to library, coach share
 npx tsx scripts/smoke-auth.ts     # /setup token gate + 404s, forgot → reset with session invalidation, change password (needs a current `next build`)
 npx tsx scripts/smoke-ghl.ts       # Client's own Private Integration token → 401 / 403 / wrong-location reasons → accounts → channel map → schedule → status sync, against scripts/mock-ghl.ts
+npx tsx scripts/smoke-headers.ts     # Every page as client and coach under the Content Security Policy: no violations, no page errors
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
 
@@ -117,7 +118,9 @@ Per-client HelixOS bases can be pointed at from **Settings → Workspace → Air
 
 Accounts: `/forgot` emails a single-use reset link (60 minutes, token stored as a sha256 hash, Resend required in production); `/reset/[token]` sets the new password and signs every other session out; Settings has change-password with the current password required. Both routes are rate-limited per IP and per email.
 
-Security notes: `SESSION_SECRET` is required in production (the app refuses to start sessions without it). Per-client GoHighLevel Private Integration tokens and the Community Loyalty key are encrypted at rest with AES-256-GCM under `ENCRYPTION_KEY` (falls back to `SESSION_SECRET`). There is no agency-level GoHighLevel credential anywhere: a client's token can only reach their own sub-account, so no member can publish or read as another. Integrations may only call approved HTTPS hosts (`services.leadconnectorhq.com`, `api.communityloyalty.app`, plus `INTEGRATION_URL_ALLOWLIST`). The cron endpoint refuses every call when `CRON_SECRET` is unset. Login is limited to 8 attempts per email and 30 per IP per 15 minutes; join to 20 per IP. Every export from `src/lib/actions` must be a `*Action` (ESLint enforces it) because "use server" exports are public endpoints. Inbound webhooks authenticate with their per-workspace secret and are exempt from the login redirect.
+Security notes: `SESSION_SECRET` is required in production (the app refuses to start sessions without it). Per-client GoHighLevel Private Integration tokens and the Community Loyalty key are encrypted at rest with AES-256-GCM under `ENCRYPTION_KEY` (falls back to `SESSION_SECRET`). There is no agency-level GoHighLevel credential anywhere: a client's token can only reach their own sub-account, so no member can publish or read as another. Integrations may only call approved HTTPS hosts (`services.leadconnectorhq.com`, `api.communityloyalty.app`, plus `INTEGRATION_URL_ALLOWLIST`). The cron endpoint refuses every call when `CRON_SECRET` is unset. Login is limited to 8 attempts per email and 30 per IP per 15 minutes; join to 20 per IP. Every export from `src/lib/actions` must be a `*Action` (ESLint enforces it) because "use server" exports are public endpoints. Inbound webhooks authenticate with the per-workspace secret in the `x-helix-secret` header (never the query string, which lands in hosting and CDN logs); only the secret's sha256 is stored and it is shown once when created. GoHighLevel marketplace-app webhooks are instead verified by their Ed25519 `x-ghl-signature` against `GHL_WEBHOOK_PUBLIC_KEY`, with the sub-account matched by `locationId`. Every response carries a Content Security Policy, HSTS, `Referrer-Policy` and `nosniff` (no frame-ancestors / X-Frame-Options, so the app can be embedded in GoHighLevel). Points, streaks, daily logs and coach roll-ups are scoped by workspace as well as user, so a user in two workspaces never sees data cross over. Library entries chosen in a form are re-checked against the member's scope before they are read.
+
+Data export: every member can download everything they own from Settings → Your data (`/api/export?format=json`, or `format=csv&table=leads|content|client_records|…`); a coach can export a client from the Coach page for offboarding. Passwords, tokens and secret hashes are never included.
 
 ## Deploying
 

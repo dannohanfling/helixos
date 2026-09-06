@@ -71,6 +71,20 @@
       "when": 1788725482724,
       "tag": "0009_drop_agency_path",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788728244579,
+      "tag": "0010_inbound_secret_hash",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788728260853,
+      "tag": "0011_drop_plain_inbound_secret",
+      "breakpoints": true
     }
   ]
 }
