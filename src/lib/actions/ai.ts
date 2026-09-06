@@ -38,7 +38,7 @@ export async function saveAiKeyAction(formData: FormData): Promise<void> {
     id = newId();
     await db.insert(schema.aiCredentials).values({ id, workspaceId, userId, ...row });
   }
-  if (validated) await db.insert(schema.aiUsage).values({ id: newId(), workspaceId, userId, provider, model: validated.model, feature: "key_check", inputTokens: validated.inputTokens, outputTokens: validated.outputTokens, estimatedCostUsd: estimateCost(validated.model, validated.inputTokens, validated.outputTokens) });
+  if (validated) await db.insert(schema.aiUsage).values({ id: newId(), workspaceId, userId, provider, model: validated.model, feature: "key_check", inputTokens: validated.inputTokens, outputTokens: validated.outputTokens, estimatedCostUsd: estimateCost(validated.model, validated.inputTokens, validated.outputTokens) ?? 0 });
   refresh();
 }
 

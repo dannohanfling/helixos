@@ -66,6 +66,10 @@ async function main() {
     await expectText(page, "looks like an OpenAI key", "wrong provider reason");
     await connect(page, "openai", "sk-nobill");
     await expectText(page, "no billing set up", "openai no billing reason");
+    await connect(page, "openai", "sk-nomodel");
+    await expectText(page, "does not have access to the model gpt-5.6-sol", "openai model access reason");
+    await connect(page, "anthropic", "sk-ant-nomodel");
+    await expectText(page, "does not have access to the model claude-sonnet-5", "anthropic model access reason");
     await connect(page, "openai", "sk-good");
     await expectText(page, "connected · OpenAI · ····good", "openai connected");
     await connect(page, "anthropic", "sk-ant-good");
@@ -73,7 +77,7 @@ async function main() {
     if ((await page.locator('input[name="key"]').inputValue()) !== "") throw new Error("key field should be cleared after save");
     if (/sk-ant-good/.test(await page.content())) throw new Error("full key must never be shown again");
     await page.screenshot({ path: "screenshots/ai01-settings.png", fullPage: true });
-    console.log("✓ key validation: 401, no billing (both providers), wrong provider, connected; key never shown again");
+    console.log("✓ key validation: 401, no billing (both providers), no model access (both providers), wrong provider, connected; key never shown again");
 
     // A ✨ feature on the member's key: repurpose with AI, then usage appears
     await page.goto(`${base}/content`);

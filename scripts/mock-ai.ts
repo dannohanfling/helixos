@@ -33,6 +33,7 @@ createServer((req, res) => {
     })();
     if (url.startsWith("/v1/messages")) {
       const key = req.headers["x-api-key"] as string | undefined;
+      if (key === "sk-ant-nomodel") return json(404, { type: "error", error: { type: "not_found_error", message: `model: ${body.model}` } });
       if (key === "sk-ant-nobill") return json(400, { type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits." } });
       if (key !== "sk-ant-good") return json(401, { type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } });
       const user = String((body.messages as { content: string }[] | undefined)?.[0]?.content ?? "");
@@ -54,6 +55,7 @@ createServer((req, res) => {
     }
     if (url.startsWith("/v1/responses")) {
       const auth = (req.headers.authorization ?? "").replace("Bearer ", "");
+      if (auth === "sk-nomodel") return json(404, { error: { message: `The model \`${body.model}\` does not exist or you do not have access to it.`, type: "invalid_request_error", code: "model_not_found" } });
       if (auth === "sk-nobill") return json(429, { error: { message: "You exceeded your current quota, please check your plan and billing details.", type: "insufficient_quota", code: "insufficient_quota" } });
       if (auth !== "sk-good") return json(401, { error: { message: "Incorrect API key provided: sk-xxx.", type: "invalid_request_error", code: "invalid_api_key" } });
       const text = reply(String(body.instructions ?? ""), String(body.input ?? ""));

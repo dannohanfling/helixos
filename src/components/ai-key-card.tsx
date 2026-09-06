@@ -99,7 +99,7 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
             Today: {status.callsToday}/{status.exempt ? "no cap" : status.cap} calls.{" "}
             {status.blocked ? <b className="text-warn">Today&apos;s cap is reached; ✨ is paused until tomorrow. Your coach can lift it.</b> : status.exempt ? "Your coach lifted the daily cap for you." : "The daily cap protects you from a runaway loop spending your money; your coach can raise it."}
           </p>
-          <p className="text-[11px] text-ink-3">Costs are estimates from list prices and token counts. Your provider&apos;s dashboard is the bill.</p>
+          <p className="text-[11px] text-ink-3">Costs are estimates from list prices and token counts. Your provider&apos;s dashboard is the bill.{use.unknownModels.length ? ` A "—" means a call ran on a model with no listed price (${use.unknownModels.join(", ")}), so its cost is unknown rather than guessed.` : ""}</p>
         </div>
       </div>
     </Card>

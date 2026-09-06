@@ -95,13 +95,14 @@ export async function draft(system: string, user: string, maxTokens = 4000, opts
   } catch (e) {
     const err = e as { status?: number; message?: string };
     // A key that stops working is marked so the pages stop offering ✨ and the member sees why on Settings.
-    if (err.status === 401 || err.status === 402 || err.status === 403) {
-      await db.update(schema.aiCredentials).set({ lastError: explainAiError(cred.provider, err.status, err.message ?? "") }).where(eq(schema.aiCredentials.id, cred.id));
+    const modelAccess = /does not exist or you do not have access|model_not_found|model.*not found/i.test(err.message ?? "") || (err.status === 404 && /model/i.test(err.message ?? ""));
+    if (err.status === 401 || err.status === 402 || err.status === 403 || modelAccess) {
+      await db.update(schema.aiCredentials).set({ lastError: explainAiError(cred.provider, err.status, err.message ?? "", model) }).where(eq(schema.aiCredentials.id, cred.id));
     }
     return null;
   }
   if (!r) return null;
-  await db.insert(schema.aiUsage).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, provider: cred.provider, model, feature, inputTokens: r.inputTokens, outputTokens: r.outputTokens, estimatedCostUsd: estimateCost(model, r.inputTokens, r.outputTokens) });
+  await db.insert(schema.aiUsage).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, provider: cred.provider, model, feature, inputTokens: r.inputTokens, outputTokens: r.outputTokens, estimatedCostUsd: estimateCost(model, r.inputTokens, r.outputTokens) ?? 0 });
   return r.text || null;
 }
 
@@ -119,7 +120,7 @@ export async function validateKey(provider: AiProvider, key: string): Promise<{ 
     return { ok: true, inputTokens: r.usage?.input_tokens ?? 0, outputTokens: r.usage?.output_tokens ?? 0, model };
   } catch (e) {
     const err = e as { status?: number; message?: string };
-    return { ok: false, reason: explainAiError(provider, err.status, err.message ?? String(e)) };
+    return { ok: false, reason: explainAiError(provider, err.status, err.message ?? String(e), model) };
   }
 }
 
