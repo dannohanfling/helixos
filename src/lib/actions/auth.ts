@@ -1,11 +1,12 @@
 "use server";
 
 import { demoLoginEnabled } from "@/lib/demo";
+import { allow, clientIp } from "@/lib/rate-limit";
 
 import { and, eq, or } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { db, ensureMigrated, schema } from "@/db";
+import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { clearSession, writeSession } from "@/lib/session";
@@ -16,9 +17,11 @@ export type AuthState = { error?: string } | undefined;
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 
 export async function loginAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  await ensureMigrated();
   const parsed = loginSchema.safeParse({ email: String(formData.get("email") ?? "").trim().toLowerCase(), password: formData.get("password") });
   if (!parsed.success) return { error: "Enter your email and password." };
+  const ip = await clientIp();
+  const [ipOk, emailOk] = await Promise.all([allow(`login:ip:${ip}`, 30, 15 * 60000), allow(`login:email:${parsed.data.email}`, 8, 15 * 60000)]);
+  if (!ipOk || !emailOk) return { error: "Too many attempts. Wait 15 minutes and try again." };
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, parsed.data.email) });
   if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) return { error: "That email and password don't match." };
   const membership = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, user.id) });
@@ -37,7 +40,6 @@ const joinSchema = z.object({
 });
 
 export async function joinAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  await ensureMigrated();
   const parsed = joinSchema.safeParse({
     code: String(formData.get("code") ?? "").trim().toUpperCase(),
     name: String(formData.get("name") ?? "").trim(),
@@ -47,6 +49,8 @@ export async function joinAction(_prev: AuthState, formData: FormData): Promise<
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
   const { code, name, email, password, businessName } = parsed.data;
+  const ip = await clientIp();
+  if (!(await allow(`join:ip:${ip}`, 20, 15 * 60000))) return { error: "Too many attempts. Wait 15 minutes and try again." };
   const workspace = await db.query.workspaces.findFirst({
     where: or(eq(schema.workspaces.clientInviteCode, code), eq(schema.workspaces.coachInviteCode, code)),
   });
@@ -80,7 +84,6 @@ export async function logoutAction(): Promise<void> {
 /** Signs in as one of the demo accounts created by `npm run db:seed`. */
 export async function demoLoginAction(formData: FormData): Promise<void> {
   if (!demoLoginEnabled()) redirect("/login");
-  await ensureMigrated();
   const who = String(formData.get("who") ?? "client");
   const email = who === "coach" ? "coach@demo.helixos.app" : "client@demo.helixos.app";
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });

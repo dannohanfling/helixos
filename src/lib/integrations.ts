@@ -7,6 +7,7 @@ import { db, schema } from "@/db";
 import type { PROVIDERS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
+import { open } from "@/lib/crypto";
 
 export type Provider = (typeof PROVIDERS)[number];
 
@@ -38,6 +39,31 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
   },
 };
 
+const BUILT_IN_HOSTS: Record<Provider, string[]> = {
+  gohighlevel: ["services.leadconnectorhq.com"],
+  community_loyalty: ["api.communityloyalty.app"],
+};
+
+/**
+ * The API base an integration may call. The agency token travels with every request, so the host must be one we know:
+ * a built-in host, one listed in INTEGRATION_URL_ALLOWLIST, or (outside production only) anything, so tests can point at a mock.
+ */
+export function resolveApiUrl(provider: Provider, configured: string | null | undefined): { ok: true; base: string } | { ok: false; error: string } {
+  const raw = (configured ?? "").trim() || `https://${BUILT_IN_HOSTS[provider][0]}`;
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return { ok: false, error: `API URL isn't a valid URL: ${raw}` };
+  }
+  const extra = (process.env.INTEGRATION_URL_ALLOWLIST ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  const allowed = [...BUILT_IN_HOSTS[provider], ...extra];
+  const dev = process.env.NODE_ENV !== "production";
+  if (!dev && u.protocol !== "https:") return { ok: false, error: "API URL must use https" };
+  if (!dev && !allowed.includes(u.hostname.toLowerCase())) return { ok: false, error: `${u.hostname} isn't an approved API host. Add it to INTEGRATION_URL_ALLOWLIST if it's right.` };
+  return { ok: true, base: `${u.origin}${u.pathname.replace(/\/$/, "")}` };
+}
+
 export async function getIntegration(workspaceId: string, provider: Provider) {
   return db.query.integrations.findFirst({ where: and(eq(schema.integrations.workspaceId, workspaceId), eq(schema.integrations.provider, provider)) });
 }
@@ -66,13 +92,14 @@ async function send(workspaceId: string, userId: string | null, provider: Provid
     await logSync({ workspaceId, userId, provider, direction: "out", event, payload, status: "skipped", note: integ ? "Integration disabled" : "Integration not configured" });
     return false;
   }
-  const base = (integ.config.apiUrl ?? "").replace(/\/$/, "");
-  if (!base || !integ.config.apiKey) {
-    await logSync({ workspaceId, userId, provider, direction: "out", event, payload, status: "skipped", note: "Missing API URL or key" });
+  const target = resolveApiUrl(provider, integ.config.apiUrl);
+  const apiKey = open(integ.config.apiKey);
+  if (!target.ok || !apiKey) {
+    await logSync({ workspaceId, userId, provider, direction: "out", event, payload, status: "skipped", note: target.ok ? "Missing API key" : target.error });
     return false;
   }
-  const headers: Record<string, string> = provider === "gohighlevel" ? { Authorization: `Bearer ${integ.config.apiKey}`, Version: "2021-07-28" } : { Authorization: `Bearer ${integ.config.apiKey}` };
-  const r = await post(`${base}${path}`, payload, headers);
+  const headers: Record<string, string> = provider === "gohighlevel" ? { Authorization: `Bearer ${apiKey}`, Version: "2021-07-28" } : { Authorization: `Bearer ${apiKey}` };
+  const r = await post(`${target.base}${path}`, payload, headers);
   await logSync({ workspaceId, userId, provider, direction: "out", event, payload, status: r.ok ? "sent" : "failed", note: r.note });
   await db.update(schema.integrations).set(r.ok ? { lastSyncAt: nowIso(), lastError: null } : { lastError: r.note }).where(eq(schema.integrations.id, integ.id));
   return r.ok;

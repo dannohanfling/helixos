@@ -1,13 +1,13 @@
 "use server";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { CLIENT_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { addDays, nowIso } from "@/lib/dates";
 import { background, pushContact } from "@/lib/integrations";
-import { ctx, num, opt, refresh, str } from "./common";
+import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 async function own(id: string, userId: string) {
   const c = await db.query.clientRecords.findFirst({ where: and(eq(schema.clientRecords.id, id), eq(schema.clientRecords.userId, userId)) });
@@ -161,6 +161,3 @@ export async function updatePassAction(formData: FormData): Promise<void> {
   refresh();
 }
 
-export async function recentMemberPoints(userId: string, limit = 20) {
-  return db.query.memberPoints.findMany({ where: eq(schema.memberPoints.userId, userId), orderBy: desc(schema.memberPoints.createdAt), limit });
-}

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { db, ensureMigrated, schema } from "@/db";
+import { db, schema } from "@/db";
 import { readSession } from "@/lib/session";
 import { hourInTz, todayInTz } from "@/lib/dates";
 
@@ -16,7 +16,6 @@ export type Viewer = {
 
 /** Resolves the signed-in viewer once per request. */
 export const getViewer = cache(async (): Promise<Viewer | null> => {
-  await ensureMigrated();
   const session = await readSession();
   if (!session) return null;
   const membership = await db.query.memberships.findFirst({

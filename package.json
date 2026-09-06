@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run db:migrate && next dev",
     "build": "next build",
+    "vercel-build": "npm run db:migrate && next build",
     "start": "next start",
+    "db:migrate": "tsx --tsconfig tsconfig.json scripts/migrate.ts",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:seed": "tsx --tsconfig tsconfig.json src/db/seed.ts",

@@ -6,7 +6,7 @@ import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { inviteCode } from "@/lib/ids";
 import { totalPoints } from "@/lib/queries/points";
-import { ctx, num, opt, refresh, str } from "./common";
+import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function updateProfileAction(formData: FormData): Promise<void> {
   const { v, userId } = await ctx();

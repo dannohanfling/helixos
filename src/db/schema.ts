@@ -980,6 +980,13 @@ export const libraryPosts = sqliteTable(
 
 export type LibraryPost = typeof libraryPosts.$inferSelect;
 
+/** Fixed-window counters for login and join attempts. */
+export const rateLimits = sqliteTable("rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  windowStart: integer("window_start").notNull().default(0),
+});
+
 export type Principle = typeof principles.$inferSelect;
 export type Proof = typeof proofs.$inferSelect;
 export type Group = typeof groups.$inferSelect;

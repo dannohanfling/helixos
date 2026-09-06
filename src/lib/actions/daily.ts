@@ -8,7 +8,7 @@ import { POINTS, closeActivityPoints } from "@/lib/engine/points";
 import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { closedDates } from "@/lib/queries/daily";
 import { award } from "@/lib/queries/points";
-import { ctx, num, opt, refresh, str } from "./common";
+import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 async function upsertLog(workspaceId: string, userId: string, date: string) {
   const existing = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, userId), eq(schema.dailyLogs.date, date)) });

@@ -6,15 +6,9 @@ import { PROVIDERS } from "@/db/schema";
 import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { PROVIDER_META, getIntegration, logSync, pushPassMessage, type Provider } from "@/lib/integrations";
-import { ctx, opt, refresh, str } from "./common";
-
-function randomSecret(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let s = "hx_";
-  for (let i = 0; i < 28; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
+import { PROVIDER_META, getIntegration, logSync, pushPassMessage, resolveApiUrl, type Provider } from "@/lib/integrations";
+import { open, randomSecret, seal } from "@/lib/crypto";
+import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function saveIntegrationAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
@@ -25,7 +19,7 @@ export async function saveIntegrationAction(formData: FormData): Promise<void> {
   for (const f of PROVIDER_META[provider].fields) {
     const val = str(formData, f.key);
     if (f.secret && !val) continue; // keep the stored secret when the field is left blank
-    config[f.key] = val;
+    config[f.key] = f.secret ? (seal(val) ?? "") : val;
   }
   const enabled = str(formData, "enabled") === "1";
   if (existing) await db.update(schema.integrations).set({ enabled, config, lastError: null }).where(eq(schema.integrations.id, existing.id));
@@ -49,15 +43,16 @@ export async function testIntegrationAction(formData: FormData): Promise<void> {
   const provider = PROVIDERS.find((p) => p === str(formData, "provider")) as Provider | undefined;
   if (!provider) return;
   const integ = await getIntegration(coach.workspace.id, provider);
-  if (!integ?.enabled || !integ.config.apiUrl) {
-    await logSync({ workspaceId: coach.workspace.id, userId: coach.user.id, provider, direction: "out", event: "ping", status: "skipped", note: "Enable the integration and set an API URL first" });
+  const target = integ?.enabled ? resolveApiUrl(provider, integ.config.apiUrl) : { ok: false as const, error: "Enable the integration and set an API URL first" };
+  if (!integ || !target.ok) {
+    await logSync({ workspaceId: coach.workspace.id, userId: coach.user.id, provider, direction: "out", event: "ping", status: "skipped", note: target.ok ? "Enable the integration first" : target.error });
     refresh();
     return;
   }
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);
-    const res = await fetch(integ.config.apiUrl, { method: "GET", headers: { Authorization: `Bearer ${integ.config.apiKey ?? ""}` }, signal: ctrl.signal });
+    const res = await fetch(target.base, { method: "GET", headers: { Authorization: `Bearer ${open(integ.config.apiKey) ?? ""}` }, signal: ctrl.signal });
     clearTimeout(t);
     await logSync({ workspaceId: coach.workspace.id, userId: coach.user.id, provider, direction: "out", event: "ping", status: res.ok ? "sent" : "failed", note: `${res.status} ${res.statusText}` });
     await db.update(schema.integrations).set(res.ok ? { lastSyncAt: nowIso(), lastError: null } : { lastError: `${res.status} ${res.statusText}` }).where(eq(schema.integrations.id, integ.id));

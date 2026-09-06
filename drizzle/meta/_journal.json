@@ -50,6 +50,13 @@
       "when": 1788720363496,
       "tag": "0006_coach_assigned",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788721580034,
+      "tag": "0007_rate_limits",
+      "breakpoints": true
     }
   ]
 }

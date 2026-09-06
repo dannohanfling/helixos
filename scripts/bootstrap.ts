@@ -8,7 +8,7 @@
 import { eq } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "@/db";
 import { seedLibrary } from "@/db/seed";
-import { newId } from "@/lib/ids";
+import { inviteCode, newId } from "@/lib/ids";
 import { hashPassword } from "@/lib/password";
 import { todayInTz } from "@/lib/dates";
 
@@ -21,13 +21,6 @@ function arg(name: string, fallback?: string): string {
     process.exit(1);
   }
   return v;
-}
-
-function code(len = 8): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }
 
 async function main() {
@@ -50,8 +43,8 @@ async function main() {
   }
   const existingUser = await db.query.users.findFirst({ where: eq(schema.users.email, coachEmail) });
   const wsId = newId();
-  const clientInviteCode = code();
-  const coachInviteCode = code();
+  const clientInviteCode = inviteCode();
+  const coachInviteCode = inviteCode();
   await db.insert(schema.workspaces).values({ id: wsId, name, slug, timezone, clientInviteCode, coachInviteCode, brandVoice: "Direct. Clear. Punchy. Heart-led, not fluffy. 4th-grade reading level. Short sentences." });
   const coachId = existingUser?.id ?? newId();
   if (!existingUser) await db.insert(schema.users).values({ id: coachId, email: coachEmail, name: coachName, passwordHash: await hashPassword(password), avatarEmoji: "🔱" });

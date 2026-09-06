@@ -12,15 +12,38 @@ declare global {
   var __helixMigrated: Promise<void> | undefined;
 }
 
-function create() {
+type Db = ReturnType<typeof drizzle<typeof schema>>;
+
+function create(): Db {
   const client = createClient({ url, authToken });
   return drizzle(client, { schema });
 }
 
-export const db = globalThis.__helixDb ?? create();
-if (process.env.NODE_ENV !== "production") globalThis.__helixDb = db;
+/** The real client is created on first use, so importing this module (for example while Next collects build data) never opens a connection. */
+function lazy(): Db {
+  let real: Db | undefined;
+  const get = () => {
+    if (!real) {
+      real = globalThis.__helixDb ?? create();
+      if (process.env.NODE_ENV !== "production") globalThis.__helixDb = real;
+    }
+    return real;
+  };
+  return new Proxy({} as Db, {
+    get(_t, prop) {
+      const target = get() as unknown as Record<string | symbol, unknown>;
+      const v = target[prop];
+      return typeof v === "function" ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+    },
+  });
+}
 
-/** Applies pending migrations once per process. Safe to call from any request. */
+export const db: Db = lazy();
+
+/**
+ * Applies pending migrations. Only for scripts (npm run db:migrate, db:seed, db:bootstrap), never from a request handler:
+ * calling this during a request means Next's build-time prerender runs it too, in parallel workers, against production.
+ */
 export function ensureMigrated(): Promise<void> {
   if (!globalThis.__helixMigrated) {
     globalThis.__helixMigrated = migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") }).catch((err) => {

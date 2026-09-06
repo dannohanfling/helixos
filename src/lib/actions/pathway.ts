@@ -6,7 +6,7 @@ import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { award } from "@/lib/queries/points";
-import { ctx, opt, refresh, str } from "./common";
+import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function submitPathwayTaskAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();

@@ -1,11 +1,12 @@
 /** Inbound webhook handling shared by the Community Loyalty and GoHighLevel routes. */
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { db, ensureMigrated, schema } from "@/db";
+import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { logSync, type Provider } from "@/lib/integrations";
 import { award } from "@/lib/queries/points";
+import { safeEqual } from "@/lib/crypto";
 
 type Body = Record<string, unknown>;
 const s = (v: unknown) => (typeof v === "string" ? v : typeof v === "number" ? String(v) : "");
@@ -23,12 +24,11 @@ async function memberByEmailOrSerial(workspaceId: string, email: string, serial:
 }
 
 export async function handleInbound(provider: Provider, request: Request): Promise<Response> {
-  await ensureMigrated();
   const url = new URL(request.url);
   const secret = request.headers.get("x-helix-secret") ?? url.searchParams.get("secret") ?? "";
   if (!secret) return NextResponse.json({ error: "missing secret" }, { status: 401 });
   const integ = await db.query.integrations.findFirst({ where: and(eq(schema.integrations.provider, provider), eq(schema.integrations.inboundSecret, secret)) });
-  if (!integ) return NextResponse.json({ error: "unknown secret" }, { status: 401 });
+  if (!integ?.inboundSecret || !safeEqual(integ.inboundSecret, secret)) return NextResponse.json({ error: "unknown secret" }, { status: 401 });
   let body: Body = {};
   try {
     body = (await request.json()) as Body;

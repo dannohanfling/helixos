@@ -10,7 +10,8 @@ import { db, schema } from "@/db";
 import type { SocialAccount, SocialConnection } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { getIntegration, logSync } from "@/lib/integrations";
+import { getIntegration, logSync, resolveApiUrl } from "@/lib/integrations";
+import { open, seal } from "@/lib/crypto";
 import { autoMap } from "@/lib/engine/ghl-map";
 
 const VERSION = "2021-07-28";
@@ -47,18 +48,21 @@ export async function connectionFor(userId: string): Promise<SocialConnection | 
 /** A usable location token: the client's own private token, a cached minted one, or a fresh mint from the agency token. */
 export async function locationToken(conn: SocialConnection): Promise<GhlResult<{ token: string; base: string }>> {
   const integ = await getIntegration(conn.workspaceId, "gohighlevel");
-  const base = integ?.config.apiUrl || "https://services.leadconnectorhq.com";
-  if (conn.manualToken) return { ok: true, data: { token: conn.manualToken, base } };
+  const target = resolveApiUrl("gohighlevel", integ?.config.apiUrl);
+  if (!target.ok) return target;
+  const base = target.base;
+  if (conn.manualToken) return { ok: true, data: { token: open(conn.manualToken) ?? "", base } };
   // The agency token can reach every sub-account under the agency. It is only used for a location the coach assigned to this member.
   if (!conn.coachAssigned) return { ok: false, error: "Ask your coach to assign your sub-account on Integrations, or paste your own private integration token" };
-  if (conn.accessToken && conn.tokenExpiresAt && new Date(conn.tokenExpiresAt).getTime() - Date.now() > 5 * 60000) return { ok: true, data: { token: conn.accessToken, base } };
+  if (conn.accessToken && conn.tokenExpiresAt && new Date(conn.tokenExpiresAt).getTime() - Date.now() > 5 * 60000) return { ok: true, data: { token: open(conn.accessToken) ?? "", base } };
   if (!integ?.enabled) return { ok: false, error: "GoHighLevel is turned off on the Integrations page" };
-  if (!integ.config.apiKey || !integ.config.companyId) return { ok: false, error: "Agency token or company ID missing on the Integrations page" };
+  const agencyKey = open(integ.config.apiKey);
+  if (!agencyKey || !integ.config.companyId) return { ok: false, error: "Agency token or company ID missing on the Integrations page" };
   const body = new URLSearchParams({ companyId: integ.config.companyId, locationId: conn.locationId });
-  const r = await call<{ access_token: string; expires_in: number }>(base, integ.config.apiKey, "/oauth/locationToken", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body });
+  const r = await call<{ access_token: string; expires_in: number }>(base, agencyKey, "/oauth/locationToken", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body });
   if (!r.ok) return r;
   const expires = new Date(Date.now() + Math.max(600, Number(r.data.expires_in || 86400) - 60) * 1000).toISOString();
-  await db.update(schema.socialConnections).set({ accessToken: r.data.access_token, tokenExpiresAt: expires, lastError: null }).where(eq(schema.socialConnections.id, conn.id));
+  await db.update(schema.socialConnections).set({ accessToken: seal(r.data.access_token), tokenExpiresAt: expires, lastError: null }).where(eq(schema.socialConnections.id, conn.id));
   return { ok: true, data: { token: r.data.access_token, base } };
 }
 
@@ -125,7 +129,7 @@ export async function getPost(conn: SocialConnection, id: string): Promise<GhlRe
  */
 export async function upsertConnection(input: { workspaceId: string; userId: string; locationId: string; ghlUserId: string | null; manualToken: string | null; byCoach: boolean }): Promise<GhlResult<SocialConnection>> {
   const existing = await connectionFor(input.userId);
-  const token = input.manualToken ?? existing?.manualToken ?? null;
+  const token = input.manualToken ? seal(input.manualToken) : (existing?.manualToken ?? null);
   let locationId = input.locationId;
   let coachAssigned = existing?.coachAssigned ?? false;
   if (input.byCoach) {

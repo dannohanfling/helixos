@@ -9,7 +9,7 @@ import { nowIso } from "@/lib/dates";
 import { VOICE, draft } from "@/lib/ai";
 import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, readinessScore } from "@/lib/engine/webinar";
 import { award } from "@/lib/queries/points";
-import { ctx, num, opt, refresh, str } from "./common";
+import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 async function own(webinarId: string, userId: string) {
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, webinarId), eq(schema.webinars.userId, userId)) });

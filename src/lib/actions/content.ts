@@ -7,7 +7,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
-import { ctx, num, opt, refresh, str } from "./common";
+import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function createContentAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx();

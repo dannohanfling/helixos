@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { ensureMigrated } from "@/db";
 import { runReminders } from "@/lib/reminders";
+import { safeEqual } from "@/lib/crypto";
 
 /**
  * Hourly cron: GET /api/cron/reminders with `Authorization: Bearer $CRON_SECRET`.
  * Optional `?force=morning|evening` sends regardless of the hour (useful for testing).
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
+  const secret = process.env.CRON_SECRET ?? "";
   const auth = request.headers.get("authorization") ?? "";
-  if (secret && auth !== `Bearer ${secret}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  await ensureMigrated();
+  // No secret configured means nobody may call this, not everybody.
+  if (!secret || !safeEqual(auth, `Bearer ${secret}`)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const url = new URL(request.url);
   const force = url.searchParams.get("force");
   const results = await runReminders(new Date(), force === "morning" || force === "evening" ? force : undefined);

@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { award } from "@/lib/queries/points";
-import { ctx, num, opt, refresh, str } from "./common";
+import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function completeLessonAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();

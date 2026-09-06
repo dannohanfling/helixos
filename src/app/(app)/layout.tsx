@@ -4,6 +4,9 @@ import { requireViewer } from "@/lib/auth";
 import { streakFor } from "@/lib/queries/daily";
 import { totalPoints } from "@/lib/queries/points";
 
+// Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await requireViewer();
   const [points, streak] = await Promise.all([totalPoints(viewer.user.id), streakFor(viewer.user.id, viewer.today)]);

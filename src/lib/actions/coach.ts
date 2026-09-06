@@ -3,7 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { refresh, str } from "./common";
+import { refresh, str } from "@/lib/action-helpers";
 
 export async function setClientPassAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();

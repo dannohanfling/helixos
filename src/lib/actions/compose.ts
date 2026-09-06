@@ -11,7 +11,7 @@ import { channelTargets, draftFor, groupTargets, staggerSchedule, type Target } 
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 import { background, pushSocialPost } from "@/lib/integrations";
-import { ctx } from "./common";
+import { ctx } from "@/lib/action-helpers";
 
 export type ComposePayload = {
   id?: string | null;

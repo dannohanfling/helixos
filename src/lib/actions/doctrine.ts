@@ -6,7 +6,7 @@ import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { VOICE, draft } from "@/lib/ai";
 import { principlePost, principleReel, principleTraining } from "@/lib/engine/doctrine";
-import { ctx, str } from "./common";
+import { ctx, str } from "@/lib/action-helpers";
 
 /** Turns a principle into a content item (post, reel script, or training outline) and opens it. */
 export async function principleToContentAction(formData: FormData): Promise<void> {

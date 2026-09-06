@@ -9,7 +9,7 @@ import { addDays, nowIso } from "@/lib/dates";
 import { POINTS } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 import { background, pushContact } from "@/lib/integrations";
-import { ctx, opt, refresh, str } from "./common";
+import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function createContactAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx();

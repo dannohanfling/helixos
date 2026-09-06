@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { PROOF_TYPES } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { ctx, opt, refresh, str } from "./common";
+import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 const BELIEFS = ["vehicle", "internal", "external", "none"] as const;
 
