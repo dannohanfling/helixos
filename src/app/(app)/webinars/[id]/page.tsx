@@ -620,8 +620,21 @@ function DeckStep({ webinarId, sections }: { webinarId: string; sections: { orde
   const slides = deckOutline(sections);
   const md = slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.section}_\n${s.body}\n\nVisual: ${s.visual}`).join("\n\n");
   return (
-    <Card title={`9 · Deck outline · ${slides.length} slides`} action={<CopyButton text={md} label="Copy outline (Markdown)" />}>
-      <p className="mb-3 text-sm text-ink-2">One idea per slide. Derived from your key points, so tighten those first. Paste this into Canva, Keynote, or Gamma.</p>
+    <Card
+      title={`9 · Deck outline · ${slides.length} slides`}
+      action={
+        <span className="flex flex-wrap gap-2">
+          <a className="btn btn-primary btn-sm" href={`/api/webinars/${webinarId}/deck?format=pptx`} download data-testid="deck-pptx">
+            Download .pptx
+          </a>
+          <a className="btn btn-ghost btn-sm" href={`/api/webinars/${webinarId}/deck?format=txt`} download>
+            Outline (.txt)
+          </a>
+          <CopyButton text={md} label="Copy all" className="btn btn-ghost btn-sm" />
+        </span>
+      }
+    >
+      <p className="mb-3 text-sm text-ink-2">One idea per slide, derived from your key points, so tighten those first. The .pptx opens in PowerPoint, Keynote, Google Slides and Canva (Import) with the art direction in each slide&apos;s notes; or copy one slide at a time.</p>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {slides.map((s) => (
           <div key={s.n} className="rounded-lg border p-3 text-sm">
@@ -633,7 +646,10 @@ function DeckStep({ webinarId, sections }: { webinarId: string; sections: { orde
             </div>
             <div className="mt-1 font-semibold">{s.headline}</div>
             {s.body ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2">{s.body}</p> : null}
-            <p className="mt-2 text-[11px] italic text-ink-3">{s.visual}</p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-[11px] italic text-ink-3">{s.visual}</p>
+              <CopyButton text={`${s.headline}\n${s.body}\n\nVisual: ${s.visual}`} label="Copy" className="btn btn-ghost btn-xs" />
+            </div>
           </div>
         ))}
       </div>

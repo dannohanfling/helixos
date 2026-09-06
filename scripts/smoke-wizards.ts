@@ -51,6 +51,13 @@ async function main() {
   await shot(page, "w03-webinar-beliefs");
   await page.goto(page.url().split("?")[0] + "?step=deck");
   await expectText(page, "Deck outline", "deck");
+  const deckHref = await page.locator('[data-testid="deck-pptx"]').getAttribute("href");
+  const pptx = await page.request.get(`${base}${deckHref}`);
+  const pptxBody = await pptx.body();
+  if (!pptx.ok() || !(pptx.headers()["content-type"] ?? "").includes("presentationml") || pptxBody.subarray(0, 2).toString() !== "PK" || pptxBody.length < 5000) throw new Error(`pptx export failed: ${pptx.status()} ${pptxBody.length} bytes`);
+  const txt = await page.request.get(`${base}${deckHref!.replace("pptx", "txt")}`);
+  if (!txt.ok() || !/Deck outline · \d+ slides/.test(await txt.text())) throw new Error("txt export failed");
+  console.log(`  deck export: pptx ${pptxBody.length} bytes, txt ok`);
   await shot(page, "w04-webinar-deck");
   await page.goto(page.url().split("?")[0] + "?step=review");
   await submit(page, 'button:has-text("Save review")');
