@@ -5,6 +5,7 @@ import { rotateInviteAction, updateGoalAction, updateProfileAction, updateWorksp
 import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
+import { ChangePasswordForm } from "@/components/change-password-form";
 import { connectionFor } from "@/lib/ghl";
 
 export const metadata = { title: "Settings" };
@@ -23,6 +24,9 @@ export default async function SettingsPage() {
         <GhlConnect conn={conn ?? null} tz={v.workspace.timezone} />
       </Card>
       <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Password">
+          <ChangePasswordForm />
+        </Card>
         <Card title="You">
           <form action={updateProfileAction} className="space-y-3">
             <div className="grid grid-cols-[4rem_1fr] gap-3">

@@ -57,6 +57,13 @@
       "when": 1788721580034,
       "tag": "0007_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788723688654,
+      "tag": "0008_password_resets",
+      "breakpoints": true
     }
   ]
 }

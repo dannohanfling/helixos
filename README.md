@@ -74,6 +74,7 @@ npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, client
 npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks
 npx tsx scripts/smoke-composer.ts  # Composer, per-channel previews, one-click schedule everywhere, collapsible nav
 npx tsx scripts/smoke-library.ts   # Library browse, search, use in composer, save to library, coach share
+npx tsx scripts/smoke-auth.ts     # /setup token gate + 404s, forgot → reset with session invalidation, change password (needs a current `next build`)
 npx tsx scripts/smoke-ghl.ts       # Agency token → client sub-account → accounts → channel map → schedule → status sync, against scripts/mock-ghl.ts
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
@@ -108,16 +109,13 @@ Per-client HelixOS bases can be pointed at from **Settings → Workspace → Air
 1. Create a Turso database and copy its URL and auth token. Create a Vercel project from this repo.
 2. Vercel → Environment Variables: `SESSION_SECRET`, `DATABASE_URL` (libsql://…), `DATABASE_AUTH_TOKEN`, `APP_URL`, `CRON_SECRET`, and optionally `RESEND_API_KEY` + `EMAIL_FROM`, `ANTHROPIC_API_KEY`. Leave `DEMO_LOGIN` unset so the demo buttons stay hidden.
 3. Deploy. The `vercel-build` script runs `npm run db:migrate` against `DATABASE_URL` and then builds; migrations never run from a request, and the build never opens the database. `vercel.json` schedules the hourly reminder cron.
-4. Create your real workspace once, from your machine, pointed at production:
+4. Create your real workspace once, in the browser. Set `SETUP_TOKEN` in Vercel to a long random string, redeploy, then open `https://your-app/setup?token=THAT_STRING` and fill in the form: workspace name, your name, email, password, timezone. It creates the workspace and your coach login, loads the library (no demo data), signs you in, and shows the client and coach invite links once. The page is a 404 whenever `SETUP_TOKEN` is unset, the token is wrong, or a workspace already exists. Remove `SETUP_TOKEN` afterwards.
 
-```bash
-DATABASE_URL=libsql://… DATABASE_AUTH_TOKEN=… APP_URL=https://app.yourdomain.com \
-  npm run db:bootstrap -- --name "Evolve Omega Academy" --coach-email you@example.com --coach-name "Your Name" --password "choose-a-strong-one"
-```
-
-It loads the library (no demo data), prints the client and coach invite links, and refuses to run twice.
+   For automation the same thing is available as a script: `npm run db:bootstrap -- --name … --coach-email … --coach-name … --password …` (both call the one shared function in `src/lib/setup.ts`).
 
 5. Log in as coach → Integrations: agency token + company ID for GoHighLevel, Community Loyalty key. Send a client their invite link.
+
+Accounts: `/forgot` emails a single-use reset link (60 minutes, token stored as a sha256 hash, Resend required in production); `/reset/[token]` sets the new password and signs every other session out; Settings has change-password with the current password required. Both routes are rate-limited per IP and per email.
 
 Security notes: `SESSION_SECRET` is required in production (the app refuses to start sessions without it). Integration secrets (agency token, private integration tokens, minted location tokens) are encrypted at rest with AES-256-GCM under `ENCRYPTION_KEY` (falls back to `SESSION_SECRET`). Integrations may only call approved HTTPS hosts (`services.leadconnectorhq.com`, `api.communityloyalty.app`, plus `INTEGRATION_URL_ALLOWLIST`). The cron endpoint refuses every call when `CRON_SECRET` is unset. Login is limited to 8 attempts per email and 30 per IP per 15 minutes; join to 20 per IP. Every export from `src/lib/actions` must be a `*Action` (ESLint enforces it) because "use server" exports are public endpoints. The agency GoHighLevel token is only ever used for a sub-account the coach assigned to that member on Integrations; a member can otherwise connect only with their own private integration token. Inbound webhooks authenticate with their per-workspace secret and are exempt from the login redirect.
 

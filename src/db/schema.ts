@@ -22,6 +22,8 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
+  /** Bumped on password change or reset; sessions carrying an older number are rejected. */
+  sessionVersion: integer("session_version").notNull().default(0),
   avatarEmoji: text("avatar_emoji").notNull().default("🧭"),
   createdAt: createdAt(),
 });
@@ -979,6 +981,20 @@ export const libraryPosts = sqliteTable(
 );
 
 export type LibraryPost = typeof libraryPosts.$inferSelect;
+
+/** Password reset tokens. Only the sha256 of the token is stored; a token is single use and expires after 60 minutes. */
+export const passwordResets = sqliteTable(
+  "password_resets",
+  {
+    id: id(),
+    userId: text("user_id").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("password_resets_user").on(t.userId)],
+);
 
 /** Fixed-window counters for login and join attempts. */
 export const rateLimits = sqliteTable("rate_limits", {

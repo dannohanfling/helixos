@@ -1,3 +1,7 @@
+export function emailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
 /** Minimal email adapter: Resend when a key is present, console otherwise. */
 export async function sendEmail(to: string, subject: string, text: string): Promise<"sent" | "logged"> {
   const key = process.env.RESEND_API_KEY;

@@ -116,6 +116,7 @@ async function wipeDemo(): Promise<void> {
 
 export async function seedDemo(): Promise<void> {
   await wipeDemo();
+  await db.delete(schema.rateLimits); // a reseed is a fresh start for login and reset attempt counters too
   const tz = "America/Los_Angeles";
   const today = todayInTz(tz);
   const wsId = newId();

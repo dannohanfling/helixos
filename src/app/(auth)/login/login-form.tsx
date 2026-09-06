@@ -11,7 +11,7 @@ export function LoginForm({ next }: { next?: string }) {
       {next ? <input type="hidden" name="next" value={next} /> : null}
       <label className="block">
         <span className="label">Email</span>
-        <input className="field" name="email" type="email" autoComplete="email" required placeholder="you@example.com" />
+        <input className="field" name="email" type="email" autoComplete="email" required placeholder="you@example.com" defaultValue={state?.email ?? ""} />
       </label>
       <label className="block">
         <span className="label">Password</span>

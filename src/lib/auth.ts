@@ -27,6 +27,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, session.workspaceId) }),
   ]);
   if (!user || !workspace) return null;
+  if ((session.sv ?? 0) !== user.sessionVersion) return null;
   return {
     user,
     workspace,
@@ -39,7 +40,11 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 
 export async function requireViewer(): Promise<Viewer> {
   const v = await getViewer();
-  if (!v) redirect("/login");
+  if (!v) {
+    // A cookie that no longer verifies (password changed elsewhere, user removed) must be cleared, or /login bounces straight back here.
+    const stale = await readSession();
+    redirect(stale ? "/api/session/clear" : "/login");
+  }
   return v;
 }
 

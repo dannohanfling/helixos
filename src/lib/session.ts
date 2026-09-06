@@ -8,6 +8,8 @@ export type SessionPayload = {
   userId: string;
   workspaceId: string;
   role: "coach" | "client";
+  /** users.sessionVersion at sign-in. A password change bumps it and signs every other session out. */
+  sv?: number;
 };
 
 function secret(): Uint8Array {
@@ -31,7 +33,7 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
   try {
     const { payload } = await jwtVerify(token, secret());
     if (typeof payload.userId !== "string" || typeof payload.workspaceId !== "string") return null;
-    return { userId: payload.userId, workspaceId: payload.workspaceId, role: payload.role === "coach" ? "coach" : "client" };
+    return { userId: payload.userId, workspaceId: payload.workspaceId, role: payload.role === "coach" ? "coach" : "client", sv: typeof payload.sv === "number" ? payload.sv : 0 };
   } catch {
     return null;
   }
