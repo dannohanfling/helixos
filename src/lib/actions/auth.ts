@@ -1,5 +1,7 @@
 "use server";
 
+import { demoLoginEnabled } from "@/lib/demo";
+
 import { and, eq, or } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -77,6 +79,7 @@ export async function logoutAction(): Promise<void> {
 
 /** Signs in as one of the demo accounts created by `npm run db:seed`. */
 export async function demoLoginAction(formData: FormData): Promise<void> {
+  if (!demoLoginEnabled()) redirect("/login");
   await ensureMigrated();
   const who = String(formData.get("who") ?? "client");
   const email = who === "coach" ? "coach@demo.helixos.app" : "client@demo.helixos.app";

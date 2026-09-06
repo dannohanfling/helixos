@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { demoLoginAction } from "@/lib/actions/auth";
 import { LoginForm } from "./login-form";
+import { demoLoginEnabled } from "@/lib/demo";
 
 export const metadata = { title: "Sign in" };
 
@@ -19,6 +20,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </Link>
         </p>
       </div>
+      {demoLoginEnabled() ? (
       <div className="card p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Try the demo</div>
         {error === "demo" ? <p className="mt-2 text-sm text-danger">Demo accounts aren&apos;t seeded yet. Run `npm run db:seed`.</p> : null}
@@ -37,6 +39,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </form>
         </div>
       </div>
+      ) : null}
     </div>
   );
 }

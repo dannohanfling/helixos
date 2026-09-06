@@ -101,6 +101,22 @@ npm run db:seed -- --library-only
 `scripts/import-airtable.ts` maps the base's field names; adjust there if a client base renamed fields.
 Per-client HelixOS bases can be pointed at from **Settings → Workspace → Airtable base ID**.
 
+## Going live (Vercel + Turso)
+
+1. Create a Turso database and copy its URL and auth token. Create a Vercel project from this repo.
+2. Vercel → Environment Variables: `SESSION_SECRET`, `DATABASE_URL` (libsql://…), `DATABASE_AUTH_TOKEN`, `APP_URL`, `CRON_SECRET`, and optionally `RESEND_API_KEY` + `EMAIL_FROM`, `ANTHROPIC_API_KEY`. Leave `DEMO_LOGIN` unset so the demo buttons stay hidden.
+3. Deploy. Migrations apply themselves on first request. `vercel.json` schedules the hourly reminder cron.
+4. Create your real workspace once, from your machine, pointed at production:
+
+```bash
+DATABASE_URL=libsql://… DATABASE_AUTH_TOKEN=… APP_URL=https://app.yourdomain.com \
+  npm run db:bootstrap -- --name "Evolve Omega Academy" --coach-email you@example.com --coach-name "Your Name" --password "choose-a-strong-one"
+```
+
+It loads the library (no demo data), prints the client and coach invite links, and refuses to run twice.
+
+5. Log in as coach → Integrations: agency token + company ID for GoHighLevel, Community Loyalty key. Send a client their invite link.
+
 ## Deploying
 
 - **Database**: keep `DATABASE_URL=file:./data/helixos.db` on a persistent disk (Fly, Railway, a VPS), or point it at

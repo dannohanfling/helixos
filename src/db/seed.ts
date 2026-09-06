@@ -560,9 +560,12 @@ async function main() {
   if (!process.argv.includes("--library-only")) await seedDemo();
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+// Only run when invoked directly (`npm run db:seed`); scripts/bootstrap.ts imports seedLibrary without seeding the demo.
+if ((process.argv[1] ?? "").replace(/\\/g, "/").endsWith("src/db/seed.ts")) {
+  main()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
