@@ -882,6 +882,73 @@ export const certSubmissions = sqliteTable(
   (t) => [index("cert_submissions_user").on(t.userId, t.deliverableId)],
 );
 
+/* ───────────────────────── Content ladders (skins) ───────────────────────── */
+
+export const LADDER_FORMAT_KEYS = ["loss_rebuild", "method_resource", "milestone", "authority_anchor", "tool_stack", "mistakes", "screenshot", "objection", "numbers_teardown", "bait_correct", "community", "origin_story", "roadmap"] as const;
+export const LADDER_STATUSES = ["draft", "ready", "live", "done"] as const;
+export const LADDER_AUDIENCES = ["warm", "cold"] as const;
+
+export type LadderKeyword = { keyword: string; use: string };
+export type LadderStat = { stat: string; source: string };
+export type LadderRung = { n: number; body: string; postedAt?: string | null };
+
+/** The facts a client's ladders are written from: product, price, keywords, what may be claimed. One per member. */
+export const ladderProfiles = sqliteTable(
+  "ladder_profiles",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    productName: text("product_name"),
+    productPitch: text("product_pitch"),
+    priceLine: text("price_line"),
+    trialLine: text("trial_line"),
+    keywords: text("keywords", { mode: "json" }).$type<LadderKeyword[]>().notNull().default([]),
+    scarcityLine: text("scarcity_line"),
+    bannedPhrases: text("banned_phrases", { mode: "json" }).$type<string[]>().notNull().default([]),
+    verifiedStats: text("verified_stats", { mode: "json" }).$type<LadderStat[]>().notNull().default([]),
+    claimsRules: text("claims_rules"),
+    originStory: text("origin_story"),
+    positioningLine: text("positioning_line"),
+    handle: text("handle"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("ladder_profiles_ws_user").on(t.workspaceId, t.userId)],
+);
+
+/** One skin: the brief that went in and every field that came out, editable, with the rungs' live-posting state. */
+export const ladders = sqliteTable(
+  "ladders",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    contentItemId: text("content_item_id"),
+    format: text("format", { enum: LADDER_FORMAT_KEYS }).notNull(),
+    topic: text("topic").notNull(),
+    audience: text("audience", { enum: LADDER_AUDIENCES }).notNull().default("warm"),
+    keyword: text("keyword").notNull().default("none"),
+    sourceMaterial: text("source_material"),
+    realNumbers: text("real_numbers"),
+    postName: text("post_name").notNull().default(""),
+    headline: text("headline").notNull().default(""),
+    altHeadlines: text("alt_headlines", { mode: "json" }).$type<string[]>().notNull().default([]),
+    hook: text("hook").notNull().default(""),
+    copy: text("copy").notNull().default(""),
+    rungs: text("rungs", { mode: "json" }).$type<LadderRung[]>().notNull().default([]),
+    dmKeyword: text("dm_keyword").notNull().default(""),
+    carousel: text("carousel", { mode: "json" }).$type<string[]>().notNull().default([]),
+    igCaption: text("ig_caption").notNull().default(""),
+    threadsChain: text("threads_chain", { mode: "json" }).$type<string[]>().notNull().default([]),
+    notes: text("notes"),
+    generatedBy: text("generated_by").notNull().default("scaffold"),
+    status: text("status", { enum: LADDER_STATUSES }).notNull().default("draft"),
+    launchedAt: text("launched_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ladders_user").on(t.userId, t.status)],
+);
+
 /* ───────────────────────── Integrations ───────────────────────── */
 
 export const PROVIDERS = ["community_loyalty", "gohighlevel"] as const;
@@ -1012,3 +1079,5 @@ export type CertDeliverable = typeof certDeliverables.$inferSelect;
 export type CertSubmission = typeof certSubmissions.$inferSelect;
 export type Integration = typeof integrations.$inferSelect;
 export type SyncEvent = typeof syncEvents.$inferSelect;
+export type LadderProfile = typeof ladderProfiles.$inferSelect;
+export type Ladder = typeof ladders.$inferSelect;

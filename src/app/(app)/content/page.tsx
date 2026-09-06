@@ -66,6 +66,7 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
     { key: "board", label: "Board", href: "/content", count: pipeline.length },
     { key: "calendar", label: "Calendar", href: "/content?view=calendar" },
     { key: "posted", label: "Posted", href: "/content?view=posted", count: posted.length },
+    { key: "ladders", label: "Ladders", href: "/content/ladders" },
   ];
 
   return (

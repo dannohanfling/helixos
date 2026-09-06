@@ -6,6 +6,7 @@ import { addDays } from "@/lib/dates";
 import { alignPost } from "@/lib/engine/groups";
 import { monthOf } from "@/lib/engine/targets";
 import { hashSecret, seal } from "@/lib/crypto";
+import { seedDemoLadders } from "./seed-ladders";
 
 export async function seedDemoWave2(wsId: string, mayaId: string, jordanId: string, today: string): Promise<void> {
   // Groups for Maya: her own, four she's in, three she's prospecting in, one on the bench.
@@ -113,5 +114,6 @@ export async function seedDemoWave2(wsId: string, mayaId: string, jordanId: stri
       }),
     );
   }
-  console.log(`Wave 2 demo: ${groups.length} groups, proofs, targets, lessons, certification, integrations`);
+  await seedDemoLadders(wsId, mayaId, today);
+  console.log(`Wave 2 demo: ${groups.length} groups, proofs, targets, lessons, certification, integrations, ladders`);
 }

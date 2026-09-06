@@ -24,7 +24,7 @@ async function saveConnection(page: Page, locationId: string, token: string) {
 }
 
 async function main() {
-  const mock = spawn("npx", ["tsx", "scripts/mock-ghl.ts", String(mockPort)], { stdio: "ignore" });
+  const mock = spawn("npx", ["tsx", "scripts/mock-ghl.ts", String(mockPort)], { stdio: "ignore", detached: true });
   await new Promise((r) => setTimeout(r, 2500));
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -103,7 +103,11 @@ async function main() {
     console.log("✓ sync log and status list");
   } finally {
     await browser.close();
-    mock.kill();
+    try {
+      if (mock.pid) process.kill(-mock.pid, "SIGTERM"); // the mock is npx's grandchild: kill the group
+    } catch {
+      mock.kill();
+    }
   }
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);
   console.log("GHL smoke passed");

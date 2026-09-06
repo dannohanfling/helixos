@@ -42,9 +42,17 @@ async function devServer(port: number, env: Record<string, string>): Promise<Chi
     const m = spawn("npx", ["tsx", "scripts/migrate.ts"], { env: common, stdio: "ignore" });
     m.on("exit", (c) => (c === 0 ? resolve() : reject(new Error("migrate failed"))));
   });
-  const child = spawn("npx", ["next", "start", "-p", String(port)], { env: common, stdio: "ignore" });
+  // detached: the server is npx's grandchild, so it must be killed as a process group or it outlives the walk and squats on the port.
+  const child = spawn("npx", ["next", "start", "-p", String(port)], { env: common, stdio: "ignore", detached: true });
   await waitFor(`http://localhost:${port}/login`);
   return child;
+}
+function stop(child: ChildProcess) {
+  try {
+    if (child.pid) process.kill(-child.pid, "SIGTERM");
+  } catch {
+    child.kill();
+  }
 }
 
 async function setupWalk(browser: Browser) {
@@ -83,7 +91,7 @@ async function setupWalk(browser: Browser) {
     await Promise.all([page.waitForURL(/\/today/), page.click('button:has-text("Sign in")')]);
     console.log("✓ setup: token gate, form, links once, signed in, 404 afterwards, login works");
   } finally {
-    server.kill();
+    stop(server);
   }
 }
 
@@ -95,7 +103,7 @@ async function setupDisabledWalk(browser: Browser) {
     if (r?.status() !== 404) throw new Error(`/setup with SETUP_TOKEN unset should be 404, got ${r?.status()}`);
     console.log("✓ setup: 404 when SETUP_TOKEN is unset, even on an empty database");
   } finally {
-    server.kill();
+    stop(server);
   }
 }
 

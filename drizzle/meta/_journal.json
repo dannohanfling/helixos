@@ -85,6 +85,13 @@
       "when": 1788728260853,
       "tag": "0011_drop_plain_inbound_secret",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788729609223,
+      "tag": "0012_content_ladders",
+      "breakpoints": true
     }
   ]
 }
