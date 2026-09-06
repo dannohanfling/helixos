@@ -95,12 +95,14 @@ async function main() {
   const doc = `<title>HelixOS Preview</title>
 <style>${css}</style>
 <style>
-#hx-bar{position:fixed;left:0;right:0;top:0;z-index:1000;background:#111;color:#fff;font:12px/1.4 system-ui,sans-serif;padding:6px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+#hx-bar{position:fixed;left:0;right:0;top:0;z-index:1000;background:var(--ink,#111);color:var(--bg,#fff);font:12px/1.4 system-ui,sans-serif;padding:0 12px;height:44px;display:flex;gap:12px;align-items:center;white-space:nowrap;overflow:hidden}
 #hx-bar a{color:#fff;text-decoration:underline}
 #hx-bar select{font-size:12px;padding:2px 4px;border-radius:4px}
 #hx-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:10px;font:13px system-ui,sans-serif;z-index:1001;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
 #hx-toast.on{opacity:1}
-#app{padding-top:32px}
+#app{padding-top:44px}
+#app aside{top:44px!important;height:calc(100vh - 44px)!important}
+@media (max-width:767px){#hx-bar span{display:none}}
 </style>
 <div id="hx-bar"><strong>HelixOS preview</strong><span>Read-only snapshot of the demo workspace. Links work. Saving needs the real app (see README).</span><label>Jump: <select id="hx-jump"></select></label><a href="#/today">Client view</a><a href="#/today?role=coach">Coach view</a></div>
 <div id="app"></div>
@@ -132,6 +134,7 @@ ${pages}
     app.innerHTML = t.innerHTML;
     document.title = (t.getAttribute('data-title') || 'HelixOS') + ' · preview';
     window.scrollTo(0,0);
+    var j = document.getElementById('hx-jump'); if (j) j.value = t.getAttribute('data-route');
     app.querySelectorAll('details').forEach(function(d){ /* keep as captured */ });
   }
   document.addEventListener('click', function(e){
