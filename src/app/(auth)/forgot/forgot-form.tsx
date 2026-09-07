@@ -28,7 +28,7 @@ export function ForgotForm() {
         <input className="field" name="email" type="email" autoComplete="email" required placeholder="you@example.com" />
       </label>
       {state?.error ? <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{state.error}</p> : null}
-      <SubmitButton className="btn btn-primary w-full" pendingText="Sending…">
+      <SubmitButton className="btn btn-brand w-full" pendingText="Sending…">
         Send reset link
       </SubmitButton>
     </form>

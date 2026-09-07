@@ -4,11 +4,12 @@ import { SESSION_COOKIE } from "@/lib/session";
 
 // Inbound machine endpoints authenticate with their own secrets, never a browser session.
 // The manifest and icons must load without a session: the browser fetches them on the login page and when installing the app.
-const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/api/cron", "/api/health", "/api/webhooks", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon"];
+const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/api/cron", "/api/health", "/api/webhooks", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  // Generated image routes carry a hash suffix (/opengraph-image-abc123), so those two match by prefix.
+  const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/")) || /^\/(opengraph|twitter)-image/.test(pathname);
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
 
   if (!isPublic && !hasSession) {

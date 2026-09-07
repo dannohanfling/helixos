@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { APP_DESCRIPTION } from "@/lib/brand";
 
 export const metadata: Metadata = {
   title: { default: "HelixOS", template: "%s · HelixOS" },
-  description: "Your daily operating system: content, conversations, tasks, and the pathway that grows your business.",
+  description: APP_DESCRIPTION,
   applicationName: "HelixOS",
   manifest: "/manifest.webmanifest",
   // Installed to an iPhone home screen it runs full-screen under its own name, not as a Safari tab.

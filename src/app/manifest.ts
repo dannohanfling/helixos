@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
+import { APP_DESCRIPTION } from "@/lib/brand";
 
 /** Add-to-home-screen: HelixOS opens on Today as a standalone app, in the brand colours, with the drawn mark as its icon. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "HelixOS",
     short_name: "HelixOS",
-    description: "Your daily operating system: lock in, do the work, close the day.",
+    description: APP_DESCRIPTION,
     start_url: "/today",
     scope: "/",
     display: "standalone",

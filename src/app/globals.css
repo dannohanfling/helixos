@@ -139,6 +139,21 @@ textarea::placeholder {
 .btn-accent:hover {
   filter: brightness(0.95);
 }
+/* Brand gold as a fill with dark ink on top: readable on both themes. Never gold text on a light background. */
+.btn-brand {
+  background: #f0c030;
+  color: #111318;
+  border: 1px solid #000;
+}
+.btn-brand:hover {
+  background: #fce484;
+}
+/* The auth card carries the logo's own rule: a gold band on a black hairline, the meander ring's colours. */
+.auth-brand > .card:first-child,
+.auth-brand > div > .card:first-child {
+  border-top: 4px solid #f0c030;
+  box-shadow: 0 -1px 0 #000, 0 1px 3px rgba(0, 0, 0, 0.06);
+}
 .btn-ghost {
   background: transparent;
   border-color: var(--line);

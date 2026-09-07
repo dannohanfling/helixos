@@ -18,7 +18,7 @@ export function ResetForm({ token }: { token: string }) {
         <input className="field" name="confirm" type="password" required minLength={8} autoComplete="new-password" />
       </label>
       {state?.error ? <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{state.error}</p> : null}
-      <SubmitButton className="btn btn-primary w-full" pendingText="Saving…">
+      <SubmitButton className="btn btn-brand w-full" pendingText="Saving…">
         Save new password
       </SubmitButton>
     </form>

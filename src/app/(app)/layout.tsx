@@ -8,6 +8,8 @@ import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
 export const dynamic = "force-dynamic";
+// Nothing behind the login is for a search engine: a client's dashboard, their numbers, the coach roster.
+export const metadata = { robots: { index: false, follow: false } };
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await requireViewer();

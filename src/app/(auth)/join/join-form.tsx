@@ -37,7 +37,7 @@ export function JoinForm({ code }: { code?: string }) {
         <input className="field" name="password" type="password" required minLength={8} autoComplete="new-password" />
       </label>
       {state?.error ? <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{state.error}</p> : null}
-      <SubmitButton className="btn btn-primary w-full" pendingText="Creating your space…">
+      <SubmitButton className="btn btn-brand w-full" pendingText="Creating your space…">
         Join and start Day 1
       </SubmitButton>
     </form>

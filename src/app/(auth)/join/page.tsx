@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { JoinForm } from "./join-form";
 
-export const metadata = { title: "Join" };
+// A live invite link; an indexed invite code is an open door.
+export const metadata = { title: "Join", robots: { index: false, follow: false } };
 
 export default function JoinPage() {
   return (

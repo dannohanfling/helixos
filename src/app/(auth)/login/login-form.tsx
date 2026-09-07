@@ -18,7 +18,7 @@ export function LoginForm({ next }: { next?: string }) {
         <input className="field" name="password" type="password" autoComplete="current-password" required />
       </label>
       {state?.error ? <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{state.error}</p> : null}
-      <SubmitButton className="btn btn-primary w-full" pendingText="Signing in…">
+      <SubmitButton className="btn btn-brand w-full" pendingText="Signing in…">
         Sign in
       </SubmitButton>
     </form>

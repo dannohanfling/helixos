@@ -32,17 +32,33 @@ async function main() {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
 
-    // Join as a brand-new client
+    // Join as a brand-new client: the first screen carries the brand, and the public entrance is set up for sharing but not for search
     await page.goto(`${base}/join/ACADEMY1`);
     await expectText(page, "Join Evolve Omega Academy", "join page");
+    const logoSrc = await page.locator('[data-testid="brand-logo"] img').evaluate((el) => (el as HTMLImageElement).currentSrc);
+    if (!/evolve-omega-logo-256\.png$/.test(logoSrc)) throw new Error(`auth screen should show the supplied logo at 2×, got ${logoSrc}`);
+    if (!(await page.locator("button.btn-brand").count())) throw new Error("the primary auth button is not the brand gold");
+    const joinHead = await page.locator("head").innerHTML();
+    if (!/name="robots" content="noindex/.test(joinHead)) throw new Error("an invite link is indexable");
+    const ogUrl = joinHead.match(/property="og:image" content="([^"]+)"/)?.[1];
+    if (!ogUrl) throw new Error("no Open Graph image on the invite page");
+    const anonCtx = await browser.newContext();
+    const og = await anonCtx.request.get(ogUrl);
+    if (og.status() !== 200 || !(og.headers()["content-type"] ?? "").startsWith("image/png")) throw new Error(`OG image ${ogUrl}: ${og.status()} ${og.headers()["content-type"]}`);
+    const robots = await anonCtx.request.get(`${base}/robots.txt`);
+    if (robots.status() !== 200 || !/Disallow: \//.test(await robots.text())) throw new Error("robots.txt does not keep the app out of search");
+    await anonCtx.close();
+    console.log("✓ brand on the join screen; invite page noindex with a shareable card; robots.txt disallows the app");
     const email = `firstday-${Date.now()}@example.com`;
     await page.fill('input[name="name"]', "Priya Natarajan");
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', "firstday-pass-123");
     await Promise.all([page.waitForURL(/\/today/, { timeout: 20000 }), page.click('button[type="submit"]')]);
 
-    // Welcome card, not raw operational data
+    // Welcome card, not raw operational data; nothing behind the login is indexable
     await expectText(page, "Welcome to HelixOS", "welcome card");
+    if (!/name="robots" content="noindex/.test(await page.locator("head").innerHTML())) throw new Error("an authenticated page is indexable");
+    if (!(await page.locator("header").getByText("Ω").count())) throw new Error("the header mark is not the Ω");
     await expectText(page, "Lock in your first day", "welcome cta");
     const body = await page.locator("main").innerText();
     for (const admin of ["Sign the agreement", "Make your first payment", "Complete your onboarding form", "Confirm your GoHighLevel access", "Confirm your HelixOS access", "Schedule your kickoff call"]) {
