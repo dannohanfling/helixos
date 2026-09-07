@@ -45,8 +45,10 @@ async function main() {
     }
     if (/\$0 \/ \$5,000/.test(body)) throw new Error("the $0 / $5,000 goal bar is shown on day one");
     await expectText(page, "Set your one goal", "goal prompt instead of bar");
+    const road = await page.locator('[data-testid="road"]').innerText();
+    if (!/Stage 1 of 7 · Week 1 · first conversion event around Week 6/.test(road)) throw new Error(`Today should name the road ahead, got "${road}"`);
     await page.screenshot({ path: "screenshots/fd01-first-today.png", fullPage: true });
-    console.log("✓ first Today: welcome card, no admin tasks, no empty goal bar");
+    console.log("✓ first Today: welcome card, no admin tasks, no empty goal bar, the road named");
 
     // Pathway: the next step is a real action, admin tasks are extras
     await page.goto(`${base}/pathway`);
@@ -55,7 +57,27 @@ async function main() {
       if (now.includes(admin) && !/extras?/i.test(now)) throw new Error(`admin task "${admin}" in the simple path`);
     }
     await expectText(page, "Choose where your community will live", "first real step");
-    console.log("✓ pathway: first step is a real action");
+    await expectText(page, "first conversion event around Week 6", "pathway header names the destination");
+    console.log("✓ pathway: first step is a real action; header names the destination");
+
+    // Courses are reference, not a score; a lesson with nothing behind it is not a checkbox
+    await page.goto(`${base}/courses`);
+    const coursesText = await page.locator("main").innerText();
+    if (/\d+ of \d+ lessons/.test(coursesText)) throw new Error("courses still show a lessons-done score");
+    const roadmap = page.locator("li", { hasText: "The Evolve Omega Roadmap" }).first();
+    if (await roadmap.count()) {
+      if (await roadmap.locator('button:has-text("Done")').count()) throw new Error("the Roadmap lesson is still a bare checkbox");
+      if (!(await roadmap.locator('[data-testid="lesson-pending"]').count())) throw new Error("an empty lesson should say the coach is adding it");
+    }
+    console.log("✓ courses: no score, empty lessons are not checkboxes");
+
+    // The whole tier ladder, locks on, exact gap to the next rung
+    await page.goto(`${base}/rewards`);
+    const rungs = page.locator('[data-testid="tier-ladder"] li');
+    if ((await rungs.count()) !== 9) throw new Error(`expected 9 tiers, saw ${await rungs.count()}`);
+    const ladderText = await page.locator('[data-testid="tier-ladder"]').innerText();
+    if (!/you are here/.test(ladderText) || !/more to unlock/.test(ladderText) || !/Olympian[\s\S]*locked/.test(ladderText)) throw new Error(`ladder should show current, next gap and locked rungs:\n${ladderText}`);
+    console.log("✓ rewards: nine tiers, current, gap to next, locked rungs visible");
 
     // No Community Pass upsell in the nav for a non-Elite client (mobile "More" and the desktop sidebar markup)
     await page.goto(`${base}/more`);

@@ -5,7 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { completeCurriculumDayAction, submitPathwayTaskAction } from "@/lib/actions/pathway";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
-import { OPEN_LIMIT, simplePath } from "@/lib/engine/pathway";
+import { OPEN_LIMIT, simplePath, roadLine } from "@/lib/engine/pathway";
 import type { LibraryTask, PathwayProgress } from "@/db/schema";
 
 export const metadata = { title: "Pathway" };
@@ -77,7 +77,7 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader
         title="Your pathway"
-        subtitle={path.allDone ? "Every stage done. You're the case study now." : `Stage ${(currentStage?.order ?? 0)} of ${stages.length}: ${currentStage?.name}. ${pathDone} of ${pathTotal} path steps verified. One thing at a time.`}
+        subtitle={path.allDone ? "Every stage done. You're the case study now." : `${roadLine(stages, path.stageKey)}. ${currentStage?.name}: ${pathDone} of ${pathTotal} path steps verified. One thing at a time.`}
         action={
           <div className="flex flex-wrap gap-2 text-xs">
             {v.membership.certEnabled ? <Link href="/certification" className="btn btn-soft btn-sm">🎓 Certification</Link> : null}

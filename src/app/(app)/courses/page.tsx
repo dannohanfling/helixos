@@ -3,9 +3,17 @@ import { asc, eq, or, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { completeLessonAction, uncompleteLessonAction } from "@/lib/actions/courses";
-import { Badge, Card, Disclosure, Empty, PageHeader, Progress, Tabs } from "@/components/ui";
+import { Badge, Card, Disclosure, Empty, PageHeader, Tabs } from "@/components/ui";
+
+import lessonLinks from "@/data/lesson-links.json";
 
 export const metadata = { title: "Courses" };
+
+/** A lesson's own content, when Danno has given it one. Keyed by lesson name so it survives a reseed. */
+const lessonLink = (name: string): string | null => {
+  const url = ((lessonLinks as Record<string, string>)[name] ?? "").trim();
+  return /^https?:\/\//.test(url) ? url : null;
+};
 
 const PROGRAMS = [
   { key: "Launch Pad", label: "Launch Pad", blurb: "Short mini-courses. Start here. Twenty minutes each." },
@@ -28,11 +36,10 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const mine = courses.filter((c) => c.program === program);
   const lessonsOf = (courseId: string) => lessons.filter((l) => l.courseId === courseId);
   const selected = mine.find((c) => c.id === sp.course) ?? mine.find((c) => lessonsOf(c.id).some((l) => !doneIds.has(l.id))) ?? mine[0];
-  const totalDone = lessons.filter((l) => doneIds.has(l.id)).length;
   const meta = PROGRAMS.find((p) => p.key === program)!;
   return (
     <>
-      <PageHeader title="Courses" subtitle={`${totalDone} of ${lessons.length} lessons done. Do the thing, tick it.`} action={<Link href="/pathway" className="btn btn-ghost btn-sm">Pathway</Link>} />
+      <PageHeader title="Courses" subtitle="Reference for the steps that need teaching. The road you walk is the Pathway." action={<Link href="/pathway" className="btn btn-ghost btn-sm">Pathway</Link>} />
       <Tabs items={PROGRAMS.map((p) => ({ key: p.key, label: p.label, href: `/courses?program=${encodeURIComponent(p.key)}`, count: courses.filter((c) => c.program === p.key).length }))} current={program} />
       <p className="mt-2 mb-4 text-sm text-ink-2">{meta.blurb}</p>
       {mine.length ? (
@@ -41,17 +48,14 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             <ul className="-mx-2 divide-y">
               {mine.map((c) => {
                 const ls = lessonsOf(c.id);
-                const d = ls.filter((l) => doneIds.has(l.id)).length;
-                const pct = ls.length ? Math.round((d / ls.length) * 100) : 0;
                 return (
                   <li key={c.id}>
                     <Link href={`/courses?program=${encodeURIComponent(program)}&course=${c.id}`} className={`block px-2 py-2.5 hover:bg-surface-2 ${selected?.id === c.id ? "bg-accent-soft" : ""}`}>
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium">{c.name}</span>
-                        <span className="text-xs text-ink-3">{d}/{ls.length}</span>
+                        <span className="text-xs text-ink-3">{ls.length} {ls.length === 1 ? "lesson" : "lessons"}</span>
                       </div>
                       {c.tier ? <div className="text-[11px] text-ink-3">{c.tier}</div> : null}
-                      <div className="mt-1.5"><Progress value={pct} tone={pct === 100 ? "good" : "accent"} height={4} /></div>
                     </Link>
                   </li>
                 );
@@ -64,6 +68,8 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <ol className="space-y-2">
                 {lessonsOf(selected.id).map((l) => {
                   const isDone = doneIds.has(l.id);
+                  const link = lessonLink(l.name);
+                  const hasContent = Boolean(l.objective || l.prompts || l.resources || link);
                   return (
                     <li key={l.id} className={`rounded-lg border p-3 ${isDone ? "border-good bg-good-soft" : ""}`}>
                       <div className="flex items-start justify-between gap-3">
@@ -76,10 +82,21 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
                           <div className={`font-medium ${isDone ? "line-through decoration-line" : ""}`}>{l.name}</div>
                           {l.objective ? <p className="mt-1 text-sm text-ink-2">{l.objective}</p> : null}
                         </div>
-                        <form action={isDone ? uncompleteLessonAction : completeLessonAction} className="shrink-0">
-                          <input type="hidden" name="lessonId" value={l.id} />
-                          <button className={`btn btn-xs ${isDone ? "btn-ghost" : "btn-accent"}`} type="submit">{isDone ? "Undo" : "Done"}</button>
-                        </form>
+                        {hasContent ? (
+                          <span className="flex shrink-0 items-center gap-1.5">
+                            {link ? (
+                              <a href={link} target="_blank" rel="noreferrer" className="btn btn-soft btn-xs" data-testid="lesson-open">
+                                Open the lesson ↗
+                              </a>
+                            ) : null}
+                            <form action={isDone ? uncompleteLessonAction : completeLessonAction}>
+                              <input type="hidden" name="lessonId" value={l.id} />
+                              <button className={`btn btn-xs ${isDone ? "btn-ghost" : "btn-accent"}`} type="submit">{isDone ? "Undo" : "Done"}</button>
+                            </form>
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-xs text-ink-3" data-testid="lesson-pending">Your coach is adding this lesson.</span>
+                        )}
                       </div>
                       {l.prompts || l.resources ? (
                         <Disclosure summary={<span className="text-xs text-ink-3 underline">Prompts and resources</span>} className="mt-2">

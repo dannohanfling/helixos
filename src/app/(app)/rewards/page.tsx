@@ -58,17 +58,19 @@ export default async function RewardsPage() {
           </div>
           {tier.current.welcome ? <p className="mt-3 text-sm text-ink-2">{tier.current.welcome}</p> : null}
         </div>
-        <Card title="The ladder">
-          <ol className="space-y-1.5">
+        <Card title="The ladder" action={<span className="text-xs text-ink-3">{TIERS.length} tiers · locked rungs shown</span>}>
+          <ol className="space-y-1" data-testid="tier-ladder">
             {TIERS.map((t) => {
               const reached = points >= t.minPoints;
               const isCurrent = t.level === tier.current.level;
+              const isNext = tier.next?.level === t.level;
+              const status = isCurrent ? "you are here" : reached ? "reached" : isNext ? `${(t.minPoints - points).toLocaleString()} more to unlock` : "locked";
               return (
-                <li key={t.level} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm ${isCurrent ? "bg-accent-soft" : ""} ${reached ? "" : "opacity-60"}`}>
-                  <span className="w-6 text-center text-base">{TIER_ICONS[t.name]}</span>
+                <li key={t.level} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm ${isCurrent ? "bg-accent-soft" : ""} ${reached || isNext ? "" : "opacity-70"}`} data-tier={t.name} data-state={isCurrent ? "current" : reached ? "reached" : isNext ? "next" : "locked"}>
+                  <span className="w-6 text-center text-base">{reached ? TIER_ICONS[t.name] : "🔒"}</span>
                   <span className="w-24 font-semibold">{t.name}</span>
                   <span className="text-xs text-ink-3 tabular">{t.minPoints.toLocaleString()}+</span>
-                  <span className="ml-auto text-xs text-ink-3">{reached ? "✓" : ""}</span>
+                  <span className={`ml-auto text-xs ${isCurrent ? "font-semibold text-accent-ink" : isNext ? "text-accent-ink" : reached ? "text-good" : "text-ink-3"}`}>{reached && !isCurrent ? "✓ " : ""}{status}</span>
                 </li>
               );
             })}

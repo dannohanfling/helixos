@@ -5,7 +5,7 @@ import type { Viewer } from "@/lib/auth";
 import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
 import { tierProgress } from "@/lib/engine/tiers";
-import { simplePath } from "@/lib/engine/pathway";
+import { roadLine, simplePath } from "@/lib/engine/pathway";
 import { closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
 import { brokenStreak } from "@/lib/engine/streak";
 import { STEPS, nextStep, webinarProgress } from "@/lib/engine/webinar";
@@ -23,6 +23,17 @@ export async function nextPathwayTask(userId: string) {
   if (!t) return null;
   const status = progress.find((p) => p.libraryTaskKey === t.key)?.status ?? "todo";
   return { key: t.key, name: t.name, points: t.points, stageKey: t.stageKey, status };
+}
+
+/** Where the client is on the Pathway and what's ahead, in one line for Today's header. */
+export async function pathwayRoad(userId: string): Promise<string> {
+  const [stages, library, progress] = await Promise.all([
+    db.query.pathwayStages.findMany({ orderBy: asc(schema.pathwayStages.order) }),
+    db.query.libraryTasks.findMany(),
+    db.query.pathwayProgress.findMany({ where: eq(schema.pathwayProgress.userId, userId) }),
+  ]);
+  const path = simplePath(stages, library, progress);
+  return roadLine(stages, path.stageKey, path.allDone);
 }
 
 export async function currentCurriculumDay(userId: string) {
@@ -159,6 +170,7 @@ export async function todayData(v: Viewer) {
     overdueTasks,
     upcomingTasks,
     taskOrigins: await taskOrigins([...focusTasks, ...dueTasks, ...overdueTasks, ...upcomingTasks]),
+    road: await pathwayRoad(userId),
     openTasks,
     contentDue: [...contentOverdue, ...contentDue],
     followUps,

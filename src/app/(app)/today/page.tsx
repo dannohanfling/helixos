@@ -50,6 +50,9 @@ export default async function TodayPage() {
         <div>
           <div className="text-sm text-ink-2">{formatDate(v.today, { weekday: "long", month: "long", day: "numeric" })}</div>
           <h1 className="text-2xl font-bold tracking-tight">{greeting(v.hour, v.user.name)}</h1>
+          <Link href="/pathway" className="mt-1 inline-block text-xs text-ink-2 hover:underline" data-testid="road">
+            🛣️ {d.road}
+          </Link>
         </div>
         <div className="flex items-center gap-2">
           <span className={`badge ${d.streak > 0 ? "badge-accent" : ""}`} title="Weekday streak">
@@ -324,6 +327,7 @@ export default async function TodayPage() {
         <div className="space-y-4">
           {d.curriculumDay ? (
             <Card title={`30-day build · Day ${d.curriculumDay.day}`} action={<Badge tone="accent">+{d.curriculumDay.points}</Badge>}>
+              <p className="mb-2 text-xs text-ink-3" data-testid="onramp">The on-ramp into Stage 1 of your Pathway. One day, one step.</p>
               <div className="font-semibold">{d.curriculumDay.title}</div>
               <p className="mt-1 whitespace-pre-line text-sm text-ink-2">{d.curriculumDay.instructions}</p>
               <div className="mt-2 text-xs text-ink-3">

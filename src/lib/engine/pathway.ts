@@ -45,3 +45,22 @@ export function simplePath(stages: { key: string; order: number }[], rawLibrary:
   const last = ordered[ordered.length - 1];
   return { stageKey: last?.key ?? "", now: [], waiting: [], doneCount: 0, pathCount: 0, remaining: 0, extras: { total: 0, done: 0, tasks: [] as LibTask[] }, allDone: true };
 }
+
+export const DESTINATION_STAGE_KEY = "launch-first-conversion-event";
+
+/**
+ * The one line that names where a client is and where the road goes: "Stage 1 of 7 · Week 1 · first conversion event
+ * around Week 6". Weeks come from each stage's own expectedDuration; nothing is computed from the signup date.
+ */
+export function roadLine(stages: { key: string; order: number; name: string; expectedDuration: string | null }[], currentKey: string, allDone = false): string {
+  const ordered = stages.slice().sort((a, b) => a.order - b.order);
+  const n = ordered.length;
+  if (allDone || !n) return "Every stage done.";
+  const cur = ordered.find((s) => s.key === currentKey) ?? ordered[0];
+  const dest = ordered.find((s) => s.key === DESTINATION_STAGE_KEY) ?? ordered.find((s) => /conversion event/i.test(s.name));
+  const here = `Stage ${cur.order} of ${n}${cur.expectedDuration ? ` · ${cur.expectedDuration}` : ""}`;
+  if (!dest) return here;
+  if (cur.order < dest.order) return `${here} · first conversion event around ${dest.expectedDuration ?? `stage ${dest.order}`}`;
+  if (cur.order === dest.order) return `${here} · this is the first conversion event`;
+  return `${here} · first conversion event behind you`;
+}
