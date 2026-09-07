@@ -1,3 +1,4 @@
+import { PendingLink } from "@/components/pending-link";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -65,9 +66,9 @@ export function Stat({ label, value, sub, hero = false }: { label: string; value
 
 export function LinkButton({ href, children, variant = "ghost", size = "" }: { href: string; children: ReactNode; variant?: "primary" | "accent" | "ghost" | "soft"; size?: "" | "sm" | "xs" }) {
   return (
-    <Link href={href} className={`btn btn-${variant} ${size ? `btn-${size}` : ""}`}>
+    <PendingLink href={href} className={`btn btn-${variant} ${size ? `btn-${size}` : ""}`}>
       {children}
-    </Link>
+    </PendingLink>
   );
 }
 

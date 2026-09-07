@@ -9,6 +9,7 @@ import { todayData } from "@/lib/queries/today";
 import { NewTaskForm } from "@/components/new-task-form";
 import { SubmitButton } from "@/components/submit-button";
 import curriculumLinks from "@/data/curriculum-links.json";
+import { PendingLink } from "@/components/pending-link";
 import { TaskRow } from "@/components/task-row";
 import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
 import { formatDate, relativeDay } from "@/lib/dates";
@@ -348,9 +349,9 @@ export default async function TodayPage() {
                       Open the lesson ↗
                     </a>
                   ) : (
-                    <Link href={exerciseLink(d.curriculumDay.day)!} className="btn btn-primary btn-sm" data-testid="exercise-link">
+                    <PendingLink href={exerciseLink(d.curriculumDay.day)!} className="btn btn-primary btn-sm" data-testid="exercise-link">
                       Do it in the app →
-                    </Link>
+                    </PendingLink>
                   )
                 ) : null}
                 <form action={completeCurriculumDayAction}>

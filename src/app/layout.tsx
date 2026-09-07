@@ -17,9 +17,8 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
-  // Pinch-zoom scales the whole screen, bars included. Fields are 16px so nothing needs zooming; an installed app honours this.
-  maximumScale: 1,
-  userScalable: false,
+  // Pinch-zoom stays on: 200% zoom is a baseline for low-vision members. The top and bottom bars are pinned to the visual
+  // viewport by PinToViewport so they hold still while the content scales.
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

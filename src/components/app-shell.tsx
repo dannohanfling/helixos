@@ -1,3 +1,5 @@
+import { NavProgress } from "@/components/nav-progress";
+import { PinToViewport } from "@/components/pin-to-viewport";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Viewer } from "@/lib/auth";
@@ -45,6 +47,7 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
         </div>
       </aside>
       <div className="min-w-0 flex-1">
+        <PinToViewport edge="top">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b bg-bg/90 px-4 py-2.5 backdrop-blur md:hidden">
           <Link href="/today" className="text-sm font-bold">
             HelixOS
@@ -57,6 +60,8 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
             </Link>
           </div>
         </header>
+        </PinToViewport>
+        <NavProgress />
         <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6 md:pb-10 md:pt-8">{children}</main>
       </div>
       <BottomNav role={viewer.role} />

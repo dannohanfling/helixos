@@ -6,9 +6,9 @@
   "name": "Onboarding",
   "track": "Foundation",
   "tagline": "Set the foundation. Clean start.",
-  "description": "This is where we lay the groundwork. Sign the agreement, pay, fill out the onboarding form, get access to the tools, and choose where your community will live. No work begins until this stage is done — because shortcuts here create leaks everywhere else. When this stage is done, you're set up to move fast — no more guessing, no more setup drag.\n",
+  "description": "Before you build anything, get clear on what you promise and who you promise it to. Your webinar, your chatbot, your groups and your conversations all get built on this. Change it later and you rebuild all four.",
   "entryCriteria": "You've been invited into Academy.\n",
-  "exitCriteria": "Agreement signed. First payment in. GHL access confirmed. Community platform chosen. Onboarding form submitted.\n",
+  "exitCriteria": "Your Big Promise is written. You know who it's for. Your 90-day revenue goal is set.",
   "pointsAvailable": 100,
   "expectedDuration": "Week 1",
   "runsInParallel": false

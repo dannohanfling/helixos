@@ -11,6 +11,11 @@ mkdirSync("screenshots", { recursive: true });
 
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  // The app says when it is still loading a page; wait for that to clear before judging what is on it.
+  await page.locator('[data-testid="page-loading"]').waitFor({ state: "hidden", timeout: 3000 }).catch(async () => {
+    await page.screenshot({ path: `screenshots/fail-stuck-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
+    throw new Error(`[${label}] loading skeleton still showing after 3s on ${page.url()}: a client would see no page`);
+  });
   await page.getByText(re).filter({ visible: true }).first().waitFor({ timeout: 15000 }).catch(async () => {
     await page.screenshot({ path: `screenshots/fail-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
     throw new Error(`[${label}] expected "${text}" on ${page.url()}`);

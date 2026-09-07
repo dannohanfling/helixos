@@ -6,6 +6,7 @@ import { aiStatus } from "@/lib/ai";
 import { Badge, PageHeader } from "@/components/ui";
 import { TOOLS, toolName, toolStatus, type ToolFacts } from "@/lib/engine/tools";
 import naming from "@/data/tools.json";
+import { PendingLink } from "@/components/pending-link";
 
 export const metadata = { title: "Tools" };
 
@@ -87,9 +88,9 @@ export default async function ToolsPage() {
               </ul>
               <div className="mt-4 flex items-center gap-2 pt-1">
                 {status.ready ? (
-                  <Link href={open} className="btn btn-accent btn-sm" data-testid="tool-open">
+                  <PendingLink href={open} className="btn btn-accent btn-sm" data-testid="tool-open">
                     {tool.openLabel} →
-                  </Link>
+                  </PendingLink>
                 ) : (
                   <>
                     <Link href={status.missing[0].href} className="btn btn-soft btn-sm" data-testid="tool-fix">

@@ -1,6 +1,7 @@
 /** Applies pending migrations to DATABASE_URL. Run before `next start` on a new deploy: `npm run db:migrate`. Idempotent. */
 import { sql } from "drizzle-orm";
-import { db, ensureMigrated } from "@/db";
+import { db, ensureMigrated, schema } from "@/db";
+import stages from "@/data/seed/stages.json";
 import { hashSecret } from "@/lib/crypto";
 
 /**
@@ -20,6 +21,7 @@ async function readLegacyInboundSecrets(): Promise<{ id: string; secret: string 
 async function main() {
   const legacy = await readLegacyInboundSecrets();
   await ensureMigrated();
+  await syncStageCopy();
   for (const { id, secret } of legacy) {
     await db.run(sql`update integrations set inbound_secret_hash = ${hashSecret(secret)} where id = ${id} and inbound_secret_hash is null`);
   }
@@ -32,3 +34,17 @@ main()
     console.error(e);
     process.exit(1);
   });
+
+/**
+ * The Pathway stages' words (name, tagline, description, criteria, duration) come from src/data/seed/stages.json and are
+ * upserted on every migrate, so approved copy reaches production with the deploy. Progress rows reference stages by key
+ * and are untouched.
+ */
+async function syncStageCopy(): Promise<void> {
+  for (const s of stages) {
+    await db
+      .insert(schema.pathwayStages)
+      .values({ ...s, tagline: s.tagline ?? null, description: s.description ?? null, entryCriteria: s.entryCriteria ?? null, exitCriteria: s.exitCriteria ?? null })
+      .onConflictDoUpdate({ target: schema.pathwayStages.key, set: { ...s } });
+  }
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { PinToViewport } from "@/components/pin-to-viewport";
 import { NAV_GROUPS, type NavItem } from "./nav-groups";
 const STORAGE_KEY = "helix.nav.collapsed";
 
@@ -106,6 +107,7 @@ export function BottomNav({ role }: { role: "coach" | "client" }) {
   void role;
   const moreActive = !items.slice(0, 4).some((n) => isActive(pathname, n.href));
   return (
+    <PinToViewport edge="bottom">
     <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t bg-surface/95 backdrop-blur md:hidden">
       {items.map((n) => {
         const active = n.href === "/more" ? moreActive && pathname !== "/today" : isActive(pathname, n.href);
@@ -117,5 +119,6 @@ export function BottomNav({ role }: { role: "coach" | "client" }) {
         );
       })}
     </nav>
+    </PinToViewport>
   );
 }

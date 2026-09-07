@@ -7,11 +7,15 @@ mkdirSync("screenshots", { recursive: true });
 
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-  const ok = (await page.getByText(re).filter({ visible: true }).count().catch(() => 0)) > 0;
-  if (!ok) {
+  // A page answers at once with its loading skeleton; it must clear within 3 seconds, then the text must be there.
+  await page.locator('[data-testid="page-loading"]').waitFor({ state: "hidden", timeout: 3000 }).catch(async () => {
+    await page.screenshot({ path: `screenshots/fail-stuck-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
+    throw new Error(`[${label}] loading skeleton still showing after 3s on ${page.url()}: a client would see no page`);
+  });
+  await page.getByText(re).filter({ visible: true }).first().waitFor({ timeout: 15000 }).catch(async () => {
     await page.screenshot({ path: `screenshots/fail-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
     throw new Error(`[${label}] expected "${text}" on ${page.url()}`);
-  }
+  });
 }
 async function shot(page: Page, name: string) {
   await page.screenshot({ path: `screenshots/${name}.png`, fullPage: true });

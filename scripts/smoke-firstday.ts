@@ -11,6 +11,11 @@ mkdirSync("screenshots", { recursive: true });
 
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  // The app says when it is still loading a page; wait for that to clear before judging what is on it.
+  await page.locator('[data-testid="page-loading"]').waitFor({ state: "hidden", timeout: 3000 }).catch(async () => {
+    await page.screenshot({ path: `screenshots/fail-stuck-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
+    throw new Error(`[${label}] loading skeleton still showing after 3s on ${page.url()}: a client would see no page`);
+  });
   await page.getByText(re).filter({ visible: true }).first().waitFor({ timeout: 15000 }).catch(async () => {
     await page.screenshot({ path: `screenshots/fail-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
     throw new Error(`[${label}] expected "${text}" on ${page.url()}`);
@@ -47,6 +52,13 @@ async function main() {
     await expectText(page, "Set your one goal", "goal prompt instead of bar");
     const exercise = await page.locator('[data-testid="exercise-link"]').first().getAttribute("href");
     if (!exercise) throw new Error("the 30-day build card has no way into the exercise");
+    if (!(await page.locator('[data-testid="nav-progress"]').count())) throw new Error("no navigation progress bar in the shell");
+    await page.locator('[data-testid="exercise-link"]').first().click();
+    const armed = await page.locator('[data-testid="nav-progress"]').getAttribute("data-active");
+    await page.waitForURL((u) => u.pathname + u.search + u.hash === exercise || u.pathname === exercise.split(/[?#]/)[0], { timeout: 15000 });
+    await page.waitForLoadState("networkidle");
+    console.log(`✓ "Do it in the app" lands on ${exercise}; progress bar ${armed === "1" ? "showed" : "had already finished"}`);
+    await page.goto(`${base}/today`);
     const road = await page.locator('[data-testid="road"]').innerText();
     if (!/Stage 1 of 7 · Week 1 · first conversion event around Week 6/.test(road)) throw new Error(`Today should name the road ahead, got "${road}"`);
     await page.screenshot({ path: "screenshots/fd01-first-today.png", fullPage: true });
@@ -164,10 +176,30 @@ async function main() {
     }
     await anon.close();
     const head = await page.locator("head").innerHTML();
-    for (const tag of ['rel="manifest"', 'rel="apple-touch-icon"', 'name="mobile-web-app-capable" content="yes"', 'name="apple-mobile-web-app-title" content="HelixOS"', "user-scalable=no"]) {
+    if (/user-scalable=no|maximum-scale=1\b/.test(head)) throw new Error("pinch zoom is disabled; low-vision members need it");
+    for (const tag of ['rel="manifest"', 'rel="apple-touch-icon"', 'name="mobile-web-app-capable" content="yes"', 'name="apple-mobile-web-app-title" content="HelixOS"']) {
       if (!head.includes(tag)) throw new Error(`head is missing ${tag}`);
     }
-    console.log(`✓ installable: manifest, ${m.icons.length} manifest icons, apple-touch-icon, standalone tags`);
+    console.log(`✓ installable: manifest, ${m.icons.length} manifest icons, apple-touch-icon, standalone tags; pinch zoom on`);
+
+    // Under pinch zoom the bars hold still: pinned to the visual viewport, counter-scaled
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
+    await page.waitForTimeout(400);
+    const pinned = await page.evaluate(() => ({
+      scale: window.visualViewport?.scale,
+      header: document.querySelector('[data-pin="top"] > *')?.getAttribute("style") ?? "",
+      nav: document.querySelector('[data-pin="bottom"] > *')?.getAttribute("style") ?? "",
+    }));
+    if (pinned.scale && pinned.scale > 1.5) {
+      if (!/scale\(0\.5\)/.test(pinned.header) || !/position: fixed/.test(pinned.header)) throw new Error(`header not pinned under zoom: ${pinned.header}`);
+      if (!/scale\(0\.5\)/.test(pinned.nav)) throw new Error(`bottom nav not pinned under zoom: ${pinned.nav}`);
+      await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+      await page.waitForTimeout(300);
+      const restored = await page.evaluate(() => document.querySelector('[data-pin="top"] > *')?.getAttribute("style") ?? "");
+      if (/scale\(/.test(restored)) throw new Error("header still transformed after zoom returned to 1");
+      console.log("✓ bars pinned to the visual viewport under 2× zoom, released at 1×");
+    } else console.log(`· page scale emulation unavailable here (scale ${pinned.scale}); pin not exercised`);
 
     // Small buttons are 40px on a phone
     await page.goto(`${base}/today`);

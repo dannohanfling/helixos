@@ -11,11 +11,15 @@ mkdirSync("screenshots", { recursive: true });
 
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-  const ok = (await page.getByText(re).filter({ visible: true }).count().catch(() => 0)) > 0;
-  if (!ok) {
+  // A page answers at once with its loading skeleton and the content lands a moment later; wait for that, then the text.
+  await page.locator('[data-testid="page-loading"]').waitFor({ state: "hidden", timeout: 3000 }).catch(async () => {
+    await page.screenshot({ path: `screenshots/fail-stuck-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
+    throw new Error(`[${label}] loading skeleton still showing after 3s on ${page.url()}: a client would see no page`);
+  });
+  await page.getByText(re).filter({ visible: true }).first().waitFor({ timeout: 15000 }).catch(async () => {
     await page.screenshot({ path: `screenshots/fail-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
     throw new Error(`[${label}] expected to see "${text}" on ${page.url()}`);
-  }
+  });
 }
 
 async function submit(page: Page, selector: string) {
@@ -37,7 +41,10 @@ async function main() {
   page.on("response", (r) => {
     if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
   });
-  page.on("pageerror", (e) => failures.push(`pageerror: ${e.message}`));
+  page.on("pageerror", (e) => {
+    console.log(`  [pageerror] ${e.message.slice(0, 200)}`);
+    failures.push(`pageerror: ${e.message}`);
+  });
 
   // Login
   await page.goto(`${base}/login`);

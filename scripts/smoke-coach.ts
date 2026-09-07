@@ -15,6 +15,11 @@ mkdirSync("screenshots/logs", { recursive: true });
 
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  // The app says when it is still loading a page; wait for that to clear before judging what is on it.
+  await page.locator('[data-testid="page-loading"]').waitFor({ state: "hidden", timeout: 3000 }).catch(async () => {
+    await page.screenshot({ path: `screenshots/fail-stuck-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
+    throw new Error(`[${label}] loading skeleton still showing after 3s on ${page.url()}: a client would see no page`);
+  });
   await page.getByText(re).filter({ visible: true }).first().waitFor({ timeout: 15000 }).catch(async () => {
     await page.screenshot({ path: `screenshots/fail-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
     throw new Error(`[${label}] expected "${text}" on ${page.url()}`);
@@ -135,10 +140,14 @@ async function main() {
 
     // A client can't open the coach view; a membership from nowhere is a 404
     await page.goto(`${base}/coach/${mm.id}`);
+    await page.waitForURL(/\/today/, { timeout: 10000 }).catch(() => null);
     if (!/\/today/.test(page.url())) throw new Error(`a client reached ${page.url()}`);
+    if (await page.getByText("Call notes").count()) throw new Error("coach content reached a client");
     await login(page, "coach");
-    const missing = await page.goto(`${base}/coach/not-a-membership`);
-    if (missing?.status() !== 404) throw new Error(`unknown membership should 404, got ${missing?.status()}`);
+    await page.goto(`${base}/coach/not-a-membership`);
+    await page.getByText(/could not be found|404/i).first().waitFor({ timeout: 5000 }).catch(() => null);
+    const body = await page.locator("main").innerText();
+    if (!/could not be found|404/i.test(body) || /Call notes/.test(body)) throw new Error(`unknown membership should show not-found, got:\n${body.slice(0, 200)}`);
     console.log("✓ access: client redirected, unknown membership 404");
   } finally {
     await browser.close();
