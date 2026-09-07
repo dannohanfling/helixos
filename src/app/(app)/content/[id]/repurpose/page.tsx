@@ -13,6 +13,7 @@ import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
 import { alignPost, groupReadiness } from "@/lib/engine/groups";
 import type { ContentVariant, Group } from "@/db/schema";
+import { AiFormStatus } from "@/components/ai-status";
 
 function VariantForm({ var_, maxChars, email = false }: { var_: ContentVariant; maxChars: number; email?: boolean }) {
   return (
@@ -170,6 +171,7 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
               <button className="btn btn-accent" type="submit">Generate group drafts</button>
               {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With AI</button> : null}
             </div>
+            <AiFormStatus feature="group_variant" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
           </form>
         ) : (
           <p className="text-sm text-ink-2">
@@ -214,6 +216,7 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
             <button className="btn btn-accent" type="submit">Generate drafts</button>
             {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With AI</button> : <span className="text-xs text-ink-3"><Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have each draft polished in your voice.</span>}
           </div>
+          <AiFormStatus feature="repurpose" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
         </form>
       </Card>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">

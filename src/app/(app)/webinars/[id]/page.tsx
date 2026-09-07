@@ -10,6 +10,7 @@ import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/componen
 import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, STEPS, WIZARD_STAGES, deckOutline, nextStep, readinessScore, webinarProgress, type StepKey } from "@/lib/engine/webinar";
 import { assetsFor } from "@/lib/queries/library";
 import { AssetForm } from "@/components/asset-form";
+import { AiFormStatus } from "@/components/ai-status";
 
 const ACT_ICON: Record<string, string> = { opening: "🎬", vehicle: "🎯", internal: "💪", external: "🌍", closing: "🎭" };
 
@@ -333,6 +334,7 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                 <button className="btn btn-soft btn-sm" type="submit">
                   {ai ? "✨ Draft this section for me" : "Start from the example"}
                 </button>
+                <AiFormStatus feature="webinar_section" enabled={ai} onlyWhen={{ field: "mode", value: "ai" }} />
               </form>
               <details className="text-xs">
                 <summary className="text-ink-3 underline">See the Leaky Webinar version</summary>

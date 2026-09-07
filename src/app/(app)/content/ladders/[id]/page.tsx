@@ -9,6 +9,7 @@ import { CopyButton } from "@/components/copy-button";
 import { LiveClock } from "@/components/rung-runner";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
 import { checkScore, checklist, formatFor, headlineParts, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, threadsText } from "@/lib/engine/ladder";
+import { AiFormStatus } from "@/components/ai-status";
 
 function HeadlinePreview({ headline, handle }: { headline: string; handle?: string | null }) {
   const h = headlineParts(headline);
@@ -238,6 +239,7 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
                 <button className="btn btn-soft btn-sm" type="submit">
                   Regenerate (replaces every field)
                 </button>
+                <AiFormStatus feature="ladder" enabled={ai} />
               </form>
             </Disclosure>
           </Card>

@@ -37,7 +37,8 @@ async function login(page: Page, who: "client" | "coach") {
 }
 
 async function main() {
-  const mock = spawn("npx", ["tsx", "scripts/mock-ai.ts", String(mockPort)], { stdio: "ignore", detached: true });
+  // Every mock reply is held 1.5s so the status line under a ✨ action is visible while the call runs.
+  const mock = spawn("npx", ["tsx", "scripts/mock-ai.ts", String(mockPort), "1500"], { stdio: "ignore", detached: true });
   await new Promise((r) => setTimeout(r, 2500));
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -84,8 +85,16 @@ async function main() {
     await page.click('main a[href^="/content/"]:not([href*="compose"]):not([href*="ladders"])');
     await page.waitForURL(/\/content\/[^/]+$/);
     await page.goto(page.url() + "/repurpose");
-    await submit(page, 'button:has-text("✨ With")');
+    // While the call runs the ✨ action narrates what it is doing; the line is gone the moment the result lands
+    await page.click('button:has-text("✨ With")');
+    const status = page.locator('[data-testid="ai-status"]');
+    await status.waitFor({ timeout: 5000 });
+    const firstLine = await status.innerText();
+    if (!/Reading the group's rules and tone\./.test(firstLine)) throw new Error(`status should narrate the group draft step, got "${firstLine}"`);
+    if (/…|%/.test(firstLine)) throw new Error("status line must not animate dots or fake a percentage");
     await expectText(page, "Mock AI draft", "ai draft used");
+    if (await status.count()) throw new Error("status line left stranded after the call returned");
+    console.log(`✓ status line while the call runs: "${firstLine.trim()}"`);
     await page.goto(`${base}/settings`);
     await expectText(page, "Group-aligned drafts", "usage by feature");
     const usage = await page.locator('[data-testid="ai-usage"]').innerText();

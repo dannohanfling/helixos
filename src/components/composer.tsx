@@ -8,6 +8,7 @@ import { polishTargetsAction, saveComposeAction, type ComposeResult } from "@/li
 import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type Draft, type GroupTarget, type Target, type TargetKey } from "@/lib/engine/compose";
 import { hashtagsFor } from "@/lib/engine/repurpose";
 import { ChannelPreview, type Persona } from "./channel-previews";
+import { AiStatus } from "@/components/ai-status";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; hasCta?: boolean; mediaUrl?: string; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 
@@ -40,6 +41,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const [time, setTime] = useState("09:00");
   const [stagger, setStagger] = useState(true);
   const [pending, start] = useTransition();
+  const [polishing, setPolishing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [result, setResult] = useState<ComposeResult | null>(null);
 
@@ -97,7 +99,9 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const polish = () =>
     start(async () => {
       setNotice(null);
+      setPolishing(true);
       const res = await polishTargetsAction({ title: src.title, hook, body, hasCta, targets: chosen.map((t) => ({ key: t.key, channel: t.channel, groupId: t.groupId, body: draftFor(src, t).body })) });
+      setPolishing(false);
       const n = Object.keys(res).length;
       if (!n) {
         setNotice("No AI drafts came back. Check your AI key on Settings (it may be past today's cap), or keep the rule-based versions.");
@@ -224,6 +228,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   <input type="checkbox" checked={hasCta} onChange={(e) => setHasCta(e.target.checked)} /> Has a call to action
                 </label>
               </div>
+              <AiStatus feature="composer_polish" active={pending && polishing} />
               <div className="grid gap-3 sm:grid-cols-2">
                 <input className="field text-sm" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="Photo or video URL (optional)" />
                 <select className="field text-sm" value={contentType} onChange={(e) => setContentType(e.target.value)}>

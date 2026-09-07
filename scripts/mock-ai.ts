@@ -6,6 +6,8 @@
 import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? 4020);
+/** Milliseconds to hold every reply, so a walk can see the status line while a call is in flight. */
+const delayMs = Number(process.argv[3] ?? process.env.MOCK_AI_DELAY_MS ?? 0);
 
 function reply(system: string, user: string): string {
   if (/JSON object keyed by/i.test(system)) {
@@ -18,7 +20,8 @@ function reply(system: string, user: string): string {
 createServer((req, res) => {
   const chunks: Buffer[] = [];
   req.on("data", (c) => chunks.push(c));
-  req.on("end", () => {
+  req.on("end", () => setTimeout(handle, delayMs));
+  const handle = () => {
     const url = req.url ?? "";
     const json = (code: number, body: unknown) => {
       res.writeHead(code, { "content-type": "application/json" });
@@ -62,5 +65,5 @@ createServer((req, res) => {
       return json(200, { id: "resp_mock", object: "response", model: body.model, status: "completed", output: [{ type: "message", id: "m1", role: "assistant", status: "completed", content: [{ type: "output_text", text, annotations: [] }] }], output_text: text, usage: { input_tokens: 120, output_tokens: 40, total_tokens: 160 } });
     }
     return json(404, { error: "not found" });
-  });
+  };
 }).listen(port, () => console.log(`mock AI on http://localhost:${port}`));

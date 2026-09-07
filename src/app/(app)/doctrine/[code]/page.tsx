@@ -8,6 +8,7 @@ import { principleToContentAction } from "@/lib/actions/doctrine";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Disclosure, PageHeader, Tabs } from "@/components/ui";
 import { principlePost, principleReel, principleTraining } from "@/lib/engine/doctrine";
+import { AiFormStatus } from "@/components/ai-status";
 
 const TABS = [
   { key: "doctrine", label: "Doctrine" },
@@ -102,6 +103,7 @@ export default async function PrinciplePage({ params, searchParams }: { params: 
                 {ai ? (
                   <button className="btn btn-soft btn-sm" type="submit" name="ai" value="1">✨ With Claude</button>
                 ) : null}
+                <AiFormStatus feature="principle_content" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
               </form>
             </Card>
           ))}

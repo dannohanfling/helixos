@@ -7,6 +7,7 @@ import { createLadderAction, deleteLadderAction } from "@/lib/actions/ladders";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
 import { LADDER_FORMATS, cadenceNotes, checkScore, checklist } from "@/lib/engine/ladder";
 import { addDays, formatDate, formatDateTime, weekday } from "@/lib/dates";
+import { AiFormStatus } from "@/components/ai-status";
 
 export const metadata = { title: "Ladders" };
 
@@ -101,6 +102,7 @@ export default async function LaddersPage() {
                 <button className="btn btn-primary" type="submit">
                   {ai ? "Write the ladder" : "Build the skeleton"}
                 </button>
+                <AiFormStatus feature="ladder" enabled={ai} />
                 <span className="text-xs text-ink-3">{ai ? "AI drafts every field from your facts and approved proof, on your own key. You edit, the checklist keeps it honest." : <>No AI key connected, so you get the full structure with every blank marked. <Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have it drafted for you.</>}</span>
               </div>
             </form>
