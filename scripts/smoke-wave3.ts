@@ -103,8 +103,10 @@ async function main() {
   // Today close optional groups
   await page.goto(`${base}/today`);
   await page.locator('summary:has-text("Edit today")').click().catch(() => null);
-  const funnel = page.locator('details:has(summary:has-text("Webinar funnel"))').first();
-  if (!(await funnel.evaluate((el) => (el as HTMLDetailsElement).open))) await funnel.locator("summary").click();
+  const early = page.locator('[data-testid="close-early"] > summary');
+  if (await early.isVisible()) await early.click();
+  const funnel = page.locator('details:has(> summary:has-text("Webinar funnel"))').first();
+  if (!(await funnel.evaluate((el) => (el as HTMLDetailsElement).open))) await funnel.locator(":scope > summary").click();
   await page.fill('input[name="webinarRegs"]', "7");
   await submit(page, 'button:has-text("Close the day")');
   await expectText(page, "Day closed", "close with optional groups");

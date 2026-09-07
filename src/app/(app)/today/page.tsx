@@ -188,7 +188,7 @@ export default async function TodayPage() {
                   {d.focusTasks.length ? (
                     <div className="-mx-2 divide-y">
                       {[...openFocus, ...doneFocus].map((t) => (
-                        <TaskRow key={t.id} task={t} today={v.today} compact />
+                        <TaskRow key={t.id} task={t} today={v.today} compact origin={d.taskOrigins.get(t.id)} />
                       ))}
                     </div>
                   ) : (
@@ -210,7 +210,7 @@ export default async function TodayPage() {
             {boardTasks.length ? (
               <div className="-mx-2 divide-y">
                 {boardTasks.map((t) => (
-                  <TaskRow key={t.id} task={t} today={v.today} />
+                  <TaskRow key={t.id} task={t} today={v.today} origin={d.taskOrigins.get(t.id)} />
                 ))}
               </div>
             ) : (

@@ -12,7 +12,8 @@ import { money, rollup } from "@/lib/engine/ai-usage";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
-import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
+import { daysBetween, formatDate, formatDateTime } from "@/lib/dates";
+import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import prizes from "@/data/seed/prizes.json";
@@ -100,7 +101,9 @@ export default async function CoachPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-lg">{r.u?.avatarEmoji}</span>
                           <div>
-                            <div className="font-medium">{r.u?.name}</div>
+                            <Link href={`/coach/${r.m.id}`} className="font-medium underline-offset-2 hover:underline" data-testid="client-link">
+                              {r.u?.name}
+                            </Link>
                             <div className="text-xs text-ink-3">{r.m.businessName ?? r.m.programTier}</div>
                           </div>
                         </div>
@@ -250,16 +253,16 @@ export default async function CoachPage() {
                 {claimRows.map((c) => {
                   const u = userById.get(c.userId);
                   const link = linkOf.get(c.rewardName);
-                  const booking = !link ? "no next step set yet" : c.bookingOpenedAt ? `opened the booking link ${formatDateTime(c.bookingOpenedAt, v.tz)}` : "hasn't opened the booking link yet";
+                  const booking = c.bookedAt ? `booked for ${formatDateTime(c.bookedAt, v.tz)}` : !link ? "no next step set yet" : c.bookingOpenedAt ? `opened the booking link ${formatDateTime(c.bookingOpenedAt, v.tz)}` : "hasn't opened the booking link yet";
                   return (
                     <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid="claim-row">
-                      <span className="font-medium">
+                      <Link href={`/coach/${members.find((mm) => mm.userId === c.userId)?.id ?? ""}`} className="font-medium hover:underline">
                         {u?.avatarEmoji} {u?.name ?? "Member"}
-                      </span>
+                      </Link>
                       <span className="min-w-0 flex-1">{c.rewardName}</span>
                       <span className="text-xs text-ink-3">{formatDateTime(c.createdAt.includes("T") ? c.createdAt : c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
                       <span className="tabular text-xs text-ink-2">{c.pointsSpent ? `−${c.pointsSpent.toLocaleString()} pts` : "milestone"}</span>
-                      <span className={`basis-full text-xs ${c.bookingOpenedAt ? "text-good" : link ? "text-warn" : "text-ink-3"}`}>{booking}</span>
+                      <span className={`basis-full text-xs ${c.bookedAt ? "text-good" : link && !c.bookingOpenedAt ? "text-warn" : "text-ink-3"}`}>{booking}</span>
                     </li>
                   );
                 })}
@@ -307,8 +310,3 @@ export default async function CoachPage() {
 }
 
 /** Same window as nudgeMemberAction: a nudge in the last 20 hours counts as today, whatever the clock says in UTC. */
-function daysSinceNudge(lastNudgedAt: string | null, now: Date, tz: string, today: string): number | null {
-  if (!lastNudgedAt) return null;
-  if (now.getTime() - new Date(lastNudgedAt).getTime() < 20 * 3600_000) return 0;
-  return Math.max(1, daysBetween(todayInTz(tz, new Date(lastNudgedAt)), today));
-}

@@ -17,6 +17,10 @@ import { nowIso } from "@/lib/dates";
 import { logSync, type Provider } from "@/lib/integrations";
 import { award } from "@/lib/queries/points";
 import { hashSecret, verifyEd25519 } from "@/lib/crypto";
+import { catalogue, matchClaimForAppointment } from "@/lib/engine/rewards";
+import { loadRewardsConfig } from "@/lib/rewards-config";
+import prizes from "@/data/seed/prizes.json";
+import rewards from "@/data/seed/rewards.json";
 
 type Body = Record<string, unknown>;
 const s = (v: unknown) => (typeof v === "string" ? v : typeof v === "number" ? String(v) : "");
@@ -62,6 +66,20 @@ async function authenticate(provider: Provider, request: Request, raw: string, b
   return NextResponse.json({ error: "missing x-helix-secret header" }, { status: 401 });
 }
 
+/**
+ * Earn Your Way: a member's appointment lands on one of their open reward claims, so the coach sees "booked", not just
+ * "opened the link". Only claims whose reward has a booking link can be booked. Ambiguity is reported, never guessed.
+ */
+async function bookClaim(ctx: { workspaceId: string; userId: string }, calendarId: string, callAt: string, ref: string): Promise<string> {
+  const config = loadRewardsConfig();
+  const linked = new Set(catalogue(rewards, prizes, config).filter((i) => i.bookingUrl).map((i) => i.name));
+  const claims = await db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, ctx.workspaceId), eq(schema.rewardClaims.userId, ctx.userId)) });
+  const open = claims.filter((c) => !c.bookedAt && linked.has(c.rewardName)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const match = matchClaimForAppointment(open, calendarId, config.calendarIds ?? {});
+  if (match.claim) await db.update(schema.rewardClaims).set({ bookedAt: callAt || nowIso(), bookedRef: ref || null }).where(eq(schema.rewardClaims.id, match.claim.id));
+  return match.note;
+}
+
 export async function handleInbound(provider: Provider, request: Request): Promise<Response> {
   const raw = await request.text();
   let body: Body = {};
@@ -101,6 +119,10 @@ export async function handleInbound(provider: Provider, request: Request): Promi
         if (existing) await db.update(schema.contacts).set({ stage: existing.stage === "client" ? "client" : stage, callAt: callAt || existing.callAt }).where(eq(schema.contacts.id, existing.id));
         else await db.insert(schema.contacts).values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, name, platform: "Other", stage, source: "GoHighLevel", callAt: callAt || null });
         note = existing ? `Updated contact ${name}` : `Created contact ${name}`;
+      }
+      if (/appointment/i.test(event)) {
+        const booked = await bookClaim(ctx, s(body.calendarId ?? appt.calendarId ?? (body.calendar as Body | undefined)?.id), callAt, s(body.id ?? appt.id ?? body.appointmentId));
+        note = `${note}; ${booked}`;
       }
     }
   }

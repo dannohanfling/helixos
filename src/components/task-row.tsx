@@ -1,12 +1,15 @@
 import type { Task } from "@/db/schema";
 import { deleteTaskAction, rescheduleTaskAction, setFocusAction, toggleTaskAction } from "@/lib/actions/tasks";
-import { addDays, relativeDay } from "@/lib/dates";
+import { addDays, formatDate, relativeDay } from "@/lib/dates";
+import { originLabel } from "@/lib/engine/notes";
+import type { TaskOrigin } from "@/lib/queries/tasks";
 import { ConfirmButton } from "./confirm-button";
 
 const CATEGORY_ICON: Record<string, string> = { sales: "💬", content: "✍️", community: "👥", system: "⚙️", admin: "🗂️", fulfillment: "🤝" };
 
-export function TaskRow({ task, today, compact = false }: { task: Task; today: string; compact?: boolean }) {
+export function TaskRow({ task, today, compact = false, origin }: { task: Task; today: string; compact?: boolean; origin?: TaskOrigin }) {
   const done = task.status === "done";
+  const from = origin ? originLabel(origin.source, origin.date, (d) => formatDate(d)) : null;
   const overdue = !done && task.dueDate !== null && task.dueDate < today;
   const isFocus = task.focusDate === today;
   return (
@@ -32,6 +35,11 @@ export function TaskRow({ task, today, compact = false }: { task: Task; today: s
           {task.dueDate ? <span className={overdue ? "font-semibold text-danger" : ""}>· {relativeDay(task.dueDate, today)}</span> : null}
           {task.repeatEveryDays ? <span>· repeats every {task.repeatEveryDays === 1 ? "day" : `${task.repeatEveryDays} days`}</span> : null}
           <span>· +{task.points} pts</span>
+          {from ? (
+            <span className="rounded-md bg-accent-soft px-1.5 py-0.5 font-medium text-accent-ink" data-testid="task-origin">
+              📞 {from}
+            </span>
+          ) : null}
         </div>
       </div>
       {!done ? (

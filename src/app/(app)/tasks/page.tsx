@@ -3,6 +3,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { NewTaskForm } from "@/components/new-task-form";
 import { TaskRow } from "@/components/task-row";
+import { taskOrigins } from "@/lib/queries/tasks";
 import { Card, Empty, PageHeader, Tabs } from "@/components/ui";
 import { addDays, formatDate } from "@/lib/dates";
 
@@ -21,6 +22,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     orderBy: desc(schema.tasks.completedAt),
     limit: 50,
   });
+  const origins = await taskOrigins([...open, ...done]);
   const overdue = open.filter((t) => t.dueDate && t.dueDate < today);
   const dueToday = open.filter((t) => t.dueDate === today);
   const focus = open.filter((t) => t.focusDate === today);
@@ -59,7 +61,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
             {g.items.length ? (
               <div className="-mx-2 divide-y">
                 {g.items.map((t) => (
-                  <TaskRow key={t.id} task={t} today={today} />
+                  <TaskRow key={t.id} task={t} today={today} origin={origins.get(t.id)} />
                 ))}
               </div>
             ) : (

@@ -12,7 +12,7 @@ export function loadRewardsConfig(): RewardsConfig {
   if (override && existsSync(override)) {
     try {
       const parsed = JSON.parse(readFileSync(override, "utf8")) as Partial<RewardsConfig>;
-      return { perMonth: parsed.perMonth ?? committed.perMonth, bookingLinks: { ...committed.bookingLinks, ...(parsed.bookingLinks ?? {}) } } as RewardsConfig;
+      return { perMonth: parsed.perMonth ?? committed.perMonth, bookingLinks: { ...committed.bookingLinks, ...(parsed.bookingLinks ?? {}) }, calendarIds: { ...committed.calendarIds, ...(parsed.calendarIds ?? {}) } } as RewardsConfig;
     } catch {
       /* a broken override file falls back to the committed config */
     }

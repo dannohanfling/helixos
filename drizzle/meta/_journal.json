@@ -113,6 +113,13 @@
       "when": 1788745120434,
       "tag": "0015_reward_claim_booking_opened",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1788796448493,
+      "tag": "0016_coach_notes_claim_booked",
+      "breakpoints": true
     }
   ]
 }

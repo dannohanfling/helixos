@@ -18,6 +18,8 @@ export type RewardsConfig = {
   perMonth: PerMonthMode;
   /** Booking link per reward or prize, keyed by its exact name. Empty means "Opening soon": visible, never claimable. */
   bookingLinks: Record<string, string>;
+  /** GoHighLevel calendar id per reward name. With it, an inbound appointment is matched to the right claim with certainty. */
+  calendarIds?: Record<string, string>;
 };
 
 export type CatalogueItem = {
@@ -152,6 +154,26 @@ export function claimability(item: CatalogueItem, c: { points: number; tierLevel
     return { ok: false, reason: "cap", message: `All ${cap.cap} taken${cap.periodWord ? ` ${cap.periodWord}` : ""}.${when}` };
   }
   return { ok: true };
+}
+
+export type ClaimMatch = { claim: { id: string; rewardName: string } | null; note: string };
+
+/**
+ * Which of a member's open claims an inbound appointment belongs to. Certain when the appointment's calendar id is mapped
+ * to a reward in the config; otherwise only when exactly one claim is open. Two open claims and no calendar id is a
+ * genuine ambiguity, and guessing would mark the wrong call booked, so nothing is stamped and the note says what would fix it.
+ */
+export function matchClaimForAppointment(open: { id: string; rewardName: string }[], calendarId: string, calendarIds: Record<string, string> = {}): ClaimMatch {
+  if (!open.length) return { claim: null, note: "No open reward claim to book" };
+  if (calendarId) {
+    const rewardName = Object.entries(calendarIds).find(([, id]) => id === calendarId)?.[0];
+    if (rewardName) {
+      const claim = open.find((c) => c.rewardName === rewardName);
+      return claim ? { claim, note: `Booked "${rewardName}" (calendar ${calendarId})` } : { claim: null, note: `Calendar ${calendarId} is "${rewardName}", but this member has no open claim for it` };
+    }
+  }
+  if (open.length === 1) return { claim: open[0], note: `Booked "${open[0].rewardName}" (only open claim)` };
+  return { claim: null, note: `${open.length} open claims (${open.map((c) => c.rewardName).join(", ")}) and no matching calendar id: not marked booked. Map each reward's GoHighLevel calendar id under "calendarIds" in rewards-config.json to make this certain.` };
 }
 
 /** One line of what an item asks for, for the catalogue: tier, points, and how many spots. */

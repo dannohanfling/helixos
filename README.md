@@ -93,6 +93,7 @@ npx tsx scripts/smoke-headers.ts     # Every page as client and coach under the 
 npx tsx scripts/smoke-firstday.ts    # A new client's first five minutes on a phone: join, welcome card, no admin tasks, touch targets, 16px fields, installable (manifest + icons), no developer copy
 npx tsx scripts/smoke-loop.ts        # The daily loop's edges: broken-streak notice + repair, close pre-filled from the day, editing a close scores the difference, member timezone, coach nudge
 npx tsx scripts/smoke-rewards.ts     # Earn Your Way: whole catalogue visible, no link = "Opening soon", claim = points off + booking link, workspace caps with reopen date, server-side refusal, coach claims read-only (needs REWARDS_CONFIG_OVERRIDE; dev-server.sh sets it)
+npx tsx scripts/smoke-coach.ts       # Coach opens a client: roster link → /coach/[clientId] (their words, pathway, claims, built, pillars), nudge, call note → tasks tagged "From your call" on the client's Today/Tasks, inbound GoHighLevel appointment books an open claim only when certain
 npx tsx scripts/smoke-email.ts       # SendGrid adapter against scripts/mock-sendgrid.ts: 202 payload shape, 401 reason, reminder loop survives one failing recipient
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
@@ -107,7 +108,7 @@ Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQ
 - `src/lib/actions/` — server actions (all writes). `src/lib/queries/` — reads.
 - `src/app/(app)/` — the signed-in app. `src/app/(auth)/` — login and invite join.
 - `src/data/seed/*.json` — template content pulled from the HelixOS base (stages, task library, curriculum, DM library, tiers, prizes, rewards).
-- `src/data/rewards-config.json` — the booking link for each reward and prize (empty = "Opening soon", never claimable) and `perMonth`: `calendar` (a Per Month cap resets on the 1st; quarters on the quarter) or `rolling` (last 30 / 90 days). Kept apart from the seed so a re-import from Airtable never wipes it. Caps count every client in the workspace together.
+- `src/data/rewards-config.json` — the booking link for each reward and prize (empty = "Opening soon", never claimable) and `perMonth`: `calendar` (a Per Month cap resets on the 1st; quarters on the quarter) or `rolling` (last 30 / 90 days). Kept apart from the seed so a re-import from Airtable never wipes it. Caps count every client in the workspace together. `calendarIds` maps a reward name to its GoHighLevel calendar id: with it, an inbound appointment webhook marks that exact claim booked; without it, only a member's single open claim is booked and two open claims are reported, never guessed.
 - `src/data/seed/webinar/*.json` — WebinarOS content: acts, the 20-section Leaky Webinar example, wizard stages, and the story / analogy / objection / belief banks.
 
 ## Keeping it in sync with Airtable

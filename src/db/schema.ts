@@ -381,10 +381,32 @@ export const rewardClaims = sqliteTable("reward_claims", {
   rewardName: text("reward_name").notNull(),
   pointsSpent: integer("points_spent").notNull().default(0),
   status: text("status", { enum: ["requested", "fulfilled"] }).notNull().default("requested"),
-  /** First time the client followed the booking link. The only "did they book" signal we have; the calendar is external. */
+  /** First time the client followed the booking link. */
   bookingOpenedAt: text("booking_opened_at"),
+  /** Set when an inbound GoHighLevel appointment is matched to this claim: the call is actually on the calendar. */
+  bookedAt: text("booked_at"),
+  bookedRef: text("booked_ref"),
   createdAt: createdAt(),
 });
+
+/**
+ * What the coach wrote after a call with one client, keyed to the membership (the client's seat in this workspace, not the
+ * client's own CRM). Tasks created from a note carry source "coach_call" and sourceRef = the note id.
+ */
+export const coachNotes = sqliteTable(
+  "coach_notes",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    authorUserId: text("author_user_id").notNull(),
+    date: text("date").notNull(),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("coach_notes_membership").on(t.membershipId, t.date)],
+);
+export type CoachNote = typeof coachNotes.$inferSelect;
 
 export type Workspace = typeof workspaces.$inferSelect;
 export type User = typeof users.$inferSelect;

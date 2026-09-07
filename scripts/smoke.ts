@@ -72,7 +72,7 @@ async function main() {
   // Evening close (expand if already closed today)
   const editClose = page.locator('summary:has-text("Edit today")');
   if (await editClose.isVisible()) await editClose.click();
-  const early = page.locator('[data-testid="close-early"] summary');
+  const early = page.locator('[data-testid="close-early"] > summary');
   if (await early.isVisible()) await early.click();
   await page.fill('input[name="dmsStarted"]', "3");
   await page.fill('input[name="callsBooked"]', "1");

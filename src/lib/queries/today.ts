@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { taskOrigins } from "@/lib/queries/tasks";
 import type { Viewer } from "@/lib/auth";
 import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
@@ -157,6 +158,7 @@ export async function todayData(v: Viewer) {
     dueTasks,
     overdueTasks,
     upcomingTasks,
+    taskOrigins: await taskOrigins([...focusTasks, ...dueTasks, ...overdueTasks, ...upcomingTasks]),
     openTasks,
     contentDue: [...contentOverdue, ...contentDue],
     followUps,
