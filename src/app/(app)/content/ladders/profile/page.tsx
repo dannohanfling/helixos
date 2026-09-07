@@ -13,7 +13,7 @@ export default async function LadderProfilePage() {
   const [profile, offer, proofs] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
     db.query.offers.findFirst({ where: eq(schema.offers.userId, v.user.id), orderBy: desc(schema.offers.createdAt) }),
-    db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
+    db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
   const p = profile ?? null;
   const priceGuess = offer?.price ? `$${offer.price.toLocaleString()}${offer.paymentPlan ? `, or ${offer.paymentPlan}` : ""}` : "";

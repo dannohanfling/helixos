@@ -105,6 +105,20 @@ async function main() {
     await expectText(page, "checklist", "checklist card");
     if (!(await page.locator('[data-testid="headline-preview"]').isVisible())) throw new Error("headline preview missing");
     console.log("✓ finished ladder clears every check");
+    // A ready ladder edited into a failing state is a draft again; fixed, it can be marked ready
+    const demoId = page.url().split("/").pop()!.split("?")[0];
+    const cleanCopy = await page.locator('textarea[name="copy"]').inputValue();
+    await page.fill('textarea[name="copy"]', `${cleanCopy}\nThe skinny version is in the comments?`);
+    await submit(page, 'button:has-text("Save and re-check")');
+    let demo = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) });
+    if (demo?.status !== "draft") throw new Error(`a ready ladder edited to fail should be a draft again, is ${demo?.status}`);
+    if (!(await page.locator('[data-testid="publish-blocked"]').count())) throw new Error("failing edit shows no blockers");
+    await page.fill('textarea[name="copy"]', cleanCopy);
+    await submit(page, 'button:has-text("Save and re-check")');
+    await submit(page, 'button:has-text("Mark ready")');
+    demo = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) });
+    if (demo?.status !== "ready") throw new Error(`fixed ladder should be ready, is ${demo?.status}`);
+    console.log("✓ a failing edit demotes ready to draft; fixed, it is ready again");
 
     // Live hour: post rung 1, rung 2; status goes live; reset returns to ready
     await submit(page, '[data-testid="rung-1"] button:has-text("Posted")');
@@ -112,6 +126,24 @@ async function main() {
     await expectText(page, "live", "status live");
     await submit(page, '[data-testid="rung-2"] button:has-text("Posted")');
     await expectText(page, "2/11 posted", "second rung posted");
+    // While a live ladder fails: Undo works, posting another rung is refused, Reset lands on draft, not ready
+    await page.fill('textarea[name="copy"]', `${cleanCopy}\nThe skinny version is in the comments?`);
+    await submit(page, 'button:has-text("Save and re-check")');
+    const rungButtons = page.locator('[data-testid="mark-rung"]');
+    await submit(page, '[data-testid="mark-rung"] >> nth=1');
+    await expectText(page, "1/11 posted", "undo allowed while blocked");
+    await rungButtons.nth(2).evaluate((el) => el.removeAttribute("disabled"));
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), rungButtons.nth(2).click()]);
+    await page.waitForURL(/blocked=/, { timeout: 10000 });
+    demo = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) });
+    if (demo?.rungs.filter((r) => r.postedAt).length !== 1) throw new Error("posting a rung of a failing live ladder was not refused");
+    await submit(page, 'button:has-text("Reset")');
+    demo = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) });
+    if (demo?.status !== "draft" || demo.rungs.some((r) => r.postedAt)) throw new Error(`Reset on a failing ladder should land on draft with no rungs posted, got ${demo?.status}`);
+    await page.fill('textarea[name="copy"]', cleanCopy);
+    await submit(page, 'button:has-text("Save and re-check")');
+    await submit(page, 'button:has-text("Mark ready")');
+    console.log("✓ while blocked: undo allowed, posting refused, Reset lands on draft; fixed and ready again");
     await page.screenshot({ path: "screenshots/ld02-live-hour.png", fullPage: true });
     await submit(page, 'button:has-text("Reset")');
     await expectText(page, "0/11 posted", "reset");

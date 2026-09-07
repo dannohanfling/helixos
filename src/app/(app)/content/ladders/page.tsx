@@ -30,7 +30,7 @@ export default async function LaddersPage() {
   const [list, profile, proofs] = await Promise.all([
     db.query.ladders.findMany({ where: eq(schema.ladders.userId, v.user.id), orderBy: desc(schema.ladders.createdAt) }),
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
-    db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
+    db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
   const ai = await hasAiKey();
   const keywords = profile?.keywords.filter((k) => k.keyword) ?? [];

@@ -334,7 +334,7 @@ export function scaffold(brief: Brief, profile: LadderProfile | null, proofs: Pr
 
 export type Check = { key: string; label: string; ok: boolean; level: "fail" | "warn"; note: string };
 
-type LadderLike = Pick<Ladder, "copy" | "headline" | "rungs" | "dmKeyword" | "igCaption" | "threadsChain" | "realNumbers" | "keyword" | "format">;
+type LadderLike = Pick<Ladder, "copy" | "headline" | "rungs" | "dmKeyword" | "igCaption" | "threadsChain" | "realNumbers" | "keyword" | "format"> & Partial<Pick<Ladder, "hook" | "carousel" | "altHeadlines">>;
 
 export function headlineParts(h: string): { lines: string[]; gold: string[]; text: string } {
   const gold = Array.from(h.matchAll(/\(gold:\s*([^)]+)\)/gi)).map((m) => m[1].trim());
@@ -347,7 +347,8 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   const checks: Check[] = [];
   const add = (key: string, label: string, ok: boolean, note = "", level: "fail" | "warn" = "fail") => checks.push({ key, label, ok, level, note: ok ? "" : note });
   const rungs = l.rungs;
-  const all = [l.copy, ...rungs.map((r) => r.body), l.igCaption, ...l.threadsChain, l.headline].join("\n");
+  // Everything that leaves: the hook becomes the content item's first line, the carousel is copied for slides.
+  const all = [l.hook ?? "", l.copy, ...rungs.map((r) => r.body), l.igCaption, ...l.threadsChain, l.headline, ...(l.altHeadlines ?? []), ...(l.carousel ?? [])].join("\n");
   const keyword = l.keyword && l.keyword.toUpperCase() !== "NONE" ? l.keyword.toUpperCase() : "";
   const banned = [...DEFAULT_BANNED, ...(profile?.bannedPhrases ?? [])].map((b) => b.toLowerCase()).filter(Boolean);
   const lower = all.toLowerCase();

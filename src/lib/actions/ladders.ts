@@ -12,15 +12,19 @@ import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 /**
  * The publish gate. Anything that pushes a ladder outward (to the composer, to ready/live/done, a rung marked posted)
- * runs the same checklist the page shows and is refused while any check FAILS. Warns never block; saving, editing and
- * regenerating are never gated. A refusal sends the client back to the ladder with the failing checks named.
+ * runs the same checklist the page shows, against the ladder's own workspace, and is refused while any check FAILS.
+ * Warns never block; saving, editing, regenerating, un-posting a rung and clearing are never gated. A refusal sends the
+ * client back to the ladder with the failing checks named.
  */
-async function assertPublishable(l: schema.Ladder, workspaceId: string, userId: string): Promise<void> {
+async function blockersFor(l: schema.Ladder) {
   const [profile, proofs] = await Promise.all([
-    db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, workspaceId), eq(schema.ladderProfiles.userId, userId)) }),
-    db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }),
+    db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, l.workspaceId), eq(schema.ladderProfiles.userId, l.userId)) }),
+    db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, l.workspaceId), eq(schema.proofs.userId, l.userId), eq(schema.proofs.status, "approved")) }),
   ]);
-  const blockers = publishBlockers(checklist(l, profile ?? null, proofs));
+  return publishBlockers(checklist(l, profile ?? null, proofs));
+}
+async function assertPublishable(l: schema.Ladder): Promise<void> {
+  const blockers = await blockersFor(l);
   if (blockers.length) redirect(`/content/ladders/${l.id}?blocked=${encodeURIComponent(blockers.map((b) => b.key).join(","))}`);
 }
 
@@ -184,31 +188,39 @@ export async function updateLadderAction(formData: FormData): Promise<void> {
       realNumbers: opt(formData, "realNumbers"),
     })
     .where(eq(schema.ladders.id, l.id));
+  if (l.status === "ready") {
+    const fresh = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, l.id) });
+    if (fresh && (await blockersFor(fresh)).length) await db.update(schema.ladders).set({ status: "draft" }).where(eq(schema.ladders.id, l.id));
+  }
   refresh();
 }
 
 export async function setLadderStatusAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { userId } = await ctx();
   const l = await own(str(formData, "id"), userId);
   const status = LADDER_STATUSES.find((s) => s === str(formData, "status"));
   if (!status) return;
-  if (status !== "draft") await assertPublishable(l, workspaceId, userId);
+  if (status !== "draft") await assertPublishable(l);
   await db.update(schema.ladders).set({ status, launchedAt: status === "live" ? (l.launchedAt ?? nowIso()) : status === "draft" ? null : l.launchedAt }).where(eq(schema.ladders.id, l.id));
   refresh();
 }
 
 /** Live posting: marks one rung posted (starting the clock on the first), or clears them all. */
 export async function markRungAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { userId } = await ctx();
   const l = await own(str(formData, "id"), userId);
   const n = Number(str(formData, "n"));
   const reset = str(formData, "clearAll") === "1"; // never name a field "reset": it shadows form.reset(), which React calls after actions
-  if (!reset) await assertPublishable(l, workspaceId, userId);
+  const target = l.rungs.find((r) => r.n === n);
+  const posting = !reset && Boolean(target) && !target!.postedAt;
+  if (posting) await assertPublishable(l); // un-posting is never gated
   const rungs = reset ? l.rungs.map((r) => ({ ...r, postedAt: null })) : l.rungs.map((r) => (r.n === n ? { ...r, postedAt: r.postedAt ? null : nowIso() } : r));
   const allDone = rungs.length > 0 && rungs.every((r) => r.postedAt);
+  // Clearing a live run lands on "ready" only if the ladder would pass today; otherwise it is a draft again.
+  const afterReset = l.status === "live" || l.status === "done" ? ((await blockersFor(l)).length ? "draft" : "ready") : l.status;
   await db
     .update(schema.ladders)
-    .set({ rungs, launchedAt: reset ? null : (l.launchedAt ?? nowIso()), status: reset ? (l.status === "live" || l.status === "done" ? "ready" : l.status) : allDone ? "done" : "live" })
+    .set({ rungs, launchedAt: reset ? null : (l.launchedAt ?? nowIso()), status: reset ? afterReset : allDone ? "done" : "live" })
     .where(eq(schema.ladders.id, l.id));
   refresh();
 }
@@ -217,7 +229,7 @@ export async function markRungAction(formData: FormData): Promise<void> {
 export async function sendLadderToComposerAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const l = await own(str(formData, "id"), userId);
-  await assertPublishable(l, workspaceId, userId);
+  await assertPublishable(l);
   let itemId = l.contentItemId;
   const existing = itemId ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) }) : null;
   const item = { title: l.postName || l.topic, hook: l.hook || null, body: l.copy || null, hasCta: l.keyword !== "NONE", contentType: "Comment Ladder", notes: l.notes };
