@@ -34,7 +34,7 @@ export default async function LaddersPage() {
   const keywords = profile?.keywords.filter((k) => k.keyword) ?? [];
   const lastLaunch = list.map((l) => l.launchedAt).filter(Boolean).sort().at(-1) ?? null;
   const slot = nextSlot(v.today);
-  const cadence = cadenceNotes(`${slot}T09:00:00`, v.workspace.timezone, lastLaunch);
+  const cadence = cadenceNotes(`${slot}T09:00:00`, v.tz, lastLaunch);
   const tabs = [
     { key: "board", label: "Board", href: "/content" },
     { key: "calendar", label: "Calendar", href: "/content?view=calendar" },

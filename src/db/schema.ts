@@ -57,6 +57,10 @@ export const memberships = sqliteTable(
     eoPassLastPushAt: text("eo_pass_last_push_at"),
     /** Coach override of the workspace's daily AI cap for this member. */
     aiCapExempt: integer("ai_cap_exempt", { mode: "boolean" }).notNull().default(false),
+    /** The member's own timezone. Null means the workspace's. "Today", reminder hours and streak boundaries all follow it. */
+    timezone: text("timezone"),
+    lastNudgedAt: text("last_nudged_at"),
+    lastComebackAt: text("last_comeback_at"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("memberships_ws_user").on(t.workspaceId, t.userId)],
@@ -239,6 +243,8 @@ export const dailyLogs = sqliteTable(
     win: text("win"),
     gratitude: text("gratitude"),
     streakDay: integer("streak_day").notNull().default(0),
+    /** Set when the day was closed after the fact to mend a broken streak. Counts for the running streak, not the weekly bonus. */
+    repairedAt: text("repaired_at"),
     webinarRegs: integer("webinar_regs").notNull().default(0),
     webinarShows: integer("webinar_shows").notNull().default(0),
     replayViews: integer("replay_views").notNull().default(0),

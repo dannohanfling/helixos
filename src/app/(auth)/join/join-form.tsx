@@ -5,7 +5,15 @@ import { joinAction, type AuthState } from "@/lib/actions/auth";
 import { SubmitButton } from "@/components/submit-button";
 
 export function JoinForm({ code }: { code?: string }) {
-  const [state, action] = useActionState<AuthState, FormData>(joinAction, undefined);
+  // The browser knows the member's timezone; the server stores it so "today" and reminders follow the member, not the coach.
+  const [state, action] = useActionState<AuthState, FormData>((prev, formData) => {
+    try {
+      formData.set("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
+    } catch {
+      /* leave unset: the workspace timezone applies */
+    }
+    return joinAction(prev, formData);
+  }, undefined);
   return (
     <form action={action} className="space-y-3">
       <label className="block">

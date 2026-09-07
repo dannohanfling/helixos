@@ -1,4 +1,4 @@
-import { addDays, isWeekday, startOfWeek } from "@/lib/dates";
+import { addDays, daysBetween, isWeekday, startOfWeek } from "@/lib/dates";
 
 /**
  * Streak rules (from the HelixOS Daily Hashtag quest):
@@ -52,6 +52,22 @@ export function runningStreak(closed: Set<string>, today: string): number {
     cursor = addDays(cursor, -1);
   }
   return count;
+}
+
+/**
+ * When the running streak is 0, what was lost and whether one grace day would mend it. Repair means closing the single missed
+ * weekday after the fact; two or more missed weekdays are a real break. Weekends are never "missed".
+ */
+export function brokenStreak(closed: Set<string>, today: string): { lost: number; endedOn: string; missed: string[]; repairable: boolean } | null {
+  if (runningStreak(closed, today) > 0 || closed.size === 0) return null;
+  const endedOn = [...closed].filter((d) => d < today).sort().at(-1);
+  if (!endedOn) return null;
+  const lost = runningStreak(closed, endedOn);
+  if (lost < 2) return null;
+  const missed: string[] = [];
+  for (let d = addDays(endedOn, 1); d < today; d = addDays(d, 1)) if (isWeekday(d) && !closed.has(d)) missed.push(d);
+  if (!missed.length) return null;
+  return { lost, endedOn, missed, repairable: missed.length === 1 && daysBetween(missed[0], today) <= 7 };
 }
 
 export function bestStreak(closed: Set<string>): number {

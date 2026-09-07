@@ -21,20 +21,20 @@ export function contentPoints(hasCta: boolean): number {
   return hasCta ? POINTS.contentWithCta : POINTS.contentPosted;
 }
 
-/** Points for the numbers logged in an evening close. */
-export function closeActivityPoints(log: {
-  dmsStarted: number;
-  conversations: number;
-  callsBooked: number;
-  callsHeld: number;
-  posts: number;
-}): { total: number; lines: { label: string; points: number }[] } {
+export type CloseNumbers = { dmsStarted: number; conversations: number; callsBooked: number; callsHeld: number; posts: number };
+
+/**
+ * Points for the numbers logged in an evening close. `alreadyCounted` is what the app scored during the day as it happened
+ * (a post marked posted, a conversation logged), so typing the same number at the close never scores it twice.
+ */
+export function closeActivityPoints(log: CloseNumbers, alreadyCounted: Partial<CloseNumbers> = {}): { total: number; lines: { label: string; points: number }[] } {
+  const net = (k: keyof CloseNumbers) => Math.max(0, log[k] - (alreadyCounted[k] ?? 0));
   const lines = [
-    { label: "DMs started", points: log.dmsStarted * POINTS.dmStarted },
-    { label: "Conversations", points: log.conversations * POINTS.reply },
-    { label: "Calls booked", points: log.callsBooked * POINTS.callBooked },
-    { label: "Calls held", points: log.callsHeld * POINTS.callHeld },
-    { label: "Posts", points: log.posts * POINTS.contentPosted },
+    { label: "DMs started", points: net("dmsStarted") * POINTS.dmStarted },
+    { label: "Conversations", points: net("conversations") * POINTS.reply },
+    { label: "Calls booked", points: net("callsBooked") * POINTS.callBooked },
+    { label: "Calls held", points: net("callsHeld") * POINTS.callHeld },
+    { label: "Posts", points: net("posts") * POINTS.contentPosted },
   ].filter((l) => l.points > 0);
   return { total: lines.reduce((s, l) => s + l.points, 0), lines };
 }

@@ -10,6 +10,8 @@ export type Viewer = {
   workspace: schema.Workspace;
   membership: schema.Membership;
   role: "coach" | "client";
+  /** The member's own timezone, or the workspace's. Every "today" in the app comes from this. */
+  tz: string;
   today: string;
   hour: number;
 };
@@ -28,13 +30,15 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   ]);
   if (!user || !workspace) return null;
   if ((session.sv ?? 0) !== user.sessionVersion) return null;
+  const tz = membership.timezone || workspace.timezone;
   return {
     user,
     workspace,
     membership,
     role: membership.role,
-    today: todayInTz(workspace.timezone),
-    hour: hourInTz(workspace.timezone),
+    tz,
+    today: todayInTz(tz),
+    hour: hourInTz(tz),
   };
 });
 

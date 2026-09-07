@@ -39,6 +39,17 @@ const joinSchema = z.object({
   businessName: z.string().max(120).optional(),
 });
 
+/** The browser's IANA zone from the join form, when it's one the runtime knows. */
+function browserTimezone(tz: string): string | null {
+  if (!tz) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
+}
+
 export async function joinAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const parsed = joinSchema.safeParse({
     code: String(formData.get("code") ?? "").trim().toUpperCase(),
@@ -69,7 +80,7 @@ export async function joinAction(_prev: AuthState, formData: FormData): Promise<
   });
   if (!existing) {
     const membershipId = newId();
-    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: workspace.id, userId: user.id, role, businessName });
+    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: workspace.id, userId: user.id, role, businessName, timezone: browserTimezone(String(formData.get("timezone") ?? "")) });
     if (role === "client") await seedNewClient(workspace.id, user.id);
   }
   await writeSession({ userId: user.id, workspaceId: workspace.id, role: existing?.role ?? role, sv: user.sessionVersion });

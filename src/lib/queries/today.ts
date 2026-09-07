@@ -5,7 +5,8 @@ import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
 import { tierProgress } from "@/lib/engine/tiers";
 import { simplePath } from "@/lib/engine/pathway";
-import { logFor, streakFor } from "./daily";
+import { closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
+import { brokenStreak } from "@/lib/engine/streak";
 import { STEPS, nextStep, webinarProgress } from "@/lib/engine/webinar";
 import { totalPoints } from "./points";
 
@@ -95,6 +96,9 @@ export async function todayData(v: Viewer) {
       db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.workspaceId, workspaceId), eq(schema.dailyLogs.userId, userId), isNotNull(schema.dailyLogs.morningDoneAt)) }),
     ]);
 
+  const [allClosed, used, activity] = await Promise.all([closedDates(workspaceId, userId), repairsUsed(workspaceId, userId, today.slice(0, 7)), todayActivity(workspaceId, userId, today)]);
+  const broken = log?.eveningDoneAt ? null : brokenStreak(allClosed, today);
+  const repairsLeft = Math.max(0, 1 - used);
   const clientRecords = await db.query.clientRecords.findMany({ where: and(eq(schema.clientRecords.userId, userId), eq(schema.clientRecords.status, "active")) });
   const clientsDueCheckin = clientRecords.filter((c) => {
     const base = c.lastCheckinAt ?? c.startDate;
@@ -162,6 +166,11 @@ export async function todayData(v: Viewer) {
     goal: goal ?? null,
     /** Never locked in: Today shows the welcome card instead of the next-action block. */
     firstSession: !everLockedIn,
+    /** When the running streak is 0 and something was lost: what, when, and whether one grace day mends it. */
+    broken,
+    repairsLeft,
+    /** What the app already saw today, to pre-fill the close. */
+    activity,
     actions,
     snapshot,
   };

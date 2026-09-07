@@ -6,7 +6,9 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { POINTS, closeActivityPoints } from "@/lib/engine/points";
 import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
-import { closedDates } from "@/lib/queries/daily";
+import { closedDates, repairsUsed, todayActivity } from "@/lib/queries/daily";
+import { brokenStreak } from "@/lib/engine/streak";
+import { isWeekday } from "@/lib/dates";
 import { award } from "@/lib/queries/points";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
@@ -87,8 +89,10 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
     revDm: num(formData, "revDm"),
   };
   const firstClose = !log.eveningDoneAt;
-  const closed = await closedDates(workspaceId, userId);
+  // Repaired days keep the running streak alive but never feed the weekly escalation: a missed weekday still drops it to day 1.
+  const closed = await closedDates(workspaceId, userId, { excludeRepaired: true });
   const streakDay = firstClose ? weeklyStreakDay(closed, today) : log.streakDay;
+  const previousCash = log.cashCollected;
 
   await db
     .update(schema.dailyLogs)
@@ -109,14 +113,49 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
     await award({ workspaceId, userId }, "close", POINTS.close, "Closed the day", today);
     const bonus = streakBonus(streakDay);
     if (bonus) await award({ workspaceId, userId }, "streak", bonus, `Streak day ${streakDay}`, today);
-    const activity = closeActivityPoints(numbers);
-    if (activity.total) await award({ workspaceId, userId }, "dm", activity.total, `Daily activity: ${activity.lines.map((l) => l.label).join(", ")}`, `activity:${today}`);
   }
-  if (numbers.cashCollected > 0) {
+  // Activity points follow the numbers on every save, first close or edit: the day's activity row is set to the new total
+  // (net of what the app already scored as it happened), so editing a close at 5pm scores exactly the difference.
+  const seen = await todayActivity(workspaceId, userId, today);
+  const activity = closeActivityPoints(numbers, { posts: seen.posts, dmsStarted: seen.dmsStarted, conversations: seen.conversations });
+  await setActivityPoints({ workspaceId, userId }, today, activity.total, activity.lines.map((l) => l.label).join(", "));
+  // Cash always moves the goal by the change, whether this is the first close or a correction.
+  const cashDelta = numbers.cashCollected - previousCash;
+  if (cashDelta !== 0) {
     const goal = await db.query.goals.findFirst({ where: and(eq(schema.goals.userId, userId), eq(schema.goals.primary, true)) });
-    if (goal && goal.unit === "$" && firstClose) {
-      await db.update(schema.goals).set({ actual: goal.actual + numbers.cashCollected }).where(eq(schema.goals.id, goal.id));
-    }
+    if (goal && goal.unit === "$") await db.update(schema.goals).set({ actual: Math.max(0, goal.actual + cashDelta) }).where(eq(schema.goals.id, goal.id));
   }
+  refresh();
+}
+
+/** One ledger row per day for close activity, adjusted to the latest total. Zero total removes it. */
+async function setActivityPoints(ctx: { workspaceId: string; userId: string }, today: string, total: number, labels: string): Promise<void> {
+  const refId = `activity:${today}`;
+  const existing = await db.query.pointsLedger.findFirst({ where: and(eq(schema.pointsLedger.userId, ctx.userId), eq(schema.pointsLedger.type, "dm"), eq(schema.pointsLedger.refId, refId)) });
+  if (!total) {
+    if (existing) await db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, existing.id));
+    return;
+  }
+  const reason = `Daily activity: ${labels}`;
+  if (existing) {
+    if (existing.points !== total) await db.update(schema.pointsLedger).set({ points: total, reason }).where(eq(schema.pointsLedger.id, existing.id));
+  } else await award(ctx, "dm", total, reason, refId);
+}
+
+/**
+ * Mends a broken streak by closing the one missed weekday after the fact. One per calendar month, only when exactly one weekday
+ * was missed and it is within the last week. No points: the day is marked closed and repaired, the running streak survives,
+ * the weekly bonus still restarts at day 1.
+ */
+export async function repairStreakAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx();
+  const date = str(formData, "date");
+  const closed = await closedDates(workspaceId, userId);
+  const broken = brokenStreak(closed, v.today);
+  if (!broken || !broken.repairable || broken.missed[0] !== date || !isWeekday(date)) return;
+  if ((await repairsUsed(workspaceId, userId, v.today.slice(0, 7))) >= 1) return;
+  const log = await upsertLog(workspaceId, userId, date);
+  if (log.eveningDoneAt) return;
+  await db.update(schema.dailyLogs).set({ eveningDoneAt: nowIso(), repairedAt: nowIso(), streakDay: 0, win: log.win ?? "Streak repaired" }).where(eq(schema.dailyLogs.id, log.id));
   refresh();
 }

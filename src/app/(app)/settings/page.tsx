@@ -22,7 +22,7 @@ export default async function SettingsPage() {
       <PageHeader title="Settings" />
       <Card className="mb-4" title="🚀 Publishing (your GoHighLevel sub-account)">
         <p className="mb-3 text-sm text-ink-2">Connect your own GoHighLevel sub-account once. Posts you schedule in the composer land in your Social Planner and go out on their own. Your token is encrypted and only ever used for your sub-account.</p>
-        <GhlConnect conn={conn ?? null} tz={v.workspace.timezone} />
+        <GhlConnect conn={conn ?? null} tz={v.tz} />
       </Card>
       <div className="mb-4" id="ai">
         <AiKeyCard v={v} />
@@ -46,6 +46,13 @@ export default async function SettingsPage() {
             </Field>
             <Field label="Big promise" hint="I help [who] go from [pain] to [outcome] in [time] without [thing they hate].">
               <textarea className="field" name="bigPromise" defaultValue={v.membership.bigPromise ?? ""} />
+            </Field>
+            <Field label="Your timezone" hint="Sets what 'today' means for your lock-in, close, streak and reminders.">
+              <select className="field" name="timezone" defaultValue={v.membership.timezone ?? v.workspace.timezone}>
+                {Array.from(new Set([v.workspace.timezone, ...(v.membership.timezone ? [v.membership.timezone] : []), ...TIMEZONES])).map((tz) => (
+                  <option key={tz}>{tz}</option>
+                ))}
+              </select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Morning reminder (hour)">

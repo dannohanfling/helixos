@@ -1,20 +1,34 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { hourInTz, todayInTz } from "@/lib/dates";
+import { hourInTz, nowIso, todayInTz, weekday } from "@/lib/dates";
 import { runningStreak, streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { sendEmail } from "@/lib/email";
+
+/** The comeback email. Monday is restart day; on any other day the restart is today. Shared with the coach's nudge button. */
+export function comebackEmail(first: string, today: string, appUrl: string): { subject: string; text: string } {
+  const monday = weekday(today) === 1;
+  return {
+    subject: monday ? `${first}, Mondays are restart day` : `${first}, today is restart day`,
+    text: `Happens. The system doesn't punish pauses, it just resets the streak.\n\nDay 1 is 10 points. By Friday it's 310.\n\nLock in: ${appUrl}/today`,
+  };
+}
+
+/** A quiet client hears from us once, then not again for a week unless they come back. */
+export const COMEBACK_EVERY_DAYS = 7;
 
 export type ReminderResult = { userId: string; email: string; kind: "morning" | "evening" | "comeback"; delivery: "sent" | "logged" | "failed"; error?: string };
 
 /** One bad address or one provider error must never take down the run: the failure is logged with the member and the loop goes on. */
-async function deliver(out: ReminderResult[], m: { userId: string }, email: string, kind: ReminderResult["kind"], subject: string, text: string): Promise<void> {
+async function deliver(out: ReminderResult[], m: { userId: string }, email: string, kind: ReminderResult["kind"], subject: string, text: string): Promise<ReminderResult["delivery"]> {
   try {
     const delivery = await sendEmail(email, subject, text);
     out.push({ userId: m.userId, email, kind, delivery });
+    return delivery;
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     console.error(`[reminders] ${kind} to member ${m.userId} failed: ${error}`);
     out.push({ userId: m.userId, email, kind, delivery: "failed", error });
+    return "failed";
   }
 }
 
@@ -27,10 +41,11 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
   const workspaces = await db.query.workspaces.findMany();
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   for (const ws of workspaces) {
-    const today = todayInTz(ws.timezone, now);
-    const hour = hourInTz(ws.timezone, now);
     const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, ws.id), eq(schema.memberships.role, "client")) });
     for (const m of members) {
+      const tz = m.timezone || ws.timezone;
+      const today = todayInTz(tz, now);
+      const hour = hourInTz(tz, now);
       const user = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
       if (!user) continue;
       const log = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, m.userId), eq(schema.dailyLogs.date, today)) });
@@ -46,11 +61,19 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
         const lastDate = logs.map((l) => l.date).sort().at(-1);
         const quietDays = lastDate ? Math.round((Date.parse(today) - Date.parse(lastDate)) / 86400000) : 0;
         const comeback = Boolean(lastDate) && quietDays >= 3;
-        const subject = comeback ? `${first}, Mondays are restart day` : streak > 0 ? `Day ${streak + 1}? Lock in your top 3` : `${first}, lock in your day`;
-        const text = comeback
-          ? `Happens. The system doesn't punish pauses, it just resets the streak.\n\nDay 1 is 10 points. By Friday it's 310.\n\nLock in: ${appUrl}/today`
-          : `Pick your top 3. Set your energy. 60 seconds, +10 points.\n\n${streak > 0 ? `Your ${streak}-day streak is alive. ` : ""}Lock in: ${appUrl}/today`;
-        await deliver(out, m, user.email, comeback ? "comeback" : "morning", subject, text);
+        if (comeback) {
+          const recently = m.lastComebackAt && (now.getTime() - new Date(m.lastComebackAt).getTime()) / 86400000 < COMEBACK_EVERY_DAYS;
+          if (recently) continue;
+          const c = comebackEmail(first, today, appUrl);
+          // Only a send that actually went out starts the week of quiet; a logged (no key) or failed delivery is tried again.
+          if ((await deliver(out, m, user.email, "comeback", c.subject, c.text)) === "sent") {
+            await db.update(schema.memberships).set({ lastComebackAt: nowIso() }).where(eq(schema.memberships.id, m.id));
+          }
+          continue;
+        }
+        const subject = streak > 0 ? `Day ${streak + 1}? Lock in your top 3` : `${first}, lock in your day`;
+        const text = `Pick your top 3. Set your energy. 60 seconds, +10 points.\n\n${streak > 0 ? `Your ${streak}-day streak is alive. ` : ""}Lock in: ${appUrl}/today`;
+        await deliver(out, m, user.email, "morning", subject, text);
       }
       if (wantsEvening && !log?.eveningDoneAt) {
         const day = weeklyStreakDay(closed, today);

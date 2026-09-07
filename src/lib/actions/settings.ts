@@ -8,6 +8,17 @@ import { inviteCode } from "@/lib/ids";
 import { totalPoints } from "@/lib/queries/points";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
+/** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
+function validTimezone(tz: string): string | null {
+  if (!tz) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
+}
+
 export async function updateProfileAction(formData: FormData): Promise<void> {
   const { v, userId } = await ctx();
   const name = str(formData, "name");
@@ -21,6 +32,7 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
       reminderHour: Math.min(23, Math.max(0, num(formData, "reminderHour") || 8)),
       eveningReminderHour: Math.min(23, Math.max(0, num(formData, "eveningReminderHour") || 17)),
       leaderboardOptIn: formData.get("leaderboardOptIn") === "on",
+      timezone: validTimezone(str(formData, "timezone")),
     })
     .where(eq(schema.memberships.id, v.membership.id));
   refresh();

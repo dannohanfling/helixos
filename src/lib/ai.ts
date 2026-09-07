@@ -31,7 +31,7 @@ export async function credentialFor(workspaceId: string, userId: string) {
 
 /** Rows are stamped in UTC by the database; "today" is the workspace day. Close enough for a soft cap. */
 async function callsToday(v: Viewer): Promise<number> {
-  const rows = await db.select({ id: schema.aiUsage.id }).from(schema.aiUsage).where(and(eq(schema.aiUsage.workspaceId, v.workspace.id), eq(schema.aiUsage.userId, v.user.id), gte(schema.aiUsage.createdAt, todayInTz(v.workspace.timezone))));
+  const rows = await db.select({ id: schema.aiUsage.id }).from(schema.aiUsage).where(and(eq(schema.aiUsage.workspaceId, v.workspace.id), eq(schema.aiUsage.userId, v.user.id), gte(schema.aiUsage.createdAt, todayInTz(v.tz))));
   return rows.length;
 }
 

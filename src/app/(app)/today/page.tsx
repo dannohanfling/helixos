@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
-import { eveningCloseAction, morningCheckinAction } from "@/lib/actions/daily";
+import { eveningCloseAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
+import type { TodayActivity } from "@/lib/queries/daily";
 import type { DailyLog } from "@/db/schema";
 import { completeCurriculumDayAction } from "@/lib/actions/pathway";
 import { setContentStatusAction } from "@/lib/actions/content";
@@ -79,6 +80,37 @@ export default async function TodayPage() {
           <a href="#checkin" className="btn btn-primary mt-3">
             Lock in your first day
           </a>
+        </section>
+      ) : null}
+
+      {d.broken ? (
+        <section className="card mb-5 border-warn p-4" style={{ background: "var(--warn-soft)" }} data-testid="streak-broken">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-semibold">
+                Your {d.broken.lost}-day streak ended {formatDate(d.broken.endedOn, { weekday: "long" })}.
+              </div>
+              <div className="text-sm text-ink-2">
+                {d.broken.repairable && d.repairsLeft > 0
+                  ? `One weekday slipped (${formatDate(d.broken.missed[0], { weekday: "long", month: "short", day: "numeric" })}). Mend it and the streak carries on; the weekly bonus still restarts at day 1. One repair a month.`
+                  : d.broken.repairable
+                    ? "One weekday slipped, and this month's repair is already used. Day 1 is 10 points. By Friday it's 310."
+                    : `${d.broken.missed.length} weekdays slipped. The system doesn't punish pauses, it just resets. Day 1 is 10 points. By Friday it's 310.`}
+              </div>
+            </div>
+            {d.broken.repairable && d.repairsLeft > 0 ? (
+              <form action={repairStreakAction}>
+                <input type="hidden" name="date" value={d.broken.missed[0]} />
+                <button className="btn btn-primary btn-sm" type="submit">
+                  Repair the streak
+                </button>
+              </form>
+            ) : (
+              <a href="#close" className="btn btn-soft btn-sm">
+                Start day 1 tonight
+              </a>
+            )}
+          </div>
         </section>
       ) : null}
 
@@ -270,11 +302,11 @@ export default async function TodayPage() {
                 ) : null}
                 <details>
                   <summary className="text-xs text-ink-3 underline">Edit today&apos;s numbers</summary>
-                  <CloseForm log={d.log} />
+                  <CloseForm log={d.log} activity={d.activity} />
                 </details>
               </div>
             ) : (
-              <CloseForm log={d.log} />
+              <CloseForm log={d.log} activity={d.activity} />
             )}
           </Card>
         </div>
@@ -379,16 +411,21 @@ function LockInForm({ openTasks, today, defaultIntention }: { openTasks: { id: s
   );
 }
 
-function CloseForm({ log }: { log: DailyLog | null }) {
+function CloseForm({ log, activity }: { log: DailyLog | null; activity: TodayActivity }) {
+  // First close: start from what the app already saw today. Editing a close shows what was saved.
+  const prefill: Partial<Record<keyof DailyLog, number>> = log?.eveningDoneAt ? {} : { dmsStarted: activity.dmsStarted, conversations: activity.conversations, posts: activity.posts, newLeads: activity.newLeads };
   const n = (key: keyof DailyLog, label: string, hint: string) => (
     <label key={key} className="block">
       <span className="label">{label}</span>
-      <input className="field tabular" name={key} type="number" min={0} step={key === "cashCollected" ? 1 : 1} inputMode="numeric" defaultValue={log ? Number(log[key] ?? 0) : 0} />
+      <input className="field tabular" name={key} type="number" min={0} step={key === "cashCollected" ? 1 : 1} inputMode="numeric" defaultValue={log?.eveningDoneAt ? Number(log[key] ?? 0) : (prefill[key] ?? (log ? Number(log[key] ?? 0) : 0))} />
       <span className="mt-0.5 block text-[11px] text-ink-3">{hint}</span>
     </label>
   );
   return (
     <form action={eveningCloseAction} className="mt-2 space-y-4">
+      {!log?.eveningDoneAt && (activity.dmsStarted || activity.conversations || activity.posts || activity.newLeads) ? (
+        <p className="rounded-lg bg-surface-2 p-2 text-xs text-ink-2" data-testid="close-prefill">Filled in from what you logged today ({[activity.dmsStarted ? `${activity.dmsStarted} DMs` : "", activity.conversations ? `${activity.conversations} replies` : "", activity.posts ? `${activity.posts} posted` : "", activity.newLeads ? `${activity.newLeads} new leads` : ""].filter(Boolean).join(", ")}). Correct anything, then close. Points already earned during the day aren&apos;t counted twice.</p>
+      ) : null}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {n("dmsStarted", "DMs started", "+5 each")}
         {n("conversations", "Conversations", "+2 each")}

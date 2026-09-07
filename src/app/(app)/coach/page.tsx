@@ -3,7 +3,8 @@ import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
-import { setClientPassAction } from "@/lib/actions/coach";
+import { nudgeMemberAction, setClientPassAction } from "@/lib/actions/coach";
+import { clientFacing } from "@/lib/engine/pathway";
 import { setCertEnabledAction } from "@/lib/actions/courses";
 import { setMemberPassAction } from "@/lib/actions/integrations";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
@@ -11,12 +12,13 @@ import { money, rollup } from "@/lib/engine/ai-usage";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
-import { daysBetween, formatDate, formatDateTime } from "@/lib/dates";
+import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
 
 export const metadata = { title: "Coach" };
 
 export default async function CoachPage() {
   const v = await requireCoach();
+  const now = new Date();
   const wsId = v.workspace.id;
   const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, wsId), eq(schema.memberships.role, "client")) });
   const userIds = members.map((m) => m.userId);
@@ -36,6 +38,8 @@ export default async function CoachPage() {
   const credOf = new Map(aiCreds.map((c) => [c.userId, c]));
   const usageOf = (userId: string) => rollup(aiRows.filter((r) => r.userId === userId));
   const libByKey = new Map(library.map((l) => [l.key, l]));
+  // The denominator a client actually walks: the must-do path, not every task in the library.
+  const pathTotal = clientFacing(library).filter((t) => t.priority === "must").length;
   const userById = new Map(users.map((u) => [u.id, u]));
   const rows = members
     .map((m) => {
@@ -102,7 +106,7 @@ export default async function CoachPage() {
                         {TIER_ICONS[r.tier.name]} {r.tier.name} <span className="text-xs text-ink-3 tabular">{r.pts.toLocaleString()}</span>
                       </td>
                       <td className="py-2 pr-3 text-right tabular">
-                        {r.verified}/{library.length}
+                        {r.verified}/{pathTotal}
                         {r.waiting ? <Badge tone="accent">{r.waiting} waiting</Badge> : null}
                       </td>
                       <td className="py-2 pr-3 text-right text-xs">
@@ -236,14 +240,29 @@ export default async function CoachPage() {
           <Card title="Who needs a nudge">
             {atRisk.length ? (
               <ul className="space-y-2 text-sm">
-                {atRisk.map((r) => (
-                  <li key={r.m.id} className="flex items-center justify-between gap-2">
-                    <span>
-                      {r.u?.avatarEmoji} {r.u?.name}
-                    </span>
-                    <span className="text-xs text-warn">{r.lastActive ? `last seen ${formatDate(r.lastActive)}` : "never logged in"}</span>
-                  </li>
-                ))}
+                {atRisk.map((r) => {
+                  const nudgedAgo = daysSinceNudge(r.m.lastNudgedAt, now, v.tz, v.today);
+                  return (
+                    <li key={r.m.id} className="flex flex-wrap items-center justify-between gap-2" data-testid="nudge-row">
+                      <span>
+                        {r.u?.avatarEmoji} {r.u?.name}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs text-warn">{r.lastActive ? `last seen ${formatDate(r.lastActive)}` : "never logged in"}</span>
+                        {nudgedAgo === 0 ? (
+                          <span className="text-xs text-ink-3">nudged today</span>
+                        ) : (
+                          <form action={nudgeMemberAction}>
+                            <input type="hidden" name="membershipId" value={r.m.id} />
+                            <button className="btn btn-soft btn-xs" type="submit" title="Send the comeback email now">
+                              Nudge{nudgedAgo !== null ? ` · last ${nudgedAgo}d ago` : ""}
+                            </button>
+                          </form>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="text-sm text-ink-2">Everyone has shown up in the last 3 days.</p>
@@ -254,4 +273,11 @@ export default async function CoachPage() {
       </div>
     </>
   );
+}
+
+/** Same window as nudgeMemberAction: a nudge in the last 20 hours counts as today, whatever the clock says in UTC. */
+function daysSinceNudge(lastNudgedAt: string | null, now: Date, tz: string, today: string): number | null {
+  if (!lastNudgedAt) return null;
+  if (now.getTime() - new Date(lastNudgedAt).getTime() < 20 * 3600_000) return 0;
+  return Math.max(1, daysBetween(todayInTz(tz, new Date(lastNudgedAt)), today));
 }
