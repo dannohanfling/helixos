@@ -183,8 +183,8 @@
  },
  {
   "key": "recFNEk8cSIDgqQgG",
-  "stage": "onboarding",
-  "order": 106,
+  "stage": "system-install",
+  "order": 6,
   "name": "Create a safe test contact process",
   "teaching": "Outcome: Client can test without affecting real users\n\nCreate a testing routine using preview/test contacts before publishing or sending real traffic.\n\nWhy this matters: This task helps a beginner business owner build a safe, measurable Community Loyalty system for generating, nurturing, and converting leads.\n",
   "howTo": "Create a testing routine using preview/test contacts before publishing or sending real traffic.\n\nSuccess criteria: Every flow can be tested before it affects prospects.\n\nVerification: Run one preview interaction and confirm the user record updates as expected.\n",
@@ -351,8 +351,8 @@
  },
  {
   "key": "rec6fAdBtYS0UN2eG",
-  "stage": "onboarding",
-  "order": 123,
+  "stage": "system-install",
+  "order": 3,
   "name": "Build internal offer brief",
   "teaching": "Student translates the client’s offer into a clear internal brief that the implementation team can build from accurately.\n",
   "howTo": "Done when: a 2–3 page offer brief exists in HelixOS with all 9 sections completed (promise, audience, pricing, objections, belief shifts, bonuses, CTA, FAQs, conversion path) and has been walked through with the build team.\n",
@@ -365,8 +365,8 @@
  },
  {
   "key": "recGEbRKhCDQw2DBw",
-  "stage": "onboarding",
-  "order": 124,
+  "stage": "system-install",
+  "order": 4,
   "name": "Map the customer journey from entry to purchase",
   "teaching": "Student creates a full omnichannel journey map from content entry point to registration, nurture, event attendance, offer invitation, and follow-up.\n",
   "howTo": "Done when: a complete journey map exists in HelixOS showing every step from first touch to post-purchase, with channel, trigger, action, and outcome labeled for each step.\n",
@@ -407,8 +407,8 @@
  },
  {
   "key": "recCt8g2kJ5XU3qiD",
-  "stage": "onboarding",
-  "order": 127,
+  "stage": "system-install",
+  "order": 5,
   "name": "Build registration confirmation workflow",
   "teaching": "Student builds the workflow that handles registration confirmations, tagging, reminders, and internal notifications.\n",
   "howTo": "Done when: a registration workflow in GHL fires on form submit and successfully sends the confirmation email, applies the tag, updates the pipeline, and notifies the internal team. A test registration confirms every step.\n",

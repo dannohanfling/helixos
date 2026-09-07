@@ -13,11 +13,14 @@ describe("stage 1 after the platform task moved to system-install", () => {
     expect(platform.stageKey).toBe("system-install");
     expect(platform.order).toBe(1);
   });
-  it("still has five must-do tasks that are neither positioning nor the demoted admin set, so it is not task-less today", () => {
+  it("holds positioning only: no must-do task is left once the admin set is demoted, and the engine offers the first should-do task", () => {
     const remaining = library.filter((t) => t.stageKey === "onboarding" && t.priority === "must" && !ADMIN_ONBOARDING_KEYS.has(t.key)).map((t) => t.name);
-    expect(remaining).toEqual(["Create a safe test contact process", "Request missing access and implementation assets", "Build internal offer brief", "Map the customer journey from entry to purchase", "Build registration confirmation workflow"]);
+    expect(remaining).toEqual([]);
+    const moved = ["Create a safe test contact process", "Build internal offer brief", "Map the customer journey from entry to purchase", "Build registration confirmation workflow"];
+    for (const name of moved) expect(library.find((t) => t.name === name)?.stageKey, name).toBe("system-install");
+    expect(ADMIN_ONBOARDING_KEYS.has(library.find((t) => t.name === "Request missing access and implementation assets")!.key)).toBe(true);
     const path = simplePath(stages, library, []);
     expect(path.stageKey).toBe("onboarding");
-    expect(path.now[0]?.name).toBe("Create a safe test contact process");
+    expect(path.now[0]?.name).toBe('Film "Start Here" Video'); // the should-do fallback, not a positioning item
   });
 });

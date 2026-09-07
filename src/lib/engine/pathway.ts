@@ -10,7 +10,8 @@ export const OPEN_LIMIT = 3;
  * is inside the app these are done or the coach's job, so they never lead the client-facing path. They stay in the library as
  * optional extras, visible on the whole map, never as "your next step".
  */
-export const ADMIN_ONBOARDING_KEYS = new Set(["rec3EDSai6DGpoSuH", "recNzletnqB7Puu0A", "recCwbntdJ4Lx4dCN", "recQ9p5TpZUbE4UTe", "recKlRTN3LqILSJYe", "recROMPBY7WWLyW3e"]);
+// Account setup, not client work: the agreement, payment, form, access checks, kickoff, and requesting access assets.
+export const ADMIN_ONBOARDING_KEYS = new Set(["rec3EDSai6DGpoSuH", "recNzletnqB7Puu0A", "recCwbntdJ4Lx4dCN", "recQ9p5TpZUbE4UTe", "recKlRTN3LqILSJYe", "recROMPBY7WWLyW3e", "recPgnXs5n531z79L"]);
 
 export function clientFacing<T extends LibTask>(library: T[]): T[] {
   return library.map((t) => (ADMIN_ONBOARDING_KEYS.has(t.key) ? { ...t, priority: "optional" as const } : t));
