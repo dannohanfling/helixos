@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 
-export function CopyButton({ text, label = "Copy", className = "btn btn-soft btn-sm" }: { text: string; label?: string; className?: string }) {
+export function CopyButton({ text, label = "Copy", className = "btn btn-soft btn-sm", disabled = false, title }: { text: string; label?: string; className?: string; disabled?: boolean; title?: string }) {
   const [done, setDone] = useState(false);
   return (
     <button
       type="button"
       className={className}
+      disabled={disabled}
+      title={title}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);

@@ -98,6 +98,15 @@ npx tsx scripts/smoke-email.ts       # SendGrid adapter against scripts/mock-sen
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
 
+## Three AI actions that share one prompt, on purpose
+
+The composer's "shape for every channel", the repurpose page's channel drafts and its group drafts all send the same
+shape of prompt: adapt this one post for a target, with the target's rules. The composer's version is the superset (it
+takes channels and groups). They are kept separate because the persistence differs, and that difference is the point:
+composer output is a draft still being worked on (overrides until scheduled); repurpose and group output is a saved
+variant the client has decided to keep. Merging them would trade a real behavioural difference for tidier code. Revisit
+only if clients ask why there are three ways to do one thing.
+
 ## Stack
 
 Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQLite/libsql, `jose` sessions,

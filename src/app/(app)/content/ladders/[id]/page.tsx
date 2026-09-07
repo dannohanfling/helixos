@@ -8,7 +8,7 @@ import { markRungAction, regenerateLadderAction, sendLadderToComposerAction, set
 import { CopyButton } from "@/components/copy-button";
 import { LiveClock } from "@/components/rung-runner";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
-import { checkScore, checklist, formatFor, headlineParts, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, threadsText } from "@/lib/engine/ladder";
+import { checkScore, checklist, formatFor, headlineParts, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, threadsText } from "@/lib/engine/ladder";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 
@@ -40,7 +40,7 @@ function HeadlinePreview({ headline, handle }: { headline: string; handle?: stri
   );
 }
 
-export default async function LadderPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)) });
@@ -54,6 +54,10 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
   const checks = checklist(l, profile ?? null, proofs);
   const score = checkScore(checks);
   const ready = readyToPost(checks);
+  const blockers = publishBlockers(checks);
+  const blocked = blockers.length > 0;
+  const { blocked: refused } = await searchParams;
+  const hold = blocked ? "Clear the checklist first" : undefined;
   const airtable = rungsForAirtable(l.rungs);
   return (
     <>
@@ -70,23 +74,39 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
           <div className="flex flex-wrap gap-2">
             <form action={sendLadderToComposerAction}>
               <input type="hidden" name="id" value={l.id} />
-              <button className="btn btn-primary btn-sm" type="submit">{l.contentItemId ? "Open in composer" : "Send to composer"}</button>
+              <button className="btn btn-primary btn-sm" type="submit" disabled={blocked} title={hold} data-testid="send-to-composer">{l.contentItemId ? "Open in composer" : "Send to composer"}</button>
             </form>
             <form action={setLadderStatusAction}>
               <input type="hidden" name="id" value={l.id} />
               <input type="hidden" name="status" value={l.status === "draft" ? "ready" : "draft"} />
-              <button className="btn btn-ghost btn-sm" type="submit" disabled={l.status === "draft" && !ready} title={l.status === "draft" && !ready ? "Clear the checklist first" : ""}>
+              <button className="btn btn-ghost btn-sm" type="submit" disabled={l.status === "draft" && blocked} title={l.status === "draft" ? hold : undefined}>
                 {l.status === "draft" ? "Mark ready" : "Back to draft"}
               </button>
             </form>
           </div>
         }
       />
+      {blocked ? (
+        <div className={`mb-4 rounded-xl border p-3 text-sm ${refused ? "border-danger bg-danger-soft" : "bg-warn-soft"}`} data-testid="publish-blocked" role="alert">
+          <div className="font-semibold">{refused ? "That didn't go out." : "Not ready to go out yet."} Blocked until these pass:</div>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {blockers.map((b) => (
+              <li key={b.key}>
+                <a href={`#check-${b.key}`} className="underline" data-testid="blocker-link">
+                  {b.label}
+                </a>
+                {b.note ? <span className="text-ink-2"> · {b.note}</span> : null}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-ink-3">Saving, editing and regenerating still work. Warnings never block; only failures do.</p>
+        </div>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-4">
           <form action={updateLadderAction} className="space-y-4">
             <input type="hidden" name="id" value={l.id} />
-            <Card title="Post body" action={<CopyButton text={l.copy} label="Copy body" className="btn btn-ghost btn-xs" />}>
+            <Card title="Post body" action={<CopyButton text={l.copy} label="Copy body" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} />}>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Post name">
                   <input className="field" name="postName" defaultValue={l.postName} />
@@ -106,7 +126,7 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
             </Card>
-            <Card title={`Rungs (${l.rungs.length})`} action={<span className="flex gap-2"><CopyButton text={rungsPlain(l.rungs)} label="Copy all" className="btn btn-ghost btn-xs" /><CopyButton text={airtable} label="Copy for Airtable" className="btn btn-ghost btn-xs" /></span>}>
+            <Card title={`Rungs (${l.rungs.length})`} action={<span className="flex gap-2"><CopyButton text={rungsPlain(l.rungs)} label="Copy all" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} /><CopyButton text={airtable} label="Copy for Airtable" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} /></span>}>
               <p className="mb-2 text-xs text-ink-2">{fmt.structure} 40–90 words each, one thought per line, and the last line of every rung is the quotable one. Keep <code>---</code> between rungs. &quot;Copy for Airtable&quot; escapes the numbers as <code>1\.</code> so Airtable doesn&apos;t renumber them.</p>
               <textarea className="field font-mono text-sm" name="rungs" rows={Math.min(40, 6 + l.rungs.length * 5)} defaultValue={rungsPlain(l.rungs)} data-testid="rungs" />
             </Card>
@@ -140,9 +160,9 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
                   <textarea className="field text-sm" name="threadsChain" rows={12} defaultValue={l.threadsChain.join("\n---\n")} />
                 </Field>
                 <div className="flex gap-2 sm:col-span-2">
-                  <CopyButton text={l.igCaption} label="Copy caption" className="btn btn-ghost btn-xs" />
-                  <CopyButton text={threadsText(l.threadsChain)} label="Copy Threads chain" className="btn btn-ghost btn-xs" />
-                  <CopyButton text={l.carousel.join("\n")} label="Copy slides" className="btn btn-ghost btn-xs" />
+                  <CopyButton text={l.igCaption} label="Copy caption" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} />
+                  <CopyButton text={threadsText(l.threadsChain)} label="Copy Threads chain" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} />
+                  <CopyButton text={l.carousel.join("\n")} label="Copy slides" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} />
                 </div>
               </div>
             </Card>
@@ -165,7 +185,7 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
           <Card title="Pre-publish checklist" action={<Badge tone={ready ? "good" : "warn"}>{ready ? "clear" : `${score.fails} to fix`}</Badge>}>
             <ul className="space-y-1 text-xs" data-testid="checklist">
               {checks.map((c) => (
-                <li key={c.key} className={c.ok ? "text-ink-2" : c.level === "fail" ? "text-danger" : "text-warn"} data-check={c.key} data-ok={c.ok ? "1" : "0"}>
+                <li key={c.key} id={`check-${c.key}`} className={c.ok ? "text-ink-2" : c.level === "fail" ? "text-danger" : "text-warn"} data-check={c.key} data-ok={c.ok ? "1" : "0"}>
                   {c.ok ? "✓" : c.level === "fail" ? "✗" : "!"} {c.label}
                   {!c.ok && c.note ? <span className="block pl-4 text-ink-3">{c.note}</span> : null}
                 </li>
@@ -194,11 +214,11 @@ export default async function LadderPage({ params }: { params: Promise<{ id: str
                       <li key={r.n} className={`flex items-start gap-2 p-2 text-sm ${r.postedAt ? "opacity-60" : next?.n === r.n ? "bg-surface-2" : ""}`} data-testid={`rung-${r.n}`}>
                         <span className="w-6 shrink-0 text-right font-semibold tabular">{r.n}.</span>
                         <span className="min-w-0 flex-1 truncate">{r.body.split("\n")[0]}</span>
-                        <CopyButton text={r.body} label="Copy" className="btn btn-ghost btn-xs" />
+                        <CopyButton text={r.body} label="Copy" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} />
                         <form action={markRungAction}>
                           <input type="hidden" name="id" value={l.id} />
                           <input type="hidden" name="n" value={r.n} />
-                          <button className={`btn btn-xs ${r.postedAt ? "btn-ghost" : next?.n === r.n ? "btn-primary" : "btn-soft"}`} type="submit">
+                          <button className={`btn btn-xs ${r.postedAt ? "btn-ghost" : next?.n === r.n ? "btn-primary" : "btn-soft"}`} type="submit" disabled={blocked && !r.postedAt} title={!r.postedAt ? hold : undefined} data-testid="mark-rung">
                             {r.postedAt ? "Undo" : "Posted ✓"}
                           </button>
                         </form>

@@ -412,6 +412,8 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
 }
 
 export const readyToPost = (checks: Check[]) => checks.every((c) => c.ok || c.level === "warn");
+/** The checks that stop a ladder going outward: fails only. A warn is advice; a draft is allowed to be unfinished. */
+export const publishBlockers = (checks: Check[]) => checks.filter((c) => !c.ok && c.level === "fail");
 export const checkScore = (checks: Check[]) => ({ pass: checks.filter((c) => c.ok).length, total: checks.length, fails: checks.filter((c) => !c.ok && c.level === "fail").length, warns: checks.filter((c) => !c.ok && c.level === "warn").length });
 
 /* ───────────── Exports and hand-offs ───────────── */

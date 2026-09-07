@@ -62,6 +62,31 @@ async function main() {
     if (c.placeholders !== false) throw new Error("skeleton should fail the placeholder check");
     if (c.cta !== true) throw new Error("skeleton CTA rung should already carry the keyword and fallback");
     if (!(await page.locator('button:has-text("Mark ready")').isDisabled())) throw new Error("Mark ready must be disabled while the checklist fails");
+    // The gate is the server, not the button: force the submit past the disabled control and the action must refuse
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const ladderId = page.url().split("/").pop()!.split("?")[0];
+    const notice = page.locator('[data-testid="publish-blocked"]');
+    if (!(await notice.count())) throw new Error("no notice names the failing checks");
+    const links = await notice.locator('[data-testid="blocker-link"]').evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+    if (!links.length || !links.every((h) => h?.startsWith("#check-"))) throw new Error(`blockers should link to their checks: ${links.join(", ")}`);
+    for (const href of links) if (!(await page.locator(href!).count())) throw new Error(`blocker link ${href} has no target`);
+    if (!(await page.locator('[data-testid="send-to-composer"]').isDisabled())) throw new Error("Send to composer must be held while the checklist fails");
+    await page.locator('[data-testid="send-to-composer"]').evaluate((el) => el.removeAttribute("disabled"));
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="send-to-composer"]').click()]);
+    await page.waitForURL(/blocked=/, { timeout: 10000 });
+    let row = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, ladderId) });
+    if (row?.contentItemId) throw new Error("a failing ladder was still sent to the composer");
+    await expectText(page, "That didn't go out", "refusal named");
+    const firstRung = page.locator('[data-testid="mark-rung"]').first();
+    await firstRung.evaluate((el) => el.removeAttribute("disabled"));
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), firstRung.click()]);
+    await page.waitForTimeout(600);
+    row = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, ladderId) });
+    if (row?.rungs.some((r) => r.postedAt)) throw new Error("a rung of a failing ladder was marked posted");
+    if (!(await page.locator('button:has-text("Copy for Airtable")').isDisabled())) throw new Error("copies must be held while the checklist fails");
+    console.log("✓ publish gate: server refuses the composer send and a posted rung while checks fail; blockers named and linked; copies held");
+    await page.goto(`${base}/content/ladders/${ladderId}`);
     // Edit the body to add comment bait and confirm it's caught after save
     await page.fill('textarea[name="copy"]', "If I lost every client tomorrow.\nComment RESET for the plan.");
     await submit(page, 'button:has-text("Save and re-check")');
