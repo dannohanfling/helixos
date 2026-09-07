@@ -3,7 +3,8 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/session";
 
 // Inbound machine endpoints authenticate with their own secrets, never a browser session.
-const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/api/cron", "/api/health", "/api/webhooks", "/api/session"];
+// The manifest and icons must load without a session: the browser fetches them on the login page and when installing the app.
+const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/api/cron", "/api/health", "/api/webhooks", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

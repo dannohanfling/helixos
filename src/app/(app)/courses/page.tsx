@@ -32,7 +32,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const meta = PROGRAMS.find((p) => p.key === program)!;
   return (
     <>
-      <PageHeader title="Courses" subtitle={`${totalDone} of ${lessons.length} lessons done. Watch, do the thing, tick it.`} action={<Link href="/pathway" className="btn btn-ghost btn-sm">Pathway</Link>} />
+      <PageHeader title="Courses" subtitle={`${totalDone} of ${lessons.length} lessons done. Do the thing, tick it.`} action={<Link href="/pathway" className="btn btn-ghost btn-sm">Pathway</Link>} />
       <Tabs items={PROGRAMS.map((p) => ({ key: p.key, label: p.label, href: `/courses?program=${encodeURIComponent(p.key)}`, count: courses.filter((c) => c.program === p.key).length }))} current={program} />
       <p className="mt-2 mb-4 text-sm text-ink-2">{meta.blurb}</p>
       {mine.length ? (
@@ -96,7 +96,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
         </div>
       ) : (
         <Card>
-          <Empty icon="📚" title="No courses here yet" hint="Run the seed to load the course library." />
+          <Empty icon="📚" title="No courses here yet" hint="Your coach hasn't published any courses yet. Check back after your next session." />
         </Card>
       )}
     </>

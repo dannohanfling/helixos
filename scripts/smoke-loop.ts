@@ -86,6 +86,8 @@ async function main() {
     await page.fill('input[name="name"]', "Prefill Lead");
     await submit(page, 'form:has(input[name="name"]) button[type="submit"]');
     await page.goto(`${base}/today`);
+    const early = page.locator('[data-testid="close-early"] summary');
+    if (await early.isVisible()) await early.click();
     await expectText(page, "Filled in from what you logged today", "close prefill");
     const dmsPrefill = await page.locator('input[name="dmsStarted"]').inputValue();
     if (Number(dmsPrefill) < 1) throw new Error(`dmsStarted should be pre-filled, got ${dmsPrefill}`);

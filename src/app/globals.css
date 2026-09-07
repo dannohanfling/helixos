@@ -254,11 +254,19 @@ details > summary::-webkit-details-marker {
   place-items: center;
   font-size: 1rem;
 }
+.btn-xs,
+.btn-sm {
+  min-height: 2.5rem;
+}
 /* Compact only on a wide screen with a mouse; every phone-sized viewport keeps the 40px targets. */
 @media (min-width: 640px) and (hover: hover) and (pointer: fine) {
   .task-control {
     min-height: 1.75rem;
     min-width: 1.75rem;
     font-size: 0.8rem;
+  }
+  .btn-xs,
+  .btn-sm {
+    min-height: 0;
   }
 }

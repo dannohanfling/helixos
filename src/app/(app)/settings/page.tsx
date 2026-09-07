@@ -85,7 +85,7 @@ export default async function SettingsPage() {
             <Field label="Goal">
               <input className="field" name="title" defaultValue={goal?.title ?? "Cash collected this month"} />
             </Field>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Field label="Target">
                 <input className="field tabular" name="target" type="number" min={1} defaultValue={goal?.target ?? 5000} />
               </Field>

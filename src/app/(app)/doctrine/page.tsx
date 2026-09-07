@@ -36,7 +36,7 @@ export default async function DoctrinePage() {
           ) : null}
         </>
       ) : (
-        <Empty icon="🏛️" title="No principles yet" hint="Run the seed to load the doctrine library." />
+        <Empty icon="🏛️" title="No principles yet" hint="Your coach hasn't published the principles yet. Check back after your next session." />
       )}
     </>
   );

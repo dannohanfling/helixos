@@ -16,6 +16,9 @@ import { closedDates } from "@/lib/queries/daily";
 
 export const metadata = { title: "Today" };
 
+/** Before this hour (the member's own clock) the close form is folded away so the morning scroll reaches the day's work. */
+const EVENING_HOUR = 16;
+
 function greeting(hour: number, name: string): string {
   const first = name.split(" ")[0];
   if (hour < 5) return `Still up, ${first}?`;
@@ -305,6 +308,13 @@ export default async function TodayPage() {
                   <CloseForm log={d.log} activity={d.activity} />
                 </details>
               </div>
+            ) : v.hour < EVENING_HOUR ? (
+              <details data-testid="close-early">
+                <summary className="cursor-pointer text-sm text-ink-2">
+                  It&apos;s not evening yet. Come back after {EVENING_HOUR - 12}pm to log your numbers, or <span className="underline">close the day early</span>.
+                </summary>
+                <CloseForm log={d.log} activity={d.activity} />
+              </details>
             ) : (
               <CloseForm log={d.log} activity={d.activity} />
             )}
@@ -474,7 +484,7 @@ function CloseForm({ log, activity }: { log: DailyLog | null; activity: TodayAct
       </details>
       <details className="rounded-lg border p-3" open={Boolean(log && (log.revContent || log.revWebinar || log.revDm))}>
         <summary className="cursor-pointer text-xs font-semibold text-ink-2">💵 Revenue by source (optional)</summary>
-        <div className="mt-2 grid grid-cols-3 gap-3">
+        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {n("revContent", "From content ($)", "")}
           {n("revWebinar", "From webinar ($)", "")}
           {n("revDm", "From DMs ($)", "")}

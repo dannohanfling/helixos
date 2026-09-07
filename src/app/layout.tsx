@@ -4,6 +4,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "HelixOS", template: "%s · HelixOS" },
   description: "Your daily operating system: content, conversations, tasks, and the pathway that grows your business.",
+  applicationName: "HelixOS",
+  manifest: "/manifest.webmanifest",
+  // Installed to an iPhone home screen it runs full-screen under its own name, not as a Safari tab.
+  appleWebApp: { capable: true, title: "HelixOS", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

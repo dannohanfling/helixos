@@ -87,7 +87,46 @@ async function main() {
     if (after >= before) throw new Error(`confirming did not delete the task (${before} → ${after})`);
     console.log("✓ task controls visible on touch, 40px targets, delete confirms first");
 
+    // Installable: manifest and icons load without a session, the page links them, iOS gets its full-screen tags
+    const anon = await browser.newContext();
+    const manifest = await anon.request.get(`${base}/manifest.webmanifest`);
+    if (manifest.status() !== 200) throw new Error(`manifest returned ${manifest.status()} without a session`);
+    const m = (await manifest.json()) as { name: string; start_url: string; display: string; icons: { src: string; sizes: string; purpose?: string }[] };
+    if (m.name !== "HelixOS" || m.start_url !== "/today" || m.display !== "standalone" || !m.icons.some((i) => i.sizes === "512x512" && i.purpose === "maskable")) throw new Error(`manifest wrong: ${JSON.stringify(m)}`);
+    for (const icon of m.icons) {
+      const r = await anon.request.get(`${base}${icon.src}`);
+      if (r.status() !== 200 || !(r.headers()["content-type"] ?? "").startsWith("image/png")) throw new Error(`icon ${icon.src}: ${r.status()} ${r.headers()["content-type"]}`);
+    }
+    for (const p of ["/apple-icon", "/icon"]) {
+      const r = await anon.request.get(`${base}${p}`);
+      if (r.status() !== 200 || !(r.headers()["content-type"] ?? "").startsWith("image/png")) throw new Error(`${p}: ${r.status()} ${r.headers()["content-type"]}`);
+    }
+    await anon.close();
+    const head = await page.locator("head").innerHTML();
+    for (const tag of ['rel="manifest"', 'rel="apple-touch-icon"', 'name="mobile-web-app-capable" content="yes"', 'name="apple-mobile-web-app-title" content="HelixOS"']) {
+      if (!head.includes(tag)) throw new Error(`head is missing ${tag}`);
+    }
+    console.log(`✓ installable: manifest, ${m.icons.length} manifest icons, apple-touch-icon, standalone tags`);
+
+    // Small buttons are 40px on a phone
+    await page.goto(`${base}/today`);
+    const small = page.locator("main .btn-xs, main .btn-sm").first();
+    if (await small.count()) {
+      const b = await small.boundingBox();
+      if (!b || b.height < 38) throw new Error(`small button is ${b?.height}px tall on a phone; needs 40`);
+      console.log(`✓ small buttons ${Math.round(b.height)}px on touch`);
+    }
+
+    // Developer copy never reaches a client
+    for (const p of ["/doctrine", "/courses"]) {
+      await page.goto(`${base}${p}`);
+      const t = await page.locator("main").innerText();
+      if (/run the seed|npm |\.env|_KEY\b/i.test(t)) throw new Error(`developer copy on ${p}`);
+    }
+    console.log("✓ no developer copy on doctrine or courses");
+
     // Inputs at 16px
+    await page.goto(`${base}/tasks`);
     const fs = await page.locator("input.field, textarea.field, select.field").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     if (fs < 16) throw new Error(`.field renders at ${fs}px; iOS Safari zooms below 16`);
     console.log(`✓ fields at ${fs}px`);

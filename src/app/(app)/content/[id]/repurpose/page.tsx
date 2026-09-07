@@ -54,7 +54,7 @@ function VariantForm({ var_, maxChars, email = false }: { var_: ContentVariant; 
         </div>
       ) : null}
       {var_.status === "posted" ? (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["reactions", "comments", "dms", "leads"] as const).map((k) => (
             <label key={k} className="block">
               <span className="label">{k}</span>

@@ -90,6 +90,9 @@ npx tsx scripts/smoke-ghl.ts       # Client's own Private Integration token → 
 npx tsx scripts/smoke-ai.ts          # Bring-your-own AI key: 401 / no-billing / wrong-provider reasons, a ✨ feature on the member's key, usage for member and coach, daily cap + override (needs AI_BASE_URL=http://localhost:4020 and scripts/mock-ai.ts)
 npx tsx scripts/smoke-ladders.ts     # Ladder facts, skeleton + checklist blocks, finished ladder clears, live hour, Airtable copy, composer hand-off
 npx tsx scripts/smoke-headers.ts     # Every page as client and coach under the Content Security Policy: no violations, no page errors
+npx tsx scripts/smoke-firstday.ts    # A new client's first five minutes on a phone: join, welcome card, no admin tasks, touch targets, 16px fields, installable (manifest + icons), no developer copy
+npx tsx scripts/smoke-loop.ts        # The daily loop's edges: broken-streak notice + repair, close pre-filled from the day, editing a close scores the difference, member timezone, coach nudge
+npx tsx scripts/smoke-email.ts       # SendGrid adapter against scripts/mock-sendgrid.ts: 202 payload shape, 401 reason, reminder loop survives one failing recipient
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
 
