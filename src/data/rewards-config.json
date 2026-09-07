@@ -1,22 +1,30 @@
 {
   "perMonth": "calendar",
   "bookingLinks": {
-    "VIP Laser Coaching Call": "",
-    "1-on-1 Funnel Makeover Call": "",
-    "Offer + Messaging Alignment Session": "",
+    "VIP Laser Coaching Call": "https://api.leadconnectorhq.com/widget/bookings/eo-reward-vip-laser-coaching-c",
+    "1-on-1 Funnel Makeover Call": "https://api.leadconnectorhq.com/widget/bookings/eo-reward-1-on-1-funnel-makeov",
+    "Offer + Messaging Alignment Session": "https://api.leadconnectorhq.com/widget/bookings/eo-reward-offer-messaging-alig",
     "Copy Review & Optimization": "",
     "Custom Chatbot Strategy Blueprint": "",
-    "90-Day Strategy Sprint Call": "",
+    "90-Day Strategy Sprint Call": "https://api.leadconnectorhq.com/widget/bookings/eo-reward-90-day-strategy-spri",
     "Digital Elite Performer Badge": "",
     "Limited Edition Evolve Omega Swag Box": "",
     "Live Feature Inside the Community": "",
     "30 Days Access to Evolve Omega Academy": "",
     "30 Days Access to Evolve Omega Elite": "",
-    "Evolve Omega Lux Partnership Conversation": "",
+    "Evolve Omega Lux Partnership Conversation": "https://api.leadconnectorhq.com/widget/bookings/eo-reward-lux-partnership-conv",
     "Onboarding Champion": "",
-    "System Builder": "",
-    "Event Runner": "",
+    "System Builder": "https://api.leadconnectorhq.com/widget/bookings/eo-prize-system-builder-strate",
+    "Event Runner": "https://api.leadconnectorhq.com/widget/bookings/eo-prize-event-runner-hot-seat",
     "Engine Owner": ""
   },
-  "calendarIds": {}
+  "calendarIds": {
+    "VIP Laser Coaching Call": "TuI5lamMrjLql514CVDc",
+    "1-on-1 Funnel Makeover Call": "H1AgY8QDcjQmkTymEntZ",
+    "Offer + Messaging Alignment Session": "ZiZA4Mw08mBGQJtjtrO3",
+    "90-Day Strategy Sprint Call": "2mPPxm8E1nIicV4PjfPP",
+    "Evolve Omega Lux Partnership Conversation": "rPXOc96epwT6ErkzGdQ2",
+    "System Builder": "jsVLHauo0vo2dK2Ek1ma",
+    "Event Runner": "VAwdTVq9yBQl8gLOS6gD"
+  }
 }
