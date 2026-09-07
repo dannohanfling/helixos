@@ -2,7 +2,7 @@
 import { chromium } from "@playwright/test";
 
 const base = process.argv[2] ?? "http://localhost:3000";
-const PAGES_CLIENT = ["/today", "/tasks", "/content", "/content/compose", "/library", "/dms", "/groups", "/webinars", "/offers", "/pathway", "/courses", "/doctrine", "/proofs", "/clients", "/community", "/numbers", "/rewards", "/settings"];
+const PAGES_CLIENT = ["/today", "/tasks", "/content", "/content/compose", "/tools", "/library", "/dms", "/groups", "/webinars", "/offers", "/pathway", "/courses", "/doctrine", "/proofs", "/clients", "/community", "/numbers", "/rewards", "/settings"];
 const PAGES_COACH = ["/coach", "/integrations", "/certification", "/settings"];
 
 async function main() {

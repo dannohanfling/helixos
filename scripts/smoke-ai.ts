@@ -49,6 +49,17 @@ async function main() {
     });
     await login(page, "client");
 
+    // Tools page without a key: every tool visible, none ready, each points at Settings; nothing is hidden
+    await page.goto(`${base}/tools`);
+    const cards = page.locator('[data-testid="tool-card"]');
+    if ((await cards.count()) !== 6) throw new Error(`expected 6 tool cards, saw ${await cards.count()}`);
+    if (await page.locator('[data-testid="tool-card"][data-ready="1"]').count()) throw new Error("no tool should be ready without a key");
+    const fixes = await page.locator('[data-testid="tool-fix"]').evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+    if (fixes.some((h) => h !== "/settings#ai")) throw new Error(`every fix link should go to the key setup: ${fixes.join(", ")}`);
+    if (/_KEY\b|\.env/.test(await page.locator("main").innerText())) throw new Error("tools page names an environment variable");
+    await page.screenshot({ path: "screenshots/ai00-tools-no-key.png", fullPage: true });
+    console.log("✓ tools page: 6 cards, none ready without a key, every card says so");
+
     // No key: the ✨ features point at Settings, nothing names an environment variable
     await page.goto(`${base}/content/compose`);
     await expectText(page, "Connect your AI key in Settings", "composer prompts to connect");
@@ -79,6 +90,14 @@ async function main() {
     if (/sk-ant-good/.test(await page.content())) throw new Error("full key must never be shown again");
     await page.screenshot({ path: "screenshots/ai01-settings.png", fullPage: true });
     console.log("✓ key validation: 401, no billing (both providers), no model access (both providers), wrong provider, connected; key never shown again");
+
+    // With a key, the tools page opens straight into the features it can run
+    await page.goto(`${base}/tools`);
+    const ready = await page.locator('[data-testid="tool-card"][data-ready="1"]').count();
+    if (ready < 3) throw new Error(`with a key and demo data most tools should be ready, saw ${ready}`);
+    await page.locator('[data-testid="tool-card"][data-feature="ladder"] [data-testid="tool-open"]').click();
+    await page.waitForURL(/\/content\/ladders/);
+    console.log(`✓ tools page with a key: ${ready} ready, ladder card opens the ladder page`);
 
     // A ✨ feature on the member's key: repurpose with AI, then usage appears
     await page.goto(`${base}/content`);

@@ -108,6 +108,7 @@ Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQ
 - `src/lib/actions/` — server actions (all writes). `src/lib/queries/` — reads.
 - `src/app/(app)/` — the signed-in app. `src/app/(auth)/` — login and invite join.
 - `src/data/seed/*.json` — template content pulled from the HelixOS base (stages, task library, curriculum, DM library, tiers, prizes, rewards).
+- `src/data/tools.json` — the name and one-line promise for each AI tool on `/tools`, keyed by feature. Ships empty; an unnamed tool shows its working label. What each tool makes and needs comes from the code (`src/lib/engine/tools.ts`), not from this file.
 - `src/data/rewards-config.json` — the booking link for each reward and prize (empty = "Opening soon", never claimable) and `perMonth`: `calendar` (a Per Month cap resets on the 1st; quarters on the quarter) or `rolling` (last 30 / 90 days). Kept apart from the seed so a re-import from Airtable never wipes it. Caps count every client in the workspace together. `calendarIds` maps a reward name to its GoHighLevel calendar id: with it, an inbound appointment webhook marks that exact claim booked; without it, only a member's single open claim is booked and two open claims are reported, never guessed.
 - `src/data/seed/webinar/*.json` — WebinarOS content: acts, the 20-section Leaky Webinar example, wizard stages, and the story / analogy / objection / belief banks.
 
