@@ -72,6 +72,24 @@ async function main() {
     }
 
     await login(page, "client");
+    if (await page.locator('[data-testid="level-up"]').count()) throw new Error("a member is congratulated for the tier they already had");
+    await page.waitForTimeout(1200); // the first visit stamps the current tier silently; let that land before crossing a tier
+    const stamped = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
+    if (stamped?.celebratedTierLevel === null) throw new Error("the first visit did not stamp the member's current tier");
+    // Crossing into a new tier is celebrated once, on the next page, then never again
+    await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: closedRows[0].workspaceId, userId: maya.id, type: "bonus", points: 4000, reason: "Smoke: level up" });
+    await page.goto(`${base}/today`);
+    const levelUp = page.locator('[data-testid="level-up"]');
+    await levelUp.waitFor({ timeout: 10000 });
+    await expectText(page, "You reached", "level up shown");
+    await page.screenshot({ path: "screenshots/lp00-level-up.png" });
+    await page.click('[data-testid="level-up"] button:has-text("Keep going")');
+    if (await levelUp.count()) throw new Error("the celebration did not close");
+    await page.waitForTimeout(600);
+    await page.reload();
+    if (await page.locator('[data-testid="level-up"]').count()) throw new Error("the celebration showed twice");
+    console.log("✓ level up celebrated once, then not again");
+    await page.goto(`${base}/today`);
     await expectText(page, "streak ended", "streak break acknowledged");
     await expectText(page, "One weekday slipped", "repairable");
     await page.screenshot({ path: "screenshots/lp01-streak-broken.png", fullPage: true });

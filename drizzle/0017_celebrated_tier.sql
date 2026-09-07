@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `celebrated_tier_level` integer;

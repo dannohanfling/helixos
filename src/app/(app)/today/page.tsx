@@ -7,6 +7,8 @@ import { completeCurriculumDayAction } from "@/lib/actions/pathway";
 import { setContentStatusAction } from "@/lib/actions/content";
 import { todayData } from "@/lib/queries/today";
 import { NewTaskForm } from "@/components/new-task-form";
+import { SubmitButton } from "@/components/submit-button";
+import curriculumLinks from "@/data/curriculum-links.json";
 import { TaskRow } from "@/components/task-row";
 import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
 import { formatDate, relativeDay } from "@/lib/dates";
@@ -15,6 +17,12 @@ import { TIER_ICONS } from "@/lib/engine/tiers";
 import { closedDates } from "@/lib/queries/daily";
 
 export const metadata = { title: "Today" };
+
+/** Where a 30-day build day is actually done: a feature in the app, or a lesson link Danno sets in src/data/curriculum-links.json. */
+const exerciseLink = (day: number): string | null => {
+  const url = ((curriculumLinks as Record<string, string>)[String(day)] ?? "").trim();
+  return url || null;
+};
 
 /** Before this hour (the member's own clock) the close form is folded away so the morning scroll reaches the day's work. */
 const EVENING_HOUR = 16;
@@ -39,7 +47,7 @@ export default async function TodayPage() {
   const eveningDone = Boolean(d.log?.eveningDoneAt);
   const openFocus = d.focusTasks.filter((t) => t.status !== "done");
   const doneFocus = d.focusTasks.filter((t) => t.status === "done");
-  const boardTasks = [...d.overdueTasks, ...d.dueTasks.filter((t) => t.focusDate !== v.today)];
+  const boardTasks = [...d.overdueTasks, ...d.dueTasks].filter((t) => t.focusDate !== v.today);
   const goalPct = d.goal ? Math.round((d.goal.actual / Math.max(d.goal.target, 1)) * 100) : 0;
   const primary = d.actions[0];
   const rest = d.actions.slice(1, 6);
@@ -333,12 +341,25 @@ export default async function TodayPage() {
               <div className="mt-2 text-xs text-ink-3">
                 {d.curriculumDay.week} · {d.curriculumDay.estTime}
               </div>
-              <form action={completeCurriculumDayAction} className="mt-3">
-                <input type="hidden" name="day" value={d.curriculumDay.day} />
-                <button className="btn btn-accent btn-sm" type="submit">
-                  Done, log it
-                </button>
-              </form>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {exerciseLink(d.curriculumDay.day) ? (
+                  exerciseLink(d.curriculumDay.day)!.startsWith("http") ? (
+                    <a href={exerciseLink(d.curriculumDay.day)!} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" data-testid="exercise-link">
+                      Open the lesson ↗
+                    </a>
+                  ) : (
+                    <Link href={exerciseLink(d.curriculumDay.day)!} className="btn btn-primary btn-sm" data-testid="exercise-link">
+                      Do it in the app →
+                    </Link>
+                  )
+                ) : null}
+                <form action={completeCurriculumDayAction}>
+                  <input type="hidden" name="day" value={d.curriculumDay.day} />
+                  <SubmitButton className="btn btn-accent btn-sm" pendingText="Logging…">
+                    Done, log it
+                  </SubmitButton>
+                </form>
+              </div>
             </Card>
           ) : null}
           {d.pathwayNext ? (
@@ -418,9 +439,9 @@ function LockInForm({ openTasks, today, defaultIntention }: { openTasks: { id: s
         </div>
         <input className="field mt-2" name="newFocus" placeholder="…or type a new top-3 task" />
       </div>
-      <button className="btn btn-accent" type="submit">
+      <SubmitButton className="btn btn-accent" pendingText="Locking in…">
         Lock it in · +10
-      </button>
+      </SubmitButton>
     </form>
   );
 }
@@ -494,9 +515,9 @@ function CloseForm({ log, activity }: { log: DailyLog | null; activity: TodayAct
           {n("revDm", "From DMs ($)", "")}
         </div>
       </details>
-      <button className="btn btn-accent" type="submit">
+      <SubmitButton className="btn btn-accent" pendingText="Saving your day…">
         Close the day
-      </button>
+      </SubmitButton>
     </form>
   );
 }

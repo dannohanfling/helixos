@@ -57,6 +57,8 @@ export const memberships = sqliteTable(
     eoPassLastPushAt: text("eo_pass_last_push_at"),
     /** Coach override of the workspace's daily AI cap for this member. */
     aiCapExempt: integer("ai_cap_exempt", { mode: "boolean" }).notNull().default(false),
+    /** Highest tier level the member has seen the celebration for. Null until first seen: then stamped silently. */
+    celebratedTierLevel: integer("celebrated_tier_level"),
     /** The member's own timezone. Null means the workspace's. "Today", reminder hours and streak boundaries all follow it. */
     timezone: text("timezone"),
     lastNudgedAt: text("last_nudged_at"),

@@ -120,6 +120,13 @@
       "when": 1788796448493,
       "tag": "0016_coach_notes_claim_booked",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1788812527275,
+      "tag": "0017_celebrated_tier",
+      "breakpoints": true
     }
   ]
 }

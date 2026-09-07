@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { addDays, nowIso } from "@/lib/dates";
@@ -19,6 +19,12 @@ export async function createTaskAction(formData: FormData): Promise<void> {
   const category = CATEGORY.find((c) => c === str(formData, "category")) ?? "sales";
   const dueDate = opt(formData, "dueDate") ?? v.today;
   const repeat = num(formData, "repeatEveryDays") || null;
+  // A double tap on Add task is one task: the same title from the same person in the last 20 seconds is the same task.
+  const recent = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, userId), eq(schema.tasks.title, title), gte(schema.tasks.createdAt, new Date(Date.now() - 20_000).toISOString().replace("T", " ").slice(0, 19))) });
+  if (recent) {
+    refresh();
+    return;
+  }
   await db.insert(schema.tasks).values({
     id: newId(),
     workspaceId,

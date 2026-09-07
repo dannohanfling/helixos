@@ -64,7 +64,7 @@ async function main() {
 
   // Complete a focus task
   const before = await page.locator("text=/\\d+\\/\\d+ done/").first().textContent();
-  await submit(page, 'div:has(> div > div:text-is("Smoke focus task")) form button[aria-label="Mark done"]');
+  await submit(page, '[data-testid="task-row"]:has-text("Smoke focus task") [data-testid="task-toggle"]');
   const after = await page.locator("text=/\\d+\\/\\d+ done/").first().textContent();
   if (before === after) throw new Error(`task completion did not change counter (${before} -> ${after})`);
   console.log(`✓ task toggled (${before?.trim()} -> ${after?.trim()})`);

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
@@ -42,7 +42,12 @@ export async function morningCheckinAction(formData: FormData): Promise<void> {
       .where(and(eq(schema.tasks.userId, userId), inArray(schema.tasks.id, focusIds)));
   }
   const newFocus = str(formData, "newFocus");
-  if (newFocus) {
+  // A redone lock-in (the browser keeps the typed text) or a double tap must not create the task twice: star the
+  // existing open task with that title instead.
+  const existing = newFocus ? await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, userId), ne(schema.tasks.status, "done"), sql`lower(${schema.tasks.title}) = lower(${newFocus})`) }) : undefined;
+  if (existing) {
+    await db.update(schema.tasks).set({ focusDate: today, urgency: "top3", status: "today" }).where(eq(schema.tasks.id, existing.id));
+  } else if (newFocus) {
     await db.insert(schema.tasks).values({
       id: newId(),
       workspaceId,

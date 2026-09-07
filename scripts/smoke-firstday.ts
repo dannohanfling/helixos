@@ -45,6 +45,8 @@ async function main() {
     }
     if (/\$0 \/ \$5,000/.test(body)) throw new Error("the $0 / $5,000 goal bar is shown on day one");
     await expectText(page, "Set your one goal", "goal prompt instead of bar");
+    const exercise = await page.locator('[data-testid="exercise-link"]').first().getAttribute("href");
+    if (!exercise) throw new Error("the 30-day build card has no way into the exercise");
     const road = await page.locator('[data-testid="road"]').innerText();
     if (!/Stage 1 of 7 · Week 1 · first conversion event around Week 6/.test(road)) throw new Error(`Today should name the road ahead, got "${road}"`);
     await page.screenshot({ path: "screenshots/fd01-first-today.png", fullPage: true });
@@ -87,10 +89,47 @@ async function main() {
     if (side.join(" ").includes("Community Pass")) throw new Error("Community Pass shown in the sidebar for a non-Elite client");
     console.log("✓ nav: no Community Pass upsell without the pass");
 
-    // Task controls visible without hover, 40px targets, delete asks first
+    // Double-tapping Add task makes one task; a redone lock-in with the same typed task makes none
+    await page.goto(`${base}/tasks`);
+    await page.click('summary:has-text("+ New task")');
+    await page.fill('input[name="title"]', "Double tap test");
+    const add = page.locator('button:has-text("Add task")');
+    await add.click();
+    await add.click({ force: true }).catch(() => null);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(800);
+    if ((await page.locator('[data-testid="task-row"]', { hasText: "Double tap test" }).count()) !== 1) throw new Error("a double-tapped Add task created more than one task");
+    // Lock in typing the same task (it exists: star it, don't clone it), then redo the lock-in with it typed again
+    for (const pass of ["first lock-in", "redone lock-in"]) {
+      await page.goto(`${base}/today`);
+      const redo = page.locator('summary:has-text("Redo lock-in")');
+      if (await redo.count()) await redo.click();
+      await page.fill('input[name="newFocus"]', "Double tap test");
+      await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Lock it in")')]);
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(800);
+      const dupes = await page.locator('[data-testid="task-row"]', { hasText: "Double tap test" }).count();
+      if (dupes !== 1) throw new Error(`the ${pass} duplicated the task (${dupes} rows on Today)`);
+    }
+    console.log("✓ no duplicate from a double tap or a redone lock-in; a starred task shows once");
+
+    // The tick answers on the tap and says it is working
+    const toggle = page.locator('[data-testid="task-row"]', { hasText: "Double tap test" }).locator('[data-testid="task-toggle"]');
+    await toggle.click();
+    const busyOrDone = await toggle.evaluate((el) => el.getAttribute("aria-busy") === "true" || el.textContent?.includes("✓"));
+    if (!busyOrDone) throw new Error("the tick gave no immediate response");
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(600);
+    console.log("✓ tick responds at once (busy or done) before the server answers");
+
+    // Task controls visible without hover, 40px targets, words on touch, delete asks first
     await page.goto(`${base}/tasks`);
     const controls = page.locator('[data-testid="task-controls"]').first();
     await controls.waitFor();
+    const labels = await controls.locator(".task-control-label").allInnerTexts();
+    if (!(labels.includes("Top 3") || labels.includes("Unstar")) || !labels.includes("Tomorrow") || !labels.includes("Delete")) throw new Error(`controls should say what they do on a phone: ${labels.join(", ")}`);
+    const labelVisible = await controls.locator(".task-control-label").first().isVisible();
+    if (!labelVisible) throw new Error("control words are hidden on a phone");
     const opacity = await controls.evaluate((el) => Number(getComputedStyle(el).opacity));
     if (opacity < 0.5) throw new Error(`task controls hidden without hover (opacity ${opacity})`);
     const del = controls.locator('button[title="Delete"]');
@@ -125,7 +164,7 @@ async function main() {
     }
     await anon.close();
     const head = await page.locator("head").innerHTML();
-    for (const tag of ['rel="manifest"', 'rel="apple-touch-icon"', 'name="mobile-web-app-capable" content="yes"', 'name="apple-mobile-web-app-title" content="HelixOS"']) {
+    for (const tag of ['rel="manifest"', 'rel="apple-touch-icon"', 'name="mobile-web-app-capable" content="yes"', 'name="apple-mobile-web-app-title" content="HelixOS"', "user-scalable=no"]) {
       if (!head.includes(tag)) throw new Error(`head is missing ${tag}`);
     }
     console.log(`✓ installable: manifest, ${m.icons.length} manifest icons, apple-touch-icon, standalone tags`);

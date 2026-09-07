@@ -1,5 +1,6 @@
 import { createTaskAction } from "@/lib/actions/tasks";
 import { Disclosure, Field } from "./ui";
+import { SubmitButton } from "./submit-button";
 
 export function NewTaskForm({ today, defaultUrgency = "medium" }: { today: string; defaultUrgency?: string }) {
   return (
@@ -40,9 +41,9 @@ export function NewTaskForm({ today, defaultUrgency = "medium" }: { today: strin
           <input className="field" name="repeatEveryDays" type="number" min={1} max={90} placeholder="—" />
         </Field>
         <div className="sm:col-span-2">
-          <button className="btn btn-primary" type="submit">
+          <SubmitButton className="btn btn-primary" pendingText="Adding…">
             Add task
-          </button>
+          </SubmitButton>
         </div>
       </form>
     </Disclosure>

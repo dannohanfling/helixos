@@ -31,7 +31,7 @@ export default async function SettingsPage() {
         <Card title="Password">
           <ChangePasswordForm />
         </Card>
-        <Card title="You">
+        <Card id="you" title="You">
           <form action={updateProfileAction} className="space-y-3">
             <div className="grid grid-cols-[4rem_1fr] gap-3">
               <Field label="Emoji">
