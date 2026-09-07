@@ -138,6 +138,46 @@ async function main() {
     await page.screenshot({ path: "screenshots/co02-client-tasks.png", fullPage: true });
     console.log("✓ client: call tasks on Today and Tasks, tagged with the call date");
 
+    // Points adjustment: reason required, ±5,000 cap, a grant the client reads, a clamp that stops at zero
+    await login(page, "coach");
+    await page.goto(`${base}/coach/${mm.id}`);
+    const adjust = page.locator('[data-testid="adjust-form"]');
+    await adjust.locator('input[name="points"]').fill("250");
+    await adjust.locator('input[name="reason"]').fill("");
+    await adjust.locator('input[name="reason"]').evaluate((el) => (el as HTMLInputElement).removeAttribute("required"));
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), adjust.locator('button[type="submit"]').click()]);
+    await page.locator('[data-testid="adjust-error"]').waitFor({ timeout: 10000 });
+    if (!/Say why/.test(await page.locator('[data-testid="adjust-error"]').innerText())) throw new Error("an empty reason was not refused");
+    await adjust.locator('input[name="points"]').fill("9000");
+    await adjust.locator('input[name="reason"]').fill("typo test");
+    await adjust.locator('input[name="points"]').evaluate((el) => (el as HTMLInputElement).removeAttribute("max"));
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), adjust.locator('button[type="submit"]').click()]);
+    await page.waitForTimeout(500);
+    if (!/capped at 5,000/.test(await page.locator('[data-testid="adjust-error"]').innerText())) throw new Error("a 9,000-point adjustment was not capped");
+    const { totalPoints } = await import("@/lib/queries/points");
+    const before = await totalPoints(ws, maya.id);
+    await adjust.locator('input[name="points"]').fill("600");
+    await adjust.locator('input[name="reason"]').fill("Comped: your first funnel call is on me");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), adjust.locator('button[type="submit"]').click()]);
+    await page.locator('[data-testid="adjust-ok"]').waitFor({ timeout: 10000 });
+    if ((await totalPoints(ws, maya.id)) - before !== 600) throw new Error("the grant did not land as +600");
+    const row = await db.query.pointsLedger.findFirst({ where: and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.reason, "Comped: your first funnel call is on me")) });
+    if (!row || row.type !== "bonus" || !row.adjustedBy || !row.refId?.startsWith("adjust:")) throw new Error(`grant row wrong: ${JSON.stringify(row)}`);
+    await page.reload();
+    if (!/Comped: your first funnel call is on me/.test(await page.locator('[data-testid="adjustments"]').innerText())) throw new Error("the adjustment history is missing the grant");
+    const balance = await totalPoints(ws, maya.id);
+    await adjust.locator('input[name="points"]').fill(String(-(balance + 100)));
+    await adjust.locator('input[name="reason"]').fill("Reset for testing");
+    await adjust.locator('input[name="points"]').evaluate((el) => (el as HTMLInputElement).removeAttribute("min"));
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), adjust.locator('button[type="submit"]').click()]);
+    await page.locator('[data-testid="adjust-ok"]').waitFor({ timeout: 10000 });
+    if (!/Clamped/.test(await page.locator('[data-testid="adjust-ok"]').innerText())) throw new Error("an over-large deduction was not clamped");
+    if ((await totalPoints(ws, maya.id)) !== 0) throw new Error(`balance should stop at 0, is ${await totalPoints(ws, maya.id)}`);
+    await login(page, "client");
+    await page.goto(`${base}/rewards`);
+    await expectText(page, "Comped: your first funnel call is on me", "client reads the reason");
+    console.log("✓ points adjustment: reason required, cap, +600 grant with coach recorded, clamp at zero, client reads the reason");
+
     // A client can't open the coach view; a membership from nowhere is a 404
     await page.goto(`${base}/coach/${mm.id}`);
     await page.waitForURL(/\/today/, { timeout: 10000 }).catch(() => null);

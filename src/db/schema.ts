@@ -288,6 +288,8 @@ export const pointsLedger = sqliteTable(
     userId: text("user_id").notNull(),
     points: integer("points").notNull(),
     type: text("type", { enum: POINT_TYPES }).notNull(),
+    /** Set only on a coach's manual adjustment: the coach's user id. The reason line stays the client's to read. */
+    adjustedBy: text("adjusted_by"),
     reason: text("reason").notNull(),
     refId: text("ref_id"),
     createdAt: createdAt(),

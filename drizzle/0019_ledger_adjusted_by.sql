@@ -1,0 +1,1 @@
+ALTER TABLE `points_ledger` ADD `adjusted_by` text;

@@ -38,3 +38,6 @@ export function closeActivityPoints(log: CloseNumbers, alreadyCounted: Partial<C
   ].filter((l) => l.points > 0);
   return { total: lines.reduce((s, l) => s + l.points, 0), lines };
 }
+
+/** One coach adjustment, either way. A typo must not put anyone at Olympian by accident. */
+export const ADJUST_CAP = 5000;

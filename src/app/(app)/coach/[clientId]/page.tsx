@@ -14,6 +14,8 @@ import { loadRewardsConfig } from "@/lib/rewards-config";
 import { totalPoints } from "@/lib/queries/points";
 import { closedDates, logsBetween } from "@/lib/queries/daily";
 import { tasksFromNotes } from "@/lib/queries/tasks";
+import { AdjustPointsForm } from "@/components/adjust-points-form";
+import { isNotNull } from "drizzle-orm";
 import { daysSinceNudge } from "@/lib/nudge";
 import { addDays, daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
@@ -53,6 +55,7 @@ export default async function CoachClientPage({ params }: { params: Promise<{ cl
     db.query.contentItems.findMany({ where: and(eq(schema.contentItems.workspaceId, ws), eq(schema.contentItems.userId, m.userId)), orderBy: desc(schema.contentItems.createdAt) }),
   ]);
   const noteTasks = await tasksFromNotes(ws, notes.map((n) => n.id));
+  const adjustments = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, ws), eq(schema.pointsLedger.userId, m.userId), isNotNull(schema.pointsLedger.adjustedBy)), orderBy: desc(schema.pointsLedger.createdAt), limit: 10 });
   const tier = tierProgress(points);
   const streak = runningStreak(closed, today);
   const todayLog = recent.find((l) => l.date === today);
@@ -238,6 +241,23 @@ export default async function CoachClientPage({ params }: { params: Promise<{ cl
               </div>
             ) : null}
             {!waiting.length && !stuck.length ? <p className="mt-2 text-xs text-ink-3">Nothing waiting on you, nothing sent back.</p> : null}
+          </Card>
+
+          <Card title="Points" action={<span className="text-xs text-ink-3">{points.toLocaleString()} now · append-only</span>}>
+            <AdjustPointsForm membershipId={m.id} />
+            {adjustments.length ? (
+              <ul className="mt-3 divide-y text-sm" data-testid="adjustments">
+                {adjustments.map((a) => (
+                  <li key={a.id} className="flex items-baseline gap-3 py-1.5">
+                    <span className={`w-14 shrink-0 text-right tabular font-semibold ${a.points < 0 ? "text-danger" : "text-good"}`}>{a.points > 0 ? "+" : ""}{a.points.toLocaleString()}</span>
+                    <span className="min-w-0 flex-1">{a.reason}</span>
+                    <span className="shrink-0 text-xs text-ink-3">{when(a.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-ink-3">No adjustments yet. A wrong one is fixed by another in the opposite direction, with its reason.</p>
+            )}
           </Card>
 
           <Card title="Claimed rewards">

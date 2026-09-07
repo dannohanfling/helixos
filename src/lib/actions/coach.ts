@@ -11,6 +11,8 @@ import { newId } from "@/lib/ids";
 import { addDays } from "@/lib/dates";
 import { parseTaskLines, TASK_SOURCES } from "@/lib/engine/notes";
 import { assignTasks } from "@/lib/queries/tasks";
+import { award, totalPoints } from "@/lib/queries/points";
+import { ADJUST_CAP } from "@/lib/engine/points";
 
 export async function setClientPassAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
@@ -62,4 +64,32 @@ export async function addCoachNoteAction(formData: FormData): Promise<void> {
   await db.insert(schema.coachNotes).values({ id: noteId, workspaceId: coach.workspace.id, membershipId: m.id, authorUserId: coach.user.id, date, body: body || "(tasks only)" });
   await assignTasks({ workspaceId: coach.workspace.id, userId: m.userId, today: clientToday }, { source: TASK_SOURCES.coachCall, sourceRef: noteId }, lines.map((title) => ({ title, dueDate })));
   refresh();
+}
+
+export type AdjustState = { error?: string; ok?: string } | undefined;
+
+/**
+ * A coach corrects or grants a client's points: a signed bonus row through award(), never a direct ledger write. The
+ * reason is required because the client reads it in their own history. Negative adjustments never take a balance below
+ * zero (clamped, and said), one adjustment is capped at ±5,000, and the acting coach is recorded on the row.
+ */
+export async function adjustPointsAction(_prev: AdjustState, formData: FormData): Promise<AdjustState> {
+  const coach = await requireCoach();
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, str(formData, "membershipId")), eq(schema.memberships.workspaceId, coach.workspace.id)) });
+  if (!m) return { error: "That client isn't in your workspace." };
+  const reason = str(formData, "reason");
+  const raw = Math.trunc(Number(str(formData, "points").replace(/[^0-9.-]/g, "")));
+  if (!reason) return { error: "Say why. The client reads this line in their points history." };
+  if (!Number.isFinite(raw) || raw === 0) return { error: "Enter a number of points, positive or negative." };
+  if (Math.abs(raw) > ADJUST_CAP) return { error: `One adjustment is capped at ${ADJUST_CAP.toLocaleString()} points either way. Split it if you mean it.` };
+  const total = await totalPoints(coach.workspace.id, m.userId);
+  const points = raw < 0 && total + raw < 0 ? -total : raw;
+  if (points === 0) return { error: "Their balance is already 0; there is nothing to take." };
+  const refId = `adjust:${newId()}`;
+  const ok = await award({ workspaceId: coach.workspace.id, userId: m.userId }, "bonus", points, reason, refId);
+  if (!ok) return { error: "Nothing was written. Try again." };
+  await db.update(schema.pointsLedger).set({ adjustedBy: coach.user.id }).where(and(eq(schema.pointsLedger.userId, m.userId), eq(schema.pointsLedger.type, "bonus"), eq(schema.pointsLedger.refId, refId)));
+  refresh();
+  const clamped = points !== raw ? ` Clamped from ${raw.toLocaleString()} so the balance stops at 0.` : "";
+  return { ok: `${points > 0 ? "+" : ""}${points.toLocaleString()} points recorded.${clamped}` };
 }
