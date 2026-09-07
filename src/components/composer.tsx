@@ -229,6 +229,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                 </label>
               </div>
               <AiStatus feature="composer_polish" active={pending && polishing} />
+              {aiEnabled ? <p className="text-xs text-ink-3" data-testid="ai-promise" data-enabled="1">✨ Returns one version of this draft per target you ticked, inside each one&apos;s limit. You review each tab before you schedule.</p> : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <input className="field text-sm" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="Photo or video URL (optional)" />
                 <select className="field text-sm" value={contentType} onChange={(e) => setContentType(e.target.value)}>

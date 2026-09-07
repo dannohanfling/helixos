@@ -11,6 +11,7 @@ import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, STEPS, WIZARD_STAGES, de
 import { assetsFor } from "@/lib/queries/library";
 import { AssetForm } from "@/components/asset-form";
 import { AiFormStatus } from "@/components/ai-status";
+import { AiPromise } from "@/components/ai-promise";
 
 const ACT_ICON: Record<string, string> = { opening: "🎬", vehicle: "🎯", internal: "💪", external: "🌍", closing: "🎭" };
 
@@ -335,6 +336,7 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                   {ai ? "✨ Draft this section for me" : "Start from the example"}
                 </button>
                 <AiFormStatus feature="webinar_section" enabled={ai} onlyWhen={{ field: "mode", value: "ai" }} />
+                <AiPromise enabled={ai}>Returns the spoken script for this section, 120 to 260 words, written to this act and the belief it has to move.</AiPromise>
               </form>
               <details className="text-xs">
                 <summary className="text-ink-3 underline">See the Leaky Webinar version</summary>

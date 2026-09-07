@@ -54,16 +54,12 @@ async function main() {
     });
     await login(page, "client");
 
-    // Tools page without a key: every tool visible, none ready, each points at Settings; nothing is hidden
-    await page.goto(`${base}/tools`);
-    const cards = page.locator('[data-testid="tool-card"]');
-    if ((await cards.count()) !== 6) throw new Error(`expected 6 tool cards, saw ${await cards.count()}`);
-    if (await page.locator('[data-testid="tool-card"][data-ready="1"]').count()) throw new Error("no tool should be ready without a key");
-    const fixes = await page.locator('[data-testid="tool-fix"]').evaluateAll((as) => as.map((a) => a.getAttribute("href")));
-    if (fixes.some((h) => h !== "/settings#ai")) throw new Error(`every fix link should go to the key setup: ${fixes.join(", ")}`);
-    if (/_KEY\b|\.env/.test(await page.locator("main").innerText())) throw new Error("tools page names an environment variable");
-    await page.screenshot({ path: "screenshots/ai00-tools-no-key.png", fullPage: true });
-    console.log("✓ tools page: 6 cards, none ready without a key, every card says so");
+    // Before the click, every ✨ action says what it needs: without a key, the key
+    await page.goto(`${base}/content/ladders`);
+    const promiseNoKey = await page.locator('[data-testid="ai-promise"]').first().innerText();
+    if (!/needs your own Anthropic or OpenAI key/.test(promiseNoKey)) throw new Error(`ladder page should say it needs a key before the click, got "${promiseNoKey}"`);
+    if (!(await page.locator('[data-testid="ai-promise"] a[href="/settings#ai"]').count())) throw new Error("the key line has no way to Settings");
+    console.log("✓ without a key the ✨ actions say so, with the way to Settings");
 
     // No key: the ✨ features point at Settings, nothing names an environment variable
     await page.goto(`${base}/content/compose`);
@@ -96,19 +92,19 @@ async function main() {
     await page.screenshot({ path: "screenshots/ai01-settings.png", fullPage: true });
     console.log("✓ key validation: 401, no billing (both providers), no model access (both providers), wrong provider, connected; key never shown again");
 
-    // With a key, the tools page opens straight into the features it can run
-    await page.goto(`${base}/tools`);
-    const ready = await page.locator('[data-testid="tool-card"][data-ready="1"]').count();
-    if (ready < 3) throw new Error(`with a key and demo data most tools should be ready, saw ${ready}`);
-    await page.locator('[data-testid="tool-card"][data-feature="ladder"] [data-testid="tool-open"]').click();
-    await page.waitForURL(/\/content\/ladders/);
-    console.log(`✓ tools page with a key: ${ready} ready, ladder card opens the ladder page`);
+    // With a key, every ✨ action says what comes back, counted, before the click
+    await page.goto(`${base}/content/ladders`);
+    const ladderPromise = await page.locator('[data-testid="ai-promise"][data-enabled="1"]').first().innerText();
+    if (!/9–11 comment rungs/.test(ladderPromise) || !/Threads chain/.test(ladderPromise)) throw new Error(`ladder promise should count the artifacts, got "${ladderPromise}"`);
+    console.log(`✓ ladder promise before the click: "${ladderPromise.trim().slice(0, 90)}…"`);
 
     // A ✨ feature on the member's key: repurpose with AI, then usage appears
     await page.goto(`${base}/content`);
     await page.click('main a[href^="/content/"]:not([href*="compose"]):not([href*="ladders"])');
     await page.waitForURL(/\/content\/[^/]+$/);
     await page.goto(page.url() + "/repurpose");
+    const promises = await page.locator('[data-testid="ai-promise"][data-enabled="1"]').allInnerTexts();
+    if (promises.length < 2 || !promises.some((t) => /one draft per channel/.test(t)) || !promises.some((t) => /one draft per group/.test(t))) throw new Error(`repurpose page should carry both promise lines: ${JSON.stringify(promises)}`);
     // While the call runs the ✨ action narrates what it is doing; the line is gone the moment the result lands
     await page.click('button:has-text("✨ With")');
     const status = page.locator('[data-testid="ai-status"]');

@@ -17,7 +17,6 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Build",
     items: [
-      { href: "/tools", label: "Tools", icon: "✨", hint: "what AI makes" },
       { href: "/webinars", label: "Webinars", icon: "🎤", hint: "wizard" },
       { href: "/offers", label: "Offers", icon: "🎁", hint: "wizard" },
       { href: "/pathway", label: "Pathway", icon: "🛣️" },

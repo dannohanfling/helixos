@@ -8,6 +8,7 @@ import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/compo
 import { LADDER_FORMATS, cadenceNotes, checkScore, checklist } from "@/lib/engine/ladder";
 import { addDays, formatDate, formatDateTime, weekday } from "@/lib/dates";
 import { AiFormStatus } from "@/components/ai-status";
+import { AiPromise } from "@/components/ai-promise";
 
 export const metadata = { title: "Ladders" };
 
@@ -103,6 +104,14 @@ export default async function LaddersPage() {
                   {ai ? "Write the ladder" : "Build the skeleton"}
                 </button>
                 <AiFormStatus feature="ladder" enabled={ai} />
+                {ai ? (
+                  <AiPromise enabled>Returns a full post, 9–11 comment rungs, a headline with alternates, a carousel, an Instagram caption and a Threads chain, written from your product facts. Testimonials come only from approved proof; otherwise it carries a [PROOF PLACEHOLDER].</AiPromise>
+                ) : (
+                  <>
+                    <p className="text-xs text-ink-3">Builds the skeleton: the body, rung slots and headline with the blanks marked for you to fill.</p>
+                    <AiPromise enabled={false}>{null}</AiPromise>
+                  </>
+                )}
                 <span className="text-xs text-ink-3">{ai ? "AI drafts every field from your facts and approved proof, on your own key. You edit, the checklist keeps it honest." : <>No AI key connected, so you get the full structure with every blank marked. <Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have it drafted for you.</>}</span>
               </div>
             </form>

@@ -9,6 +9,7 @@ import { CopyButton } from "@/components/copy-button";
 import { Card, Disclosure, PageHeader, Tabs } from "@/components/ui";
 import { principlePost, principleReel, principleTraining } from "@/lib/engine/doctrine";
 import { AiFormStatus } from "@/components/ai-status";
+import { AiPromise } from "@/components/ai-promise";
 
 const TABS = [
   { key: "doctrine", label: "Doctrine" },
@@ -104,6 +105,7 @@ export default async function PrinciplePage({ params, searchParams }: { params: 
                   <button className="btn btn-soft btn-sm" type="submit" name="ai" value="1">✨ With Claude</button>
                 ) : null}
                 <AiFormStatus feature="principle_content" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
+                <AiPromise enabled={ai}>With Claude rewrites {c.kind === "post" ? "this post" : c.kind === "reel" ? "this 60-second reel script" : "this 10-minute training outline"} in your voice and saves it to your content board.</AiPromise>
               </form>
             </Card>
           ))}

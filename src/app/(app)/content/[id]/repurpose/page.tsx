@@ -14,6 +14,7 @@ import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
 import { alignPost, groupReadiness } from "@/lib/engine/groups";
 import type { ContentVariant, Group } from "@/db/schema";
 import { AiFormStatus } from "@/components/ai-status";
+import { AiPromise } from "@/components/ai-promise";
 
 function VariantForm({ var_, maxChars, email = false }: { var_: ContentVariant; maxChars: number; email?: boolean }) {
   return (
@@ -172,6 +173,7 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
               {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With AI</button> : null}
             </div>
             <AiFormStatus feature="group_variant" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
+            <AiPromise enabled={ai}>With AI returns one draft per group you tick, shaped to that group&apos;s mission and rules: your own group keeps the call to action, other people&apos;s groups get value first and no links.</AiPromise>
           </form>
         ) : (
           <p className="text-sm text-ink-2">
@@ -217,6 +219,7 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
             {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With AI</button> : <span className="text-xs text-ink-3"><Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have each draft polished in your voice.</span>}
           </div>
           <AiFormStatus feature="repurpose" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
+          <AiPromise enabled={ai}>With AI returns one draft per channel you tick, rewritten for that format inside its length and link rules.</AiPromise>
         </form>
       </Card>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
