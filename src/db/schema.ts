@@ -40,6 +40,8 @@ export const memberships = sqliteTable(
     programTier: text("program_tier").notNull().default("Academy"),
     businessName: text("business_name"),
     bigPromise: text("big_promise"),
+    /** Who the Big Promise is for. One field for the whole business; offers and webinars refine it, nothing else copies it. */
+    audience: text("audience"),
     reminderHour: integer("reminder_hour").notNull().default(8),
     eveningReminderHour: integer("evening_reminder_hour").notNull().default(17),
     leaderboardOptIn: integer("leaderboard_opt_in", { mode: "boolean" }).notNull().default(true),

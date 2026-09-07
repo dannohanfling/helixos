@@ -47,6 +47,10 @@ export default async function SettingsPage() {
             <Field label="Big promise" hint="I help [who] go from [pain] to [outcome] in [time] without [thing they hate].">
               <textarea className="field" name="bigPromise" defaultValue={v.membership.bigPromise ?? ""} />
             </Field>
+            {/* Label and helper line are Danno's to write; the field name stands in until then. */}
+            <Field label="Audience">
+              <input className="field" name="audience" defaultValue={v.membership.audience ?? ""} data-testid="audience-field" />
+            </Field>
             <Field label="Your timezone" hint="Sets what 'today' means for your lock-in, close, streak and reminders.">
               <select className="field" name="timezone" defaultValue={v.membership.timezone ?? v.workspace.timezone}>
                 {Array.from(new Set([v.workspace.timezone, ...(v.membership.timezone ? [v.membership.timezone] : []), ...TIMEZONES])).map((tz) => (

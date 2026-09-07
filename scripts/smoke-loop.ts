@@ -134,6 +134,14 @@ async function main() {
     if ((goalAfter?.actual ?? 0) - (goalBefore?.actual ?? 0) !== 250) throw new Error(`goal should move by the cash delta (250), moved ${(goalAfter?.actual ?? 0) - (goalBefore?.actual ?? 0)}`);
     console.log("✓ editing a close awards the delta and moves the goal by the cash difference");
 
+    // Audience: one member-level field beside the Big Promise
+    await page.goto(`${base}/settings`);
+    await page.fill('[data-testid="audience-field"]', "Coaches with a Facebook group");
+    await submit(page, 'form:has([data-testid="audience-field"]) button:has-text("Save")');
+    const withAudience = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
+    if (withAudience?.audience !== "Coaches with a Facebook group") throw new Error(`audience not saved: ${withAudience?.audience}`);
+    console.log("✓ audience saved on the membership");
+
     // Member timezone
     await page.goto(`${base}/settings`);
     await page.selectOption('select[name="timezone"]', "America/New_York");

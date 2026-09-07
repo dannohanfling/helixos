@@ -70,7 +70,10 @@ async function main() {
     for (const admin of ["Sign the agreement", "Make your first payment", "Confirm your GoHighLevel access"]) {
       if (now.includes(admin) && !/extras?/i.test(now)) throw new Error(`admin task "${admin}" in the simple path`);
     }
-    await expectText(page, "Choose where your community will live", "first real step");
+    if (/Choose where your community will live/.test(now)) throw new Error("the community-platform task is still in stage 1");
+    await page.goto(`${base}/pathway?view=all&stage=system-install`);
+    await expectText(page, "Choose where your community will live", "platform choice lives in system-install");
+    await page.goto(`${base}/pathway`);
     await expectText(page, "first conversion event around Week 6", "pathway header names the destination");
     console.log("✓ pathway: first step is a real action; header names the destination");
 

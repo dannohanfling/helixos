@@ -28,6 +28,7 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
     .set({
       businessName: opt(formData, "businessName"),
       bigPromise: opt(formData, "bigPromise"),
+      audience: opt(formData, "audience"),
       reminderHour: Math.min(23, Math.max(0, num(formData, "reminderHour") || 8)),
       eveningReminderHour: Math.min(23, Math.max(0, num(formData, "eveningReminderHour") || 17)),
       leaderboardOptIn: formData.get("leaderboardOptIn") === "on",

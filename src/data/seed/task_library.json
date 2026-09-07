@@ -43,8 +43,8 @@
  },
  {
   "key": "recEykICDkrZqGgfx",
-  "stage": "onboarding",
-  "order": 4,
+  "stage": "system-install",
+  "order": 1,
   "name": "Choose where your community will live",
   "teaching": "Your community needs a home. Facebook Group. Skool. Circle. Slack. Pick one. Don't overthink it — you can always move later.\n",
   "howTo": "Done when: you've chosen one community platform and posted your choice and reasoning in the Evolve Omega community.\n",
