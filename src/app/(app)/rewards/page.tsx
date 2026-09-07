@@ -1,11 +1,14 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { claimRewardAction } from "@/lib/actions/settings";
 import { markPassInstalledAction, sendTestPushAction } from "@/lib/actions/integrations";
 import { Badge, Card, PageHeader, Progress } from "@/components/ui";
+import { ClaimButton } from "@/components/claim-button";
 import { TIERS, TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
+import { catalogue, claimability, requirementText, type CatalogueItem, type Claimability } from "@/lib/engine/rewards";
+import { loadRewardsConfig } from "@/lib/rewards-config";
 import { leaderboard, recentLedger, totalPoints } from "@/lib/queries/points";
+import { claimDatesByName } from "@/lib/queries/rewards";
 import { formatDateTime, startOfWeek } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
@@ -29,7 +32,12 @@ export default async function RewardsPage() {
   const nameOf = new Map(users.map((u) => [u.id, u]));
   const topBoard = board.filter((b) => optedIn.has(b.userId)).slice(0, 8);
   const claimed = new Set(claims.map((c) => c.rewardName));
-  const tierLevel = (name: string) => TIERS.find((t) => t.name === name)?.level ?? 0;
+  const config = loadRewardsConfig();
+  const items = catalogue(rewards, prizes, config);
+  const claimDates = await claimDatesByName(v.workspace.id, v.tz);
+  const verdictOf = (item: CatalogueItem): Claimability =>
+    claimability(item, { points, tierLevel: tier.current.level, claimed, claimDates: claimDates.get(item.name) ?? [], today: v.today, mode: config.perMonth });
+  const myClaim = (name: string) => claims.find((c) => c.rewardName === name);
 
   return (
     <>
@@ -98,64 +106,18 @@ export default async function RewardsPage() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Prizes you unlock">
-          <ul className="space-y-2">
-            {prizes.map((p) => {
-              const unlocked = points >= p.pointsRequired;
-              return (
-                <li key={p.name} className={`rounded-lg border p-3 ${unlocked ? "border-good" : ""}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-semibold">{p.name}</div>
-                    <Badge tone={unlocked ? "good" : "neutral"}>{unlocked ? "Unlocked" : `${p.pointsRequired.toLocaleString()} pts`}</Badge>
-                  </div>
-                  <p className="mt-1 text-sm text-ink-2">{p.description}</p>
-                  {unlocked && !claimed.has(p.name) ? (
-                    <form action={claimRewardAction} className="mt-2">
-                      <input type="hidden" name="name" value={p.name} />
-                      <input type="hidden" name="cost" value={0} />
-                      <button className="btn btn-accent btn-xs" type="submit">
-                        Claim
-                      </button>
-                    </form>
-                  ) : claimed.has(p.name) ? (
-                    <div className="mt-2 text-xs text-good">Claimed · your coach will follow up</div>
-                  ) : null}
-                </li>
-              );
-            })}
+        <Card title="Prizes you unlock" action={<span className="text-xs text-ink-3">milestones, no points spent</span>}>
+          <ul className="space-y-2" data-testid="prize-list">
+            {items.filter((i) => i.kind === "prize").map((item) => (
+              <CatalogueRow key={item.name} item={item} verdict={verdictOf(item)} claim={myClaim(item.name)} tz={v.tz} />
+            ))}
           </ul>
         </Card>
-        <Card title="Spend your points">
-          <ul className="space-y-2">
-            {rewards.slice(0, 8).map((r) => {
-              const tierOk = !r.tierRequired || tierLevel(r.tierRequired.replace(/^[^\w]+/, "")) <= tier.current.level;
-              const cost = Number(r.pointsCost ?? 0);
-              const canClaim = tierOk && points >= cost && !claimed.has(r.name);
-              return (
-                <li key={r.name} className="rounded-lg border p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-semibold">{r.name}</div>
-                    <span className="text-xs text-ink-3">{cost ? `${cost.toLocaleString()} pts` : "tier unlock"}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-ink-2">{r.description}</p>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-ink-3">
-                    {r.tierRequired ? <span>{r.tierRequired}+</span> : null}
-                    {r.category ? <span>· {r.category}</span> : null}
-                    {canClaim ? (
-                      <form action={claimRewardAction} className="ml-auto">
-                        <input type="hidden" name="name" value={r.name} />
-                        <input type="hidden" name="cost" value={cost} />
-                        <button className="btn btn-soft btn-xs" type="submit">
-                          Claim {cost ? `for ${cost}` : ""}
-                        </button>
-                      </form>
-                    ) : claimed.has(r.name) ? (
-                      <span className="ml-auto text-good">Claimed</span>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
+        <Card title="Spend your points" action={<span className="text-xs text-ink-3">the whole ladder, locked rungs included</span>}>
+          <ul className="space-y-2" data-testid="reward-list">
+            {items.filter((i) => i.kind === "reward").map((item) => (
+              <CatalogueRow key={item.name} item={item} verdict={verdictOf(item)} claim={myClaim(item.name)} tz={v.tz} />
+            ))}
           </ul>
         </Card>
         <Card title="This week's leaderboard" action={<span className="text-xs text-ink-3">Opt out in settings</span>}>
@@ -194,5 +156,48 @@ export default async function RewardsPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+/**
+ * One reward or prize: what it is, what it asks for, and exactly one of: a Claim button, the reason it can't be claimed
+ * yet, or (once claimed) that reward's own booking link. A claim is an instant unlock; the next step is the client's.
+ */
+function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdict: Claimability; claim?: { id: string; createdAt: string; bookingOpenedAt: string | null }; tz: string }) {
+  const locked = !claim && !verdict.ok;
+  const soon = !verdict.ok && (verdict.reason === "opening-soon" || verdict.reason === "not-earnable");
+  return (
+    <li className={`rounded-lg border p-3 ${claim ? "border-good" : locked && !soon ? "opacity-75" : ""}`} data-testid="catalogue-item" data-reward={item.name}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-semibold">{item.name}</div>
+        <span className="shrink-0 text-xs text-ink-3">{item.kind === "prize" ? `${item.minPoints.toLocaleString()} pts` : item.cost ? `${item.cost.toLocaleString()} pts` : item.tierRequired ? "tier unlock" : "earned"}</span>
+      </div>
+      <p className="mt-1 text-sm text-ink-2">{item.description}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-3">
+        <span>{requirementText(item) || "By invitation"}</span>
+        {item.category ? <span>· {item.category}</span> : null}
+        <span className="ml-auto flex items-center gap-2">
+          {claim ? (
+            <>
+              <span className="text-good">Claimed {formatDateTime(claim.createdAt.includes("T") ? claim.createdAt : claim.createdAt.replace(" ", "T") + "Z", tz)}</span>
+              {item.bookingUrl ? (
+                <a href={`/rewards/book/${claim.id}`} target="_blank" rel="noreferrer" className="btn btn-accent btn-xs" data-testid="book-link">
+                  {claim.bookingOpenedAt ? "Booking link ↗" : "Book your slot ↗"}
+                </a>
+              ) : (
+                <span>· next step opening soon</span>
+              )}
+            </>
+          ) : verdict.ok ? (
+            <ClaimButton name={item.name} label={item.cost ? `Claim for ${item.cost.toLocaleString()}` : "Claim"} className={item.kind === "prize" ? "btn btn-accent btn-xs" : "btn btn-soft btn-xs"} />
+          ) : (
+            <Badge tone={verdict.reason === "cap" ? "warn" : soon ? "neutral" : "accent"}>
+              <span data-testid="reward-status">{verdict.message}</span>
+            </Badge>
+          )}
+        </span>
+      </div>
+      {claim && item.bookingUrl && !claim.bookingOpenedAt ? <p className="mt-2 text-xs text-ink-2">Your points are spent and the slot is yours to book. Nobody books it for you.</p> : null}
+    </li>
   );
 }

@@ -381,6 +381,8 @@ export const rewardClaims = sqliteTable("reward_claims", {
   rewardName: text("reward_name").notNull(),
   pointsSpent: integer("points_spent").notNull().default(0),
   status: text("status", { enum: ["requested", "fulfilled"] }).notNull().default("requested"),
+  /** First time the client followed the booking link. The only "did they book" signal we have; the calendar is external. */
+  bookingOpenedAt: text("booking_opened_at"),
   createdAt: createdAt(),
 });
 

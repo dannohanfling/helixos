@@ -13,6 +13,10 @@ import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
 import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
+import { catalogue } from "@/lib/engine/rewards";
+import { loadRewardsConfig } from "@/lib/rewards-config";
+import prizes from "@/data/seed/prizes.json";
+import rewards from "@/data/seed/rewards.json";
 
 export const metadata = { title: "Coach" };
 
@@ -31,6 +35,9 @@ export default async function CoachPage() {
     db.query.libraryTasks.findMany(),
   ]);
   const monthStart = `${v.today.slice(0, 7)}-01`;
+  // Claims are instant unlocks; this is a window onto what's coming, not a queue to work.
+  const claimRows = await db.query.rewardClaims.findMany({ where: eq(schema.rewardClaims.workspaceId, wsId), orderBy: desc(schema.rewardClaims.createdAt), limit: 50 });
+  const linkOf = new Map(catalogue(rewards, prizes, loadRewardsConfig()).map((i) => [i.name, i.bookingUrl]));
   const [aiCreds, aiRows] = await Promise.all([
     db.query.aiCredentials.findMany({ where: eq(schema.aiCredentials.workspaceId, wsId) }),
     db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.workspaceId, wsId), gte(schema.aiUsage.createdAt, monthStart)) }),
@@ -236,6 +243,30 @@ export default async function CoachPage() {
               <button className="btn btn-soft btn-xs" type="submit">Save</button>
               <span className="text-ink-3">calls per day, on their own key. Stops a runaway loop from spending a client&apos;s money.</span>
             </form>
+          </Card>
+          <Card title="Claimed rewards" action={<span className="text-xs text-ink-3">read-only · the client books it</span>}>
+            {claimRows.length ? (
+              <ul className="divide-y text-sm" data-testid="claims-list">
+                {claimRows.map((c) => {
+                  const u = userById.get(c.userId);
+                  const link = linkOf.get(c.rewardName);
+                  const booking = !link ? "no next step set yet" : c.bookingOpenedAt ? `opened the booking link ${formatDateTime(c.bookingOpenedAt, v.tz)}` : "hasn't opened the booking link yet";
+                  return (
+                    <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-testid="claim-row">
+                      <span className="font-medium">
+                        {u?.avatarEmoji} {u?.name ?? "Member"}
+                      </span>
+                      <span className="min-w-0 flex-1">{c.rewardName}</span>
+                      <span className="text-xs text-ink-3">{formatDateTime(c.createdAt.includes("T") ? c.createdAt : c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
+                      <span className="tabular text-xs text-ink-2">{c.pointsSpent ? `−${c.pointsSpent.toLocaleString()} pts` : "milestone"}</span>
+                      <span className={`basis-full text-xs ${c.bookingOpenedAt ? "text-good" : link ? "text-warn" : "text-ink-3"}`}>{booking}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-2">Nothing claimed yet. When a client spends points, it shows here with whether they&apos;ve followed the booking link.</p>
+            )}
           </Card>
           <Card title="Who needs a nudge">
             {atRisk.length ? (

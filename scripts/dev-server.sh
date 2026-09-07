@@ -27,6 +27,7 @@ main() {
     SESSION_SECRET="${SESSION_SECRET:-dev-secret-dev-secret-dev-secret-123}" \
     GHL_WEBHOOK_PUBLIC_KEY="${GHL_WEBHOOK_PUBLIC_KEY:-LcZjV/epRdfWK7Ah/K3pR4K5ulVZRnaRt6vHVnshlMg=}" \
     AI_BASE_URL="${AI_BASE_URL:-http://localhost:4020}" \
+    REWARDS_CONFIG_OVERRIDE="${REWARDS_CONFIG_OVERRIDE:-screenshots/logs/rewards-config.override.json}" \
       nohup npx next dev -p "$PORT" >"$LOG" 2>&1 &
     for _ in $(seq 1 60); do
       if curl -sf -o /dev/null "http://localhost:$PORT/login"; then

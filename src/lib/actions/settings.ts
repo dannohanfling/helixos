@@ -5,7 +5,6 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { inviteCode } from "@/lib/ids";
-import { totalPoints } from "@/lib/queries/points";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 /** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
@@ -72,16 +71,3 @@ export async function rotateInviteAction(formData: FormData): Promise<void> {
   refresh();
 }
 
-export async function claimRewardAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
-  const name = str(formData, "name");
-  const cost = num(formData, "cost");
-  if (!name) return;
-  const points = await totalPoints(workspaceId, userId);
-  if (cost > 0 && points < cost) return;
-  await db.insert(schema.rewardClaims).values({ id: newId(), workspaceId, userId, rewardName: name, pointsSpent: cost });
-  if (cost > 0) {
-    await db.insert(schema.pointsLedger).values({ id: newId(), workspaceId, userId, type: "redeem", points: -cost, reason: `Claimed: ${name}` });
-  }
-  refresh();
-}

@@ -1,0 +1,1 @@
+ALTER TABLE `reward_claims` ADD `booking_opened_at` text;

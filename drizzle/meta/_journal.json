@@ -106,6 +106,13 @@
       "when": 1788739340855,
       "tag": "0014_member_timezone_streak_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1788745120434,
+      "tag": "0015_reward_claim_booking_opened",
+      "breakpoints": true
     }
   ]
 }
