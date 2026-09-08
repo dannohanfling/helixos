@@ -74,7 +74,7 @@ export default async function LadderProfilePage() {
         </Card>
         <Card title="The rules every ladder follows">
           <ul className="space-y-1 text-xs text-ink-2">
-            <li>4th-grade reading level. One thought per line. No jargon, no hype, no manufactured urgency.</li>
+            <li>Your own voice, from your Essence. No hype, no manufactured urgency.</li>
             <li>The body ends in an open question, never &quot;comment KEYWORD&quot;. The keyword lives in the final rung.</li>
             <li>No revenue guarantees. Tools enable; people and offers produce. Client counts are exact.</li>
             <li>Every number is true or marked &quot;(Illustrative. Your numbers will differ.)&quot;</li>

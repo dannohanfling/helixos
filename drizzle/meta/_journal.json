@@ -169,6 +169,13 @@
       "when": 1788890888855,
       "tag": "0023_proof_speaker_label",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1788893853427,
+      "tag": "0024_essence",
+      "breakpoints": true
     }
   ]
 }

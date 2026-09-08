@@ -6,7 +6,7 @@ import { db, schema } from "@/db";
 import { WEBINAR_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { VOICE, draft } from "@/lib/ai";
+import { draft } from "@/lib/ai";
 import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, readinessScore } from "@/lib/engine/webinar";
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
@@ -111,7 +111,7 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   let text: string | null = null;
   if (str(formData, "mode") !== "example") {
     text = await draft(
-      `You write webinar scripts for coaches using the Perfect Webinar structure (Opening Frame, Vehicle, Internal, External, Closing Frame). ${VOICE} Output only the spoken script for one section, 120 to 260 words, no headings.`,
+      `You write webinar scripts for coaches using the Perfect Webinar structure (Opening Frame, Vehicle, Internal, External, Closing Frame). Output only the spoken script for one section, 120 to 260 words, no headings.`,
       [
         `Webinar: ${w.title}`,
         `Audience: ${w.audience ?? "(not set)"}`,

@@ -1101,10 +1101,28 @@ export const aiUsage = sqliteTable(
     inputTokens: integer("input_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),
     estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+    /** Prompt-cache accounting for the Essence block: written at 1.25× the input price, read back at 0.1×. */
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [index("ai_usage_user_at").on(t.userId, t.createdAt), index("ai_usage_ws_at").on(t.workspaceId, t.createdAt)],
 );
+
+/** The client's Essence: brand voice as config, fourteen sections of JSON, owned by the client. Not a secret. One per client. */
+export const essences = sqliteTable(
+  "essences",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    data: text("data", { mode: "json" }).$type<Record<string, Record<string, unknown>>>().notNull().default({}),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("essences_ws_user").on(t.workspaceId, t.userId)],
+);
+export type Essence = typeof essences.$inferSelect;
 
 /* ───────────────────────── Integrations ───────────────────────── */
 

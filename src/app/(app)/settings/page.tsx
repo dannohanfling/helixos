@@ -133,9 +133,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     ))}
                   </select>
                 </Field>
-                <Field label="Brand voice" hint="Used when generating copy suggestions.">
-                  <textarea className="field" name="brandVoice" defaultValue={v.workspace.brandVoice ?? ""} />
-                </Field>
                 <Field label="HelixOS Airtable base ID" hint="Run `npm run import:airtable` to refresh pathway, curriculum, and DM templates from your base.">
                   <input className="field" name="airtableBaseId" defaultValue={v.workspace.airtableBaseId ?? ""} placeholder="appXXXXXXXXXXXXXX" />
                 </Field>

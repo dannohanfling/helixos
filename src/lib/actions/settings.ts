@@ -67,7 +67,6 @@ export async function updateWorkspaceAction(formData: FormData): Promise<void> {
     .set({
       name: str(formData, "name") || coach.workspace.name,
       timezone: str(formData, "timezone") || coach.workspace.timezone,
-      brandVoice: opt(formData, "brandVoice"),
       airtableBaseId: opt(formData, "airtableBaseId"),
     })
     .where(eq(schema.workspaces.id, coach.workspace.id));

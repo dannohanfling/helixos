@@ -16,9 +16,15 @@ export const NARRATION: Record<string, string[]> = {
 /** How long each line stays before the next. Long calls sit on the last line; short ones may never leave the first. */
 export const NARRATION_STEP_MS = 2500;
 
+/** With no Essence there is no voice to keep: a line that claims one is cut, never reworded. */
+export function narrationFor(feature: string, voiceReady: boolean): string[] {
+  const lines = NARRATION[feature] ?? [];
+  return voiceReady ? lines : lines.filter((l) => !/your voice/i.test(l));
+}
+
 /** The line to show after `elapsedMs` in flight. With reduced motion only the first line ever shows. */
-export function narrationLine(feature: string, elapsedMs: number, reducedMotion = false): string | null {
-  const lines = NARRATION[feature];
+export function narrationLine(feature: string, elapsedMs: number, reducedMotion = false, voiceReady = true): string | null {
+  const lines = narrationFor(feature, voiceReady);
   if (!lines?.length) return null;
   if (reducedMotion) return lines[0];
   return lines[Math.min(lines.length - 1, Math.max(0, Math.floor(elapsedMs / NARRATION_STEP_MS)))];

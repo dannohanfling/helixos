@@ -10,6 +10,8 @@ import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type
 import { hashtagsFor } from "@/lib/engine/repurpose";
 import { ChannelPreview, type Persona } from "./channel-previews";
 import { AiStatus } from "@/components/ai-status";
+import { AiPromise } from "@/components/ai-promise";
+import { useVoice } from "@/components/voice-context";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
@@ -22,6 +24,7 @@ type Snippet = { id: string; title: string; text: string };
 
 export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[] }; stale?: StaleNotice }) {
   const router = useRouter();
+  const voice = useVoice();
   const targets = useMemo(() => [...groupTargets(groups), ...channelTargets()], [groups]);
   const byKey = useMemo(() => new Map(targets.map((t) => [t.key, t])), [targets]);
   const [title, setTitle] = useState(initial?.title ?? "");
@@ -120,7 +123,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       }
       setCustomize(true);
       setOverrides((o) => ({ ...o, ...res }));
-      setNotice(`AI rewrote ${n} versions in your voice. Review each tab, then schedule.`);
+      setNotice(`AI rewrote ${n} versions${voice.ready ? " in your voice" : ""}. Review each tab, then schedule.`);
     });
 
   const preview = previewTab === "all" ? chosen : chosen.filter((t) => t.key === previewTab);
@@ -271,7 +274,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                 </label>
               </div>
               <AiStatus feature="composer_polish" active={pending && polishing} />
-              {aiEnabled ? <p className="text-xs text-ink-3" data-testid="ai-promise" data-enabled="1">✨ Returns one version of this draft per target you ticked, inside each one&apos;s limit. You review each tab before you schedule.</p> : null}
+              {aiEnabled ? <AiPromise enabled>Returns one version of this draft per target you ticked, inside each one&apos;s limit. You review each tab before you schedule.</AiPromise> : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <input className="field text-sm" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="Photo or video URL (optional)" />
                 <select className="field text-sm" value={contentType} onChange={(e) => setContentType(e.target.value)}>

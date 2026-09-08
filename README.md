@@ -87,6 +87,7 @@ npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simpl
 npx tsx scripts/smoke-composer.ts  # Composer: the CTA as its own field (desktop and phone), per-channel previews, one-click schedule everywhere, collapsible nav
 npx tsx scripts/smoke-library.ts   # Library browse, search, use in composer, save to library, coach share
 npx tsx scripts/smoke-auth.ts     # /setup token gate + 404s, forgot → reset with session invalidation, change password (needs a current `next build`)
+npx tsx scripts/smoke-essence.ts   # Essence: empty says so at the point of use, sections save and count, the cap refuses, every AI system message leads with the Essence (cached) then the task, cache tokens on the usage row
 npx tsx scripts/smoke-fathom.ts    # Fathom harvest: own key + tick one, recording list, one recording read only when picked, verbatim check, tick two, trims not rewrites, attribution on copy, proof into the webinar wizard and composer, against scripts/mock-fathom.ts + mock-ai.ts
 npx tsx scripts/smoke-ghl.ts       # Client's own Private Integration token → 401 / 403 / wrong-location reasons → accounts → channel map → schedule → edit in place → status sync → coach's read-only planner audit, against scripts/mock-ghl.ts
 npx tsx scripts/smoke-ai.ts          # Bring-your-own AI key: 401 / no-billing / wrong-provider reasons, a ✨ feature on the member's key, usage for member and coach, daily cap + override (needs AI_BASE_URL=http://localhost:4020 and scripts/mock-ai.ts)
@@ -100,6 +101,10 @@ npx tsx scripts/smoke-coach.ts       # Coach opens a client: roster link → /co
 npx tsx scripts/smoke-email.ts       # SendGrid adapter against scripts/mock-sendgrid.ts: 202 payload shape, 401 reason, reminder loop survives one failing recipient
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
+
+## The Essence System: brand voice as config
+
+Every ✨ action promises the client's voice, and the voice comes from one place: the client's Essence, fourteen sections of JSON they fill in at Build → Essence (Danno's production schema plus representative stories), capped at 20,000 characters so it stays portable to the bot. Every model call goes through `draft()` in `src/lib/ai.ts`, which builds the system message itself: the Essence first, marked for prompt caching, then the feature's task instruction. ESLint keeps the provider SDKs out of every other file, so no feature can compose its own system message and drift. With an empty Essence the task runs alone, no voice is invented, and the ✨ line at the point of use says the output will read generic with a link into the wizard. Usage rows carry cache write and read tokens and the cost estimate prices them (1.25× and 0.1× of the input price); the AI card on Settings says what the prefix adds per call.
 
 ## Three AI actions that share one prompt, on purpose
 

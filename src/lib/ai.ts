@@ -2,6 +2,10 @@
  * Bring-your-own AI. Every call runs on the signed-in member's own key (Anthropic or OpenAI), is logged with its token counts
  * and estimated cost, and is refused past the workspace's daily cap. No key → null, and every feature falls back to its
  * rule-based draft exactly as before. There is no coach or house key.
+ *
+ * draft() is the only way a model is called in this codebase (ESLint keeps the SDKs out of every other file). It builds the
+ * system message itself: the client's Essence first, the feature's task instruction second. No feature composes its own,
+ * so a voice can never be pasted inline and drift.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
@@ -12,6 +16,8 @@ import { open } from "@/lib/crypto";
 import { newId } from "@/lib/ids";
 import { todayInTz } from "@/lib/dates";
 import { FEATURES, MODELS, estimateCost, explainAiError, modelFor, type AiProvider } from "@/lib/engine/ai-usage";
+import { assembleSystem, type SystemBlock } from "@/lib/engine/essence";
+import { essenceBlockFor } from "@/lib/queries/essence";
 
 export type AiStatus = { hasKey: boolean; provider: AiProvider | null; last4: string; lastError: string | null; callsToday: number; cap: number; exempt: boolean; blocked: boolean };
 
@@ -51,11 +57,13 @@ export async function hasAiKey(): Promise<boolean> {
   return s.hasKey && !s.blocked;
 }
 
-type Result = { text: string; inputTokens: number; outputTokens: number };
+type Result = { text: string; inputTokens: number; outputTokens: number; cacheWriteTokens: number; cacheReadTokens: number };
 
-async function callAnthropic(key: string, model: string, system: string, user: string, maxTokens: number): Promise<Result | null> {
+/** The Essence block carries a cache marker: it is the same prefix on every call, which is what prompt caching is for. */
+async function callAnthropic(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number): Promise<Result | null> {
   const client = new Anthropic({ apiKey: key, baseURL: baseURL() });
-  const stream = client.messages.stream({ model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] });
+  const blocks: Anthropic.TextBlockParam[] = system.map((b) => (b.cached ? { type: "text", text: b.text, cache_control: { type: "ephemeral" } } : { type: "text", text: b.text }));
+  const stream = client.messages.stream({ model, max_tokens: maxTokens, system: blocks, messages: [{ role: "user", content: user }] });
   const message = await stream.finalMessage();
   if (message.stop_reason === "refusal") return null;
   const text = message.content
@@ -63,23 +71,27 @@ async function callAnthropic(key: string, model: string, system: string, user: s
     .map((b) => b.text)
     .join("\n")
     .trim();
-  return { text, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+  return { text, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0, cacheReadTokens: message.usage.cache_read_input_tokens ?? 0 };
 }
 
-async function callOpenAI(key: string, model: string, system: string, user: string, maxTokens: number): Promise<Result | null> {
+/** OpenAI caches a repeated prefix on its own (no marker); the voice leads the instructions so that prefix is the Essence. */
+async function callOpenAI(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number): Promise<Result | null> {
   const client = new OpenAI({ apiKey: key, baseURL: openaiBaseURL() });
-  const res = await client.responses.create({ model, instructions: system, input: user, max_output_tokens: maxTokens });
+  const res = await client.responses.create({ model, instructions: system.map((b) => b.text).join("\n\n"), input: user, max_output_tokens: maxTokens });
   const text = (res.output_text ?? "").trim();
-  return { text, inputTokens: res.usage?.input_tokens ?? 0, outputTokens: res.usage?.output_tokens ?? 0 };
+  const cached = res.usage?.input_tokens_details?.cached_tokens ?? 0;
+  return { text, inputTokens: Math.max(0, (res.usage?.input_tokens ?? 0) - cached), outputTokens: res.usage?.output_tokens ?? 0, cacheWriteTokens: 0, cacheReadTokens: cached };
 }
 
 export type DraftOptions = { feature?: keyof typeof FEATURES | string };
 
 /**
- * Drafts with the member's own key. Returns null when there is no key, the key is broken, the cap is reached, or the provider
- * refused, so every caller keeps its rule-based path. Logs usage on every completed call.
+ * Drafts with the member's own key. `task` is the feature's instruction only: the system message is assembled here as the
+ * client's Essence (their voice, as JSON, cached) followed by that task. With no Essence the task runs alone and no voice is
+ * invented. Returns null when there is no key, the key is broken, the cap is reached, or the provider refused, so every
+ * caller keeps its rule-based path. Logs usage, cache tokens included, on every completed call.
  */
-export async function draft(system: string, user: string, maxTokens = 4000, opts: DraftOptions = {}): Promise<string | null> {
+export async function draft(task: string, user: string, maxTokens = 4000, opts: DraftOptions = {}): Promise<string | null> {
   const v = await getViewer();
   if (!v) return null;
   const cred = await credentialFor(v.workspace.id, v.user.id);
@@ -89,6 +101,7 @@ export async function draft(system: string, user: string, maxTokens = 4000, opts
   if (!key) return null;
   const feature = opts.feature ?? "composer_polish";
   const model = modelFor(cred.provider, feature);
+  const system = assembleSystem(await essenceBlockFor(v.workspace.id, v.user.id), task).blocks;
   let r: Result | null = null;
   try {
     r = cred.provider === "anthropic" ? await callAnthropic(key, model, system, user, maxTokens) : await callOpenAI(key, model, system, user, maxTokens);
@@ -102,7 +115,7 @@ export async function draft(system: string, user: string, maxTokens = 4000, opts
     return null;
   }
   if (!r) return null;
-  await db.insert(schema.aiUsage).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, provider: cred.provider, model, feature, inputTokens: r.inputTokens, outputTokens: r.outputTokens, estimatedCostUsd: estimateCost(model, r.inputTokens, r.outputTokens) ?? 0 });
+  await db.insert(schema.aiUsage).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, provider: cred.provider, model, feature, inputTokens: r.inputTokens, outputTokens: r.outputTokens, cacheWriteTokens: r.cacheWriteTokens, cacheReadTokens: r.cacheReadTokens, estimatedCostUsd: estimateCost(model, r.inputTokens, r.outputTokens, r.cacheWriteTokens, r.cacheReadTokens) ?? 0 });
   return r.text || null;
 }
 
@@ -124,4 +137,4 @@ export async function validateKey(provider: AiProvider, key: string): Promise<{ 
   }
 }
 
-export const VOICE = `Write in the coach's voice: direct, clear, punchy, heart-led not fluffy. 4th-grade reading level. Short sentences. One line per thought with line breaks between thoughts. No corporate jargon, no empty hype, no "here's the real magic", no "this isn't just about X, it's about Y". Never use em dashes.`;
+

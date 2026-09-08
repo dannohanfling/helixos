@@ -149,7 +149,6 @@ export async function seedDemo(): Promise<void> {
     timezone: tz,
     clientInviteCode: "ACADEMY1",
     coachInviteCode: "COACH001",
-    brandVoice: "Direct. Clear. Punchy. Heart-led, not fluffy. 4th-grade reading level. Short sentences.",
     airtableBaseId: "appz2UoSLKvSr4OWQ",
   });
   const password = await hashPassword("demo1234");

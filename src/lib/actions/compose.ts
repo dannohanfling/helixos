@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { CHANNELS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { VOICE, draft } from "@/lib/ai";
+import { draft } from "@/lib/ai";
 import { CHANNEL_SPECS, type Channel } from "@/lib/engine/repurpose";
 import { channelTargets, draftFor, groupTargets, staggerSchedule, type Target } from "@/lib/engine/compose";
 import { contentPoints } from "@/lib/engine/points";
@@ -101,7 +101,7 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
     return `- ${t.key}: ${rules}\n  Current draft:\n${t.body}`;
   });
   const text = await draft(
-    `You adapt one coaching post for several channels so each version is native to where it's read and built to earn comments, shares and DMs. ${VOICE} Return ONLY a JSON object keyed by target key, each value {"body": string, "subject"?: string (email only)}. Keep every version inside its character limit.`,
+    `You adapt one coaching post for several channels so each version is native to where it's read and built to earn comments, shares and DMs. Return ONLY a JSON object keyed by target key, each value {"body": string, "subject"?: string (email only)}. Keep every version inside its character limit.`,
     `Author: ${v.user.name}. Business: ${v.membership.businessName ?? ""}. Promise: ${v.membership.bigPromise ?? ""}\n\nSource title: ${input.title}\nHook: ${input.hook}\nBody:\n${input.body}\nHas CTA: ${input.hasCta}${input.cta?.trim() ? `\nCTA (the closing line, once, where a CTA belongs): ${input.cta.trim()}` : ""}\n\nTargets:\n${lines.join("\n\n")}`,
     8000,
     { feature: "composer_polish" },

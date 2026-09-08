@@ -1,9 +1,12 @@
+import Link from "next/link";
 import { and, eq, gte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { aiStatus } from "@/lib/ai";
 import { recheckAiKeyAction, removeAiKeyAction, saveAiKeyAction } from "@/lib/actions/ai";
-import { MODELS, money, rollup } from "@/lib/engine/ai-usage";
+import { MODELS, essenceCallDelta, money, rollup } from "@/lib/engine/ai-usage";
+import { essenceChars, roughTokens } from "@/lib/engine/essence";
+import { essenceFor } from "@/lib/queries/essence";
 import { formatDateTime } from "@/lib/dates";
 import { Badge, Card, Field } from "./ui";
 
@@ -13,6 +16,9 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
   const monthStart = `${v.today.slice(0, 7)}-01`;
   const rows = await db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.workspaceId, v.workspace.id), eq(schema.aiUsage.userId, v.user.id), gte(schema.aiUsage.createdAt, monthStart)) });
   const use = rollup(rows);
+  // The voice prefix is paid on every call; say what it adds, on this member's own key.
+  const voiceTokens = roughTokens(essenceChars(await essenceFor(v.workspace.id, v.user.id)));
+  const delta = status.provider ? essenceCallDelta(MODELS[status.provider].light, voiceTokens) : null;
   const cred = status.provider ? await db.query.aiCredentials.findFirst({ where: and(eq(schema.aiCredentials.workspaceId, v.workspace.id), eq(schema.aiCredentials.userId, v.user.id)) }) : null;
   const providerName = status.provider === "anthropic" ? "Anthropic" : status.provider === "openai" ? "OpenAI" : null;
   return (
@@ -83,6 +89,17 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
             <span className="label">This month, on your key</span>
             <span className="tabular font-semibold">{use.calls} calls · about {money(use.costUsd)}</span>
           </div>
+          <p className="text-xs text-ink-3" data-testid="voice-cost">
+            {voiceTokens ? (
+              <>
+                Your Essence rides on every call: about {voiceTokens.toLocaleString()} tokens{delta ? `, roughly ${money(delta.cacheRead)} a call read from cache, ${money(delta.cacheWrite)} when it has to be written (the first call, then again after five quiet minutes)` : ""}.{voiceTokens < 1024 ? " Under about 1,000 tokens the provider doesn't cache it and it is billed at the plain rate." : ""} This month: {use.cacheReadTokens.toLocaleString()} tokens read from cache, {use.cacheWriteTokens.toLocaleString()} written.
+              </>
+            ) : (
+              <>
+                No Essence yet, so no voice prefix is sent. <Link href="/essence" className="underline">Set up your voice</Link> and it rides on every call, cached where the provider allows.
+              </>
+            )}
+          </p>
           {use.byFeature.length ? (
             <ul className="divide-y rounded-lg border text-xs">
               {use.byFeature.map((f) => (

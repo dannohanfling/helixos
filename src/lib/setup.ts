@@ -35,7 +35,7 @@ export async function createWorkspace(input: SetupInput): Promise<{ ok: true; da
   const workspaceId = newId();
   const clientInviteCode = inviteCode();
   const coachInviteCode = inviteCode();
-  await db.insert(schema.workspaces).values({ id: workspaceId, name, slug, timezone: input.timezone, clientInviteCode, coachInviteCode, brandVoice: "Direct. Clear. Punchy. Heart-led, not fluffy. 4th-grade reading level. Short sentences." });
+  await db.insert(schema.workspaces).values({ id: workspaceId, name, slug, timezone: input.timezone, clientInviteCode, coachInviteCode });
   const coachId = existingUser?.id ?? newId();
   if (!existingUser) await db.insert(schema.users).values({ id: coachId, email: coachEmail, name: coachName, passwordHash: await hashPassword(input.password), avatarEmoji: "🔱" });
   await db.insert(schema.memberships).values({ id: newId(), workspaceId, userId: coachId, role: "coach", startedAt: todayInTz(input.timezone) });

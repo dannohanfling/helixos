@@ -46,12 +46,28 @@ export function modelFor(provider: AiProvider, feature: string): string {
   return MODELS[provider][FEATURES[feature]?.tier ?? "light"];
 }
 
-/** Null for a model with no listed price: an unknown cost must show as unknown, never as a confident wrong number. */
-export function estimateCost(model: string, inputTokens: number, outputTokens: number): number | null {
+/** Prompt-cache multipliers on the input price: a write costs 1.25× (5-minute entry), a read 0.1×. Applied to both providers' cached tokens. */
+export const CACHE_WRITE_MULTIPLIER = 1.25;
+export const CACHE_READ_MULTIPLIER = 0.1;
+
+/**
+ * Null for a model with no listed price: an unknown cost must show as unknown, never as a confident wrong number.
+ * `inputTokens` is the uncached remainder; the Essence block arrives as cache writes or cache reads and is priced here too,
+ * so the estimate carries the voice prefix on every call.
+ */
+export function estimateCost(model: string, inputTokens: number, outputTokens: number, cacheWriteTokens = 0, cacheReadTokens = 0): number | null {
   const price = PRICES[model];
   if (!price) return null;
   const [pin, pout] = price;
-  return (inputTokens * pin + outputTokens * pout) / 1_000_000;
+  return (inputTokens * pin + outputTokens * pout + cacheWriteTokens * pin * CACHE_WRITE_MULTIPLIER + cacheReadTokens * pin * CACHE_READ_MULTIPLIER) / 1_000_000;
+}
+
+/** What a voice prefix of this many tokens adds to one call, uncached, written to cache, and read from cache. */
+export function essenceCallDelta(model: string, essenceTokens: number): { uncached: number; cacheWrite: number; cacheRead: number } | null {
+  const price = PRICES[model];
+  if (!price) return null;
+  const pin = price[0] / 1_000_000;
+  return { uncached: essenceTokens * pin, cacheWrite: essenceTokens * pin * CACHE_WRITE_MULTIPLIER, cacheRead: essenceTokens * pin * CACHE_READ_MULTIPLIER };
 }
 export const priceKnown = (model: string) => Boolean(PRICES[model]);
 
@@ -83,21 +99,27 @@ export type UsageRollup = {
   calls: number;
   inputTokens: number;
   outputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
   /** Null when any call used a model with no listed price: a partial total would read as a confident wrong number. */
   costUsd: number | null;
   unknownModels: string[];
   byFeature: { feature: string; label: string; calls: number; costUsd: number | null }[];
 };
 
-export function rollup(rows: Pick<AiUsage, "feature" | "model" | "inputTokens" | "outputTokens" | "estimatedCostUsd">[]): UsageRollup {
+export function rollup(rows: (Pick<AiUsage, "feature" | "model" | "inputTokens" | "outputTokens" | "estimatedCostUsd"> & Partial<Pick<AiUsage, "cacheWriteTokens" | "cacheReadTokens">>)[]): UsageRollup {
   const by = new Map<string, { calls: number; costUsd: number | null }>();
   const unknown = new Set<string>();
   let inputTokens = 0;
   let outputTokens = 0;
+  let cacheWriteTokens = 0;
+  let cacheReadTokens = 0;
   let costUsd: number | null = 0;
   for (const r of rows) {
     inputTokens += r.inputTokens;
     outputTokens += r.outputTokens;
+    cacheWriteTokens += r.cacheWriteTokens ?? 0;
+    cacheReadTokens += r.cacheReadTokens ?? 0;
     const known = priceKnown(r.model);
     if (!known) unknown.add(r.model);
     costUsd = known && costUsd !== null ? costUsd + r.estimatedCostUsd : null;
@@ -108,6 +130,8 @@ export function rollup(rows: Pick<AiUsage, "feature" | "model" | "inputTokens" |
     calls: rows.length,
     inputTokens,
     outputTokens,
+    cacheWriteTokens,
+    cacheReadTokens,
     costUsd,
     unknownModels: Array.from(unknown),
     byFeature: Array.from(by.entries())

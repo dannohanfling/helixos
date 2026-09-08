@@ -91,14 +91,13 @@ export async function saveLadderProfileAction(formData: FormData): Promise<void>
 }
 
 async function generate(workspaceId: string, userId: string, brief: Brief): Promise<{ parsed: Parsed; generatedBy: string }> {
-  const [profile, proofs, membership, user, workspace] = await Promise.all([
+  const [profile, proofs, membership, user] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, workspaceId), eq(schema.ladderProfiles.userId, userId)) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }),
     db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)) }),
     db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
-    db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, workspaceId) }),
   ]);
-  const member = { name: user?.name ?? "the coach", businessName: membership?.businessName, bigPromise: membership?.bigPromise, brandVoice: workspace?.brandVoice };
+  const member = { name: user?.name ?? "the coach", businessName: membership?.businessName, bigPromise: membership?.bigPromise };
   const system = `${masterBlock(profile ?? null, proofs, member)}\n\n${outputContract()}`;
   const text = await draft(system, perPostInput(brief), 8000, { feature: "ladder" });
   if (text) {

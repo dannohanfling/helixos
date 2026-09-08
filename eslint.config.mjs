@@ -17,6 +17,15 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // Every model call goes through draft() in src/lib/ai.ts, which builds the system message itself (voice first, task second).
+    // No feature may reach the SDKs directly and compose its own: that is how a pasted voice drifts.
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    ignores: ["src/lib/ai.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [{ name: "@anthropic-ai/sdk", message: "Call draft() in src/lib/ai.ts; it assembles the system message (Essence first, task second)." }, { name: "openai", message: "Call draft() in src/lib/ai.ts; it assembles the system message (Essence first, task second)." }] }],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

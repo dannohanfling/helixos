@@ -14,6 +14,9 @@ describe("bring-your-own AI", () => {
   it("estimates cost from list prices per million tokens, and the OpenAI tiers price-match the Anthropic ones", () => {
     expect(estimateCost("claude-sonnet-5", 1_000_000, 0)).toBeCloseTo(2);
     expect(estimateCost("claude-opus-5", 2000, 3000)).toBeCloseTo(0.01 + 0.075, 5);
+    // The Essence prefix: written at 1.25× the input price, read back at 0.1×
+    expect(estimateCost("claude-sonnet-5", 1000, 0, 2000, 0)).toBeCloseTo((1000 * 2 + 2000 * 2 * 1.25) / 1_000_000, 9);
+    expect(estimateCost("claude-sonnet-5", 1000, 0, 0, 2000)).toBeCloseTo((1000 * 2 + 2000 * 2 * 0.1) / 1_000_000, 9);
     expect(estimateCost(MODELS.openai.strong, 2000, 3000)).toBe(estimateCost(MODELS.anthropic.strong, 2000, 3000));
     expect(estimateCost(MODELS.openai.light, 2000, 3000)).toBe(estimateCost(MODELS.anthropic.light, 2000, 3000));
     expect(MODELS.openai).toEqual({ strong: "gpt-6-astra", light: "gpt-5.6-sol" });

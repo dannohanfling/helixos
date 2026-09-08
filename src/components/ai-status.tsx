@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { NARRATION_STEP_MS, narrationLine } from "@/lib/engine/ai-narration";
+import { useVoice } from "./voice-context";
 
 /**
  * The rotating status line under a ✨ action while its call is in flight. Renders nothing when idle, so the page's own
  * result or error takes over the moment the call returns; a failed call never leaves a line stranded.
  */
 export function AiStatus({ feature, active }: { feature: string; active: boolean }) {
+  const voice = useVoice();
   const [elapsed, setElapsed] = useState(0);
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -23,7 +25,7 @@ export function AiStatus({ feature, active }: { feature: string; active: boolean
     const id = window.setInterval(tick, NARRATION_STEP_MS);
     return () => window.clearInterval(id);
   }, [active]);
-  const line = active ? narrationLine(feature, elapsed, reduced) : null;
+  const line = active ? narrationLine(feature, elapsed, reduced, voice.ready) : null;
   if (!line) return null;
   return (
     <p className="mt-2 text-xs text-ink-2" role="status" aria-live="polite" data-testid="ai-status" data-feature={feature}>

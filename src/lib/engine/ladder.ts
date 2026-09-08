@@ -54,7 +54,8 @@ const NAME_PUN = /\b(police|badge|handcuffs?|book\s?['’]?em)\b/i;
 const STAT = /(\d+(?:\.\d+)?\s?%)|\b(?:studies|research|data|surveys?)\s+(?:show|shows|found|say|says|prove|proves)\b/gi;
 
 export type Brief = { format: LadderFormatKey; topic: string; audience: "warm" | "cold"; keyword: string; sourceMaterial?: string | null; realNumbers?: string | null };
-export type Member = { name: string; businessName?: string | null; bigPromise?: string | null; brandVoice?: string | null };
+/** The voice itself is not here: it arrives ahead of this block, from the client's Essence, through draft(). */
+export type Member = { name: string; businessName?: string | null; bigPromise?: string | null };
 
 export function words(text: string): number {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -100,11 +101,9 @@ RUNGS
 - 40–90 words each
 - Each ends with ONE short quotable line on its own line
 - Standard shape: pain → origin → five value rungs → honest math → proof → who-it's-not-for → CTA`,
-    `## VOICE — NON-NEGOTIABLE
-- 4th-grade reading level. Sentences average 5–7 words.
-- Line break between every sentence or short thought.
-- Plain language. No jargon. No hype.${member.brandVoice ? `\n- Brand voice: ${member.brandVoice}` : ""}
-- NO manufactured urgency. NO fake scarcity.
+    `## RULES — NON-NEGOTIABLE
+- The voice, tone, sentence length and formatting come from the client's Essence above; nothing here overrides it.
+- NO hype. NO manufactured urgency. NO fake scarcity.
 - ${profile?.scarcityLine?.trim() ? `The ONLY permitted scarcity, verbatim: "${profile.scarcityLine.trim()}"` : "No scarcity line of any kind. There is no permitted one for this client."}
 - BANNED: ${banned.map((b) => `"${b}"`).join(", ")}, any hypey close.
 - No contempt. Never mock any group. Polarize on readiness, never on intelligence.
