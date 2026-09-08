@@ -162,6 +162,13 @@
       "when": 1788888555651,
       "tag": "0022_fathom_harvest",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1788890888855,
+      "tag": "0023_proof_speaker_label",
+      "breakpoints": true
     }
   ]
 }

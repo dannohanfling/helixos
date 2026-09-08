@@ -64,6 +64,11 @@ async function main() {
   await submit(page, 'button:has-text("Save proof")');
   await page.waitForURL(/\/proof\//);
   await expectText(page, "Ready to paste", "proof detail");
+  // A win post is drafted from approved proof only; approval is the permission tick, typed or harvested
+  if (await page.locator('button:has-text("Draft a win post")').count()) throw new Error("a draft proof must not be offered to a post");
+  await page.check('[data-testid="permission-tick"] input');
+  await submit(page, '[data-testid="approve"]');
+  await expectText(page, "has given me permission", "approved through the tick");
   await submit(page, 'button:has-text("Draft a win post")');
   await page.waitForURL(/\/content\//);
   await expectText(page, "Win: Priya", "win post drafted");

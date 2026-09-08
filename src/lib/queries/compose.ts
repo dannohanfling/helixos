@@ -21,7 +21,7 @@ export async function composerContext(v: Viewer) {
   const snippets = {
     hooks: lib.filter((p) => p.kind === "hook").map((p) => ({ id: p.id, title: p.title, text: p.hook ?? p.body })),
     ctas: lib.filter((p) => p.kind === "cta").map((p) => ({ id: p.id, title: p.title, text: p.cta ?? p.body })),
-    proofs: approvedProofs.map((p) => ({ id: p.id, title: p.name, text: p.quote ? withAttribution(p.hook ?? p.punchline ?? p.shortVersion ?? p.quote, p.who) : (p.hook ?? p.punchline ?? p.shortVersion ?? "") })).filter((p) => p.text),
+    proofs: approvedProofs.map((p) => ({ id: p.id, title: p.name, text: p.quote ? withAttribution(p.shortVersion ?? p.quote, p.who) : (p.hook ?? p.punchline ?? p.shortVersion ?? "") })).filter((p) => p.text),
   };
   const ordered: GroupTarget[] = [
     ...groups.filter((g) => g.kind === "own"),

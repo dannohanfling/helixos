@@ -4,14 +4,14 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { PROOF_TYPES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
-import { approveHarvestedProofAction, deleteProofAction, proofToContentAction, unapproveProofAction, updateProofAction } from "@/lib/actions/proofs";
+import { approveProofAction, deleteProofAction, proofToContentAction, unapproveProofAction, updateProofAction } from "@/lib/actions/proofs";
 import { attribution, withAttribution } from "@/lib/engine/fathom";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { formatDateTime } from "@/lib/dates";
 
 const TYPE_LABEL: Record<string, string> = { result: "Result", testimonial: "Testimonial", screenshot: "Screenshot", case_study: "Case study", stat: "Stat", story: "Story" };
-const SHAPE_LABEL: Record<string, string> = { shortVersion: "short version", longVersion: "long version", hook: "hook", punchline: "punchline" };
+const SHAPE_LABEL: Record<string, string> = { shortVersion: "short version", longVersion: "long version" };
 
 export default async function ProofDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ notVerbatim?: string; needsPermission?: string }> }) {
   const v = await requireViewer();
@@ -22,12 +22,17 @@ export default async function ProofDetailPage({ params, searchParams }: { params
   const harvested = Boolean(p.quote);
   const oneLiner = p.shortVersion ?? p.resultAfter ?? p.name;
   const slide = [p.who ? `${p.who}` : "", p.problemBefore ? `Before: ${p.problemBefore}` : "", p.resultAfter ? `After: ${p.resultAfter}` : "", p.shift ? `The shift: ${p.shift}` : ""].filter(Boolean).join("\n");
+  // The quote's own versions carry the name; hook and punchline are the client's framing and are copied as their own words.
   const shapes = [
     { key: "short", label: "Short version", text: p.shortVersion },
     { key: "long", label: "Long version", text: p.longVersion },
+  ].filter((s): s is { key: string; label: string; text: string } => Boolean(s.text));
+  const frames = [
     { key: "hook", label: "Hook", text: p.hook },
     { key: "punchline", label: "Punchline", text: p.punchline },
   ].filter((s): s is { key: string; label: string; text: string } => Boolean(s.text));
+  const grandfathered = p.status === "approved" && !p.permissionAt;
+  const speakerName = p.who ?? p.name;
   return (
     <>
       <PageHeader
@@ -36,7 +41,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
         action={
           <div className="flex items-center gap-2">
             <Badge tone={p.status === "approved" ? "good" : "neutral"}>{p.status}</Badge>
-            {!harvested || p.status === "approved" ? (
+            {p.status === "approved" ? (
               <form action={proofToContentAction}>
                 <input type="hidden" name="id" value={p.id} />
                 <button className="btn btn-accent btn-sm" type="submit">✍️ Draft a win post</button>
@@ -77,7 +82,8 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                   {p.contextAfter ? <p>After it: “{p.contextAfter}”</p> : null}
                 </div>
               ) : null}
-              <p className="mt-2 text-xs text-ink-3">These words are theirs. Every shape below is a trim of this quote, never a rewrite. The frame around it is yours.</p>
+              {p.speakerLabel && p.speakerLabel !== p.who ? <p className="mt-2 text-xs text-ink-3" data-testid="speaker-label">Transcript label: {p.speakerLabel}</p> : null}
+              <p className="mt-2 text-xs text-ink-3">These words are theirs. The short and long versions below are trims of this quote, never a rewrite. The hook, the punchline and the frame are yours.</p>
             </Card>
           ) : null}
           <Card title="Edit">
@@ -92,38 +98,30 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                     {PROOF_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
                   </select>
                 </Field>
-                {harvested ? (
-                  <Field label="Who">
+                {harvested && p.status === "approved" ? (
+                  <Field label="Who" hint="Fixed once approved: the permission was given under this name.">
                     <input className="field" value={p.who ?? ""} readOnly aria-readonly="true" data-testid="who-readonly" />
                   </Field>
                 ) : (
-                  <Field label="Status">
-                    <select className="field" name="status" defaultValue={p.status}>
-                      <option value="draft">Draft</option>
-                      <option value="approved">Approved to use</option>
-                    </select>
+                  <Field label="Who" hint={harvested ? "As the transcript labelled them. Correct it here (an email to a name, say) before approving." : undefined}>
+                    <input className="field" name="who" defaultValue={p.who ?? ""} data-testid="who" />
                   </Field>
                 )}
               </div>
-              {!harvested ? (
-                <Field label="Who">
-                  <input className="field" name="who" defaultValue={p.who ?? ""} />
-                </Field>
-              ) : null}
               {harvested ? <div className="label pt-1">Their words, trimmed only</div> : null}
               <Field label={harvested ? "Short version (trim)" : "One-liner (for a slide or a comment)"} hint={harvested ? "An excerpt of the quote, an ellipsis for what you cut." : "Leave blank and it's built from before and after."}>
                 <input className="field" name="shortVersion" defaultValue={p.shortVersion ?? ""} data-testid="short-version" />
-              </Field>
-              <Field label={harvested ? "Hook (trim)" : "Hook"}>
-                <input className="field" name="hook" defaultValue={p.hook ?? ""} placeholder={harvested ? undefined : "She said she'd quit by week three. Week six: down 11."} data-testid="hook" />
-              </Field>
-              <Field label={harvested ? "Punchline (trim)" : "Punchline"}>
-                <input className="field" name="punchline" defaultValue={p.punchline ?? ""} />
               </Field>
               <Field label={harvested ? "Long version (trim)" : "Long version (the full story)"}>
                 <textarea className="field min-h-32" name="longVersion" defaultValue={p.longVersion ?? ""} />
               </Field>
               {harvested ? <div className="label pt-1">The frame, in your words</div> : null}
+              <Field label="Hook" hint={harvested ? "How you deploy it, in your words. Not attributed to them." : undefined}>
+                <input className="field" name="hook" defaultValue={p.hook ?? ""} placeholder={harvested ? undefined : "She said she'd quit by week three. Week six: down 11."} data-testid="hook" />
+              </Field>
+              <Field label="Punchline">
+                <input className="field" name="punchline" defaultValue={p.punchline ?? ""} />
+              </Field>
               <Field label="Before">
                 <textarea className="field" name="problemBefore" defaultValue={p.problemBefore ?? ""} />
               </Field>
@@ -155,32 +153,34 @@ export default async function ProofDetailPage({ params, searchParams }: { params
           </Card>
         </div>
         <div className="space-y-4">
-          {harvested ? (
-            <Card title="Permission to use it" action={<Badge tone={p.status === "approved" ? "good" : "neutral"}>{p.status}</Badge>}>
+          <Card title="Permission to use it" action={<Badge tone={p.status === "approved" ? "good" : "neutral"}>{p.status}</Badge>}>
               {p.status === "approved" ? (
                 <>
-                  <p className="text-sm" data-testid="permission-record">
-                    {p.who} has given me permission to use what they said here in my marketing.
-                    {p.permissionAt ? <span className="block text-xs text-ink-3">Ticked {formatDateTime(p.permissionAt, v.tz)}.</span> : null}
-                  </p>
+                  {grandfathered ? (
+                    <p className="text-sm" data-testid="grandfathered">Approved before the permission tick existed. It stays approved; the tick applies to approvals from now on.</p>
+                  ) : (
+                    <p className="text-sm" data-testid="permission-record">
+                      {speakerName} has given me permission to use what they said here in my marketing.
+                      {p.permissionAt ? <span className="block text-xs text-ink-3">Ticked {formatDateTime(p.permissionAt, v.tz)}.</span> : null}
+                    </p>
+                  )}
                   <form action={unapproveProofAction} className="mt-3">
                     <input type="hidden" name="id" value={p.id} />
                     <button className="text-xs underline" type="submit">Back to draft</button>
                   </form>
                 </>
               ) : (
-                <form action={approveHarvestedProofAction} className="space-y-3">
+                <form action={approveProofAction} className="space-y-3">
                   <input type="hidden" name="id" value={p.id} />
                   <label className="flex items-start gap-2 text-sm" data-testid="permission-tick">
                     <input type="checkbox" name="permission" className="mt-1" />
-                    <span>{p.who} has given me permission to use what they said here in my marketing.</span>
+                    <span>{speakerName} has given me permission to use what they said here in my marketing.</span>
                   </label>
                   <button className="btn btn-primary btn-sm" type="submit" data-testid="approve">Approve</button>
                   <p className="text-xs text-ink-3">A draft is invisible to every AI feature and every picker until it is approved here.</p>
                 </form>
               )}
             </Card>
-          ) : null}
           <Card title="Copy with attribution">
             {shapes.length ? (
               <ul className="space-y-2" data-testid="copy-out">
@@ -197,7 +197,20 @@ export default async function ProofDetailPage({ params, searchParams }: { params
             ) : (
               <p className="text-sm text-ink-3">Fill in a version above and it appears here with the name attached.</p>
             )}
-            <p className="mt-2 text-xs text-ink-3">For a website, a funnel or a landing page. The name{attribution(p.who) ? ` (${attribution(p.who)})` : ""} travels with the words.</p>
+            {frames.length ? (
+              <ul className="mt-3 space-y-2" data-testid="copy-frame">
+                {frames.map((s) => (
+                  <li key={s.key} className="flex items-start gap-2 rounded-lg border border-dashed p-2 text-sm">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] uppercase tracking-wide text-ink-3">{s.label} · your words</span>
+                      <span className="block">{s.text}</span>
+                    </span>
+                    <CopyButton text={s.text} label="Copy" className="btn btn-ghost btn-xs" />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <p className="mt-2 text-xs text-ink-3">For a website, a funnel or a landing page. The name{attribution(p.who) ? ` (${attribution(p.who)})` : ""} travels with their words; your hook and punchline are copied as yours.</p>
           </Card>
           {!harvested ? (
             <>

@@ -846,6 +846,8 @@ export const proofs = sqliteTable(
     sourceRecordedAt: text("source_recorded_at"),
     contextBefore: text("context_before"),
     contextAfter: text("context_after"),
+    /** The speaker label exactly as the transcript had it (a name, a first name, or an email); `who` is the name shown and may be corrected before approval. */
+    speakerLabel: text("speaker_label"),
     /** Tick two: "[Name] has given me permission to use what they said here in my marketing." Who ticked it and when. */
     permissionAt: text("permission_at"),
     permissionBy: text("permission_by"),

@@ -43,14 +43,15 @@ export async function createProofAction(formData: FormData): Promise<void> {
   const f = fields(formData);
   if (!f.name) return;
   const id = newId();
-  await db.insert(schema.proofs).values({ id, workspaceId, userId, ...f, shortVersion: autoShort(f), clientRecordId: opt(formData, "clientRecordId") });
+  // Every proof starts as a draft; approval goes through the permission tick, harvested or typed.
+  await db.insert(schema.proofs).values({ id, workspaceId, userId, ...f, status: "draft", shortVersion: autoShort(f), clientRecordId: opt(formData, "clientRecordId") });
   refresh();
   const back = str(formData, "back");
   redirect(back.startsWith("/") ? back : `/proof/${id}`);
 }
 
-/** The shapes of a harvested quote that must each be a trim of it. */
-const SHAPES = ["shortVersion", "longVersion", "hook", "punchline"] as const;
+/** The versions of a harvested quote that must each be a trim of it. Hook and punchline are frame: how the proof is deployed, in the client's own words. */
+const SHAPES = ["shortVersion", "longVersion"] as const;
 
 export async function updateProofAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
@@ -59,30 +60,31 @@ export async function updateProofAction(formData: FormData): Promise<void> {
   if (!f.name) return;
   const existing = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.userId, userId)) });
   if (!existing) return;
+  // Status never moves through this form, harvested or typed: approval is the permission tick, and back to draft is its own button.
+  const { status: _status, ...rest } = f;
+  void _status;
   if (existing.quote) {
-    // Harvested from a recording: the words are someone else's. Each shape is a trim of the verbatim quote or it is refused;
-    // who said it stays as the transcript had it; approval goes through the permission tick, never this form.
+    // Harvested from a recording: the words are someone else's. Short and long are trims of the verbatim quote or they are refused.
     for (const k of SHAPES) {
       const value = f[k];
       if (value && !isTrim(value, existing.quote)) redirect(`/proof/${id}?notVerbatim=${k}`);
     }
-    const { status: _ignored, who: _who, ...rest } = f;
-    void _ignored;
-    void _who;
-    await db.update(schema.proofs).set({ ...rest, shortVersion: f.shortVersion ?? existing.shortVersion }).where(eq(schema.proofs.id, id));
+    // The name may be corrected (an email to a name, say) only while it is a draft; once approved the attribution is fixed.
+    const who = existing.status === "approved" ? existing.who : (f.who ?? existing.who);
+    await db.update(schema.proofs).set({ ...rest, who, shortVersion: f.shortVersion ?? existing.shortVersion }).where(eq(schema.proofs.id, id));
   } else {
-    await db.update(schema.proofs).set({ ...f, shortVersion: autoShort(f) }).where(eq(schema.proofs.id, id));
+    await db.update(schema.proofs).set({ ...rest, shortVersion: autoShort(f) }).where(eq(schema.proofs.id, id));
   }
   refresh();
   redirect(`/proof/${id}`); // a clean URL: an earlier "not a trim" notice must not outlive the save that fixed it
 }
 
-/** Tick two. "[Name] has given me permission to use what they said here in my marketing." No tick, no approval; one proof at a time. */
-export async function approveHarvestedProofAction(formData: FormData): Promise<void> {
+/** Tick two, for every proof, harvested or typed. "[Name] has given me permission to use what they said here in my marketing." No tick, no approval; one proof at a time. */
+export async function approveProofAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const id = str(formData, "id");
   const p = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.userId, userId)) });
-  if (!p || !p.quote) return;
+  if (!p) return;
   if (formData.get("permission") !== "on") redirect(`/proof/${id}?needsPermission=1`);
   await db.update(schema.proofs).set({ status: "approved", permissionAt: nowIso(), permissionBy: userId }).where(eq(schema.proofs.id, id));
   refresh();

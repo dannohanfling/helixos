@@ -1,0 +1,1 @@
+ALTER TABLE `proofs` ADD `speaker_label` text;

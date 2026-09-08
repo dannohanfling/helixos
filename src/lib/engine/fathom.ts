@@ -66,10 +66,30 @@ export function autoTrim(quote: string, words = 25): string {
   return ws.length <= words ? normalize(quote) : `${ws.slice(0, words).join(" ")}…`;
 }
 
-export function timestampSeconds(ts: string): number {
-  const parts = ts.split(":").map((p) => Number(p));
-  if (parts.some((n) => !Number.isFinite(n))) return 0;
-  return parts.reduce((acc, n) => acc * 60 + n, 0);
+/** "MM:SS", "HH:MM:SS" or a plain number of seconds, to an integer second. */
+export function timestampSeconds(ts: string | number): number {
+  if (typeof ts === "number") return Math.max(0, Math.floor(ts));
+  const parts = ts.trim().split(":").map((p) => Number(p));
+  if (!parts.length || parts.some((n) => !Number.isFinite(n))) return 0;
+  return Math.floor(parts.reduce((acc, n) => acc * 60 + n, 0));
+}
+
+export type Invitee = { name: string | null; email: string | null };
+/**
+ * Speaker labels are inconsistent by nature: a full name for one person, a bare first name or an email for another. The
+ * calendar invitees are the honest source for the name behind an email or a first name; anything unresolved stays as the
+ * transcript gave it, for the client to correct before approval.
+ */
+export function resolveSpeaker(label: string, email: string | null, invitees: Invitee[]): string {
+  const clean = label.trim();
+  const byEmail = (e: string | null) => (e ? invitees.find((i) => i.email && i.email.toLowerCase() === e.toLowerCase())?.name : null);
+  const viaEmail = byEmail(email) ?? (clean.includes("@") ? byEmail(clean) : null);
+  if (viaEmail) return viaEmail;
+  if (clean && !clean.includes("@") && !/\s/.test(clean)) {
+    const first = invitees.filter((i) => i.name && i.name.trim().toLowerCase().split(/\s+/)[0] === clean.toLowerCase());
+    if (first.length === 1 && first[0].name!.trim().includes(" ")) return first[0].name!.trim();
+  }
+  return clean || "Unknown speaker";
 }
 /** A link back to the moment, so the client can hear it in context before deciding. */
 export function deepLink(shareUrl: string, timestamp: string): string {

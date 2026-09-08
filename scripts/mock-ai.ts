@@ -12,9 +12,9 @@ const delayMs = Number(process.argv[3] ?? process.env.MOCK_AI_DELAY_MS ?? 0);
 function reply(system: string, user: string): string {
   // The harvest prompt: one quote that is word for word in the transcript it was given, and one that is not, so the app's verbatim check is seen to drop it.
   if (/word for word/i.test(system) && /"quotes"/.test(system)) {
-    const line = user.split("\n").find((l) => /Jess Morgan: .*three new clients/.test(l));
-    const real = line ? line.replace(/^\[[^\]]+\]\s*Jess Morgan:\s*/, "").replace(/^Honestly it's been different\.\s*/, "") : "I've had three new clients this month and I didn't chase a single one.";
-    return JSON.stringify({ quotes: [{ quote: real, speaker: "Jess Morgan" }, { quote: "This program changed my life completely.", speaker: "Jess Morgan" }] });
+    const line = user.split("\n").find((l) => /three new clients/.test(l));
+    const real = line ? line.replace(/^\[[^\]]+\]\s*[^:]+:\s*/, "").replace(/^Honestly it's been different\.\s*/, "") : "I've had three new clients this month and I didn't chase a single one.";
+    return JSON.stringify({ quotes: [{ quote: real, speaker: "jess@example.com" }, { quote: "This program changed my life completely.", speaker: "jess@example.com" }] });
   }
   if (/JSON object keyed by/i.test(system)) {
     const keys = Array.from(user.matchAll(/^- ([\w:_-]+):/gm)).map((m) => m[1]);

@@ -39,7 +39,7 @@ const reads = async () => ((await (await fetch(`http://localhost:${fathomPort}/_
 
 const QUOTE = "I've had three new clients this month and I didn't chase a single one.";
 const TICK_ONE = "These are my clients' recordings. Anything I take from them is someone else's words, and it's my responsibility to have their permission before I use it anywhere.";
-const TICK_TWO = "Jess Morgan has given me permission to use what they said here in my marketing.";
+const TICK_TWO = "Jess Morgan-Lee has given me permission to use what they said here in my marketing.";
 
 async function main() {
   const fathom = spawn("npx", ["tsx", "scripts/mock-fathom.ts", String(fathomPort)], { stdio: "ignore", detached: true });
@@ -97,10 +97,10 @@ async function main() {
     await expectText(page, "connected · Anthropic", "ai connected");
 
     await page.goto(`${base}/proof/harvest`);
-    await submit(page, '[data-testid="recording"][data-recording-id="9001"] [data-testid="read-recording"]');
-    await page.waitForURL(/recording=9001/);
+    await submit(page, '[data-testid="recording"][data-recording-id="180896622"] [data-testid="read-recording"]');
+    await page.waitForURL(/recording=180896622/);
     const read = await reads();
-    if (read.join(",") !== "9001") throw new Error(`exactly the picked recording must be read, once; read: ${read.join(",")}`);
+    if (read.join(",") !== "180896622") throw new Error(`exactly the picked recording must be read, once; read: ${read.join(",")}`);
     await expectText(page, "1 new quote saved as drafts", "one verbatim quote kept");
     await expectText(page, "1 dropped because it was not word for word", "the invented one dropped");
     await page.screenshot({ path: "screenshots/f02-harvest.png", fullPage: true });
@@ -111,9 +111,10 @@ async function main() {
     await page.waitForURL(/\/proof\/[a-z0-9-]+$/i);
     const quote = (await page.locator('[data-testid="verbatim-quote"]').innerText()).replace(/[“”]/g, "").trim();
     if (quote !== QUOTE) throw new Error(`quote is not verbatim: ${quote}`);
-    await expectText(page, "Jess Morgan", "speaker from the transcript");
+    await expectText(page, "Jess Morgan", "speaker named from the invitees, the label was an email");
+    if (!(await page.locator('[data-testid="speaker-label"]').count())) throw new Error("the transcript's own label must be shown beside the corrected name");
     const link = await page.locator('[data-testid="quote-link"]').getAttribute("href");
-    if (!link?.includes("timestamp=739")) throw new Error(`link must point at the second in the recording, got ${link}`);
+    if (link !== "https://fathom.video/calls/815301715?timestamp=739") throw new Error(`link must be the meeting url with the second, never the recording id, got ${link}`);
     if (!(await page.locator('[data-testid="quote-context"]').count())) throw new Error("context missing");
     if (await page.locator('button:has-text("Draft a win post")').count()) throw new Error("a draft quote must not be offered to a post");
     const proofUrl = page.url();
@@ -121,18 +122,22 @@ async function main() {
     if (await page.locator('select[aria-label="Pick a proof from the bank"] option:has-text("Jess M.")').count()) throw new Error("a draft must not reach the composer");
     console.log("✓ draft: verbatim, speaker and time from the transcript, context shown, invisible to pickers");
 
-    // A rewrite is refused; a trim with an ellipsis is saved; the name stays read-only
+    // A rewrite of the quote is refused; a trim with an ellipsis is saved; the hook is the client's own framing; the name can be corrected while a draft
     await page.goto(proofUrl);
-    if (!(await page.locator('[data-testid="who-readonly"]').count())) throw new Error("who said it must be read-only for a harvested quote");
+    if (!(await page.locator('[data-testid="who"]').count())) throw new Error("the name must be correctable before approval");
     await fillExact(page, '[data-testid="short-version"]', "I got three new clients without chasing anyone.");
     await submit(page, 'button:has-text("Save")');
     await page.waitForURL(/notVerbatim=shortVersion/);
     await expectText(page, "isn't a trim of the quote", "rewrite refused");
+    await fillExact(page, '[data-testid="who"]', "Jess Morgan-Lee");
     await fillExact(page, '[data-testid="short-version"]', "three new clients this month… didn't chase a single one.");
-    await fillExact(page, '[data-testid="hook"]', "I didn't chase a single one.");
+    await fillExact(page, '[data-testid="hook"]', "She 3x'd her client list in a month without chasing anyone.");
     await submit(page, 'button:has-text("Save")');
-    if (/notVerbatim/.test(page.url())) throw new Error("a trim with an ellipsis must be accepted");
-    await expectText(page, "three new clients this month… didn't chase a single one.” — Jess M.", "copy-out carries the attribution");
+    if (/notVerbatim/.test(page.url())) throw new Error("a trim with an ellipsis, and a hook in the client's own words, must be accepted");
+    await expectText(page, "three new clients this month… didn't chase a single one.” — Jess M.", "copy-out carries the attribution (the corrected name)");
+    if ((await page.inputValue('[data-testid="who"]')) !== "Jess Morgan-Lee") throw new Error("the corrected name must be saved while a draft");
+    const frame = await page.locator('[data-testid="copy-frame"]').innerText();
+    if (/— Jess/.test(frame)) throw new Error("the hook is the client's framing and must not be attributed to the customer");
     console.log("✓ rewrite refused, trim accepted, attribution attached to every copy");
 
     // Tick two: no tick, no approval; ticked, approved with the exact wording and a date
@@ -145,8 +150,25 @@ async function main() {
     await submit(page, '[data-testid="approve"]');
     await expectText(page, "Ticked", "approved with a date");
     if (!(await page.locator('[data-testid="permission-record"]').count())) throw new Error("the tick must be recorded");
+    if (!(await page.locator('[data-testid="who-readonly"]').count())) throw new Error("once approved the name is fixed");
     await page.screenshot({ path: "screenshots/f03-proof-approved.png", fullPage: true });
-    console.log("✓ tick two gates approval, recorded with the date");
+    console.log("✓ tick two gates approval, recorded with the date; the name is fixed once approved");
+
+    // The same tick gates a typed proof, and proofs approved before the tick existed stay approved
+    await page.goto(`${base}/proof`);
+    await expectText(page, "3 approved before the permission tick", "grandfathered rows counted");
+    await page.click('a:has-text("Dana\'s first full week")');
+    await page.waitForURL(/\/proof\/[a-z0-9-]+$/i);
+    if (await page.locator('select[name="status"]').count()) throw new Error("status must not be settable from the form");
+    await submit(page, '[data-testid="approve"]');
+    await page.waitForURL(/needsPermission=1/);
+    await page.check('[data-testid="permission-tick"] input');
+    await submit(page, '[data-testid="approve"]');
+    await expectText(page, "Dana has given me permission", "typed proof approved through the same tick");
+    await page.goto(`${base}/proof`);
+    await expectText(page, "5 approved to use", "count after approvals");
+    await expectText(page, "3 approved before the permission tick", "grandfathered rows unchanged");
+    console.log("✓ the tick gates typed proofs too; earlier approvals untouched and counted");
 
     // Approved: the composer offers it with the name; the webinar belief step lists it
     await page.goto(`${base}/content/compose`);
@@ -164,7 +186,8 @@ async function main() {
     await submit(page, 'button:has-text("Save")');
     console.log("✓ approved proof reaches the composer with its name and the webinar belief step");
 
-    if ((await reads()).join(",") !== "9001") throw new Error("nothing else was allowed to read a recording");
+    const allReads = await reads();
+    if (allReads.join(",") !== "180896622") throw new Error(`nothing else was allowed to read a recording; reads: ${allReads.join(",")}`);
   } finally {
     await browser.close();
     for (const m of [fathom, ai]) {

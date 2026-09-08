@@ -16,7 +16,7 @@ export function fathomBase(): string {
 }
 
 export type FathomResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
-export type Recording = { recordingId: string; title: string; url: string; recordedAt: string | null; invitees: string[] };
+export type Recording = { recordingId: string; title: string; url: string; recordedAt: string | null; invitees: { name: string | null; email: string | null }[] };
 
 /** 60 calls a minute per key. One recording at a time never gets near it; this keeps a fast clicker a second apart. */
 const lastCall = new Map<string, number>();
@@ -58,7 +58,7 @@ async function call<T>(key: string, path: string): Promise<FathomResult<T>> {
 }
 
 type RawMeeting = { recording_id?: number | string; title?: string; meeting_title?: string; share_url?: string; url?: string; created_at?: string; recording_start_time?: string; calendar_invitees?: { name?: string; email?: string }[] };
-type RawEntry = { speaker?: { display_name?: string; matched_calendar_invitee_email?: string | null }; text?: string; timestamp?: string };
+type RawEntry = { speaker?: { display_name?: string; matched_calendar_invitee_email?: string | null }; text?: string; timestamp?: string | number };
 
 /** Titles, dates and who was on the call. No transcript is requested here, ever. */
 export async function listRecordings(userId: string, key: string, cursor?: string | null): Promise<FathomResult<{ recordings: Recording[]; nextCursor: string | null }>> {
@@ -66,7 +66,8 @@ export async function listRecordings(userId: string, key: string, cursor?: strin
   const r = await call<{ items?: RawMeeting[]; next_cursor?: string | null }>(key, `/external/v1/meetings${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
   if (!r.ok) return r;
   const recordings = (r.data.items ?? [])
-    .map((m) => ({ recordingId: String(m.recording_id ?? ""), title: m.title ?? m.meeting_title ?? "Untitled recording", url: m.share_url ?? m.url ?? "", recordedAt: m.recording_start_time ?? m.created_at ?? null, invitees: (m.calendar_invitees ?? []).map((i) => i.name || i.email || "").filter(Boolean) }))
+    // `url` is the meeting's own address (fathom.video/calls/<call id>); the deep link is built from it. `recording_id` is a different number and only ever fetches.
+    .map((m) => ({ recordingId: String(m.recording_id ?? ""), title: m.title ?? m.meeting_title ?? "Untitled recording", url: m.url ?? m.share_url ?? "", recordedAt: m.recording_start_time ?? m.created_at ?? null, invitees: (m.calendar_invitees ?? []).map((i) => ({ name: i.name?.trim() || null, email: i.email?.trim() || null })).filter((i) => i.name || i.email) }))
     .filter((m) => m.recordingId);
   return { ok: true, data: { recordings, nextCursor: r.data.next_cursor ?? null } };
 }
@@ -78,7 +79,7 @@ export async function readTranscript(userId: string, key: string, recordingId: s
   const r = await call<{ transcript?: RawEntry[] } | RawEntry[]>(key, `/external/v1/recordings/${encodeURIComponent(recordingId)}/transcript`);
   if (!r.ok) return r;
   const raw = Array.isArray(r.data) ? r.data : (r.data.transcript ?? []);
-  return { ok: true, data: raw.map((e) => ({ speaker: e.speaker?.display_name?.trim() || "Unknown speaker", email: e.speaker?.matched_calendar_invitee_email ?? null, text: (e.text ?? "").trim(), timestamp: e.timestamp ?? "00:00:00" })).filter((e) => e.text) };
+  return { ok: true, data: raw.map((e) => ({ speaker: e.speaker?.display_name?.trim() || "Unknown speaker", email: e.speaker?.matched_calendar_invitee_email ?? null, text: (e.text ?? "").trim(), timestamp: String(e.timestamp ?? "00:00:00") })).filter((e) => e.text) };
 }
 
 /** The cheap check on save: one page of titles. */

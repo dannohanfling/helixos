@@ -24,9 +24,10 @@ export default async function ProofPage() {
   const captured = new Set(rows.map((r) => r.resultAfter));
   const wins = checkins.filter((k) => k.wins && !captured.has(k.wins)).slice(0, 6);
   const approved = rows.filter((r) => r.status === "approved").length;
+  const grandfathered = rows.filter((r) => r.status === "approved" && !r.permissionAt).length;
   return (
     <>
-      <PageHeader title="Proof Bank" subtitle={`${rows.length} proofs · ${approved} approved to use. Every win your clients get is a post, a webinar slide, and an objection answer.`} />
+      <PageHeader title="Proof Bank" subtitle={<span>{rows.length} proofs · {approved} approved to use{grandfathered ? <span data-testid="grandfathered-count"> ({grandfathered} approved before the permission tick; they stay approved)</span> : null}. Every win your clients get is a post, a webinar slide, and an objection answer.</span>} />
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-4">
           {rows.length ? (

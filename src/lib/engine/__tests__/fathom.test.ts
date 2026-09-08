@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attribution, autoTrim, deepLink, isTrim, locate, parseExtraction, timestampSeconds, verify, withAttribution, type TranscriptEntry } from "../fathom";
+import { attribution, autoTrim, deepLink, isTrim, locate, parseExtraction, resolveSpeaker, timestampSeconds, verify, withAttribution, type TranscriptEntry } from "../fathom";
 
 const entries: TranscriptEntry[] = [
   { speaker: "Maya Torres", email: "m@x", text: "So tell me how the last month has actually gone.", timestamp: "00:12:04" },
@@ -64,8 +64,22 @@ describe("attribution travels with the words", () => {
     expect(attribution("  ")).toBe("");
     expect(withAttribution("three new clients this month", "Jess Morgan")).toBe("“three new clients this month” — Jess M.");
   });
-  it("links back to the second in the recording", () => {
+  it("names the speaker from the invitees when the label is an email or a first name, and otherwise shows what the transcript gave", () => {
+    const invitees = [{ name: "Jess Morgan", email: "jess@example.com" }, { name: "Maya Torres", email: "maya@example.com" }, { name: "Jo Park", email: null }];
+    expect(resolveSpeaker("jess@example.com", null, invitees)).toBe("Jess Morgan");
+    expect(resolveSpeaker("Jess", "jess@example.com", invitees)).toBe("Jess Morgan");
+    expect(resolveSpeaker("Jess", null, invitees)).toBe("Jess Morgan");
+    expect(resolveSpeaker("Jo", null, invitees)).toBe("Jo Park");
+    expect(resolveSpeaker("Sam", null, invitees)).toBe("Sam");
+    expect(resolveSpeaker("sam@else.com", null, invitees)).toBe("sam@else.com");
+    expect(resolveSpeaker("Jess Morgan-Lee", null, invitees)).toBe("Jess Morgan-Lee");
+    expect(resolveSpeaker("", null, invitees)).toBe("Unknown speaker");
+  });
+  it("links back to the second in the recording, from the meeting url and never the recording id", () => {
     expect(timestampSeconds("00:12:19")).toBe(739);
+    expect(timestampSeconds("01:47")).toBe(107);
+    expect(timestampSeconds(107.9)).toBe(107);
+    expect(deepLink("https://fathom.video/calls/815301715", "01:47")).toBe("https://fathom.video/calls/815301715?timestamp=107");
     expect(deepLink("https://fathom.video/share/abc", "00:12:19")).toBe("https://fathom.video/share/abc?timestamp=739");
     expect(deepLink("https://fathom.video/share/abc?x=1", "01:00:00")).toBe("https://fathom.video/share/abc?x=1&timestamp=3600");
   });

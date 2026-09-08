@@ -8,7 +8,7 @@ import { nowIso } from "@/lib/dates";
 import { seal } from "@/lib/crypto";
 import { draft, hasAiKey } from "@/lib/ai";
 import { fathomConnectionFor, fathomKeyFor, readTranscript, validateFathomKey } from "@/lib/fathom";
-import { attribution, autoTrim, deepLink, parseExtraction, transcriptText, verify } from "@/lib/engine/fathom";
+import { attribution, autoTrim, deepLink, parseExtraction, resolveSpeaker, transcriptText, verify, type Invitee } from "@/lib/engine/fathom";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 
 /** Saves the member's own Fathom key after a real check. Tick one (the acknowledgement) is required the first time and dated on the membership. */
@@ -63,6 +63,13 @@ export async function harvestRecordingAction(formData: FormData): Promise<void> 
   const title = str(formData, "title") || "Recording";
   const url = str(formData, "url");
   const recordedAt = str(formData, "recordedAt") || null;
+  let invitees: Invitee[] = [];
+  try {
+    const raw = JSON.parse(str(formData, "invitees") || "[]") as unknown;
+    invitees = Array.isArray(raw) ? raw.map((i) => ({ name: typeof (i as Invitee).name === "string" ? (i as Invitee).name : null, email: typeof (i as Invitee).email === "string" ? (i as Invitee).email : null })) : [];
+  } catch {
+    invitees = [];
+  }
   const back = (q: string) => redirect(`/proof/harvest?${q}`);
   if (!recordingId) back("error=norecording");
   const fk = await fathomKeyFor(workspaceId, userId);
@@ -92,14 +99,17 @@ export async function harvestRecordingAction(formData: FormData): Promise<void> 
       already++;
       continue;
     }
+    // The link comes from the meeting url, never from the recording id: they are different numbers.
     const link = url ? deepLink(url, q.timestamp) : null;
+    const who = resolveSpeaker(q.speaker, entries.find((e) => e.speaker === q.speaker)?.email ?? null, invitees);
     await db.insert(schema.proofs).values({
       id: newId(),
       workspaceId,
       userId,
-      name: `${attribution(q.speaker)}: ${autoTrim(q.quote, 8)}`,
+      name: `${attribution(who)}: ${autoTrim(q.quote, 8)}`,
       type: "testimonial",
-      who: q.speaker,
+      who,
+      speakerLabel: q.speaker,
       quote: q.quote,
       longVersion: q.quote,
       shortVersion: autoTrim(q.quote),
