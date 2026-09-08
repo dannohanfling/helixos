@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
@@ -123,11 +122,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {v.role === "coach" ? (
           <>
             <Card title="Workspace">
-              {v.workspace.brandVoice?.trim() ? (
-                <p className="mb-3 rounded-lg bg-warn-soft p-3 text-sm" data-testid="brand-voice-orphan">
-                  This workspace had a brand voice line that nothing reads any more: &ldquo;{v.workspace.brandVoice.trim()}&rdquo;. If it is how you sound, it belongs in <Link href="/essence" className="underline">your Essence</Link>.
-                </p>
-              ) : null}
               <form action={updateWorkspaceAction} className="space-y-3">
                 <Field label="Name">
                   <input className="field" name="name" defaultValue={v.workspace.name} />

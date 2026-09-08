@@ -79,6 +79,11 @@ async function main() {
     await expectText(page, "0 of 14 sections", "empty wizard");
     if ((await page.locator('[data-testid="essence-section"]').count()) !== 14) throw new Error("fourteen sections");
     await page.goto(`${base}/essence?step=identity`);
+    // A placeholder is only ever a placeholder: saving without typing leaves the section empty
+    if (!(await page.locator('[data-testid="field-name"]').getAttribute("placeholder"))?.includes("Priya Raman")) throw new Error("the example text must be a placeholder inside the input");
+    await submit(page, 'button:has-text("Save")');
+    await expectText(page, "0 of 14 sections", "an untouched step saves nothing");
+    if ((await page.locator('[data-testid="essence-section"][data-section="identity"]').getAttribute("data-filled")) !== "0") throw new Error("a placeholder must never become a value");
     await fillExact(page, '[data-testid="field-name"]', "Maya Torres");
     await fillExact(page, '[data-testid="field-role"]', "Nutrition coach for busy moms");
     await fillExact(page, '[data-testid="field-core_traits"]', "Direct\nWarm\nNo hype");
@@ -89,10 +94,17 @@ async function main() {
     await fillExact(page, '[data-testid="field-mission_statement"]', "Every mom gets her energy back without giving up her Saturday.");
     await submit(page, 'button:has-text("Save")');
     await expectText(page, "2 of 14 sections", "two sections filled");
-    // A story from the client's own bank
+    // A story from the client's own story bank, never the proof bank
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const mayaRow = await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") });
+    const ws = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, mayaRow!.id) });
+    await db.insert(schema.libraryAssets).values({ id: `walk-story-${Date.now()}`, workspaceId: ws!.workspaceId, userId: mayaRow!.id, type: "story", name: "The year I coached from a hospital car park", body: "What it taught me about systems.", summary: "What it taught me about systems.", useWhen: "Origin", isExample: false });
     await page.goto(`${base}/essence?step=representative_stories`);
     const bank = await page.locator('[data-testid="story-from-bank"] option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value).filter(Boolean));
-    if (!bank.length) throw new Error("the story step must offer the client's own bank");
+    if (!bank.length) throw new Error("the story step must offer the client's own story bank");
+    if (bank.some((v) => v.startsWith("proof:"))) throw new Error("client results belong in the proof bank, not in the Essence");
+    await expectText(page, "Client results go in the proof bank, not here", "the stories line points at the gate");
     await page.selectOption('[data-testid="story-from-bank"]', bank[0]);
     await submit(page, 'button:has-text("Save")');
     await expectText(page, "3 of 14 sections", "story section filled from the bank");
@@ -119,18 +131,33 @@ async function main() {
     if (sys[1].cached || !/comment ladder|rung/i.test(sys[1].text)) throw new Error("the second block must be the task, uncached");
     if (/Direct\. Clear\. Punchy|## VOICE|brand voice:/i.test(sys[1].text)) throw new Error("the task must not carry a second voice after the Essence");
     if (!/## FORMAT/.test(sys[1].text) || !/4th-grade reading level/.test(sys[1].text)) throw new Error("the ladder's format rules (the medium) must stay in the task");
-    console.log("✓ filled: the Essence leads every system message, cached; the task follows");
+    if (/Priya Raman|hospital car park, and what it taught me about systems\./.test(sys[0].text)) throw new Error("placeholder text must never reach the model");
+    console.log("✓ filled: the Essence leads every system message, cached; the task follows; placeholders never sent");
 
     // The cost display carries the prefix and the cache tokens
     await page.goto(`${base}/settings`);
     await expectText(page, "Your Essence rides on every call", "cost line names the prefix");
     await expectText(page, "written", "cache tokens counted");
-    const { db, schema } = await import("@/db");
+    // db and schema are already imported above
     const { desc } = await import("drizzle-orm");
     const row = (await db.query.aiUsage.findMany({ orderBy: desc(schema.aiUsage.createdAt), limit: 1 }))[0];
     if (!row || row.cacheWriteTokens <= 0) throw new Error(`the usage row must record the cache write, got ${JSON.stringify(row)}`);
     if (row.estimatedCostUsd <= 0) throw new Error("the estimate must include the cached prefix");
     await page.screenshot({ path: "screenshots/e02-essence-cost.png", fullPage: true });
+
+    // The coach sees which fields clients actually fill in, read-only
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As the coach")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/coach`);
+    await expectText(page, "Essence: what clients actually fill in", "coach counts card");
+    const nameCount = await page.locator('[data-testid="essence-counts"] [data-field="identity.name"]').getAttribute("data-count");
+    if (nameCount !== "1") throw new Error(`identity.name should count one client, got ${nameCount}`);
+    const traitsCount = await page.locator('[data-testid="essence-counts"] [data-field="guidelines_to_respond.tone"]').getAttribute("data-count");
+    if (traitsCount !== "0") throw new Error(`an unfilled field should count zero, got ${traitsCount}`);
+    console.log("✓ coach: per-field fill counts across clients");
     console.log("✓ cost: the prefix and its cache tokens are on the row and on the card");
   } finally {
     await browser.close();

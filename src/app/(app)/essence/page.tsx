@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { saveEssenceSectionAction } from "@/lib/actions/essence";
-import { ESSENCE_CAP, ESSENCE_HELP, ESSENCE_SECTIONS, completion, essenceChars, roughTokens, sectionByKey, sectionFilled, type Story } from "@/lib/engine/essence";
+import { ESSENCE_CAP, ESSENCE_HELP, ESSENCE_SECTIONS, placeholderFor, completion, essenceChars, roughTokens, sectionByKey, sectionFilled, type Story } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 
@@ -25,12 +25,13 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
   const values = data[current.key] ?? {};
   const storiesField = current.fields.find((f) => f.kind === "stories");
   const stories = storiesField ? ((values[storiesField.key] as Story[] | undefined) ?? []) : [];
-  const [proofs, assets] = storiesField
+  // Stories are the client's own: their story bank, never the proof bank (someone else's result is evidence, and evidence lives behind the consent gate).
+  const [assets, proofCount] = storiesField
     ? await Promise.all([
-        db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
-        db.query.libraryAssets.findMany({ where: and(eq(schema.libraryAssets.userId, v.user.id), eq(schema.libraryAssets.type, "story")) }),
+        db.query.libraryAssets.findMany({ where: and(eq(schema.libraryAssets.userId, v.user.id), eq(schema.libraryAssets.type, "story"), eq(schema.libraryAssets.isExample, false)) }),
+        db.query.proofs.findMany({ where: eq(schema.proofs.userId, v.user.id) }).then((r) => r.length),
       ])
-    : [[], []];
+    : [[], 0];
   const help = (field: string) => ESSENCE_HELP[`${current.key}.${field}`];
   return (
     <>
@@ -75,26 +76,29 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
             {current.fields.map((f) =>
               f.kind === "stories" ? (
                 <div key={f.key} className="space-y-3">
+                  {help(f.key) ? <p className="text-xs text-ink-3">{help(f.key)}</p> : null}
+                  {stories.length && proofCount === 0 ? (
+                    <p className="rounded-lg bg-warn-soft p-3 text-xs" data-testid="stories-nudge">
+                      Your proof bank is empty. If any of these stories is a client&apos;s result, it belongs in the <Link href="/proof" className="underline">Proof Bank</Link>, where permission is recorded, not here.
+                    </p>
+                  ) : null}
                   {[...stories, { name: "", summary: "", when_to_use: "" }].map((st, i) => (
                     <div key={i} className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_2fr_1fr]" data-testid="story-row">
                       <Field label="Name">
                         <input className="field" name="story_name" defaultValue={st.name} />
                       </Field>
                       <Field label="Summary">
-                        <textarea className="field" name="story_summary" defaultValue={st.summary} rows={2} />
+                        <textarea className="field" name="story_summary" defaultValue={st.summary} rows={2} placeholder={i === stories.length ? placeholderFor(current.key, f.key) : undefined} />
                       </Field>
                       <Field label="When to use">
                         <input className="field" name="story_when" defaultValue={st.when_to_use} />
                       </Field>
                     </div>
                   ))}
-                  {proofs.length || assets.length ? (
-                    <Field label="Or add one from your own bank" hint="An approved proof or a story from your story bank, added on save.">
+                  {assets.length ? (
+                    <Field label="Or add one from your story bank" hint="One of your own stories, added on save.">
                       <select className="field" name="story_from_bank" defaultValue="" data-testid="story-from-bank">
                         <option value="">—</option>
-                        {proofs.map((p) => (
-                          <option key={p.id} value={`proof:${p.id}`}>Proof: {p.name}</option>
-                        ))}
                         {assets.map((a) => (
                           <option key={a.id} value={`asset:${a.id}`}>Story: {a.name}</option>
                         ))}
@@ -105,11 +109,11 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
                 </div>
               ) : f.kind === "list" ? (
                 <Field key={f.key} label={f.label} hint={help(f.key) ?? "One per line."}>
-                  <textarea className="field" name={`${current.key}.${f.key}`} defaultValue={((values[f.key] as string[] | undefined) ?? []).join("\n")} rows={4} data-testid={`field-${f.key}`} />
+                  <textarea className="field" name={`${current.key}.${f.key}`} defaultValue={((values[f.key] as string[] | undefined) ?? []).join("\n")} rows={4} placeholder={placeholderFor(current.key, f.key, "list")} data-testid={`field-${f.key}`} />
                 </Field>
               ) : (
                 <Field key={f.key} label={f.label} hint={help(f.key)}>
-                  <textarea className="field" name={`${current.key}.${f.key}`} defaultValue={(values[f.key] as string | undefined) ?? ""} rows={2} data-testid={`field-${f.key}`} />
+                  <textarea className="field" name={`${current.key}.${f.key}`} defaultValue={(values[f.key] as string | undefined) ?? ""} rows={2} placeholder={placeholderFor(current.key, f.key)} data-testid={`field-${f.key}`} />
                 </Field>
               ),
             )}

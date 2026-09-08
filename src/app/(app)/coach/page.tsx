@@ -9,6 +9,7 @@ import { setCertEnabledAction } from "@/lib/actions/courses";
 import { setMemberPassAction } from "@/lib/actions/integrations";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
 import { money, rollup } from "@/lib/engine/ai-usage";
+import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
@@ -44,6 +45,11 @@ export default async function CoachPage() {
     db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.workspaceId, wsId), gte(schema.aiUsage.createdAt, monthStart)) }),
   ]);
   const credOf = new Map(aiCreds.map((c) => [c.userId, c]));
+  // Essence fill counts across clients, per field: evidence for which sections earn their place, read-only.
+  const essenceRows = await db.query.essences.findMany({ where: eq(schema.essences.workspaceId, wsId) });
+  const essenceData = essenceRows.map((r) => normalizeEssence(r.data));
+  const fieldCounts = ESSENCE_SECTIONS.map((s) => ({ section: s, fields: s.fields.map((f) => ({ field: f, count: essenceData.filter((d) => d[s.key]?.[f.key] !== undefined).length })) }));
+  const essenceStarted = essenceData.filter((d) => Object.keys(d).length).length;
   const usageOf = (userId: string) => rollup(aiRows.filter((r) => r.userId === userId));
   const libByKey = new Map(library.map((l) => [l.key, l]));
   // The denominator a client actually walks: the must-do path, not every task in the library.
@@ -246,6 +252,24 @@ export default async function CoachPage() {
               <button className="btn btn-soft btn-xs" type="submit">Save</button>
               <span className="text-ink-3">calls per day, on their own key. Stops a runaway loop from spending a client&apos;s money.</span>
             </form>
+          </Card>
+          <Card title="Essence: what clients actually fill in" action={<span className="text-xs text-ink-3">{essenceStarted}/{members.length} started</span>}>
+            <p className="mb-2 text-xs text-ink-2">How many clients have each field filled. Evidence for which of the fourteen sections earn their place; nothing here changes anything.</p>
+            <div className="max-h-80 overflow-y-auto text-xs" data-testid="essence-counts">
+              {fieldCounts.map(({ section, fields }) => (
+                <div key={section.key} className="py-1.5">
+                  <div className="font-semibold">{section.title}</div>
+                  <ul className="mt-0.5 grid gap-x-3 sm:grid-cols-2">
+                    {fields.map(({ field, count }) => (
+                      <li key={field.key} className="flex justify-between" data-field={`${section.key}.${field.key}`} data-count={count}>
+                        <span className="text-ink-2">{field.key}</span>
+                        <span className="tabular">{count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </Card>
           <Card title="Claimed rewards" action={<span className="text-xs text-ink-3">read-only · the client books it</span>}>
             {claimRows.length ? (

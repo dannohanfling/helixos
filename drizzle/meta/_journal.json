@@ -176,6 +176,13 @@
       "when": 1788893853427,
       "tag": "0024_essence",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1788902807900,
+      "tag": "0025_drop_brand_voice",
+      "breakpoints": true
     }
   ]
 }

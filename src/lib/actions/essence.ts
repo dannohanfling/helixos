@@ -11,7 +11,7 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
 
 /**
  * Saves one section of the client's Essence. Every value is the client's own words; a story may be picked from their own
- * proof bank or story bank (their material, not invented). Refused over the 20,000-character cap, with nothing saved.
+ * own story bank (their material, not invented; never the proof bank). Refused over the 20,000-character cap, with nothing saved.
  */
 export async function saveEssenceSectionAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
@@ -25,14 +25,12 @@ export async function saveEssenceSectionAction(formData: FormData): Promise<void
       const summaries = formData.getAll("story_summary").map(String);
       const whens = formData.getAll("story_when").map(String);
       const stories: Story[] = names.map((name, i) => ({ name, summary: summaries[i] ?? "", when_to_use: whens[i] ?? "" }));
+      // Only the client's own story bank: a client's result is evidence and lives in the proof bank, behind the consent gate.
       const pick = str(formData, "story_from_bank");
       if (pick) {
         const [kind, id] = pick.split(":");
-        if (kind === "proof") {
-          const p = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) });
-          if (p) stories.push({ name: p.name, summary: p.longVersion ?? p.shortVersion ?? p.resultAfter ?? "", when_to_use: p.beliefBroken !== "none" ? `Breaks the ${p.beliefBroken} belief` : "" });
-        } else if (kind === "asset") {
-          const a = await db.query.libraryAssets.findFirst({ where: and(eq(schema.libraryAssets.id, id), eq(schema.libraryAssets.userId, userId)) });
+        if (kind === "asset") {
+          const a = await db.query.libraryAssets.findFirst({ where: and(eq(schema.libraryAssets.id, id), eq(schema.libraryAssets.userId, userId), eq(schema.libraryAssets.type, "story"), eq(schema.libraryAssets.isExample, false)) });
           if (a) stories.push({ name: a.name, summary: a.summary ?? a.body, when_to_use: a.useWhen ?? "" });
         }
       }

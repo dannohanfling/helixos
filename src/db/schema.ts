@@ -9,7 +9,6 @@ export const workspaces = sqliteTable("workspaces", {
   id: id(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  brandVoice: text("brand_voice"),
   timezone: text("timezone").notNull().default("America/Los_Angeles"),
   clientInviteCode: text("client_invite_code").notNull().unique(),
   coachInviteCode: text("coach_invite_code").notNull().unique(),

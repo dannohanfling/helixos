@@ -4,6 +4,7 @@
  * holds structure only. "Brand voice should be a config file, not a vibe."
  */
 import helpJson from "@/data/essence-help.json";
+import placeholdersJson from "@/data/essence-placeholders.json";
 
 export type FieldKind = "text" | "list" | "stories";
 export type EssenceField = { key: string; label: string; kind: FieldKind };
@@ -39,8 +40,18 @@ const STORIES_FIELD = "stories";
 /** The platform limit the production Essence lives under; matching it keeps the app's Essence portable to the bot. */
 export const ESSENCE_CAP = 20000;
 
-/** One-line prompts under the hard fields, keyed "section.field". Danno's words; empty until he supplies them. */
+/** One-line prompts under the fields, keyed "section.field". Danno's words for the hard ones, plain restatements for the rest. */
 export const ESSENCE_HELP: Record<string, string> = helpJson as Record<string, string>;
+/**
+ * Faint example text inside each input, keyed "section.field": five different invented coaches, deliberately unalike, so
+ * nobody mistakes them for a template. A placeholder is only ever a placeholder: never a value, never saved, never sent.
+ * A list placeholder carries its items separated by " / ".
+ */
+export const ESSENCE_PLACEHOLDERS: Record<string, string> = placeholdersJson as Record<string, string>;
+export const placeholderFor = (section: string, field: string, kind: FieldKind = "text"): string => {
+  const p = ESSENCE_PLACEHOLDERS[`${section}.${field}`] ?? "";
+  return kind === "list" ? p.split(" / ").join("\n") : p;
+};
 
 const cleanList = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : typeof v === "string" ? v.split("\n").map((x) => x.trim()).filter(Boolean) : []);
 const cleanStories = (v: unknown): Story[] =>
@@ -106,7 +117,11 @@ export type SystemBlock = { text: string; cached: boolean };
  */
 export function assembleSystem(essence: string | null, task: string): { blocks: SystemBlock[]; text: string } {
   const blocks: SystemBlock[] = [];
-  if (essence) blocks.push({ text: `This is the voice you write in. It is the client's own brand voice, as JSON; follow it in every line you produce.\n${essence}`, cached: true });
+  if (essence) {
+    // `inspirations` is attribution material: it says who to credit when an idea is theirs, never who to sound like.
+    const credit = /"inspirations"/.test(essence) ? " The inspirations listed name who to credit where an idea is theirs; they are never a voice to imitate." : "";
+    blocks.push({ text: `This is the voice you write in. It is the client's own brand voice, as JSON; follow it in every line you produce.${credit}\n${essence}`, cached: true });
+  }
   blocks.push({ text: task, cached: false });
   return { blocks, text: blocks.map((b) => b.text).join("\n\n") };
 }

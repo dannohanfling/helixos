@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ESSENCE_CAP, ESSENCE_SECTIONS, assembleSystem, completion, essenceChars, normalizeEssence, serializeEssence } from "../essence";
+import { ESSENCE_CAP, ESSENCE_PLACEHOLDERS, ESSENCE_SECTIONS, assembleSystem, completion, essenceChars, normalizeEssence, placeholderFor, serializeEssence } from "../essence";
 
 describe("the Essence schema", () => {
   it("has the thirteen production sections plus representative_stories, in order", () => {
@@ -29,7 +29,21 @@ describe("the Essence schema", () => {
   });
 });
 
+describe("placeholders are illustrations, never values", () => {
+  it("has one for every field, in five voices that never enter the Essence", () => {
+    for (const s of ESSENCE_SECTIONS) for (const f of s.fields) expect(ESSENCE_PLACEHOLDERS[`${s.key}.${f.key}`], `${s.key}.${f.key}`).toBeTruthy();
+    expect(placeholderFor("identity", "core_traits", "list")).toBe("Patient\nAllergic to buzzwords\nI ask before I advise");
+    expect(serializeEssence(normalizeEssence({ identity: { name: "", core_traits: "" } }))).toBeNull();
+  });
+});
+
 describe("one way to build a system message", () => {
+  it("presents inspirations as attribution, never as a voice to imitate", () => {
+    const { blocks } = assembleSystem('{"cultural_and_philosophical_alignment":{"inspirations":["Miller and Rollnick"]}}', "Write.");
+    expect(blocks[0].text).toMatch(/who to credit/);
+    expect(blocks[0].text).toMatch(/never a voice to imitate/);
+    expect(assembleSystem('{"identity":{"name":"Maya"}}', "Write.").blocks[0].text).not.toMatch(/credit/);
+  });
   it("puts the voice first and marks it for caching, then the task", () => {
     const { blocks, text } = assembleSystem('{"identity":{"name":"Maya"}}', "Write the post.");
     expect(blocks).toHaveLength(2);
