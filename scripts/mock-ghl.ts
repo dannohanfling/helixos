@@ -56,6 +56,12 @@ createServer((req, res) => {
       posts.set(_id, { _id, ...body, error: null, postId: null });
       return json(201, { success: true, statusCode: 201, message: "Post created", results: { post: posts.get(_id) } });
     }
+    if (kind === "posts" && req.method === "POST" && id === "list") {
+      const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+      const all = [...posts.values()];
+      const list = body.type && body.type !== "all" && body.type !== "recent" ? all.filter((p) => p.status === body.type) : all;
+      return json(200, { success: true, statusCode: 200, message: "Fetched Posts", results: { posts: list, count: list.length } });
+    }
     if (kind === "posts" && req.method === "PUT" && id) {
       const p = posts.get(id);
       if (!p) return json(404, { message: "Post not found" });
@@ -66,7 +72,9 @@ createServer((req, res) => {
     if (kind === "posts" && req.method === "GET" && id) {
       const p = posts.get(id);
       if (!p) return json(404, { message: "Post not found" });
-      const flipped = { ...p, status: "published", postId: `fb_${id}`, publishedAt: new Date().toISOString() };
+      // The planner "publishes" a post whose time has come (within a day); one scheduled further out stays scheduled.
+      const due = !p.scheduleDate || new Date(String(p.scheduleDate)).getTime() <= Date.now() + 86400000;
+      const flipped = due ? { ...p, status: "published", postId: `fb_${id}`, publishedAt: new Date().toISOString() } : p;
       return json(200, { success: true, statusCode: 200, message: "Fetched Post", results: { post: flipped } });
     }
     return json(404, { message: "Not found" });

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -103,7 +104,7 @@ export default async function IntegrationsPage() {
         })}
       </div>
 
-      <Card className="mt-4" title="🚀 Client sub-accounts (Social Planner)" action={<span className="text-xs text-ink-3">{conns.filter((c) => c.accounts.length && !c.lastError).length}/{members.length} connected</span>}>
+      <Card className="mt-4" title="🚀 Client sub-accounts (Social Planner)" action={<span className="flex items-center gap-3 text-xs text-ink-3"><span>{conns.filter((c) => c.accounts.length && !c.lastError).length}/{members.length} connected</span><Link href="/integrations/planner-audit" className="underline" data-testid="planner-audit-link">Planner audit</Link></span>}>
         <p className="mb-3 text-sm text-ink-2">Each client publishes through their own sub-account with their own Private Integration token, entered on their Settings → Publishing page (the steps are written there). You can see who is connected; you can&apos;t see or enter their tokens.</p>
         <ul className="divide-y text-sm">
           {members.map((m) => {

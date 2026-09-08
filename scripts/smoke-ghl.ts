@@ -1,4 +1,4 @@
-/** End-to-end: a member's own Private Integration token → validation with real reasons → channel map → schedule → Social Planner → re-schedule edits in place → status sync, against scripts/mock-ghl.ts. */
+/** End-to-end: a member's own Private Integration token → validation with real reasons → channel map → schedule → Social Planner → re-schedule edits in place → status sync → the coach's read-only planner audit finds a leftover duplicate, against scripts/mock-ghl.ts. */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
 
@@ -114,6 +114,17 @@ async function main() {
     console.log("✓ scheduled through the Social Planner with the member's token and synced status");
 
     // Coach sees it in the sync log and the status list
+    // A leftover from the old re-schedule path: a second planner post with the same text and account, logged but tracked by no variant
+    const fbPage = (await plannerPosts()).find((p) => (p as { accountIds?: string[] }).accountIds?.includes("loc_maya_fbpage_1"));
+    if (!fbPage) throw new Error("no planner post for the Facebook page to duplicate");
+    const dupRes = await fetch(`http://localhost:${mockPort}/social-media-posting/loc_maya/posts`, { method: "POST", headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28", "content-type": "application/json" }, body: JSON.stringify({ accountIds: ["loc_maya_fbpage_1"], summary: fbPage.summary, type: "post", status: "scheduled", scheduleDate: new Date(Date.now() + 7 * 86400000).toISOString() }) });
+    const dupId = String(((await dupRes.json()) as { results: { post: { _id: string } } }).results.post._id);
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const maya = await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") });
+    const ws = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya!.id) });
+    await db.insert(schema.syncEvents).values({ id: `walk-dup-${Date.now()}`, workspaceId: ws!.workspaceId, userId: maya!.id, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: "fb_page", postAt: null, accountId: "loc_maya_fbpage_1", ghlPostId: dupId }, status: "sent", note: `Scheduled via Social Planner · ${dupId}` });
+
     await page.goto(`${base}/settings`);
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
@@ -124,6 +135,21 @@ async function main() {
     await expectText(page, "Updated in Social Planner", "sync log update");
     await expectText(page, "4/5 channels", "coach status list");
     console.log("✓ sync log and status list");
+
+    // The planner audit names the duplicate, and nothing on the page can delete it
+    await page.click('[data-testid="planner-audit-link"]');
+    await page.waitForURL(/\/integrations\/planner-audit/);
+    await expectText(page, "1 duplicate", "audit totals");
+    const dupRow = page.locator(`[data-testid="audit-row"][data-post-id="${dupId}"]`);
+    if ((await dupRow.getAttribute("data-verdict")) !== "duplicate") throw new Error(`the leftover ${dupId} should be a duplicate, got ${await dupRow.getAttribute("data-verdict")}`);
+    await expectText(page, "same text", "twin named");
+    const tracked = (await plannerPosts()).filter((p) => p._id !== dupId).map((p) => p._id);
+    for (const id of tracked) if (await page.locator(`[data-testid="audit-row"][data-post-id="${id}"]`).count()) throw new Error(`tracked planner post ${id} must not be listed as untracked`);
+    if (await page.locator('button:has-text("Delete"), button:has-text("Remove")').count()) throw new Error("the audit must not offer a delete");
+    const stillThere = (await plannerPosts()).some((p) => p._id === dupId);
+    if (!stillThere) throw new Error("the audit changed the planner");
+    await page.screenshot({ path: "screenshots/g03-planner-audit.png", fullPage: true });
+    console.log("✓ planner audit: the leftover is named a duplicate with its twin; tracked posts are not listed; nothing deleted");
   } finally {
     await browser.close();
     try {

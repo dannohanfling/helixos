@@ -6,6 +6,7 @@
  *  - POST /social-media-posting/{locationId}/posts → results.post
  *  - GET  /social-media-posting/{locationId}/posts/{id} → results.post (status, error, postId, publishedAt)
  *  - PUT  /social-media-posting/{locationId}/posts/{id} → edits a scheduled post in place (same body as create)
+ *  - POST /social-media-posting/{locationId}/posts/list → results.posts[] (read-only listing, used by the coach's planner audit)
  * Tokens are encrypted at rest (src/lib/crypto.ts) and decrypted only for the request.
  */
 import { and, eq } from "drizzle-orm";
@@ -137,15 +138,32 @@ export async function updatePost(conn: SocialConnection, id: string, post: NewPo
   return { ok: true, data: { id } };
 }
 
-export type PostStatus = { status: string; error: string | null; postId: string | null; publishedAt: string | null };
+export type PostStatus = { status: string; error: string | null; postId: string | null; publishedAt: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[] };
+type RawPost = { _id?: string; id?: string; status?: string; error?: string; postId?: string; publishedAt?: string; summary?: string; scheduleDate?: string; accountIds?: unknown };
+
+const accountIdsOf = (p: RawPost) => (Array.isArray(p.accountIds) ? p.accountIds.map(String) : []);
 
 export async function getPost(conn: SocialConnection, id: string): Promise<GhlResult<PostStatus>> {
   const cred = await credentials(conn);
   if (!cred.ok) return cred;
-  const r = await call<{ results?: { post?: { status?: string; error?: string; postId?: string; publishedAt?: string } } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/${id}`);
+  const r = await call<{ results?: { post?: RawPost } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/${encodeURIComponent(id)}`);
   if (!r.ok) return { ok: false, error: explain(r), status: r.status };
   const p = r.data.results?.post ?? {};
-  return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null } };
+  return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p) } };
+}
+
+export type PlannerPost = { id: string; status: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[] };
+
+/** Read-only: the posts the Social Planner holds for this location in one state (default: scheduled). Never changes anything. */
+export async function listPosts(conn: SocialConnection, type: "scheduled" | "all" = "scheduled", limit = 100): Promise<GhlResult<PlannerPost[]>> {
+  const cred = await credentials(conn);
+  if (!cred.ok) return cred;
+  const now = Date.now();
+  const body = { type, skip: "0", limit: String(limit), fromDate: new Date(now - 120 * 86400000).toISOString(), toDate: new Date(now + 400 * 86400000).toISOString(), includeUsers: "true" };
+  const r = await call<{ results?: { posts?: RawPost[] } | RawPost[]; posts?: RawPost[] }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/list`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) return { ok: false, error: explain(r), status: r.status };
+  const raw = Array.isArray(r.data.results) ? r.data.results : (r.data.results?.posts ?? r.data.posts ?? []);
+  return { ok: true, data: raw.map((p) => ({ id: String(p._id ?? p.id ?? ""), status: p.status ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p) })).filter((p) => p.id) };
 }
 
 /** A GoHighLevel contact in the member's own sub-account (needs contacts.write on their token; skipped otherwise). */
