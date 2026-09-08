@@ -92,7 +92,7 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
           <p className="text-xs text-ink-3" data-testid="voice-cost">
             {voiceTokens ? (
               <>
-                Your Essence rides on every call: about {voiceTokens.toLocaleString()} tokens{delta ? `, roughly ${money(delta.cacheRead)} a call read from cache, ${money(delta.cacheWrite)} when it has to be written (the first call, then again after five quiet minutes)` : ""}.{voiceTokens < 1024 ? " Under about 1,000 tokens the provider doesn't cache it and it is billed at the plain rate." : ""} This month: {use.cacheReadTokens.toLocaleString()} tokens read from cache, {use.cacheWriteTokens.toLocaleString()} written.
+                Your Essence rides on every call: about {voiceTokens.toLocaleString()} tokens{delta ? `, roughly ${money(delta.cacheRead)} a call read from cache, ${money(delta.cacheWrite)} when it has to be written (the first call, then again after five quiet minutes)` : ""}.{voiceTokens < 1024 ? " Under about 1,000 tokens the provider doesn't cache it and it is billed at the plain rate." : ""} This month: {use.cacheReadTokens.toLocaleString()} tokens read from cache, {use.cacheWriteTokens.toLocaleString()} written.{status.provider === "openai" ? " OpenAI figures here are indicative: the tiers are priced to match Anthropic's, and OpenAI's own cached rate may differ." : ""}
               </>
             ) : (
               <>

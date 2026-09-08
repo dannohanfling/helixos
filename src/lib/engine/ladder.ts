@@ -101,8 +101,11 @@ RUNGS
 - 40–90 words each
 - Each ends with ONE short quotable line on its own line
 - Standard shape: pain → origin → five value rungs → honest math → proof → who-it's-not-for → CTA`,
-    `## RULES — NON-NEGOTIABLE
-- The voice, tone, sentence length and formatting come from the client's Essence above; nothing here overrides it.
+    `## FORMAT — NON-NEGOTIABLE (the medium, not a voice: a comment thread read on a phone while scrolling)
+- 4th-grade reading level. Sentences average 5–7 words.
+- Line break between every sentence or short thought.
+- The voice itself, its tone and warmth and vocabulary, comes from the client's Essence above; nothing here overrides it.
+## RULES — NON-NEGOTIABLE
 - NO hype. NO manufactured urgency. NO fake scarcity.
 - ${profile?.scarcityLine?.trim() ? `The ONLY permitted scarcity, verbatim: "${profile.scarcityLine.trim()}"` : "No scarcity line of any kind. There is no permitted one for this client."}
 - BANNED: ${banned.map((b) => `"${b}"`).join(", ")}, any hypey close.

@@ -71,7 +71,7 @@ async function main() {
     await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+/i);
     let sys = (await last()).system;
     if (sys.length !== 1 || sys[0].cached) throw new Error(`with no Essence the system message must be the task alone, got ${JSON.stringify(sys.map((b) => [b.cached, b.text.slice(0, 40)]))}`);
-    if (/write in the coach's voice|4th-grade|reading level|## VOICE|brand voice:/i.test(sys[0].text)) throw new Error("no hard-coded voice may remain in a task instruction");
+    if (/write in the coach's voice|Direct\. Clear\. Punchy|## VOICE|brand voice:/i.test(sys[0].text)) throw new Error("no hard-coded voice may remain in a task instruction");
     console.log("✓ no Essence: the task runs alone, no voice invented");
 
     // The wizard: fourteen sections, save one at a time, count honestly, come back any time
@@ -117,7 +117,8 @@ async function main() {
     if (sys.length !== 2) throw new Error(`voice first, task second: expected two blocks, got ${sys.length}`);
     if (!sys[0].cached || !sys[0].text.includes('"identity"') || !sys[0].text.includes("Maya Torres")) throw new Error("the first block must be the client's Essence, marked for caching");
     if (sys[1].cached || !/comment ladder|rung/i.test(sys[1].text)) throw new Error("the second block must be the task, uncached");
-    if (/4th-grade|reading level|## VOICE|brand voice:/i.test(sys[1].text)) throw new Error("the task must not carry a second voice after the Essence");
+    if (/Direct\. Clear\. Punchy|## VOICE|brand voice:/i.test(sys[1].text)) throw new Error("the task must not carry a second voice after the Essence");
+    if (!/## FORMAT/.test(sys[1].text) || !/4th-grade reading level/.test(sys[1].text)) throw new Error("the ladder's format rules (the medium) must stay in the task");
     console.log("✓ filled: the Essence leads every system message, cached; the task follows");
 
     // The cost display carries the prefix and the cache tokens
