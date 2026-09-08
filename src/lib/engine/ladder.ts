@@ -5,6 +5,7 @@
  */
 import type { Ladder, LadderProfile, LadderRung, Proof } from "@/db/schema";
 import { LADDER_FORMAT_KEYS } from "@/db/schema";
+import { CHANNEL_SPECS, type Channel, type ChannelSpec } from "./repurpose";
 
 export type LadderFormatKey = (typeof LADDER_FORMAT_KEYS)[number];
 
@@ -102,8 +103,7 @@ RUNGS
 - Each ends with ONE short quotable line on its own line
 - Standard shape: pain → origin → five value rungs → honest math → proof → who-it's-not-for → CTA`,
     `## FORMAT — NON-NEGOTIABLE (the medium, not a voice: a comment thread read on a phone while scrolling)
-- 4th-grade reading level. Sentences average 5–7 words.
-- Line break between every sentence or short thought.
+- Every output field below that lands on a channel carries that channel's FORMAT line: the container the words go in, not how they sound. Follow it for that field.
 - The voice itself, its tone and warmth and vocabulary, comes from the client's Essence above; nothing here overrides it.
 ## RULES — NON-NEGOTIABLE
 - NO hype. NO manufactured urgency. NO fake scarcity.
@@ -141,8 +141,18 @@ Recap the system in short lines. Then the price and entry terms exactly as given
 
 export const OUTPUT_FIELDS = ["POST_NAME", "HEADLINE", "ALT_HEADLINES", "HOOK", "COPY", "SUPPORTING_COMMENTS", "DM_KEYWORD", "IG_CAROUSEL", "IG_CAPTION", "THREADS_CHAIN", "SCREENSHOT_TEXT", "NOTES"] as const;
 
-/** Section B: what comes back, every time. */
-export function outputContract(): string {
+/** The FORMAT line(s) for the channels an output field lands on; channels sharing one line are named together. Nothing when none has a line. */
+function sectionFormat(specs: ChannelSpec[], keys: Channel[]): string {
+  const byLine = new Map<string, string[]>();
+  for (const k of keys) {
+    const s = specs.find((c) => c.key === k);
+    if (s?.format) byLine.set(s.format, [...(byLine.get(s.format) ?? []), s.label]);
+  }
+  return [...byLine].map(([line, labels]) => `\nFORMAT (${labels.join(", ")}): ${line}`).join("");
+}
+
+/** Section B: what comes back, every time. Each field that lands on a channel carries that channel's format line beside it. */
+export function outputContract(specs: ChannelSpec[] = CHANNEL_SPECS): string {
   return `Return these fields, each on its own line as the field name in capitals followed by a colon, then the content on the following lines. Match the names exactly.
 
 POST_NAME
@@ -158,10 +168,10 @@ HOOK
 One sentence. The opening line of the post body.
 
 COPY
-The post body only. Hook, "read them in order" line, save line, one open question. No keyword prompt.
+The post body only. Hook, "read them in order" line, save line, one open question. No keyword prompt.${sectionFormat(specs, ["fb_personal", "fb_page"])}
 
 SUPPORTING_COMMENTS
-The rungs. Number each as "1." "2." etc. on its own first line. Separate rungs with --- on its own line. Each rung 40–90 words ending with ONE short quotable line on its own line.
+The rungs. Number each as "1." "2." etc. on its own first line. Separate rungs with --- on its own line. Each rung 40–90 words ending with ONE short quotable line on its own line.${sectionFormat(specs, ["fb_personal", "fb_page"])}
 
 DM_KEYWORD
 The keyword, or NONE with a short reason.
@@ -170,10 +180,10 @@ IG_CAROUSEL
 9 slides. Format: "SLIDE n — TEXT (gold: PHRASE)". Slide 1 is the headline plus "+ SWIPE →". Slides 2–8 are rungs compressed to one or two lines. Slide 9 is "(solid black) COMMENT [KEYWORD]..." or the closing question when there is no keyword.
 
 IG_CAPTION
-Under 2,200 characters. Hook, then the 4–5 strongest rungs compressed with **bolded lead-ins**, then the CTA.
+Under 2,200 characters. Hook, then the 4–5 strongest rungs compressed with **bolded lead-ins**, then the CTA.${sectionFormat(specs, ["instagram"])}
 
 THREADS_CHAIN
-6–8 posts, each under 500 characters, numbered "1/" "2/" etc., one per line block separated by --- on its own line.
+6–8 posts, each under 500 characters, numbered "1/" "2/" etc., one per line block separated by --- on its own line.${sectionFormat(specs, ["threads"])}
 
 SCREENSHOT_TEXT
 Only for the Screenshot format: 80–150 words of standalone text. Otherwise omit.

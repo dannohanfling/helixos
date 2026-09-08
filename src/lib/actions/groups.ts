@@ -8,6 +8,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { alignPost, groupSpec, readRules } from "@/lib/engine/groups";
+import { formatClause } from "@/lib/engine/repurpose";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 function fields(fd: FormData) {
@@ -116,7 +117,7 @@ export async function generateGroupVariantsAction(formData: FormData): Promise<v
     let by = "rules";
     if (useAi) {
       const ai = await draft(
-        `You adapt one coaching post for a specific Facebook group so it fits that group's mission, the admin's values, and its rules. ${aligned.ctaAllowed ? "A soft call to action is allowed." : "No pitch, no links, no call to action: pure value and a question."} Channel: ${spec.label}. Max ${spec.maxChars} chars. Links: ${links}. Return only the post.`,
+        `You adapt one coaching post for a specific Facebook group so it fits that group's mission, the admin's values, and its rules. ${aligned.ctaAllowed ? "A soft call to action is allowed." : "No pitch, no links, no call to action: pure value and a question."} Channel: ${spec.label}.${formatClause(spec)} Max ${spec.maxChars} chars. Links: ${links}. Return only the post.`,
         `Group: ${g.name}\nMission: ${g.mission ?? ""}\nDescription: ${g.description ?? ""}\nAudience: ${g.audience ?? ""}\nAdmin: ${g.adminName ?? ""}. What the admin values: ${g.adminValues ?? ""}\nRules: ${g.rules ?? ""}\nPosting norms: ${g.postingNorms ?? ""}\nWhat works here: ${g.whatWorks ?? ""}\n\nSource post title: ${item.title}\nHook: ${item.hook ?? ""}\nBody:\n${item.body ?? ""}\n\nRule-based draft to improve:\n${aligned.body}`,
         2500,
         { feature: "group_variant" },

@@ -131,6 +131,12 @@ async function main() {
     if (sys[1].cached || !/comment ladder|rung/i.test(sys[1].text)) throw new Error("the second block must be the task, uncached");
     if (/Direct\. Clear\. Punchy|## VOICE|brand voice:/i.test(sys[1].text)) throw new Error("the task must not carry a second voice after the Essence");
     if (!/## FORMAT/.test(sys[1].text) || !/4th-grade reading level/.test(sys[1].text)) throw new Error("the ladder's format rules (the medium) must stay in the task");
+    // Format belongs to the channel: the Facebook line sits beside the fields that land on Facebook, and only there (no other channel has a line yet)
+    const section = (name: string) => sys[1].text.split(`\n${name}\n`)[1]?.split("\n\n")[0] ?? "";
+    const fbLine = /^FORMAT \(Facebook personal, Facebook business page\): 4th-grade reading level\. Sentences average 5–7 words\. Line break between every sentence or short thought\.$/m;
+    if (!fbLine.test(section("COPY")) || !fbLine.test(section("SUPPORTING_COMMENTS"))) throw new Error("the Facebook format line must sit beside COPY and SUPPORTING_COMMENTS");
+    if (/FORMAT/.test(section("IG_CAPTION")) || /FORMAT/.test(section("THREADS_CHAIN"))) throw new Error("Instagram and Threads have no format line yet; none may appear");
+    if (/^- 4th-grade/m.test(sys[1].text)) throw new Error("the format line must not also sit at the top as a feature-level rule");
     if (/Priya Raman|hospital car park, and what it taught me about systems\./.test(sys[0].text)) throw new Error("placeholder text must never reach the model");
     console.log("✓ filled: the Essence leads every system message, cached; the task follows; placeholders never sent");
 

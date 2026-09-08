@@ -119,6 +119,14 @@ A group post lands on a channel like any other: the client's own group is `fb_gr
 (`groupChannel` in `src/lib/engine/groups.ts`). Its length and link rule come from that channel's spec, in the rule-based
 draft, the counters, and the prompt alike; the group's own rules can only tighten them (a no-links rule wins).
 
+Format belongs to the channel, not the feature. Each entry in `CHANNEL_SPECS` carries `tone` (the channel's posture) and
+`format` (the container the words go in: reading level, sentence length, line breaks). Every prompt that targets a channel
+(composer polish, repurpose, group drafts) appends the channel's format line beside its limit and link rule, and the ladder
+attaches it to each output field by the channel that field lands on (the post body and rungs to Facebook, the caption to
+Instagram, the chain to Threads). The Facebook personal and page lines are the ladder's, verbatim; every other channel's
+`format` is empty, which is no rule at all, until a line for it is signed off and lands as data. The rule of thumb: the more
+specific layer wins on tone (a group's own rules over its channel's posture), format is bounded by the channel regardless.
+
 ## Stack
 
 Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQLite/libsql, `jose` sessions,

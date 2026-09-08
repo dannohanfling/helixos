@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LadderProfile, Proof } from "@/db/schema";
-import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, masterBlock, parseLadderOutput, parseRungs, readyToPost, rungGapMinutes, rungsForAirtable, scaffold } from "../ladder";
+import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, masterBlock, outputContract, parseLadderOutput, parseRungs, readyToPost, rungGapMinutes, rungsForAirtable, scaffold } from "../ladder";
+import { CHANNEL_SPECS } from "../repurpose";
 
 const profile = {
   productName: "The 90-Day Reset",
@@ -153,6 +154,26 @@ Verify Sarah's quote.`;
     expect(block).toContain("Sarah");
     expect(block).toContain("No scarcity line of any kind");
     expect(block).not.toMatch(/Book 'Em|Lamborfeeties|BOOKEM/);
+    // The format rule is the channel's, attached to the output field; the top block only points at it
+    expect(block).toContain("## FORMAT");
+    expect(block).not.toMatch(/^- 4th-grade/m);
+  });
+
+  it("attaches each channel's format line to the output field that lands on it", () => {
+    const section = (text: string, name: string) => text.split(`\n${name}\n`)[1]?.split("\n\n")[0] ?? "";
+    const fb = "FORMAT (Facebook personal, Facebook business page): 4th-grade reading level. Sentences average 5–7 words. Line break between every sentence or short thought.";
+    const today = outputContract();
+    expect(section(today, "COPY")).toContain(fb);
+    expect(section(today, "SUPPORTING_COMMENTS")).toContain(fb);
+    expect(section(today, "IG_CAPTION")).not.toContain("FORMAT");
+    expect(section(today, "THREADS_CHAIN")).not.toContain("FORMAT");
+    expect(section(today, "HEADLINE")).not.toContain("FORMAT");
+    // When a channel's line lands as data, its field carries it and nothing else moves
+    const later = outputContract(CHANNEL_SPECS.map((c) => (c.key === "instagram" ? { ...c, format: "First line is the hook." } : c.key === "fb_page" ? { ...c, format: "Page line." } : c)));
+    expect(section(later, "IG_CAPTION")).toContain("FORMAT (Instagram caption): First line is the hook.");
+    expect(section(later, "THREADS_CHAIN")).not.toContain("FORMAT");
+    expect(section(later, "COPY")).toContain("FORMAT (Facebook personal): 4th-grade");
+    expect(section(later, "COPY")).toContain("FORMAT (Facebook business page): Page line.");
   });
 });
 

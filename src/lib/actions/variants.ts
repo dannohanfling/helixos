@@ -6,7 +6,7 @@ import { CHANNELS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { CHANNEL_SPECS, repurposeAll, type Channel } from "@/lib/engine/repurpose";
+import { CHANNEL_SPECS, formatClause, repurposeAll, type Channel } from "@/lib/engine/repurpose";
 import { POINTS } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
@@ -30,7 +30,7 @@ export async function generateVariantsAction(formData: FormData): Promise<void> 
     const specs = drafts.map((d) => CHANNEL_SPECS.find((c) => c.key === d.channel)!);
     const text = await draft(
       `You repurpose one piece of coaching content into channel-native drafts. Return ONLY a JSON object keyed by channel key, each value {"body": string, "subject"?: string}. Respect each channel's max length and link rules.`,
-      `Source title: ${item.title}\nHook: ${item.hook ?? ""}\nBody:\n${item.body ?? ""}\nHas CTA: ${item.hasCta}${item.cta ? `\nCTA (the closing line, once, where a CTA belongs): ${item.cta}` : ""}\n\nChannels:\n${specs.map((s) => `- ${s.key}: ${s.label}. ${s.tone} Max ${s.maxChars} chars. Links: ${s.links}.`).join("\n")}\n\nRule-based starting drafts you may improve:\n${JSON.stringify(Object.fromEntries(drafts.map((d) => [d.channel, d])))}`,
+      `Source title: ${item.title}\nHook: ${item.hook ?? ""}\nBody:\n${item.body ?? ""}\nHas CTA: ${item.hasCta}${item.cta ? `\nCTA (the closing line, once, where a CTA belongs): ${item.cta}` : ""}\n\nChannels:\n${specs.map((s) => `- ${s.key}: ${s.label}. ${s.tone}${formatClause(s)} Max ${s.maxChars} chars. Links: ${s.links}.`).join("\n")}\n\nRule-based starting drafts you may improve:\n${JSON.stringify(Object.fromEntries(drafts.map((d) => [d.channel, d])))}`,
       8000,
       { feature: "repurpose" },
     );

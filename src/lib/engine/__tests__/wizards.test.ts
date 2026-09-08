@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { offerOnePager, scoreOffer } from "../offer-score";
-import { CHANNEL_SPECS, repurpose, repurposeAll } from "../repurpose";
+import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll } from "../repurpose";
 import { ACTS, SECTION_TEMPLATES, deckOutline, nextStep, readinessScore, webinarProgress } from "../webinar";
 
 const strongOffer = {
@@ -63,6 +63,17 @@ describe("repurpose", () => {
       const spec = CHANNEL_SPECS.find((c) => c.key === v.channel)!;
       expect(v.body.length).toBeLessThanOrEqual(spec.maxChars + 20);
     }
+  });
+  it("carries format on the channel: the ladder's Facebook line verbatim, every other channel empty until signed off", () => {
+    const line = "4th-grade reading level. Sentences average 5–7 words. Line break between every sentence or short thought.";
+    for (const c of CHANNEL_SPECS) {
+      expect(typeof c.format, c.key).toBe("string");
+      if (c.key === "fb_personal" || c.key === "fb_page") expect(c.format, c.key).toBe(line);
+      else expect(c.format, c.key).toBe("");
+    }
+    expect(formatClause(CHANNEL_SPECS.find((c) => c.key === "fb_page"))).toBe(` Format: ${line}`);
+    expect(formatClause(CHANNEL_SPECS.find((c) => c.key === "linkedin"))).toBe("");
+    expect(formatClause(undefined)).toBe("");
   });
   it("keeps other groups pitch-free and gives email a subject", () => {
     expect(repurpose(src, "other_groups").body).not.toMatch(/link|comment "more"/i);
