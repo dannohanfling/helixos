@@ -20,7 +20,7 @@ const DEFAULT_SELECTED: TargetKey[] = ["ch:fb_personal", "ch:instagram", "ch:thr
 
 type Snippet = { id: string; title: string; text: string };
 
-export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[] }; stale?: StaleNotice }) {
+export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[] }; stale?: StaleNotice }) {
   const router = useRouter();
   const targets = useMemo(() => [...groupTargets(groups), ...channelTargets()], [groups]);
   const byKey = useMemo(() => new Map(targets.map((t) => [t.key, t])), [targets]);
@@ -247,6 +247,14 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                     <option value="">🪝 Hook from library</option>
                     {snippets.hooks.map((h) => (
                       <option key={h.id} value={h.id}>{h.title}</option>
+                    ))}
+                  </select>
+                ) : null}
+                {snippets?.proofs?.length ? (
+                  <select className="field w-auto py-1 text-xs" value="" onChange={(e) => { const p = snippets.proofs?.find((x) => x.id === e.target.value); if (p) insert(p.text); }} aria-label="Pick a proof from the bank">
+                    <option value="">🏆 Proof from the bank</option>
+                    {snippets.proofs.map((p) => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
                     ))}
                   </select>
                 ) : null}

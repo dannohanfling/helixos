@@ -10,6 +10,7 @@ export const NARRATION: Record<string, string[]> = {
   repurpose: ["Reading the original.", "Finding what carries over.", "Rewriting for the new format."],
   group_variant: ["Reading the group's rules and tone.", "Adjusting your draft to fit.", "Checking nothing breaks their guidelines."],
   principle_content: ["Reading the principle.", "Drafting the post, the reel and the training."],
+  harvest: ["Reading the recording you picked.", "Finding where your client describes a result.", "Checking every quote against the transcript, word for word.", "Saving what holds up as drafts."],
 };
 
 /** How long each line stays before the next. Long calls sit on the last line; short ones may never leave the first. */

@@ -64,6 +64,8 @@ export const memberships = sqliteTable(
     /** The member's own timezone. Null means the workspace's. "Today", reminder hours and streak boundaries all follow it. */
     timezone: text("timezone"),
     lastNudgedAt: text("last_nudged_at"),
+    /** Tick one: at connection the member acknowledged that anything harvested from a recording is someone else's words. Date of the tick. */
+    fathomConsentAt: text("fathom_consent_at"),
     lastComebackAt: text("last_comeback_at"),
     createdAt: createdAt(),
   },
@@ -548,6 +550,8 @@ export const webinarBeliefs = sqliteTable(
     fromBelief: text("from_belief"),
     toBelief: text("to_belief"),
     proof: text("proof"),
+    /** An approved row of the proof bank, the same rows the ladder reads; the free text above is the fallback for proof that isn't there. */
+    proofId: text("proof_id"),
     storyAssetId: text("story_asset_id"),
   },
   (t) => [uniqueIndex("webinar_beliefs_type").on(t.webinarId, t.type)],
@@ -834,6 +838,17 @@ export const proofs = sqliteTable(
     link: text("link"),
     clientRecordId: text("client_record_id"),
     status: text("status", { enum: ["draft", "approved"] }).notNull().default("draft"),
+    /** Harvested from a Fathom recording: the verbatim quote as the transcript has it. Every shorter shape must be a trim of this. */
+    quote: text("quote"),
+    sourceRecordingId: text("source_recording_id"),
+    sourceUrl: text("source_url"),
+    sourceTimestamp: text("source_timestamp"),
+    sourceRecordedAt: text("source_recorded_at"),
+    contextBefore: text("context_before"),
+    contextAfter: text("context_after"),
+    /** Tick two: "[Name] has given me permission to use what they said here in my marketing." Who ticked it and when. */
+    permissionAt: text("permission_at"),
+    permissionBy: text("permission_by"),
     createdAt: createdAt(),
   },
   (t) => [index("proofs_user").on(t.userId, t.status)],
@@ -1053,6 +1068,23 @@ export const aiCredentials = sqliteTable(
   },
   (t) => [uniqueIndex("ai_credentials_ws_user").on(t.workspaceId, t.userId)],
 );
+
+/** A member's own Fathom API key (user-level), encrypted at rest. Used only when that member points at one of their recordings. */
+export const fathomConnections = sqliteTable(
+  "fathom_connections",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    keyEncrypted: text("key_encrypted").notNull(),
+    last4: text("last4").notNull().default(""),
+    lastValidatedAt: text("last_validated_at"),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("fathom_connections_ws_user").on(t.workspaceId, t.userId)],
+);
+export type FathomConnection = typeof fathomConnections.$inferSelect;
 
 /** One row per AI call: who, which key, which feature, how many tokens, what it probably cost. */
 export const aiUsage = sqliteTable(

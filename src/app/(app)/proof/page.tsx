@@ -6,6 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { createProofAction, proofFromCheckinAction } from "@/lib/actions/proofs";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
+import { fathomKeyFor } from "@/lib/fathom";
 
 export const metadata = { title: "Proof Bank" };
 
@@ -18,6 +19,7 @@ export default async function ProofPage() {
     db.query.clientCheckins.findMany({ where: eq(schema.clientCheckins.userId, v.user.id), orderBy: desc(schema.clientCheckins.date), limit: 40 }),
     db.query.clientRecords.findMany({ where: eq(schema.clientRecords.userId, v.user.id) }),
   ]);
+  const fathom = await fathomKeyFor(v.workspace.id, v.user.id);
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
   const captured = new Set(rows.map((r) => r.resultAfter));
   const wins = checkins.filter((k) => k.wins && !captured.has(k.wins)).slice(0, 6);
@@ -71,6 +73,19 @@ export default async function ProofPage() {
             </Card>
           ) : null}
         </div>
+        <div className="space-y-4">
+        <Card title="🎙️ Harvest from Fathom" action={fathom ? <Badge tone="good">connected</Badge> : <Badge tone="neutral">not connected</Badge>}>
+          {fathom ? (
+            <>
+              <p className="text-sm text-ink-2">Pick one of your recorded calls and pull your client&apos;s own words out of it, word for word, with a link back to the moment.</p>
+              <Link href="/proof/harvest" className="btn btn-accent btn-sm mt-3 inline-block" data-testid="harvest-link">Pick a recording →</Link>
+            </>
+          ) : (
+            <p className="text-sm" data-testid="harvest-needs-key">
+              Not connected. <Link href="/settings#fathom" className="underline">Paste your Fathom API key in Settings</Link> to pick a recording and pull quotes from it.
+            </p>
+          )}
+        </Card>
         <Card title="Add proof">
           <form action={createProofAction} className="space-y-3">
             <Field label="Name it">
@@ -119,6 +134,7 @@ export default async function ProofPage() {
             <button className="btn btn-primary" type="submit">Save proof</button>
           </form>
         </Card>
+        </div>
       </div>
     </>
   );

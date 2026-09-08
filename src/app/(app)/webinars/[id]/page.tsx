@@ -182,7 +182,17 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                     <Field label="They must believe by the end" hint={a.beliefTo ?? undefined}>
                       <textarea className="field" name={`${type}_to`} defaultValue={b?.toBelief ?? ""} />
                     </Field>
-                    <Field label="Proof you'll show">
+                    <Field label="Proof from the bank" hint="The same approved rows the ladder reads.">
+                      <select className="field" name={`${type}_proofId`} defaultValue={b?.proofId ?? ""} data-testid={`belief-proof-${type}`}>
+                        <option value="">None picked</option>
+                        {proofs.map((pr) => (
+                          <option key={pr.id} value={pr.id}>
+                            {pr.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Or proof you'll describe" hint="Only for proof that isn't in the bank yet.">
                       <textarea className="field" name={`${type}_proof`} defaultValue={b?.proof ?? ""} placeholder="Data, a screenshot, a client result." />
                     </Field>
                     <Field label="Story that carries it">

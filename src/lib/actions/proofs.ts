@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { PROOF_TYPES } from "@/db/schema";
 import { newId } from "@/lib/ids";
+import { nowIso } from "@/lib/dates";
+import { isTrim } from "@/lib/engine/fathom";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 const BELIEFS = ["vehicle", "internal", "external", "none"] as const;
@@ -47,12 +49,50 @@ export async function createProofAction(formData: FormData): Promise<void> {
   redirect(back.startsWith("/") ? back : `/proof/${id}`);
 }
 
+/** The shapes of a harvested quote that must each be a trim of it. */
+const SHAPES = ["shortVersion", "longVersion", "hook", "punchline"] as const;
+
 export async function updateProofAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const id = str(formData, "id");
   const f = fields(formData);
   if (!f.name) return;
-  await db.update(schema.proofs).set({ ...f, shortVersion: autoShort(f) }).where(and(eq(schema.proofs.id, id), eq(schema.proofs.userId, userId)));
+  const existing = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.userId, userId)) });
+  if (!existing) return;
+  if (existing.quote) {
+    // Harvested from a recording: the words are someone else's. Each shape is a trim of the verbatim quote or it is refused;
+    // who said it stays as the transcript had it; approval goes through the permission tick, never this form.
+    for (const k of SHAPES) {
+      const value = f[k];
+      if (value && !isTrim(value, existing.quote)) redirect(`/proof/${id}?notVerbatim=${k}`);
+    }
+    const { status: _ignored, who: _who, ...rest } = f;
+    void _ignored;
+    void _who;
+    await db.update(schema.proofs).set({ ...rest, shortVersion: f.shortVersion ?? existing.shortVersion }).where(eq(schema.proofs.id, id));
+  } else {
+    await db.update(schema.proofs).set({ ...f, shortVersion: autoShort(f) }).where(eq(schema.proofs.id, id));
+  }
+  refresh();
+  redirect(`/proof/${id}`); // a clean URL: an earlier "not a trim" notice must not outlive the save that fixed it
+}
+
+/** Tick two. "[Name] has given me permission to use what they said here in my marketing." No tick, no approval; one proof at a time. */
+export async function approveHarvestedProofAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const id = str(formData, "id");
+  const p = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.userId, userId)) });
+  if (!p || !p.quote) return;
+  if (formData.get("permission") !== "on") redirect(`/proof/${id}?needsPermission=1`);
+  await db.update(schema.proofs).set({ status: "approved", permissionAt: nowIso(), permissionBy: userId }).where(eq(schema.proofs.id, id));
+  refresh();
+  redirect(`/proof/${id}`);
+}
+
+/** Back to draft: the safe direction never needs a tick. The record of the earlier tick is kept. */
+export async function unapproveProofAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  await db.update(schema.proofs).set({ status: "draft" }).where(and(eq(schema.proofs.id, str(formData, "id")), eq(schema.proofs.userId, userId)));
   refresh();
 }
 

@@ -15,6 +15,7 @@ export const FEATURES: Record<string, { label: string; tier: Tier }> = {
   repurpose: { label: "Repurpose drafts", tier: "light" },
   group_variant: { label: "Group-aligned drafts", tier: "light" },
   principle_content: { label: "Doctrine content", tier: "light" },
+  harvest: { label: "Testimonials from a recording", tier: "strong" },
   key_check: { label: "Key check", tier: "light" },
 };
 

@@ -7,14 +7,16 @@ import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { AiKeyCard } from "@/components/ai-key-card";
+import { FathomKeyCard } from "@/components/fathom-key-card";
 import { connectionFor } from "@/lib/ghl";
 
 export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string }> }) {
   const v = await requireViewer();
+  const { fathom: fathomNotice } = await searchParams;
   const [goal, conn] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id)]);
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   return (
@@ -26,6 +28,9 @@ export default async function SettingsPage() {
       </Card>
       <div className="mb-4" id="ai">
         <AiKeyCard v={v} />
+      </div>
+      <div className="mb-4">
+        <FathomKeyCard v={v} notice={fathomNotice} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Password">

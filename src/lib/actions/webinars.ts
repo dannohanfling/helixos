@@ -60,7 +60,7 @@ export async function updateWebinarBeliefsAction(formData: FormData): Promise<vo
   for (const type of ["vehicle", "internal", "external"] as const) {
     await db
       .update(schema.webinarBeliefs)
-      .set({ fromBelief: opt(formData, `${type}_from`), toBelief: opt(formData, `${type}_to`), proof: opt(formData, `${type}_proof`), storyAssetId: opt(formData, `${type}_story`) })
+      .set({ fromBelief: opt(formData, `${type}_from`), toBelief: opt(formData, `${type}_to`), proof: opt(formData, `${type}_proof`), proofId: opt(formData, `${type}_proofId`), storyAssetId: opt(formData, `${type}_story`) })
       .where(and(eq(schema.webinarBeliefs.webinarId, id), eq(schema.webinarBeliefs.type, type)));
   }
   refresh();
@@ -105,6 +105,9 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   const beliefs = await db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) });
   const act = ACTS.find((a) => a.key === tpl.act)!;
   const belief = beliefs.find((b) => b.type === tpl.act);
+  // The picked proof is an approved row of the bank, the same rows the ladder reads; a draft can never get here.
+  const picked = belief?.proofId ? await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, belief.proofId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }) : null;
+  const proofLine = picked ? `Approved proof, use it verbatim with first name and last initial: ${picked.who ?? picked.name}: "${picked.longVersion ?? picked.shortVersion ?? picked.resultAfter ?? ""}"` : `Proof: ${belief?.proof ?? ""}`;
   let text: string | null = null;
   if (str(formData, "mode") !== "example") {
     text = await draft(
@@ -116,7 +119,7 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
         `Promise: ${w.promise ?? "(not set)"}`,
         `Named mechanism: ${w.mechanismName ?? "(not set)"}`,
         `Desired result: ${w.desiredResult ?? "(not set)"}`,
-        belief ? `Belief shift for this act: from "${belief.fromBelief ?? ""}" to "${belief.toBelief ?? ""}". Proof: ${belief.proof ?? ""}` : "",
+        belief ? `Belief shift for this act: from "${belief.fromBelief ?? ""}" to "${belief.toBelief ?? ""}". ${proofLine}` : "",
         `Act: ${act.name}. Purpose: ${act.purpose}`,
         `Section: ${tpl.name}. Coaching: ${tpl.prompt}`,
         asset ? `Use this ${asset.type} from the library, adapted to the audience:\n${asset.body}` : "",
