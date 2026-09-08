@@ -66,6 +66,9 @@ async function main() {
     }
     if (/\$0 \/ \$5,000/.test(body)) throw new Error("the $0 / $5,000 goal bar is shown on day one");
     await expectText(page, "Set your one goal", "goal prompt instead of bar");
+    const nextStep = page.locator('[data-testid="pathway-next"]');
+    if ((await nextStep.innerText()).trim() !== "Write your Big Promise") throw new Error(`a new client's first pathway step should be the Big Promise, got "${await nextStep.innerText()}"`);
+    if ((await nextStep.getAttribute("href")) !== "/settings#you") throw new Error("the Big Promise task should open Settings");
     const exercise = await page.locator('[data-testid="exercise-link"]').first().getAttribute("href");
     if (!exercise) throw new Error("the 30-day build card has no way into the exercise");
     if (!(await page.locator('[data-testid="nav-progress"]').count())) throw new Error("no navigation progress bar in the shell");
@@ -80,13 +83,31 @@ async function main() {
     await page.screenshot({ path: "screenshots/fd01-first-today.png", fullPage: true });
     console.log("✓ first Today: welcome card, no admin tasks, no empty goal bar, the road named");
 
+    // The three fields complete stage 1 by themselves: promise, audience, goal
+    await page.goto(`${base}/settings`);
+    await page.fill('textarea[name="bigPromise"]', "I help nutrition coaches fill a group without ads");
+    await page.fill('[data-testid="audience-field"]', "Nutrition coaches with a Facebook group");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('form:has([data-testid="audience-field"]) button:has-text("Save")')]);
+    await page.waitForLoadState("networkidle");
+    await page.goto(`${base}/today`);
+    if ((await page.locator('[data-testid="pathway-next"]').innerText()).trim() !== "Set your 90-day revenue goal") throw new Error(`after promise and audience the next step should be the goal, got "${await page.locator('[data-testid="pathway-next"]').innerText()}"`);
+    await page.goto(`${base}/settings`);
+    await page.fill('#goal input[name="target"]', "5000");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('#goal button[type="submit"]')]);
+    await page.waitForLoadState("networkidle");
+    await page.goto(`${base}/today`);
+    const roadAfter = await page.locator('[data-testid="road"]').innerText();
+    if (!/Stage 2 of 7/.test(roadAfter)) throw new Error(`stage 1 should be done once the three fields are set, road says "${roadAfter}"`);
+    console.log("✓ stage 1: Big Promise first; promise + audience + goal complete it; the road moves to stage 2");
+
     // Pathway: the next step is a real action, admin tasks are extras
     await page.goto(`${base}/pathway`);
     const now = await page.locator("main").innerText();
     for (const admin of ["Sign the agreement", "Make your first payment", "Confirm your GoHighLevel access"]) {
       if (now.includes(admin) && !/extras?/i.test(now)) throw new Error(`admin task "${admin}" in the simple path`);
     }
-    if (/Choose where your community will live/.test(now)) throw new Error("the community-platform task is still in stage 1");
+    await page.goto(`${base}/pathway?view=all&stage=onboarding`);
+    if (/Choose where your community will live/.test(await page.locator("main").innerText())) throw new Error("the community-platform task is still in stage 1");
     await page.goto(`${base}/pathway?view=all&stage=system-install`);
     await expectText(page, "Choose where your community will live", "platform choice lives in system-install");
     await page.goto(`${base}/pathway`);
@@ -134,7 +155,7 @@ async function main() {
     for (const pass of ["first lock-in", "redone lock-in"]) {
       await page.goto(`${base}/today`);
       const redo = page.locator('summary:has-text("Redo lock-in")');
-      if (await redo.count()) await redo.click();
+      if (await redo.count()) await redo.evaluate((el) => (el as HTMLElement).click()); // may sit under the fixed bottom nav on a phone
       await page.fill('input[name="newFocus"]', "Double tap test");
       await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Lock it in")')]);
       await page.waitForLoadState("networkidle");

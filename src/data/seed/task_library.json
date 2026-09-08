@@ -1,5 +1,47 @@
 [
  {
+  "key": "field-big-promise",
+  "stage": "onboarding",
+  "order": 1,
+  "name": "Write your Big Promise",
+  "teaching": null,
+  "howTo": "Fill in the Big Promise on Settings. This task completes itself when the field is saved.\n",
+  "submissionType": "checkbox",
+  "points": 15,
+  "effort": "quick",
+  "priority": "must",
+  "unlocks": null,
+  "trainingUrl": null
+ },
+ {
+  "key": "field-audience",
+  "stage": "onboarding",
+  "order": 2,
+  "name": "Name who it's for",
+  "teaching": null,
+  "howTo": "Fill in the audience beside your Big Promise on Settings. This task completes itself when the field is saved.\n",
+  "submissionType": "checkbox",
+  "points": 15,
+  "effort": "quick",
+  "priority": "must",
+  "unlocks": null,
+  "trainingUrl": null
+ },
+ {
+  "key": "field-revenue-goal",
+  "stage": "onboarding",
+  "order": 3,
+  "name": "Set your 90-day revenue goal",
+  "teaching": null,
+  "howTo": "Set the target on your one goal on Settings. This task completes itself when a number is saved.\n",
+  "submissionType": "checkbox",
+  "points": 15,
+  "effort": "quick",
+  "priority": "must",
+  "unlocks": null,
+  "trainingUrl": null
+ },
+ {
   "key": "rec3EDSai6DGpoSuH",
   "stage": "onboarding",
   "order": 1,

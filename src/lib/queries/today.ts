@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { taskOrigins } from "@/lib/queries/tasks";
+import { syncFieldTasks } from "@/lib/queries/pathway";
 import type { Viewer } from "@/lib/auth";
 import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
@@ -27,6 +28,9 @@ export async function nextPathwayTask(userId: string) {
 
 /** Where the client is on the Pathway and what's ahead, in one line for Today's header. */
 export async function pathwayRoad(userId: string): Promise<string> {
+  // the field-bound stage 1 tasks follow the fields, so members from before this shipped catch up on load
+  const m = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, userId) });
+  if (m) await syncFieldTasks(m.workspaceId, userId);
   const [stages, library, progress] = await Promise.all([
     db.query.pathwayStages.findMany({ orderBy: asc(schema.pathwayStages.order) }),
     db.query.libraryTasks.findMany(),

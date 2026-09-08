@@ -50,6 +50,21 @@ export function simplePath(stages: { key: string; order: number }[], rawLibrary:
 export const DESTINATION_STAGE_KEY = "launch-first-conversion-event";
 
 /**
+ * Stage 1's three tasks are bound to fields, not submissions: each completes itself when its field is saved, and the
+ * stage completes when all three are, which is what its exit criteria say. Order: promise, audience, goal.
+ */
+export type FieldTaskFacts = { bigPromise: string | null; audience: string | null; goalTarget: number };
+export const FIELD_TASKS: Record<string, { href: string; done: (f: FieldTaskFacts) => boolean; where: string }> = {
+  "field-big-promise": { href: "/settings#you", where: "Settings", done: (f) => Boolean(f.bigPromise?.trim()) },
+  "field-audience": { href: "/settings#you", where: "Settings", done: (f) => Boolean(f.audience?.trim()) },
+  "field-revenue-goal": { href: "/settings#goal", where: "Settings", done: (f) => f.goalTarget > 0 },
+};
+export const isFieldTask = (key: string) => key in FIELD_TASKS;
+export function fieldTaskStatus(f: FieldTaskFacts): Record<string, boolean> {
+  return Object.fromEntries(Object.entries(FIELD_TASKS).map(([k, t]) => [k, t.done(f)]));
+}
+
+/**
  * The one line that names where a client is and where the road goes: "Stage 1 of 7 · Week 1 · first conversion event
  * around Week 6". Weeks come from each stage's own expectedDuration; nothing is computed from the signup date.
  */

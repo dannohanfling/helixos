@@ -10,6 +10,7 @@ import { NewTaskForm } from "@/components/new-task-form";
 import { SubmitButton } from "@/components/submit-button";
 import curriculumLinks from "@/data/curriculum-links.json";
 import { PendingLink } from "@/components/pending-link";
+import { FIELD_TASKS } from "@/lib/engine/pathway";
 import { TaskRow } from "@/components/task-row";
 import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
 import { formatDate, relativeDay } from "@/lib/dates";
@@ -365,7 +366,7 @@ export default async function TodayPage() {
           ) : null}
           {d.pathwayNext ? (
             <Card title="Next on your pathway" action={<Link href="/pathway" className="text-xs text-ink-2 hover:underline">Pathway →</Link>}>
-              <Link href={`/pathway?task=${d.pathwayNext.key}`} className="font-semibold hover:underline">
+              <Link href={FIELD_TASKS[d.pathwayNext.key]?.href ?? `/pathway?task=${d.pathwayNext.key}`} className="font-semibold hover:underline" data-testid="pathway-next">
                 {d.pathwayNext.name}
               </Link>
               <div className="mt-1 text-xs text-ink-3">+{d.pathwayNext.points} pts when your coach verifies it</div>

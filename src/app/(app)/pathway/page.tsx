@@ -5,7 +5,8 @@ import { requireViewer } from "@/lib/auth";
 import { completeCurriculumDayAction, submitPathwayTaskAction } from "@/lib/actions/pathway";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
-import { OPEN_LIMIT, simplePath, roadLine } from "@/lib/engine/pathway";
+import { FIELD_TASKS, OPEN_LIMIT, simplePath, roadLine } from "@/lib/engine/pathway";
+import { syncFieldTasks } from "@/lib/queries/pathway";
 import type { LibraryTask, PathwayProgress } from "@/db/schema";
 
 export const metadata = { title: "Pathway" };
@@ -40,6 +41,7 @@ function TaskLink({ t, st, selected, extra = false }: { t: LibraryTask; st: stri
 
 export default async function PathwayPage({ searchParams }: { searchParams: Promise<{ task?: string; stage?: string; view?: string }> }) {
   const v = await requireViewer();
+  await syncFieldTasks(v.workspace.id, v.user.id);
   const sp = await searchParams;
   const [stages, library, progress, curriculum, curriculumDone, courses] = await Promise.all([
     db.query.pathwayStages.findMany({ orderBy: asc(schema.pathwayStages.order) }),
@@ -205,6 +207,13 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                 <div className="mt-4 rounded-lg bg-surface-2 p-3 text-sm">
                   <p className="font-medium">Submitted. Your coach will review it.</p>
                   {selectedProg?.submissionText ? <p className="mt-1 whitespace-pre-line text-ink-2">{selectedProg.submissionText}</p> : null}
+                </div>
+              ) : FIELD_TASKS[selected.key] ? (
+                <div className="mt-4 rounded-lg bg-surface-2 p-3 text-sm" data-testid="field-task">
+                  This one completes itself when the field is saved.{" "}
+                  <Link href={FIELD_TASKS[selected.key].href} className="font-semibold underline">
+                    Set it on {FIELD_TASKS[selected.key].where} →
+                  </Link>
                 </div>
               ) : (
                 <form action={submitPathwayTaskAction} className="mt-4 space-y-3">

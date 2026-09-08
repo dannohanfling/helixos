@@ -6,6 +6,7 @@ import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { inviteCode } from "@/lib/ids";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { syncFieldTasks } from "@/lib/queries/pathway";
 
 /** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
 function validTimezone(tz: string): string | null {
@@ -19,6 +20,13 @@ function validTimezone(tz: string): string | null {
 }
 
 export async function updateProfileAction(formData: FormData): Promise<void> {
+  await updateProfile(formData);
+  const { workspaceId, userId } = await ctx();
+  await syncFieldTasks(workspaceId, userId);
+  refresh();
+}
+
+async function updateProfile(formData: FormData): Promise<void> {
   const { v, userId } = await ctx();
   const name = str(formData, "name");
   const emoji = str(formData, "avatarEmoji");
@@ -48,6 +56,7 @@ export async function updateGoalAction(formData: FormData): Promise<void> {
   } else {
     await db.insert(schema.goals).values({ id: newId(), workspaceId, userId, title, target, actual: num(formData, "actual"), unit: str(formData, "unit") || "$", period: str(formData, "period") || "This month", primary: true });
   }
+  await syncFieldTasks(workspaceId, userId);
   refresh();
 }
 

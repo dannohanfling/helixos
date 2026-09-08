@@ -26,6 +26,25 @@ async function checks(page: Page): Promise<Record<string, boolean>> {
   const items = await page.locator('[data-testid="checklist"] li').evaluateAll((els) => els.map((e) => [e.getAttribute("data-check"), e.getAttribute("data-ok") === "1"]));
   return Object.fromEntries(items as [string, boolean][]);
 }
+/** A fill right after navigation can land mid-hydration and merge with the old value; write until the field holds exactly this. */
+async function fillExact(page: Page, selector: string, value: string) {
+  for (let i = 0; i < 5; i++) {
+    await page.fill(selector, value);
+    if ((await page.locator(selector).inputValue()) === value) return;
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`could not set ${selector} to the expected text`);
+}
+/** After a save the page re-renders from the server; wait (bounded) for the checklist to show the expected state. */
+async function checksWhen(page: Page, key: string, expected: boolean): Promise<Record<string, boolean>> {
+  const started = Date.now();
+  let c = await checks(page);
+  while (c[key] !== expected && Date.now() - started < 10000) {
+    await page.waitForTimeout(250);
+    c = await checks(page);
+  }
+  return c;
+}
 
 async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
@@ -88,9 +107,9 @@ async function main() {
     console.log("✓ publish gate: server refuses the composer send and a posted rung while checks fail; blockers named and linked; copies held");
     await page.goto(`${base}/content/ladders/${ladderId}`);
     // Edit the body to add comment bait and confirm it's caught after save
-    await page.fill('textarea[name="copy"]', "If I lost every client tomorrow.\nComment RESET for the plan.");
+    await fillExact(page, 'textarea[name="copy"]', "If I lost every client tomorrow.\nComment RESET for the plan.");
     await submit(page, 'button:has-text("Save and re-check")');
-    c = await checks(page);
+    c = await checksWhen(page, "bait", false);
     if (c.bait !== false || c.question !== false) throw new Error("comment bait / missing question not caught");
     await page.screenshot({ path: "screenshots/ld01-skeleton-checklist.png", fullPage: true });
     console.log("✓ skeleton built; checklist blocks placeholders, comment bait and a missing question");
@@ -108,12 +127,12 @@ async function main() {
     // A ready ladder edited into a failing state is a draft again; fixed, it can be marked ready
     const demoId = page.url().split("/").pop()!.split("?")[0];
     const cleanCopy = await page.locator('textarea[name="copy"]').inputValue();
-    await page.fill('textarea[name="copy"]', `${cleanCopy}\nThe skinny version is in the comments?`);
+    await fillExact(page, 'textarea[name="copy"]', `${cleanCopy}\nThe skinny version is in the comments?`);
     await submit(page, 'button:has-text("Save and re-check")');
     let demo = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) });
     if (demo?.status !== "draft") throw new Error(`a ready ladder edited to fail should be a draft again, is ${demo?.status}`);
     if (!(await page.locator('[data-testid="publish-blocked"]').count())) throw new Error("failing edit shows no blockers");
-    await page.fill('textarea[name="copy"]', cleanCopy);
+    await fillExact(page, 'textarea[name="copy"]', cleanCopy);
     await submit(page, 'button:has-text("Save and re-check")');
     await submit(page, 'button:has-text("Mark ready")');
     demo = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) });
@@ -127,7 +146,7 @@ async function main() {
     await submit(page, '[data-testid="rung-2"] button:has-text("Posted")');
     await expectText(page, "2/11 posted", "second rung posted");
     // While a live ladder fails: Undo works, posting another rung is refused, Reset lands on draft, not ready
-    await page.fill('textarea[name="copy"]', `${cleanCopy}\nThe skinny version is in the comments?`);
+    await fillExact(page, 'textarea[name="copy"]', `${cleanCopy}\nThe skinny version is in the comments?`);
     await submit(page, 'button:has-text("Save and re-check")');
     const rungButtons = page.locator('[data-testid="mark-rung"]');
     await submit(page, '[data-testid="mark-rung"] >> nth=1');
@@ -140,7 +159,7 @@ async function main() {
     await submit(page, 'button:has-text("Reset")');
     demo = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) });
     if (demo?.status !== "draft" || demo.rungs.some((r) => r.postedAt)) throw new Error(`Reset on a failing ladder should land on draft with no rungs posted, got ${demo?.status}`);
-    await page.fill('textarea[name="copy"]', cleanCopy);
+    await fillExact(page, 'textarea[name="copy"]', cleanCopy);
     await submit(page, 'button:has-text("Save and re-check")');
     await submit(page, 'button:has-text("Mark ready")');
     console.log("✓ while blocked: undo allowed, posting refused, Reset lands on draft; fixed and ready again");

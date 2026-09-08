@@ -84,7 +84,7 @@ export default async function SettingsPage() {
           </div>
           <p className="mt-2 text-xs text-ink-3">Passwords and your GoHighLevel token are never included.</p>
         </Card>
-        <Card title="Your one goal">
+        <Card id="goal" title="Your one goal">
           <form action={updateGoalAction} className="space-y-3">
             <Field label="Goal">
               <input className="field" name="title" defaultValue={goal?.title ?? "Cash collected this month"} />

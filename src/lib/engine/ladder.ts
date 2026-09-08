@@ -48,6 +48,10 @@ const REVENUE_GUARANTEE = /\b(guarantee[ds]?|sure[- ]fire|sure thing|can't fail|
 const FAKE_SCARCITY = /\b(only \d+ spots?|spots? left|seats? left|closing soon|last chance|doors close|ends tonight|limited time)\b/i;
 const PLACEHOLDER = /\[(?:[A-Z][A-Z0-9 _'/-]*|verify price|numbers placeholder|proof placeholder|placeholder)\]/;
 const COMMENT_BAIT = /\b[Cc]omment\s+["“]?[A-Z]{3,}["”]?\b/;
+/** The Book 'Em Danno name puns: the brand's, not a client's. */
+const NAME_PUN = /\b(police|badge|handcuffs?|book\s?['’]?em)\b/i;
+/** A percentage or a "studies show" is a statistic; it has to be on the verified list. */
+const STAT = /(\d+(?:\.\d+)?\s?%)|\b(?:studies|research|data|surveys?)\s+(?:show|shows|found|say|says|prove|proves)\b/gi;
 
 export type Brief = { format: LadderFormatKey; topic: string; audience: "warm" | "cold"; keyword: string; sourceMaterial?: string | null; realNumbers?: string | null };
 export type Member = { name: string; businessName?: string | null; bigPromise?: string | null; brandVoice?: string | null };
@@ -383,8 +387,14 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   add("scarcity", "No fake scarcity or manufactured urgency", !scarcityHit || (Boolean(permitted) && lower.includes(permitted) && !all.replace(new RegExp(permitted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "").match(FAKE_SCARCITY)), `Found "${scarcityHit?.[0]}". ${permitted ? "Only the permitted line, verbatim, is allowed." : "This client has no permitted scarcity line."}`);
   const generates = all.match(/\b(tool|bot|agent|software|app|automation|ai)\b[^.\n]{0,40}\bgenerat(es|e|ing)\b[^.\n]{0,20}\b(leads|clients|revenue|money|sales)\b/i);
   add("tools-earn", "Tools enable; they don't generate leads or money", !generates, `"${generates?.[0]}" claims a tool produces results. Tools catch, speed up or remove; people and offers produce.`);
+  // Truth rule, not craft: every number is true or it is marked illustrative. Blocks.
   const money = rungs.filter((r) => /\$\s?\d[\d,]*/.test(r.body) && !/illustrative/i.test(r.body) && !(l.realNumbers ?? "").match(/\$\s?\d/) && !(profile?.priceLine ?? "").match(/\$\s?\d/) ).map((r) => r.n);
-  add("illustrative", "Dollar figures are real numbers or marked illustrative", !money.length, `Rung ${money.join(", ")} has a $ figure that is neither in Real numbers nor marked "(Illustrative. Your numbers will differ.)"`, "warn");
+  add("illustrative", "Dollar figures are real numbers or marked illustrative", !money.length, `Rung ${money.join(", ")} has a $ figure that is neither in Real numbers nor marked "(Illustrative. Your numbers will differ.)"`);
+  const pun = all.match(NAME_PUN);
+  add("namepun", "No Book 'Em Danno name puns", !pun, `"${pun?.[0]}" is the brand's pun, not this client's.`);
+  const verified = (profile?.verifiedStats ?? []).map((s) => s.stat.toLowerCase());
+  const statHits = Array.from(all.matchAll(STAT)).map((m) => m[0]).filter((hit) => !verified.some((v) => v.includes(hit.toLowerCase().trim())));
+  add("stats", "Every statistic is on the verified list", !statHits.length, `"${statHits[0]}" is not among your verified stats. Add it there with its source, or write [STAT PLACEHOLDER].`);
 
   // Testimonials: a quoted line attributed to a name must be an approved proof, verbatim
   const approved = proofs.filter((p) => p.status === "approved").map((p) => [p.shortVersion, p.resultAfter, p.longVersion, p.punchline].filter(Boolean).map((t) => String(t).replace(/^"|"$/g, "").toLowerCase()));
@@ -400,15 +410,15 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   // Headline
   const h = headlineParts(l.headline);
   const wc = words(h.text);
-  add("headline-lines", "Headline breaks into exactly two lines", h.lines.length === 2, `${h.lines.length} line(s). Separate the two lines with " / ".`);
+  add("headline-lines", "Headline breaks into exactly two lines", h.lines.length === 2, `${h.lines.length} line(s). Separate the two lines with " / ".`, "warn");
   add("headline-words", `Headline is 8–14 words (${wc})`, wc >= 8 && wc <= 14, "Trim or extend it so it fills two big lines.", "warn");
-  add("headline-gold", "Exactly one gold phrase, and it appears in the headline", h.gold.length === 1 && h.text.toUpperCase().includes(h.gold[0].toUpperCase()), h.gold.length === 1 ? "The gold phrase must be part of the headline text." : `${h.gold.length} gold markers. Mark one with (gold: PHRASE).`);
+  add("headline-gold", "Exactly one gold phrase, and it appears in the headline", h.gold.length === 1 && h.text.toUpperCase().includes(h.gold[0].toUpperCase()), h.gold.length === 1 ? "The gold phrase must be part of the headline text." : `${h.gold.length} gold markers. Mark one with (gold: PHRASE).`, "warn");
   add("headline-strand", "No single word stranded on the second line", h.lines.length !== 2 || words(h.lines[1]) > 1, "Rebalance the break so the second line has at least two words.", "warn");
 
   // Platform limits
   const overThreads = l.threadsChain.filter((t) => t.length > 500).length;
-  add("threads", "Threads posts under 500 characters", !overThreads, `${overThreads} post(s) over 500. Warn, don't truncate.`);
-  add("ig", `Instagram caption under 2,200 characters (${l.igCaption.length})`, l.igCaption.length <= 2200, "Cut a rung from the caption.");
+  add("threads", "Threads posts under 500 characters", !overThreads, `${overThreads} post(s) over 500. Warn, don't truncate.`, "warn");
+  add("ig", `Instagram caption under 2,200 characters (${l.igCaption.length})`, l.igCaption.length <= 2200, "Cut a rung from the caption.", "warn");
   return checks;
 }
 

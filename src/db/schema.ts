@@ -112,6 +112,7 @@ export const tasks = sqliteTable(
 export const CONTENT_STATUSES = ["idea", "creating", "ready", "scheduled", "posted"] as const;
 export const CONTENT_TYPES = [
   "CTA Post",
+  "Comment Ladder",
   "Client Win",
   "Story Post",
   "Belief Shifting Post",
