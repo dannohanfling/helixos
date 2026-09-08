@@ -1,4 +1,4 @@
-/** End-to-end: a member's own Private Integration token → validation with real reasons → channel map → schedule → Social Planner → status sync, against scripts/mock-ghl.ts. */
+/** End-to-end: a member's own Private Integration token → validation with real reasons → channel map → schedule → Social Planner → re-schedule edits in place → status sync, against scripts/mock-ghl.ts. */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
 
@@ -91,6 +91,23 @@ async function main() {
     await page.reload();
     await expectText(page, "Social Planner: scheduled", "variant pushed to social planner");
     await expectText(page, "paste by hand", "manual channels marked");
+    const plannerPosts = async () => ((await (await fetch(`http://localhost:${mockPort}/__posts`, { headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } })).json()) as { posts: { _id: string; summary: string; edits?: number }[] }).posts;
+    const created = await plannerPosts();
+    if (!created.length || created.some((p) => p.edits)) throw new Error(`expected fresh planner posts, got ${JSON.stringify(created.map((p) => [p._id, p.edits]))}`);
+
+    // Re-scheduling edits the planner's posts in place: the same ids, no second copy
+    const itemUrl = page.url().replace(/\/repurpose.*$/, "");
+    await page.goto(`${itemUrl}/compose`);
+    await expectText(page, "Redistribute:", "edit composer");
+    await page.click('label:has-text("Customize for each channel") input'); // one source for every version again
+    await page.fill('input[placeholder^="Hook"]', "Twelve minutes on Tuesday, edited.");
+    await page.click('button:has-text("Schedule")');
+    await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
+    await page.waitForTimeout(2500);
+    const edited = await plannerPosts();
+    if (edited.length !== created.length || edited.some((p) => p.edits !== 1) || edited.some((p) => !p.summary.includes("edited"))) throw new Error(`expected the same ${created.length} planner post(s) each edited once, got ${JSON.stringify(edited.map((p) => [p._id, p.edits, p.summary.slice(0, 30)]))}`);
+    console.log(`✓ re-scheduling edited ${edited.length} planner post(s) in place under the same id`);
+    await page.goto(`${itemUrl}/repurpose`);
     await submit(page, 'button:has-text("Check status")');
     await expectText(page, "Social Planner: published", "status synced");
     await page.screenshot({ path: "screenshots/g02-distribute-ghl.png", fullPage: true });
@@ -104,6 +121,7 @@ async function main() {
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/integrations`);
     await expectText(page, "Scheduled via Social Planner", "sync log sent");
+    await expectText(page, "Updated in Social Planner", "sync log update");
     await expectText(page, "4/5 channels", "coach status list");
     console.log("✓ sync log and status list");
   } finally {

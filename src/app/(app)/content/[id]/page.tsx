@@ -14,7 +14,7 @@ export default async function ContentDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
   if (!item) notFound();
-  const fullText = [item.hook, item.body].filter(Boolean).join("\n\n");
+  const fullText = [item.hook, item.body, item.cta].filter(Boolean).join("\n\n");
   return (
     <>
       <PageHeader

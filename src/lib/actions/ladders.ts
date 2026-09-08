@@ -8,6 +8,8 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { channelBodies, checklist, masterBlock, outputContract, parseLadderOutput, parseRungs, perPostInput, publishBlockers, scaffold, type Brief, type Parsed } from "@/lib/engine/ladder";
+import { pushSocialPost } from "@/lib/integrations";
+import { staleScheduledFor } from "@/lib/queries/ladders";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 /**
@@ -225,7 +227,11 @@ export async function markRungAction(formData: FormData): Promise<void> {
   refresh();
 }
 
-/** Creates (or refreshes) the content item and channel drafts, then opens the composer so the client can schedule it everywhere. */
+/**
+ * Creates (or refreshes) the content item and channel drafts, then opens the composer so the client can schedule it everywhere.
+ * A channel post that is already scheduled or posted is never touched here: the ladder page and the composer warn that it
+ * still carries the older text, and only "Push the update to GoHighLevel" (the client's choice) replaces it.
+ */
 export async function sendLadderToComposerAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const l = await own(str(formData, "id"), userId);
@@ -241,12 +247,35 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
   }
   for (const c of channelBodies(l)) {
     const v = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId!), eq(schema.contentVariants.channel, c.channel), eq(schema.contentVariants.groupId, "")) });
-    if (v?.status === "posted") continue;
+    if (v?.status === "posted" || v?.status === "scheduled") continue;
     if (v) await db.update(schema.contentVariants).set({ body: c.body, generatedBy: "ladder" }).where(eq(schema.contentVariants.id, v.id));
     else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId!, userId, channel: c.channel, groupId: "", body: c.body, generatedBy: "ladder" });
   }
   refresh();
   redirect(`/content/${itemId}/compose`);
+}
+
+/**
+ * The client's choice, from the warning on the ladder page or in the composer: every scheduled channel post that still
+ * carries older text takes the ladder's current text. Posts the Social Planner holds are edited there in place under the
+ * same id (no second copy); the rest are scheduled here and pasted by hand, so only their text changes. Gated like every
+ * other outward step, and the schedule itself (dates, targets) is never altered.
+ */
+export async function pushLadderUpdateAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx();
+  const l = await own(str(formData, "id"), userId);
+  const back = str(formData, "back").startsWith("/") ? str(formData, "back") : `/content/ladders/${l.id}`;
+  await assertPublishable(l);
+  const item = l.contentItemId ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, l.contentItemId), eq(schema.contentItems.userId, userId)) }) : null;
+  const stale = item ? await staleScheduledFor(l) : [];
+  let pushed = 0;
+  for (const s of stale) {
+    await db.update(schema.contentVariants).set({ body: s.body, generatedBy: "ladder" }).where(eq(schema.contentVariants.id, s.variantId));
+    if (s.inGhl && (await pushSocialPost({ workspaceId, userId }, { variantId: s.variantId, channel: s.channel, body: s.body, postAt: s.postAt, mediaUrl: item?.mediaUrl, title: item?.title }))) pushed++;
+  }
+  refresh();
+  const sep = back.includes("?") ? "&" : "?";
+  redirect(`${back}${sep}pushed=${stale.length}&ghl=${pushed}`);
 }
 
 export async function deleteLadderAction(formData: FormData): Promise<void> {

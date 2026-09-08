@@ -21,6 +21,7 @@ createServer((req, res) => {
     };
     if (!auth.startsWith("Bearer ") || version !== "2021-07-28") return json(401, { message: "Invalid JWT" });
     const token = auth.slice(7);
+    if (url.startsWith("/__posts") && req.method === "GET") return json(200, { posts: [...posts.values()] }); // walk introspection, not a GHL route
     if (url.startsWith("/contacts/upsert") && req.method === "POST") {
       if (!token.startsWith("pit-") || token === "pit-noscope") return json(401, { message: "Invalid JWT" });
       return json(200, { contact: { id: `contact_${++n}` } });
@@ -54,6 +55,13 @@ createServer((req, res) => {
       const _id = `post_${++n}`;
       posts.set(_id, { _id, ...body, error: null, postId: null });
       return json(201, { success: true, statusCode: 201, message: "Post created", results: { post: posts.get(_id) } });
+    }
+    if (kind === "posts" && req.method === "PUT" && id) {
+      const p = posts.get(id);
+      if (!p) return json(404, { message: "Post not found" });
+      const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+      posts.set(id, { ...p, ...body, _id: id, edits: Number(p.edits ?? 0) + 1 });
+      return json(200, { success: true, statusCode: 200, message: "Post updated", results: { post: posts.get(id) } });
     }
     if (kind === "posts" && req.method === "GET" && id) {
       const p = posts.get(id);

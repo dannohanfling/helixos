@@ -452,6 +452,25 @@ export function channelBodies(l: Pick<Ladder, "copy" | "igCaption" | "threadsCha
   ];
 }
 
+/** What a scheduled channel post looks like to the re-sync: enough to tell whether it still carries older text. */
+export type ScheduledVariantLike = { id: string; channel: string; groupId: string; status: string; body: string; postAt: string | null; externalId: string | null; externalStatus: string | null };
+export type StaleScheduled = { variantId: string; channel: ScheduledVariantLike["channel"]; body: string; postAt: string | null; inGhl: boolean };
+
+/**
+ * The seam between a ladder and its live schedule. A re-sync never touches a scheduled post; instead these are the
+ * scheduled channel posts whose text is older than the ladder's, so the page can warn and the client can choose to push.
+ * `inGhl` marks the ones GoHighLevel's Social Planner holds; the rest are scheduled here and pasted by hand.
+ */
+export function staleScheduled(l: Pick<Ladder, "copy" | "igCaption" | "threadsChain" | "hook">, variants: ScheduledVariantLike[]): StaleScheduled[] {
+  const out: StaleScheduled[] = [];
+  for (const c of channelBodies(l)) {
+    const v = variants.find((x) => x.channel === c.channel && x.groupId === "" && x.status === "scheduled");
+    if (!v || v.body === c.body) continue;
+    out.push({ variantId: v.id, channel: c.channel, body: c.body, postAt: v.postAt, inGhl: Boolean(v.externalId) && v.externalStatus === "scheduled" });
+  }
+  return out;
+}
+
 /* ───────────── Cadence: two ladders a week, 72 hours apart, mid-week mornings, the author free for the first hour ───────────── */
 
 export type CadenceNote = { ok: boolean; note: string };

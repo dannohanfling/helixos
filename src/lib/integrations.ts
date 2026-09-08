@@ -129,9 +129,11 @@ export async function pushContact(ctx: { workspaceId: string; userId: string }, 
 /**
  * Publishes one channel version through the member's own GoHighLevel sub-account (Social Planner).
  * Writes GHL's post id and status back onto the variant so the Distribute page can show what happened.
+ * A variant the Social Planner already holds as scheduled is edited in place under the same id, so re-scheduling or
+ * pushing an update never leaves a second copy in the planner.
  */
 export async function pushSocialPost(ctx: { workspaceId: string; userId: string }, post: { variantId: string; channel: string; body: string; postAt: string | null; mediaUrl?: string | null; title?: string; followUpComment?: string | null }): Promise<boolean> {
-  const { connectionFor, createPost } = await import("@/lib/ghl");
+  const { connectionFor, createPost, updatePost } = await import("@/lib/ghl");
   const { PUBLISHABLE, mediaTypeFor, postTypeFor } = await import("@/lib/engine/ghl-map");
   const channel = post.channel as keyof typeof PUBLISHABLE;
   const skip = async (note: string) => {
@@ -146,14 +148,18 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string 
   if (!accountId) return skip(`No ${PUBLISHABLE[channel].note} chosen for this channel in Settings`);
   if (channel === "stories" && !post.mediaUrl) return skip("Stories need a photo or video");
   const scheduleDate = post.postAt ? new Date(post.postAt).toISOString() : null;
-  const r = await createPost(conn, { accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: post.mediaUrl ? [{ url: post.mediaUrl, type: mediaTypeFor(post.mediaUrl) }] : [], followUpComment: post.followUpComment });
+  const variant = await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, post.variantId) });
+  const held = variant?.externalId && variant.externalStatus === "scheduled" ? variant.externalId : null;
+  const event = held ? "social.update" : "social.schedule";
+  const draft = { accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: post.mediaUrl ? [{ url: post.mediaUrl, type: mediaTypeFor(post.mediaUrl) }] : [], followUpComment: post.followUpComment };
+  const r = held ? await updatePost(conn, held, draft) : await createPost(conn, draft);
   if (!r.ok) {
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt, accountId }, status: "failed", note: r.error });
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, accountId, ghlPostId: held ?? undefined }, status: "failed", note: r.error });
     await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: r.error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
     await db.update(schema.socialConnections).set({ lastError: r.error }).where(eq(schema.socialConnections.id, conn.id));
     return false;
   }
-  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt, accountId, ghlPostId: r.data.id }, status: "sent", note: `${scheduleDate ? "Scheduled" : "Published"} via Social Planner · ${r.data.id}` });
+  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, accountId, ghlPostId: r.data.id }, status: "sent", note: `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Published via"} Social Planner · ${r.data.id}` });
   await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: scheduleDate ? "scheduled" : "published", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
   await db.update(schema.socialConnections).set({ lastSyncAt: nowIso(), lastError: null }).where(eq(schema.socialConnections.id, conn.id));
   return true;

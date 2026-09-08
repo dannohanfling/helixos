@@ -5,6 +5,7 @@
  *  - GET  /social-media-posting/{locationId}/accounts → results.accounts[]
  *  - POST /social-media-posting/{locationId}/posts → results.post
  *  - GET  /social-media-posting/{locationId}/posts/{id} → results.post (status, error, postId, publishedAt)
+ *  - PUT  /social-media-posting/{locationId}/posts/{id} → edits a scheduled post in place (same body as create)
  * Tokens are encrypted at rest (src/lib/crypto.ts) and decrypted only for the request.
  */
 import { and, eq } from "drizzle-orm";
@@ -115,6 +116,25 @@ export async function createPost(conn: SocialConnection, post: NewPost): Promise
   if (!r.ok) return { ok: false, error: explain(r), status: r.status };
   const id = String(r.data.results?.post?._id ?? r.data.results?.post?.id ?? "");
   return id ? { ok: true, data: { id } } : { ok: false, error: "GoHighLevel accepted the post but returned no id" };
+}
+
+/** Edits a post the Social Planner already holds (a scheduled one), keeping its id: no second copy appears in the planner. */
+export async function updatePost(conn: SocialConnection, id: string, post: NewPost): Promise<GhlResult<{ id: string }>> {
+  const cred = await credentials(conn);
+  if (!cred.ok) return cred;
+  const body = {
+    accountIds: [post.accountId],
+    summary: post.summary,
+    media: post.media ?? [],
+    status: post.scheduleDate ? "scheduled" : "published",
+    scheduleDate: post.scheduleDate ?? new Date().toISOString(),
+    type: post.type,
+    followUpComment: post.followUpComment ?? undefined,
+    userId: conn.ghlUserId ?? "",
+  };
+  const r = await call<unknown>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/${encodeURIComponent(id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) return { ok: false, error: explain(r), status: r.status };
+  return { ok: true, data: { id } };
 }
 
 export type PostStatus = { status: string; error: string | null; postId: string | null; publishedAt: string | null };

@@ -141,6 +141,13 @@
       "when": 1788820337965,
       "tag": "0019_ledger_adjusted_by",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1788832489152,
+      "tag": "0020_content_cta",
+      "breakpoints": true
     }
   ]
 }

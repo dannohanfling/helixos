@@ -13,7 +13,7 @@ export type GroupProfile = {
   whatWorks?: string | null;
 };
 
-export type Source = { title: string; hook?: string | null; body?: string | null; hasCta?: boolean; firstName?: string | null };
+export type Source = { title: string; hook?: string | null; body?: string | null; hasCta?: boolean; ctaText?: string | null; firstName?: string | null };
 
 export type AlignmentCheck = { key: string; label: string; ok: boolean; note: string };
 
@@ -67,7 +67,7 @@ export function alignPost(src: Source, g: GroupProfile): { body: string; checks:
       : hook;
   const close = own
     ? src.hasCta
-      ? "Want the full version? Comment \"more\" and I'll send it."
+      ? src.ctaText?.trim() || "Want the full version? Comment \"more\" and I'll send it."
       : "Your turn: where are you with this? Reply below."
     : ctaAllowed
       ? "If it's useful I can share the full breakdown. Just ask."

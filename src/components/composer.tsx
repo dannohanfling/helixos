@@ -5,25 +5,30 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { CONTENT_TYPES } from "@/db/schema";
 import { polishTargetsAction, saveComposeAction, type ComposeResult } from "@/lib/actions/compose";
+import { pushLadderUpdateAction } from "@/lib/actions/ladders";
 import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type Draft, type GroupTarget, type Target, type TargetKey } from "@/lib/engine/compose";
 import { hashtagsFor } from "@/lib/engine/repurpose";
 import { ChannelPreview, type Persona } from "./channel-previews";
 import { AiStatus } from "@/components/ai-status";
 
-type Initial = { id?: string; title?: string; hook?: string; body?: string; hasCta?: boolean; mediaUrl?: string; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
+type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
+/** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
+export type StaleNotice = { ladderId: string; back: string; channels: { key: string; label: string; inGhl: boolean }[] };
 
 const EMOJI = ["🔥", "✅", "👇", "💡", "🙌", "❤️", "👉", "⚡", "🎯", "😅", "🤝", "📌"];
 const DEFAULT_SELECTED: TargetKey[] = ["ch:fb_personal", "ch:instagram", "ch:threads", "ch:linkedin"];
 
 type Snippet = { id: string; title: string; text: string };
 
-export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[] } }) {
+export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[] }; stale?: StaleNotice }) {
   const router = useRouter();
   const targets = useMemo(() => [...groupTargets(groups), ...channelTargets()], [groups]);
   const byKey = useMemo(() => new Map(targets.map((t) => [t.key, t])), [targets]);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [hook, setHook] = useState(initial?.hook ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
+  // The CTA is its own field. Picking one replaces it; each channel version places it once at render. It is never appended to the body.
+  const [cta, setCta] = useState(initial?.cta ?? "");
   const [hasCta, setHasCta] = useState(initial?.hasCta ?? true);
   const [mediaUrl, setMediaUrl] = useState(initial?.mediaUrl ?? "");
   const [contentType, setContentType] = useState(initial?.contentType ?? "CTA Post");
@@ -45,7 +50,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const [notice, setNotice] = useState<string | null>(null);
   const [result, setResult] = useState<ComposeResult | null>(null);
 
-  const src = useMemo(() => ({ title: title || hook.slice(0, 60), hook, body, hasCta, hashtag, firstName: persona.name.split(" ")[0] }), [title, hook, body, hasCta, hashtag, persona.name]);
+  const src = useMemo(() => ({ title: title || hook.slice(0, 60), hook, body, hasCta, ctaText: cta, hashtag, firstName: persona.name.split(" ")[0] }), [title, hook, body, hasCta, cta, hashtag, persona.name]);
   const chosen = selected.map((k) => byKey.get(k)).filter((t): t is Target => Boolean(t));
   const draftOf = (t: Target): Draft => {
     const auto = draftFor(src, t);
@@ -65,7 +70,12 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
     if (tab === k) setTab("all");
     if (previewTab === k) setPreviewTab("all");
   };
-  const insert = (text: string) => setBody((b) => (b ? `${b}${b.endsWith("\n") ? "" : "\n"}${text}` : text));
+  /** Adds a line to the body once: a second press of the same button changes nothing. */
+  const insert = (text: string) => setBody((b) => (b.includes(text) ? b : b ? `${b}${b.endsWith("\n") ? "" : "\n"}${text}` : text));
+  const chooseCta = (text: string) => {
+    setCta(text);
+    setHasCta(true);
+  };
   const setOverride = (k: TargetKey, patch: { body?: string; subject?: string }) =>
     setOverrides((o) => {
       const cur = o[k] ?? { body: active ? draftFor(src, active).body : "", subject: active ? draftFor(src, active).subject : undefined };
@@ -80,6 +90,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
         title: src.title,
         hook,
         body,
+        cta,
         hasCta,
         mediaUrl,
         contentType,
@@ -100,7 +111,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
     start(async () => {
       setNotice(null);
       setPolishing(true);
-      const res = await polishTargetsAction({ title: src.title, hook, body, hasCta, targets: chosen.map((t) => ({ key: t.key, channel: t.channel, groupId: t.groupId, body: draftFor(src, t).body })) });
+      const res = await polishTargetsAction({ title: src.title, hook, body, cta, hasCta, targets: chosen.map((t) => ({ key: t.key, channel: t.channel, groupId: t.groupId, body: draftFor(src, t).body })) });
       setPolishing(false);
       const n = Object.keys(res).length;
       if (!n) {
@@ -118,6 +129,22 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
     <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr]">
       {/* Left: compose */}
       <div className="space-y-4">
+        {stale?.channels.length ? (
+          <div className="rounded-xl border bg-warn-soft p-3 text-sm" data-testid="stale-scheduled" role="status">
+            <div className="font-semibold">Scheduled with the old text: {stale.channels.map((c) => c.label).join(", ")}.</div>
+            <p className="mt-0.5 text-xs text-ink-2">
+              The ladder changed after these were scheduled. Nothing in the schedule was touched.{" "}
+              {stale.channels.some((c) => c.inGhl) ? "Pushing the update edits the post GoHighLevel holds, under the same id, at the same time." : "These are scheduled here and pasted by hand, so pushing the update replaces their text only."}
+            </p>
+            <form action={pushLadderUpdateAction} className="mt-2">
+              <input type="hidden" name="id" value={stale.ladderId} />
+              <input type="hidden" name="back" value={stale.back} />
+              <button type="submit" className="btn btn-soft btn-sm" data-testid="push-update">
+                Push the update to GoHighLevel
+              </button>
+            </form>
+          </div>
+        ) : null}
         <section className="card p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -184,6 +211,17 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
               <input className="field font-medium" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Working title (for your content board)" />
               <input className="field" value={hook} onChange={(e) => setHook(e.target.value)} placeholder="Hook: the first line. If it doesn't stop the scroll, nothing else matters." />
               <textarea className="field min-h-48 text-[15px]" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Type content. One line per thought. Line breaks between thoughts." />
+              <input
+                className="field text-sm"
+                value={cta}
+                onChange={(e) => {
+                  setCta(e.target.value);
+                  if (e.target.value.trim()) setHasCta(true);
+                }}
+                placeholder="Call to action: the closing line. Kept apart from the body and placed once on every version."
+                aria-label="Call to action"
+                data-testid="cta-field"
+              />
               <div className="flex flex-wrap items-center gap-1.5">
                 {aiEnabled ? (
                   <button type="button" onClick={polish} disabled={pending || !chosen.length || !(body || hook)} className="btn btn-accent btn-sm">
@@ -213,17 +251,13 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   </select>
                 ) : null}
                 {snippets?.ctas.length ? (
-                  <select className="field w-auto py-1 text-xs" value="" onChange={(e) => { const c = snippets.ctas.find((x) => x.id === e.target.value); if (c) { insert(c.text); setHasCta(true); } }} aria-label="Pick a CTA from the library">
+                  <select className="field w-auto py-1 text-xs" value="" onChange={(e) => { const c = snippets.ctas.find((x) => x.id === e.target.value); if (c) chooseCta(c.text); }} aria-label="Pick a CTA from the library">
                     <option value="">🎯 CTA from library</option>
                     {snippets.ctas.map((c) => (
                       <option key={c.id} value={c.id}>{c.title}</option>
                     ))}
                   </select>
-                ) : (
-                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => insert("Comment \"more\" and I'll send you the full breakdown.")}>
-                    + CTA line
-                  </button>
-                )}
+                ) : null}
                 <label className="ml-auto flex items-center gap-1.5 text-xs">
                   <input type="checkbox" checked={hasCta} onChange={(e) => setHasCta(e.target.checked)} /> Has a call to action
                 </label>

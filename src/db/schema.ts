@@ -152,6 +152,8 @@ export const contentItems = sqliteTable(
     hasCta: integer("has_cta", { mode: "boolean" }).notNull().default(false),
     hook: text("hook"),
     body: text("body"),
+    /** The call to action, kept apart from the body and composed onto each channel version at render. */
+    cta: text("cta"),
     postAt: text("post_at"),
     postedAt: text("posted_at"),
     postLink: text("post_link"),

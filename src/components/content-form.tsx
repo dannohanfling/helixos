@@ -47,6 +47,11 @@ export function ContentForm({ item, today }: { item?: ContentItem; today: string
           <textarea className="field min-h-32" name="body" defaultValue={item?.body ?? ""} placeholder="One line per thought. Line breaks between thoughts." />
         </Field>
       </div>
+      <div className="sm:col-span-2">
+        <Field label="Call to action" hint="Kept apart from the body. Each channel version places it once, at the end.">
+          <input className="field" name="cta" defaultValue={item?.cta ?? ""} />
+        </Field>
+      </div>
       <label className="flex items-center gap-2 text-sm sm:col-span-2">
         <input type="checkbox" name="hasCta" defaultChecked={item?.hasCta ?? false} /> Has a call to action (+25 when posted instead of +15)
       </label>

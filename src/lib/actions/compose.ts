@@ -18,6 +18,8 @@ export type ComposePayload = {
   title: string;
   hook: string;
   body: string;
+  /** The call to action, its own field: composed onto each version at render, never appended to the body. */
+  cta: string;
   hasCta: boolean;
   mediaUrl: string;
   contentType: string;
@@ -39,6 +41,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     title,
     hook: payload.hook.trim() || null,
     body: payload.body.trim() || null,
+    cta: payload.cta.trim() || null,
     hasCta: payload.hasCta,
     mediaUrl: payload.mediaUrl.trim() || null,
     contentType: payload.contentType || "CTA Post",
@@ -88,7 +91,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
 }
 
 /** Claude rewrites each target's draft in the coach's voice, respecting channel limits and group rules. Returns only the targets it improved. */
-export async function polishTargetsAction(input: { title: string; hook: string; body: string; hasCta: boolean; targets: { key: string; channel: string; groupId: string; body: string }[] }): Promise<Record<string, { body: string; subject?: string }>> {
+export async function polishTargetsAction(input: { title: string; hook: string; body: string; cta?: string; hasCta: boolean; targets: { key: string; channel: string; groupId: string; body: string }[] }): Promise<Record<string, { body: string; subject?: string }>> {
   const { v, userId } = await ctx();
   const groups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
   const lines = input.targets.map((t) => {
@@ -99,7 +102,7 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
   });
   const text = await draft(
     `You adapt one coaching post for several channels so each version is native to where it's read and built to earn comments, shares and DMs. ${VOICE} Return ONLY a JSON object keyed by target key, each value {"body": string, "subject"?: string (email only)}. Keep every version inside its character limit.`,
-    `Author: ${v.user.name}. Business: ${v.membership.businessName ?? ""}. Promise: ${v.membership.bigPromise ?? ""}\n\nSource title: ${input.title}\nHook: ${input.hook}\nBody:\n${input.body}\nHas CTA: ${input.hasCta}\n\nTargets:\n${lines.join("\n\n")}`,
+    `Author: ${v.user.name}. Business: ${v.membership.businessName ?? ""}. Promise: ${v.membership.bigPromise ?? ""}\n\nSource title: ${input.title}\nHook: ${input.hook}\nBody:\n${input.body}\nHas CTA: ${input.hasCta}${input.cta?.trim() ? `\nCTA (the closing line, once, where a CTA belongs): ${input.cta.trim()}` : ""}\n\nTargets:\n${lines.join("\n\n")}`,
     8000,
     { feature: "composer_polish" },
   );
@@ -123,12 +126,13 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
   const picked = groups.filter((g) => g.kind === "own" || (g.kind === "prospect" && g.rank >= 1 && g.rank <= 3));
   const targets: Target[] = [...groupTargets(picked), ...channelTargets()];
   const when = staggerSchedule(targets, `${startDate}T${startTime}:00`);
-  const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, hashtag: v.membership.passHashtag, firstName: v.user.name.split(" ")[0] };
+  const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, ctaText: item.cta, hashtag: v.membership.passHashtag, firstName: v.user.name.split(" ")[0] };
   await saveComposeAction({
     id: item.id,
     title: item.title,
     hook: item.hook ?? "",
     body: item.body ?? "",
+    cta: item.cta ?? "",
     hasCta: item.hasCta,
     mediaUrl: item.mediaUrl ?? "",
     contentType: item.contentType,

@@ -21,6 +21,8 @@ export const CHANNEL_SPECS: ChannelSpec[] = [
 
 export type SourceContent = { title: string; hook?: string | null; body?: string | null; hasCta?: boolean; ctaText?: string | null; hashtag?: string | null; firstName?: string | null };
 
+const TAG_LINE = /^(#[\p{L}\p{N}_]+\s*)+$/u;
+
 function lines(body: string): string[] {
   return body
     .split(/\n+/)
@@ -47,14 +49,22 @@ export function repurpose(src: SourceContent, channel: Channel): { body: string;
   const hook = (src.hook ?? "").trim() || src.title;
   const body = (src.body ?? "").trim();
   const ls = lines(body);
-  const first = ls[0] ?? "";
-  const rest = ls.slice(1);
+  // The first line and the lesson come from the prose: a hashtag-only line (the "# Hashtags" button) is never "the lesson".
+  const prose = ls.filter((l) => !TAG_LINE.test(l));
+  const first = prose[0] ?? "";
+  const rest = prose.slice(1);
   const lesson = rest.length ? rest[rest.length - 1] : first;
-  const cta = src.hasCta ? (src.ctaText?.trim() || "If you want the full breakdown, comment \"more\" and I'll send it over.") : "";
+  // The CTA is its own field. When the client chose one it is the closing line on every channel that carries a CTA;
+  // without one each channel keeps its own default. It is never folded into the body, so nothing can double it.
+  const chosen = src.hasCta ? (src.ctaText?.trim() ?? "") : "";
+  const cta = src.hasCta ? chosen || "If you want the full breakdown, comment \"more\" and I'll send it over." : "";
+  // Hashtags are composed at render; a body that already carries the same line (the "# Hashtags" button) is not tagged twice.
+  const tags = hashtagsFor(src);
+  const tagLine = tags && !body.includes(tags) ? tags : "";
 
   switch (channel) {
     case "fb_personal": {
-      const out = [hook, "", ...ls, "", src.hasCta ? "Want the full version? Drop a comment and I'll DM it. No link, no pitch." : "What's your version of this?"];
+      const out = [hook, "", ...ls, "", src.hasCta ? chosen || "Want the full version? Drop a comment and I'll DM it. No link, no pitch." : "What's your version of this?"];
       return { body: truncate(out.join("\n"), 2000) };
     }
     case "fb_page": {
@@ -71,11 +81,11 @@ export function repurpose(src: SourceContent, channel: Channel): { body: string;
       return { body: truncate(out.join("\n"), 1200) };
     }
     case "stories": {
-      const frames = [hook, first || lesson, src.hasCta ? "DM me \"more\" for the full thing" : lesson === first ? "Save this one." : lesson];
+      const frames = [hook, first || lesson, src.hasCta ? chosen || "DM me \"more\" for the full thing" : lesson === first ? "Save this one." : lesson];
       return { body: frames.map((f, i) => `Frame ${i + 1}: ${truncate(f, 110)}`).join("\n\n") };
     }
     case "instagram": {
-      const out = [hook, "", ...ls.map((l) => l), "", src.hasCta ? "Link in bio for the full breakdown." : "Save this for the next time you need it.", "", hashtagsFor(src)];
+      const out = [hook, "", ...ls.map((l) => l), "", src.hasCta ? chosen || "Link in bio for the full breakdown." : "Save this for the next time you need it.", "", tagLine];
       return { body: truncate(out.join("\n"), 2200) };
     }
     case "threads": {
@@ -83,7 +93,7 @@ export function repurpose(src: SourceContent, channel: Channel): { body: string;
       return { body: truncate(out.join("\n\n"), 500) };
     }
     case "linkedin": {
-      const out = [hook, "", ...ls.slice(0, 8), "", `The lesson: ${lesson.replace(/^The lesson:\s*/i, "")}`, "", src.hasCta ? "Full breakdown in the first comment." : "Agree? Disagree? Tell me below.", "", hashtagsFor(src)];
+      const out = [hook, "", ...ls.slice(0, 8), "", `The lesson: ${lesson.replace(/^The lesson:\s*/i, "")}`, "", src.hasCta ? chosen || "Full breakdown in the first comment." : "Agree? Disagree? Tell me below.", "", tagLine];
       return { body: truncate(out.join("\n"), 3000) };
     }
     case "email": {

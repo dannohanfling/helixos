@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
-import { markRungAction, regenerateLadderAction, sendLadderToComposerAction, setLadderStatusAction, updateLadderAction } from "@/lib/actions/ladders";
+import { markRungAction, pushLadderUpdateAction, regenerateLadderAction, sendLadderToComposerAction, setLadderStatusAction, updateLadderAction } from "@/lib/actions/ladders";
+import { staleScheduledFor } from "@/lib/queries/ladders";
+import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
 import { CopyButton } from "@/components/copy-button";
 import { LiveClock } from "@/components/rung-runner";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
@@ -40,7 +42,7 @@ function HeadlinePreview({ headline, handle }: { headline: string; handle?: stri
   );
 }
 
-export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string }> }) {
+export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)) });
@@ -56,9 +58,12 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
   const ready = readyToPost(checks);
   const blockers = publishBlockers(checks);
   const blocked = blockers.length > 0;
-  const { blocked: refused } = await searchParams;
+  const { blocked: refused, pushed, ghl } = await searchParams;
   const hold = blocked ? "Clear the checklist first" : undefined;
   const airtable = rungsForAirtable(l.rungs);
+  // The seam with the live schedule: channel posts already scheduled keep their text until the client pushes the update.
+  const stale = await staleScheduledFor(l);
+  const label = (channel: string) => CHANNEL_SPECS.find((c) => c.key === channel)?.label ?? channel;
   return (
     <>
       <PageHeader
@@ -100,6 +105,27 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
             ))}
           </ul>
           <p className="mt-1 text-xs text-ink-3">Saving, editing and regenerating still work. Warnings never block; only failures do.</p>
+        </div>
+      ) : null}
+      {pushed ? (
+        <p className="mb-4 rounded-xl border bg-good-soft p-3 text-sm" data-testid="pushed-notice" role="status">
+          {pushed} scheduled {pushed === "1" ? "post now carries" : "posts now carry"} this ladder&apos;s current text{Number(ghl) > 0 ? `; ${ghl} edited in GoHighLevel under the same id` : ""}.
+        </p>
+      ) : null}
+      {stale.length ? (
+        <div className="mb-4 rounded-xl border bg-warn-soft p-3 text-sm" data-testid="stale-scheduled" role="status">
+          <div className="font-semibold">Scheduled with the old text: {stale.map((s) => label(s.channel)).join(", ")}.</div>
+          <p className="mt-0.5 text-xs text-ink-2">
+            This ladder changed after those were scheduled. Nothing in the schedule was touched.{" "}
+            {stale.some((s) => s.inGhl) ? "Pushing the update edits the post GoHighLevel holds, under the same id, at the same time." : "These are scheduled here and pasted by hand, so pushing the update replaces their text only."}
+          </p>
+          <form action={pushLadderUpdateAction} className="mt-2">
+            <input type="hidden" name="id" value={l.id} />
+            <input type="hidden" name="back" value={`/content/ladders/${l.id}`} />
+            <button className="btn btn-soft btn-sm" type="submit" disabled={blocked} title={hold} data-testid="push-update">
+              Push the update to GoHighLevel
+            </button>
+          </form>
         </div>
       ) : null}
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">

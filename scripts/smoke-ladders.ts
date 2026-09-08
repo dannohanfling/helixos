@@ -1,4 +1,4 @@
-/** Comment ladders: facts profile → new skeleton (no Claude) → checklist blocks it → the finished demo ladder clears → live hour → Airtable copy → composer. */
+/** Comment ladders: facts profile → new skeleton (no Claude) → checklist blocks it → the finished demo ladder clears → live hour → Airtable copy → composer → scheduled posts keep their text until the client pushes the update. */
 import { chromium, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
@@ -83,7 +83,7 @@ async function main() {
     if (!(await page.locator('button:has-text("Mark ready")').isDisabled())) throw new Error("Mark ready must be disabled while the checklist fails");
     // The gate is the server, not the button: force the submit past the disabled control and the action must refuse
     const { db, schema } = await import("@/db");
-    const { eq } = await import("drizzle-orm");
+    const { and, eq } = await import("drizzle-orm");
     const ladderId = page.url().split("/").pop()!.split("?")[0];
     const notice = page.locator('[data-testid="publish-blocked"]');
     if (!(await notice.count())) throw new Error("no notice names the failing checks");
@@ -180,9 +180,42 @@ async function main() {
     await page.waitForURL(/\/content\/[a-z0-9-]+\/compose/i);
     await expectText(page, "I quit every diet by week three", "body in composer");
     await page.screenshot({ path: "screenshots/ld03-composer.png", fullPage: true });
+    // Schedule it (Threads chain is longer than one Threads post, so that chip comes off)
+    const itemId = page.url().match(/\/content\/([a-z0-9-]+)\/compose/i)![1];
+    await page.locator('button[title="Threads"]').first().click();
+    await page.click('button:has-text("Schedule")');
+    await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
+    const fbVariant = () => db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, "fb_personal"), eq(schema.contentVariants.groupId, "")) });
+    const scheduled = await fbVariant();
+    if (scheduled?.status !== "scheduled") throw new Error(`Facebook version should be scheduled, is ${scheduled?.status}`);
     await page.goto(ladderUrl);
     await expectText(page, "Open in composer", "linked to the content item");
-    console.log("✓ sent to the composer with the body, caption and Threads chain");
+    if (await page.locator('[data-testid="stale-scheduled"]').count()) throw new Error("nothing changed yet, so no stale warning should show");
+    console.log("✓ sent to the composer with the body, caption and Threads chain, and scheduled");
+
+    // The seam: the ladder changes after the schedule. Re-opening in the composer never touches the scheduled post;
+    // the ladder page and the composer warn, and only "Push the update" (the client's choice) replaces the text.
+    const copyScheduled = await page.locator('textarea[name="copy"]').inputValue();
+    const copyEdited = `One more line, added after this was scheduled.\n${copyScheduled}`;
+    await fillExact(page, 'textarea[name="copy"]', copyEdited);
+    await submit(page, 'button:has-text("Save and re-check")');
+    await expectText(page, "Scheduled with the old text", "ladder warns at the seam");
+    await expectText(page, "Facebook personal", "warning names the channel");
+    await submit(page, 'button:has-text("Open in composer")');
+    await page.waitForURL(/\/content\/[a-z0-9-]+\/compose/i);
+    const untouched = await fbVariant();
+    if (untouched?.body !== scheduled.body || untouched.status !== "scheduled") throw new Error("re-opening in the composer must leave a scheduled post exactly as it was");
+    await expectText(page, "Scheduled with the old text", "composer warns at the seam");
+    await page.screenshot({ path: "screenshots/ld05-stale-warning.png", fullPage: true });
+    await submit(page, '[data-testid="push-update"]');
+    await page.waitForURL(/pushed=/, { timeout: 15000 });
+    const pushedRow = await fbVariant();
+    if (!pushedRow?.body.startsWith("One more line, added after this was scheduled.") || pushedRow.status !== "scheduled" || pushedRow.postAt !== scheduled.postAt) throw new Error(`push must replace the text and leave the schedule alone: ${JSON.stringify({ body: pushedRow?.body.slice(0, 40), status: pushedRow?.status, postAt: [pushedRow?.postAt, scheduled.postAt] })}`);
+    await expectText(page, "now carry", "pushed notice");
+    if (await page.locator('[data-testid="stale-scheduled"]').count()) throw new Error("the warning must clear once the text matches");
+    await page.goto(ladderUrl);
+    if (await page.locator('[data-testid="stale-scheduled"]').count()) throw new Error("the ladder page must stop warning once the text matches");
+    console.log("✓ a scheduled post keeps its text through a re-sync; warned on the ladder and in the composer; pushed only on the client's click");
 
     // Ladders tab on the content board, and the list shows both
     await page.goto(`${base}/content`);

@@ -11,8 +11,9 @@ export default async function ComposePage({ searchParams }: { searchParams: Prom
   const v = await requireViewer();
   const sp = await searchParams;
   const [c, from] = await Promise.all([composerContext(v), sp.from ? libraryPostFor(sp.from, v.workspace.id, v.user.id) : null]);
+  // A library entry's CTA lands in the CTA field, never folded into the body: each channel version places it once at render.
   const initial = from
-    ? { title: from.kind === "post" || from.kind === "pattern" ? from.title : "", hook: from.hook ?? "", body: from.kind === "cta" ? "" : [from.body, from.cta].filter(Boolean).join("\n\n"), hasCta: from.hasCta, contentType: from.contentType ?? undefined, ...(from.kind === "cta" ? { body: from.cta ?? from.body } : {}) }
+    ? { title: from.kind === "post" || from.kind === "pattern" ? from.title : "", hook: from.hook ?? "", body: from.kind === "cta" ? "" : from.body, cta: from.cta ?? (from.kind === "cta" ? from.body : ""), hasCta: from.hasCta, contentType: from.contentType ?? undefined }
     : { title: sp.title, hook: sp.hook, body: sp.body };
   return (
     <>

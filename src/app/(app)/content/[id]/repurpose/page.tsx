@@ -73,7 +73,7 @@ function StatusBadge({ v }: { v?: ContentVariant }) {
   return v ? <Badge tone={v.status === "posted" ? "good" : v.status === "scheduled" ? "accent" : "neutral"}>{v.status}</Badge> : <span className="text-xs text-ink-3">not generated</span>;
 }
 
-function GroupCard({ g, var_, src, slot }: { g: Group; var_?: ContentVariant; src: { title: string; hook: string | null; body: string | null; hasCta: boolean }; slot?: string }) {
+function GroupCard({ g, var_, src, slot }: { g: Group; var_?: ContentVariant; src: { title: string; hook: string | null; body: string | null; hasCta: boolean; ctaText: string | null }; slot?: string }) {
   const aligned = alignPost(src, g);
   const ready = groupReadiness(g);
   return (
@@ -111,7 +111,7 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
     db.query.contentVariants.findMany({ where: eq(schema.contentVariants.contentItemId, id) }),
     db.query.groups.findMany({ where: eq(schema.groups.userId, v.user.id), orderBy: [asc(schema.groups.kind), asc(schema.groups.rank)] }),
   ]);
-  const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta };
+  const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, ctaText: item.cta };
   const own = groups.filter((g) => g.kind === "own");
   const top3 = groups.filter((g) => g.kind === "prospect" && g.rank >= 1 && g.rank <= 3).sort((a, b) => a.rank - b.rank);
   const others = groups.filter((g) => g.kind === "member" || (g.kind === "prospect" && !top3.includes(g)));

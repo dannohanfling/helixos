@@ -66,8 +66,10 @@ async function main() {
   const hook2 = await page.inputValue('input[placeholder^="Hook"]');
   if (!hook2.includes("hot leads")) throw new Error(`hook picker failed: ${hook2}`);
   await page.selectOption('select[aria-label="Pick a CTA from the library"]', { label: "Delegate deeper" });
+  const ctaVal = await page.inputValue('[data-testid="cta-field"]');
+  if (!ctaVal.includes("delegate deeper")) throw new Error(`cta picker failed: ${ctaVal}`);
   const bodyVal = await page.inputValue('textarea[placeholder^="Type content"]');
-  if (!bodyVal.includes("delegate deeper")) throw new Error("cta picker failed");
+  if (bodyVal.includes("delegate deeper")) throw new Error("the CTA is its own field; it must not be written into the body");
   await shot(page, "l03-composer-from-library");
   console.log("✓ use + pickers");
 

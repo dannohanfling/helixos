@@ -23,14 +23,14 @@ export async function generateVariantsAction(formData: FormData): Promise<void> 
   const item = await ownItem(itemId, userId);
   const channels = formData.getAll("channels").map(String).filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
   const useAi = str(formData, "ai") === "1";
-  const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, hashtag: v.membership.passHashtag, firstName: null };
+  const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, ctaText: item.cta, hashtag: v.membership.passHashtag, firstName: null };
   const drafts = repurposeAll(src, channels.length ? channels : undefined);
   let polished: Record<string, { body: string; subject?: string }> | null = null;
   if (useAi) {
     const specs = drafts.map((d) => CHANNEL_SPECS.find((c) => c.key === d.channel)!);
     const text = await draft(
       `You repurpose one piece of coaching content into channel-native drafts. ${VOICE} Return ONLY a JSON object keyed by channel key, each value {"body": string, "subject"?: string}. Respect each channel's max length and link rules.`,
-      `Source title: ${item.title}\nHook: ${item.hook ?? ""}\nBody:\n${item.body ?? ""}\nHas CTA: ${item.hasCta}\n\nChannels:\n${specs.map((s) => `- ${s.key}: ${s.label}. ${s.tone} Max ${s.maxChars} chars. Links: ${s.links}.`).join("\n")}\n\nRule-based starting drafts you may improve:\n${JSON.stringify(Object.fromEntries(drafts.map((d) => [d.channel, d])))}`,
+      `Source title: ${item.title}\nHook: ${item.hook ?? ""}\nBody:\n${item.body ?? ""}\nHas CTA: ${item.hasCta}${item.cta ? `\nCTA (the closing line, once, where a CTA belongs): ${item.cta}` : ""}\n\nChannels:\n${specs.map((s) => `- ${s.key}: ${s.label}. ${s.tone} Max ${s.maxChars} chars. Links: ${s.links}.`).join("\n")}\n\nRule-based starting drafts you may improve:\n${JSON.stringify(Object.fromEntries(drafts.map((d) => [d.channel, d])))}`,
       8000,
       { feature: "repurpose" },
     );
