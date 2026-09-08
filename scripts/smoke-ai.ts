@@ -115,6 +115,12 @@ async function main() {
     await expectText(page, "Mock AI draft", "ai draft used");
     if (await status.count()) throw new Error("status line left stranded after the call returned");
     console.log(`✓ status line while the call runs: "${firstLine.trim()}"`);
+    // A group draft is bounded by its channel's spec (own group or someone else's), the same rule every other channel post gets
+    const lastCall = (await (await fetch(`http://localhost:${mockPort}/__last`)).json()) as { system: { text: string }[] };
+    const task = lastCall.system.map((b) => b.text).join("\n");
+    const bound = task.match(/Channel: (Your Facebook group|Other people's groups)\. Max (2000|1200) chars\. Links: (ok|none)\./);
+    if (!bound) throw new Error(`the group draft task must carry its channel's length and link rule, got: ${task.slice(-300)}`);
+    console.log(`✓ group draft bounded by its channel: "${bound[0]}"`);
     await page.goto(`${base}/settings`);
     await expectText(page, "Group-aligned drafts", "usage by feature");
     const usage = await page.locator('[data-testid="ai-usage"]').innerText();

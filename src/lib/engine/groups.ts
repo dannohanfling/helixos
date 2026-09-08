@@ -1,5 +1,7 @@
 /** Group-aligned posting: shape a post for someone else's community so it honors their mission, rules, and admin. */
 
+import { CHANNEL_SPECS, type ChannelSpec } from "./repurpose";
+
 export type GroupProfile = {
   name: string;
   kind: "own" | "member" | "prospect";
@@ -16,6 +18,10 @@ export type GroupProfile = {
 export type Source = { title: string; hook?: string | null; body?: string | null; hasCta?: boolean; ctaText?: string | null; firstName?: string | null };
 
 export type AlignmentCheck = { key: string; label: string; ok: boolean; note: string };
+
+/** The channel a group post lands on: the client's own group, or someone else's. Every length and link rule comes from that channel's spec. */
+export const groupChannel = (kind: GroupProfile["kind"]): "fb_group" | "other_groups" => (kind === "own" ? "fb_group" : "other_groups");
+export const groupSpec = (kind: GroupProfile["kind"]): ChannelSpec => CHANNEL_SPECS.find((c) => c.key === groupChannel(kind))!;
 
 const has = (s?: string | null, re?: RegExp) => Boolean(s && (re ? re.test(s) : s.trim().length > 0));
 
@@ -87,7 +93,7 @@ export function alignPost(src: Source, g: GroupProfile): { body: string; checks:
     { key: "works", label: "Uses what works here", ok: has(g.whatWorks) || own, note: has(g.whatWorks) ? g.whatWorks!.split(/\n/)[0] : "Note the 2 post types that get the most comments in this group." },
     ...(r.askFirst ? [{ key: "approval", label: "Admin approval required", ok: false, note: "This group asks for approval. Message the admin before posting." }] : []),
   ];
-  return { body: body.slice(0, 1800), checks, ctaAllowed };
+  return { body: body.slice(0, groupSpec(g.kind).maxChars), checks, ctaAllowed };
 }
 
 /** Scores how prepared a group profile is for aligned posting (0 to 100). */

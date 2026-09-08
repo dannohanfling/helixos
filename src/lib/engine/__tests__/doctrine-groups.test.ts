@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { alignPost, groupReadiness, readRules } from "../groups";
+import { alignPost, groupChannel, groupReadiness, groupSpec, readRules } from "../groups";
+import { CHANNEL_SPECS } from "../repurpose";
 import { ADMIN_ONBOARDING_KEYS, clientFacing, simplePath } from "../pathway";
 import { daysInMonth, monthProgress } from "../targets";
 import { principlePost, principleReel, principleTraining } from "../doctrine";
@@ -28,6 +29,16 @@ describe("group alignment", () => {
     expect(out.ctaAllowed).toBe(true);
     expect(out.body).toContain("Comment \"more\"");
   });
+  it("bounds a group draft by its channel's spec, not a number of its own", () => {
+    expect(groupChannel("own")).toBe("fb_group");
+    expect(groupChannel("member")).toBe("other_groups");
+    expect(groupChannel("prospect")).toBe("other_groups");
+    expect(groupSpec("own").maxChars).toBe(CHANNEL_SPECS.find((c) => c.key === "fb_group")!.maxChars);
+    const long = { ...src, body: Array.from({ length: 8 }, () => "x".repeat(400)).join("\n") };
+    expect(alignPost(long, { name: "Mine", kind: "own" }).body.length).toBeLessThanOrEqual(groupSpec("own").maxChars);
+    expect(alignPost(long, { name: "Theirs", kind: "prospect" }).body.length).toBeLessThanOrEqual(groupSpec("prospect").maxChars);
+  });
+
   it("scores readiness", () => {
     expect(groupReadiness({ name: "x", kind: "member" })).toBe(0);
     expect(groupReadiness({ name: "x", kind: "member", mission: "a", rules: "b", adminValues: "c", whatWorks: "d" })).toBe(50);

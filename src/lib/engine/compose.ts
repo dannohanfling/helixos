@@ -1,6 +1,7 @@
 /** Composer helpers shared by the client editor and the server actions. Pure. */
 import type { Channel } from "./repurpose";
 import { CHANNEL_SPECS, repurpose, type SourceContent } from "./repurpose";
+import { groupChannel, groupSpec } from "./groups";
 import { alignPost, type GroupProfile } from "./groups";
 
 export type TargetKey = `ch:${Channel}` | `grp:${string}`;
@@ -24,7 +25,7 @@ export function channelTargets(): Target[] {
 }
 
 export function groupTargets(groups: GroupTarget[]): Target[] {
-  return groups.map((g) => ({ key: `grp:${g.id}` as TargetKey, channel: g.kind === "own" ? "fb_group" : "other_groups", groupId: g.id, label: g.name, icon: g.kind === "own" ? "🏠" : g.kind === "prospect" && g.rank ? `🎯${g.rank}` : "👥", maxChars: 1800, group: g }));
+  return groups.map((g) => ({ key: `grp:${g.id}` as TargetKey, channel: groupChannel(g.kind), groupId: g.id, label: g.name, icon: g.kind === "own" ? "🏠" : g.kind === "prospect" && g.rank ? `🎯${g.rank}` : "👥", maxChars: groupSpec(g.kind).maxChars, group: g }));
 }
 
 /** The channel-native draft for one target. Groups get the mission/rules-aligned version. */

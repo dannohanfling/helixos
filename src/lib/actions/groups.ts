@@ -7,7 +7,7 @@ import { GROUP_KINDS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { alignPost } from "@/lib/engine/groups";
+import { alignPost, groupSpec, readRules } from "@/lib/engine/groups";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 function fields(fd: FormData) {
@@ -110,11 +110,13 @@ export async function generateGroupVariantsAction(formData: FormData): Promise<v
   const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, firstName: v.user.name.split(" ")[0] };
   for (const g of chosen) {
     const aligned = alignPost(src, g);
+    const spec = groupSpec(g.kind);
+    const links = readRules(g).noLinks ? "none" : spec.links;
     let body = aligned.body;
     let by = "rules";
     if (useAi) {
       const ai = await draft(
-        `You adapt one coaching post for a specific Facebook group so it fits that group's mission, the admin's values, and its rules. ${aligned.ctaAllowed ? "A soft call to action is allowed." : "No pitch, no links, no call to action: pure value and a question."} Return only the post.`,
+        `You adapt one coaching post for a specific Facebook group so it fits that group's mission, the admin's values, and its rules. ${aligned.ctaAllowed ? "A soft call to action is allowed." : "No pitch, no links, no call to action: pure value and a question."} Channel: ${spec.label}. Max ${spec.maxChars} chars. Links: ${links}. Return only the post.`,
         `Group: ${g.name}\nMission: ${g.mission ?? ""}\nDescription: ${g.description ?? ""}\nAudience: ${g.audience ?? ""}\nAdmin: ${g.adminName ?? ""}. What the admin values: ${g.adminValues ?? ""}\nRules: ${g.rules ?? ""}\nPosting norms: ${g.postingNorms ?? ""}\nWhat works here: ${g.whatWorks ?? ""}\n\nSource post title: ${item.title}\nHook: ${item.hook ?? ""}\nBody:\n${item.body ?? ""}\n\nRule-based draft to improve:\n${aligned.body}`,
         2500,
         { feature: "group_variant" },
@@ -124,7 +126,7 @@ export async function generateGroupVariantsAction(formData: FormData): Promise<v
         by = "claude";
       }
     }
-    const channel = g.kind === "own" ? ("fb_group" as const) : ("other_groups" as const);
+    const channel = spec.key;
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, channel), eq(schema.contentVariants.groupId, g.id)) });
     if (existing?.status === "posted") continue;
     if (existing) await db.update(schema.contentVariants).set({ body, generatedBy: by }).where(eq(schema.contentVariants.id, existing.id));

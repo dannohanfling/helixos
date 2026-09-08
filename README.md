@@ -115,6 +115,10 @@ composer output is a draft still being worked on (overrides until scheduled); re
 variant the client has decided to keep. Merging them would trade a real behavioural difference for tidier code. Revisit
 only if clients ask why there are three ways to do one thing.
 
+A group post lands on a channel like any other: the client's own group is `fb_group`, anyone else's is `other_groups`
+(`groupChannel` in `src/lib/engine/groups.ts`). Its length and link rule come from that channel's spec, in the rule-based
+draft, the counters, and the prompt alike; the group's own rules can only tighten them (a no-links rule wins).
+
 ## Stack
 
 Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQLite/libsql, `jose` sessions,

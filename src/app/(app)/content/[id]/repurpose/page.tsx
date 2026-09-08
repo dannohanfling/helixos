@@ -11,7 +11,7 @@ import { syncPostStatusAction } from "@/lib/actions/social";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
-import { alignPost, groupReadiness } from "@/lib/engine/groups";
+import { alignPost, groupReadiness, groupSpec } from "@/lib/engine/groups";
 import type { ContentVariant, Group } from "@/db/schema";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
@@ -90,7 +90,7 @@ function GroupCard({ g, var_, src, slot }: { g: Group; var_?: ContentVariant; sr
         {g.adminName ? `Admin ${g.adminName}. ` : ""}
         {g.mission ? `Mission: ${g.mission.split(/[.\n]/)[0]}.` : `Profile ${ready}% complete. Add the mission and rules so the draft can honor them.`}
       </p>
-      {var_ ? <VariantForm var_={var_} maxChars={1800} /> : <p className="text-sm text-ink-3">Tick this group above and generate.</p>}
+      {var_ ? <VariantForm var_={var_} maxChars={groupSpec(g.kind).maxChars} /> : <p className="text-sm text-ink-3">Tick this group above and generate.</p>}
       <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
         {aligned.checks.map((c) => (
           <li key={c.key} title={c.note} className={c.ok ? "text-good" : "text-warn"}>
