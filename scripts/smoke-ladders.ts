@@ -180,21 +180,22 @@ async function main() {
     await page.waitForURL(/\/content\/[a-z0-9-]+\/compose/i);
     await expectText(page, "I quit every diet by week three", "body in composer");
     await page.screenshot({ path: "screenshots/ld03-composer.png", fullPage: true });
-    // KNOWN DEFECT, worked around here, not intended behaviour: the ladder sends its whole Threads chain (6–8 posts joined) to the
-    // composer as one Threads draft against the single-post limit, so it can never be scheduled from the composer. The chip is
-    // taken off so the other channels can schedule. The fix (keep the chain visible and copyable, disable scheduling for it, say
-    // why) is its own commit; when it lands, this line goes and the walk asserts the notice instead.
+    // The Threads chain (6–8 posts) stays visible and copyable but is never scheduled as one post: the composer says why, and the rest schedule
     const itemId = page.url().match(/\/content\/([a-z0-9-]+)\/compose/i)![1];
-    await page.locator('button[title="Threads"]').first().click();
+    await expectText(page, "A Threads chain posts as separate posts. Copy them out, or schedule the other channels here.", "chain is copy-only, with the reason");
+    if (!(await page.locator('[data-testid="copy-only"] button:has-text("Copy the chain")').count())) throw new Error("the chain must be copyable from the composer");
+    if (await page.locator('[data-testid="over-limit"]').count()) throw new Error("a chain must not be shown as one over-long post");
     await page.click('button:has-text("Schedule")');
     await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
     const fbVariant = () => db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, "fb_personal"), eq(schema.contentVariants.groupId, "")) });
     const scheduled = await fbVariant();
     if (scheduled?.status !== "scheduled") throw new Error(`Facebook version should be scheduled, is ${scheduled?.status}`);
+    const chain = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, "threads"), eq(schema.contentVariants.groupId, "")) });
+    if (chain?.status === "scheduled") throw new Error("the Threads chain must never be scheduled as one post");
     await page.goto(ladderUrl);
     await expectText(page, "Open in composer", "linked to the content item");
     if (await page.locator('[data-testid="stale-scheduled"]').count()) throw new Error("nothing changed yet, so no stale warning should show");
-    console.log("✓ sent to the composer with the body, caption and Threads chain, and scheduled");
+    console.log("✓ sent to the composer with the body, caption and Threads chain; the chain copy-only with its reason, the rest scheduled");
 
     // The seam: the ladder changes after the schedule. Re-opening in the composer never touches the scheduled post;
     // the ladder page and the composer warn, and only "Push the update" (the client's choice) replaces the text.

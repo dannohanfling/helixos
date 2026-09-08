@@ -12,17 +12,20 @@ import { ChannelPreview, type Persona } from "./channel-previews";
 import { AiStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { useVoice } from "@/components/voice-context";
+import { CopyButton } from "@/components/copy-button";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
 export type StaleNotice = { ladderId: string; back: string; channels: { key: string; label: string; inGhl: boolean }[] };
+/** Targets the composer shows and lets the client copy but never schedules, keyed by target, with the reason said beside the draft. */
+export type CopyOnly = Partial<Record<string, string>>;
 
 const EMOJI = ["🔥", "✅", "👇", "💡", "🙌", "❤️", "👉", "⚡", "🎯", "😅", "🤝", "📌"];
 const DEFAULT_SELECTED: TargetKey[] = ["ch:fb_personal", "ch:instagram", "ch:threads", "ch:linkedin"];
 
 type Snippet = { id: string; title: string; text: string };
 
-export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[] }; stale?: StaleNotice }) {
+export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale, copyOnly }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[] }; stale?: StaleNotice; copyOnly?: CopyOnly }) {
   const router = useRouter();
   const voice = useVoice();
   const targets = useMemo(() => [...groupTargets(groups), ...channelTargets()], [groups]);
@@ -54,14 +57,17 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const [result, setResult] = useState<ComposeResult | null>(null);
 
   const src = useMemo(() => ({ title: title || hook.slice(0, 60), hook, body, hasCta, ctaText: cta, hashtag, firstName: persona.name.split(" ")[0] }), [title, hook, body, hasCta, cta, hashtag, persona.name]);
-  const chosen = selected.map((k) => byKey.get(k)).filter((t): t is Target => Boolean(t));
+  const chosen = useMemo(() => selected.map((k) => byKey.get(k)).filter((t): t is Target => Boolean(t)), [selected, byKey]);
+  // A copy-only target (a Threads chain from a ladder) is shown and copied here but never scheduled or polished as one post.
+  const copyOnlyReason = (t: Target): string | undefined => copyOnly?.[t.key];
+  const schedulable = useMemo(() => chosen.filter((t) => !copyOnly?.[t.key]), [chosen, copyOnly]);
   const draftOf = (t: Target): Draft => {
     const auto = draftFor(src, t);
     const o = customize ? overrides[t.key] : undefined;
     return o ? { ...auto, body: o.body, subject: o.subject ?? auto.subject } : auto;
   };
-  const schedule = useMemo(() => (stagger ? staggerSchedule(chosen, localIso(date, time)) : new Map(chosen.map((t) => [t.key, `${date}T${time}`]))), [chosen, stagger, date, time]);
-  const problems = chosen.filter((t) => {
+  const schedule = useMemo(() => (stagger ? staggerSchedule(schedulable, localIso(date, time)) : new Map(schedulable.map((t) => [t.key, `${date}T${time}`]))), [schedulable, stagger, date, time]);
+  const problems = schedulable.filter((t) => {
     const d = draftOf(t);
     return !d.body.trim() || d.body.length > t.maxChars;
   });
@@ -98,7 +104,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
         mediaUrl,
         contentType,
         mode,
-        targets: chosen.map((t) => {
+        targets: schedulable.map((t) => {
           const d = draftOf(t);
           const at = schedule.get(t.key);
           return { key: t.key, channel: t.channel, groupId: t.groupId, body: d.body, subject: d.subject, postAt: mode === "schedule" && at ? `${at}:00` : null };
@@ -114,7 +120,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
     start(async () => {
       setNotice(null);
       setPolishing(true);
-      const res = await polishTargetsAction({ title: src.title, hook, body, cta, hasCta, targets: chosen.map((t) => ({ key: t.key, channel: t.channel, groupId: t.groupId, body: draftFor(src, t).body })) });
+      const res = await polishTargetsAction({ title: src.title, hook, body, cta, hasCta, targets: schedulable.map((t) => ({ key: t.key, channel: t.channel, groupId: t.groupId, body: draftFor(src, t).body })) });
       setPolishing(false);
       const n = Object.keys(res).length;
       if (!n) {
@@ -192,7 +198,12 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   {activeDraft.body.length}/{active.maxChars}
                 </span>
               </div>
-              {activeDraft.body.length > active.maxChars ? (
+              {copyOnlyReason(active) ? (
+                <p className="flex flex-wrap items-center gap-2 rounded-lg bg-warn-soft p-2 text-xs" data-testid="copy-only" role="status">
+                  <span>{copyOnlyReason(active)}</span>
+                  <CopyButton text={activeDraft.body} label="Copy the chain" className="btn btn-soft btn-xs" />
+                </p>
+              ) : activeDraft.body.length > active.maxChars ? (
                 <p className="text-xs text-danger" data-testid="over-limit" role="status">
                   Over the {active.maxChars}-character limit for {active.label}.
                 </p>
@@ -328,10 +339,10 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
             <button type="button" className="btn btn-ghost" disabled={pending || !chosen.length} onClick={() => submit("draft")}>
               Save for later
             </button>
-            <button type="button" className="btn btn-soft" disabled={pending || !chosen.length || problems.length > 0} onClick={() => submit("now")}>
+            <button type="button" className="btn btn-soft" disabled={pending || !schedulable.length || problems.length > 0} onClick={() => submit("now")}>
               Post now
             </button>
-            <button type="button" className="btn btn-accent" disabled={pending || !chosen.length || problems.length > 0} onClick={() => submit("schedule")}>
+            <button type="button" className="btn btn-accent" disabled={pending || !schedulable.length || problems.length > 0} onClick={() => submit("schedule")}>
               {pending ? "Working…" : `Schedule ${chosen.length} ${chosen.length === 1 ? "post" : "posts"}`}
             </button>
           </div>
@@ -372,7 +383,8 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
           {preview.length ? (
             preview.map((t) => {
               const d = draftOf(t);
-              const over = d.body.length > t.maxChars;
+              const reason = copyOnlyReason(t);
+              const over = !reason && d.body.length > t.maxChars;
               return (
                 <div key={t.key}>
                   <div className="mb-1 flex items-center justify-between text-[11px] text-ink-3">
@@ -380,10 +392,20 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                       {t.icon} {t.label}
                       {schedule.get(t.key) ? ` · ${(schedule.get(t.key) ?? "").slice(11, 16)}` : ""}
                     </span>
-                    <span className={over ? "font-semibold text-danger" : ""}>
-                      {d.body.length}/{t.maxChars}
-                    </span>
+                    {reason ? (
+                      <span>{d.body.split(/\n\n+/).filter(Boolean).length} posts · copy only</span>
+                    ) : (
+                      <span className={over ? "font-semibold text-danger" : ""}>
+                        {d.body.length}/{t.maxChars}
+                      </span>
+                    )}
                   </div>
+                  {reason ? (
+                    <p className="mb-1 flex flex-wrap items-center gap-2 rounded-lg bg-warn-soft p-2 text-[11px]" data-testid="copy-only" role="status">
+                      <span>{reason}</span>
+                      <CopyButton text={d.body} label="Copy the chain" className="btn btn-soft btn-xs" />
+                    </p>
+                  ) : null}
                   {over ? <p className="mb-1 text-[11px] text-danger">Over the {t.maxChars}-character limit for {t.label}.</p> : null}
                   <ChannelPreview t={t} d={d} p={persona} media={mediaUrl || undefined} title={src.title} />
                 </div>

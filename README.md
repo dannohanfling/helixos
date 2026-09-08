@@ -137,6 +137,10 @@ channels, carries the tighter limit and names both), the ladder's publish checkl
 counter, which now says which limit and whose. A unit test refuses any character count written as a literal in the ladder
 engine, which is the shape the 1800 bug took.
 
+A ladder's Threads chain is six to eight posts, and the composer schedules one post per target, so the chain is a copy-only
+target there: shown, counted in posts, copyable, never scheduled or polished as one post, with the reason beside it. Sending
+the chain as several drafts is a separate decision about how the composer models a multi-post target.
+
 ## Stack
 
 Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQLite/libsql, `jose` sessions,
