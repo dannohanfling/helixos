@@ -148,6 +148,13 @@
       "when": 1788832489152,
       "tag": "0020_content_cta",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1788878693473,
+      "tag": "0021_socrates_domain",
+      "breakpoints": true
     }
   ]
 }

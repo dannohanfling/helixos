@@ -137,6 +137,10 @@ export default async function ConversationsPage({ searchParams }: { searchParams
           </div>
         }
       />
+      <p className="mb-4 text-sm text-ink-2" data-testid="clarity-link">
+        Conversations is CLARITY in short form. The DM scripts run Recognition → Light Question → Stuck on X → Door Open: C → L → A → Y, with R, I and T left out — those are beats you can only do live.{" "}
+        <Link href="/socrates/foundations" className="underline">Socrates Domain →</Link>
+      </p>
       <Tabs items={tabs} current={filter === "inbound" ? "due" : filter} />
       <Card>
         {list.length ? (

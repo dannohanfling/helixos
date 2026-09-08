@@ -1,0 +1,65 @@
+[
+  {
+    "order": 1,
+    "section": "Start Here",
+    "topic": "Welcome to SocratesOS",
+    "subtitle": "Start here. Read this once. Then never again.",
+    "body": "SocratesOS is the sales operating system for your business.\n\nIt's built on three things: a question (Socrates), a framework (CLARITY), and two teachers (Jeremy Miner and Matt Ryder).\n\nThe core idea is simple. Stop pitching. Start asking. People sell themselves when you ask the right question at the right time. Your job isn't to convince — it's to guide.\n\nEvery script you build in here will follow the same 7-beat structure: CLARITY. Once you know it, you can write a sales call, a DM, a follow-up email, or an objection diffusion using the same spine. The voice changes per channel. The structure doesn't.\n\nRead the next 5 lessons in order. They take 15 minutes total. Then go build your first script.",
+    "whyItMatters": "Most sales training teaches you what to say. SocratesOS teaches you what to ask. The difference is everything — because the prospect who answers their own question never feels sold to.",
+    "soundsLike": "\"I don't have a sales script. I have a question framework. The script writes itself once I know what they said.\""
+  },
+  {
+    "order": 2,
+    "section": "Framework",
+    "topic": "The CLARITY Framework",
+    "subtitle": "7 beats. Every script. Every channel.",
+    "body": "CLARITY is the spine of every script you build in SocratesOS. 7 beats, in order:\n\n**C — Context.** Who they are. Why they're here. The first 30 seconds where you earn the right to ask the next question.\n\n**L — Landscape.** Their current world. Map the terrain before you map the gaps. Cap at 3–4 questions — don't overstay.\n\n**A — Areas of Friction.** Where it's broken. The pain they've normalized. Probe until they describe it in their own words.\n\n**R — Result Desired.** What they actually want. Not the surface answer. Make them own the future before you sell them the path.\n\n**I — Implications.** Cost of doing nothing. They feel the weight before you offer the lift.\n\n**T — Tailor the Solution.** Bridge from their words to your offer. Three pillars max, each tied to a phrase they used.\n\n**Y — Your Next Step.** The decision moment. Soft, clear, binary. A yes, a no, or a calendared follow-up. Never a maybe.",
+    "whyItMatters": "Without a framework, every sales conversation is a coin flip. With CLARITY, you always know what beat you're in and what beat comes next. That's the difference between a hopeful pitch and a guided journey.",
+    "soundsLike": "On a sales call: \"Cool — sounds like we covered Context. Let me ask about your Landscape now.\" (You'd never say that out loud. But you'd think it. That's the point.)"
+  },
+  {
+    "order": 3,
+    "section": "Methodology",
+    "topic": "NEPQ — The Base Methodology",
+    "subtitle": "Jeremy Miner. 7th Level. The neuro-emotional engine.",
+    "body": "NEPQ stands for Neuro-Emotional Persuasion Questioning. Built by Jeremy Miner of 7th Level.\n\nThe insight: the brain doesn't make decisions logically. It makes them emotionally, then justifies them logically. Your questions need to bypass the prospect's defenses and land in the part of their brain that already knows the answer.\n\nNEPQ has 21 question categories — Connecting, Situation, Problem Awareness, Solution Awareness, Consequence, Qualifying, Decision Making, Committing, and others. Each category does a specific job at a specific moment.\n\nIn SocratesOS, every question in your library is tagged with its NEPQ category. So when you're writing the Implications beat in your script, you can pull a Consequence question. When you're writing Areas of Friction, you can pull a Probing question. The work is already done — you just pick what fits your prospect.\n\nThe deeper move: NEPQ is built on tonality. Curiosity tone, not interrogation tone. The same question lands differently when delivered with genuine wonder vs. canned scripting.",
+    "whyItMatters": "Every great sales question already exists. Jeremy spent 20 years building the taxonomy. You don't need to reinvent it — you need to learn to use it.",
+    "soundsLike": "Probing tone, not interrogation tone: \"What do you mean by that exactly?\" — said with genuine curiosity, slowly, with a slight head tilt in your voice."
+  },
+  {
+    "order": 4,
+    "section": "Methodology",
+    "topic": "Sales Sniper — The Voice",
+    "subtitle": "Matt Ryder. Trained by Jeremy. The flavor layer.",
+    "body": "Matt Ryder runs Sales Sniper. He was taught by Jeremy Miner. Same methodology under the hood — different voice on top.\n\nMatt's contribution to SocratesOS is flavor: the reframes, the analogies, the way of speaking that makes the questions land harder. Where Jeremy is clinical and academic, Matt is direct and operator-grade.\n\nMatt's other contribution: the 5 tonality vectors — pausing, inflection, body language, cadence, word choice.\n\n**Note for the app build:** the original version of this lesson listed four of Matt's own signature reframes by name. Those are replaced by Danno's own reframe library, which is tagged to the specific objection rather than presented as a flat list. See the reframes seed file.",
+    "whyItMatters": "Same questions, different voice. NEPQ gets you the structure. Sniper makes you sound like a person, not a script reader.",
+    "soundsLike": "There's no wrong answer here. Just one that gets you closer to where you said you wanted to be, and one that doesn't. Which is it?"
+  },
+  {
+    "order": 5,
+    "section": "Methodology",
+    "topic": "The 3-Layer Stack",
+    "subtitle": "How CLARITY, NEPQ, and Sniper fit together.",
+    "body": "Three layers. Each does a specific job.\n\n**Layer 1 — CLARITY (the spine).** The 7-beat structure that holds the conversation together. Tells you where you are, what comes next, and when to move on. Without CLARITY, you wander.\n\n**Layer 2 — NEPQ (the engine).** The 21 question categories that fill each beat. Built on neuro-emotional triggers. Tells you which question type does the work at each beat. Without NEPQ, your questions land flat.\n\n**Layer 3 — Sniper (the voice).** The tone, the reframes, the operator's instinct that makes the whole thing sound human. Tells you how to deliver. Without Sniper, you sound like you're reading off a card.\n\nThe stack matters because each layer plugs a hole the others have:\n\n- CLARITY without NEPQ = correct structure, weak questions.\n- NEPQ without CLARITY = great questions, no flow.\n- Either of those without Sniper = it sounds like a script.\n\nWhen all three are stacked, the prospect doesn't experience a sales call. They experience a conversation that happens to lead them to a yes.",
+    "whyItMatters": "If you only learn one thing in here, learn this: the framework, the questions, and the voice are three different skills. You need all three. Most reps only have one.",
+    "soundsLike": "When all three layers are in sync, the prospect says, \"This is the best sales call I've ever been on,\" and books the next one before you can ask."
+  },
+  {
+    "order": 6,
+    "section": "Practice",
+    "topic": "The 3-Step Diffusion",
+    "subtitle": "How to handle any objection. Clarify → Discuss → Diffuse.",
+    "body": "Objections aren't problems. They're invitations to go deeper. There is a 3-step architecture for handling every objection:\n\n**Step 1 — Clarify.** Don't respond. Don't defend. Ask: \"Out of curiosity — when you say [their objection], what specifically do you mean by that?\" 8 out of 10 times the surface objection isn't the real one. Clarify until you find the real one.\n\n**Step 2 — Discuss.** Once you know the real objection, discuss it. Not pitch. Discuss. \"Walk me through what happens if you don't fix this for 6 months.\" Make them feel the weight. Let the silence do work.\n\n**Step 3 — Diffuse.** Now you reframe. Pick the reframe that fits the real objection and deliver it. Your reframe library is grouped by objection — price, time, a partner's sign-off, general resistance — so you are choosing from three or four that already fit, not scanning a list.\n\nThen ask for the decision again — softly, binary, no pressure.\n\nThe rule: never skip a step. Reps who jump from objection to reframe lose deals. Reps who Clarify → Discuss → Diffuse close them.",
+    "whyItMatters": "Objections are the part of the call most reps fear. SocratesOS treats them as the part of the call where deals are actually made. Same conversation, different posture.",
+    "soundsLike": "\"It's too expensive\" — Clarify: \"What do you mean by expensive — relative to your budget, relative to the result, or something else?\" Discuss: \"What's the cost of NOT solving this?\" Diffuse: \"You're not deciding whether to invest. You're deciding whether to keep paying the cost of not investing.\""
+  },
+  {
+    "order": 7,
+    "section": "How-To",
+    "topic": "How to Use the Script Wizard",
+    "subtitle": "5 steps. 30 minutes. A finished script.",
+    "body": "**Step 1 — Open the wizard.** Start a new script.\n\n**Step 2 — Name it and pick a type.** Give it a name (\"Webinar Close — Health Coaches Q2\") and pick a Script Type. The Script Type filters the question library so you only see questions that fit.\n\n**Step 3 — Walk the 7 CLARITY beats.** For each beat, you have two choices:\n\n- **Pick from the library.** Browse the questions tagged for that beat and your script type, and pick the ones that fit your prospect.\n- **Write your own.** Type your custom version directly in the override field.\n\nMost scripts are a mix. Pick from the library where the questions fit. Override where they don't.\n\n**Step 4 — Watch the progress counter.** When all 7 beats have either a library pick or an override, your script is done.\n\n**Step 5 — Read it back as one script.** The finished script assembles from your beats in order.",
+    "whyItMatters": "A blank page says \"figure out the structure.\" The wizard says \"fill in the structure.\" That's the difference between 3 hours of staring and 30 minutes of building.",
+    "soundsLike": "After your first script, you'll go: \"Wait, that's it?\" Yes. That's it. The framework does the heavy lifting. You just bring the prospect."
+  }
+]

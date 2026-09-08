@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "@/db";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
+import socratesQuestions from "@/data/seed/socrates/questions.json";
 import { ADMIN_ONBOARDING_KEYS } from "@/lib/engine/pathway";
 import { hashSecret } from "@/lib/crypto";
 
@@ -65,5 +66,13 @@ async function syncLibrary(): Promise<void> {
       trainingUrl: t.trainingUrl ?? null,
     };
     await db.insert(schema.libraryTasks).values(row).onConflictDoUpdate({ target: schema.libraryTasks.key, set: row });
+  }
+  // Socrates Domain's question library: keyed by the seed id, so an update reaches every workspace; a client's own questions have no key and are never touched.
+  for (const q of socratesQuestions) {
+    const row = { key: q.id, workspaceId: null, userId: null, question: q.question, clarityStage: q.clarityStage, nepqCategory: q.nepqCategory, source: q.source, scriptTypes: q.scriptTypes };
+    await db
+      .insert(schema.socratesQuestions)
+      .values({ id: `socrates-${q.id}`, ...row })
+      .onConflictDoUpdate({ target: schema.socratesQuestions.key, set: row });
   }
 }

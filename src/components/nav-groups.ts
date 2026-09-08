@@ -26,6 +26,15 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Socrates Domain",
+    items: [
+      { href: "/socrates/foundations", label: "Foundations", icon: "🧭", hint: "7 lessons" },
+      { href: "/socrates/questions", label: "Questions", icon: "❓", hint: "library" },
+      { href: "/socrates/reframes", label: "Reframes", icon: "🔁", hint: "objections" },
+      { href: "/socrates/scripts", label: "Scripts", icon: "📝", hint: "wizard" },
+    ],
+  },
+  {
     label: "Grow",
     items: [
       { href: "/clients", label: "Clients", icon: "🤝", hint: "your clients" },

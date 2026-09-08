@@ -1,0 +1,545 @@
+[
+  {
+    "id": "q01",
+    "question": "Out of curiosity — when you say [their objection], what specifically do you mean by that?",
+    "nepqCategory": "Clarifying / Probing",
+    "source": "Matt Ryder",
+    "clarityStage": "C — Context",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Objection",
+      "Follow-Up",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q02",
+    "question": "What happens if you do nothing and this gets worse?",
+    "nepqCategory": "Consequence",
+    "source": "NEPQ",
+    "clarityStage": "I — Implications",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call",
+      "Follow-Up",
+      "Objection",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q03",
+    "question": "How long has the current setup been in place?",
+    "nepqCategory": "Situation",
+    "source": "NEPQ",
+    "clarityStage": "L — Landscape",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call"
+    ]
+  },
+  {
+    "id": "q04",
+    "question": "What does 'ideal' look like for you 12 months from now?",
+    "nepqCategory": "Solution Awareness",
+    "source": "Matt Ryder",
+    "clarityStage": "R — Result Desired",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q05",
+    "question": "If you could redo the way you set this up, what would you change?",
+    "nepqCategory": "Past Situation",
+    "source": "Matt Ryder",
+    "clarityStage": "L — Landscape",
+    "scriptTypes": [
+      "High-Ticket Sales Call"
+    ]
+  },
+  {
+    "id": "q06",
+    "question": "Sounds like we covered what you're after — next step is [logistics]. Sound right?",
+    "nepqCategory": "Committing",
+    "source": "NEPQ",
+    "clarityStage": "Y — Your Next Step",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "DM",
+      "Cold Call",
+      "Follow-Up",
+      "Presentation Close",
+      "Objection"
+    ]
+  },
+  {
+    "id": "q07",
+    "question": "What would have to be true for this to make sense for you?",
+    "nepqCategory": "Qualifying",
+    "source": "Matt Ryder",
+    "clarityStage": "Y — Your Next Step",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Objection",
+      "Presentation Close",
+      "Follow-Up"
+    ]
+  },
+  {
+    "id": "q08",
+    "question": "Out of everyone in your world right now, who do you see stuck where you were 90 days ago?",
+    "nepqCategory": "Connecting",
+    "source": "Danno Custom",
+    "clarityStage": "L — Landscape",
+    "scriptTypes": [
+      "Referral"
+    ]
+  },
+  {
+    "id": "q09",
+    "question": "Help me understand — is it a [the surface thing] thing, or is there something underneath that?",
+    "nepqCategory": "Clarifying / Probing",
+    "source": "Danno Custom",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Objection",
+      "Follow-Up",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q10",
+    "question": "It sounds like things are going well — anything you'd change if you could?",
+    "nepqCategory": "Two Truths",
+    "source": "NEPQ",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up"
+    ]
+  },
+  {
+    "id": "q11",
+    "question": "Real quick — is this still an appropriate time to talk?",
+    "nepqCategory": "Connecting",
+    "source": "Matt Ryder",
+    "clarityStage": "C — Context",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call",
+      "Follow-Up"
+    ]
+  },
+  {
+    "id": "q12",
+    "question": "What got you looking into this in the first place?",
+    "nepqCategory": "Connecting",
+    "source": "NEPQ",
+    "clarityStage": "C — Context",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call"
+    ]
+  },
+  {
+    "id": "q13",
+    "question": "Based on what you said about [their pain phrase], what we do is [3 pillars]. Does that sound like it could fit?",
+    "nepqCategory": "Transition",
+    "source": "NEPQ",
+    "clarityStage": "T — Tailor the Solution",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "DM",
+      "Cold Call",
+      "Follow-Up",
+      "Presentation Close",
+      "Objection"
+    ]
+  },
+  {
+    "id": "q14",
+    "question": "How long has that been going on?",
+    "nepqCategory": "Clarifying / Probing",
+    "source": "NEPQ",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call",
+      "Follow-Up",
+      "Objection"
+    ]
+  },
+  {
+    "id": "q15",
+    "question": "Is there anything holding you back from taking action right now?",
+    "nepqCategory": "Committing",
+    "source": "Matt Ryder",
+    "clarityStage": "Y — Your Next Step",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up",
+      "Objection",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q16",
+    "question": "If you keep doing this for another 5 years, what does that cost you?",
+    "nepqCategory": "Consequence",
+    "source": "Matt Ryder",
+    "clarityStage": "I — Implications",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up",
+      "Objection",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q17",
+    "question": "How important is solving this right now versus 6 months from now?",
+    "nepqCategory": "Qualifying",
+    "source": "NEPQ",
+    "clarityStage": "I — Implications",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call",
+      "Follow-Up",
+      "Objection",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q18",
+    "question": "What's been the toughest part of [pain area] this week?",
+    "nepqCategory": "Problem Awareness",
+    "source": "Danno Custom",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "DM",
+      "Community Reachout",
+      "Cold Call",
+      "Follow-Up"
+    ]
+  },
+  {
+    "id": "q19",
+    "question": "How is this affecting you personally — not just on paper?",
+    "nepqCategory": "Problem Awareness",
+    "source": "Matt Ryder",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up",
+      "Objection"
+    ]
+  },
+  {
+    "id": "q20",
+    "question": "Want to text them right now and CC me? I'll take it from there — no pitch, just a conversation.",
+    "nepqCategory": "Committing",
+    "source": "Danno Custom",
+    "clarityStage": "Y — Your Next Step",
+    "scriptTypes": [
+      "Referral"
+    ]
+  },
+  {
+    "id": "q21",
+    "question": "Who's involved in this on your team — or is it mostly you?",
+    "nepqCategory": "Situation",
+    "source": "Matt Ryder",
+    "clarityStage": "L — Landscape",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call"
+    ]
+  },
+  {
+    "id": "q22",
+    "question": "Saw your post about [topic] — what's been the toughest piece of that?",
+    "nepqCategory": "Connecting",
+    "source": "Danno Custom",
+    "clarityStage": "C — Context",
+    "scriptTypes": [
+      "DM",
+      "Community Reachout"
+    ]
+  },
+  {
+    "id": "q23",
+    "question": "What have you tried before to fix this? What worked, what didn't?",
+    "nepqCategory": "Solution Awareness",
+    "source": "NEPQ",
+    "clarityStage": "R — Result Desired",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call",
+      "Follow-Up"
+    ]
+  },
+  {
+    "id": "q24",
+    "question": "Why would you change that?",
+    "nepqCategory": "Two Truths",
+    "source": "NEPQ",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up",
+      "Objection",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q25",
+    "question": "Last time we spoke you mentioned [X] — where did that land?",
+    "nepqCategory": "Connecting",
+    "source": "Danno Custom",
+    "clarityStage": "C — Context",
+    "scriptTypes": [
+      "Follow-Up"
+    ]
+  },
+  {
+    "id": "q26",
+    "question": "Walk me through how you're handling [X] right now.",
+    "nepqCategory": "Situation",
+    "source": "NEPQ",
+    "clarityStage": "L — Landscape",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "DM",
+      "Cold Call",
+      "Follow-Up",
+      "Community Reachout"
+    ]
+  },
+  {
+    "id": "q27",
+    "question": "What's different now compared to 6 months ago?",
+    "nepqCategory": "Qualifying",
+    "source": "NEPQ",
+    "clarityStage": "I — Implications",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up",
+      "Objection"
+    ]
+  },
+  {
+    "id": "q28",
+    "question": "Before we dive in — what were you hoping would happen by reaching out?",
+    "nepqCategory": "Connecting",
+    "source": "NEPQ",
+    "clarityStage": "C — Context",
+    "scriptTypes": [
+      "High-Ticket Sales Call"
+    ]
+  },
+  {
+    "id": "q29",
+    "question": "Why does that feel like a fit?",
+    "nepqCategory": "Transition",
+    "source": "NEPQ",
+    "clarityStage": "T — Tailor the Solution",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q30",
+    "question": "If they got the same shift you got — what would change for them?",
+    "nepqCategory": "Solution Awareness",
+    "source": "Danno Custom",
+    "clarityStage": "R — Result Desired",
+    "scriptTypes": [
+      "Referral"
+    ]
+  },
+  {
+    "id": "q31",
+    "question": "Walk me through your criteria when you pick a vendor for this.",
+    "nepqCategory": "Decision Making",
+    "source": "NEPQ",
+    "clarityStage": "R — Result Desired",
+    "scriptTypes": [
+      "High-Ticket Sales Call"
+    ]
+  },
+  {
+    "id": "q32",
+    "question": "What about [current state] has been frustrating for you?",
+    "nepqCategory": "Problem Awareness",
+    "source": "NEPQ",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "DM",
+      "Cold Call",
+      "Follow-Up"
+    ]
+  },
+  {
+    "id": "q33",
+    "question": "If [money / timing / partner sign-off] wasn't the issue — would you do it?",
+    "nepqCategory": "Qualifying",
+    "source": "Matt Ryder",
+    "clarityStage": "Y — Your Next Step",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Objection",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q34",
+    "question": "What do you mean by that exactly?",
+    "nepqCategory": "Clarifying / Probing",
+    "source": "NEPQ",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "DM",
+      "Cold Call",
+      "Follow-Up",
+      "Community Reachout",
+      "Objection",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q35",
+    "question": "Have you thought through the ramifications of staying put?",
+    "nepqCategory": "Consequence",
+    "source": "Matt Ryder",
+    "clarityStage": "I — Implications",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up",
+      "Objection",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q36",
+    "question": "What's the single thing that, if it changed, would make the biggest difference?",
+    "nepqCategory": "Problem Awareness",
+    "source": "Danno Custom",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "DM",
+      "Follow-Up",
+      "Community Reachout"
+    ]
+  },
+  {
+    "id": "q37",
+    "question": "What's causing that?",
+    "nepqCategory": "Clarifying / Probing",
+    "source": "NEPQ",
+    "clarityStage": "A — Areas of Friction",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Cold Call",
+      "Follow-Up",
+      "Objection"
+    ]
+  },
+  {
+    "id": "q38",
+    "question": "If two providers matched on price and capability, how would you decide?",
+    "nepqCategory": "Decision Making",
+    "source": "NEPQ",
+    "clarityStage": "R — Result Desired",
+    "scriptTypes": [
+      "High-Ticket Sales Call"
+    ]
+  },
+  {
+    "id": "q39",
+    "question": "If this was handled properly, what would that allow you to do?",
+    "nepqCategory": "Solution Awareness",
+    "source": "NEPQ",
+    "clarityStage": "R — Result Desired",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "DM",
+      "Cold Call",
+      "Follow-Up",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q40",
+    "question": "What's the toughest version of this problem you've dealt with before?",
+    "nepqCategory": "Past Situation",
+    "source": "NEPQ",
+    "clarityStage": "L — Landscape",
+    "scriptTypes": [
+      "High-Ticket Sales Call"
+    ]
+  },
+  {
+    "id": "q41",
+    "question": "What feels like the next logical step?",
+    "nepqCategory": "Committing",
+    "source": "NEPQ",
+    "clarityStage": "Y — Your Next Step",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "DM",
+      "Cold Call",
+      "Follow-Up",
+      "Presentation Close",
+      "Objection"
+    ]
+  },
+  {
+    "id": "q42",
+    "question": "How do you feel I've helped you most so far?",
+    "nepqCategory": "Referral",
+    "source": "Matt Ryder",
+    "clarityStage": "Y — Your Next Step",
+    "scriptTypes": [
+      "Referral"
+    ]
+  },
+  {
+    "id": "q43",
+    "question": "How would solving this make you feel?",
+    "nepqCategory": "Solution Awareness",
+    "source": "Matt Ryder",
+    "clarityStage": "R — Result Desired",
+    "scriptTypes": [
+      "High-Ticket Sales Call",
+      "Follow-Up",
+      "Presentation Close"
+    ]
+  },
+  {
+    "id": "q44",
+    "question": "Why do customers pick you over the other folks doing this?",
+    "nepqCategory": "Pre-Situation",
+    "source": "NEPQ",
+    "clarityStage": "C — Context",
+    "scriptTypes": [
+      "High-Ticket Sales Call"
+    ]
+  },
+  {
+    "id": "q45",
+    "question": "How long have you been in this role / running this business?",
+    "nepqCategory": "Pre-Situation",
+    "source": "NEPQ",
+    "clarityStage": "C — Context",
+    "scriptTypes": [
+      "High-Ticket Sales Call"
+    ]
+  }
+]

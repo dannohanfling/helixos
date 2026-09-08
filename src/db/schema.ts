@@ -657,6 +657,47 @@ export const contentVariants = sqliteTable(
   (t) => [uniqueIndex("variants_item_channel_group").on(t.contentItemId, t.channel, t.groupId)],
 );
 
+/* ───────────────────────── Socrates Domain: the question library and the scripts built from it ───────────────────────── */
+
+export const SOCRATES_SCRIPT_TYPES = ["High-Ticket Sales Call", "Cold Call", "DM", "Follow-Up", "Objection", "Presentation Close", "Community Reachout", "Referral"] as const;
+
+/** Library rows (key set, no owner) are upserted from the seed on every migrate; a client's own rows (owner set, no key) are never touched by that. */
+export const socratesQuestions = sqliteTable(
+  "socrates_questions",
+  {
+    id: id(),
+    key: text("key"),
+    workspaceId: text("workspace_id"),
+    userId: text("user_id"),
+    question: text("question").notNull(),
+    clarityStage: text("clarity_stage").notNull(),
+    nepqCategory: text("nepq_category"),
+    source: text("source").notNull().default("Mine"),
+    scriptTypes: text("script_types", { mode: "json" }).$type<string[]>().notNull().default([]),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("socrates_questions_key").on(t.key), index("socrates_questions_owner").on(t.userId)],
+);
+export type SocratesQuestion = typeof socratesQuestions.$inferSelect;
+
+export type SocratesBeat = { questionIds: string[]; reframeIds: string[]; override: string | null };
+
+export const socratesScripts = sqliteTable(
+  "socrates_scripts",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    scriptType: text("script_type", { enum: SOCRATES_SCRIPT_TYPES }).notNull().default("High-Ticket Sales Call"),
+    beats: text("beats", { mode: "json" }).$type<Record<string, SocratesBeat>>().notNull().default({}),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [index("socrates_scripts_owner").on(t.userId, t.updatedAt)],
+);
+export type SocratesScript = typeof socratesScripts.$inferSelect;
+
 /* ───────────────────────── The client's own clients ───────────────────────── */
 
 export const CLIENT_STATUSES = ["lead", "active", "paused", "completed", "alumni"] as const;
