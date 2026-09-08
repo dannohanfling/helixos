@@ -192,6 +192,11 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   {activeDraft.body.length}/{active.maxChars}
                 </span>
               </div>
+              {activeDraft.body.length > active.maxChars ? (
+                <p className="text-xs text-danger" data-testid="over-limit" role="status">
+                  Over the {active.maxChars}-character limit for {active.label}.
+                </p>
+              ) : null}
               {active.channel === "email" ? <input className="field" value={activeDraft.subject ?? ""} onChange={(e) => setOverride(active.key, { subject: e.target.value })} placeholder="Subject line" /> : null}
               <textarea className="field min-h-56 text-sm" value={activeDraft.body} onChange={(e) => setOverride(active.key, { body: e.target.value })} />
               {activeDraft.checks ? (
@@ -379,6 +384,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                       {d.body.length}/{t.maxChars}
                     </span>
                   </div>
+                  {over ? <p className="mb-1 text-[11px] text-danger">Over the {t.maxChars}-character limit for {t.label}.</p> : null}
                   <ChannelPreview t={t} d={d} p={persona} media={mediaUrl || undefined} title={src.title} />
                 </div>
               );

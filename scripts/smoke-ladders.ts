@@ -180,7 +180,10 @@ async function main() {
     await page.waitForURL(/\/content\/[a-z0-9-]+\/compose/i);
     await expectText(page, "I quit every diet by week three", "body in composer");
     await page.screenshot({ path: "screenshots/ld03-composer.png", fullPage: true });
-    // Schedule it (Threads chain is longer than one Threads post, so that chip comes off)
+    // KNOWN DEFECT, worked around here, not intended behaviour: the ladder sends its whole Threads chain (6–8 posts joined) to the
+    // composer as one Threads draft against the single-post limit, so it can never be scheduled from the composer. The chip is
+    // taken off so the other channels can schedule. The fix (keep the chain visible and copyable, disable scheduling for it, say
+    // why) is its own commit; when it lands, this line goes and the walk asserts the notice instead.
     const itemId = page.url().match(/\/content\/([a-z0-9-]+)\/compose/i)![1];
     await page.locator('button[title="Threads"]').first().click();
     await page.click('button:has-text("Schedule")');

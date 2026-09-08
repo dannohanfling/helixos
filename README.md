@@ -131,6 +131,12 @@ column restates the limit or the link rule the prompt already prints beside them
 client's hashtag comes from their own settings. The rule of thumb: the more specific layer wins on tone (a group's own rules
 over its channel's posture), format is bounded by the channel regardless.
 
+A character count appears once per prompt and comes from `maxChars`, never from a literal in prose. That covers the ladder's
+output contract (each channel field carries "Max N chars" from the spec; the post body, which goes to both Facebook
+channels, carries the tighter limit and names both), the ladder's publish checklist and scaffold, and the composer's red
+counter, which now says which limit and whose. A unit test refuses any character count written as a literal in the ladder
+engine, which is the shape the 1800 bug took.
+
 ## Stack
 
 Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQLite/libsql, `jose` sessions,

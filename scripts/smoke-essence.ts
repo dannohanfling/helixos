@@ -135,7 +135,11 @@ async function main() {
     const section = (name: string) => sys[1].text.split(`\n${name}\n`)[1]?.split("\n\n")[0] ?? "";
     const fbLine = /^FORMAT \(Facebook personal, Facebook business page\): 4th-grade reading level\. Sentences average 5–7 words\. Line break between every sentence or short thought\.$/m;
     if (!fbLine.test(section("COPY")) || !fbLine.test(section("SUPPORTING_COMMENTS"))) throw new Error("the Facebook format line must sit beside COPY and SUPPORTING_COMMENTS");
-    if (!/^FORMAT \(Instagram caption\): The first line is the whole hook;/m.test(section("IG_CAPTION")) || !/^FORMAT \(Threads\): Under 500 characters a post\./m.test(section("THREADS_CHAIN"))) throw new Error("the caption and the chain must carry their own channel's format line");
+    if (!/^FORMAT \(Instagram caption\): The first line is the whole hook;/m.test(section("IG_CAPTION")) || !/^FORMAT \(Threads\): One idea per post in the chain\./m.test(section("THREADS_CHAIN"))) throw new Error("the caption and the chain must carry their own channel's format line");
+    // Every channel field is bounded, from the spec: one body to two Facebook limits fits the tighter and says so; no number lives in prose
+    if (!/^Max 1500 chars — this body posts to both Facebook business page \(1500\) and Facebook personal \(2000\)\.$/m.test(section("COPY"))) throw new Error("the post body must carry the tighter of its two Facebook limits, named");
+    if (!/^Max 2200 chars\.$/m.test(section("IG_CAPTION")) || !/^Max 500 chars a post\.$/m.test(section("THREADS_CHAIN"))) throw new Error("the caption and the chain must carry their channel's bound");
+    if (/Under 2,200|under 500 characters/.test(sys[1].text)) throw new Error("a character count must come from the spec, never from a prose literal");
     if (/daily hashtag/i.test(sys[1].text)) throw new Error("a house practice must never reach a client's prompt");
     if (/^- 4th-grade/m.test(sys[1].text)) throw new Error("the format line must not also sit at the top as a feature-level rule");
     if (/Priya Raman|hospital car park, and what it taught me about systems\./.test(sys[0].text)) throw new Error("placeholder text must never reach the model");

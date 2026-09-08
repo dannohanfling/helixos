@@ -151,7 +151,23 @@ function sectionFormat(specs: ChannelSpec[], keys: Channel[]): string {
   return [...byLine].map(([line, labels]) => `\nFORMAT (${labels.join(", ")}): ${line}`).join("");
 }
 
-/** Section B: what comes back, every time. Each field that lands on a channel carries that channel's format line beside it. */
+const limitOf = (specs: ChannelSpec[], key: Channel): number => specs.find((c) => c.key === key)?.maxChars ?? 0;
+
+/**
+ * The character bound for an output field, from the spec and never from prose. A field that lands on several channels with
+ * different limits must fit the tightest, and the line says so: these are editorial limits, not the platforms' own.
+ */
+function sectionBound(specs: ChannelSpec[], keys: Channel[], noun = "field", unit = ""): string {
+  const chans = keys.map((k) => specs.find((c) => c.key === k)).filter((c): c is ChannelSpec => Boolean(c)).sort((a, b) => a.maxChars - b.maxChars);
+  if (!chans.length) return "";
+  const min = chans[0].maxChars;
+  if (chans.every((c) => c.maxChars === min)) return `\nMax ${min} chars${unit}.`;
+  const named = chans.map((c) => `${c.label} (${c.maxChars})`);
+  const list = named.length === 2 ? `both ${named[0]} and ${named[1]}` : `all of ${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+  return `\nMax ${min} chars${unit} — this ${noun} posts to ${list}.`;
+}
+
+/** Section B: what comes back, every time. Each field that lands on a channel carries that channel's format line and bound beside it. */
 export function outputContract(specs: ChannelSpec[] = CHANNEL_SPECS): string {
   return `Return these fields, each on its own line as the field name in capitals followed by a colon, then the content on the following lines. Match the names exactly.
 
@@ -168,7 +184,7 @@ HOOK
 One sentence. The opening line of the post body.
 
 COPY
-The post body only. Hook, "read them in order" line, save line, one open question. No keyword prompt.${sectionFormat(specs, ["fb_personal", "fb_page"])}
+The post body only. Hook, "read them in order" line, save line, one open question. No keyword prompt.${sectionFormat(specs, ["fb_personal", "fb_page"])}${sectionBound(specs, ["fb_personal", "fb_page"], "body")}
 
 SUPPORTING_COMMENTS
 The rungs. Number each as "1." "2." etc. on its own first line. Separate rungs with --- on its own line. Each rung 40–90 words ending with ONE short quotable line on its own line.${sectionFormat(specs, ["fb_personal", "fb_page"])}
@@ -180,10 +196,10 @@ IG_CAROUSEL
 9 slides. Format: "SLIDE n — TEXT (gold: PHRASE)". Slide 1 is the headline plus "+ SWIPE →". Slides 2–8 are rungs compressed to one or two lines. Slide 9 is "(solid black) COMMENT [KEYWORD]..." or the closing question when there is no keyword.
 
 IG_CAPTION
-Under 2,200 characters. Hook, then the 4–5 strongest rungs compressed with **bolded lead-ins**, then the CTA.${sectionFormat(specs, ["instagram"])}
+Hook, then the 4–5 strongest rungs compressed with **bolded lead-ins**, then the CTA.${sectionFormat(specs, ["instagram"])}${sectionBound(specs, ["instagram"], "caption")}
 
 THREADS_CHAIN
-6–8 posts, each under 500 characters, numbered "1/" "2/" etc., one per line block separated by --- on its own line.${sectionFormat(specs, ["threads"])}
+6–8 posts, numbered "1/" "2/" etc., one per line block separated by --- on its own line.${sectionFormat(specs, ["threads"])}${sectionBound(specs, ["threads"], "chain", " a post")}
 
 SCREENSHOT_TEXT
 Only for the Screenshot format: 80–150 words of standalone text. Otherwise omit.
@@ -340,7 +356,7 @@ export function scaffold(brief: Brief, profile: LadderProfile | null, proofs: Pr
     dmKeyword: keyword || "NONE",
     carousel: ["SLIDE 1 — [HEADLINE] + SWIPE →", ...[2, 3, 4, 5, 6, 7, 8].map((n) => `SLIDE ${n} — [RUNG ${n - 1} IN ONE LINE] (gold: [PHRASE])`), `SLIDE 9 — (solid black) ${keyword ? `COMMENT ${keyword}` : "[CLOSING QUESTION]"}`],
     igCaption: `[HOOK]\n\n**[LEAD-IN 1]** [compressed rung]\n**[LEAD-IN 2]** [compressed rung]\n**[LEAD-IN 3]** [compressed rung]\n**[LEAD-IN 4]** [compressed rung]\n\n${keyword ? `Comment ${keyword} and I'll send you the link.` : "[CLOSING QUESTION]"}`,
-    threadsChain: [1, 2, 3, 4, 5, 6].map((n) => `${n}/ [${n === 1 ? "HOOK" : n === 6 ? "CTA OR QUESTION" : `RUNG ${n} COMPRESSED`}, under 500 characters]`),
+    threadsChain: [1, 2, 3, 4, 5, 6].map((n) => `${n}/ [${n === 1 ? "HOOK" : n === 6 ? "CTA OR QUESTION" : `RUNG ${n} COMPRESSED`}, under ${limitOf(CHANNEL_SPECS, "threads")} characters]`),
     screenshotText: brief.format === "screenshot" ? "[80–150 WORDS OF STANDALONE TEXT THAT BECOMES THE IMAGE]" : "",
     notes: `Scaffold only (Claude drafting isn't configured). Fill every [BRACKET]. ${f.structure}${f.stopRule ? ` ${f.stopRule}` : ""}`,
   };
@@ -428,9 +444,14 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   add("headline-strand", "No single word stranded on the second line", h.lines.length !== 2 || words(h.lines[1]) > 1, "Rebalance the break so the second line has at least two words.", "warn");
 
   // Platform limits
-  const overThreads = l.threadsChain.filter((t) => t.length > 500).length;
-  add("threads", "Threads posts under 500 characters", !overThreads, `${overThreads} post(s) over 500. Warn, don't truncate.`, "warn");
-  add("ig", `Instagram caption under 2,200 characters (${l.igCaption.length})`, l.igCaption.length <= 2200, "Cut a rung from the caption.", "warn");
+  // Every number here is the channel spec's, the same one the prompt and the composer print; a literal would drift from it.
+  const threadsMax = limitOf(CHANNEL_SPECS, "threads");
+  const igMax = limitOf(CHANNEL_SPECS, "instagram");
+  const bodyMax = Math.min(limitOf(CHANNEL_SPECS, "fb_personal"), limitOf(CHANNEL_SPECS, "fb_page"));
+  const overThreads = l.threadsChain.filter((t) => t.length > threadsMax).length;
+  add("threads", `Threads posts under ${threadsMax} characters`, !overThreads, `${overThreads} post(s) over ${threadsMax}. Warn, don't truncate.`, "warn");
+  add("ig", `Instagram caption under ${igMax} characters (${l.igCaption.length})`, l.igCaption.length <= igMax, "Cut a rung from the caption.", "warn");
+  add("body", `Post body under ${bodyMax} characters (${l.copy.length}), the tighter of the two Facebook limits`, l.copy.length <= bodyMax, "Trim the body; it posts to the page as well as the profile.", "warn");
   return checks;
 }
 

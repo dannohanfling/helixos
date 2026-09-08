@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LadderProfile, Proof } from "@/db/schema";
 import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, masterBlock, outputContract, parseLadderOutput, parseRungs, readyToPost, rungGapMinutes, rungsForAirtable, scaffold } from "../ladder";
+import { readFileSync } from "node:fs";
 import { CHANNEL_SPECS } from "../repurpose";
 
 const profile = {
@@ -166,7 +167,16 @@ Verify Sarah's quote.`;
     expect(section(today, "COPY")).toContain(fb);
     expect(section(today, "SUPPORTING_COMMENTS")).toContain(fb);
     expect(section(today, "IG_CAPTION")).toContain("FORMAT (Instagram caption): The first line is the whole hook;");
-    expect(section(today, "THREADS_CHAIN")).toContain("FORMAT (Threads): Under 500 characters a post.");
+    expect(section(today, "THREADS_CHAIN")).toContain("FORMAT (Threads): One idea per post in the chain.");
+    // Every channel field carries its bound from the spec; one text to two limits fits the tighter and says so
+    expect(section(today, "COPY")).toContain("Max 1500 chars — this body posts to both Facebook business page (1500) and Facebook personal (2000).");
+    expect(section(today, "IG_CAPTION")).toContain("Max 2200 chars.");
+    expect(section(today, "THREADS_CHAIN")).toContain("Max 500 chars a post.");
+    expect(section(today, "SUPPORTING_COMMENTS")).not.toContain("Max ");
+    expect(today).not.toMatch(/Under 2,200|under 500 characters/);
+    const equal = outputContract(CHANNEL_SPECS.map((c) => (c.key === "fb_page" ? { ...c, maxChars: 2000 } : c)));
+    expect(section(equal, "COPY")).toContain("\nMax 2000 chars.");
+    expect(section(equal, "COPY")).not.toContain("posts to both");
     expect(section(today, "HEADLINE")).not.toContain("FORMAT");
     expect(section(today, "IG_CAROUSEL")).not.toContain("FORMAT");
     // When a channel's line lands as data, its field carries it and nothing else moves
@@ -175,6 +185,17 @@ Verify Sarah's quote.`;
     expect(section(later, "THREADS_CHAIN")).not.toContain("FORMAT");
     expect(section(later, "COPY")).toContain("FORMAT (Facebook personal): 4th-grade");
     expect(section(later, "COPY")).toContain("FORMAT (Facebook business page): Page line.");
+  });
+});
+
+describe("no character count as a literal", () => {
+  it("the ladder engine takes every character count from the channel spec, never from prose or a hard-coded comparison", () => {
+    const source = readFileSync(new URL("../ladder.ts", import.meta.url), "utf8");
+    // "2,200 characters", "under 500 chars": the shape the 1800 bug and the Threads 500 took
+    expect(source.match(/\d[\d,]*\s*(?:characters|chars)\b/gi)).toBeNull();
+    // `.length > 500`, `.length <= 2200`: a gate believing a number of its own
+    expect(source.match(/\.length\s*(?:<=?|>=?|===?)\s*\d{3,}/g)).toBeNull();
+    expect(source.match(/\.(?:slice|substring)\(0,\s*\d{3,}\)/g)).toBeNull();
   });
 });
 
