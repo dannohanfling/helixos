@@ -35,12 +35,17 @@ export const LESSONS: Lesson[] = [...(foundationsJson as Lesson[])].sort((a, b) 
 export const LIBRARY_QUESTIONS: LibraryQuestion[] = questionsJson as LibraryQuestion[];
 export const REFRAMES: Reframe[] = reframesJson as Reframe[];
 
-/** A paragraph addressed to the app build, not to a client. Kept verbatim in the seed, not shown on the page. */
+/** A paragraph addressed to the app build, not to a client, must never reach the page even if one lands in the seed again. */
 const BUILD_NOTE = /^\*\*Note for the app build:\*\*/;
 export function lessonParagraphs(body: string): string[] {
   return body.split(/\n\s*\n/).map((p) => p.trim()).filter((p) => p && !BUILD_NOTE.test(p));
 }
 export const hasBuildNote = (body: string) => body.split(/\n\s*\n/).some((p) => BUILD_NOTE.test(p.trim()));
+/** A lesson that talks about the reframe library gets a link to it under the text. */
+export const mentionsReframes = (body: string) => /reframe library/i.test(body);
+
+/** The beat where a reframe is deployed in an Objection script: clarified through C, L and A, discussed at I, reframed at T, asked again at Y. */
+export const REFRAME_BEAT = "T";
 
 /** Any question the wizard or the library can show: a seed row or a client's own. */
 export type QuestionLike = { id: string; question: string; clarityStage: string; nepqCategory: string | null; source: string; scriptTypes: string[]; own?: boolean };

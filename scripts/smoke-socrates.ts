@@ -57,6 +57,7 @@ async function main() {
     if ((await page.locator('[data-testid="sounds-like"]').count()) !== 7 || (await page.locator('[data-testid="why-it-matters"]').count()) !== 7) throw new Error("every lesson needs its Why it matters and Sounds like blocks");
     const body = await page.locator("main").innerText().catch(() => page.locator("body").innerText());
     if (/Note for the app build/.test(body)) throw new Error("the build note in lesson 4 must not be shown to a client");
+    if (!body.includes("Your reframe library is where this layer lives")) throw new Error("lesson 4 must close on Danno's sentence about the reframe library");
     if (!body.includes("Clarify → Discuss → Diffuse")) throw new Error("lesson 6 missing");
     if (/Mark done|Done ✓|\+\d+ pts|points/i.test(body)) throw new Error("lessons must carry no done button, score or points");
     const attribution = (await page.locator('[data-testid="socrates-attribution"]').innerText()).replace(/\s+/g, " ").trim();
@@ -144,13 +145,18 @@ async function main() {
     await page.selectOption('[data-testid="new-script"] select[name="scriptType"]', "Objection");
     await submit(page, '[data-testid="new-script"] button:has-text("Start")');
     await page.waitForURL(/\/socrates\/scripts\/[a-z0-9-]+/i);
-    if (!(await page.locator('[data-testid="beat-reframes"]').count())) throw new Error("an Objection script must offer the grouped reframes");
+    if (await page.locator('[data-testid="beat-reframes"]').count()) throw new Error("reframes are deployed at T, not offered at C");
+    const objectionId = page.url().split("/socrates/scripts/")[1].split("?")[0];
+    await page.goto(`${base}/socrates/scripts/${objectionId}?beat=T`);
+    if (!(await page.locator('[data-testid="beat-reframes"]').count())) throw new Error("an Objection script must offer the grouped reframes at T");
+    await expectText(page, "full library", "the whole reframe library stays reachable");
     await page.check('input[name="reframeIds"][value="r04"]');
     await submit(page, '[data-testid="beat-form"] button:has-text("Save")');
     await expectText(page, "1 of 7", "reframe counts as a pick");
+    if ((await page.locator('[data-testid="beat-link"][data-beat="T"]').getAttribute("data-done")) !== "1") throw new Error("T should be done after a reframe pick");
     await page.goto(`${base}/socrates/scripts`);
     await expectText(page, "Walk objection script", "list");
-    console.log("✓ objection script pulls a reframe by group");
+    console.log("✓ objection script pulls a reframe by group, at T");
 
     // Conversations points at the method
     await page.goto(`${base}/conversations`);

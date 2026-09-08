@@ -6,7 +6,7 @@ import { db, schema } from "@/db";
 import { SOCRATES_SCRIPT_TYPES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { CLARITY_BEATS, NEPQ_CATEGORIES, REFRAMES, beatByKey, beatByStage, beatOf } from "@/lib/engine/socrates";
+import { CLARITY_BEATS, NEPQ_CATEGORIES, REFRAMES, REFRAME_BEAT, beatByKey, beatByStage, beatOf } from "@/lib/engine/socrates";
 import { visibleQuestions, ownScript } from "@/lib/queries/socrates";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
@@ -63,7 +63,8 @@ export async function saveBeatAction(formData: FormData): Promise<void> {
   if (!s || !beat) return;
   const visible = new Set((await visibleQuestions(userId)).map((q) => q.id));
   const questionIds = formData.getAll("questionIds").map(String).filter((id) => visible.has(id));
-  const reframeIds = formData.getAll("reframeIds").map(String).filter((id) => REFRAMES.some((r) => r.id === id));
+  // Reframes are deployed at one beat of an Objection script; picks sent for any other beat are dropped.
+  const reframeIds = s.scriptType === "Objection" && beat.key === REFRAME_BEAT ? formData.getAll("reframeIds").map(String).filter((id) => REFRAMES.some((r) => r.id === id)) : [];
   const beats = { ...s.beats, [beat.key]: { ...beatOf(s.beats, beat.key), questionIds, reframeIds, override: opt(formData, "override") } };
   await db.update(schema.socratesScripts).set({ beats, updatedAt: nowIso() }).where(eq(schema.socratesScripts.id, s.id));
   refresh();

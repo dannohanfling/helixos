@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLARITY_BEATS, LESSONS, LIBRARY_QUESTIONS, OBJECTION_GROUPS, REFRAMES, SCRIPT_TYPES, assemble, beatByStage, hasBuildNote, lessonParagraphs, progress, questionsFor, reframesByGroup, scriptText } from "../socrates";
+import { CLARITY_BEATS, LESSONS, LIBRARY_QUESTIONS, OBJECTION_GROUPS, REFRAMES, SCRIPT_TYPES, assemble, beatByStage, hasBuildNote, lessonParagraphs, mentionsReframes, progress, questionsFor, reframesByGroup, scriptText } from "../socrates";
 
 describe("Socrates Domain seed content, as shipped", () => {
   it("has seven lessons in order, Start Here to How-To, under fifteen minutes of reading", () => {
@@ -24,13 +24,15 @@ describe("Socrates Domain seed content, as shipped", () => {
     expect(reframesByGroup().map((g) => [g.group, g.reframes.length])).toEqual(OBJECTION_GROUPS.map((g, i) => [g, i === 3 ? 2 : 3]));
     expect(REFRAMES.find((r) => r.name === "Shoulder to Shoulder")?.credit).toBe("Alex Hormozi");
   });
-  it("keeps the build note out of what a client reads, and only that", () => {
+  it("lesson 4 closes on Danno's sentence, no lesson carries a build note, and a build note would still never reach the page", () => {
     const four = LESSONS.find((l) => l.order === 4)!;
-    expect(hasBuildNote(four.body)).toBe(true);
-    expect(lessonParagraphs(four.body).join("\n")).not.toMatch(/Note for the app build/);
-    expect(lessonParagraphs(four.body).length).toBe(four.body.split(/\n\s*\n/).length - 1);
-    const six = LESSONS.find((l) => l.order === 6)!;
-    expect(lessonParagraphs(six.body).length).toBe(six.body.split(/\n\s*\n/).length);
+    expect(lessonParagraphs(four.body).at(-1)).toBe("Your reframe library is where this layer lives — a metaphor for every objection you will actually hear, grouped by the objection itself rather than as a list to memorise.");
+    expect(mentionsReframes(four.body)).toBe(true);
+    for (const l of LESSONS) {
+      expect(hasBuildNote(l.body), `lesson ${l.order}`).toBe(false);
+      expect(lessonParagraphs(l.body).length).toBe(l.body.split(/\n\s*\n/).length);
+    }
+    expect(lessonParagraphs("Real words.\n\n**Note for the app build:** not for clients.")).toEqual(["Real words."]);
   });
 });
 

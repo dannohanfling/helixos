@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
-import { LESSONS, hasBuildNote, lessonParagraphs } from "@/lib/engine/socrates";
+import { LESSONS, lessonParagraphs, mentionsReframes } from "@/lib/engine/socrates";
 import { RichText } from "@/components/rich-text";
 import { Badge, Card, PageHeader } from "@/components/ui";
 
@@ -47,7 +47,7 @@ export default async function FoundationsPage() {
             <article data-testid="lesson" data-order={l.order}>
               <p className="mb-4 text-base italic text-ink-2">{l.subtitle}</p>
               <RichText paragraphs={lessonParagraphs(l.body)} className="text-[15px] leading-relaxed" />
-              {hasBuildNote(l.body) ? (
+              {mentionsReframes(l.body) ? (
                 <p className="mt-3 text-sm">
                   <Link href="/socrates/reframes" className="underline">Reframe library →</Link>
                 </p>

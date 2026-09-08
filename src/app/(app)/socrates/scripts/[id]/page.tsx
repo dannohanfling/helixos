@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { deleteScriptAction, saveBeatAction, updateScriptAction } from "@/lib/actions/socrates";
-import { CLARITY_BEATS, SCRIPT_TYPES, assemble, beatByKey, beatDone, beatOf, progress, questionsFor, reframesByGroup, scriptText } from "@/lib/engine/socrates";
+import { CLARITY_BEATS, REFRAME_BEAT, SCRIPT_TYPES, assemble, beatByKey, beatDone, beatOf, progress, questionsFor, reframesByGroup, scriptText } from "@/lib/engine/socrates";
 import { ownScript, visibleQuestions } from "@/lib/queries/socrates";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/components/ui";
@@ -117,9 +117,9 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
                 <p className="mt-1 text-sm text-ink-3" data-testid="beat-empty">Nothing tagged for this beat and {s.scriptType}. Write your own below.</p>
               )}
             </fieldset>
-            {s.scriptType === "Objection" ? (
+            {s.scriptType === "Objection" && current.key === REFRAME_BEAT ? (
               <fieldset data-testid="beat-reframes">
-                <legend className="label">Reframes, by objection</legend>
+                <legend className="label">Reframes, by objection <Link href="/socrates/reframes" className="ml-1 font-normal underline">full library</Link></legend>
                 <div className="mt-1 space-y-3">
                   {reframesByGroup().map((g) => (
                     <div key={g.group}>
