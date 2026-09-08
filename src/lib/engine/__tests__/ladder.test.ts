@@ -165,11 +165,12 @@ Verify Sarah's quote.`;
     const today = outputContract();
     expect(section(today, "COPY")).toContain(fb);
     expect(section(today, "SUPPORTING_COMMENTS")).toContain(fb);
-    expect(section(today, "IG_CAPTION")).not.toContain("FORMAT");
-    expect(section(today, "THREADS_CHAIN")).not.toContain("FORMAT");
+    expect(section(today, "IG_CAPTION")).toContain("FORMAT (Instagram caption): The first line is the whole hook;");
+    expect(section(today, "THREADS_CHAIN")).toContain("FORMAT (Threads): Under 500 characters a post.");
     expect(section(today, "HEADLINE")).not.toContain("FORMAT");
+    expect(section(today, "IG_CAROUSEL")).not.toContain("FORMAT");
     // When a channel's line lands as data, its field carries it and nothing else moves
-    const later = outputContract(CHANNEL_SPECS.map((c) => (c.key === "instagram" ? { ...c, format: "First line is the hook." } : c.key === "fb_page" ? { ...c, format: "Page line." } : c)));
+    const later = outputContract(CHANNEL_SPECS.map((c) => (c.key === "instagram" ? { ...c, format: "First line is the hook." } : c.key === "fb_page" ? { ...c, format: "Page line." } : c.key === "threads" ? { ...c, format: "" } : c)));
     expect(section(later, "IG_CAPTION")).toContain("FORMAT (Instagram caption): First line is the hook.");
     expect(section(later, "THREADS_CHAIN")).not.toContain("FORMAT");
     expect(section(later, "COPY")).toContain("FORMAT (Facebook personal): 4th-grade");

@@ -123,9 +123,13 @@ Format belongs to the channel, not the feature. Each entry in `CHANNEL_SPECS` ca
 `format` (the container the words go in: reading level, sentence length, line breaks). Every prompt that targets a channel
 (composer polish, repurpose, group drafts) appends the channel's format line beside its limit and link rule, and the ladder
 attaches it to each output field by the channel that field lands on (the post body and rungs to Facebook, the caption to
-Instagram, the chain to Threads). The Facebook personal and page lines are the ladder's, verbatim; every other channel's
-`format` is empty, which is no rule at all, until a line for it is signed off and lands as data. The rule of thumb: the more
-specific layer wins on tone (a group's own rules over its channel's posture), format is bounded by the channel regardless.
+Instagram, the chain to Threads). The Facebook personal and page lines are the ladder's, verbatim; the other eight are
+Danno's signed-off lines, and a wrong one is a data edit. The test for which column a rule belongs in: it is format if it
+would change when the channel changed for the same writer, tone if it would change when the writer changed on the same
+channel. An empty tone is allowed and is never padded; the voice then comes entirely from the client's Essence. Neither
+column restates the limit or the link rule the prompt already prints beside them, and neither carries a house practice: a
+client's hashtag comes from their own settings. The rule of thumb: the more specific layer wins on tone (a group's own rules
+over its channel's posture), format is bounded by the channel regardless.
 
 ## Stack
 

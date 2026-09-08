@@ -5,29 +5,33 @@ import type { CHANNELS } from "@/db/schema";
 export type Channel = (typeof CHANNELS)[number];
 
 /**
- * One channel's rules. `tone` is the channel's posture; `format` is the container the words go in (reading level, sentence
- * length, line breaks) and is empty until a line for that channel is signed off. Format belongs to the channel, never to the
- * feature that wrote the post: a ladder rung and a composer post on the same feed carry the same line. The Facebook lines are
- * the ladder's, verbatim; every other channel is empty and so carries no format rule, as before.
+ * One channel's rules. `tone` is the channel's posture: what would change if the writer changed on the same channel. `format`
+ * is the container the words go in: what would change if the channel changed for the same writer. Format belongs to the
+ * channel, never to the feature that wrote the post: a ladder rung and a composer post on the same feed carry the same line.
+ * The Facebook lines are the ladder's, verbatim; the rest are Danno's signed-off lines. An empty tone is fine and is not
+ * padded: the voice then comes entirely from the client's Essence. Neither column restates the limit or the link rule,
+ * which the prompt prints beside them, and neither carries a house practice (a client's hashtag comes from their own
+ * settings, never from here).
  */
 export type ChannelSpec = { key: Channel; label: string; icon: string; maxChars: number; hashtags: boolean; links: "ok" | "comment" | "bio" | "none"; tone: string; format: string; why: string };
 
 const FACEBOOK_FORMAT = "4th-grade reading level. Sentences average 5–7 words. Line break between every sentence or short thought.";
 
 export const CHANNEL_SPECS: ChannelSpec[] = [
-  { key: "fb_personal", label: "Facebook personal", icon: "👤", maxChars: 2000, hashtags: false, links: "comment", tone: "Story-first, personal, no links in the body.", format: FACEBOOK_FORMAT, why: "Your profile is where people decide if they like you. Lead with the story." },
-  { key: "fb_page", label: "Facebook business page", icon: "🏢", maxChars: 1500, hashtags: false, links: "ok", tone: "Clear value, direct CTA, link allowed.", format: FACEBOOK_FORMAT, why: "Pages get less reach but the link is fair game." },
-  { key: "fb_group", label: "Your Facebook group", icon: "👥", maxChars: 2000, hashtags: true, links: "ok", tone: "Question-first. Invite replies. Use the daily hashtag.", format: "", why: "Your group rewards conversation. Every post should ask something." },
-  { key: "other_groups", label: "Other people's groups", icon: "🤝", maxChars: 1200, hashtags: false, links: "none", tone: "Pure value. No links, no pitch, no CTA. Invite DMs only if asked.", format: "", why: "You're a guest. Give the whole lesson and let people come to you." },
-  { key: "stories", label: "Stories (FB / IG)", icon: "📱", maxChars: 220, hashtags: false, links: "ok", tone: "Three frames. One idea per frame. Big text.", format: "", why: "Stories are read in 3 seconds each. One line per frame." },
-  { key: "instagram", label: "Instagram caption", icon: "📸", maxChars: 2200, hashtags: true, links: "bio", tone: "Hook line, spaced lines, hashtags at the end, 'link in bio'.", format: "", why: "The first line is all they see before 'more'." },
-  { key: "threads", label: "Threads", icon: "🧵", maxChars: 500, hashtags: false, links: "ok", tone: "500 characters. One sharp idea. Conversational.", format: "", why: "Threads punishes long posts and rewards a strong take." },
-  { key: "linkedin", label: "LinkedIn", icon: "💼", maxChars: 3000, hashtags: true, links: "comment", tone: "Professional but human. Short lines. Lesson at the end. Link in first comment.", format: "", why: "LinkedIn readers want the business lesson, not the hype." },
-  { key: "email", label: "Email", icon: "📧", maxChars: 4000, hashtags: false, links: "ok", tone: "Subject line, one story, one CTA, one P.S.", format: "", why: "Email is the only channel you own. One ask per email." },
-  { key: "skool", label: "Skool community", icon: "🏫", maxChars: 3000, hashtags: false, links: "ok", tone: "Discussion post. Teach, then ask members to share their version.", format: "", why: "Skool ranks by comments. End with a real question." },
+  { key: "fb_personal", label: "Facebook personal", icon: "👤", maxChars: 2000, hashtags: false, links: "comment", tone: "Story-first, personal.", format: FACEBOOK_FORMAT, why: "Your profile is where people decide if they like you. Lead with the story." },
+  { key: "fb_page", label: "Facebook business page", icon: "🏢", maxChars: 1500, hashtags: false, links: "ok", tone: "Clear value, direct CTA.", format: FACEBOOK_FORMAT, why: "Pages get less reach but the link is fair game." },
+  { key: "fb_group", label: "Your Facebook group", icon: "👥", maxChars: 2000, hashtags: true, links: "ok", tone: "Question-first. Invite replies.", format: "4th-grade reading level. Line break between every sentence or short thought. No headings — a group post is a message, not an article.", why: "Your group rewards conversation. Every post should ask something." },
+  { key: "other_groups", label: "Other people's groups", icon: "🤝", maxChars: 1200, hashtags: false, links: "none", tone: "Pure value. No pitch, no CTA. Invite DMs only if asked.", format: "4th-grade reading level. Line break between every sentence or short thought. One thought only — a guest post that runs long reads as a takeover.", why: "You're a guest. Give the whole lesson and let people come to you." },
+  { key: "stories", label: "Stories (FB / IG)", icon: "📱", maxChars: 220, hashtags: false, links: "ok", tone: "", format: "Three frames. One idea per frame, twelve words at most. Big text. The action goes on the last frame.", why: "Stories are read in 3 seconds each. One line per frame." },
+  { key: "instagram", label: "Instagram caption", icon: "📸", maxChars: 2200, hashtags: true, links: "bio", tone: "", format: "The first line is the whole hook; everything after it hides behind \"more\". Spaced lines, one thought each. Hashtags at the end. 4th-grade reading level.", why: "The first line is all they see before 'more'." },
+  { key: "threads", label: "Threads", icon: "🧵", maxChars: 500, hashtags: false, links: "ok", tone: "Conversational.", format: "Under 500 characters a post. One idea per post in the chain. Plain sentences, no headings, no formatting.", why: "Threads punishes long posts and rewards a strong take." },
+  { key: "linkedin", label: "LinkedIn", icon: "💼", maxChars: 3000, hashtags: true, links: "comment", tone: "Professional but human.", format: "The first three lines show before \"see more\"; put the hook there. One or two sentences a paragraph. The lesson lands at the end. Plain language, full sentences. No emoji in the body.", why: "LinkedIn readers want the business lesson, not the hype." },
+  { key: "email", label: "Email", icon: "📧", maxChars: 4000, hashtags: false, links: "ok", tone: "", format: "Subject line under 50 characters. Write the preview text; do not let it inherit the first line. One idea a paragraph, one to three sentences. One story, one CTA, one P.S.", why: "Email is the only channel you own. One ask per email." },
+  { key: "skool", label: "Skool community", icon: "🏫", maxChars: 3000, hashtags: false, links: "ok", tone: "Teaching, not broadcasting.", format: "Lead with the point, not a tease — nothing is truncated and the audience is already here. Short paragraphs, headings allowed. Ends by asking members to share their version.", why: "Skool ranks by comments. End with a real question." },
 ];
 
-/** The clause a prompt appends for a channel's format, or nothing when the channel has no line yet. */
+/** The clauses a prompt appends for a channel's tone and format; nothing for an empty column, never filler. */
+export const toneClause = (spec?: Pick<ChannelSpec, "tone"> | null): string => (spec?.tone ? ` ${spec.tone}` : "");
 export const formatClause = (spec?: Pick<ChannelSpec, "format"> | null): string => (spec?.format ? ` Format: ${spec.format}` : "");
 
 export type SourceContent = { title: string; hook?: string | null; body?: string | null; hasCta?: boolean; ctaText?: string | null; hashtag?: string | null; firstName?: string | null };

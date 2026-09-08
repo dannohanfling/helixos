@@ -6,7 +6,7 @@ import { CHANNELS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { CHANNEL_SPECS, formatClause, type Channel } from "@/lib/engine/repurpose";
+import { CHANNEL_SPECS, formatClause, toneClause, type Channel } from "@/lib/engine/repurpose";
 import { readRules } from "@/lib/engine/groups";
 import { channelTargets, draftFor, groupTargets, staggerSchedule, type Target } from "@/lib/engine/compose";
 import { contentPoints } from "@/lib/engine/points";
@@ -98,7 +98,7 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
   const lines = input.targets.map((t) => {
     const spec = CHANNEL_SPECS.find((c) => c.key === t.channel);
     const g = t.groupId ? groups.find((x) => x.id === t.groupId) : null;
-    const rules = g ? `Facebook group "${g.name}". Mission: ${g.mission ?? ""}. Admin values: ${g.adminValues ?? ""}. Rules: ${g.rules ?? ""}. Norms: ${g.postingNorms ?? ""}. ${g.kind === "own" ? "This is the author's own group: full CTA welcome." : "Guest post: value first, no links, no pitch."}${formatClause(spec)} Max ${spec?.maxChars} chars. Links: ${readRules(g).noLinks ? "none" : spec?.links}.` : `${spec?.label}. ${spec?.tone}${formatClause(spec)} Max ${spec?.maxChars} chars. Links: ${spec?.links}.`;
+    const rules = g ? `Facebook group "${g.name}". Mission: ${g.mission ?? ""}. Admin values: ${g.adminValues ?? ""}. Rules: ${g.rules ?? ""}. Norms: ${g.postingNorms ?? ""}. ${g.kind === "own" ? "This is the author's own group: full CTA welcome." : "Guest post: value first, no links, no pitch."}${formatClause(spec)} Max ${spec?.maxChars} chars. Links: ${readRules(g).noLinks ? "none" : spec?.links}.` : `${spec?.label}.${toneClause(spec)}${formatClause(spec)} Max ${spec?.maxChars} chars. Links: ${spec?.links}.`;
     return `- ${t.key}: ${rules}\n  Current draft:\n${t.body}`;
   });
   const text = await draft(

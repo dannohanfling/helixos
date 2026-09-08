@@ -135,7 +135,8 @@ async function main() {
     const section = (name: string) => sys[1].text.split(`\n${name}\n`)[1]?.split("\n\n")[0] ?? "";
     const fbLine = /^FORMAT \(Facebook personal, Facebook business page\): 4th-grade reading level\. Sentences average 5–7 words\. Line break between every sentence or short thought\.$/m;
     if (!fbLine.test(section("COPY")) || !fbLine.test(section("SUPPORTING_COMMENTS"))) throw new Error("the Facebook format line must sit beside COPY and SUPPORTING_COMMENTS");
-    if (/FORMAT/.test(section("IG_CAPTION")) || /FORMAT/.test(section("THREADS_CHAIN"))) throw new Error("Instagram and Threads have no format line yet; none may appear");
+    if (!/^FORMAT \(Instagram caption\): The first line is the whole hook;/m.test(section("IG_CAPTION")) || !/^FORMAT \(Threads\): Under 500 characters a post\./m.test(section("THREADS_CHAIN"))) throw new Error("the caption and the chain must carry their own channel's format line");
+    if (/daily hashtag/i.test(sys[1].text)) throw new Error("a house practice must never reach a client's prompt");
     if (/^- 4th-grade/m.test(sys[1].text)) throw new Error("the format line must not also sit at the top as a feature-level rule");
     if (/Priya Raman|hospital car park, and what it taught me about systems\./.test(sys[0].text)) throw new Error("placeholder text must never reach the model");
     console.log("✓ filled: the Essence leads every system message, cached; the task follows; placeholders never sent");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { offerOnePager, scoreOffer } from "../offer-score";
-import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll } from "../repurpose";
+import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll, toneClause } from "../repurpose";
 import { ACTS, SECTION_TEMPLATES, deckOutline, nextStep, readinessScore, webinarProgress } from "../webinar";
 
 const strongOffer = {
@@ -64,15 +64,24 @@ describe("repurpose", () => {
       expect(v.body.length).toBeLessThanOrEqual(spec.maxChars + 20);
     }
   });
-  it("carries format on the channel: the ladder's Facebook line verbatim, every other channel empty until signed off", () => {
+  it("carries tone and format on the channel: the ladder's Facebook line verbatim, a signed-off line on every channel, no house practice, no restated limit", () => {
     const line = "4th-grade reading level. Sentences average 5–7 words. Line break between every sentence or short thought.";
     for (const c of CHANNEL_SPECS) {
-      expect(typeof c.format, c.key).toBe("string");
+      expect(c.format.length, c.key).toBeGreaterThan(0);
       if (c.key === "fb_personal" || c.key === "fb_page") expect(c.format, c.key).toBe(line);
-      else expect(c.format, c.key).toBe("");
+      // The limit and the link rule are printed beside the tone by every prompt; neither column may say them again
+      expect(c.tone, c.key).not.toMatch(/link|characters/i);
+      expect(`${c.tone} ${c.format}`, c.key).not.toMatch(/daily hashtag/i);
     }
+    // LinkedIn deliberately drops the 5–7 word rhythm; Skool deliberately does not lead with a hook
+    expect(CHANNEL_SPECS.find((c) => c.key === "linkedin")!.format).not.toMatch(/5–7/);
+    expect(CHANNEL_SPECS.find((c) => c.key === "skool")!.format).toMatch(/^Lead with the point, not a tease/);
+    // An empty tone is allowed and appends nothing, never filler
+    const empties = CHANNEL_SPECS.filter((c) => !c.tone).map((c) => c.key);
+    expect(empties).toEqual(["stories", "instagram", "email"]);
+    expect(toneClause(CHANNEL_SPECS.find((c) => c.key === "instagram"))).toBe("");
+    expect(toneClause(CHANNEL_SPECS.find((c) => c.key === "threads"))).toBe(" Conversational.");
     expect(formatClause(CHANNEL_SPECS.find((c) => c.key === "fb_page"))).toBe(` Format: ${line}`);
-    expect(formatClause(CHANNEL_SPECS.find((c) => c.key === "linkedin"))).toBe("");
     expect(formatClause(undefined)).toBe("");
   });
   it("keeps other groups pitch-free and gives email a subject", () => {
