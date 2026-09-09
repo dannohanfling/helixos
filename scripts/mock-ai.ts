@@ -18,6 +18,10 @@ function reply(system: string, user: string): string {
     const real = line ? line.replace(/^\[[^\]]+\]\s*[^:]+:\s*/, "").replace(/^Honestly it's been different\.\s*/, "") : "I've had three new clients this month and I didn't chase a single one.";
     return JSON.stringify({ quotes: [{ quote: real, speaker: "jess@example.com" }, { quote: "This program changed my life completely.", speaker: "jess@example.com" }] });
   }
+  // The Evidence prompt: a claim becomes the terms a researcher would search, the effect, and the field.
+  if (/search terms/i.test(system) && /"terms"/.test(system)) {
+    return JSON.stringify({ terms: ["foot-in-the-door", "compliance", "small request", "commitment"], effect: "Foot-in-the-door effect", field: "Social psychology, compliance research" });
+  }
   if (/JSON object keyed by/i.test(system)) {
     const keys = Array.from(user.matchAll(/^- ([\w:_-]+):/gm)).map((m) => m[1]);
     return JSON.stringify(Object.fromEntries(keys.map((k) => [k, { body: `Mock AI draft for ${k}.\nOne thought per line.\nWhat would you try first?` }])));

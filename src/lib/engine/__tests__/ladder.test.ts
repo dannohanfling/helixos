@@ -155,6 +155,12 @@ Verify Sarah's quote.`;
     expect(block).toContain("Sarah");
     expect(block).toContain("No scarcity line of any kind");
     expect(block).not.toMatch(/Book 'Em|Lamborfeeties|BOOKEM/);
+    // Evidence: only verified studies, claim and citation together; none means a placeholder, never an invented study
+    expect(block).toContain("## EVIDENCE\nNo verified research is on this client's shelf");
+    const withEvidence = masterBlock(profile, proofs, { name: "Maya Torres" }, ["- Familiarity lowers resistance (Robert Zajonc (1968). Attitudinal effects of mere exposure.. https://doi.org/10.1037/h0025848)"]);
+    expect(withEvidence).toContain("## VERIFIED EVIDENCE — USE ONLY THESE");
+    expect(withEvidence).toContain("Zajonc (1968)");
+    expect(withEvidence).toContain("[EVIDENCE PLACEHOLDER]");
     // The format rule is the channel's, attached to the output field; the top block only points at it
     expect(block).toContain("## FORMAT");
     expect(block).not.toMatch(/^- 4th-grade/m);

@@ -651,6 +651,8 @@ export const contentVariants = sqliteTable(
     dms: integer("dms").notNull().default(0),
     leads: integer("leads").notNull().default(0),
     generatedBy: text("generated_by").notNull().default("rules"),
+    /** What the generator removed from this draft and why (a fabricated statistic, with what to say instead). Shown beside the draft. */
+    notes: text("notes"),
     externalId: text("external_id"),
     externalStatus: text("external_status"),
     externalError: text("external_error"),
@@ -1234,6 +1236,99 @@ export const passwordResets = sqliteTable(
   },
   (t) => [index("password_resets_user").on(t.userId)],
 );
+
+/**
+ * Evidence: published research, each client's own. A study is citable only once the client has confirmed that what came back
+ * is what they asked for; `citationQuality` starts unverified and only their confirmation moves it. `askedFor` keeps the
+ * request beside the result so the two are always shown side by side.
+ */
+export const EVIDENCE_QUALITY = ["unverified", "verified"] as const;
+export type EvidenceAskedFor = { claim: string; terms: string[]; author?: string; year?: number };
+export const evidence = sqliteTable(
+  "evidence",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    claim: text("claim").notNull(),
+    askedFor: text("asked_for", { mode: "json" }).$type<EvidenceAskedFor>().notNull(),
+    title: text("title").notNull(),
+    authors: text("authors").notNull().default(""),
+    year: integer("year"),
+    doi: text("doi"),
+    url: text("url"),
+    openalexId: text("openalex_id"),
+    citedByCount: integer("cited_by_count").notNull().default(0),
+    citationQuality: text("citation_quality", { enum: EVIDENCE_QUALITY }).notNull().default("unverified"),
+    flags: text("flags", { mode: "json" }).$type<string[]>().notNull().default([]),
+    verifiedAt: text("verified_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("evidence_owner").on(t.userId)],
+);
+export type Evidence = typeof evidence.$inferSelect;
+
+/** The shared starter shelf: Evolve Omega's studies, upserted from src/data/research-library-seed-v2.json on every migrate. Never a client's. */
+export const evidenceShared = sqliteTable("evidence_shared", {
+  id: id(),
+  name: text("name").notNull(),
+  authorsSource: text("authors_source").notNull(),
+  category: text("category").notNull(),
+  confidenceLevel: text("confidence_level").notNull(),
+  shortSummary: text("short_summary").notNull(),
+  whyItMatters: text("why_it_matters").notNull(),
+  fifteenSecondScript: text("fifteen_second_script").notNull(),
+  thirtySecondReelScript: text("thirty_second_reel_script").notNull(),
+  clipHook: text("clip_hook").notNull(),
+  supports: text("supports", { mode: "json" }).$type<string[]>().notNull().default([]),
+  doi: text("doi").notNull(),
+  url: text("url").notNull(),
+  openalexId: text("openalex_id").notNull(),
+  citationQuality: text("citation_quality").notNull(),
+  verifiedTitle: text("verified_title").notNull(),
+  verifiedYear: integer("verified_year").notNull(),
+  citedByCount: integer("cited_by_count").notNull().default(0),
+  createdAt: createdAt(),
+});
+export type EvidenceShared = typeof evidenceShared.$inferSelect;
+
+/** A shared study a client removed from their own shelf. Nobody else's shelf changes. */
+export const evidenceHidden = sqliteTable(
+  "evidence_hidden",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sharedId: text("shared_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("evidence_hidden_user_shared").on(t.userId, t.sharedId)],
+);
+
+/** One OpenAlex search: kept as the cache (by normalised query) and as the per-client daily count. `day` is the UTC date. */
+export type EvidenceResult = { openalexId: string; title: string; authors: string; year: number | null; doi: string | null; url: string | null; citedByCount: number };
+export const evidenceSearches = sqliteTable(
+  "evidence_searches",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: text("day").notNull(),
+    queryKey: text("query_key").notNull(),
+    query: text("query").notNull(),
+    claim: text("claim").notNull().default(""),
+    askedFor: text("asked_for", { mode: "json" }).$type<EvidenceAskedFor>().notNull(),
+    results: text("results", { mode: "json" }).$type<EvidenceResult[]>().notNull().default([]),
+    fromCache: integer("from_cache", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [index("evidence_searches_user_day").on(t.userId, t.day), index("evidence_searches_key").on(t.queryKey)],
+);
+export type EvidenceSearch = typeof evidenceSearches.$inferSelect;
 
 /** Fixed-window counters for login and join attempts. */
 export const rateLimits = sqliteTable("rate_limits", {

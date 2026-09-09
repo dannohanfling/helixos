@@ -8,6 +8,7 @@ import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { CHANNEL_SPECS, formatClause, toneClause, type Channel } from "@/lib/engine/repurpose";
 import { readRules } from "@/lib/engine/groups";
+import { explainFabricated, findFabricated, stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { channelTargets, draftFor, groupTargets, staggerSchedule, type Target } from "@/lib/engine/compose";
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
@@ -28,13 +29,17 @@ export type ComposePayload = {
   targets: { key: string; channel: string; groupId: string; body: string; subject?: string; postAt?: string | null }[];
 };
 
-export type ComposeResult = { id: string; scheduled: number; posted: number; pushed: number };
+/** `blocked`: nothing was saved; the text says which fabricated statistic and what to say instead. */
+export type ComposeResult = { id: string; scheduled: number; posted: number; pushed: number; blocked?: string };
 
 const isChannel = (c: string): c is Channel => (CHANNELS as readonly string[]).includes(c);
 
 /** Saves the post and one variant per target. Schedules or marks posted; pushes scheduled channel posts to the Social Planner. */
 export async function saveComposeAction(payload: ComposePayload): Promise<ComposeResult> {
   const { v, workspaceId, userId } = await ctx();
+  // Block on truth, server-side as well: a fabricated statistic in any version saves nothing and says why.
+  const fabricated = findFabricated([payload.body, ...payload.targets.map((t) => t.body)].join("\n"));
+  if (fabricated.length) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: `Blocked, this statistic is not real: ${explainFabricated(fabricated)}` };
   const title = payload.title.trim() || payload.hook.trim().slice(0, 80) || "Untitled post";
   const firstAt = payload.targets.map((t) => t.postAt).filter(Boolean).sort()[0] ?? null;
   const status = payload.mode === "now" ? "posted" : payload.mode === "schedule" ? "scheduled" : "ready";
@@ -92,7 +97,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
 }
 
 /** Claude rewrites each target's draft in the coach's voice, respecting channel limits and group rules. Returns only the targets it improved. */
-export async function polishTargetsAction(input: { title: string; hook: string; body: string; cta?: string; hasCta: boolean; targets: { key: string; channel: string; groupId: string; body: string }[] }): Promise<Record<string, { body: string; subject?: string }>> {
+export async function polishTargetsAction(input: { title: string; hook: string; body: string; cta?: string; hasCta: boolean; targets: { key: string; channel: string; groupId: string; body: string }[] }): Promise<{ drafts: Record<string, { body: string; subject?: string }>; removed: string | null }> {
   const { v, userId } = await ctx();
   const groups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
   const lines = input.targets.map((t) => {
@@ -107,11 +112,19 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
     8000,
     { feature: "composer_polish" },
   );
-  if (!text) return {};
+  if (!text) return { drafts: {}, removed: null };
   try {
-    return JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as Record<string, { body: string; subject?: string }>;
+    const drafts = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as Record<string, { body: string; subject?: string }>;
+    // A fabricated statistic the model wrote comes out of every version, and the composer says what went and why.
+    const removed: ReturnType<typeof stripFabricated>["removed"] = [];
+    for (const [k, d] of Object.entries(drafts)) {
+      const r = stripFabricated(d.body ?? "");
+      removed.push(...r.removed);
+      drafts[k] = { ...d, body: r.text };
+    }
+    return { drafts, removed: stripNote(removed) };
   } catch {
-    return {};
+    return { drafts: {}, removed: null };
   }
 }
 

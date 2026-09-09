@@ -6,6 +6,7 @@ import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { draft } from "@/lib/ai";
 import { principlePost, principleReel, principleTraining } from "@/lib/engine/doctrine";
+import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { ctx, str } from "@/lib/action-helpers";
 
 /** Turns a principle into a content item (post, reel script, or training outline) and opens it. */
@@ -18,6 +19,7 @@ export async function principleToContentAction(formData: FormData): Promise<void
   if (!p) return;
   const firstName = v.user.name.split(" ")[0];
   let body = kind === "post" ? principlePost(p, firstName) : kind === "reel" ? principleReel(p) : principleTraining(p);
+  let note: string | null = null;
   if (useAi) {
     const ai = await draft(
       `You turn a business principle into ${kind === "post" ? "a Facebook post" : kind === "reel" ? "a 60-second reel script with timestamps" : "a 10-minute training outline"}. Return only the ${kind === "post" ? "post" : kind === "reel" ? "script" : "outline"}, no preamble.`,
@@ -25,7 +27,11 @@ export async function principleToContentAction(formData: FormData): Promise<void
       3000,
       { feature: "principle_content" },
     );
-    if (ai) body = ai;
+    if (ai) {
+      const stripped = stripFabricated(ai);
+      body = stripped.text;
+      note = stripNote(stripped.removed);
+    }
   }
   const id = newId();
   await db.insert(schema.contentItems).values({
@@ -39,7 +45,7 @@ export async function principleToContentAction(formData: FormData): Promise<void
     hasCta: kind === "post",
     hook: p.hookAngle ?? p.name,
     body,
-    notes: `From principle ${p.code}`,
+    notes: [`From principle ${p.code}`, note ? `Taken out of the draft, because it is not true: ${note}` : ""].filter(Boolean).join("\n"),
   });
   redirect(`/content/${id}`);
 }

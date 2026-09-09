@@ -9,6 +9,7 @@ import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { alignPost, groupSpec, readRules } from "@/lib/engine/groups";
 import { formatClause } from "@/lib/engine/repurpose";
+import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 function fields(fd: FormData) {
@@ -115,6 +116,7 @@ export async function generateGroupVariantsAction(formData: FormData): Promise<v
     const links = readRules(g).noLinks ? "none" : spec.links;
     let body = aligned.body;
     let by = "rules";
+    let notes: string | null = null;
     if (useAi) {
       const ai = await draft(
         `You adapt one coaching post for a specific Facebook group so it fits that group's mission, the admin's values, and its rules. ${aligned.ctaAllowed ? "A soft call to action is allowed." : "No pitch, no links, no call to action: pure value and a question."} Channel: ${spec.label}.${formatClause(spec)} Max ${spec.maxChars} chars. Links: ${links}. Return only the post.`,
@@ -123,15 +125,18 @@ export async function generateGroupVariantsAction(formData: FormData): Promise<v
         { feature: "group_variant" },
       );
       if (ai) {
-        body = ai;
+        // A fabricated statistic the model wrote comes out, and the note beside the draft says why.
+        const stripped = stripFabricated(ai);
+        body = stripped.text;
+        notes = stripNote(stripped.removed);
         by = "claude";
       }
     }
     const channel = spec.key;
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, channel), eq(schema.contentVariants.groupId, g.id)) });
     if (existing?.status === "posted") continue;
-    if (existing) await db.update(schema.contentVariants).set({ body, generatedBy: by }).where(eq(schema.contentVariants.id, existing.id));
-    else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId, userId, channel, groupId: g.id, body, generatedBy: by });
+    if (existing) await db.update(schema.contentVariants).set({ body, notes, generatedBy: by }).where(eq(schema.contentVariants.id, existing.id));
+    else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId, userId, channel, groupId: g.id, body, notes, generatedBy: by });
   }
   refresh();
 }

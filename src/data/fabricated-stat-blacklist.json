@@ -1,0 +1,98 @@
+[
+  {
+    "id": "b01",
+    "pattern": "Yale|Harvard",
+    "claim": "The Yale (or Harvard) study where the 3% who wrote down their goals out-earned the other 97%",
+    "why": "The study does not exist. Yale has no record of it. Fast Company chased it to its source in 1996 and found nothing. It is repeated constantly in coaching.",
+    "sayInstead": "Gail Matthews' 2015 Dominican University study is real, was actually run, and found written goals plus accountability improved achievement. Use that one and cite it.",
+    "confidence": "certain"
+  },
+  {
+    "id": "b02",
+    "pattern": "21 days|twenty-one days",
+    "claim": "It takes 21 days to form a habit",
+    "why": "From Maxwell Maltz's Psycho-Cybernetics (1960), an observation about how long amputees took to stop feeling a phantom limb. Never a habit study. Lally et al. 2010 found a median of 66 days with enormous variation.",
+    "sayInstead": "Habits take longer than people expect, and how long varies enormously by person and behaviour.",
+    "confidence": "certain"
+  },
+  {
+    "id": "b03",
+    "pattern": "93%|55%|38%|body language",
+    "claim": "93% of communication is nonverbal",
+    "why": "Mehrabian's research is real but was about people judging feelings when the words and the tone contradicted each other. It was never a claim about communication in general. Mehrabian himself has said so repeatedly.",
+    "sayInstead": "When your words and your delivery disagree, people believe the delivery.",
+    "confidence": "certain"
+  },
+  {
+    "id": "b04",
+    "pattern": "attention span|goldfish|8 seconds|eight seconds",
+    "claim": "The human attention span is now 8 seconds, shorter than a goldfish",
+    "why": "Traced to a Microsoft report that cited a source which did not contain the claim. No researcher has ever measured a goldfish's attention span.",
+    "sayInstead": "People decide fast whether something is for them. Earn the first line.",
+    "confidence": "certain"
+  },
+  {
+    "id": "b05",
+    "pattern": "7 touches|seven touches|touchpoints before",
+    "claim": "It takes 7 touches to make a sale",
+    "why": "No source has ever been produced. The number is also given as 5, 8, 12 and 13 depending on who is selling what.",
+    "sayInstead": "Familiarity lowers resistance — and that one is real. Zajonc 1968, already in your Evidence shelf.",
+    "confidence": "high"
+  },
+  {
+    "id": "b06",
+    "pattern": "5,000 ads|5000 ads|10,000 ads",
+    "claim": "The average person sees 5,000 (or 10,000) ads a day",
+    "why": "Traced to a single unsourced 2007 quote in a newspaper article. Repeated ever since, never measured.",
+    "sayInstead": "People see a great deal of marketing and most of it does not register.",
+    "confidence": "high"
+  },
+  {
+    "id": "b07",
+    "pattern": "10% of what they read|learning pyramid|cone of learning|retain 90%",
+    "claim": "People remember 10% of what they read, 20% of what they hear, 90% of what they do",
+    "why": "The 'learning pyramid' or 'cone of learning'. The numbers were invented; they conveniently descend in multiples of ten. Repeatedly traced and repeatedly found to have no study behind them.",
+    "sayInstead": "Doing something is a better way to learn it than reading about it.",
+    "confidence": "certain"
+  },
+  {
+    "id": "b08",
+    "pattern": "90% of (startups|businesses) fail|95% of businesses fail",
+    "claim": "90% of businesses fail in the first year",
+    "why": "Real survival data exists and does not say this. Roughly 20% of US businesses close in year one and about half within five years. The 90% figure is a scare number.",
+    "sayInstead": "Cite the actual survival figures, or drop the statistic and describe what you see instead.",
+    "confidence": "high"
+  },
+  {
+    "id": "b09",
+    "pattern": "5x more|five times more|costs 5 times",
+    "claim": "It costs 5x more to acquire a customer than to keep one",
+    "why": "Cited everywhere with no primary source. The multiple is variously given as 4x, 5x, 6x, 7x and 25x. It also varies enormously by industry, so a single number cannot be true.",
+    "sayInstead": "Keeping a client is usually cheaper than finding a new one, and by how much depends on your business.",
+    "confidence": "high"
+  },
+  {
+    "id": "b10",
+    "pattern": "7 income streams|seven streams of income",
+    "claim": "Millionaires have 7 streams of income",
+    "why": "A misreading of an IRS statistic about the number of income categories on high-earner tax returns. Not a strategy anyone measured.",
+    "sayInstead": "Nothing. Say what you have actually seen work.",
+    "confidence": "high"
+  },
+  {
+    "id": "b11",
+    "pattern": "80% of sales|5 follow-ups|eight follow-ups",
+    "claim": "80% of sales require 5 follow-up calls",
+    "why": "Attributed to a 'Marketing Donut' page that cited no study. Reproduced in thousands of sales decks since.",
+    "sayInstead": "Most people do not buy the first time you ask. Follow up more than feels comfortable.",
+    "confidence": "high"
+  },
+  {
+    "id": "b12",
+    "pattern": "left brain|right brain|creative side of the brain",
+    "claim": "Left-brained and right-brained people",
+    "why": "Not how brains work. There are no left-dominant or right-dominant personality types; imaging studies find no such split.",
+    "sayInstead": "People approach problems differently, and it is not because of which half of their brain they use.",
+    "confidence": "certain"
+  }
+]

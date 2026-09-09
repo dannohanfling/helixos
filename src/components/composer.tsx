@@ -8,6 +8,7 @@ import { polishTargetsAction, saveComposeAction, type ComposeResult } from "@/li
 import { pushLadderUpdateAction } from "@/lib/actions/ladders";
 import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type Draft, type GroupTarget, type Target, type TargetKey } from "@/lib/engine/compose";
 import { hashtagsFor } from "@/lib/engine/repurpose";
+import { explainFabricated, findFabricated } from "@/lib/engine/blacklist";
 import { ChannelPreview, type Persona } from "./channel-previews";
 import { AiStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
@@ -69,8 +70,13 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const schedule = useMemo(() => (stagger ? staggerSchedule(schedulable, localIso(date, time)) : new Map(schedulable.map((t) => [t.key, `${date}T${time}`]))), [schedulable, stagger, date, time]);
   const problems = schedulable.filter((t) => {
     const d = draftOf(t);
-    return !d.body.trim() || d.body.length > t.maxChars;
+    return !d.body.trim() || d.body.length > t.maxChars || findFabricated(d.body).length > 0;
   });
+  // Block on truth: a fabricated statistic blocks scheduling and posting, and the block says why and what to say instead.
+  const fabricatedIn = (body: string) => {
+    const m = findFabricated(body);
+    return m.length ? explainFabricated(m) : null;
+  };
   const active = tab !== "all" ? byKey.get(tab) : undefined;
   const activeDraft = active ? draftOf(active) : null;
 
@@ -111,6 +117,10 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
         }),
       };
       const r = await saveComposeAction(payload);
+      if (r.blocked) {
+        setNotice(r.blocked);
+        return;
+      }
       setResult(r);
       if (mode === "draft") router.push(`/content/${r.id}/repurpose`);
       else setNotice(mode === "now" ? `Posted to ${r.posted} places. Groups are ready to paste; channels went to the Social Planner${socialConnected ? "" : " queue (connect GoHighLevel to auto-publish)"}.` : `Scheduled ${r.scheduled} posts starting ${date} ${time}.`);
@@ -120,7 +130,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
     start(async () => {
       setNotice(null);
       setPolishing(true);
-      const res = await polishTargetsAction({ title: src.title, hook, body, cta, hasCta, targets: schedulable.map((t) => ({ key: t.key, channel: t.channel, groupId: t.groupId, body: draftFor(src, t).body })) });
+      const { drafts: res, removed } = await polishTargetsAction({ title: src.title, hook, body, cta, hasCta, targets: schedulable.map((t) => ({ key: t.key, channel: t.channel, groupId: t.groupId, body: draftFor(src, t).body })) });
       setPolishing(false);
       const n = Object.keys(res).length;
       if (!n) {
@@ -129,7 +139,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       }
       setCustomize(true);
       setOverrides((o) => ({ ...o, ...res }));
-      setNotice(`AI rewrote ${n} versions${voice.ready ? " in your voice" : ""}. Review each tab, then schedule.`);
+      setNotice(`AI rewrote ${n} versions${voice.ready ? " in your voice" : ""}. Review each tab, then schedule.${removed ? `\nTaken out, because it is not true: ${removed}` : ""}`);
     });
 
   const preview = previewTab === "all" ? chosen : chosen.filter((t) => t.key === previewTab);
@@ -198,6 +208,11 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   {activeDraft.body.length}/{active.maxChars}
                 </span>
               </div>
+              {fabricatedIn(activeDraft.body) ? (
+                <p className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-2 text-xs" data-testid="fabricated-block" role="alert">
+                  Blocked, this statistic is not real: {fabricatedIn(activeDraft.body)}
+                </p>
+              ) : null}
               {copyOnlyReason(active) ? (
                 <p className="flex flex-wrap items-center gap-2 rounded-lg bg-warn-soft p-2 text-xs" data-testid="copy-only" role="status">
                   <span>{copyOnlyReason(active)}</span>
@@ -407,6 +422,11 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                     </p>
                   ) : null}
                   {over ? <p className="mb-1 text-[11px] text-danger">Over the {t.maxChars}-character limit for {t.label}.</p> : null}
+                  {fabricatedIn(d.body) ? (
+                    <p className="mb-1 whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-2 text-[11px]" data-testid="fabricated-block" role="alert">
+                      Blocked, this statistic is not real: {fabricatedIn(d.body)}
+                    </p>
+                  ) : null}
                   <ChannelPreview t={t} d={d} p={persona} media={mediaUrl || undefined} title={src.title} />
                 </div>
               );

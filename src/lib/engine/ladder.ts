@@ -6,6 +6,7 @@
 import type { Ladder, LadderProfile, LadderRung, Proof } from "@/db/schema";
 import { LADDER_FORMAT_KEYS } from "@/db/schema";
 import { CHANNEL_SPECS, type Channel, type ChannelSpec } from "./repurpose";
+import { explainFabricated, findFabricated } from "./blacklist";
 
 export type LadderFormatKey = (typeof LADDER_FORMAT_KEYS)[number];
 
@@ -79,7 +80,8 @@ function testimonialLines(proofs: Proof[]): string[] {
 }
 
 /** Section A, adapted: the same rules, written from this client's facts instead of Danno's. */
-export function masterBlock(profile: LadderProfile | null, proofs: Proof[], member: Member): string {
+/** `evidence`: the client's citable studies as "claim (citation)" lines, from src/lib/engine/evidence; nothing unverified ever reaches here. */
+export function masterBlock(profile: LadderProfile | null, proofs: Proof[], member: Member, evidence: string[] = []): string {
   const keywords = (profile?.keywords ?? []).filter((k) => k.keyword);
   const stats = (profile?.verifiedStats ?? []).filter((s) => s.stat);
   const banned = [...DEFAULT_BANNED, ...(profile?.bannedPhrases ?? [])];
@@ -130,6 +132,9 @@ Sell methodology and transformation, never program names.`,
     tms.length
       ? `## APPROVED TESTIMONIALS — PERMISSION GRANTED\nUse verbatim. First name + last initial.\n${tms.join("\n")}\nAnyone not on this list requires permission first. Write [PROOF PLACEHOLDER] rather than inventing.`
       : `## TESTIMONIALS\nNone are approved yet. Write [PROOF PLACEHOLDER] where a testimonial belongs. Never invent one.`,
+    evidence.length
+      ? `## VERIFIED EVIDENCE — USE ONLY THESE\nEach line is a claim and its citation. Use them together, never the claim alone.\n${evidence.join("\n")}\nAny other study is off limits. Write [EVIDENCE PLACEHOLDER] rather than inventing or half-remembering one.`
+      : `## EVIDENCE\nNo verified research is on this client's shelf. Do not cite a study. Write [EVIDENCE PLACEHOLDER] where one would help.`,
     `## KEYWORD ROUTING\n${keywords.length ? keywords.map((k) => `- ${k.keyword} — ${k.use}`).join("\n") : "- (no keywords set up)"}\n- NONE — pure trust/story posts close with a question instead. Pitching at the end of a personal story breaks it.`,
     profile?.originStory?.trim() ? `## ORIGIN STORY (recurring source material)\n${profile.originStory.trim()}${profile.positioningLine ? `\nPositioning line: ${profile.positioningLine}` : ""}\nKeep the odd specific details. They're what make it feel lived rather than constructed.` : "",
     `## CTA — FINAL RUNG ONLY
@@ -456,6 +461,10 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   add("headline-strand", "No single word stranded on the second line", h.lines.length !== 2 || words(h.lines[1]) > 1, "Rebalance the break so the second line has at least two words.", "warn");
 
   // Platform limits
+  // Block on truth: a fabricated statistic anywhere in the package fails publishing, and the note says why and what to say instead.
+  const fabricated = findFabricated([l.copy, ...l.rungs.map((r) => r.body), l.igCaption, ...l.threadsChain].join("\n"));
+  add("fabricated", "No fabricated statistics", !fabricated.length, explainFabricated(fabricated));
+
   // Every number here is the channel spec's, the same one the prompt and the composer print; a literal would drift from it.
   const threadsMax = limitOf(CHANNEL_SPECS, "threads");
   const igMax = limitOf(CHANNEL_SPECS, "instagram");

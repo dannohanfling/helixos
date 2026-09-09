@@ -143,6 +143,37 @@ A ladder's Threads chain is six to eight posts, and the composer schedules one p
 target there: shown, counted in posts, copyable, never scheduled or polished as one post, with the reason beside it. Sending
 the chain as several drafts is a separate decision about how the composer models a multi-post target.
 
+## Evidence: published research, each client's own
+
+"Evidence" is the left-nav section for published research (the Proof Bank is your clients' results; one line under each says
+which is which). The flow starts from the claim, not the query: the client writes the claim in plain words, the model turns it
+into the terms a researcher would search (with no AI key the claim's own words stand in, and the page says so), OpenAlex
+returns real papers with title, authors, year, DOI as a working link and citation count, sorted by citations, and the client
+picks. What they pick joins their shelf as unverified, with what they asked for shown beside what came back and a flag where
+the year differs or the title has none of their terms; a flag says look closer, never no. Only the client's confirmation makes
+a study citable, and only citable studies reach a prompt or a copy button. Insert copies the claim and the citation
+together (`insertText` in `src/lib/engine/evidence.ts`); they never travel apart.
+
+OpenAlex takes the key as a query parameter, so `src/lib/openalex.ts` is server-side only: an ESLint rule keeps it out of
+everything but `src/lib/actions/evidence.ts`, no error message carries the URL, and the walk asserts the browser never calls
+it. One shared key pays for every client: searches are cached by normalised query for a week, each client gets 25 real
+searches a day (UTC), and a quota failure says so and when it resets rather than reading as "no research exists".
+
+The shared starter shelf is Danno's nine studies (`src/data/research-library-seed-v2.json`, every one with a DOI resolved
+through OpenAlex), upserted on every migrate into `evidence_shared` and shown on every shelf labelled as shared and sourced by
+Evolve Omega. A client removes any of it from their own shelf without touching anyone else's (`evidence_hidden`). It is never a
+client's evidence.
+
+The fabricated-stat blacklist (`src/data/fabricated-stat-blacklist.json`, Danno's list to edit) is the other half of proof.
+Block on truth: a blacklisted claim in a client's own draft blocks the ladder's publish checklist and the composer's schedule
+and post buttons, and the block shows the claim, where it actually came from and what to say instead, never a bare refusal.
+Copy a model wrote is stripped of the sentence carrying the claim in every generator (ladder, composer polish, repurpose,
+group drafts, webinar sections, doctrine) and the page says what went and why. Patterns are loose and case-insensitive on
+purpose: a false positive costs one sentence, a false negative puts a fabricated statistic in front of an audience.
+
+Environment: `OPENALEX_API_KEY` (already in Vercel, all environments). `OPENALEX_BASE_URL` is honoured only outside production,
+for `scripts/mock-openalex.ts`. Walk: `scripts/smoke-evidence.ts` (needs the OpenAlex and AI mocks; `scripts/dev-server.sh` sets both).
+
 ## Stack
 
 Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQLite/libsql, `jose` sessions,

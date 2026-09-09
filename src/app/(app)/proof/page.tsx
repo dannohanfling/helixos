@@ -27,7 +27,7 @@ export default async function ProofPage() {
   const grandfathered = rows.filter((r) => r.status === "approved" && !r.permissionAt).length;
   return (
     <>
-      <PageHeader title="Proof Bank" subtitle={<span>{rows.length} proofs · {approved} approved to use{grandfathered ? <span data-testid="grandfathered-count"> ({grandfathered} approved before the permission tick; they stay approved)</span> : null}. Every win your clients get is a post, a webinar slide, and an objection answer.</span>} />
+      <PageHeader title="Proof Bank" subtitle={<span>Your clients&apos; results. {rows.length} proofs · {approved} approved to use{grandfathered ? <span data-testid="grandfathered-count"> ({grandfathered} approved before the permission tick; they stay approved)</span> : null}. Every win your clients get is a post, a webinar slide, and an objection answer.</span>} />
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-4">
           {rows.length ? (

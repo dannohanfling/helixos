@@ -11,6 +11,9 @@ import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, readinessScore } from "@
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
+import { evidenceLines } from "@/lib/engine/evidence";
+import { citableEvidence } from "@/lib/queries/evidence";
 
 async function own(webinarId: string, userId: string) {
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, webinarId), eq(schema.webinars.userId, userId)) });
@@ -107,6 +110,8 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   const belief = beliefs.find((b) => b.type === tpl.act);
   // The picked proof is an approved row of the bank, the same rows the ladder reads; a draft can never get here.
   const picked = belief?.proofId ? await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, belief.proofId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }) : null;
+  const evidence = evidenceLines(await citableEvidence(userId));
+  const evidenceLine = evidence.length ? `Verified research on the coach's shelf, each line a claim and its citation to be used together, and the only studies that may be cited:\n${evidence.join("\n")}` : "No verified research is on the coach's shelf: cite no study; write [EVIDENCE PLACEHOLDER] where one would help.";
   const proofLine = picked ? `Approved proof, use it verbatim with first name and last initial: ${picked.who ?? picked.name}: "${picked.longVersion ?? picked.shortVersion ?? picked.resultAfter ?? ""}"` : `Proof: ${belief?.proof ?? ""}`;
   let text: string | null = null;
   if (str(formData, "mode") !== "example") {
@@ -120,6 +125,7 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
         `Named mechanism: ${w.mechanismName ?? "(not set)"}`,
         `Desired result: ${w.desiredResult ?? "(not set)"}`,
         belief ? `Belief shift for this act: from "${belief.fromBelief ?? ""}" to "${belief.toBelief ?? ""}". ${proofLine}` : "",
+        evidenceLine,
         `Act: ${act.name}. Purpose: ${act.purpose}`,
         `Section: ${tpl.name}. Coaching: ${tpl.prompt}`,
         asset ? `Use this ${asset.type} from the library, adapted to the audience:\n${asset.body}` : "",
@@ -136,12 +142,15 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
     const swap = (s: string) => s.replace(/Synchronized Journey( Framework)?/g, w.mechanismName ?? "[your mechanism]").replace(/75 minutes/g, "60 minutes");
     text = `${swap(tpl.exampleScript)}\n\n[Example from The Leaky Webinar. Rewrite in your words: your audience is "${w.audience ?? "…"}", your promise is "${w.promise ?? "…"}".]`;
   }
+  // A fabricated statistic the model wrote comes out, and the page says what went and why. The coach's own words are never edited here.
+  const stripped = stripFabricated(text);
+  const note = stripNote(stripped.removed);
   await db
     .update(schema.webinarSections)
-    .set({ script: text, status: "drafted", keyPoints: section?.keyPoints ?? tpl.exampleKeyPoints })
+    .set({ script: stripped.text, status: "drafted", keyPoints: section?.keyPoints ?? tpl.exampleKeyPoints })
     .where(and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)));
   refresh();
-  redirect(`/webinars/${id}?step=script&section=${sectionKey}`);
+  redirect(`/webinars/${id}?step=script&section=${sectionKey}${note ? `&stripped=${encodeURIComponent(note)}` : ""}`);
 }
 
 export async function linkOfferAction(formData: FormData): Promise<void> {

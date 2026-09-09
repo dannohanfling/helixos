@@ -6,6 +6,8 @@ import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { markRungAction, pushLadderUpdateAction, regenerateLadderAction, sendLadderToComposerAction, setLadderStatusAction, updateLadderAction } from "@/lib/actions/ladders";
 import { staleScheduledFor } from "@/lib/queries/ladders";
+import { citableEvidence } from "@/lib/queries/evidence";
+import { insertText } from "@/lib/engine/evidence";
 import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
 import { CopyButton } from "@/components/copy-button";
 import { LiveClock } from "@/components/rung-runner";
@@ -52,6 +54,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
   const ai = await hasAiKey();
+  const evidence = await citableEvidence(v.user.id);
   const fmt = formatFor(l.format);
   const checks = checklist(l, profile ?? null, proofs);
   const score = checkScore(checks);
@@ -208,6 +211,26 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           </form>
         </div>
         <div className="space-y-4">
+          <Card title="Evidence" action={<Badge tone={evidence.length ? "good" : "neutral"}>{evidence.length} citable</Badge>}>
+            <p className="mb-2 text-[11px] text-ink-3">Published research for a proof rung. Copy puts the claim and its citation together; they never travel apart. Unconfirmed studies are not here.</p>
+            {evidence.length ? (
+              <ul className="max-h-64 space-y-1 overflow-y-auto text-xs" data-testid="ladder-evidence">
+                {evidence.map((e) => (
+                  <li key={`${e.source}:${e.id}`} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2" data-source={e.source}>
+                    <span className="min-w-0">
+                      <span className="font-semibold">{e.name}</span>
+                      {e.source === "shared" ? <span className="text-ink-3"> · shared, Evolve Omega</span> : null}
+                      <span className="block text-ink-2 line-clamp-2">{e.claim}</span>
+                      <span className="block text-ink-3">{e.authors}{e.year ? ` (${e.year})` : ""} · cited {e.citedByCount.toLocaleString()} times</span>
+                    </span>
+                    <CopyButton text={insertText(e)} label="Copy" className="btn btn-ghost btn-xs" title="Copy the claim and the citation together" />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-ink-3">Nothing citable yet. Find and confirm a study in <Link href="/evidence" className="underline">Evidence</Link>.</p>
+            )}
+          </Card>
           <Card title="Pre-publish checklist" action={<Badge tone={ready ? "good" : "warn"}>{ready ? "clear" : `${score.fails} to fix`}</Badge>}>
             <ul className="space-y-1 text-xs" data-testid="checklist">
               {checks.map((c) => (

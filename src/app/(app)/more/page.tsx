@@ -21,7 +21,7 @@ export default async function MorePage() {
                 <Link key={n.href} href={n.href} className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2">
                   <span className="w-6 text-center text-lg">{n.icon}</span>
                   <span className="font-medium">{n.label}</span>
-                  {n.hint ? <span className="ml-auto text-xs text-ink-3">{n.hint}</span> : null}
+                  {n.line ?? n.hint ? <span className="ml-auto text-xs text-ink-3">{n.line ?? n.hint}</span> : null}
                 </Link>
               ))}
           </div>

@@ -8,6 +8,9 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { channelBodies, checklist, masterBlock, outputContract, parseLadderOutput, parseRungs, perPostInput, publishBlockers, scaffold, type Brief, type Parsed } from "@/lib/engine/ladder";
+import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
+import { evidenceLines } from "@/lib/engine/evidence";
+import { citableEvidence } from "@/lib/queries/evidence";
 import { pushSocialPost } from "@/lib/integrations";
 import { staleScheduledFor } from "@/lib/queries/ladders";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
@@ -90,18 +93,32 @@ export async function saveLadderProfileAction(formData: FormData): Promise<void>
   redirect("/content/ladders");
 }
 
+/** A fabricated statistic the model wrote comes out of every field, and the notes say what went and why. The client's own words are never edited here. */
+function scrub(parsed: Parsed): Parsed {
+  const removed: ReturnType<typeof stripFabricated>["removed"] = [];
+  const take = (text: string) => {
+    const r = stripFabricated(text);
+    removed.push(...r.removed);
+    return r.text;
+  };
+  const out: Parsed = { ...parsed, copy: take(parsed.copy), rungs: parsed.rungs.map((r) => ({ ...r, body: take(r.body) })), igCaption: take(parsed.igCaption), threadsChain: parsed.threadsChain.map(take) };
+  const note = stripNote(removed);
+  return note ? { ...out, notes: [out.notes, note].filter(Boolean).join("\n") } : out;
+}
+
 async function generate(workspaceId: string, userId: string, brief: Brief): Promise<{ parsed: Parsed; generatedBy: string }> {
-  const [profile, proofs, membership, user] = await Promise.all([
+  const [profile, proofs, membership, user, evidence] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, workspaceId), eq(schema.ladderProfiles.userId, userId)) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }),
     db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)) }),
     db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
+    citableEvidence(userId),
   ]);
   const member = { name: user?.name ?? "the coach", businessName: membership?.businessName, bigPromise: membership?.bigPromise };
-  const system = `${masterBlock(profile ?? null, proofs, member)}\n\n${outputContract()}`;
+  const system = `${masterBlock(profile ?? null, proofs, member, evidenceLines(evidence))}\n\n${outputContract()}`;
   const text = await draft(system, perPostInput(brief), 8000, { feature: "ladder" });
   if (text) {
-    const parsed = parseLadderOutput(text);
+    const parsed = scrub(parseLadderOutput(text));
     if (parsed.rungs.length >= 3 && parsed.copy) return { parsed, generatedBy: "claude" };
     // The model refused (stop rule) or answered outside the contract: keep what it said as the notes on a skeleton.
     const sk = scaffold(brief, profile ?? null, proofs);

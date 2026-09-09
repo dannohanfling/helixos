@@ -83,7 +83,10 @@ export function SideNav({ role, passEnabled }: { role: "coach" | "client"; passE
                     className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition ${isActive(pathname, n.href) ? "bg-surface-2 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}
                   >
                     <span className="w-5 text-center text-base">{n.icon}</span>
-                    {n.label}
+                    <span className="flex flex-col leading-tight">
+                      {n.label}
+                      {n.line ? <span className="text-[11px] font-normal text-ink-3">{n.line}</span> : null}
+                    </span>
                   </Link>
                 ))}
               </div>

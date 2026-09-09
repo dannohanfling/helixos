@@ -7,6 +7,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { CHANNEL_SPECS, formatClause, repurposeAll, toneClause, type Channel } from "@/lib/engine/repurpose";
+import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { POINTS } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
@@ -45,12 +46,15 @@ export async function generateVariantsAction(formData: FormData): Promise<void> 
   }
   for (const d of drafts) {
     const p = polished?.[d.channel];
-    const body = p?.body?.trim() || d.body;
+    // A fabricated statistic the model wrote comes out, and the note beside the draft says why.
+    const stripped = p?.body?.trim() ? stripFabricated(p.body.trim()) : null;
+    const body = stripped?.text || d.body;
+    const notes = stripped ? stripNote(stripped.removed) : null;
     const subject = p?.subject ?? d.subject ?? null;
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, d.channel), eq(schema.contentVariants.groupId, "")) });
     if (existing && existing.status === "posted") continue;
-    if (existing) await db.update(schema.contentVariants).set({ body, subject, generatedBy: p ? "claude" : "rules" }).where(eq(schema.contentVariants.id, existing.id));
-    else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId, userId, channel: d.channel, body, subject, generatedBy: p ? "claude" : "rules" });
+    if (existing) await db.update(schema.contentVariants).set({ body, subject, notes, generatedBy: p ? "claude" : "rules" }).where(eq(schema.contentVariants.id, existing.id));
+    else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId, userId, channel: d.channel, body, subject, notes, generatedBy: p ? "claude" : "rules" });
   }
   refresh();
 }

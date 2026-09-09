@@ -9,26 +9,29 @@ import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/components/ui";
 import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, STEPS, WIZARD_STAGES, deckOutline, nextStep, readinessScore, webinarProgress, type StepKey } from "@/lib/engine/webinar";
 import { assetsFor } from "@/lib/queries/library";
+import { citableEvidence } from "@/lib/queries/evidence";
+import { insertText } from "@/lib/engine/evidence";
 import { AssetForm } from "@/components/asset-form";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 
 const ACT_ICON: Record<string, string> = { opening: "🎬", vehicle: "🎯", internal: "💪", external: "🌍", closing: "🎭" };
 
-export default async function WebinarWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ step?: string; section?: string; act?: string }> }) {
+export default async function WebinarWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ step?: string; section?: string; act?: string; stripped?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
   const ai = await hasAiKey();
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) notFound();
-  const [sections, beliefs, reviews, offers, assets, proofs] = await Promise.all([
+  const [sections, beliefs, reviews, offers, assets, proofs, evidence] = await Promise.all([
     db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, id), orderBy: asc(schema.webinarSections.order) }),
     db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) }),
     db.query.readinessReviews.findMany({ where: eq(schema.readinessReviews.webinarId, id), orderBy: desc(schema.readinessReviews.createdAt) }),
     db.query.offers.findMany({ where: eq(schema.offers.userId, v.user.id) }),
     assetsFor(v.workspace.id, v.user.id),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
+    citableEvidence(v.user.id),
   ]);
   const review = reviews[0] ?? null;
   const progress = webinarProgress(w, sections, beliefs, review);
@@ -301,6 +304,11 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
               <Field label="Key points (one per line)">
                 <textarea className="field min-h-20" name="keyPoints" defaultValue={section.keyPoints ?? ""} placeholder={tpl.exampleKeyPoints} />
               </Field>
+              {sp.stripped ? (
+                <p className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-xs" data-testid="stripped-notice" role="alert">
+                  Taken out of the draft, because it is not true: {sp.stripped}
+                </p>
+              ) : null}
               <Field label="Script (what you'll actually say)">
                 <textarea className="field min-h-56" name="script" defaultValue={section.script ?? ""} placeholder="Talk it out loud first. Then type what you said." />
               </Field>
@@ -391,6 +399,25 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                       <p className="text-xs text-ink-3">Approve proofs in the <Link href="/proof" className="underline">Proof Bank</Link> and they show up here.</p>
                     )}
                   </div>
+                </div>
+                <div className="mt-3">
+                  <div className="label">Evidence (published research)</div>
+                  {evidence.length ? (
+                    <ul className="max-h-56 space-y-1 overflow-y-auto text-xs" data-testid="webinar-evidence">
+                      {evidence.map((e) => (
+                        <li key={`${e.source}:${e.id}`} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
+                          <span className="min-w-0">
+                            <span className="font-semibold">{e.name}</span>
+                            {e.source === "shared" ? <span className="text-ink-3"> · shared, Evolve Omega</span> : null}
+                            <span className="block text-ink-2 line-clamp-2">{e.claim}</span>
+                          </span>
+                          <CopyButton text={insertText(e)} label="Copy" className="btn btn-ghost btn-xs" title="Copy the claim and the citation together" />
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-ink-3">Find and confirm a study in <Link href="/evidence" className="underline">Evidence</Link> and it shows up here.</p>
+                  )}
                 </div>
               </Disclosure>
               {tpl.assetType ? (

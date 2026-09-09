@@ -4,6 +4,7 @@ import { db, ensureMigrated, schema } from "@/db";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
 import socratesQuestions from "@/data/seed/socrates/questions.json";
+import researchSeed from "@/data/research-library-seed-v2.json";
 import { ADMIN_ONBOARDING_KEYS } from "@/lib/engine/pathway";
 import { hashSecret } from "@/lib/crypto";
 
@@ -68,6 +69,11 @@ async function syncLibrary(): Promise<void> {
     await db.insert(schema.libraryTasks).values(row).onConflictDoUpdate({ target: schema.libraryTasks.key, set: row });
   }
   // Socrates Domain's question library: keyed by the seed id, so an update reaches every workspace; a client's own questions have no key and are never touched.
+  // The Evidence starter shelf: Danno's nine studies, every one with a DOI resolved through OpenAlex, keyed by seed id. A client's own rows live elsewhere.
+  for (const s of researchSeed) {
+    const row = { name: s.name, authorsSource: s.authorsSource, category: s.category, confidenceLevel: s.confidenceLevel, shortSummary: s.shortSummary, whyItMatters: s.whyItMatters, fifteenSecondScript: s.fifteenSecondScript, thirtySecondReelScript: s.thirtySecondReelScript, clipHook: s.clipHook, supports: s.supports, doi: s.doi, url: s.url, openalexId: s.openalexId, citationQuality: s.citationQuality, verifiedTitle: s.verifiedTitle, verifiedYear: s.verifiedYear, citedByCount: s.citedByCount };
+    await db.insert(schema.evidenceShared).values({ id: s.id, ...row }).onConflictDoUpdate({ target: schema.evidenceShared.id, set: row });
+  }
   for (const q of socratesQuestions) {
     const row = { key: q.id, workspaceId: null, userId: null, question: q.question, clarityStage: q.clarityStage, nepqCategory: q.nepqCategory, source: q.source, scriptTypes: q.scriptTypes };
     await db

@@ -1,5 +1,6 @@
 /** The navigation model, in a plain module so both client components and server pages can read it. */
-export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; hint?: string };
+/** `line`: a one-line description shown under the label everywhere, for the two sections a client would otherwise confuse. `hint` shows on the More page only. */
+export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -23,7 +24,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/courses", label: "Courses", icon: "📚" },
       { href: "/doctrine", label: "Doctrine", icon: "🏛️", hint: "principles" },
       { href: "/essence", label: "Essence", icon: "🧬", hint: "your voice" },
-      { href: "/proof", label: "Proof Bank", icon: "🏆" },
+      { href: "/proof", label: "Proof Bank", icon: "🏆", line: "Your clients' results" },
+      { href: "/evidence", label: "Evidence", icon: "📚", line: "Published research" },
     ],
   },
   {
