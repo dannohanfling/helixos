@@ -124,7 +124,9 @@ async function main() {
     await expectText(page, "Year differs: you asked for 1966, this is 2014.", "year flag");
     if ((await rows.first().getAttribute("data-flagged")) !== "0") throw new Error("the right paper must not be flagged");
     if ((await calls()) !== before + 1) throw new Error("one search is one OpenAlex call");
-    console.log("✓ results: sorted by citations, year and DOI shown, the wrong paper flagged, the right one not");
+    const under = (await page.locator('[data-testid="none-fitting"]').innerText()).replace(/\s+/g, " ").trim();
+    if (under !== "None of these fitting is an answer too. A study that is close but not about your claim is worse than no study at all — it holds up right until someone reads it.") throw new Error(`the line under the results differs: "${under}"`);
+    console.log("✓ results: sorted by citations, year and DOI shown, the wrong paper flagged, the right one not, and the standing line beneath");
 
     // The key never reaches the browser
     if (browserRequests.some((u) => u.includes(`:${openalexPort}`) || u.includes("openalex") || u.includes("api_key"))) throw new Error("the browser must never call OpenAlex or carry the key");
@@ -139,6 +141,15 @@ async function main() {
     await expectText(page, "from this week's cache", "cache badge");
     if ((await calls()) !== beforeCache) throw new Error("a repeated query must be answered from the cache, not OpenAlex");
     console.log("✓ a repeated query is one call, not two");
+
+    // Zero results is a result, not a failure, and the words teach the swap
+    await page.goto(`${base}/evidence?claim=x&terms=nothing-here`);
+    await submit(page, 'button:has-text("Search OpenAlex")');
+    await page.locator('[data-testid="no-results"]').waitFor({ timeout: 10000 });
+    const none = (await page.locator('[data-testid="no-results"]').innerText()).replace(/\s+/g, " ").trim();
+    if (none !== 'Nothing came back for these terms. That is a result, not a failure. Try the words a researcher would use rather than the words you would say to a client — "self-efficacy" rather than "confidence", "adherence" rather than "sticking with it".') throw new Error(`zero-results wording differs: "${none}"`);
+    if (await page.locator('[data-testid="evidence-error"]').count()) throw new Error("zero results is not an error");
+    console.log("✓ zero results: a result, not a failure, with the two swaps");
 
     // Out of quota fails visibly and says when it resets; it never reads as "no research exists"
     await page.goto(`${base}/evidence?claim=x&terms=quota`);
@@ -244,7 +255,7 @@ async function main() {
     await page.goto(`${base}/coach`);
     await expectText(page, "Evidence searches: the shared OpenAlex key", "quota card");
     const today = await page.locator('[data-testid="evidence-quota-today"]').innerText();
-    if (!/^1 of 10,000 today$/.test(today.trim())) throw new Error(`one real search today, the cache hit and the 429 not counted; got "${today}"`);
+    if (!/^2 of 10,000 today$/.test(today.trim())) throw new Error(`two real searches today (the results one and the empty one), the cache hit and the 429 not counted; got "${today}"`);
     const credits = await page.locator('[data-testid="evidence-credits"]').innerText();
     if (!/OpenAlex reports 99,9\d0 of 100,000 credits left/.test(credits)) throw new Error(`the card must show what OpenAlex reported: "${credits}"`);
     if ((await page.locator('[data-testid="evidence-quota"] tr[data-day]').count()) !== 7) throw new Error("seven days, zero-filled");

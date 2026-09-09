@@ -140,7 +140,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       }
       setCustomize(true);
       setOverrides((o) => ({ ...o, ...res }));
-      setNotice(`AI rewrote ${n} versions${voice.ready ? " in your voice" : ""}. Review each tab, then schedule.${removed ? `\nTaken out, because it is not true: ${removed}` : ""}`);
+      setNotice(`AI rewrote ${n} versions${voice.ready ? " in your voice" : ""}. Review each tab, then schedule.${removed ? `\n\n${removed}` : ""}`);
     });
 
   const preview = previewTab === "all" ? chosen : chosen.filter((t) => t.key === previewTab);

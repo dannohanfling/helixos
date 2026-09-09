@@ -306,7 +306,7 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
               </Field>
               {sp.stripped ? (
                 <p className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-xs" data-testid="stripped-notice" role="alert">
-                  Taken out of the draft, because it is not true: {sp.stripped}
+                  {sp.stripped}
                 </p>
               ) : null}
               <Field label="Script (what you'll actually say)">

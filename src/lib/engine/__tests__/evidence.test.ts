@@ -26,8 +26,26 @@ describe("fabricated-stat blacklist", () => {
     expect(r.text).toBe("Most plans fail by week three.\nSo I plan for twelve weeks.\nWhat would you try first?");
     expect(r.removed).toHaveLength(1);
     expect(r.removed[0].entry.id).toBe("b02");
-    expect(stripNote(r.removed)).toMatch(/^Removed "It takes 21 days to build a habit\.": .*Say instead: /);
+    expect(stripNote(r.removed)).toBe(`This one doesn't hold up, so it came out of the draft:\n\n"It takes 21 days to build a habit."\n\n${r.removed[0].entry.why}\n\nSay this instead: ${r.removed[0].entry.sayInstead}`);
     expect(stripNote([])).toBeNull();
+  });
+});
+
+describe("the old frames are gone from every surface", () => {
+  it("no page, action or component says a claim is not true or not real; the engine's two frames are the only ones", async () => {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (/\.(ts|tsx)$/.test(name) && !p.includes("__tests__")) files.push(p);
+      }
+    };
+    walk(join(process.cwd(), "src"));
+    const offenders = files.filter((f) => /because it is not true|this statistic is not real|Say instead:/.test(readFileSync(f, "utf8")));
+    expect(offenders).toEqual([]);
   });
 });
 

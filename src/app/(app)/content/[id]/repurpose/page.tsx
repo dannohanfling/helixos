@@ -27,7 +27,7 @@ function VariantForm({ var_, maxChars, email = false }: { var_: ContentVariant; 
       ) : null}
       {var_.notes ? (
         <p className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-2 text-xs" data-testid="variant-notes" role="alert">
-          Taken out of the draft, because it is not true: {var_.notes}
+          {var_.notes}
         </p>
       ) : null}
       <textarea className="field min-h-40 text-sm" name="body" defaultValue={var_.body} />

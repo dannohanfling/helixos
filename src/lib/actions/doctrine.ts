@@ -45,7 +45,7 @@ export async function principleToContentAction(formData: FormData): Promise<void
     hasCta: kind === "post",
     hook: p.hookAngle ?? p.name,
     body,
-    notes: [`From principle ${p.code}`, note ? `Taken out of the draft, because it is not true: ${note}` : ""].filter(Boolean).join("\n"),
+    notes: [`From principle ${p.code}`, note ?? ""].filter(Boolean).join("\n\n"),
   });
   redirect(`/content/${id}`);
 }

@@ -91,6 +91,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
             <Card title={`Results for “${search.askedFor.claim || search.query}”`} action={search.fromCache ? <Badge tone="neutral">from this week&apos;s cache</Badge> : null}>
               <p className="mb-2 text-xs text-ink-3">Terms: {search.query}. Most cited first. Citation count is the quality signal you can read; a flag means look closer, not no.</p>
               {search.results.length ? (
+                <>
                 <ul className="divide-y" data-testid="results">
                   {byCitations(search.results).map((r) => {
                     const added = shelf.own.find((e) => e.openalexId === r.openalexId);
@@ -125,8 +126,15 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                     );
                   })}
                 </ul>
+                <p className="mt-3 text-xs text-ink-3" data-testid="none-fitting">
+                  {"None of these fitting is an answer too. A study that is close but not about your claim is worse than no study at all — it holds up right until someone reads it."}
+                </p>
+                </>
               ) : (
-                <p className="text-sm text-ink-3" data-testid="no-results">OpenAlex found nothing for these terms. That is a result, not a failure: try the terms a researcher would use.</p>
+                <div className="space-y-2 text-sm text-ink-3" data-testid="no-results">
+                  <p>Nothing came back for these terms.</p>
+                  <p>{'That is a result, not a failure. Try the words a researcher would use rather than the words you would say to a client — "self-efficacy" rather than "confidence", "adherence" rather than "sticking with it".'}</p>
+                </div>
               )}
             </Card>
           ) : null}

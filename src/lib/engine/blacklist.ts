@@ -74,8 +74,12 @@ export function stripFabricated(text: string): { text: string; removed: { senten
   return { text: kept.join("\n").replace(/\n{3,}/g, "\n\n").trim(), removed };
 }
 
-/** The note stored beside a stripped draft. */
+/**
+ * The note shown beside copy a model wrote and the app stripped: what happened, in the same three blocks as a block message,
+ * the sentence, the why and the replacement. Lighter than a block: the client did not write it and it is already gone, so it
+ * reports and corrects nobody. The frame is the reviewer's wording; change it here, nowhere else.
+ */
 export function stripNote(removed: { sentence: string; entry: BlacklistEntry }[]): string | null {
   if (!removed.length) return null;
-  return removed.map((r) => `Removed "${r.sentence}": ${r.entry.why} Say instead: ${r.entry.sayInstead}`).join("\n");
+  return removed.map((r) => `This one doesn't hold up, so it came out of the draft:\n\n"${r.sentence}"\n\n${r.entry.why}\n\nSay this instead: ${r.entry.sayInstead}`).join("\n\n");
 }
