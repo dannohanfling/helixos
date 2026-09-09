@@ -241,14 +241,18 @@ async function main() {
       console.log("✓ bars pinned to the visual viewport under 2× zoom, released at 1×");
     } else console.log(`· page scale emulation unavailable here (scale ${pinned.scale}); pin not exercised`);
 
-    // Small buttons are 40px on a phone
+    // Small buttons are 40px on a phone. Unconditional: lock a task into Today first, so its controls are always there to measure.
     await page.goto(`${base}/today`);
-    const small = page.locator("main .btn-xs, main .btn-sm").first();
-    if (await small.count()) {
-      const b = await small.boundingBox();
-      if (!b || b.height < 38) throw new Error(`small button is ${b?.height}px tall on a phone; needs 40`);
-      console.log(`✓ small buttons ${Math.round(b.height)}px on touch`);
-    }
+    const redoForTouch = page.locator('summary:has-text("Redo lock-in")');
+    if (await redoForTouch.count()) await redoForTouch.evaluate((el) => (el as HTMLElement).click());
+    await page.fill('input[name="newFocus"]', "Touch target test");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Lock it in")')]);
+    await page.waitForLoadState("networkidle");
+    const small = page.locator('[data-testid="task-row"]', { hasText: "Touch target test" }).locator(".btn-xs, .btn-sm").first();
+    await small.waitFor({ timeout: 5000 });
+    const b = await small.boundingBox();
+    if (!b || b.height < 38) throw new Error(`small button is ${b?.height}px tall on a phone; needs 40`);
+    console.log(`✓ small buttons ${Math.round(b.height)}px on touch`);
 
     // Developer copy never reaches a client
     for (const p of ["/doctrine", "/courses"]) {

@@ -173,6 +173,10 @@ Verify Sarah's quote.`;
     expect(section(today, "IG_CAPTION")).toContain("Max 2200 chars.");
     expect(section(today, "THREADS_CHAIN")).toContain("Max 500 chars a post.");
     expect(section(today, "SUPPORTING_COMMENTS")).not.toContain("Max ");
+    // The body carries Facebook personal's tone and never the page's: a ladder body has no CTA, the rungs do
+    expect(section(today, "COPY")).toContain("TONE (Facebook personal): Story-first, personal.");
+    expect(today).not.toMatch(/direct CTA|TONE \(Facebook business page\)/);
+    expect(section(today, "SUPPORTING_COMMENTS")).not.toContain("TONE");
     expect(today).not.toMatch(/Under 2,200|under 500 characters/);
     const equal = outputContract(CHANNEL_SPECS.map((c) => (c.key === "fb_page" ? { ...c, maxChars: 2000 } : c)));
     expect(section(equal, "COPY")).toContain("\nMax 2000 chars.");

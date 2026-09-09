@@ -167,6 +167,18 @@ function sectionBound(specs: ChannelSpec[], keys: Channel[], noun = "field", uni
   return `\nMax ${min} chars${unit} — this ${noun} posts to ${list}.`;
 }
 
+/**
+ * The tone the post body carries: Facebook personal's, and deliberately not Facebook business page's, although one body posts
+ * to both. The page's tone is "Clear value, direct CTA." and a ladder body never carries the CTA: it lives in the rungs, by
+ * design, so applying the page's tone here would instruct the model to do the one thing the method exists to avoid. The
+ * ladder is the more specific layer than the channel, so the ladder decides. The page's tone stays right for a standalone
+ * page post in the composer, where each channel is drafted on its own. Do not add the page's tone back here.
+ */
+function sectionTone(specs: ChannelSpec[], key: Channel): string {
+  const s = specs.find((c) => c.key === key);
+  return s?.tone ? `\nTONE (${s.label}): ${s.tone}` : "";
+}
+
 /** Section B: what comes back, every time. Each field that lands on a channel carries that channel's format line and bound beside it. */
 export function outputContract(specs: ChannelSpec[] = CHANNEL_SPECS): string {
   return `Return these fields, each on its own line as the field name in capitals followed by a colon, then the content on the following lines. Match the names exactly.
@@ -184,7 +196,7 @@ HOOK
 One sentence. The opening line of the post body.
 
 COPY
-The post body only. Hook, "read them in order" line, save line, one open question. No keyword prompt.${sectionFormat(specs, ["fb_personal", "fb_page"])}${sectionBound(specs, ["fb_personal", "fb_page"], "body")}
+The post body only. Hook, "read them in order" line, save line, one open question. No keyword prompt.${sectionTone(specs, "fb_personal")}${sectionFormat(specs, ["fb_personal", "fb_page"])}${sectionBound(specs, ["fb_personal", "fb_page"], "body")}
 
 SUPPORTING_COMMENTS
 The rungs. Number each as "1." "2." etc. on its own first line. Separate rungs with --- on its own line. Each rung 40–90 words ending with ONE short quotable line on its own line.${sectionFormat(specs, ["fb_personal", "fb_page"])}

@@ -140,6 +140,9 @@ async function main() {
     if (!/^Max 1500 chars — this body posts to both Facebook business page \(1500\) and Facebook personal \(2000\)\.$/m.test(section("COPY"))) throw new Error("the post body must carry the tighter of its two Facebook limits, named");
     if (!/^Max 2200 chars\.$/m.test(section("IG_CAPTION")) || !/^Max 500 chars a post\.$/m.test(section("THREADS_CHAIN"))) throw new Error("the caption and the chain must carry their channel's bound");
     if (/Under 2,200|under 500 characters/.test(sys[1].text)) throw new Error("a character count must come from the spec, never from a prose literal");
+    // The body carries Facebook personal's tone, never the page's "direct CTA": a ladder body has no CTA, the rungs do
+    if (!/^TONE \(Facebook personal\): Story-first, personal\.$/m.test(section("COPY"))) throw new Error("the post body must carry Facebook personal's tone");
+    if (/direct CTA/.test(sys[1].text)) throw new Error("the page's tone must not reach the ladder: its direct CTA contradicts the method");
     if (/daily hashtag/i.test(sys[1].text)) throw new Error("a house practice must never reach a client's prompt");
     if (/^- 4th-grade/m.test(sys[1].text)) throw new Error("the format line must not also sit at the top as a feature-level rule");
     if (/Priya Raman|hospital car park, and what it taught me about systems\./.test(sys[0].text)) throw new Error("placeholder text must never reach the model");

@@ -135,7 +135,9 @@ A character count appears once per prompt and comes from `maxChars`, never from 
 output contract (each channel field carries "Max N chars" from the spec; the post body, which goes to both Facebook
 channels, carries the tighter limit and names both), the ladder's publish checklist and scaffold, and the composer's red
 counter, which now says which limit and whose. A unit test refuses any character count written as a literal in the ladder
-engine, which is the shape the 1800 bug took.
+engine, which is the shape the 1800 bug took. The ladder body carries Facebook personal's tone and deliberately not the
+page's: the page's "direct CTA" contradicts the method, where the CTA lives in the rungs and never in the body, and the
+ladder is the more specific layer, so it decides (the comment on `sectionTone` says so).
 
 A ladder's Threads chain is six to eight posts, and the composer schedules one post per target, so the chain is a copy-only
 target there: shown, counted in posts, copyable, never scheduled or polished as one post, with the reason beside it. Sending
