@@ -212,7 +212,14 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-ink-3">Nothing of your own yet. Search for a claim on the left; what you pick and confirm lands here.</p>
+              <div className="space-y-2 text-sm text-ink-3" data-testid="shelf-empty">
+                <p>Nothing here yet.</p>
+                <p>
+                  Write the claim you want to make, then search for the research behind it.
+                  <br />
+                  What you pick and confirm lands here.
+                </p>
+              </div>
             )}
           </Card>
           <Card title="Shared starter shelf" action={<Badge tone="neutral">shared · sourced by Evolve Omega</Badge>}>

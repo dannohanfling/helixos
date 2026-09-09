@@ -42,7 +42,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
   const fabricated = findFabricated(everything);
   if (fabricated.length) {
     const quotes = (await db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) })).flatMap((p) => [p.quote, p.longVersion, p.shortVersion].filter((x): x is string => Boolean(x)));
-    return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: `Blocked, this statistic is not real: ${explainFabricated(fabricated, { text: everything, quotes })}` };
+    return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: explainFabricated(fabricated, { text: everything, quotes }) };
   }
   const title = payload.title.trim() || payload.hook.trim().slice(0, 80) || "Untitled post";
   const firstAt = payload.targets.map((t) => t.postAt).filter(Boolean).sort()[0] ?? null;

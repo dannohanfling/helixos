@@ -42,13 +42,15 @@ export function inQuote(text: string, matched: string, quotes: string[] = []): b
 }
 
 /**
- * The explanation a block shows: the claim, where it came from, and what to say instead. Never shown without all three. With
- * the text and any known quotes, a match inside a quotation also names that situation.
+ * What a block shows, three blocks and never one paragraph: the verdict ("doesn't hold up" is true for both confidence levels
+ * and for claims that are not numbers, and says what the client needs to know: if anyone checks, they lose), the why, and the
+ * replacement, the last two verbatim from the entry. With the text and any known quotes, a match inside a quotation adds the
+ * quote line underneath. The wording of the frame is Danno's reviewer's; change it there, not here.
  */
 export function explainFabricated(matches: FabricatedMatch[], context?: { text: string; quotes?: string[] }): string {
   return matches
-    .map((m) => `"${m.entry.claim}" — ${m.entry.why} Say instead: ${m.entry.sayInstead}${context && inQuote(context.text, m.matched, context.quotes) ? ` ${QUOTE_NOTE}` : ""}`)
-    .join("\n");
+    .map((m) => `This one doesn't hold up: "${m.entry.claim}"\n\n${m.entry.why}\n\nSay this instead: ${m.entry.sayInstead}${context && inQuote(context.text, m.matched, context.quotes) ? `\n\n${QUOTE_NOTE}` : ""}`)
+    .join("\n\n");
 }
 
 const SENTENCE = /[^.!?\n]+[.!?]?(?:\s+|$)/g;

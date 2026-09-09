@@ -16,8 +16,8 @@ describe("fabricated-stat blacklist", () => {
     const m = findFabricated("Everyone knows it takes 21 DAYS to form a habit.");
     expect(m.map((x) => x.entry.id)).toEqual(["b02"]);
     const why = explainFabricated(m);
-    expect(why).toContain("Psycho-Cybernetics");
-    expect(why).toContain("Say instead: Habits take longer than people expect");
+    expect(why).toMatch(/^This one doesn't hold up: "It takes 21 days to form a habit"\n\nFrom Maxwell Maltz's Psycho-Cybernetics/);
+    expect(why).toContain("\n\nSay this instead: Habits take longer than people expect");
     expect(findFabricated("A famous Harvard study on goals")).toHaveLength(1);
     expect(findFabricated("People are different, and I ask before I advise.")).toHaveLength(0);
   });

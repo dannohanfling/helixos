@@ -103,7 +103,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                 <a href={`#check-${b.key}`} className="underline" data-testid="blocker-link">
                   {b.label}
                 </a>
-                {b.note ? <span className="text-ink-2"> · {b.note}</span> : null}
+                {b.note ? <span className={b.note.includes("\n") ? "block whitespace-pre-line text-ink-2" : "text-ink-2"}>{b.note.includes("\n") ? b.note : ` · ${b.note}`}</span> : null}
               </li>
             ))}
           </ul>
@@ -236,7 +236,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
               {checks.map((c) => (
                 <li key={c.key} id={`check-${c.key}`} className={c.ok ? "text-ink-2" : c.level === "fail" ? "text-danger" : "text-warn"} data-check={c.key} data-ok={c.ok ? "1" : "0"}>
                   {c.ok ? "✓" : c.level === "fail" ? "✗" : "!"} {c.label}
-                  {!c.ok && c.note ? <span className="block pl-4 text-ink-3">{c.note}</span> : null}
+                  {!c.ok && c.note ? <span className="block whitespace-pre-line pl-4 text-ink-3">{c.note}</span> : null}
                 </li>
               ))}
             </ul>

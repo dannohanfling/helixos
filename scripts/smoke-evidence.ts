@@ -68,6 +68,8 @@ async function main() {
     // The section, its one-line description, and the Proof Bank's, so the two are not confused
     await page.goto(`${base}/evidence`);
     await expectText(page, "Published research", "evidence page");
+    const empty = (await page.locator('[data-testid="shelf-empty"]').innerText()).replace(/\s+/g, " ").trim();
+    if (empty !== "Nothing here yet. Write the claim you want to make, then search for the research behind it. What you pick and confirm lands here.") throw new Error(`empty state wording differs: "${empty}"`);
     const nav = await page.locator('nav a[href="/evidence"]').first().innerText();
     if (!/published research/i.test(nav)) throw new Error(`nav must say what Evidence is: "${nav}"`);
     const proofNav = await page.locator('nav a[href="/proof"]').first().innerText();
@@ -199,7 +201,7 @@ async function main() {
     const check = page.locator('[data-testid="checklist"] li[data-check="fabricated"]');
     if ((await check.getAttribute("data-ok")) !== "0") throw new Error("a fabricated statistic must fail the checklist");
     const checkText = await check.innerText();
-    if (!/Psycho-Cybernetics/.test(checkText) || !/Say instead: Habits take longer than people expect/.test(checkText)) throw new Error(`the block must show the why and the say-instead:\n${checkText}`);
+    if (!/This one doesn't hold up: "It takes 21 days to form a habit"/.test(checkText) || !/Psycho-Cybernetics/.test(checkText) || !/Say this instead: Habits take longer than people expect/.test(checkText)) throw new Error(`the block must show the verdict, the why and the say-instead:\n${checkText}`);
     await fillExact(page, 'textarea[name="copy"]', copy);
     await submit(page, 'button:has-text("Save and re-check")');
     if ((await check.getAttribute("data-ok")) !== "1") throw new Error("the block should clear once the claim is gone");
@@ -210,7 +212,8 @@ async function main() {
     await page.fill('textarea[placeholder^="Type content"]', "The Yale goals study proved that writing goals down works.\nWhat would you try first?");
     await page.locator('[data-testid="fabricated-block"]').first().waitFor({ timeout: 5000 });
     const block = await page.locator('[data-testid="fabricated-block"]').first().innerText();
-    if (!/does not exist/.test(block) || !/Say instead: Gail Matthews/.test(block)) throw new Error(`composer block must carry the why and the say-instead:\n${block}`);
+    if (!/^This one doesn't hold up: "The Yale/.test(block) || !/does not exist/.test(block) || !/Say this instead: Gail Matthews/.test(block)) throw new Error(`composer block must open with the verdict and carry the why and the say-instead:\n${block}`);
+    if (/not real/.test(block)) throw new Error("the block must not call the claim fabricated by the client");
     if (!(await page.locator('button:has-text("Schedule")').first().isDisabled())) throw new Error("scheduling must be disabled while a fabricated statistic is in a draft");
     // Inside a quote (a client's testimonial): still blocked, and the block says the quote is trimmed, never rewritten
     await page.fill('textarea[placeholder^="Type content"]', "“Like that Yale study where the 3% who wrote goals down won,” Jess told me.\nWhat would you try first?");

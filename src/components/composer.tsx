@@ -211,7 +211,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
               </div>
               {fabricatedIn(activeDraft.body) ? (
                 <p className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-2 text-xs" data-testid="fabricated-block" role="alert">
-                  Blocked, this statistic is not real: {fabricatedIn(activeDraft.body)}
+                  {fabricatedIn(activeDraft.body)}
                 </p>
               ) : null}
               {copyOnlyReason(active) ? (
@@ -363,7 +363,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
             </button>
           </div>
           {notice ? (
-            <p className="mt-3 rounded-lg bg-surface-2 p-3 text-sm">
+            <p className="mt-3 rounded-lg bg-surface-2 p-3 text-sm whitespace-pre-line">
               {notice}
               {result ? (
                 <>
@@ -425,7 +425,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   {over ? <p className="mb-1 text-[11px] text-danger">Over the {t.maxChars}-character limit for {t.label}.</p> : null}
                   {fabricatedIn(d.body) ? (
                     <p className="mb-1 whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-2 text-[11px]" data-testid="fabricated-block" role="alert">
-                      Blocked, this statistic is not real: {fabricatedIn(d.body)}
+                      {fabricatedIn(d.body)}
                     </p>
                   ) : null}
                   <ChannelPreview t={t} d={d} p={persona} media={mediaUrl || undefined} title={src.title} />
