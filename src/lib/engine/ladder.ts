@@ -462,8 +462,10 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
 
   // Platform limits
   // Block on truth: a fabricated statistic anywhere in the package fails publishing, and the note says why and what to say instead.
-  const fabricated = findFabricated([l.copy, ...l.rungs.map((r) => r.body), l.igCaption, ...l.threadsChain].join("\n"));
-  add("fabricated", "No fabricated statistics", !fabricated.length, explainFabricated(fabricated));
+  const everything = [l.copy, ...l.rungs.map((r) => r.body), l.igCaption, ...l.threadsChain].join("\n");
+  const fabricated = findFabricated(everything);
+  const quotes = proofs.flatMap((p) => [p.quote, p.longVersion, p.shortVersion].filter((x): x is string => Boolean(x)));
+  add("fabricated", "No fabricated statistics", !fabricated.length, explainFabricated(fabricated, { text: everything, quotes }));
 
   // Every number here is the channel spec's, the same one the prompt and the composer print; a literal would drift from it.
   const threadsMax = limitOf(CHANNEL_SPECS, "threads");

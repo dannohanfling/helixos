@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BLACKLIST, explainFabricated, findFabricated, stripFabricated, stripNote } from "../blacklist";
-import { byCitations, fallbackTerms, flagsFor, insertText, queryKey } from "../evidence";
+import { BLACKLIST, QUOTE_NOTE, explainFabricated, findFabricated, inQuote, stripFabricated, stripNote } from "../blacklist";
+import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_GLOBAL_BUDGET, byCitations, fallbackTerms, flagsFor, insertText, lastDays, queryKey, quotaState } from "../evidence";
 import seed from "@/data/research-library-seed-v2.json";
 
 describe("fabricated-stat blacklist", () => {
@@ -28,6 +28,73 @@ describe("fabricated-stat blacklist", () => {
     expect(r.removed[0].entry.id).toBe("b02");
     expect(stripNote(r.removed)).toMatch(/^Removed "It takes 21 days to build a habit\.": .*Say instead: /);
     expect(stripNote([])).toBeNull();
+  });
+});
+
+describe("a block inside a quote names the situation", () => {
+  const said = "“Like that Yale study where the 3% who wrote goals down won,” Jess said.";
+  it("sees quotation marks, and an approved proof's words, and says the quote is trimmed, never rewritten", () => {
+    const m = findFabricated(said);
+    expect(inQuote(said, m[0].matched)).toBe(true);
+    expect(explainFabricated(m, { text: said })).toContain(QUOTE_NOTE);
+    const bare = "Remember the Yale study on goals.";
+    expect(inQuote(bare, findFabricated(bare)[0].matched)).toBe(false);
+    expect(explainFabricated(findFabricated(bare), { text: bare })).not.toContain(QUOTE_NOTE);
+    // No quotation marks in the post, but the words are an approved proof's: still a quote
+    const pasted = "Like that Yale study where the 3% who wrote goals down won. Jess M.";
+    expect(inQuote(pasted, findFabricated(pasted)[0].matched, ["Like that Yale study where the 3% who wrote goals down won."])).toBe(true);
+  });
+});
+
+describe("quota: two counters that must agree, one pool for every client", () => {
+  const day = "2026-09-09";
+  const rows = (n: number, userId = "u1", extra: Partial<{ day: string; fromCache: boolean }> = {}) => Array.from({ length: n }, () => ({ userId, day, fromCache: false, ...extra }));
+  it("counts real calls only, per client and for the pool", () => {
+    const q = quotaState([...rows(3), ...rows(2, "u2"), ...rows(4, "u1", { fromCache: true }), ...rows(1, "u1", { day: "2026-09-08" })], "u1", day);
+    expect(q.usedToday).toBe(3);
+    expect(q.globalToday).toBe(5);
+    expect(q.limit).toBe(EVIDENCE_DAILY_LIMIT);
+    expect(q.allowed).toBe(true);
+    expect(q.refusal).toBeNull();
+  });
+  it("the per-client limit refuses at 25 with a plain reason", () => {
+    const q = quotaState(rows(25), "u1", day);
+    expect(q.allowed).toBe(false);
+    expect(q.refusal).toContain("You have used today's 25 searches");
+    expect(quotaState(rows(24), "u1", day).allowed).toBe(true);
+  });
+  it("past 70% of the pool everyone drops to the degraded allowance, and the words blame nobody", () => {
+    const busy = Math.ceil(EVIDENCE_GLOBAL_BUDGET * 0.7);
+    const others = rows(busy, "everyone-else");
+    const q = quotaState([...others, ...rows(EVIDENCE_DEGRADED_LIMIT)], "u1", day);
+    expect(q.degraded).toBe(true);
+    expect(q.limit).toBe(EVIDENCE_DEGRADED_LIMIT);
+    expect(q.allowed).toBe(false);
+    expect(q.refusal).toContain("Nobody did anything wrong");
+    expect(quotaState([...others, ...rows(EVIDENCE_DEGRADED_LIMIT - 1)], "u1", day).allowed).toBe(true);
+    // A latecomer still gets in
+    expect(quotaState(others, "new", day).allowed).toBe(true);
+    // Just under 70%, the full allowance stands
+    expect(quotaState(rows(busy - 1, "everyone-else"), "u1", day).degraded).toBe(false);
+  });
+  it("the pool used up is a hard stop that says so, and OpenAlex's reported balance tightens the local count", () => {
+    const q = quotaState(rows(EVIDENCE_GLOBAL_BUDGET, "everyone-else"), "u1", day);
+    expect(q.exhausted).toBe(true);
+    expect(q.allowed).toBe(false);
+    expect(q.refusal).toContain("used up for today");
+    // The local counter says 0 used, OpenAlex says 40 credits left: 4 searches, which is degraded territory
+    const tight = quotaState([], "u1", day, 40);
+    expect(tight.poolLeft).toBe(4);
+    expect(tight.degraded).toBe(true);
+    expect(quotaState([], "u1", day, 0).exhausted).toBe(true);
+    expect(quotaState([], "u1", day, null).poolLeft).toBe(EVIDENCE_GLOBAL_BUDGET);
+  });
+  it("the last seven days, oldest first, zero-filled", () => {
+    const d = lastDays([...rows(2), ...rows(1, "u2", { day: "2026-09-07" }), ...rows(9, "u1", { fromCache: true })], day);
+    expect(d).toHaveLength(7);
+    expect(d[6]).toEqual({ day, count: 2 });
+    expect(d[4]).toEqual({ day: "2026-09-07", count: 1 });
+    expect(d[0]).toEqual({ day: "2026-09-03", count: 0 });
   });
 });
 

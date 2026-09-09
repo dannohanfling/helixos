@@ -212,6 +212,11 @@ async function main() {
     const block = await page.locator('[data-testid="fabricated-block"]').first().innerText();
     if (!/does not exist/.test(block) || !/Say instead: Gail Matthews/.test(block)) throw new Error(`composer block must carry the why and the say-instead:\n${block}`);
     if (!(await page.locator('button:has-text("Schedule")').first().isDisabled())) throw new Error("scheduling must be disabled while a fabricated statistic is in a draft");
+    // Inside a quote (a client's testimonial): still blocked, and the block says the quote is trimmed, never rewritten
+    await page.fill('textarea[placeholder^="Type content"]', "“Like that Yale study where the 3% who wrote goals down won,” Jess told me.\nWhat would you try first?");
+    await page.locator('[data-testid="fabricated-block"]').first().waitFor({ timeout: 5000 });
+    const quoted = await page.locator('[data-testid="fabricated-block"]').first().innerText();
+    if (!/inside a quote/.test(quoted) || !/trimmed with an ellipsis/.test(quoted)) throw new Error(`a block inside a quote must name the situation:\n${quoted}`);
     await page.fill('textarea[placeholder^="Type content"]', "Gail Matthews' Dominican University study found written goals plus accountability improved achievement.\nWhat would you try first?");
     await page.waitForTimeout(300);
     if (await page.locator('[data-testid="fabricated-block"]').count()) throw new Error("a true claim must not be blocked");
@@ -231,6 +236,16 @@ async function main() {
     if ((await page.locator('[data-testid="shared-study"]').count()) !== 9) throw new Error("removing a shared study from one shelf must not touch another");
     if (await page.locator('[data-testid="own-study"]').count()) throw new Error("one client's own evidence must never appear for another");
     console.log("✓ each shelf is its own: the coach's has all nine and none of the client's");
+
+    // The coach sees the shared pool: today's real count against the budget, what OpenAlex reported, the last seven days
+    await page.goto(`${base}/coach`);
+    await expectText(page, "Evidence searches: the shared OpenAlex key", "quota card");
+    const today = await page.locator('[data-testid="evidence-quota-today"]').innerText();
+    if (!/^1 of 10,000 today$/.test(today.trim())) throw new Error(`one real search today, the cache hit and the 429 not counted; got "${today}"`);
+    const credits = await page.locator('[data-testid="evidence-credits"]').innerText();
+    if (!/OpenAlex reports 99,9\d0 of 100,000 credits left/.test(credits)) throw new Error(`the card must show what OpenAlex reported: "${credits}"`);
+    if ((await page.locator('[data-testid="evidence-quota"] tr[data-day]').count()) !== 7) throw new Error("seven days, zero-filled");
+    console.log("✓ coach: today's pool count, OpenAlex's reported balance, seven days");
   } finally {
     await browser.close();
     try {

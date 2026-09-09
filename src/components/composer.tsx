@@ -73,9 +73,10 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
     return !d.body.trim() || d.body.length > t.maxChars || findFabricated(d.body).length > 0;
   });
   // Block on truth: a fabricated statistic blocks scheduling and posting, and the block says why and what to say instead.
+  const proofQuotes = (snippets?.proofs ?? []).map((p) => p.text);
   const fabricatedIn = (body: string) => {
     const m = findFabricated(body);
-    return m.length ? explainFabricated(m) : null;
+    return m.length ? explainFabricated(m, { text: body, quotes: proofQuotes }) : null;
   };
   const active = tab !== "all" ? byKey.get(tab) : undefined;
   const activeDraft = active ? draftOf(active) : null;

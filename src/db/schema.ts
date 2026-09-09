@@ -1324,6 +1324,9 @@ export const evidenceSearches = sqliteTable(
     askedFor: text("asked_for", { mode: "json" }).$type<EvidenceAskedFor>().notNull(),
     results: text("results", { mode: "json" }).$type<EvidenceResult[]>().notNull().default([]),
     fromCache: integer("from_cache", { mode: "boolean" }).notNull().default(false),
+    /** What OpenAlex reported with this call (X-RateLimit-Limit / X-RateLimit-Remaining, in credits); null for a cache hit or a mock without headers. */
+    creditsLimit: integer("credits_limit"),
+    creditsRemaining: integer("credits_remaining"),
     createdAt: createdAt(),
   },
   (t) => [index("evidence_searches_user_day").on(t.userId, t.day), index("evidence_searches_key").on(t.queryKey)],

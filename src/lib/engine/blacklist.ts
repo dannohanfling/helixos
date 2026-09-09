@@ -23,9 +23,32 @@ export function findFabricated(text: string): FabricatedMatch[] {
   return out;
 }
 
-/** The explanation a block shows: the claim, where it came from, and what to say instead. Never shown without all three. */
-export function explainFabricated(matches: FabricatedMatch[]): string {
-  return matches.map((m) => `"${m.entry.claim}" — ${m.entry.why} Say instead: ${m.entry.sayInstead}`).join("\n");
+export const QUOTE_NOTE = "This sentence is inside a quote. A quote is trimmed with an ellipsis or left out; it is never rewritten, and the block is not a judgement on the person who said it.";
+
+const QUOTE_MARKS = /["“”«»]/g;
+
+/**
+ * Whether the matched words sit inside a quotation: between quotation marks in the text, or inside one of the known quotes
+ * (an approved proof's words). A testimonial is verbatim or it does not exist, so the block says so rather than reading as
+ * a verdict on the client's client.
+ */
+export function inQuote(text: string, matched: string, quotes: string[] = []): boolean {
+  const at = text.toLowerCase().indexOf(matched.toLowerCase());
+  if (at >= 0) {
+    const before = (text.slice(0, at).match(QUOTE_MARKS) ?? []).length;
+    if (before % 2 === 1) return true;
+  }
+  return quotes.some((q) => q && new RegExp(BLACKLIST.map((e) => e.pattern).join("|"), "i").test(q) && q.toLowerCase().includes(matched.toLowerCase()));
+}
+
+/**
+ * The explanation a block shows: the claim, where it came from, and what to say instead. Never shown without all three. With
+ * the text and any known quotes, a match inside a quotation also names that situation.
+ */
+export function explainFabricated(matches: FabricatedMatch[], context?: { text: string; quotes?: string[] }): string {
+  return matches
+    .map((m) => `"${m.entry.claim}" — ${m.entry.why} Say instead: ${m.entry.sayInstead}${context && inQuote(context.text, m.matched, context.quotes) ? ` ${QUOTE_NOTE}` : ""}`)
+    .join("\n");
 }
 
 const SENTENCE = /[^.!?\n]+[.!?]?(?:\s+|$)/g;

@@ -28,8 +28,9 @@ const WORKS = [
 
 createServer((req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
+  // The real API reports the day's credits on every response; a list request costs 10.
   const json = (code: number, body: unknown) => {
-    res.writeHead(code, { "content-type": "application/json" });
+    res.writeHead(code, { "content-type": "application/json", "x-ratelimit-limit": "100000", "x-ratelimit-remaining": String(100000 - calls * 10), "x-ratelimit-reset": "3600" });
     res.end(JSON.stringify(body));
   };
   if (url.pathname === "/__calls") return json(200, { calls });

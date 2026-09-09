@@ -14,7 +14,9 @@ export function openalexBase(): string {
 
 export const openalexConfigured = (): boolean => Boolean(process.env.OPENALEX_API_KEY);
 
-export type OpenAlexResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
+/** What OpenAlex reported with the response, in credits: the day's limit and what is left (X-RateLimit-Limit / -Remaining). */
+export type OpenAlexQuota = { limit: number | null; remaining: number | null };
+export type OpenAlexResult<T> = { ok: true; data: T; quota: OpenAlexQuota } | { ok: false; error: string; status?: number; quota?: OpenAlexQuota };
 
 type Work = { id?: string; doi?: string | null; title?: string | null; display_name?: string | null; publication_year?: number | null; cited_by_count?: number; authorships?: { author?: { display_name?: string | null } }[] };
 
@@ -50,11 +52,13 @@ async function call<T>(path: string, params: Record<string, string>): Promise<Op
     const t = setTimeout(() => ctrl.abort(), 20000);
     const res = await fetch(url, { signal: ctrl.signal, headers: { accept: "application/json" } });
     clearTimeout(t);
+    const num = (h: string) => (res.headers.get(h) === null || Number.isNaN(Number(res.headers.get(h))) ? null : Number(res.headers.get(h)));
+    const quota: OpenAlexQuota = { limit: num("x-ratelimit-limit"), remaining: num("x-ratelimit-remaining") };
     if (!res.ok) {
       const body = (await res.text().catch(() => "")).slice(0, 200);
-      return { ok: false, status: res.status, error: explainOpenAlex(res.status, body) };
+      return { ok: false, status: res.status, error: explainOpenAlex(res.status, body), quota };
     }
-    return { ok: true, data: (await res.json()) as T };
+    return { ok: true, data: (await res.json()) as T, quota };
   } catch (e) {
     // The message may name the URL, and the URL carries the key: never pass it through.
     return { ok: false, error: explainOpenAlex(undefined, (e as Error).name === "AbortError" ? "abort" : "fetch failed") };
@@ -65,12 +69,12 @@ async function call<T>(path: string, params: Record<string, string>): Promise<Op
 export async function searchWorks(terms: string[]): Promise<OpenAlexResult<EvidenceResult[]>> {
   const r = await call<{ results?: Work[] }>("/works", { search: terms.join(" "), "per-page": "10", sort: "cited_by_count:desc", select: "id,doi,title,display_name,publication_year,cited_by_count,authorships" });
   if (!r.ok) return r;
-  return { ok: true, data: (r.data.results ?? []).map(toResult) };
+  return { ok: true, data: (r.data.results ?? []).map(toResult), quota: r.quota };
 }
 
 /** One work by DOI, for the side-by-side when a client already has a study in mind. */
 export async function workByDoi(doi: string): Promise<OpenAlexResult<EvidenceResult>> {
   const r = await call<Work>(`/works/https://doi.org/${encodeURIComponent(doi.replace(/^https?:\/\/doi\.org\//, ""))}`, {});
   if (!r.ok) return r;
-  return { ok: true, data: toResult(r.data) };
+  return { ok: true, data: toResult(r.data), quota: r.quota };
 }

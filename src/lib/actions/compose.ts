@@ -38,8 +38,12 @@ const isChannel = (c: string): c is Channel => (CHANNELS as readonly string[]).i
 export async function saveComposeAction(payload: ComposePayload): Promise<ComposeResult> {
   const { v, workspaceId, userId } = await ctx();
   // Block on truth, server-side as well: a fabricated statistic in any version saves nothing and says why.
-  const fabricated = findFabricated([payload.body, ...payload.targets.map((t) => t.body)].join("\n"));
-  if (fabricated.length) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: `Blocked, this statistic is not real: ${explainFabricated(fabricated)}` };
+  const everything = [payload.body, ...payload.targets.map((t) => t.body)].join("\n");
+  const fabricated = findFabricated(everything);
+  if (fabricated.length) {
+    const quotes = (await db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) })).flatMap((p) => [p.quote, p.longVersion, p.shortVersion].filter((x): x is string => Boolean(x)));
+    return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: `Blocked, this statistic is not real: ${explainFabricated(fabricated, { text: everything, quotes })}` };
+  }
   const title = payload.title.trim() || payload.hook.trim().slice(0, 80) || "Untitled post";
   const firstAt = payload.targets.map((t) => t.postAt).filter(Boolean).sort()[0] ?? null;
   const status = payload.mode === "now" ? "posted" : payload.mode === "schedule" ? "scheduled" : "ready";

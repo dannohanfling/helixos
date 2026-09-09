@@ -156,8 +156,14 @@ together (`insertText` in `src/lib/engine/evidence.ts`); they never travel apart
 
 OpenAlex takes the key as a query parameter, so `src/lib/openalex.ts` is server-side only: an ESLint rule keeps it out of
 everything but `src/lib/actions/evidence.ts`, no error message carries the URL, and the walk asserts the browser never calls
-it. One shared key pays for every client: searches are cached by normalised query for a week, each client gets 25 real
-searches a day (UTC), and a quota failure says so and when it resets rather than reading as "no research exists".
+it. One shared key pays for every client. OpenAlex's docs give the free pool as 100,000 credits a day with a search
+costing 10, reset at midnight UTC, so 10,000 searches a day (`EVIDENCE_GLOBAL_BUDGET`). Searches are cached by normalised
+query for a week; each client gets 25 real searches a day; past 70% of the pool everyone drops to 5 so latecomers still get
+in, and the message says the shared limit is close, not that the client did anything wrong; the pool used up is a hard stop
+that says so and when it resets. OpenAlex reports its own balance on every response (`X-RateLimit-Remaining`) and the tighter
+of that and the local count wins. The Coach page shows today's count against the pool, what OpenAlex last reported, and the
+last seven days, which is how Danno sees when to move the key to the paid tier. A blocked statistic that sits inside a quote
+(quotation marks, or an approved proof's words) says so: a quote is trimmed with an ellipsis or left out, never rewritten.
 
 The shared starter shelf is Danno's nine studies (`src/data/research-library-seed-v2.json`, every one with a DOI resolved
 through OpenAlex), upserted on every migrate into `evidence_shared` and shown on every shelf labelled as shared and sourced by

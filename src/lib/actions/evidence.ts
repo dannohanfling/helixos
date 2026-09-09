@@ -7,7 +7,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { EVIDENCE_CACHE_DAYS, EVIDENCE_DAILY_LIMIT, fallbackTerms, flagsFor, queryKey, utcDay } from "@/lib/engine/evidence";
+import { EVIDENCE_CACHE_DAYS, fallbackTerms, flagsFor, queryKey, quotaState, utcDay } from "@/lib/engine/evidence";
 import { searchWorks } from "@/lib/openalex";
 
 function back(params: Record<string, string | number | undefined>): never {
@@ -70,16 +70,21 @@ export async function searchEvidenceAction(formData: FormData): Promise<void> {
   const cached = await db.query.evidenceSearches.findFirst({ where: and(eq(schema.evidenceSearches.queryKey, key), eq(schema.evidenceSearches.fromCache, false), gte(schema.evidenceSearches.createdAt, since)), orderBy: desc(schema.evidenceSearches.createdAt) });
   let results = cached?.results ?? [];
   let fromCache = Boolean(cached);
+  let credits: { limit: number | null; remaining: number | null } = { limit: null, remaining: null };
   if (!cached) {
-    const usedToday = (await db.query.evidenceSearches.findMany({ where: and(eq(schema.evidenceSearches.userId, userId), eq(schema.evidenceSearches.day, day), eq(schema.evidenceSearches.fromCache, false)) })).length;
-    if (usedToday >= EVIDENCE_DAILY_LIMIT) back({ ...carry, error: `You have used today's ${EVIDENCE_DAILY_LIMIT} searches. The key is shared by every client, and the count resets at midnight UTC.` });
+    // Two counters that must agree: this client's day, and the whole pool's day (one key for every client), with what OpenAlex last reported.
+    const today = await db.query.evidenceSearches.findMany({ where: and(eq(schema.evidenceSearches.day, day), eq(schema.evidenceSearches.fromCache, false)), orderBy: desc(schema.evidenceSearches.createdAt) });
+    const reported = today.find((r) => r.creditsRemaining != null)?.creditsRemaining ?? null;
+    const q = quotaState(today, userId, day, reported);
+    if (!q.allowed) back({ ...carry, error: q.refusal ?? "Not now." });
     const r = await searchWorks(terms);
     if (!r.ok) back({ ...carry, error: r.error });
     results = r.data;
+    credits = r.quota;
     fromCache = false;
   }
   const id = newId();
-  await db.insert(schema.evidenceSearches).values({ id, userId, day, queryKey: key, query: terms.join(", "), claim, askedFor, results, fromCache });
+  await db.insert(schema.evidenceSearches).values({ id, userId, day, queryKey: key, query: terms.join(", "), claim, askedFor, results, fromCache, creditsLimit: credits.limit, creditsRemaining: credits.remaining });
   refresh();
   redirect(`/evidence?search=${id}`);
 }

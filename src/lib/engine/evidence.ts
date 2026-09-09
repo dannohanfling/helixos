@@ -7,6 +7,67 @@ import type { Evidence, EvidenceAskedFor, EvidenceResult, EvidenceShared } from 
 
 /** How many OpenAlex searches one client gets a day. Generous for real use, fatal to a loop; the key is shared by every client. */
 export const EVIDENCE_DAILY_LIMIT = 25;
+/**
+ * The shared pool, from OpenAlex's docs (rate-limits-and-authentication): 100,000 credits a day free, a list or search request
+ * costing 10, reset at midnight UTC. So 10,000 searches a day for the one key every client shares. OpenAlex also reports the
+ * live figure on every response (X-RateLimit-Remaining); when it has, the tighter of the two counts wins.
+ */
+export const EVIDENCE_CREDITS_PER_SEARCH = 10;
+export const EVIDENCE_GLOBAL_BUDGET = 100000 / EVIDENCE_CREDITS_PER_SEARCH;
+/** Past this share of the day's pool, everyone drops to the degraded allowance so latecomers can still get in. */
+export const EVIDENCE_DEGRADE_AT = 0.7;
+export const EVIDENCE_DEGRADED_LIMIT = 5;
+
+export type QuotaRow = { userId: string; day: string; fromCache: boolean; creditsRemaining?: number | null };
+export type QuotaState = {
+  usedToday: number;
+  globalToday: number;
+  budget: number;
+  poolLeft: number;
+  degraded: boolean;
+  exhausted: boolean;
+  limit: number;
+  allowed: boolean;
+  /** Plain words for a refusal, never implying the client did something wrong when they did not. Null when allowed. */
+  refusal: string | null;
+};
+
+/**
+ * Where today's quota stands for one client: their own count, the global count, and the allowance that follows. Real calls
+ * only; cache hits cost nothing. `creditsRemaining` is the last figure OpenAlex reported today, if any.
+ */
+export function quotaState(rows: QuotaRow[], userId: string, day: string, creditsRemaining?: number | null): QuotaState {
+  const real = rows.filter((r) => r.day === day && !r.fromCache);
+  const globalToday = real.length;
+  const usedToday = real.filter((r) => r.userId === userId).length;
+  const budget = EVIDENCE_GLOBAL_BUDGET;
+  const local = budget - globalToday;
+  const reported = creditsRemaining == null ? Infinity : Math.floor(creditsRemaining / EVIDENCE_CREDITS_PER_SEARCH);
+  const poolLeft = Math.max(0, Math.min(local, reported));
+  const exhausted = poolLeft <= 0;
+  const degraded = !exhausted && poolLeft <= budget * (1 - EVIDENCE_DEGRADE_AT);
+  const limit = degraded ? EVIDENCE_DEGRADED_LIMIT : EVIDENCE_DAILY_LIMIT;
+  const allowed = !exhausted && usedToday < limit;
+  const refusal = allowed
+    ? null
+    : exhausted
+      ? "The shared daily limit for Evidence searches is used up for today. Nobody did anything wrong: one key is shared by every client. It resets at midnight UTC."
+      : degraded
+        ? `The shared daily limit is close, so everyone is down to ${EVIDENCE_DEGRADED_LIMIT} searches for the rest of today. Nobody did anything wrong. It resets at midnight UTC.`
+        : `You have used today's ${EVIDENCE_DAILY_LIMIT} searches. The count resets at midnight UTC.`;
+  return { usedToday, globalToday, budget, poolLeft, degraded, exhausted, limit, allowed, refusal };
+}
+
+/** The last seven UTC days, oldest first, with each day's real search count. */
+export function lastDays(rows: QuotaRow[], today: string, days = 7): { day: string; count: number }[] {
+  const out: { day: string; count: number }[] = [];
+  const t = new Date(`${today}T00:00:00Z`);
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(t.getTime() - i * 86400000).toISOString().slice(0, 10);
+    out.push({ day: d, count: rows.filter((r) => r.day === d && !r.fromCache).length });
+  }
+  return out;
+}
 /** A cached result answers the same query for this long. */
 export const EVIDENCE_CACHE_DAYS = 7;
 

@@ -10,6 +10,7 @@ import { setMemberPassAction } from "@/lib/actions/integrations";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
 import { money, rollup } from "@/lib/engine/ai-usage";
 import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
+import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_DEGRADE_AT, EVIDENCE_GLOBAL_BUDGET, lastDays, quotaState, utcDay } from "@/lib/engine/evidence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
@@ -49,6 +50,12 @@ export default async function CoachPage() {
   const essenceRows = await db.query.essences.findMany({ where: eq(schema.essences.workspaceId, wsId) });
   const essenceData = essenceRows.map((r) => normalizeEssence(r.data));
   const fieldCounts = ESSENCE_SECTIONS.map((s) => ({ section: s, fields: s.fields.map((f) => ({ field: f, count: essenceData.filter((d) => d[s.key]?.[f.key] !== undefined).length })) }));
+  const evidenceToday = utcDay();
+  const evidenceSince = new Date(new Date(`${evidenceToday}T00:00:00Z`).getTime() - 6 * 86400000).toISOString().slice(0, 10);
+  const evidenceRows = await db.query.evidenceSearches.findMany({ where: gte(schema.evidenceSearches.day, evidenceSince), orderBy: desc(schema.evidenceSearches.createdAt) });
+  const evidenceReported = evidenceRows.find((r) => r.day === evidenceToday && r.creditsRemaining != null) ?? null;
+  const evidenceQuota = quotaState(evidenceRows, "", evidenceToday, evidenceReported?.creditsRemaining);
+  const evidenceDays = lastDays(evidenceRows, evidenceToday);
   const essenceStarted = essenceData.filter((d) => Object.keys(d).length).length;
   const usageOf = (userId: string) => rollup(aiRows.filter((r) => r.userId === userId));
   const libByKey = new Map(library.map((l) => [l.key, l]));
@@ -252,6 +259,31 @@ export default async function CoachPage() {
               <button className="btn btn-soft btn-xs" type="submit">Save</button>
               <span className="text-ink-3">calls per day, on their own key. Stops a runaway loop from spending a client&apos;s money.</span>
             </form>
+          </Card>
+          <Card title="Evidence searches: the shared OpenAlex key" action={<span className="text-xs text-ink-3" data-testid="evidence-quota-today">{evidenceQuota.globalToday.toLocaleString()} of {EVIDENCE_GLOBAL_BUDGET.toLocaleString()} today</span>}>
+            <p className="mb-2 text-xs text-ink-2">
+              One free key pays for every client: {EVIDENCE_GLOBAL_BUDGET.toLocaleString()} searches a day, reset at midnight UTC. Each client gets {EVIDENCE_DAILY_LIMIT} a day; past {Math.round(EVIDENCE_DEGRADE_AT * 100)}% of the pool everyone drops to {EVIDENCE_DEGRADED_LIMIT} so latecomers still get in. When a day here runs close, that is the sign to move the key to OpenAlex&apos;s paid tier.
+            </p>
+            <div className="text-xs" data-testid="evidence-quota">
+              <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1">
+                <span>
+                  Today: <span className="font-semibold">{evidenceQuota.globalToday.toLocaleString()}</span> real searches{evidenceQuota.degraded ? <Badge tone="warn">degraded</Badge> : evidenceQuota.exhausted ? <Badge tone="danger">used up</Badge> : null}
+                </span>
+                <span data-testid="evidence-credits">
+                  {evidenceReported ? `OpenAlex reports ${evidenceReported.creditsRemaining?.toLocaleString()} of ${evidenceReported.creditsLimit?.toLocaleString()} credits left, as of ${formatDateTime(evidenceReported.createdAt.includes("T") ? evidenceReported.createdAt : `${evidenceReported.createdAt.replace(" ", "T")}Z`, v.workspace.timezone)}` : "OpenAlex has not reported a balance today (no real call yet)."}
+                </span>
+              </div>
+              <table className="w-full">
+                <tbody>
+                  {evidenceDays.map((d) => (
+                    <tr key={d.day} className="border-t" data-day={d.day} data-count={d.count}>
+                      <td className="py-0.5">{d.day}</td>
+                      <td className="py-0.5 text-right tabular">{d.count.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
           <Card title="Essence: what clients actually fill in" action={<span className="text-xs text-ink-3">{essenceStarted}/{members.length} started</span>}>
             <p className="mb-2 text-xs text-ink-2">How many clients have each field filled. Evidence for which of the fourteen sections earn their place; nothing here changes anything.</p>
