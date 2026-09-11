@@ -275,6 +275,8 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
           </Card>
         </div>
       </div>
+      {/* The one place the source is named on a client's page: a quiet credit, the same principle as the Socrates attribution line. */}
+      <p className="mt-6 text-xs text-ink-3" data-testid="evidence-credit">Results come from OpenAlex, an open catalogue of scholarly work.</p>
     </>
   );
 }

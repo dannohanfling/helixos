@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BLACKLIST, QUOTE_NOTE, explainFabricated, findFabricated, inQuote, stripFabricated, stripNote } from "../blacklist";
-import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_GLOBAL_BUDGET, byCitations, fallbackTerms, flagsFor, insertText, lastDays, queryKey, quotaState } from "../evidence";
+import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_GLOBAL_BUDGET, byCitations, fallbackTerms, flagsFor, insertText, lastDays, queryKey, quotaState, resetLabel, resetPhrase } from "../evidence";
 import seed from "@/data/research-library-seed-v2.json";
 
 describe("fabricated-stat blacklist", () => {
@@ -75,11 +75,26 @@ describe("quota: two counters that must agree, one pool for every client", () =>
     expect(q.allowed).toBe(true);
     expect(q.refusal).toBeNull();
   });
-  it("the per-client limit refuses at 25 with a plain reason", () => {
-    const q = quotaState(rows(25), "u1", day);
+  it("the per-client limit and the degraded floor are configuration, and the floor is a quarter of the limit", () => {
+    expect(EVIDENCE_DAILY_LIMIT).toBe(100);
+    expect(EVIDENCE_DEGRADED_LIMIT).toBe(25);
+  });
+  it("the per-client limit refuses at the limit with a plain reason that derives the number", () => {
+    const q = quotaState(rows(EVIDENCE_DAILY_LIMIT), "u1", day);
     expect(q.allowed).toBe(false);
-    expect(q.refusal).toContain("You have used today's 25 searches");
-    expect(quotaState(rows(24), "u1", day).allowed).toBe(true);
+    expect(q.refusal).toContain(`You have used today's ${EVIDENCE_DAILY_LIMIT} searches`);
+    expect(quotaState(rows(EVIDENCE_DAILY_LIMIT - 1), "u1", day).allowed).toBe(true);
+  });
+  it("the reset is said in the member's own clock, never as a unit nobody lives in", () => {
+    const septemberNoon = new Date("2026-09-11T12:00:00Z");
+    expect(resetLabel("America/Los_Angeles", septemberNoon)).toBe("5pm");
+    expect(resetLabel("America/New_York", septemberNoon)).toBe("8pm");
+    expect(resetLabel("Asia/Kolkata", septemberNoon)).toBe("5:30am");
+    expect(resetLabel("UTC", septemberNoon)).toBe("12am");
+    expect(resetLabel("America/Los_Angeles", new Date("2026-01-11T12:00:00Z"))).toBe("4pm");
+    const q = quotaState(rows(EVIDENCE_DAILY_LIMIT), "u1", day, null, resetPhrase("America/Los_Angeles", septemberNoon));
+    expect(q.refusal).toContain("resets at 5pm your time");
+    expect(q.refusal).not.toContain("UTC");
   });
   it("past 70% of the pool everyone drops to the degraded allowance, and the words blame nobody", () => {
     const busy = Math.ceil(EVIDENCE_GLOBAL_BUDGET * 0.7);

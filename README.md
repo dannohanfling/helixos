@@ -74,7 +74,7 @@ npm test                    # engine unit tests (streaks, tiers, points, next be
 # The gate. Exits non-zero on the first failure; nothing is piped through tail/head, so a red check can never green-light a commit.
 npm run verify              # tsc + eslint + vitest            (scripts/verify.sh; add --build for next build)
 npm run dev:server start    # dev server on :3000 with every setting the walks need (scripts/dev-server.sh)
-npm run smoke -- ladders ai # reseed + one or more Playwright walks (scripts/smoke.sh; "all" runs every walk)
+npm run smoke -- ladders ai # warm-up (login, sign-in, Today; five-minute timeout, fails loudly), then reseed + one or more Playwright walks (scripts/smoke.sh; "all" runs every walk)
 npm run release             # verify --build, restart the server, every walk. Commit only after: scripts/release.sh && git commit …
 # Never edit a scripts/*.sh file while it is running: bash reads a script incrementally, so a mid-run edit corrupts the tail of the
 # run (it once turned the last line into "us,: command not found"). The scripts wrap their body in main() so the whole file is
@@ -166,12 +166,18 @@ OpenAlex takes the key as a query parameter, so `src/lib/openalex.ts` is server-
 everything but `src/lib/actions/evidence.ts`, no error message carries the URL, and the walk asserts the browser never calls
 it. One shared key pays for every client. OpenAlex's docs give the free pool as 100,000 credits a day with a search
 costing 10, reset at midnight UTC, so 10,000 searches a day (`EVIDENCE_GLOBAL_BUDGET`). Searches are cached by normalised
-query for a week; each client gets 25 real searches a day; past 70% of the pool everyone drops to 5 so latecomers still get
-in, and the message says the shared limit is close, not that the client did anything wrong; the pool used up is a hard stop
-that says so and when it resets. OpenAlex reports its own balance on every response (`X-RateLimit-Remaining`) and the tighter
+query for a week; each client gets `EVIDENCE_DAILY_LIMIT` real searches a day (100); past 70% of the pool everyone drops to
+`EVIDENCE_DEGRADED_LIMIT` (25, a quarter of the limit, so the degraded state still reads as a bit less rather than a wall)
+so latecomers still get in, and the message says the shared limit is close, not that the client did anything wrong; the
+pool used up is a hard stop that says so and when it resets. Both numbers are configuration in `src/lib/engine/evidence.ts`
+and every message derives from them. The reset is midnight UTC (the pool's day), said to the client in their own clock
+(`resetLabel`: "5pm your time" in Los Angeles, "5:30am your time" in Kolkata), never as UTC. OpenAlex reports its own balance on every response (`X-RateLimit-Remaining`) and the tighter
 of that and the local count wins. The Coach page shows today's count against the pool, what OpenAlex last reported, and the
 last seven days, which is how Danno sees when to move the key to the paid tier. A blocked statistic that sits inside a quote
 (quotation marks, or an approved proof's words) says so: a quote is trimmed with an ellipsis or left out, never rewritten.
+
+A client's page names the source once, quietly, at the foot: "Results come from OpenAlex, an open catalogue of scholarly
+work." The Coach page is Danno's operational view and says OpenAlex wherever it helps.
 
 The shared starter shelf is Danno's nine studies (`src/data/research-library-seed-v2.json`, every one with a DOI resolved
 through OpenAlex), upserted on every migrate into `evidence_shared` and shown on every shelf labelled as shared and sourced by

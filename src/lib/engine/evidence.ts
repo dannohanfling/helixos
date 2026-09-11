@@ -6,7 +6,7 @@
 import type { Evidence, EvidenceAskedFor, EvidenceResult, EvidenceShared } from "@/db/schema";
 
 /** How many OpenAlex searches one client gets a day. Generous for real use, fatal to a loop; the key is shared by every client. */
-export const EVIDENCE_DAILY_LIMIT = 25;
+export const EVIDENCE_DAILY_LIMIT = 100;
 /**
  * The shared pool, from OpenAlex's docs (rate-limits-and-authentication): 100,000 credits a day free, a list or search request
  * costing 10, reset at midnight UTC. So 10,000 searches a day for the one key every client shares. OpenAlex also reports the
@@ -16,7 +16,7 @@ export const EVIDENCE_CREDITS_PER_SEARCH = 10;
 export const EVIDENCE_GLOBAL_BUDGET = 100000 / EVIDENCE_CREDITS_PER_SEARCH;
 /** Past this share of the day's pool, everyone drops to the degraded allowance so latecomers can still get in. */
 export const EVIDENCE_DEGRADE_AT = 0.7;
-export const EVIDENCE_DEGRADED_LIMIT = 5;
+export const EVIDENCE_DEGRADED_LIMIT = 25;
 
 export type QuotaRow = { userId: string; day: string; fromCache: boolean; creditsRemaining?: number | null };
 export type QuotaState = {
@@ -36,7 +36,7 @@ export type QuotaState = {
  * Where today's quota stands for one client: their own count, the global count, and the allowance that follows. Real calls
  * only; cache hits cost nothing. `creditsRemaining` is the last figure OpenAlex reported today, if any.
  */
-export function quotaState(rows: QuotaRow[], userId: string, day: string, creditsRemaining?: number | null): QuotaState {
+export function quotaState(rows: QuotaRow[], userId: string, day: string, creditsRemaining?: number | null, resetsAt = "midnight UTC"): QuotaState {
   const real = rows.filter((r) => r.day === day && !r.fromCache);
   const globalToday = real.length;
   const usedToday = real.filter((r) => r.userId === userId).length;
@@ -51,12 +51,30 @@ export function quotaState(rows: QuotaRow[], userId: string, day: string, credit
   const refusal = allowed
     ? null
     : exhausted
-      ? "The shared daily limit for Evidence searches is used up for today. Nobody did anything wrong: one key is shared by every client. It resets at midnight UTC."
+      ? `The shared daily limit for Evidence searches is used up for today. Nobody did anything wrong: one key is shared by every client. It resets at ${resetsAt}.`
       : degraded
-        ? `The shared daily limit is close, so everyone is down to ${EVIDENCE_DEGRADED_LIMIT} searches for the rest of today. Nobody did anything wrong. It resets at midnight UTC.`
-        : `You have used today's ${EVIDENCE_DAILY_LIMIT} searches. The count resets at midnight UTC.`;
+        ? `The shared daily limit is close, so everyone is down to ${EVIDENCE_DEGRADED_LIMIT} searches for the rest of today. Nobody did anything wrong. It resets at ${resetsAt}.`
+        : `You have used today's ${EVIDENCE_DAILY_LIMIT} searches. The count resets at ${resetsAt}.`;
   return { usedToday, globalToday, budget, poolLeft, degraded, exhausted, limit, allowed, refusal };
 }
+
+/**
+ * When the count resets, said in the member's own clock: the day boundary is midnight UTC (the pool's), which is 5pm in
+ * Los Angeles and 5:30am in Kolkata. "12am your time" only where the member's clock is UTC.
+ */
+export function resetLabel(tz: string, now = new Date()): string {
+  const next = new Date(now);
+  next.setUTCHours(24, 0, 0, 0);
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true }).formatToParts(next);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const hour = get("hour");
+  const minute = get("minute");
+  const ampm = get("dayPeriod").toLowerCase();
+  return `${hour}${minute === "00" ? "" : `:${minute}`}${ampm}`;
+}
+/** What a 429 from the pool says. One place for the words; the caller supplies the reset in the member's clock. */
+export const outOfQuotaMessage = (resetsAt = "midnight UTC"): string => `Evidence search is out of quota for today. The key is shared by every client, and it resets at ${resetsAt}. Try again then.`;
+export const resetPhrase = (tz: string, now = new Date()): string => `${resetLabel(tz, now)} your time`;
 
 /** The last seven UTC days, oldest first, with each day's real search count. */
 export function lastDays(rows: QuotaRow[], today: string, days = 7): { day: string; count: number }[] {

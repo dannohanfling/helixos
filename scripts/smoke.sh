@@ -31,6 +31,17 @@ main() {
   [[ "${walks[0]}" == "all" ]] && walks=("${ALL[@]}")
   mkdir -p screenshots/logs
 
+  # Warm the routes every walk starts on (login, the demo sign-in, Today) before the first walk: a cold dev server compiles
+  # them on first request, which has taken minutes, and a walk's 30-second wait is only an honest signal on a compiled route.
+  # The warm-up has its own long timeout and asserts nothing but "it responded"; if it times out, that is the app, and the run
+  # fails here, loudly, rather than inside a walk.
+  printf '\n== warm-up ==\n'
+  npm run db:seed
+  if ! timeout 330 npx tsx scripts/smoke-warm.ts "$BASE_URL"; then
+    echo "smoke: warm-up failed: login, the demo sign-in or Today did not respond within five minutes" >&2
+    exit 1
+  fi
+
   for w in "${walks[@]}"; do
     script="scripts/smoke-$w.ts"
     [[ "$w" == "base" ]] && script="scripts/smoke.ts"

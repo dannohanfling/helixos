@@ -7,7 +7,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { EVIDENCE_CACHE_DAYS, fallbackTerms, flagsFor, queryKey, quotaState, utcDay } from "@/lib/engine/evidence";
+import { EVIDENCE_CACHE_DAYS, fallbackTerms, flagsFor, outOfQuotaMessage, queryKey, quotaState, resetPhrase, utcDay } from "@/lib/engine/evidence";
 import { searchWorks } from "@/lib/openalex";
 
 function back(params: Record<string, string | number | undefined>): never {
@@ -53,7 +53,8 @@ export async function proposeTermsAction(formData: FormData): Promise<void> {
  * thing is one call; rate-limited per client per day so one loop cannot break Evidence for everyone; a failure says so plainly.
  */
 export async function searchEvidenceAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { v, userId } = await ctx();
+  const resetsAt = resetPhrase(v.membership.timezone || v.workspace.timezone);
   const claim = str(formData, "claim");
   const author = str(formData, "author");
   const yearRaw = str(formData, "year");
@@ -75,10 +76,11 @@ export async function searchEvidenceAction(formData: FormData): Promise<void> {
     // Two counters that must agree: this client's day, and the whole pool's day (one key for every client), with what OpenAlex last reported.
     const today = await db.query.evidenceSearches.findMany({ where: and(eq(schema.evidenceSearches.day, day), eq(schema.evidenceSearches.fromCache, false)), orderBy: desc(schema.evidenceSearches.createdAt) });
     const reported = today.find((r) => r.creditsRemaining != null)?.creditsRemaining ?? null;
-    const q = quotaState(today, userId, day, reported);
+    const q = quotaState(today, userId, day, reported, resetsAt);
     if (!q.allowed) back({ ...carry, error: q.refusal ?? "Not now." });
     const r = await searchWorks(terms);
-    if (!r.ok) back({ ...carry, error: r.error });
+    // The pool itself answered 429: the same words, with the reset in the member's own clock rather than the pool's.
+    if (!r.ok) back({ ...carry, error: r.status === 429 ? outOfQuotaMessage(resetsAt) : r.error });
     results = r.data;
     credits = r.quota;
     fromCache = false;

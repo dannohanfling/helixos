@@ -4,7 +4,7 @@
  * by a client component, and no error message ever carries the URL. Two calls: search works, and resolve one work by DOI.
  */
 import type { EvidenceResult } from "@/db/schema";
-import { authorLine } from "@/lib/engine/evidence";
+import { authorLine, outOfQuotaMessage } from "@/lib/engine/evidence";
 
 const DEFAULT_BASE = "https://api.openalex.org";
 /** Development and smoke tests point at a mock. Never honoured in production. */
@@ -35,7 +35,7 @@ function toResult(w: Work): EvidenceResult {
 
 /** Plain words for what went wrong. The quota case says when it resets; an empty result must never stand in for "no quota". */
 export function explainOpenAlex(status: number | undefined, message: string): string {
-  if (status === 429) return "Evidence search is out of quota for today. The key is shared by every client, and it resets at midnight UTC. Try again then.";
+  if (status === 429) return outOfQuotaMessage();
   if (status === 401 || status === 403) return "OpenAlex rejected the key. Tell Danno: the OPENALEX_API_KEY in Vercel needs checking.";
   if (/abort|fetch failed|econn/i.test(message)) return "Couldn't reach OpenAlex. Try again in a minute.";
   return `OpenAlex replied: ${message}`.slice(0, 200);

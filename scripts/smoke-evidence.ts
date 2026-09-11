@@ -156,7 +156,9 @@ async function main() {
     await submit(page, 'button:has-text("Search OpenAlex")');
     await page.locator('[data-testid="evidence-error"]').waitFor({ timeout: 5000 });
     await expectText(page, "out of quota for today", "quota message");
-    await expectText(page, "midnight UTC", "quota reset");
+    const { resetPhrase } = await import("@/lib/engine/evidence");
+    await expectText(page, `resets at ${resetPhrase("America/Los_Angeles")}`, "quota reset in the member's own clock");
+    if (/midnight UTC/i.test(await page.locator('[data-testid="evidence-error"]').innerText())) throw new Error("the reset is said in the member's clock, not UTC");
     if (await page.locator('[data-testid="no-results"]').count()) throw new Error("a quota failure must not look like an empty result");
     console.log("✓ quota exhaustion is said plainly, with the reset time");
 

@@ -116,6 +116,9 @@ async function main() {
     const prefillTimes: Record<string, string> = { contactSubmitted: new Date().toISOString() };
     await page.goto(`${base}/today`);
     prefillTimes.todayLoaded = new Date().toISOString();
+    // The close card streams in after navigation resolves; judging the disclosure before the card exists skipped the click
+    // (diagnosed from the instrumented failure below: presentBeforeClick false, presentNow true, openNow false).
+    await page.locator("#close").waitFor({ timeout: 15000 });
     const early = page.locator('[data-testid="close-early"] > summary');
     const earlyVisible = await early.isVisible();
     if (earlyVisible) await early.click();
@@ -127,7 +130,9 @@ async function main() {
       const { todayActivity } = await import("@/lib/queries/daily");
       const { todayInTz, hourInTz } = await import("@/lib/dates");
       const membership = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
-      const tz = membership?.timezone || "UTC";
+      const workspace = membership ? await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, membership.workspaceId) }) : null;
+      // The app's own rule: the member's timezone, else the workspace's. Never a unit of the harness's choosing.
+      const tz = membership?.timezone || workspace?.timezone || "UTC";
       const prefill = page.locator('[data-testid="close-prefill"]');
       const details = page.locator('[data-testid="close-early"]');
       const diag = {
