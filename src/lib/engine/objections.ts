@@ -33,6 +33,9 @@ export function handledIn(o: Pick<ObjectionLike, "id">, sections: { assetId: str
 export type MethodStep = { key: string; title: string; line: string };
 export const OBJECTION_METHOD: MethodStep[] = method as MethodStep[];
 export const methodReady = (steps: MethodStep[] = OBJECTION_METHOD): boolean => steps.length > 0 && steps.every((s) => s.title.trim() && s.line.trim());
+/** Step 5 ("Check it landed") sends you back to step 2 ("Find out what they actually mean") when it did not: the loop that makes this a method. */
+export const LOOP_FROM = "check";
+export const LOOP_TO = "find";
 export const REFRAME_STEP_KEY = "reframe";
 
 /** The offer wizard's older fixed fields, each with the objection it stood for, so a filled answer can move into the bank as a record. */

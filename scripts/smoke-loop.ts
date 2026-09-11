@@ -82,7 +82,12 @@ async function main() {
     const stamped = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
     if (stamped?.celebratedTierLevel === null) throw new Error("the first visit did not stamp the member's current tier");
     // Crossing into a new tier is celebrated once, on the next page, then never again
-    await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: closedRows[0].workspaceId, userId: maya.id, type: "bonus", points: 4000, reason: "Smoke: level up" });
+    // Enough to cross the next tier line whatever the seed's date-relative streak and close points add up to today.
+    const { TIERS } = await import("@/lib/engine/tiers");
+    const total = (await db.query.pointsLedger.findMany({ where: eq(schema.pointsLedger.userId, maya.id) })).reduce((s, r) => s + r.points, 0);
+    const nextTier = TIERS.find((t) => t.minPoints > total);
+    if (!nextTier) throw new Error("the demo client is already on the top tier; nothing to cross");
+    await db.insert(schema.pointsLedger).values({ id: crypto.randomUUID(), workspaceId: closedRows[0].workspaceId, userId: maya.id, type: "bonus", points: nextTier.minPoints - total + 1, reason: "Smoke: level up" });
     await page.goto(`${base}/today`);
     const levelUp = page.locator('[data-testid="level-up"]');
     await levelUp.waitFor({ timeout: 10000 });

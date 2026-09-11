@@ -218,6 +218,20 @@
       "when": 1789100677158,
       "tag": "0030_lead_magnets",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1789154606977,
+      "tag": "0031_files_bytes_out",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1789154608543,
+      "tag": "0032_files_url",
+      "breakpoints": true
     }
   ]
 }

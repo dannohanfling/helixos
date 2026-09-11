@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BELIEF_KEYS } from "@/db/schema";
-import { LEGACY_OFFER_OBJECTIONS, OBJECTION_METHOD, handledIn, isSharedObjection, methodReady, reframesOf } from "../objections";
+import { LEGACY_OFFER_OBJECTIONS, LOOP_FROM, LOOP_TO, OBJECTION_METHOD, handledIn, isSharedObjection, methodReady, reframesOf } from "../objections";
 import seed from "@/data/seed/webinar/objections.json";
 
 describe("objections: one record", () => {
@@ -29,8 +29,12 @@ describe("objections: one record", () => {
   });
   it("the method is structure until every step has Danno's words, and the reframe step is one of them", () => {
     expect(OBJECTION_METHOD.map((s) => s.key)).toEqual(["hold", "find", "reflect", "reframe", "check", "return"]);
-    expect(methodReady()).toBe(false);
-    expect(methodReady(OBJECTION_METHOD.map((s) => ({ ...s, title: "t", line: "l" })))).toBe(true);
+    expect(methodReady()).toBe(true);
+    expect(methodReady(OBJECTION_METHOD.map((s) => ({ ...s, title: "", line: "" })))).toBe(false);
+    expect(OBJECTION_METHOD.map((s) => s.title)).toEqual(["Don't answer it yet.", "Find out what they actually mean.", "Say it back.", "Now reframe.", "Check it landed.", "Pick up where you were."]);
+    // Step 5 sends you back to step 2: the loop that makes this a method rather than a list, in the words and in the keys.
+    expect(OBJECTION_METHOD.find((s) => s.key === LOOP_FROM)?.line).toMatch(/Go back to step two\.$/);
+    expect(OBJECTION_METHOD.findIndex((s) => s.key === LOOP_TO)).toBe(1);
     expect(LEGACY_OFFER_OBJECTIONS.map((l) => l.field)).toEqual(["objTime", "objMoney", "objPartner", "objTriedBefore", "objDiy"]);
   });
 });

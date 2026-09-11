@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { blob, index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const id = () => text("id").primaryKey();
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
@@ -1359,15 +1359,16 @@ export const evidenceSearches = sqliteTable(
 export type EvidenceSearch = typeof evidenceSearches.$inferSelect;
 
 /**
- * The object store, backed by the database (swappable for a bucket behind src/lib/storage.ts). Two access rules live in one
- * store, so the rule is in the key: only `public/magnets/<slug>/…` is ever public, written by one function; everything
- * else is private, written by another. `isPublic` is recorded for the read path and must agree with the prefix.
+ * The object store's index: one row per object in the bucket (Vercel Blob, behind src/lib/storage.ts), never the bytes.
+ * Two access rules live in one store, so the rule is in the key: only `public/magnets/<slug>/…` is ever public, written by
+ * one function; everything else is private, written by another. `isPublic` is recorded for the read path and must agree
+ * with the prefix; `url` is where the bucket serves the object (a CDN address for a public one, an authenticated one otherwise).
  */
 export const files = sqliteTable("files", {
   key: text("key").primaryKey(),
   workspaceId: text("workspace_id").notNull(),
   contentType: text("content_type").notNull(),
-  bytes: blob("bytes", { mode: "buffer" }).notNull(),
+  url: text("url").notNull().default(""),
   size: integer("size").notNull(),
   isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
   createdAt: createdAt(),

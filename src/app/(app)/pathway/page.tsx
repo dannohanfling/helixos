@@ -5,7 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { completeCurriculumDayAction, submitPathwayTaskAction } from "@/lib/actions/pathway";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
-import { FIELD_TASKS, OPEN_LIMIT, simplePath, roadLine, stageRelation } from "@/lib/engine/pathway";
+import { FIELD_TASKS, OPEN_LIMIT, SECTION_TASKS, sectionCountLine, simplePath, roadLine, stageRelation } from "@/lib/engine/pathway";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import type { LibraryTask, PathwayProgress } from "@/db/schema";
 
@@ -88,6 +88,7 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
     db.query.curriculumProgress.findMany({ where: eq(schema.curriculumProgress.userId, v.user.id) }),
     db.query.courses.findMany(),
   ]);
+  const sectionCounts: Record<string, number> = { recA3OidbU8gUYW8x: (await db.query.leadMagnets.findMany({ where: eq(schema.leadMagnets.userId, v.user.id), columns: { id: true } })).length };
   const progByKey = new Map<string, PathwayProgress>(progress.map((p) => [p.libraryTaskKey, p]));
   const statusOf = (key: string) => progByKey.get(key)?.status ?? "todo";
   const path = simplePath(stages, library, progress);
@@ -239,6 +240,14 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                 <a href={selected.trainingUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm underline">
                   Watch the training ↗
                 </a>
+              ) : null}
+              {SECTION_TASKS[selected.key] ? (
+                <div className="mt-3 rounded-lg bg-surface-2 p-3 text-sm" data-testid="section-task">
+                  {sectionCountLine(selected.key, sectionCounts[selected.key] ?? 0)}{" "}
+                  <Link href={SECTION_TASKS[selected.key].href} className="font-semibold underline">
+                    Open {SECTION_TASKS[selected.key].where} →
+                  </Link>
+                </div>
               ) : null}
               {selectedProg?.coachFeedback ? (
                 <div className="mt-3 rounded-lg border border-warn bg-warn-soft p-3 text-sm">

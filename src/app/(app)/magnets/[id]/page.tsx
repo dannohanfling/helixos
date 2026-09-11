@@ -5,9 +5,10 @@ import { MAGNET_TYPES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { appUrl } from "@/lib/branded-email";
-import { buildMagnetPdfAction, deleteMagnetAction, generateMagnetAction, removeMagnetFileAction, updateMagnetAction, uploadMagnetFileAction } from "@/lib/actions/magnets";
-import { HIT_SOURCES, MAGNET_TYPE_INFO, canvaHandoff, contentToText, magnetText, primaryTarget } from "@/lib/engine/lead-magnet";
-import { publicUrlFor } from "@/lib/engine/storage-policy";
+import { buildMagnetPdfAction, deleteMagnetAction, generateMagnetAction, removeMagnetFileAction, updateMagnetAction } from "@/lib/actions/magnets";
+import { HIT_SOURCES, MAGNET_TYPE_INFO, QUESTION_WARNING, canvaHandoff, contentToText, endsWithQuestion, magnetText, primaryTarget } from "@/lib/engine/lead-magnet";
+import { STORAGE_UNCONFIGURED, publicUrls, storageConfigured } from "@/lib/storage";
+import { MagnetUpload } from "@/components/magnet-upload";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { CopyButton } from "@/components/copy-button";
@@ -31,22 +32,26 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
       </p>
     );
   }
-  const [ai, offers, membership, hits] = await Promise.all([
+  const [ai, offers, membership, hits, urlOf] = await Promise.all([
     hasAiKey(),
     db.query.offers.findMany({ where: eq(schema.offers.userId, v.user.id) }),
     db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.userId, v.user.id)) }),
     db.select({ src: schema.leadMagnetHits.src, n: sql<number>`count(*)` }).from(schema.leadMagnetHits).where(eq(schema.leadMagnetHits.magnetId, m.id)).groupBy(schema.leadMagnetHits.src),
+    publicUrls([m.pdfKey, m.fileKey]),
   ]);
+  const storage = storageConfigured();
   const bySrc = new Map(hits.map((h) => [h.src, Number(h.n)]));
   const total = hits.reduce((s, h) => s + Number(h.n), 0);
   const base = appUrl();
   const link = `${base}/g/${m.slug}`;
-  const target = primaryTarget(m, publicUrlFor);
-  const pdfUrl = m.pdfKey ? publicUrlFor(m.pdfKey) : null;
-  const fileUrl = m.fileKey ? publicUrlFor(m.fileKey) : null;
+  const target = primaryTarget(m, urlOf);
+  const pdfUrl = m.pdfKey ? urlOf(m.pdfKey) : null;
+  const fileUrl = m.fileKey ? urlOf(m.fileKey) : null;
   const text = magnetText(m);
   const canva = canvaHandoff({ ...m, businessName: membership?.businessName });
   const info = MAGNET_TYPE_INFO[m.type];
+  // Craft, not truth: a DM or chatbot answer that ends without a question is warned on the field and on the summary, and the block opens so it is seen.
+  const handoverWarnings = [m.personalDm, m.chatbotAnswer].filter((t) => t && !endsWithQuestion(t)).length;
   return (
     <>
       <PageHeader
@@ -123,20 +128,24 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
                   <option value="file">The uploaded file</option>
                 </select>
               </Field>
-              <details className="rounded-lg border border-line p-3">
-                <summary className="cursor-pointer text-sm font-medium">Hand-over messages</summary>
+              <details className="rounded-lg border border-line p-3" open={handoverWarnings > 0}>
+                <summary className="cursor-pointer text-sm font-medium">
+                  Hand-over messages{handoverWarnings ? <span className="ml-2 text-xs font-normal text-warn" data-testid="handover-warnings">{handoverWarnings === 1 ? "one ends without a question" : "both end without a question"}</span> : null}
+                </summary>
                 <p className="mt-2 text-xs text-ink-2">Personal profile: comment automation can&apos;t fire, so you reply and DM by hand. Business page: the Community Loyalty chatbot answers, delivers and asks. Every line is yours to write or edit.</p>
                 <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <Field label="Your public reply (personal profile)">
+                  <Field label="Your public reply (personal profile)" hint="Moves them off the thread. Short, no link.">
                     <textarea className="field text-sm" name="personalReply" rows={2} defaultValue={m.personalReply ?? ""} />
                   </Field>
-                  <Field label="Your DM with the link (personal profile)">
+                  <Field label="Your DM with the link (personal profile)" hint="Deliver, then one question that invites a reply.">
                     <textarea className="field text-sm" name="personalDm" rows={2} defaultValue={m.personalDm ?? ""} />
+                    {m.personalDm && !endsWithQuestion(m.personalDm) ? <span className="mt-1 block text-xs text-warn" data-testid="dm-question-warning">{QUESTION_WARNING}</span> : null}
                   </Field>
-                  <Field label="Chatbot answer (business page)">
+                  <Field label="Chatbot answer (business page)" hint="Deliver, then the first qualifying question.">
                     <textarea className="field text-sm" name="chatbotAnswer" rows={2} defaultValue={m.chatbotAnswer ?? ""} />
+                    {m.chatbotAnswer && !endsWithQuestion(m.chatbotAnswer) ? <span className="mt-1 block text-xs text-warn" data-testid="chatbot-question-warning">{QUESTION_WARNING}</span> : null}
                   </Field>
-                  <Field label="Chatbot delivery message (business page)">
+                  <Field label="Chatbot delivery message (business page)" hint="What arrives with the file: one line on what to do with it first.">
                     <textarea className="field text-sm" name="chatbotDelivery" rows={2} defaultValue={m.chatbotDelivery ?? ""} />
                   </Field>
                 </div>
@@ -193,19 +202,15 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
           </Card>
           <Card title="PDF">
             <p className="text-xs text-ink-2">A typeset document from the content above: title over the gold band, the sections, your name at the foot. Build it again after editing.</p>
+            {!storage ? <p className="mt-2 text-xs text-warn" data-testid="magnet-storage-off">{STORAGE_UNCONFIGURED}</p> : null}
             <form action={buildMagnetPdfAction} className="mt-2 flex flex-wrap items-center gap-2">
               <input type="hidden" name="id" value={m.id} />
-              <button className="btn btn-soft btn-sm" type="submit" data-testid="magnet-build-pdf">{pdfUrl ? "Rebuild the PDF" : "Build the PDF"}</button>
+              <button className="btn btn-soft btn-sm" type="submit" disabled={!storage} data-testid="magnet-build-pdf">{pdfUrl ? "Rebuild the PDF" : "Build the PDF"}</button>
               {pdfUrl ? <a className="text-sm underline" href={pdfUrl} target="_blank" rel="noreferrer" data-testid="magnet-pdf-url">Open the PDF</a> : null}
             </form>
           </Card>
           <Card title="Upload a file">
-            <p className="text-xs text-ink-2">Made in Canva or by a designer. Served at its own public address. Up to 4 MB.</p>
-            <form action={uploadMagnetFileAction} className="mt-2 flex flex-wrap items-center gap-2" encType="multipart/form-data">
-              <input type="hidden" name="id" value={m.id} />
-              <input className="text-sm" type="file" name="file" data-testid="magnet-file" />
-              <button className="btn btn-soft btn-sm" type="submit" data-testid="magnet-upload">Upload</button>
-            </form>
+            <MagnetUpload magnetId={m.id} slug={m.slug} enabled={storage} why={STORAGE_UNCONFIGURED} />
             {fileUrl ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                 <a className="underline" href={fileUrl} target="_blank" rel="noreferrer" data-testid="magnet-file-url">{m.fileName}</a>

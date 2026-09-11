@@ -34,7 +34,22 @@ export function keyIsPublic(key: string): boolean {
   return rest.length === 2 && rest.every((seg) => SEGMENT.test(seg));
 }
 
-/** The URL a public object is served at, or null for anything that is not public. Never a signed or guessable route for a private key. */
+/** The app's stable address for a public object, or null for anything that is not public. Never a signed or guessable route for a private key. */
 export function publicUrlFor(key: string): string | null {
   return keyIsPublic(key) ? `/files/${key}` : null;
 }
+
+/** The folder segment of a public key (the magnet's slug), or null when the key is not public. */
+export function publicFolderOf(key: string): string | null {
+  return keyIsPublic(key) ? key.slice(PUBLIC_MAGNET_PREFIX.length).split("/")[0] : null;
+}
+
+/**
+ * The upload cap and the types a magnet file may be. The bytes go from the browser to the bucket, so no serverless body
+ * limit applies; the cap is what a lead magnet reasonably is. Every message that names the cap derives it from here.
+ */
+export const UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+export const UPLOAD_TYPES = ["application/pdf", "image/png", "image/jpeg", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/zip"] as const;
+export const capLabel = (bytes: number = UPLOAD_MAX_BYTES): string => (bytes >= 1024 * 1024 ? `${Math.round(bytes / (1024 * 1024))} MB` : `${Math.round(bytes / 1024)} KB`);
+export const uploadRefusal = (file: { size: number; type: string }): string | null =>
+  file.size > UPLOAD_MAX_BYTES ? `That file is over ${capLabel()}. Export it smaller, or link to it from the page instead.` : !(UPLOAD_TYPES as readonly string[]).includes(file.type) ? "That file type can't be served. PDF, PNG, JPEG, plain text, Word or ZIP." : null;

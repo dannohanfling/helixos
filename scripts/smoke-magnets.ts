@@ -3,13 +3,19 @@
  * already true (blacklisted claims stripped and said so), a typeset PDF and an uploaded file served from the public magnets
  * prefix only, a hosted page and a tracked link that both work with no session, the link's counts per source with nothing
  * about the reader on it, a private attachment that never resolves anywhere, and a ladder that inherits the magnet's keyword.
- * Runs against scripts/mock-ai.ts; the dev server must be started with AI_BASE_URL=http://localhost:4020.
+ * Runs against scripts/mock-ai.ts and scripts/mock-blob.ts; the dev server must be started with AI_BASE_URL=http://localhost:4020,
+ * BLOB_READ_WRITE_TOKEN set to any vercel_blob_rw_ token, and VERCEL_BLOB_API_URL and NEXT_PUBLIC_VERCEL_BLOB_API_URL at
+ * http://localhost:4050 (scripts/dev-server.sh sets all of these).
  */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const aiPort = 4020;
+const blobPort = 4050;
+// This process writes a private attachment through the same store the server uses, so it points the SDK at the mock too.
+process.env.BLOB_READ_WRITE_TOKEN ??= "vercel_blob_rw_TESTSTORE_testsecret";
+process.env.VERCEL_BLOB_API_URL ??= `http://localhost:${blobPort}`;
 
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
@@ -41,7 +47,9 @@ const anon = (url: string) => fetch(url, { redirect: "manual" });
 
 async function main() {
   const ai = spawn("npx", ["tsx", "scripts/mock-ai.ts", String(aiPort)], { stdio: "ignore", detached: true });
-  await new Promise((r) => setTimeout(r, 2000));
+  const blob = spawn("npx", ["tsx", "scripts/mock-blob.ts", String(blobPort)], { stdio: "ignore", detached: true });
+  await new Promise((r) => setTimeout(r, 2500));
+  await fetch(`http://localhost:${blobPort}/__reset`);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
@@ -53,7 +61,7 @@ async function main() {
     const { db, schema } = await import("@/db");
     const { eq } = await import("drizzle-orm");
     const { putPrivateAttachment } = await import("@/lib/storage");
-    const { publicUrlFor } = await import("@/lib/engine/storage-policy");
+    const { publicUrlFor, capLabel } = await import("@/lib/engine/storage-policy");
 
     await page.goto(`${base}/login`);
     await page.click('button:has-text("As a client")');
@@ -106,20 +114,37 @@ async function main() {
     if (/21 days/.test(written)) throw new Error("the blacklisted claim stayed in the content");
     const stripped = await page.locator('[data-testid="magnet-stripped"]').innerText();
     if (!/This one doesn't hold up, so it came out of the draft/.test(stripped)) throw new Error(`the strip notice is the shared frame: "${stripped}"`);
-    if ((await page.locator('textarea[name="personalDm"]').inputValue()) !== "Mock DM: here it is, and one question for you.") throw new Error("the hand-over messages were not filled");
+    if ((await page.locator('textarea[name="personalDm"]').inputValue()) !== "Mock DM: here it is. What are you working on right now?") throw new Error("the hand-over messages were not filled");
     console.log("✓ AI: sections in the type's shape from the facts given, the blacklisted line stripped and said so, hand-overs filled");
 
-    // Build the PDF: served from the public magnets prefix, with no session, as a real PDF
+    // The hand-overs the model wrote end in a question, so no craft warning shows; a DM saved without one gets the warning, and only a warning
+    if (await page.locator('[data-testid="dm-question-warning"], [data-testid="chatbot-question-warning"]').count()) throw new Error("the model's DM and chatbot answer end in a question: no warning");
+    await page.locator('summary:has-text("Hand-over messages")').click();
+    await fillExact(page, 'textarea[name="personalDm"]', "Here it is, enjoy.");
+    await submit(page, '[data-testid="magnet-save"]');
+    await page.waitForURL(/saved=1/);
+    await expectText(page, "Ends without a question", "dm warning");
+    if (await page.locator('[data-testid="chatbot-question-warning"]').count()) throw new Error("the chatbot answer still ends in a question");
+    console.log("✓ craft: a DM that ends without a question is warned, saved all the same");
+
+    // Build the PDF: written to the bucket under the public magnets prefix; the app's /files address sends a reader to the CDN URL; a real PDF, no session
     await submit(page, '[data-testid="magnet-build-pdf"]');
     await page.waitForURL(/pdf=1/);
     const pdfHref = await page.locator('[data-testid="magnet-pdf-url"]').getAttribute("href");
-    if (!pdfHref?.startsWith("/files/public/magnets/")) throw new Error(`the PDF lives under the public magnets prefix: ${pdfHref}`);
+    if (!pdfHref?.startsWith(`http://localhost:${blobPort}/public/magnets/the-12-minute-content-plan/`)) throw new Error(`the PDF is served by the bucket under the magnet's public folder: ${pdfHref}`);
     noPersonalData(pdfHref, "pdf url");
-    const pdfRes = await anon(`${base}${pdfHref}`);
+    const pdfKey = (await db.query.leadMagnets.findFirst({ where: eq(schema.leadMagnets.id, magnetId) }))!.pdfKey!;
+    const viaApp = await anon(`${base}/files/${pdfKey}`);
+    if (viaApp.status !== 302 || viaApp.headers.get("location") !== pdfHref) throw new Error(`/files/<key> sends the reader to the bucket: ${viaApp.status} → ${viaApp.headers.get("location")}`);
+    const pdfRes = await anon(pdfHref);
     if (pdfRes.status !== 200 || !pdfRes.headers.get("content-type")?.startsWith("application/pdf")) throw new Error(`anonymous PDF read: ${pdfRes.status} ${pdfRes.headers.get("content-type")}`);
     const pdfBytes = Buffer.from(await pdfRes.arrayBuffer());
     if (pdfBytes.subarray(0, 4).toString() !== "%PDF") throw new Error("the served object is not a PDF");
-    console.log(`✓ PDF: built, ${pdfBytes.length} bytes, served anonymously from ${pdfHref.slice(0, 22)}…`);
+    const stored = (await (await fetch(`http://localhost:${blobPort}/__list`)).json()) as { objects: { pathname: string; access: string }[] };
+    if (!stored.objects.some((o) => o.pathname === pdfKey && o.access === "public")) throw new Error("the PDF is in the bucket, public, under its key");
+    const indexRow = await db.query.files.findFirst({ where: eq(schema.files.key, pdfKey) });
+    if (!indexRow || !indexRow.isPublic || indexRow.url !== pdfHref || "bytes" in indexRow) throw new Error("the index row records where the object is, never the bytes");
+    console.log(`✓ PDF: built into the bucket, ${pdfBytes.length} bytes, /files redirects to the CDN address, served anonymously`);
 
     // Hosted page and tracked link with no session
     const pageRes = await anon(`${base}/m/the-12-minute-content-plan`);
@@ -145,12 +170,15 @@ async function main() {
     await submit(page, '[data-testid="magnet-save"]');
     await page.waitForURL(/saved=1/);
     const g4 = await anon(`${base}/g/the-12-minute-content-plan?src=dm`);
-    if (g4.status !== 302 || g4.headers.get("location") !== `${base}${pdfHref}`) throw new Error(`the link opens the nominated PDF: ${g4.headers.get("location")}`);
+    if (g4.status !== 302 || g4.headers.get("location") !== pdfHref) throw new Error(`the link opens the nominated PDF at the bucket, one hop: ${g4.headers.get("location")}`);
     console.log("✓ the tracked link opens what the client nominated");
 
-    // A private attachment: written by the other writer, never public, no URL, 404 on the public path
+    // A private attachment: written by the other writer with private access, never public, no URL, 404 on the public path
     const priv = await putPrivateAttachment(membership.workspaceId, "proof-screenshot.png", Buffer.from("not really a png"), "image/png");
     if (priv.url !== null || publicUrlFor(priv.key) !== null) throw new Error("a private attachment resolved to a URL");
+    const privStored = (await (await fetch(`http://localhost:${blobPort}/__list`)).json()) as { objects: { pathname: string; access: string }[] };
+    if (privStored.objects.find((o) => o.pathname === priv.key)?.access !== "private") throw new Error("the private attachment went to the bucket with private access");
+    if ((await anon(`http://localhost:${blobPort}/${priv.key}`)).status !== 403) throw new Error("the bucket refuses a private object without the token");
     const privRes = await anon(`${base}/files/${priv.key}`);
     if (privRes.status !== 404) throw new Error(`a private key must be 404 on /files: ${privRes.status}`);
     const forged = await anon(`${base}/files/public/magnets/the-12-minute-content-plan/nope-proof-screenshot.png`);
@@ -163,17 +191,33 @@ async function main() {
     await db.delete(schema.files).where(eq(schema.files.key, priv.key));
     console.log("✓ private attachment: no URL, 404 on the public path, the prefix wins over the flag");
 
-    // Upload a file made elsewhere: same writer, same prefix, served anonymously
+    // Upload a file made elsewhere: browser to bucket on a token from this app, under the magnet's own folder, recorded after reading it back
     await page.goto(`${base}/magnets/${magnetId}`);
+    await expectText(page, `Up to ${capLabel()}`, "cap from the policy");
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
     await page.setInputFiles('[data-testid="magnet-file"]', { name: "cover art.png", mimeType: "image/png", buffer: png });
-    await submit(page, '[data-testid="magnet-upload"]');
-    await page.waitForURL(/uploaded=1/);
+    const serverBodies: Buffer[] = [];
+    page.on("request", (r) => {
+      if (r.url().startsWith(base) && r.method() === "POST") serverBodies.push(r.postDataBuffer() ?? Buffer.alloc(0));
+    });
+    await page.click('[data-testid="magnet-upload"]');
+    await page.waitForURL(/uploaded=1/, { timeout: 15000 });
+    // The token request and the record call reach this app; the file's bytes (raw or base64) never do.
+    if (serverBodies.some((b) => b.includes(png.subarray(0, 8)) || b.includes(png.toString("base64").slice(0, 24)))) throw new Error("the bytes must go to the bucket, never through this app");
     const fileHref = await page.locator('[data-testid="magnet-file-url"]').getAttribute("href");
-    if (!fileHref?.startsWith("/files/public/magnets/") || !fileHref.endsWith("-cover-art.png")) throw new Error(`uploaded file key: ${fileHref}`);
-    const fileRes = await anon(`${base}${fileHref}`);
+    if (!fileHref?.startsWith(`http://localhost:${blobPort}/public/magnets/the-12-minute-content-plan/`) || !fileHref.endsWith("-cover-art.png")) throw new Error(`uploaded file address: ${fileHref}`);
+    const fileRes = await anon(fileHref);
     if (fileRes.status !== 200 || fileRes.headers.get("content-type") !== "image/png") throw new Error(`anonymous file read: ${fileRes.status}`);
-    console.log("✓ upload: served from the public magnets prefix with a safe name");
+    const fileRow = (await db.query.leadMagnets.findFirst({ where: eq(schema.leadMagnets.id, magnetId) }))!;
+    const fileIndex = await db.query.files.findFirst({ where: eq(schema.files.key, fileRow.fileKey!) });
+    if (!fileIndex?.isPublic || fileIndex.size !== png.length || fileIndex.contentType !== "image/png") throw new Error("the record is what the bucket reports, not what the browser said");
+    // A token for another magnet's folder, or a file that is not the client's, is refused at the door
+    const forgedToken = await page.evaluate(async (m) => {
+      const r = await fetch("/api/magnets/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "blob.generate-client-token", payload: { pathname: "public/magnets/someone-elses-guide/x-file.png", clientPayload: JSON.stringify({ magnetId: m }), multipart: false, callbackUrl: "" } }) });
+      return r.status;
+    }, magnetId);
+    if (forgedToken !== 400) throw new Error(`a token for another folder must be refused: ${forgedToken}`);
+    console.log("✓ upload: browser to bucket on a token pinned to the magnet's folder, cap named from the policy, recorded from the bucket's own report, forged folder refused");
 
     // Copy-outs are on the page
     for (const t of ["magnet-text", "magnet-canva"]) if (!(await page.locator(`[data-testid="${t}"]`).innerText()).includes("Pick one platform.")) throw new Error(`${t} lacks the content`);
@@ -208,17 +252,27 @@ async function main() {
     if (!/KEYWORD ROUTING/.test(ladderSystem)) throw new Error("the ladder prompt was not the ladder's");
     console.log("✓ ladder: inherits the magnet's keyword over the select, names the magnet, keeps it out of the body");
 
+    // The pathway task links to the section and shows the count; it does not tick itself
+    await page.goto(`${base}/pathway?stage=system-install&task=recA3OidbU8gUYW8x`);
+    await expectText(page, "You have 1 lead magnet.", "section task count");
+    if (!(await page.locator('[data-testid="section-task"] a[href="/magnets"]').count())) throw new Error("the task links to Lead magnets");
+    if (!(await page.locator('button:has-text("Submit for review")').count())) throw new Error("the client still submits the task themselves");
+    console.log("✓ pathway: the task shows the count and the link, and waits for the client's submit");
+
     // Delete: the objects go with the record and the ladder keeps its keyword without the link
     await page.goto(`${base}/magnets/${magnetId}`);
     await submit(page, 'button:has-text("Delete")');
     await page.waitForURL(/\/magnets$/);
-    if ((await anon(`${base}${pdfHref}`)).status !== 404) throw new Error("the PDF outlived its magnet");
+    if ((await anon(`${base}/files/${pdfKey}`)).status !== 404 || (await anon(pdfHref)).status !== 404) throw new Error("the PDF outlived its magnet, in the index or in the bucket");
     if ((await db.query.ladders.findFirst({ where: eq(schema.ladders.id, ladderId) }))?.leadMagnetId !== null) throw new Error("the ladder still points at a deleted magnet");
     console.log("✓ delete: objects removed, ladder unlinked");
   } finally {
     await browser.close();
     try {
       process.kill(-ai.pid!);
+    } catch {}
+    try {
+      process.kill(-blob.pid!);
     } catch {}
   }
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);

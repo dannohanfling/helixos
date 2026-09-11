@@ -5,9 +5,16 @@ import { BELIEF_KEYS } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { createObjectionAction, deleteObjectionAction, updateObjectionAction } from "@/lib/actions/objections";
 import { assetsFor } from "@/lib/queries/library";
-import { BELIEF_LABEL, OBJECTION_METHOD, REFRAME_STEP_KEY, handledIn, isSharedObjection, methodReady, reframesOf } from "@/lib/engine/objections";
+import { BELIEF_LABEL, LOOP_FROM, LOOP_TO, OBJECTION_METHOD, REFRAME_STEP_KEY, handledIn, isSharedObjection, methodReady, reframesOf } from "@/lib/engine/objections";
 import { CopyButton } from "@/components/copy-button";
+import { LoopLine } from "@/components/loop-line";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
+
+/** A sample line inside straight quotes is shown as the speech it is. The words are unchanged. */
+function quoted(line: string) {
+  const parts = line.split(/("[^"]+")/);
+  return parts.map((p, i) => (p.startsWith('"') && p.endsWith('"') ? <em key={i}>{p}</em> : <span key={i}>{p}</span>));
+}
 
 export const metadata = { title: "Objections" };
 
@@ -36,15 +43,19 @@ export default async function ObjectionsPage() {
       <PageHeader title="Objections" subtitle={<span>One record for every objection: their words, what is underneath, which belief, and every reframe you have for it. The offer wizard, the webinar wizard and Scripts read from here. Your reframes for the four groups are in the <Link href="/socrates/reframes" className="underline">reframe library</Link>.</span>} />
       {ready ? (
         <Card title="Handling one, in order">
-          <ol className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3" data-testid="objection-method">
-            {OBJECTION_METHOD.map((st, i) => (
-              <li key={st.key} className="rounded-lg bg-surface-2 p-3">
-                <div className="text-xs font-semibold text-ink-2">{i + 1}. {st.title}</div>
-                <div className="mt-1">{st.line}</div>
-                {st.key === REFRAME_STEP_KEY ? <a href="#library" className="mt-1 inline-block text-xs underline">Your reframes, below</a> : null}
-              </li>
-            ))}
-          </ol>
+          <div className="relative pb-6 pl-4" id="objection-method-frame">
+            <ol className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3" data-testid="objection-method">
+              {OBJECTION_METHOD.map((st, i) => (
+                <li key={st.key} id={`method-step-${st.key}`} className="rounded-lg bg-surface-2 p-3">
+                  <div className="text-xs font-semibold text-ink-2">{i + 1}. {st.title}</div>
+                  <div className="mt-1">{quoted(st.line)}</div>
+                  {st.key === REFRAME_STEP_KEY ? <a href="#library" className="mt-1 inline-block text-xs underline">Your reframes, below</a> : null}
+                </li>
+              ))}
+            </ol>
+            {/* Step 5 sends you back to step 2: the loop is drawn, not only said. */}
+            <LoopLine parent="objection-method-frame" from={`method-step-${LOOP_FROM}`} to={`method-step-${LOOP_TO}`} label="back to 2" />
+          </div>
         </Card>
       ) : null}
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]" id="library">

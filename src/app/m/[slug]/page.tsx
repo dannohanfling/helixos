@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { publicUrlFor } from "@/lib/engine/storage-policy";
+import { publicUrls } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +26,9 @@ export default async function MagnetPage({ params }: { params: Promise<{ slug: s
   const m = await load(slug);
   if (!m) notFound();
   const tick = m.type === "checklist" || m.type === "audit";
-  const pdf = m.formats.pdf && m.pdfKey ? publicUrlFor(m.pdfKey) : null;
-  const file = m.fileKey ? publicUrlFor(m.fileKey) : null;
+  const urlOf = await publicUrls([m.pdfKey, m.fileKey]);
+  const pdf = m.formats.pdf && m.pdfKey ? urlOf(m.pdfKey) : null;
+  const file = m.fileKey ? urlOf(m.fileKey) : null;
   return (
     <main className="mx-auto max-w-2xl px-4 py-10" data-testid="magnet-page">
       <div className="mb-6 h-2 rounded bg-accent" aria-hidden="true" />

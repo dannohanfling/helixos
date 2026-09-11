@@ -67,6 +67,20 @@ export const FIELD_TASKS: Record<string, { href: string; done: (f: FieldTaskFact
   "field-revenue-goal": { href: "/settings#goal", where: "Settings", done: (f) => f.goalTarget > 0 },
 };
 export const isFieldTask = (key: string) => key in FIELD_TASKS;
+
+/**
+ * A task whose work lives in a section of the app: the card links there and shows what the client has made, beside the
+ * box they tick themselves. Never auto-ticked: submitting is where a client says they finished rather than started, and a
+ * pathway where some boxes tick themselves and most do not cannot be predicted.
+ */
+export const SECTION_TASKS: Record<string, { href: string; where: string; one: string; many: string }> = {
+  recA3OidbU8gUYW8x: { href: "/magnets", where: "Lead magnets", one: "lead magnet", many: "lead magnets" },
+};
+export function sectionCountLine(key: string, count: number): string | null {
+  const t = SECTION_TASKS[key];
+  if (!t) return null;
+  return count === 0 ? `You have no ${t.many} yet.` : `You have ${count} ${count === 1 ? t.one : t.many}.`;
+}
 export function fieldTaskStatus(f: FieldTaskFacts): Record<string, boolean> {
   return Object.fromEntries(Object.entries(FIELD_TASKS).map(([k, t]) => [k, t.done(f)]));
 }

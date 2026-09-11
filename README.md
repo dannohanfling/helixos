@@ -206,14 +206,25 @@ else is `other`), then sends the reader to the format the client nominated. The 
 the reader is read or kept, and the counts are per source per day. Who came is Community Loyalty's answer on the business
 page, never this link's. Both public routes work with no session (`src/proxy.ts` lists `/g`, `/m` and `/files`).
 
-The object store (`src/lib/storage.ts`, backed by the `files` table today and swappable for a bucket) has two writers on
-purpose: `putPublicMagnet` writes only under `public/magnets/<slug>/` (the magnet's slug, so a public URL carries no
-workspace, user or record id) and is the one function that marks an object public; `putPrivateAttachment` writes only under `private/attachments/<workspace>/` and never does. The read path at
-`/files/<key>` serves an object only when its key is under the public prefix and it was written public; a private key has no
-URL anywhere (`publicUrlFor` returns null), and `src/lib/engine/__tests__/lead-magnet.test.ts` fails if a private key ever
-resolves, if a malformed public-looking key passes, or if any file but `storage.ts` marks an object public. Walk:
-`scripts/smoke-magnets.ts` (needs the AI mock; also reads the PDF, the page and the link with no cookie, and flips the flag on
-a private row to show the prefix still wins).
+The object store is Vercel Blob (`src/lib/storage.ts`); the `files` table is its index (key, URL, size, type, public or
+not), never the bytes. Two writers on purpose: `putPublicMagnet` (the typeset PDF) and `recordPublicMagnet` (a file the
+browser sent straight to the bucket) write only under `public/magnets/<slug>/` (the magnet's slug, so a public URL carries no
+workspace, user or record id) and are the only functions that mark an object public; `putPrivateAttachment` writes only
+under `private/attachments/<workspace>/` with private access and never does. A public object's address is the bucket's CDN
+URL; `/files/<key>` is the app's stable address for it and redirects there only when the prefix and the recorded flag both
+agree; a private key has no URL anywhere (`publicUrlFor` returns null). An upload goes browser to bucket on a token from
+`/api/magnets/upload`, which pins the pathname to the magnet's own folder, the types and the cap to the policy's
+(`UPLOAD_MAX_BYTES` in `src/lib/engine/storage-policy.ts`, the one number every message derives from); no serverless body
+limit applies because no function carries the bytes, and the record is what the bucket reports on read-back, not what the
+browser said. `src/lib/engine/__tests__/lead-magnet.test.ts` fails if a private key ever resolves, if a malformed
+public-looking key passes, if any file but `storage.ts` marks an object public or writes the index, if the SDK appears
+outside its three files, or if a cap is written as a literal.
+
+Environment: `BLOB_READ_WRITE_TOKEN` (Vercel Blob; without it the PDF and upload buttons say storage is not connected).
+Locally `scripts/mock-blob.ts` stands in for the bucket: `VERCEL_BLOB_API_URL` and `NEXT_PUBLIC_VERCEL_BLOB_API_URL` point
+the SDK at it and any `vercel_blob_rw_…` token passes (`scripts/dev-server.sh` sets all three). Walk: `scripts/smoke-magnets.ts`
+(needs the AI and bucket mocks; reads the PDF, the page and the link with no cookie, checks the upload bytes never pass
+through the app, and flips the flag on a private row to show the prefix still wins).
 
 ## Stack
 

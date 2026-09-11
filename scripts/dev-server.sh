@@ -30,6 +30,9 @@ main() {
     FATHOM_BASE_URL="${FATHOM_BASE_URL:-http://localhost:4030}" \
     OPENALEX_BASE_URL="${OPENALEX_BASE_URL:-http://localhost:4040}" \
     OPENALEX_API_KEY="${OPENALEX_API_KEY:-test-key}" \
+    BLOB_READ_WRITE_TOKEN="${BLOB_READ_WRITE_TOKEN:-vercel_blob_rw_TESTSTORE_testsecret}" \
+    VERCEL_BLOB_API_URL="${VERCEL_BLOB_API_URL:-http://localhost:4050}" \
+    NEXT_PUBLIC_VERCEL_BLOB_API_URL="${NEXT_PUBLIC_VERCEL_BLOB_API_URL:-http://localhost:4050}" \
     REWARDS_CONFIG_OVERRIDE="${REWARDS_CONFIG_OVERRIDE:-screenshots/logs/rewards-config.override.json}" \
       nohup npx next dev -p "$PORT" >"$LOG" 2>&1 &
     for _ in $(seq 1 60); do

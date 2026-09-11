@@ -9,9 +9,10 @@ import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { MAGNET_TYPE_INFO, keywordOf, parseContent, parseGenerated, scaffoldContent, slugify } from "@/lib/engine/lead-magnet";
+import { publicFolderOf, safeName } from "@/lib/engine/storage-policy";
 import { evidenceLines } from "@/lib/engine/evidence";
 import { citableEvidence } from "@/lib/queries/evidence";
-import { deleteObject, putPublicMagnet } from "@/lib/storage";
+import { deleteObject, putPublicMagnet, recordPublicMagnet } from "@/lib/storage";
 import { renderMagnetPdf } from "@/lib/pdf";
 
 const typeOf = (raw: string): MagnetType => (MAGNET_TYPES as readonly string[]).includes(raw) ? (raw as MagnetType) : "checklist";
@@ -113,7 +114,7 @@ export async function generateMagnetAction(formData: FormData): Promise<void> {
   ]);
   const info = MAGNET_TYPE_INFO[m.type];
   const evidence = evidenceLines(citable);
-  const task = `You write a lead magnet for a coach: the thing a reader comments a keyword to receive. Type: ${info.label}. ${info.shape} Write it as the coach, for their audience, from the facts given and nothing else. Output only a JSON object with keys "intro", "sections" (an array of objects with "heading", "items" (an array of strings)${m.type === "guide" ? ', "why", "how"' : ""}), "closing", "personalReply" (the public comment reply the coach posts under a comment on their personal profile), "personalDm" (the message the coach sends by hand with the link), "chatbotAnswer" (what an automated reply on the business page says when someone comments the keyword), "chatbotDelivery" (the message that carries the link) and "chatbotQuestions" (up to five questions the automation asks, an array of strings). Proof may be used only verbatim as given. Studies may be cited only from the list given, claim and citation together. No other statistics, studies or results. Where a fact is missing, leave it out rather than invent it. The keyword is never in the intro or the sections.`;
+  const task = `You write a lead magnet for a coach: the thing a reader comments a keyword to receive. Type: ${info.label}. ${info.shape} Write it as the coach, for their audience, from the facts given and nothing else. Output only a JSON object with keys "intro", "sections" (an array of objects with "heading", "items" (an array of strings)${m.type === "guide" ? ', "why", "how"' : ""}), "closing", and the five hand-over messages, each with one job: "personalReply" is the public comment reply on the coach's personal profile, and its job is to move them off the comment thread, short, with no link (a link in a comment suppresses reach); "personalDm" is the message the coach sends by hand, and its job is to deliver, then open a conversation: the link, then one question that invites a reply, because a DM that only delivers is a dead end; "chatbotAnswer" is what the automation on the business page says when someone comments the keyword, and it has the same two jobs, unattended: deliver, then ask the first qualifying question; "chatbotDelivery" is what arrives with the file: one line on what to do with it first, not a description of what it is, they already know; "chatbotQuestions" is an array of up to five qualifying questions in the order the automation asks them. The DM and the chatbot answer both end in a question. Proof may be used only verbatim as given. Studies may be cited only from the list given, claim and citation together. No other statistics, studies or results. Where a fact is missing, leave it out rather than invent it. The keyword is never in the intro or the sections.`;
   const input = [
     `TITLE: ${m.title}`,
     `PROMISE: ${m.promise || "(not set)"}`,
@@ -158,23 +159,21 @@ export async function buildMagnetPdfAction(formData: FormData): Promise<void> {
   redirect(`/magnets/${m.id}?pdf=1`);
 }
 
-const UPLOAD_TYPES = ["application/pdf", "image/png", "image/jpeg", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/zip"];
-/** Under Vercel's request body cap for a serverless function, which is where a server action's upload lands. */
-const UPLOAD_MAX = 4 * 1024 * 1024;
-
-/** A file made elsewhere (Canva, a designer), served at its own public URL. Same writer, same prefix. */
-export async function uploadMagnetFileAction(formData: FormData): Promise<void> {
+/**
+ * A file made elsewhere (Canva, a designer) that the browser sent straight to the bucket on a token from
+ * /api/magnets/upload. Nothing here trusts the browser: the key must be under this magnet's own public folder and the
+ * object is read back from the bucket before it is recorded. The bytes never pass through a function.
+ */
+export async function recordMagnetUploadAction(magnetId: string, key: string, url: string, fileName: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const { workspaceId, userId } = await ctx();
-  const m = await own(str(formData, "id"), userId);
-  const file = formData.get("file");
-  if (!(file instanceof File) || !file.size) redirect(`/magnets/${m.id}?error=${encodeURIComponent("Choose a file first.")}`);
-  if (file.size > UPLOAD_MAX) redirect(`/magnets/${m.id}?error=${encodeURIComponent("That file is over 4 MB. Export it smaller, or link to it from the page instead.")}`);
-  if (!UPLOAD_TYPES.includes(file.type)) redirect(`/magnets/${m.id}?error=${encodeURIComponent("That file type can't be served. PDF, PNG, JPEG, plain text, Word or ZIP.")}`);
-  const stored = await putPublicMagnet(workspaceId, m.slug, file.name, Buffer.from(await file.arrayBuffer()), file.type);
-  if (m.fileKey) await deleteObject(m.fileKey);
-  await db.update(schema.leadMagnets).set({ fileKey: stored.key, fileName: file.name, updatedAt: nowIso() }).where(eq(schema.leadMagnets.id, m.id));
+  const m = await own(magnetId, userId);
+  if (publicFolderOf(key) !== m.slug) return { ok: false, error: "That file is not under this magnet's folder." };
+  const stored = await recordPublicMagnet(workspaceId, key, url);
+  if (m.fileKey && m.fileKey !== stored.key) await deleteObject(m.fileKey);
+  await db.update(schema.leadMagnets).set({ fileKey: stored.key, fileName: safeName(fileName), updatedAt: nowIso() }).where(eq(schema.leadMagnets.id, m.id));
   refresh();
-  redirect(`/magnets/${m.id}?uploaded=1`);
+  // Called from the browser after the upload, not from a form: the caller navigates, so no redirect is thrown here.
+  return { ok: true };
 }
 
 export async function removeMagnetFileAction(formData: FormData): Promise<void> {

@@ -145,6 +145,10 @@ export function parseGenerated(text: string): Generated | null {
   };
 }
 
+/** The DM and the chatbot answer both end in a question: a delivery that ends in a full stop leaves the reader with nothing to do next. Craft, so a warning, never a block. */
+export const endsWithQuestion = (text: string | null | undefined): boolean => /\?\s*["')\]]*$/.test((text ?? "").trim());
+export const QUESTION_WARNING = "Ends without a question. The person is left holding the file with nothing to do next.";
+
 /** Which output the tracked link points at: the client nominates one; a format that is off cannot be primary. */
 export function primaryTarget(m: { primary: "page" | "pdf" | "file"; formats: MagnetFormats; slug: string; pdfKey: string | null; fileKey: string | null }, publicUrlFor: (key: string) => string | null): string | null {
   if (m.primary === "file" && m.fileKey) return publicUrlFor(m.fileKey);

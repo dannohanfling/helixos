@@ -28,8 +28,8 @@ function reply(system: string, user: string): string {
       ],
       closing: "Mock AI closing. Comment the keyword and I'll send the next one.",
       personalReply: "Mock reply: sent you a DM.",
-      personalDm: "Mock DM: here it is, and one question for you.",
-      chatbotAnswer: "Mock chatbot answer.",
+      personalDm: "Mock DM: here it is. What are you working on right now?",
+      chatbotAnswer: "Mock chatbot answer: sent. What is in the way this week?",
       chatbotDelivery: "Mock delivery message with the link.",
       chatbotQuestions: ["What are you working on right now?", "What's in the way?"],
     });

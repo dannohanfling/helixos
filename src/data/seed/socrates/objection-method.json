@@ -1,32 +1,32 @@
 [
   {
     "key": "hold",
-    "title": "",
-    "line": ""
+    "title": "Don't answer it yet.",
+    "line": "The first thing they say is rarely the real thing. Answer it fast and you have answered the wrong one, confidently."
   },
   {
     "key": "find",
-    "title": "",
-    "line": ""
+    "title": "Find out what they actually mean.",
+    "line": "One question, not three. \"When you say the timing's off — what's happening between now and then?\""
   },
   {
     "key": "reflect",
-    "title": "",
-    "line": ""
+    "title": "Say it back.",
+    "line": "In their words, not yours. They need to hear that you got it before they will hear anything else."
   },
   {
     "key": "reframe",
-    "title": "",
-    "line": ""
+    "title": "Now reframe.",
+    "line": "One frame, not three. This is the first moment it belongs."
   },
   {
     "key": "check",
-    "title": "",
-    "line": ""
+    "title": "Check it landed.",
+    "line": "\"Does that change how you're seeing it?\" If it didn't, you reframed the wrong thing. Go back to step two."
   },
   {
     "key": "return",
-    "title": "",
-    "line": ""
+    "title": "Pick up where you were.",
+    "line": "Don't restart the close. Carry on from the sentence you were in the middle of."
   }
 ]
