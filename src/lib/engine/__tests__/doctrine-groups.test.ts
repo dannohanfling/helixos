@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { alignPost, groupChannel, groupReadiness, groupSpec, readRules } from "../groups";
 import { CHANNEL_SPECS } from "../repurpose";
-import { ADMIN_ONBOARDING_KEYS, clientFacing, simplePath } from "../pathway";
+import { ADMIN_ONBOARDING_KEYS, clientFacing, simplePath, stageRelation } from "../pathway";
 import { daysInMonth, monthProgress } from "../targets";
 import { principlePost, principleReel, principleTraining } from "../doctrine";
 
@@ -55,6 +55,14 @@ describe("simple pathway", () => {
     { key: "a5", stageKey: "a", order: 5, name: "A5", points: 10, priority: "must" as const },
     { key: "b1", stageKey: "b", order: 1, name: "B1", points: 10, priority: "must" as const },
   ];
+  it("places a stage behind, at, or ahead of the client's current one", () => {
+    const stages = [{ key: "a", order: 1 }, { key: "b", order: 2 }, { key: "c", order: 3 }];
+    expect(stageRelation(stages, "b", "a")).toBe("past");
+    expect(stageRelation(stages, "b", "b")).toBe("current");
+    expect(stageRelation(stages, "b", "c")).toBe("future");
+    expect(stageRelation(stages, "b", "nope")).toBe("current");
+  });
+
   it("shows at most 3 must-do tasks and hides extras", () => {
     const p = simplePath(stages, lib, []);
     expect(p.stageKey).toBe("a");

@@ -49,6 +49,13 @@ export function simplePath(stages: { key: string; order: number }[], rawLibrary:
 
 export const DESTINATION_STAGE_KEY = "launch-first-conversion-event";
 
+/** A stage the client is looking at, relative to the one they are in: behind them, theirs now, or still locked. */
+export function stageRelation(stages: { key: string; order: number }[], currentKey: string, key: string): "past" | "current" | "future" {
+  const cur = stages.find((s) => s.key === currentKey)?.order ?? 0;
+  const at = stages.find((s) => s.key === key)?.order ?? cur;
+  return at < cur ? "past" : at > cur ? "future" : "current";
+}
+
 /**
  * Stage 1's three tasks are bound to fields, not submissions: each completes itself when its field is saved, and the
  * stage completes when all three are, which is what its exit criteria say. Order: promise, audience, goal.

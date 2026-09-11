@@ -152,6 +152,25 @@ async function main() {
     await submit(page, 'form:has(select[name="timezone"]) button:has-text("Save")');
     console.log("✓ member timezone saved and restored");
 
+    // A future stage opens read-only: greyed tasks, what unlocks it in the stage's own words, and the NOW card never follows the preview
+    await page.goto(`${base}/pathway`);
+    await page.click('a[href="/pathway?stage=optimize"]');
+    await page.waitForURL(/\/pathway\?stage=optimize/);
+    const preview = page.locator('[data-testid="stage-preview"][data-stage="optimize"]');
+    await preview.waitFor({ timeout: 5000 });
+    if ((await preview.getAttribute("data-relation")) !== "future") throw new Error("optimize should be a future stage for the demo client");
+    await expectText(page, "First conversion event delivered with real numbers captured.", "what unlocks the stage, in its own entry criteria");
+    const previewTasks = page.locator('[data-testid="preview-task"]');
+    if (!(await previewTasks.count())) throw new Error("the previewed stage should list its tasks");
+    if ((await previewTasks.evaluateAll((els) => els.filter((e) => e.getAttribute("aria-disabled") !== "true").length)) !== 0) throw new Error("every task in a future stage must be greyed and disabled");
+    if (await page.locator('[data-testid="preview-task"] a').count()) throw new Error("a future stage's tasks must not be links");
+    const nowStage = await page.locator('[data-testid="now-card"]').getAttribute("data-stage");
+    if (!nowStage || nowStage === "optimize") throw new Error(`the NOW card must keep the current stage, got ${nowStage}`);
+    await page.goto(`${base}/pathway?view=all&stage=optimize`);
+    await page.locator('[data-testid="stage-preview"][data-stage="optimize"]').waitFor({ timeout: 5000 });
+    await expectText(page, "Unlocks when:", "whole map: future stage read-only too");
+    console.log("✓ a future pathway stage opens read-only with its unlock line; the NOW card stays on the current stage");
+
     // Coach nudge for the quiet client (Jordan)
     await login(page, "coach");
     await page.goto(`${base}/coach`);

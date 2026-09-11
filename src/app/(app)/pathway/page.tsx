@@ -5,7 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { completeCurriculumDayAction, submitPathwayTaskAction } from "@/lib/actions/pathway";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
-import { FIELD_TASKS, OPEN_LIMIT, simplePath, roadLine } from "@/lib/engine/pathway";
+import { FIELD_TASKS, OPEN_LIMIT, simplePath, roadLine, stageRelation } from "@/lib/engine/pathway";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import type { LibraryTask, PathwayProgress } from "@/db/schema";
 
@@ -39,6 +39,43 @@ function TaskLink({ t, st, selected, extra = false }: { t: LibraryTask; st: stri
   );
 }
 
+/**
+ * A stage that is not the client's current one, read-only. A future stage says what unlocks it, in the stage's own entry
+ * criteria, and its tasks are greyed and not links; a past stage shows its tasks with their status.
+ */
+function StagePreview({ stage, tasks, relation, statusOf, back }: { stage: { key: string; icon: string | null; name: string; tagline: string | null; description: string | null; entryCriteria: string | null; expectedDuration: string | null }; tasks: LibraryTask[]; relation: "past" | "future"; statusOf: (key: string) => string; back: string }) {
+  return (
+    <Card title={`${stage.icon ?? ""} ${stage.name}`} action={<Badge tone={relation === "future" ? "neutral" : "good"}>{relation === "future" ? "up ahead" : "behind you"}</Badge>}>
+      <div data-testid="stage-preview" data-stage={stage.key} data-relation={relation}>
+        <div className="mb-3 space-y-1 text-sm">
+          {stage.tagline ? <p className="font-medium">{stage.tagline}</p> : null}
+          {stage.description ? <p className="text-ink-2">{stage.description}</p> : null}
+          {relation === "future" && stage.entryCriteria ? (
+            <p className="rounded-lg bg-surface-2 p-2 text-xs" data-testid="stage-unlock">
+              <span className="font-semibold">Unlocks when:</span> {stage.entryCriteria}
+            </p>
+          ) : null}
+        </div>
+        <ol className="-mx-2 divide-y">
+          {tasks.map((t) => (
+            <li key={t.key} className={`flex items-start gap-3 px-2 py-2.5 ${relation === "future" ? "opacity-50" : ""}`} data-testid="preview-task" aria-disabled={relation === "future" ? "true" : undefined}>
+              <span className="mt-0.5 text-sm">{relation === "future" ? "🔒" : STATUS[statusOf(t.key) as keyof typeof STATUS]?.label === "Verified" ? "✅" : "◻︎"}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">{t.name}</span>
+                <span className="block text-xs text-ink-3">+{t.points} pts{t.priority !== "must" ? " · optional" : ""}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-3 text-xs text-ink-3">
+          {relation === "future" ? "Read only until you get here. " : ""}
+          <Link href={back} className="underline">Back to now</Link>
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 export default async function PathwayPage({ searchParams }: { searchParams: Promise<{ task?: string; stage?: string; view?: string }> }) {
   const v = await requireViewer();
   await syncFieldTasks(v.workspace.id, v.user.id);
@@ -58,6 +95,9 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
   const fullMap = sp.view === "all";
   const viewStageKey = sp.stage ?? path.stageKey;
   const viewStage = stages.find((s) => s.key === viewStageKey) ?? currentStage;
+  // A stage the client clicked that is not the one they are in: shown read-only, beside the NOW card, which never changes.
+  const relation = stageRelation(stages, path.stageKey, viewStage?.key ?? path.stageKey);
+  const previewStage = !fullMap && sp.stage && relation !== "current" ? viewStage : null;
   const selected = sp.task ? library.find((t) => t.key === sp.task) : undefined;
   const selectedProg = selected ? progByKey.get(selected.key) : undefined;
   const stageStats = stages.map((s) => {
@@ -111,6 +151,7 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
           {!fullMap ? (
             <>
               <Card title={`${currentStage?.icon ?? ""} Now`} action={<span className="text-xs text-ink-3">up to {OPEN_LIMIT} open at a time</span>}>
+                <div data-testid="now-card" data-stage={currentStage?.key} className="contents" />
                 {currentStage ? <p className="mb-3 text-sm text-ink-2">{currentStage.tagline}</p> : null}
                 {path.now.length ? (
                   <ol className="-mx-2 divide-y">
@@ -148,6 +189,8 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                 </Disclosure>
               ) : null}
             </>
+          ) : viewStage && relation === "future" ? (
+            <StagePreview stage={viewStage} tasks={stageTasks} relation="future" statusOf={statusOf} back="/pathway?view=all" />
           ) : (
             <Card title={`${viewStage?.icon ?? ""} ${viewStage?.name ?? "Stage"}`} action={<span className="text-xs text-ink-3">{viewStage?.expectedDuration}</span>}>
               {viewStage ? (
@@ -165,7 +208,9 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
         </div>
 
         <div className="space-y-4">
-          {selected ? (
+          {previewStage && relation !== "current" ? (
+            <StagePreview stage={previewStage} tasks={stageTasks} relation={relation} statusOf={statusOf} back="/pathway" />
+          ) : selected ? (
             <Card title="Task" action={<Badge tone={STATUS[statusOf(selected.key)].tone}>{STATUS[statusOf(selected.key)].label}</Badge>}>
               <h3 className="text-lg font-bold">{selected.name}</h3>
               <div className="mt-1 flex flex-wrap gap-2 text-xs text-ink-3">
