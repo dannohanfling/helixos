@@ -23,7 +23,13 @@ const VERSION = "2021-07-28";
 /** The six scopes a client ticks when creating the Private Integration. Shown in the UI and named in error messages. */
 export const REQUIRED_SCOPES = ["socialplanner/oauth.readonly", "socialplanner/oauth.write", "socialplanner/post.readonly", "socialplanner/post.write", "socialplanner/account.readonly", "socialplanner/account.write"] as const;
 
-export type GhlResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
+/** `error` is what a client may see and what is persisted; `detail` is the upstream reply, for the classifier and the log only. */
+export type GhlResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number; detail?: string };
+
+/** The server-side record of a failed call: status, path and the upstream body, which never reach a client or a note. */
+function logGhl(what: string, detail: Record<string, unknown>): void {
+  console.error(`[ghl] ${what}`, JSON.stringify(detail));
+}
 
 async function call<T>(base: string, token: string, path: string, init: RequestInit = {}): Promise<GhlResult<T>> {
   try {
@@ -39,24 +45,28 @@ async function call<T>(base: string, token: string, path: string, init: RequestI
       json = null;
     }
     if (!res.ok) {
-      const msg = (json && typeof json === "object" && "message" in json ? String((json as { message: unknown }).message) : text).slice(0, 200);
-      return { ok: false, error: `${res.status} ${msg}`.trim(), status: res.status };
+      const msg = (json && typeof json === "object" && "message" in json ? String((json as { message: unknown }).message) : text).slice(0, 500);
+      logGhl(`upstream ${res.status}`, { status: res.status, path, body: msg });
+      return { ok: false, error: `GoHighLevel didn't accept the request (${res.status}).`, status: res.status, detail: msg };
     }
     return { ok: true, data: json as T };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    logGhl("request failed", { path, detail });
+    return { ok: false, error: "Couldn't reach GoHighLevel.", detail };
   }
 }
 
 /** Turns GoHighLevel's reply into the reason a non-technical client can act on. */
-export function explain(r: { error: string; status?: number }): string {
-  const lower = r.error.toLowerCase();
+export function explain(r: { error: string; status?: number; detail?: string }): string {
+  const lower = (r.detail ?? "").toLowerCase();
   if (r.status === 401) return "GoHighLevel rejected the token (401). It was pasted incompletely, or it was deleted in GoHighLevel. Create a new Private Integration and paste the new token.";
   if (r.status === 403 || lower.includes("scope")) return `The token is valid but is missing Social Planner permissions (403). Edit the Private Integration in GoHighLevel and tick all six scopes: ${REQUIRED_SCOPES.join(", ")}.`;
   if (r.status === 404 || r.status === 422 || lower.includes("location")) return "GoHighLevel says that location ID doesn't match this token (it belongs to a different sub-account, or has a typo). Copy the Location ID from Settings → Business Profile in the same sub-account where you created the token.";
   if (r.status === 429) return "GoHighLevel is rate-limiting requests (429). Wait a minute and try again.";
   if (lower.includes("abort") || lower.includes("fetch failed") || lower.includes("econn")) return "Couldn't reach GoHighLevel. Check the API base URL on Integrations, or try again in a minute.";
-  return `GoHighLevel replied: ${r.error}`;
+  // The fallthrough keeps the case and drops the vendor's words: they are in the log under [ghl].
+  return `GoHighLevel didn't accept the request${r.status ? ` (${r.status})` : ""}. Try again in a minute.`;
 }
 
 export async function connectionFor(userId: string): Promise<SocialConnection | undefined> {
@@ -67,7 +77,11 @@ export async function connectionFor(userId: string): Promise<SocialConnection | 
 export async function credentials(conn: SocialConnection): Promise<GhlResult<{ token: string; base: string }>> {
   const integ = await getIntegration(conn.workspaceId, "gohighlevel");
   const target = resolveApiUrl("gohighlevel", integ?.config.apiUrl);
-  if (!target.ok) return target;
+  if (!target.ok) {
+    // The allowlist message names a variable for the operator who can set it, on the coach's Integrations page; a client's note gets a sentence.
+    logGhl("API URL refused for a member's push", { reason: target.error });
+    return { ok: false, error: "Publishing isn't set up on this server yet. Ask your coach." };
+  }
   const token = open(conn.manualToken);
   if (!token) return { ok: false, error: "Paste your sub-account's Private Integration token on Settings → Publishing." };
   return { ok: true, data: { token, base: target.base } };

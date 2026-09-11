@@ -15,7 +15,10 @@ import { STORAGE_UNCONFIGURED, storageConfigured } from "@/lib/storage";
 export async function POST(request: Request) {
   const v = await getViewer();
   if (!v) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
-  if (!storageConfigured()) return NextResponse.json({ error: STORAGE_UNCONFIGURED }, { status: 503 });
+  if (!storageConfigured()) {
+    console.error("[storage] BLOB_READ_WRITE_TOKEN is not set: an upload token was refused");
+    return NextResponse.json({ error: STORAGE_UNCONFIGURED }, { status: 503 });
+  }
   const body = (await request.json()) as HandleUploadBody;
   try {
     const json = await handleUpload({
@@ -34,6 +37,9 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(json);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "The upload was refused." }, { status: 400 });
+    // Our own refusals (not the client's magnet, the wrong folder) are plain sentences and pass through; anything else is the SDK's and is logged, not shown.
+    const ours = e instanceof Error && /not yours|own folder/.test(e.message);
+    console.error("[storage] upload token refused", JSON.stringify({ message: e instanceof Error ? e.message : String(e) }));
+    return NextResponse.json({ error: ours ? (e as Error).message : "The upload was refused. Try again in a minute." }, { status: 400 });
   }
 }

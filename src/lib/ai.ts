@@ -110,6 +110,7 @@ export async function draft(task: string, user: string, maxTokens = 4000, opts: 
     // A key that stops working is marked so the pages stop offering ✨ and the member sees why on Settings.
     const modelAccess = /does not exist or you do not have access|model_not_found|model.*not found/i.test(err.message ?? "") || (err.status === 404 && /model/i.test(err.message ?? ""));
     if (err.status === 401 || err.status === 402 || err.status === 403 || modelAccess) {
+      console.error("[ai] draft failed", JSON.stringify({ provider: cred.provider, model, status: err.status, message: (err.message ?? "").slice(0, 500) }));
       await db.update(schema.aiCredentials).set({ lastError: explainAiError(cred.provider, err.status, err.message ?? "", model) }).where(eq(schema.aiCredentials.id, cred.id));
     }
     return null;
@@ -133,6 +134,7 @@ export async function validateKey(provider: AiProvider, key: string): Promise<{ 
     return { ok: true, inputTokens: r.usage?.input_tokens ?? 0, outputTokens: r.usage?.output_tokens ?? 0, model };
   } catch (e) {
     const err = e as { status?: number; message?: string };
+    console.error("[ai] key check failed", JSON.stringify({ provider, model, status: err.status, message: (err.message ?? String(e)).slice(0, 500) }));
     return { ok: false, reason: explainAiError(provider, err.status, err.message ?? String(e), model) };
   }
 }

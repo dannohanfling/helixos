@@ -62,7 +62,10 @@ export async function setupAction(_prev: SetupState, formData: FormData): Promis
 export async function forgotAction(_prev: ForgotState, formData: FormData): Promise<ForgotState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email.includes("@")) return { error: "Enter the email you log in with." };
-  if (!emailConfigured() && process.env.NODE_ENV === "production") return { error: "Password reset email isn't set up on this server yet (SENDGRID_API_KEY). Ask your coach to reset your password for you." };
+  if (!emailConfigured() && process.env.NODE_ENV === "production") {
+    console.error("[email] SENDGRID_API_KEY is not set: a password reset could not be sent");
+    return { error: "Password reset email isn't set up yet. Ask your coach to reset your password for you." };
+  }
   const ip = await clientIp();
   const [ipOk, emailOk] = await Promise.all([allow(`forgot:ip:${ip}`, 10, 15 * 60000), allow(`forgot:email:${email}`, 3, 15 * 60000)]);
   const message = "If that email has an account, a reset link is on its way. It works for 60 minutes.";
@@ -88,7 +91,14 @@ export async function forgotAction(_prev: ForgotState, formData: FormData): Prom
     },
     { settingsLink: false },
   );
-  const delivery = await sendEmail(user.email, reset.subject, reset.text, reset.html);
+  let delivery: "sent" | "logged";
+  try {
+    delivery = await sendEmail(user.email, reset.subject, reset.text, reset.html);
+  } catch (e) {
+    // SendGrid's answer (an unverified sender, a bad key) is for the log; the client gets a sentence instead of an unhandled error.
+    console.error("[email] password reset send failed", JSON.stringify({ message: e instanceof Error ? e.message : String(e) }));
+    return { error: "The reset email couldn't be sent right now. Try again in a minute, or ask your coach to reset your password for you." };
+  }
   return { message, ...(delivery === "logged" && process.env.NODE_ENV !== "production" ? { devLink: link } : {}) };
 }
 

@@ -79,7 +79,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                 <input type="hidden" name="proposed" value={sp.proposed ?? ""} />
                 {sp.note ? <p className="text-sm" data-testid="terms-note">Look for: <span className="font-medium">{sp.note}</span></p> : null}
                 {sp.proposed === "words" ? <p className="rounded-lg bg-warn-soft p-2 text-xs" data-testid="terms-fallback">No AI key is connected, so these are the claim&apos;s own words. Edit them into what a researcher would search before you run it.</p> : null}
-                <Field label="Search terms" hint="Words that would appear in a study's title or abstract.">
+                <Field label="Search terms" hint="Words that would appear in a study's title or abstract. Separate them with commas.">
                   <input className="field" name="terms" defaultValue={terms} data-testid="terms-input" />
                 </Field>
                 <p className="text-xs text-ink-3">{EVIDENCE_DAILY_LIMIT} searches a day per person; the key is shared by everyone here. The same terms searched again this week come from the cache.</p>

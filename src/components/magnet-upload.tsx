@@ -30,7 +30,9 @@ export function MagnetUpload({ magnetId, slug, enabled, why }: { magnetId: strin
         if (!r.ok) return setError(r.error);
         router.push(`/magnets/${magnetId}?uploaded=1`);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "The upload did not finish.");
+        // The bucket's or its SDK's own words never reach the screen; they go to the browser console, where a report can quote them.
+        console.error("[upload]", e);
+        setError("The upload didn't finish. Try again in a minute.");
       } finally {
         setProgress(null);
       }

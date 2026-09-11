@@ -18,10 +18,14 @@ import { keyIsPublic, privateAttachmentKey, publicMagnetKey } from "@/lib/engine
 export type Stored = { key: string; url: string | null; size: number; contentType: string };
 
 export const storageConfigured = (): boolean => Boolean(process.env.BLOB_READ_WRITE_TOKEN);
-export const STORAGE_UNCONFIGURED = "File storage is not connected on this server (BLOB_READ_WRITE_TOKEN).";
+/** What a client sees. The variable's name is for the log and the README, never a screen. */
+export const STORAGE_UNCONFIGURED = "File storage isn't set up yet.";
 
 function requireStorage(): void {
-  if (!storageConfigured()) throw new Error(STORAGE_UNCONFIGURED);
+  if (!storageConfigured()) {
+    console.error("[storage] BLOB_READ_WRITE_TOKEN is not set: a write to the object store was refused");
+    throw new Error(STORAGE_UNCONFIGURED);
+  }
 }
 
 /** A lead magnet file written by the server (the typeset PDF): public, under the magnet's folder. */

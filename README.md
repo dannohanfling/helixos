@@ -65,6 +65,18 @@ Demo logins (or use the buttons on the login page):
 - Coach: `coach@demo.helixos.app` / `demo1234`
 - Client invite link: `/join/ACADEMY1`
 
+## Client-facing errors
+
+An error a client can see says what happened to them and what to do next. It never names a variable, a host, a vendor's raw
+reply, a stack trace or a person; the detail (status, upstream body, missing configuration) goes to the server log under a
+prefixed line (`[openalex]`, `[ghl]`, `[ai]`, `[fathom]`, `[storage]`, `[email]`). Naming an outside service is fine when the
+client has their own relationship with it and the next action is theirs to take there: their own AI key at Anthropic or
+OpenAI, their own Fathom key, their own GoHighLevel token. The coach's pages (role `coach`: Danno and operators, joined with
+the coach invite code) may name a variable to the person who can set it. `src/lib/engine/__tests__/client-errors.test.ts`
+holds the line with two scans over every source file: no string, template text or JSX text carries the name of an environment
+variable the code reads, and no error, note, persisted lastError or thrown message interpolates an upstream body or message.
+Exceptions are listed by file and snippet with the reason, and each is checked to still exist.
+
 ## Checks
 
 ```bash

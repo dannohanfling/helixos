@@ -11,7 +11,7 @@ export default function ForgotPage() {
       <p className="mb-4 mt-1 text-sm text-ink-2">Enter the email you log in with. If it has an account, you&apos;ll get a link that works for 60 minutes.</p>
       {!emailConfigured() ? (
         <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm">
-          Email sending isn&apos;t set up on this server yet (<code>SENDGRID_API_KEY</code>). {process.env.NODE_ENV === "production" ? "Ask your coach to reset your password for you." : "In development the reset link is shown on screen instead."}
+          Email sending isn&apos;t set up yet. {process.env.NODE_ENV === "production" ? "Ask your coach to reset your password for you." : "In development the reset link is shown on screen instead."}
         </p>
       ) : null}
       <ForgotForm />

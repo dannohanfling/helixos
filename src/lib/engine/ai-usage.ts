@@ -94,7 +94,8 @@ export function explainAiError(provider: AiProvider, status: number | undefined,
   if (status === 429) return "The provider is rate-limiting this key right now. The key itself is fine; try again in a minute.";
   if (status === 404) return `The provider returned 404 for this request. Check the account at ${console_} has access to current models.`;
   if (/fetch failed|econn|network|timeout/.test(m)) return "Couldn't reach the provider. Check the connection and try again.";
-  return `The provider returned an error: ${message.slice(0, 160)}`;
+  // The fallthrough keeps the case and drops the vendor's words; src/lib/ai.ts logs them under [ai].
+  return `The provider returned an error${status ? ` (${status})` : ""}. Try again in a minute, and if it keeps happening check the key at ${console_}.`;
 }
 
 export type UsageRollup = {

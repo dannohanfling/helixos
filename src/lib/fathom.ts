@@ -31,7 +31,8 @@ export function explainFathom(status: number | undefined, message: string): stri
   if (status === 404) return "Fathom says that recording isn't there any more (404). Refresh the list and pick again.";
   if (status === 429) return "Fathom is rate-limiting this key (429). Wait a minute and try again.";
   if (/abort|fetch failed|econn/i.test(message)) return "Couldn't reach Fathom. Try again in a minute.";
-  return `Fathom replied: ${message}`.slice(0, 300);
+  // The fallthrough keeps the case and drops the vendor's words; they are in the log under [fathom].
+  return `Fathom returned an error${status ? ` (${status})` : ""}. Try again in a minute.`;
 }
 
 async function call<T>(key: string, path: string): Promise<FathomResult<T>> {
@@ -49,10 +50,12 @@ async function call<T>(key: string, path: string): Promise<FathomResult<T>> {
     }
     if (!res.ok) {
       const msg = json && typeof json === "object" && "message" in json ? String((json as { message: unknown }).message) : text.slice(0, 200);
+      console.error("[fathom] upstream error", JSON.stringify({ status: res.status, body: msg.slice(0, 500) }));
       return { ok: false, error: explainFathom(res.status, msg), status: res.status };
     }
     return { ok: true, data: json as T };
   } catch (e) {
+    console.error("[fathom] request failed", JSON.stringify({ message: (e instanceof Error ? e.message : String(e)).slice(0, 300) }));
     return { ok: false, error: explainFathom(undefined, e instanceof Error ? e.message : String(e)) };
   }
 }
