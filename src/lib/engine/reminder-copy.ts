@@ -4,8 +4,11 @@
  * state line; the state line is one line or nothing. Pure: the caller supplies the numbers.
  */
 
-export type MorningState = { first: string; streak: number; brokenYesterday: boolean; points: number; nextTier: { name: string; minPoints: number } | null };
-export type EveningState = { first: string; streak: number; bonus: number };
+/** The client's own reminder hours (0–23), which the footer states; never a hard-coded time. */
+export type ReminderHours = { morning: number; evening: number };
+export type MorningState = { first: string; streak: number; brokenYesterday: boolean; points: number; nextTier: { name: string; minPoints: number } | null; hours: ReminderHours };
+/** `streak` is the days already closed; tonight's close makes it one more. */
+export type EveningState = { first: string; streak: number; bonus: number; hours: ReminderHours };
 export type EmailCopy = { subject: string; preheader: string; greeting: string; stateLine: string | null; asks: string[]; buttonLabel: string; pointsLine: string; path: string; footerText: string };
 
 /** Within this many points of the next rank, the morning email says so. */
@@ -22,7 +25,16 @@ export function numberWords(n: number): string {
 }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export const FOOTER_TEXT = "Reminders come at 8am and 5pm. Change them in Settings.";
+/** "8am", "5pm", "12pm". */
+export function hourLabel(h: number): string {
+  const n = ((h % 24) + 24) % 24;
+  return `${n % 12 === 0 ? 12 : n % 12}${n < 12 ? "am" : "pm"}`;
+}
+
+/** The footer, with this client's own hours. The sentence shape is the brief's. */
+export function footerText(hours: ReminderHours): string {
+  return `Reminders come at ${hourLabel(hours.morning)} and ${hourLabel(hours.evening)}. Change them in Settings.`;
+}
 
 export function morningCopy(s: MorningState): EmailCopy {
   const toNext = s.nextTier ? s.nextTier.minPoints - s.points : Infinity;
@@ -44,38 +56,40 @@ export function morningCopy(s: MorningState): EmailCopy {
     buttonLabel: "Lock in my day",
     pointsLine: "+10 points when you do.",
     path: "/today",
-    footerText: FOOTER_TEXT,
+    footerText: footerText(s.hours),
   };
 }
 
 export function eveningCopy(s: EveningState): EmailCopy {
+  // Both numbers, honestly: the days behind them, and what tonight's close makes it.
   return {
-    subject: s.streak > 0 ? `${s.first} — close out day ${s.streak}` : `${s.first}, close the day`,
+    subject: s.streak > 0 ? `${s.first} — make it ${numberWords(s.streak + 1)}` : `${s.first}, close the day`,
     preheader: "Numbers in, one win named. Ninety seconds.",
     greeting: `Evening, ${s.first}.`,
-    stateLine: s.streak > 0 ? `Day ${s.streak} of your streak. Close it and it holds.` : null,
+    stateLine: s.streak > 0 ? `${cap(numberWords(s.streak))} ${s.streak === 1 ? "day" : "days"} behind you. Close today and it's ${numberWords(s.streak + 1)}.` : null,
     asks: ["Log your numbers.", "Name the win.", "Ninety seconds."],
     buttonLabel: "Close my day",
     pointsLine: s.bonus > 0 ? `+20 points. +${s.bonus} more for the streak.` : "+20 points.",
     path: "/today#close",
-    footerText: FOOTER_TEXT,
+    footerText: footerText(s.hours),
   };
 }
 
 /**
- * The comeback email's existing words, laid into the template's slots without a word changed: the first sentence is the
- * greeting, the rest the asks. Its preheader is its own first line until Danno writes one.
+ * The comeback email, three quiet days in. The subject and preheader are the brief's: no imagined backlog, nothing to catch
+ * up on. The body keeps its existing words, laid into the slots without a word changed: the first sentence is the greeting,
+ * the rest the asks.
  */
-export function comebackCopy(first: string, monday: boolean): EmailCopy {
+export function comebackCopy(first: string, hours: ReminderHours): EmailCopy {
   return {
-    subject: monday ? `${first}, Mondays are restart day` : `${first}, today is restart day`,
-    preheader: "The system doesn't punish pauses, it just resets the streak.",
+    subject: `${first}, pick it back up`,
+    preheader: "No catching up to do. Just today.",
     greeting: "Happens.",
     stateLine: null,
     asks: ["The system doesn't punish pauses, it just resets the streak.", "Day 1 is 10 points. By Friday it's 310."],
     buttonLabel: "Lock in my day",
     pointsLine: "",
     path: "/today",
-    footerText: FOOTER_TEXT,
+    footerText: footerText(hours),
   };
 }

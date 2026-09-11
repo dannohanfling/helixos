@@ -34,8 +34,7 @@ export async function nudgeMemberAction(formData: FormData): Promise<void> {
   if (m.lastNudgedAt && Date.now() - new Date(m.lastNudgedAt).getTime() < 20 * 3600_000) return;
   const user = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
   if (!user) return;
-  const today = todayInTz(m.timezone || coach.workspace.timezone);
-  const c = comebackEmail(user.name.split(" ")[0], today, process.env.APP_URL ?? "http://localhost:3000");
+  const c = comebackEmail(user.name.split(" ")[0], { morning: m.reminderHour, evening: m.eveningReminderHour }, process.env.APP_URL ?? "http://localhost:3000");
   try {
     await sendEmail(user.email, c.subject, c.text, c.html);
     await db.update(schema.memberships).set({ lastNudgedAt: nowIso(), lastComebackAt: nowIso() }).where(eq(schema.memberships.id, m.id));

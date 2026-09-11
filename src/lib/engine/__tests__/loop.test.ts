@@ -47,9 +47,12 @@ describe("close activity points", () => {
 });
 
 describe("comeback email", () => {
-  it("only calls Monday restart day on a Monday", () => {
-    expect(comebackEmail("Maya", "2026-09-07", "https://x").subject).toBe("Maya, Mondays are restart day");
-    expect(comebackEmail("Maya", "2026-09-09", "https://x").subject).toBe("Maya, today is restart day");
-    expect(comebackEmail("Maya", "2026-09-09", "https://x").text).toContain("https://x/today");
+  it("one subject every day, no backlog in the preheader, the link on its own line in the text and as the button in the HTML", () => {
+    const c = comebackEmail("Maya", { morning: 8, evening: 17 }, "https://x");
+    expect(c.subject).toBe("Maya, pick it back up");
+    expect(c.html).toContain("No catching up to do. Just today.");
+    expect(c.text.split("\n")).toContain("https://x/today");
+    expect(c.html).toContain('<a href="https://x/today"');
+    expect(c.html.match(/https:\/\/x\/today/g)).toHaveLength(1);
   });
 });

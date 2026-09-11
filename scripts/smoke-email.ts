@@ -45,7 +45,7 @@ async function main() {
     // app's own domain, and the link as a button; the raw URL appears in the HTML only as the href.
     const { brandedEmail } = await import("@/lib/branded-email");
     const { morningCopy } = await import("@/lib/engine/reminder-copy");
-    const morning = brandedEmail(morningCopy({ first: "Maya", streak: 4, brokenYesterday: false, points: 310, nextTier: { name: "Sage", minPoints: 500 } }));
+    const morning = brandedEmail(morningCopy({ first: "Maya", streak: 4, brokenYesterday: false, points: 310, nextTier: { name: "Sage", minPoints: 500 }, hours: { morning: 6, evening: 21 } }));
     if ((await sendEmail("maya@example.com", morning.subject, morning.text, morning.html)) !== "sent") throw new Error("branded send should be accepted");
     const branded = ((await (await fetch(`http://localhost:${mockPort}/_sent`)).json()) as { subject: string; content: { type: string; value: string }[] }[]).at(-1)!;
     if (branded.subject !== "Maya — day 4") throw new Error(`subject should be the streak form, got "${branded.subject}"`);
@@ -59,8 +59,9 @@ async function main() {
     if ((html.match(/https:\/\/helixos\.example\.test\/today/g) ?? []).length !== 1) throw new Error("the action URL must appear once in the HTML, as the href, never as text");
     if (!/src="https:\/\/helixos\.example\.test\/email\/logo-120\.png"/.test(html) || !/alt="Evolve Omega"/.test(html)) throw new Error("the logo must be served from the app's own domain with real alt text");
     if (/<style|class=/.test(html)) throw new Error("no <style> block and no classes in email HTML");
-    if (!/Change them in Settings<\/a>/.test(html) || !/href="https:\/\/helixos\.example\.test\/settings"/.test(html)) throw new Error("the footer must link straight to Settings");
-    const noState = brandedEmail(morningCopy({ first: "Maya", streak: 0, brokenYesterday: false, points: 10, nextTier: { name: "Philosopher", minPoints: 100 } }));
+    if (!/Reminders come at 6am and 9pm\. <a href="https:\/\/helixos\.example\.test\/settings"[^>]*>Change them in Settings<\/a>/.test(html)) throw new Error("the footer must state the client's own hours and link straight to Settings");
+    if (!/Reminders come at 6am and 9pm\. Change them in Settings\./.test(text)) throw new Error("the text footer must state the same hours");
+    const noState = brandedEmail(morningCopy({ first: "Maya", streak: 0, brokenYesterday: false, points: 10, nextTier: { name: "Philosopher", minPoints: 100 }, hours: { morning: 8, evening: 17 } }));
     if (/border-left:3px solid #E49C24/.test(noState.html)) throw new Error("with no state line the whole row must go, not an empty box");
     console.log("✓ branded email: multipart, preheader, own-domain logo, the link as a button, the text part intact");
 

@@ -20,6 +20,8 @@ export type EmailSlots = {
   logoUrl: string;
   /** The footer as HTML, already escaped where needed; defaults to the template's own reminders line with the Settings link. */
   footerHtml?: string;
+  /** The client's reminder hours as words ("6am", "5pm"), stated in the template's footer in place of its example times. */
+  hourLabels?: { morning: string; evening: string };
 };
 
 export function escapeHtml(s: string): string {
@@ -37,6 +39,7 @@ export function renderEmailHtml(s: EmailSlots): string {
   const asks = s.asks.filter((a) => a.trim()).map((a) => `<div style="margin:0 0 6px 0;">${escapeHtml(a)}</div>`).join("");
   html = html.replace(ASKS_BLOCK, asks);
   if (s.footerHtml !== undefined) html = html.replace(FOOTER, s.footerHtml);
+  else if (s.hourLabels) html = html.replace("Reminders come at 8am and 5pm.", `Reminders come at ${escapeHtml(s.hourLabels.morning)} and ${escapeHtml(s.hourLabels.evening)}.`);
   return html
     .replace("{{PREHEADER}}", escapeHtml(s.preheader))
     .replace("{{GREETING}}", escapeHtml(s.greeting))

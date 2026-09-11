@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EMAIL_TEMPLATE, renderEmailHtml, renderEmailText } from "../email-template";
-import { comebackCopy, eveningCopy, morningCopy, numberWords } from "../reminder-copy";
+import { comebackCopy, eveningCopy, footerText, hourLabel, morningCopy, numberWords } from "../reminder-copy";
 import { readFileSync } from "node:fs";
 
 const base = { actionUrl: "https://app.test/today", settingsUrl: "https://app.test/settings", logoUrl: "https://app.test/email/logo-120.png" };
@@ -21,6 +21,11 @@ describe("the email template", () => {
     expect(html).toContain('alt="Evolve Omega" style="display:block;width:60px;height:60px;border:0;outline:none;text-decoration:none;font-family');
     expect(html).toContain('bgcolor="#ffffff"');
   });
+  it("the HTML footer states the same hours as the text, in the template's sentence, with the Settings link", () => {
+    const html = renderEmailHtml({ ...base, preheader: "p", greeting: "g", stateLine: null, asks: ["A"], buttonLabel: "b", pointsLine: "", hourLabels: { morning: "6am", evening: "9pm" } });
+    expect(html).toContain('Reminders come at 6am and 9pm. <a href="https://app.test/settings"');
+    expect(html).not.toContain("8am and 5pm");
+  });
   it("removes the whole state row when there is no state line, never an empty box", () => {
     const html = renderEmailHtml({ ...base, preheader: "p", greeting: "g", stateLine: null, asks: ["A"], buttonLabel: "b", pointsLine: "" });
     expect(html).not.toContain("border-left:3px solid #E49C24");
@@ -37,8 +42,9 @@ describe("the email template", () => {
 
 describe("the morning email, by state, verbatim", () => {
   const sage = { name: "Sage", minPoints: 500 };
+  const hours = { morning: 8, evening: 17 };
   it("streak running", () => {
-    const c = morningCopy({ first: "Danno", streak: 4, brokenYesterday: false, points: 460, nextTier: sage });
+    const c = morningCopy({ first: "Danno", streak: 4, brokenYesterday: false, points: 460, nextTier: sage, hours });
     expect(c.subject).toBe("Danno — day 4");
     expect(c.stateLine).toBe("Four days straight. Don't break it today.");
     expect(c.preheader).toBe("Three things. Sixty seconds. Then you're free.");
@@ -46,48 +52,56 @@ describe("the morning email, by state, verbatim", () => {
     expect(c.asks).toEqual(["Pick your top three.", "Set your energy.", "That's it. Sixty seconds."]);
     expect(c.buttonLabel).toBe("Lock in my day");
     expect(c.pointsLine).toBe("+10 points when you do.");
-    expect(morningCopy({ first: "Danno", streak: 1, brokenYesterday: false, points: 0, nextTier: null }).stateLine).toBe("One day straight. Don't break it today.");
+    expect(morningCopy({ first: "Danno", streak: 1, brokenYesterday: false, points: 0, nextTier: null, hours }).stateLine).toBe("One day straight. Don't break it today.");
   });
   it("streak broken yesterday does not shame", () => {
-    const c = morningCopy({ first: "Danno", streak: 0, brokenYesterday: true, points: 460, nextTier: sage });
+    const c = morningCopy({ first: "Danno", streak: 0, brokenYesterday: true, points: 460, nextTier: sage, hours });
     expect(c.subject).toBe("Danno, start again today");
     expect(c.stateLine).toBe("You missed yesterday. That's fine. Start again.");
   });
   it("within fifty points of the next rank", () => {
-    const c = morningCopy({ first: "Danno", streak: 0, brokenYesterday: false, points: 460, nextTier: sage });
+    const c = morningCopy({ first: "Danno", streak: 0, brokenYesterday: false, points: 460, nextTier: sage, hours });
     expect(c.subject).toBe("Danno — 40 points to Sage");
     expect(c.stateLine).toBe("460 points. Forty more and you're Sage.");
-    expect(morningCopy({ first: "Danno", streak: 0, brokenYesterday: false, points: 310, nextTier: sage }).stateLine).toBeNull();
+    expect(morningCopy({ first: "Danno", streak: 0, brokenYesterday: false, points: 310, nextTier: sage, hours }).stateLine).toBeNull();
   });
   it("none of the above: no state line, never padding", () => {
-    const c = morningCopy({ first: "Danno", streak: 0, brokenYesterday: false, points: 10, nextTier: { name: "Philosopher", minPoints: 100 } });
+    const c = morningCopy({ first: "Danno", streak: 0, brokenYesterday: false, points: 10, nextTier: { name: "Philosopher", minPoints: 100 }, hours });
     expect(c.subject).toBe("Danno, lock in your day");
     expect(c.stateLine).toBeNull();
   });
   it("the states take precedence in the brief's order", () => {
-    expect(morningCopy({ first: "Danno", streak: 4, brokenYesterday: false, points: 460, nextTier: sage }).subject).toBe("Danno — day 4");
-    expect(morningCopy({ first: "Danno", streak: 0, brokenYesterday: true, points: 460, nextTier: sage }).subject).toBe("Danno, start again today");
+    expect(morningCopy({ first: "Danno", streak: 4, brokenYesterday: false, points: 460, nextTier: sage, hours }).subject).toBe("Danno — day 4");
+    expect(morningCopy({ first: "Danno", streak: 0, brokenYesterday: true, points: 460, nextTier: sage, hours }).subject).toBe("Danno, start again today");
   });
 });
 
 describe("the evening and comeback emails", () => {
   it("evening leads with the day, points under the button", () => {
-    const c = eveningCopy({ first: "Danno", streak: 4, bonus: 10 });
-    expect(c.subject).toBe("Danno — close out day 4");
+    const c = eveningCopy({ first: "Danno", streak: 4, bonus: 10, hours: { morning: 8, evening: 17 } });
+    expect(c.subject).toBe("Danno — make it five");
     expect(c.preheader).toBe("Numbers in, one win named. Ninety seconds.");
-    expect(c.stateLine).toBe("Day 4 of your streak. Close it and it holds.");
+    expect(c.stateLine).toBe("Four days behind you. Close today and it's five.");
+    expect(eveningCopy({ first: "Danno", streak: 1, bonus: 10, hours: { morning: 8, evening: 17 } }).stateLine).toBe("One day behind you. Close today and it's two.");
     expect(c.asks).toEqual(["Log your numbers.", "Name the win.", "Ninety seconds."]);
     expect(c.buttonLabel).toBe("Close my day");
     expect(c.pointsLine).toBe("+20 points. +10 more for the streak.");
-    const none = eveningCopy({ first: "Danno", streak: 0, bonus: 0 });
+    const none = eveningCopy({ first: "Danno", streak: 0, bonus: 0, hours: { morning: 8, evening: 17 } });
     expect(none.subject).toBe("Danno, close the day");
     expect(none.stateLine).toBeNull();
     expect(none.pointsLine).toBe("+20 points.");
   });
-  it("comeback keeps its existing words", () => {
-    const c = comebackCopy("Danno", true);
-    expect(c.subject).toBe("Danno, Mondays are restart day");
+  it("comeback: the brief's subject and preheader, the body's existing words", () => {
+    const c = comebackCopy("Danno", { morning: 8, evening: 17 });
+    expect(c.subject).toBe("Danno, pick it back up");
+    expect(c.preheader).toBe("No catching up to do. Just today.");
+    expect(c.buttonLabel).toBe("Lock in my day");
     expect([c.greeting, ...c.asks].join(" ")).toBe("Happens. The system doesn't punish pauses, it just resets the streak. Day 1 is 10 points. By Friday it's 310.");
+  });
+  it("the footer states the client's own hours, never a hard-coded time", () => {
+    expect([hourLabel(6), hourLabel(8), hourLabel(12), hourLabel(17), hourLabel(0)]).toEqual(["6am", "8am", "12pm", "5pm", "12am"]);
+    expect(footerText({ morning: 6, evening: 21 })).toBe("Reminders come at 6am and 9pm. Change them in Settings.");
+    expect(morningCopy({ first: "Danno", streak: 0, brokenYesterday: false, points: 10, nextTier: null, hours: { morning: 6, evening: 21 } }).footerText).toBe("Reminders come at 6am and 9pm. Change them in Settings.");
   });
   it("small counts as words", () => {
     expect([numberWords(1), numberWords(4), numberWords(40), numberWords(42), numberWords(100)]).toEqual(["one", "four", "forty", "forty-two", "100"]);
