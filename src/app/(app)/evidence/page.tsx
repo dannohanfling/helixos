@@ -79,11 +79,11 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                 <input type="hidden" name="proposed" value={sp.proposed ?? ""} />
                 {sp.note ? <p className="text-sm" data-testid="terms-note">Look for: <span className="font-medium">{sp.note}</span></p> : null}
                 {sp.proposed === "words" ? <p className="rounded-lg bg-warn-soft p-2 text-xs" data-testid="terms-fallback">No AI key is connected, so these are the claim&apos;s own words. Edit them into what a researcher would search before you run it.</p> : null}
-                <Field label="Terms OpenAlex will search" hint="Comma-separated. Edit freely.">
+                <Field label="Search terms" hint="Words that would appear in a study's title or abstract.">
                   <input className="field" name="terms" defaultValue={terms} data-testid="terms-input" />
                 </Field>
                 <p className="text-xs text-ink-3">{EVIDENCE_DAILY_LIMIT} searches a day per person; the key is shared by everyone here. The same terms searched again this week come from the cache.</p>
-                <button className="btn btn-accent" type="submit">Search OpenAlex</button>
+                <button className="btn btn-accent" type="submit">Find studies</button>
               </form>
             </Card>
           ) : null}
@@ -276,7 +276,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
         </div>
       </div>
       {/* The one place the source is named on a client's page: a quiet credit, the same principle as the Socrates attribution line. */}
-      <p className="mt-6 text-xs text-ink-3" data-testid="evidence-credit">Results come from OpenAlex, an open catalogue of scholarly work.</p>
+      <p className="mt-6 text-xs text-ink-3" data-testid="evidence-credit">Results come from <a href="https://openalex.org" target="_blank" rel="noreferrer" className="underline">OpenAlex</a>, an open catalogue of scholarly work.</p>
     </>
   );
 }

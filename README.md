@@ -164,7 +164,9 @@ together (`insertText` in `src/lib/engine/evidence.ts`); they never travel apart
 
 OpenAlex takes the key as a query parameter, so `src/lib/openalex.ts` is server-side only: an ESLint rule keeps it out of
 everything but `src/lib/actions/evidence.ts`, no error message carries the URL, and the walk asserts the browser never calls
-it. One shared key pays for every client. OpenAlex's docs give the free pool as 100,000 credits a day with a search
+it. An error a client can see says what happened to them and what to do next (`OPENALEX_CLIENT_ERRORS`); it never names a
+variable, a host, a vendor, a stack trace or a person. The status, the upstream body and any missing configuration go to the
+server log under `[openalex]`, where they are useful. One shared key pays for every client. OpenAlex's docs give the free pool as 100,000 credits a day with a search
 costing 10, reset at midnight UTC, so 10,000 searches a day (`EVIDENCE_GLOBAL_BUDGET`). Searches are cached by normalised
 query for a week; each client gets `EVIDENCE_DAILY_LIMIT` real searches a day (100); past 70% of the pool everyone drops to
 `EVIDENCE_DEGRADED_LIMIT` (25, a quarter of the limit, so the degraded state still reads as a bit less rather than a wall)

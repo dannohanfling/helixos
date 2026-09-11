@@ -33,17 +33,34 @@ function toResult(w: Work): EvidenceResult {
   };
 }
 
-/** Plain words for what went wrong. The quota case says when it resets; an empty result must never stand in for "no quota". */
+/**
+ * What a client sees when the search fails: what happened to them and what to do next. Never a variable, a host, a vendor,
+ * a stack trace or a person; the detail (status, upstream body, missing configuration) goes to the server log, where it is
+ * useful. The quota case says when it resets; an empty result must never stand in for "no quota".
+ */
+export const OPENALEX_CLIENT_ERRORS = {
+  keyRejected: "Evidence search is unavailable right now. This one is on us — it has been logged and we are on it.",
+  unreachable: "Couldn't reach the research catalogue. Try again in a minute.",
+  other: "Evidence search hit an error. Try again in a minute.",
+  notConfigured: "Evidence search isn't set up yet.",
+} as const;
 export function explainOpenAlex(status: number | undefined, message: string): string {
   if (status === 429) return outOfQuotaMessage();
-  if (status === 401 || status === 403) return "OpenAlex rejected the key. Tell Danno: the OPENALEX_API_KEY in Vercel needs checking.";
-  if (/abort|fetch failed|econn/i.test(message)) return "Couldn't reach OpenAlex. Try again in a minute.";
-  return `OpenAlex replied: ${message}`.slice(0, 200);
+  if (status === 401 || status === 403) return OPENALEX_CLIENT_ERRORS.keyRejected;
+  if (/abort|fetch failed|econn/i.test(message)) return OPENALEX_CLIENT_ERRORS.unreachable;
+  return OPENALEX_CLIENT_ERRORS.other;
+}
+/** The server-side record of the same failure, with everything the client line leaves out. */
+function logOpenAlex(what: string, detail: Record<string, unknown>): void {
+  console.error(`[openalex] ${what}`, JSON.stringify(detail));
 }
 
 async function call<T>(path: string, params: Record<string, string>): Promise<OpenAlexResult<T>> {
   const key = process.env.OPENALEX_API_KEY;
-  if (!key) return { ok: false, error: "Evidence search is not set up on this server (no OpenAlex key)." };
+  if (!key) {
+    logOpenAlex("OPENALEX_API_KEY is not set: Evidence search refused", { path });
+    return { ok: false, error: OPENALEX_CLIENT_ERRORS.notConfigured };
+  }
   const url = new URL(`${openalexBase()}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set("api_key", key);
@@ -55,12 +72,14 @@ async function call<T>(path: string, params: Record<string, string>): Promise<Op
     const num = (h: string) => (res.headers.get(h) === null || Number.isNaN(Number(res.headers.get(h))) ? null : Number(res.headers.get(h)));
     const quota: OpenAlexQuota = { limit: num("x-ratelimit-limit"), remaining: num("x-ratelimit-remaining") };
     if (!res.ok) {
-      const body = (await res.text().catch(() => "")).slice(0, 200);
+      const body = (await res.text().catch(() => "")).slice(0, 500);
+      logOpenAlex(res.status === 401 || res.status === 403 ? "the key was rejected: OPENALEX_API_KEY needs checking" : `upstream ${res.status}`, { status: res.status, path, body, quota });
       return { ok: false, status: res.status, error: explainOpenAlex(res.status, body), quota };
     }
     return { ok: true, data: (await res.json()) as T, quota };
   } catch (e) {
-    // The message may name the URL, and the URL carries the key: never pass it through.
+    // The message may name the URL, and the URL carries the key: never pass it through, to the client or to the log.
+    logOpenAlex("request failed", { path, name: (e as Error).name, message: String((e as Error).message ?? e).replace(/api_key=[^&\s]+/g, "api_key=[redacted]").slice(0, 300) });
     return { ok: false, error: explainOpenAlex(undefined, (e as Error).name === "AbortError" ? "abort" : "fetch failed") };
   }
 }

@@ -111,7 +111,7 @@ async function main() {
 
     // Search: real papers, most cited first, year and DOI shown, the wrong-year one flagged and never auto-decided
     const before = await calls();
-    await submit(page, 'button:has-text("Search OpenAlex")');
+    await submit(page, 'button:has-text("Find studies")');
     await page.locator('[data-testid="results"]').waitFor({ timeout: 10000 });
     const rows = page.locator('[data-testid="result"]');
     if ((await rows.count()) !== 3) throw new Error(`expected 3 results, got ${await rows.count()}`);
@@ -137,14 +137,14 @@ async function main() {
     const searchUrl = page.url();
     await page.goto(`${base}/evidence?claim=${encodeURIComponent("A small yes makes a bigger yes easier later.")}&terms=${encodeURIComponent(terms)}&author=Freedman&year=1966`);
     const beforeCache = await calls();
-    await submit(page, 'button:has-text("Search OpenAlex")');
+    await submit(page, 'button:has-text("Find studies")');
     await expectText(page, "from this week's cache", "cache badge");
     if ((await calls()) !== beforeCache) throw new Error("a repeated query must be answered from the cache, not OpenAlex");
     console.log("✓ a repeated query is one call, not two");
 
     // Zero results is a result, not a failure, and the words teach the swap
     await page.goto(`${base}/evidence?claim=x&terms=nothing-here`);
-    await submit(page, 'button:has-text("Search OpenAlex")');
+    await submit(page, 'button:has-text("Find studies")');
     await page.locator('[data-testid="no-results"]').waitFor({ timeout: 10000 });
     const none = (await page.locator('[data-testid="no-results"]').innerText()).replace(/\s+/g, " ").trim();
     if (none !== 'Nothing came back for these terms. That is a result, not a failure. Try the words a researcher would use rather than the words you would say to a client — "self-efficacy" rather than "confidence", "adherence" rather than "sticking with it".') throw new Error(`zero-results wording differs: "${none}"`);
@@ -153,7 +153,7 @@ async function main() {
 
     // Out of quota fails visibly and says when it resets; it never reads as "no research exists"
     await page.goto(`${base}/evidence?claim=x&terms=quota`);
-    await submit(page, 'button:has-text("Search OpenAlex")');
+    await submit(page, 'button:has-text("Find studies")');
     await page.locator('[data-testid="evidence-error"]').waitFor({ timeout: 5000 });
     await expectText(page, "out of quota for today", "quota message");
     const { resetPhrase } = await import("@/lib/engine/evidence");
