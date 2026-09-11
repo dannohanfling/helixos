@@ -76,12 +76,13 @@ export async function forgotAction(_prev: ForgotState, formData: FormData): Prom
   const reset = brandedEmail(
     {
       subject: "Reset your HelixOS password",
-      preheader: "One link and you're back in.",
+      preheader: "One link and you're back in. Good for 60 minutes.",
       greeting: `Hi ${user.name.split(" ")[0]},`,
       stateLine: null,
       asks: ["Someone asked to reset the password for this email. If it was you, open this link within 60 minutes:"],
       buttonLabel: "Reset my password",
-      pointsLine: "",
+      // Under the button, because it is a consequence: a client who resets on a laptop and finds their phone signed out must know it was meant.
+      pointsLine: "Using this link signs you out of every other device.",
       path: `/reset/${token}`,
       footerText: "If it wasn't you, ignore this and nothing changes.",
     },

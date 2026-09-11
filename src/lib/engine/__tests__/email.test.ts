@@ -96,7 +96,9 @@ describe("the evening and comeback emails", () => {
     expect(c.subject).toBe("Danno, pick it back up");
     expect(c.preheader).toBe("No catching up to do. Just today.");
     expect(c.buttonLabel).toBe("Lock in my day");
-    expect([c.greeting, ...c.asks].join(" ")).toBe("Happens. The system doesn't punish pauses, it just resets the streak. Day 1 is 10 points. By Friday it's 310.");
+    expect([c.greeting, ...c.asks].join(" ")).toBe("Happens. Day 1 is 10 points. By Friday it's 310.");
+    expect(c.stateLine).toBeNull();
+    expect(c.pointsLine).toBe("");
   });
   it("the footer states the client's own hours, never a hard-coded time", () => {
     expect([hourLabel(6), hourLabel(8), hourLabel(12), hourLabel(17), hourLabel(0)]).toEqual(["6am", "8am", "12pm", "5pm", "12am"]);

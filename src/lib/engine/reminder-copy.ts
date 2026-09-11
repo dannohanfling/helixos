@@ -77,8 +77,8 @@ export function eveningCopy(s: EveningState): EmailCopy {
 
 /**
  * The comeback email, three quiet days in. The subject and preheader are the brief's: no imagined backlog, nothing to catch
- * up on. The body keeps its existing words, laid into the slots without a word changed: the first sentence is the greeting,
- * the rest the asks.
+ * up on. The body is three words and a line of maths, and the shortness is the message: "Happens." is the whole apology, then
+ * what is available starting today. The old middle sentence was cut, not replaced: denying a fear introduces it.
  */
 export function comebackCopy(first: string, hours: ReminderHours): EmailCopy {
   return {
@@ -86,7 +86,7 @@ export function comebackCopy(first: string, hours: ReminderHours): EmailCopy {
     preheader: "No catching up to do. Just today.",
     greeting: "Happens.",
     stateLine: null,
-    asks: ["The system doesn't punish pauses, it just resets the streak.", "Day 1 is 10 points. By Friday it's 310."],
+    asks: ["Day 1 is 10 points. By Friday it's 310."],
     buttonLabel: "Lock in my day",
     pointsLine: "",
     path: "/today",
