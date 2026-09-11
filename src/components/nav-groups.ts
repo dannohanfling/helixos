@@ -26,6 +26,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/essence", label: "Essence", icon: "🧬", hint: "your voice" },
       { href: "/proof", label: "Proof Bank", icon: "🏆", line: "Your clients' results" },
       { href: "/evidence", label: "Evidence", icon: "📚", line: "Published research" },
+      { href: "/magnets", label: "Lead magnets", icon: "🧲", hint: "keyword + link" },
     ],
   },
   {

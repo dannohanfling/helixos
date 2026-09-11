@@ -127,22 +127,32 @@ async function generate(workspaceId: string, userId: string, brief: Brief): Prom
   return { parsed: scaffold(brief, profile ?? null, proofs), generatedBy: "scaffold" };
 }
 
-function briefFrom(fd: FormData): Brief {
+/** The magnet a ladder offers, when it does: its keyword replaces whatever was picked, so a comment always routes to the magnet. */
+async function magnetFor(userId: string, id: string | null): Promise<{ id: string; title: string; promise: string; keyword: string } | null> {
+  if (!id) return null;
+  const m = await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, id), eq(schema.leadMagnets.userId, userId)) });
+  return m ? { id: m.id, title: m.title, promise: m.promise, keyword: m.keyword } : null;
+}
+
+async function briefFrom(fd: FormData, userId: string): Promise<Brief & { leadMagnetId: string | null }> {
+  const magnet = await magnetFor(userId, opt(fd, "leadMagnetId"));
   return {
     format: LADDER_FORMAT_KEYS.find((f) => f === str(fd, "format")) ?? "method_resource",
     topic: str(fd, "topic"),
     audience: LADDER_AUDIENCES.find((a) => a === str(fd, "audience")) ?? "warm",
-    keyword: str(fd, "keyword").toUpperCase().replace(/[^A-Z0-9]/g, "") || "NONE",
+    keyword: magnet?.keyword ?? (str(fd, "keyword").toUpperCase().replace(/[^A-Z0-9]/g, "") || "NONE"),
     sourceMaterial: opt(fd, "sourceMaterial"),
     realNumbers: opt(fd, "realNumbers"),
+    leadMagnet: magnet ? { title: magnet.title, promise: magnet.promise } : null,
+    leadMagnetId: magnet?.id ?? null,
   };
 }
 
 export async function createLadderAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
-  const brief = briefFrom(formData);
+  const { leadMagnet, ...brief } = await briefFrom(formData, userId);
   if (!brief.topic) return;
-  const { parsed, generatedBy } = await generate(workspaceId, userId, brief);
+  const { parsed, generatedBy } = await generate(workspaceId, userId, { ...brief, leadMagnet });
   const id = newId();
   await db.insert(schema.ladders).values({
     id,
@@ -170,11 +180,12 @@ export async function createLadderAction(formData: FormData): Promise<void> {
 export async function regenerateLadderAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const l = await own(str(formData, "id"), userId);
-  const brief: Brief = { format: l.format, topic: str(formData, "topic") || l.topic, audience: l.audience, keyword: l.keyword, sourceMaterial: opt(formData, "sourceMaterial") ?? l.sourceMaterial, realNumbers: opt(formData, "realNumbers") ?? l.realNumbers };
+  const magnet = await magnetFor(userId, l.leadMagnetId);
+  const brief: Brief = { format: l.format, topic: str(formData, "topic") || l.topic, audience: l.audience, keyword: magnet?.keyword ?? l.keyword, sourceMaterial: opt(formData, "sourceMaterial") ?? l.sourceMaterial, realNumbers: opt(formData, "realNumbers") ?? l.realNumbers, leadMagnet: magnet ? { title: magnet.title, promise: magnet.promise } : null };
   const { parsed, generatedBy } = await generate(workspaceId, userId, brief);
   await db
     .update(schema.ladders)
-    .set({ topic: brief.topic, sourceMaterial: brief.sourceMaterial ?? null, realNumbers: brief.realNumbers ?? null, postName: parsed.postName, headline: parsed.headline, altHeadlines: parsed.altHeadlines, hook: parsed.hook, copy: parsed.copy, rungs: parsed.rungs, dmKeyword: parsed.dmKeyword, carousel: parsed.carousel, igCaption: parsed.igCaption, threadsChain: parsed.threadsChain, notes: parsed.notes || null, generatedBy, status: "draft", launchedAt: null })
+    .set({ topic: brief.topic, keyword: brief.keyword, sourceMaterial: brief.sourceMaterial ?? null, realNumbers: brief.realNumbers ?? null, postName: parsed.postName, headline: parsed.headline, altHeadlines: parsed.altHeadlines, hook: parsed.hook, copy: parsed.copy, rungs: parsed.rungs, dmKeyword: parsed.dmKeyword, carousel: parsed.carousel, igCaption: parsed.igCaption, threadsChain: parsed.threadsChain, notes: parsed.notes || null, generatedBy, status: "draft", launchedAt: null })
     .where(eq(schema.ladders.id, l.id));
   refresh();
 }

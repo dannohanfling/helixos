@@ -30,6 +30,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // A lead magnet upload rides in a server action; eight megabytes covers a designed PDF and stays under Vercel's request cap.
+  experimental: { serverActions: { bodySizeLimit: "8mb" } },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

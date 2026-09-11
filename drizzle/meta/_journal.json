@@ -211,6 +211,13 @@
       "when": 1789099470773,
       "tag": "0029_objections_one_record",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1789100677158,
+      "tag": "0030_lead_magnets",
+      "breakpoints": true
     }
   ]
 }

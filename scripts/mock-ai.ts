@@ -18,6 +18,22 @@ function reply(system: string, user: string): string {
     const real = line ? line.replace(/^\[[^\]]+\]\s*[^:]+:\s*/, "").replace(/^Honestly it's been different\.\s*/, "") : "I've had three new clients this month and I didn't chase a single one.";
     return JSON.stringify({ quotes: [{ quote: real, speaker: "jess@example.com" }, { quote: "This program changed my life completely.", speaker: "jess@example.com" }] });
   }
+  // The lead magnet prompt: sections in the type's shape, the two hand-overs, and one blacklisted line the app must strip.
+  if (/lead magnet/i.test(system) && /"sections"/.test(system)) {
+    return JSON.stringify({
+      intro: "Mock AI intro. Three things before you start.",
+      sections: [
+        { heading: "Before you start", items: ["Pick one platform.", "Block twelve minutes on Tuesday."], why: "One place beats three.", how: "Put it in the calendar." },
+        { heading: "The list", items: ["Write the hook first.", "It takes 21 days to form a habit, so start today.", "Ask one question at the end."] },
+      ],
+      closing: "Mock AI closing. Comment the keyword and I'll send the next one.",
+      personalReply: "Mock reply: sent you a DM.",
+      personalDm: "Mock DM: here it is, and one question for you.",
+      chatbotAnswer: "Mock chatbot answer.",
+      chatbotDelivery: "Mock delivery message with the link.",
+      chatbotQuestions: ["What are you working on right now?", "What's in the way?"],
+    });
+  }
   // The Evidence prompt: a claim becomes the terms a researcher would search, the effect, and the field.
   if (/search terms/i.test(system) && /"terms"/.test(system)) {
     return JSON.stringify({ terms: ["foot-in-the-door", "compliance", "small request", "commitment"], effect: "Foot-in-the-door effect", field: "Social psychology, compliance research" });

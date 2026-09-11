@@ -17,6 +17,7 @@ export const FEATURES: Record<string, { label: string; tier: Tier }> = {
   principle_content: { label: "Doctrine content", tier: "light" },
   harvest: { label: "Testimonials from a recording", tier: "strong" },
   evidence_terms: { label: "Evidence: a claim into search terms", tier: "light" },
+  lead_magnet: { label: "Lead magnet drafts", tier: "strong" },
   key_check: { label: "Key check", tier: "light" },
 };
 

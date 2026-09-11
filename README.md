@@ -188,6 +188,33 @@ purpose: a false positive costs one sentence, a false negative puts a fabricated
 Environment: `OPENALEX_API_KEY` (already in Vercel, all environments). `OPENALEX_BASE_URL` is honoured only outside production,
 for `scripts/mock-openalex.ts`. Walk: `scripts/smoke-evidence.ts` (needs the OpenAlex and AI mocks; `scripts/dev-server.sh` sets both).
 
+## Lead magnets: the thing people comment for
+
+"Lead magnets" is the left-nav section for what a reader comments a keyword to receive. Type first (checklist, guide, cheat
+sheet, swipe file, audit, resource list: `MAGNET_TYPE_INFO` in `src/lib/engine/lead-magnet.ts`), then the title, the
+promise and the keyword. A new magnet is the type's shape with the promise as its intro and nothing invented; ✨ writes the
+sections and the hand-over messages from the Big Promise, the audience, the linked offer, approved proof (verbatim only) and
+confirmed evidence (claim and citation together), and the blacklist strips anything else in code, with the page saying what
+went. One keyword per magnet, never shared inside a workspace, so a comment always routes to one thing. A ladder that offers
+a magnet takes the magnet's keyword over whatever the brief picked, and the prompt names the magnet for the final rung only;
+the body check that refuses "comment KEYWORD" is unchanged.
+
+Formats are the client's to tick: a hosted page at `/m/<slug>`, a typeset PDF (`src/lib/pdf.ts`, pdfkit: type and layout
+over the gold band, no imagery), plain text and a Canva hand-off as copy-outs, and a file made elsewhere uploaded to the same
+place. The tracked link is `/g/<slug>?src=…`: it counts one hit under a source from a closed list (`HIT_SOURCES`; anything
+else is `other`), then sends the reader to the format the client nominated. The slug comes from the title only, nothing about
+the reader is read or kept, and the counts are per source per day. Who came is Community Loyalty's answer on the business
+page, never this link's. Both public routes work with no session (`src/proxy.ts` lists `/g`, `/m` and `/files`).
+
+The object store (`src/lib/storage.ts`, backed by the `files` table today and swappable for a bucket) has two writers on
+purpose: `putPublicMagnet` writes only under `public/magnets/<slug>/` (the magnet's slug, so a public URL carries no
+workspace, user or record id) and is the one function that marks an object public; `putPrivateAttachment` writes only under `private/attachments/<workspace>/` and never does. The read path at
+`/files/<key>` serves an object only when its key is under the public prefix and it was written public; a private key has no
+URL anywhere (`publicUrlFor` returns null), and `src/lib/engine/__tests__/lead-magnet.test.ts` fails if a private key ever
+resolves, if a malformed public-looking key passes, or if any file but `storage.ts` marks an object public. Walk:
+`scripts/smoke-magnets.ts` (needs the AI mock; also reads the PDF, the page and the link with no cookie, and flips the flag on
+a private row to show the prefix still wins).
+
 ## Stack
 
 Next.js 16 (App Router, server actions), React 19, Tailwind 4, Drizzle ORM on SQLite/libsql, `jose` sessions,

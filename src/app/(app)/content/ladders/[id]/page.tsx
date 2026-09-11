@@ -48,6 +48,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
   const v = await requireViewer();
   const { id } = await params;
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)) });
+  const magnet = l?.leadMagnetId ? await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, l.leadMagnetId), eq(schema.leadMagnets.userId, v.user.id)) }) : null;
   if (!l) notFound();
   const [profile, proofs] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
@@ -75,7 +76,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           <span className="flex flex-wrap items-center gap-2">
             <Link href="/content/ladders" className="hover:underline">← Ladders</Link>
             <Badge tone={l.status === "ready" ? "good" : l.status === "live" ? "accent" : "neutral"}>{l.status}</Badge>
-            <span>{fmt.name} · {l.audience} audience · keyword {l.keyword} · {l.generatedBy === "claude" ? "drafted by AI" : l.generatedBy === "scaffold" ? "skeleton, fill the blanks" : l.generatedBy}</span>
+            <span>{fmt.name} · {l.audience} audience · keyword {l.keyword}{magnet ? <> · offers <Link href={`/magnets/${magnet.id}`} className="underline" data-testid="ladder-magnet-link">{magnet.title}</Link></> : null} · {l.generatedBy === "claude" ? "drafted by AI" : l.generatedBy === "scaffold" ? "skeleton, fill the blanks" : l.generatedBy}</span>
           </span>
         }
         action={

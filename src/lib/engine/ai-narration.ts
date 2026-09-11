@@ -10,6 +10,7 @@ export const NARRATION: Record<string, string[]> = {
   repurpose: ["Reading the original.", "Finding what carries over.", "Rewriting for the new format."],
   group_variant: ["Reading the group's rules and tone.", "Adjusting your draft to fit.", "Checking nothing breaks their guidelines."],
   principle_content: ["Reading the principle.", "Drafting the post, the reel and the training."],
+  lead_magnet: ["Reading your promise, your audience and your offer.", "Pulling in approved proof and confirmed evidence.", "Writing the sections in the shape you chose.", "Writing the reply, the DM and what the chatbot says.", "Checking every claim against the blacklist."],
   evidence_terms: ["Reading your claim.", "Naming the effect and the field a researcher would search.", "Proposing the terms."],
   harvest: ["Reading the recording you picked.", "Finding where your client describes a result.", "Checking every quote against the transcript, word for word.", "Saving what holds up as drafts."],
 };

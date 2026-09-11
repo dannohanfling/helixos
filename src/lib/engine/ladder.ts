@@ -55,7 +55,8 @@ const NAME_PUN = /\b(police|badge|handcuffs?|book\s?['’]?em)\b/i;
 /** A percentage or a "studies show" is a statistic; it has to be on the verified list. */
 const STAT = /(\d+(?:\.\d+)?\s?%)|\b(?:studies|research|data|surveys?)\s+(?:show|shows|found|say|says|prove|proves)\b/gi;
 
-export type Brief = { format: LadderFormatKey; topic: string; audience: "warm" | "cold"; keyword: string; sourceMaterial?: string | null; realNumbers?: string | null };
+/** `leadMagnet`: the magnet the keyword fetches. It is named in the final rung only, as fulfilment; the body never mentions it. */
+export type Brief = { format: LadderFormatKey; topic: string; audience: "warm" | "cold"; keyword: string; sourceMaterial?: string | null; realNumbers?: string | null; leadMagnet?: { title: string; promise: string } | null };
 /** The voice itself is not here: it arrives ahead of this block, from the client's Essence, through draft(). */
 export type Member = { name: string; businessName?: string | null; bigPromise?: string | null };
 
@@ -233,6 +234,7 @@ export function perPostInput(brief: Brief): string {
     `TOPIC: ${brief.topic}`,
     `AUDIENCE: ${brief.audience === "cold" ? "cold business owners who don't know the client yet" : "warm audience who already follows the client"}`,
     `KEYWORD: ${brief.keyword || "NONE"}`,
+    brief.leadMagnet ? `LEAD MAGNET (what the keyword gets them; name it in the final rung only, never in the post body): ${brief.leadMagnet.title}${brief.leadMagnet.promise ? ` — ${brief.leadMagnet.promise}` : ""}` : "",
     brief.sourceMaterial?.trim() ? `SOURCE MATERIAL:\n${brief.sourceMaterial.trim()}` : "",
     brief.realNumbers?.trim() ? `REAL NUMBERS (use exactly, nothing else may be presented as real):\n${brief.realNumbers.trim()}` : "",
   ]

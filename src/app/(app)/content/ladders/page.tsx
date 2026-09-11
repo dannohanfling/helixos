@@ -27,10 +27,11 @@ function nextSlot(today: string): string {
 
 export default async function LaddersPage() {
   const v = await requireViewer();
-  const [list, profile, proofs] = await Promise.all([
+  const [list, profile, proofs, magnets] = await Promise.all([
     db.query.ladders.findMany({ where: eq(schema.ladders.userId, v.user.id), orderBy: desc(schema.ladders.createdAt) }),
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
+    db.query.leadMagnets.findMany({ where: eq(schema.leadMagnets.userId, v.user.id), orderBy: desc(schema.leadMagnets.createdAt) }),
   ]);
   const ai = await hasAiKey();
   const keywords = profile?.keywords.filter((k) => k.keyword) ?? [];
@@ -89,6 +90,18 @@ export default async function LaddersPage() {
                   <option value="NONE">NONE — close with a question</option>
                 </select>
               </Field>
+              <div className="sm:col-span-2">
+                <Field label="Lead magnet (optional)" hint="Pick one and its keyword is the ladder's, whatever is chosen above. The magnet is named in the final rung only, never in the body.">
+                  <select className="field" name="leadMagnetId" defaultValue="" data-testid="ladder-magnet">
+                    <option value="">None: the keyword above</option>
+                    {magnets.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.title} — {m.keyword}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
               <div className="sm:col-span-2">
                 <Field label="Source material (optional)" hint="A transcript, notes, a quote with its source. The model may only use what's here and in your facts.">
                   <textarea className="field" name="sourceMaterial" rows={3} />

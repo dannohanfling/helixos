@@ -15,7 +15,7 @@ set -euo pipefail
 main() {
   cd "$(dirname "$0")/.."
 
-  ALL=(base firstday loop rewards coach wave3 composer library wizards ladders socrates ghl ai essence fathom email headers auth evidence)
+  ALL=(base firstday loop rewards coach wave3 composer library wizards ladders socrates ghl ai essence fathom email headers auth evidence magnets)
   BASE_URL="${BASE_URL:-http://localhost:3000}"
 
   if [[ $# -eq 0 ]]; then

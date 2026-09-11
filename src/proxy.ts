@@ -4,7 +4,8 @@ import { SESSION_COOKIE } from "@/lib/session";
 
 // Inbound machine endpoints authenticate with their own secrets, never a browser session.
 // The manifest and icons must load without a session: the browser fetches them on the login page and when installing the app.
-const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/api/cron", "/api/health", "/api/webhooks", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt"];
+// /g (a lead magnet's tracked link), /m (its hosted page) and /files (its public objects, and only those) are read by strangers.
+const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/api/cron", "/api/health", "/api/webhooks", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const id = () => text("id").primaryKey();
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
@@ -1053,6 +1053,8 @@ export const ladders = sqliteTable(
     topic: text("topic").notNull(),
     audience: text("audience", { enum: LADDER_AUDIENCES }).notNull().default("warm"),
     keyword: text("keyword").notNull().default("none"),
+    /** The lead magnet this ladder offers, if any: the keyword is the magnet's, and the ask lives in a rung, never in the body. */
+    leadMagnetId: text("lead_magnet_id"),
     sourceMaterial: text("source_material"),
     realNumbers: text("real_numbers"),
     postName: text("post_name").notNull().default(""),
@@ -1355,6 +1357,82 @@ export const evidenceSearches = sqliteTable(
   (t) => [index("evidence_searches_user_day").on(t.userId, t.day), index("evidence_searches_key").on(t.queryKey)],
 );
 export type EvidenceSearch = typeof evidenceSearches.$inferSelect;
+
+/**
+ * The object store, backed by the database (swappable for a bucket behind src/lib/storage.ts). Two access rules live in one
+ * store, so the rule is in the key: only `public/magnets/<slug>/…` is ever public, written by one function; everything
+ * else is private, written by another. `isPublic` is recorded for the read path and must agree with the prefix.
+ */
+export const files = sqliteTable("files", {
+  key: text("key").primaryKey(),
+  workspaceId: text("workspace_id").notNull(),
+  contentType: text("content_type").notNull(),
+  bytes: blob("bytes", { mode: "buffer" }).notNull(),
+  size: integer("size").notNull(),
+  isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
+  createdAt: createdAt(),
+});
+
+/** Lead magnets: the reason someone comments in the first place. The keyword ties a comment to one magnet; the slug is its public address. */
+export const MAGNET_TYPES = ["checklist", "guide", "cheat_sheet", "swipe_file", "audit", "resource_list"] as const;
+export type MagnetType = (typeof MAGNET_TYPES)[number];
+export type MagnetSection = { heading: string; items: string[]; why?: string; how?: string };
+export type MagnetContent = { intro: string; sections: MagnetSection[]; closing: string };
+export type MagnetFormats = { page: boolean; pdf: boolean; copy: boolean; canva: boolean };
+export const MAGNET_PRIMARY = ["page", "pdf", "file"] as const;
+export const leadMagnets = sqliteTable(
+  "lead_magnets",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    promise: text("promise").notNull().default(""),
+    audience: text("audience").notNull().default(""),
+    offerId: text("offer_id"),
+    type: text("type", { enum: MAGNET_TYPES }).notNull().default("checklist"),
+    /** The word people comment to get it. Two magnets in one workspace never share one. */
+    keyword: text("keyword").notNull(),
+    /** The public address: /g/<slug> counts and redirects, /m/<slug> is the hosted page. No personal data, ever. */
+    slug: text("slug").notNull(),
+    content: text("content", { mode: "json" }).$type<MagnetContent>().notNull().default({ intro: "", sections: [], closing: "" }),
+    formats: text("formats", { mode: "json" }).$type<MagnetFormats>().notNull().default({ page: true, pdf: true, copy: false, canva: false }),
+    primary: text("primary", { enum: MAGNET_PRIMARY }).notNull().default("page"),
+    /** Public object keys, always under public/magnets/<slug>/: a public URL carries no workspace, user or record id. */
+    pdfKey: text("pdf_key"),
+    fileKey: text("file_key"),
+    fileName: text("file_name"),
+    /** The two hand-overs. Personal profile: the public reply and the DM the client sends by hand. Business page: what the Community Loyalty chatbot says. */
+    personalReply: text("personal_reply"),
+    personalDm: text("personal_dm"),
+    chatbotAnswer: text("chatbot_answer"),
+    chatbotDelivery: text("chatbot_delivery"),
+    chatbotQuestions: text("chatbot_questions", { mode: "json" }).$type<string[]>().notNull().default([]),
+    generatedBy: text("generated_by").notNull().default("none"),
+    notes: text("notes"),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at"),
+  },
+  (t) => [uniqueIndex("lead_magnets_slug").on(t.slug), uniqueIndex("lead_magnets_ws_keyword").on(t.workspaceId, t.keyword), index("lead_magnets_user").on(t.userId)],
+);
+export type LeadMagnet = typeof leadMagnets.$inferSelect;
+
+/** One click on a tracked link: how many, per magnet and per source. Never who; that is Community Loyalty's answer. */
+export const leadMagnetHits = sqliteTable(
+  "lead_magnet_hits",
+  {
+    id: id(),
+    magnetId: text("magnet_id")
+      .notNull()
+      .references(() => leadMagnets.id, { onDelete: "cascade" }),
+    src: text("src").notNull().default("other"),
+    day: text("day").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("lead_magnet_hits_magnet").on(t.magnetId, t.day)],
+);
 
 /** Fixed-window counters for login and join attempts. */
 export const rateLimits = sqliteTable("rate_limits", {
