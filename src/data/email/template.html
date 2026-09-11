@@ -1,0 +1,84 @@
+<!-- HelixOS transactional email template.
+     Slots: {{PREHEADER}} {{GREETING}} {{STATE_LINE}} {{ASK_1..3}} {{BUTTON_LABEL}}
+            {{POINTS_LINE}} {{ACTION_URL}} {{SETTINGS_URL}}
+     When there is no state line, remove the whole <tr> containing {{STATE_LINE}}.
+     Do not add CSS classes or a <style> block - inline only. -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f6f5f1;margin:0;padding:0;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+
+      <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f6f5f1;opacity:0;">{{PREHEADER}}</div>
+
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #e8e5dd;border-radius:12px;overflow:hidden;">
+
+        <tr><td style="background-color:#F0C030;height:4px;line-height:4px;font-size:0;">&nbsp;</td></tr>
+
+        <tr>
+          <td style="padding:26px 40px 20px 40px;" bgcolor="#ffffff">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td bgcolor="#ffffff" style="background-color:#ffffff;width:60px;" width="60">
+                  <img src="{{LOGO_URL}}" width="60" height="60" alt="Evolve Omega" style="display:block;width:60px;height:60px;border:0;outline:none;text-decoration:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;color:#1a1a1a;">
+                </td>
+                <td style="padding-left:14px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  <div style="font-size:17px;font-weight:700;color:#1a1a1a;letter-spacing:.2px;">HelixOS</div>
+                  <div style="font-size:12px;color:#8a8a8a;padding-top:3px;">Evolve Omega</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 40px 18px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:21px;font-weight:700;color:#1a1a1a;">
+            {{GREETING}}
+          </td>
+        </tr>
+
+              <tr>
+                <td style="padding:0 40px 24px 40px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                    <tr>
+                      <td style="background-color:#fdf6e3;border-left:3px solid #E49C24;padding:14px 18px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#5a4a20;">
+                        {{STATE_LINE}}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+        <tr>
+          <td style="padding:0 40px 28px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:17px;line-height:1.55;color:#2f2f2f;">
+            <div style="margin:0 0 6px 0;">{{ASK_1}}</div><div style="margin:0 0 6px 0;">{{ASK_2}}</div><div style="margin:0 0 6px 0;">{{ASK_3}}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 40px 14px 40px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background-color:#F0C030;border-radius:8px;">
+                  <a href="{{ACTION_URL}}" style="display:inline-block;padding:15px 34px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#1a1a1a;text-decoration:none;border-radius:8px;">{{BUTTON_LABEL}}</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 40px 30px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#8a8a8a;">
+            {{POINTS_LINE}}
+          </td>
+        </tr>
+
+        <tr><td style="padding:0 40px;"><div style="height:1px;line-height:1px;font-size:0;background-color:#e8e5dd;">&nbsp;</div></td></tr>
+
+        <tr>
+          <td style="padding:18px 40px 26px 40px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#8a8a8a;">
+            Reminders come at 8am and 5pm. <a href="{{SETTINGS_URL}}" style="color:#C86432;text-decoration:underline;">Change them in Settings</a>.
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>

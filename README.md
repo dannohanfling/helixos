@@ -41,7 +41,7 @@ see who's on track, verify pathway work, and nudge who's gone quiet.
 - **Points** for every input: lock-in +10, close +20, DM started +5, reply +2, call booked +25, post +15 (+25 with a CTA), task +5 (+15 for a top 3), pathway tasks at their library value once the coach verifies.
 - **Tiers** at the base's thresholds (100 / 500 / 1,500 / 3,000 / 7,500 / 15,000 / 30,000 / 60,000) with the member-facing copy.
 - **Next best action** ranks what to do right now: unanswered replies > coach revisions > overdue > follow-ups > content due > top 3 > curriculum > pathway > close the day.
-- **Reminders**: hourly cron sends a morning "lock in" and evening "close" email, and a comeback note after 3 quiet days.
+- **Reminders**: hourly cron sends a morning "lock in" and evening "close" email, and a comeback note after 3 quiet days. Every email the app sends is multipart: the branded HTML (the template in `src/data/email/template.html`, embedded verbatim in `src/lib/engine/email-template.ts`; the Ω mark served from `public/email/logo-120.png` on the app's own domain; one gold button carrying the link; a hidden preheader) and the plain text with the URL on its own line, never dropped. The morning and evening words are the brief's, verbatim, in `src/lib/engine/reminder-copy.ts`; the subject and the one state line follow the client's state (streak running, streak broken yesterday, within 50 points of the next rank, or none).
 - **Next best action** also surfaces clients due for a check-in and the next step of an in-progress webinar build.
 
 ### Optional: Claude drafting

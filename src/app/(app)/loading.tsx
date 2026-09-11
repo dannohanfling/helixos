@@ -2,9 +2,14 @@
  * What a client sees the instant they tap a link, while the next page renders: the shape of a page, not a blank. The
  * shell (nav, bars) stays put; only the content area shows this.
  */
+import { AppLogo } from "@/components/brand-logo";
+
 export default function Loading() {
   return (
     <div className="animate-pulse space-y-4" role="status" aria-live="polite" aria-label="Loading" data-testid="page-loading">
+      <div className="flex justify-center py-2">
+        <AppLogo size={96} className="opacity-70" />
+      </div>
       <div className="h-7 w-48 rounded-md bg-surface-2" />
       <div className="h-4 w-72 max-w-full rounded-md bg-surface-2" />
       <div className="grid gap-4 md:grid-cols-2">

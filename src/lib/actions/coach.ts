@@ -37,7 +37,7 @@ export async function nudgeMemberAction(formData: FormData): Promise<void> {
   const today = todayInTz(m.timezone || coach.workspace.timezone);
   const c = comebackEmail(user.name.split(" ")[0], today, process.env.APP_URL ?? "http://localhost:3000");
   try {
-    await sendEmail(user.email, c.subject, c.text);
+    await sendEmail(user.email, c.subject, c.text, c.html);
     await db.update(schema.memberships).set({ lastNudgedAt: nowIso(), lastComebackAt: nowIso() }).where(eq(schema.memberships.id, m.id));
   } catch (e) {
     console.error(`[coach] nudge to ${m.userId} failed: ${e instanceof Error ? e.message : String(e)}`);

@@ -41,6 +41,29 @@ async function main() {
     if (last.personalizations[0].to[0].email !== "maya@example.com" || last.from.email !== "helixos@evolveomega.com" || last.from.name !== "HelixOS" || last.content[0].type !== "text/plain" || last.content[0].value !== "Body text" || last.subject !== "Hello") throw new Error(`payload shape wrong: ${JSON.stringify(last)}`);
     console.log("✓ 202 accepted; personalizations / from {email,name} / content payload");
 
+    // A branded email is multipart: the text part first and never dropped, the HTML part with the preheader, the logo from the
+    // app's own domain, and the link as a button; the raw URL appears in the HTML only as the href.
+    const { brandedEmail } = await import("@/lib/branded-email");
+    const { morningCopy } = await import("@/lib/engine/reminder-copy");
+    const morning = brandedEmail(morningCopy({ first: "Maya", streak: 4, brokenYesterday: false, points: 310, nextTier: { name: "Sage", minPoints: 500 } }));
+    if ((await sendEmail("maya@example.com", morning.subject, morning.text, morning.html)) !== "sent") throw new Error("branded send should be accepted");
+    const branded = ((await (await fetch(`http://localhost:${mockPort}/_sent`)).json()) as { subject: string; content: { type: string; value: string }[] }[]).at(-1)!;
+    if (branded.subject !== "Maya — day 4") throw new Error(`subject should be the streak form, got "${branded.subject}"`);
+    if (branded.content.length !== 2 || branded.content[0].type !== "text/plain" || branded.content[1].type !== "text/html") throw new Error("multipart: text first, then html");
+    const text = branded.content[0].value;
+    const html = branded.content[1].value;
+    if (!text.split("\n").includes("https://helixos.example.test/today")) throw new Error("the text part must carry the URL on its own line");
+    if (!/Four days straight\. Don't break it today\./.test(text) || !/Lock in my day/.test(html)) throw new Error("the copy must be the brief's, verbatim");
+    if (!/Three things\. Sixty seconds\. Then you&#39;re free\./.test(html)) throw new Error("the HTML must carry the preheader (apostrophe escaped)");
+    if (!/<a href="https:\/\/helixos\.example\.test\/today"/.test(html)) throw new Error("the button must carry the link");
+    if ((html.match(/https:\/\/helixos\.example\.test\/today/g) ?? []).length !== 1) throw new Error("the action URL must appear once in the HTML, as the href, never as text");
+    if (!/src="https:\/\/helixos\.example\.test\/email\/logo-120\.png"/.test(html) || !/alt="Evolve Omega"/.test(html)) throw new Error("the logo must be served from the app's own domain with real alt text");
+    if (/<style|class=/.test(html)) throw new Error("no <style> block and no classes in email HTML");
+    if (!/Change them in Settings<\/a>/.test(html) || !/href="https:\/\/helixos\.example\.test\/settings"/.test(html)) throw new Error("the footer must link straight to Settings");
+    const noState = brandedEmail(morningCopy({ first: "Maya", streak: 0, brokenYesterday: false, points: 10, nextTier: { name: "Philosopher", minPoints: 100 } }));
+    if (/border-left:3px solid #E49C24/.test(noState.html)) throw new Error("with no state line the whole row must go, not an empty box");
+    console.log("✓ branded email: multipart, preheader, own-domain logo, the link as a button, the text part intact");
+
     // 401 surfaces SendGrid's own message
     process.env.SENDGRID_API_KEY = "SG.bad";
     let msg = "";

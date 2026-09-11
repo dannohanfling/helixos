@@ -1,16 +1,16 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { hourInTz, nowIso, todayInTz, weekday } from "@/lib/dates";
+import { addDays, hourInTz, nowIso, todayInTz, weekday } from "@/lib/dates";
 import { runningStreak, streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
+import { nextTier } from "@/lib/engine/tiers";
+import { comebackCopy, eveningCopy, morningCopy } from "@/lib/engine/reminder-copy";
+import { brandedEmail } from "@/lib/branded-email";
+import { totalPoints } from "@/lib/queries/points";
 import { sendEmail } from "@/lib/email";
 
 /** The comeback email. Monday is restart day; on any other day the restart is today. Shared with the coach's nudge button. */
-export function comebackEmail(first: string, today: string, appUrl: string): { subject: string; text: string } {
-  const monday = weekday(today) === 1;
-  return {
-    subject: monday ? `${first}, Mondays are restart day` : `${first}, today is restart day`,
-    text: `Happens. The system doesn't punish pauses, it just resets the streak.\n\nDay 1 is 10 points. By Friday it's 310.\n\nLock in: ${appUrl}/today`,
-  };
+export function comebackEmail(first: string, today: string, appUrl: string): { subject: string; text: string; html: string } {
+  return brandedEmail(comebackCopy(first, weekday(today) === 1), { base: appUrl });
 }
 
 /** A quiet client hears from us once, then not again for a week unless they come back. */
@@ -19,9 +19,9 @@ export const COMEBACK_EVERY_DAYS = 7;
 export type ReminderResult = { userId: string; email: string; kind: "morning" | "evening" | "comeback"; delivery: "sent" | "logged" | "failed"; error?: string };
 
 /** One bad address or one provider error must never take down the run: the failure is logged with the member and the loop goes on. */
-async function deliver(out: ReminderResult[], m: { userId: string }, email: string, kind: ReminderResult["kind"], subject: string, text: string): Promise<ReminderResult["delivery"]> {
+async function deliver(out: ReminderResult[], m: { userId: string }, email: string, kind: ReminderResult["kind"], subject: string, text: string, html: string): Promise<ReminderResult["delivery"]> {
   try {
-    const delivery = await sendEmail(email, subject, text);
+    const delivery = await sendEmail(email, subject, text, html);
     out.push({ userId: m.userId, email, kind, delivery });
     return delivery;
   } catch (e) {
@@ -66,21 +66,23 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
           if (recently) continue;
           const c = comebackEmail(first, today, appUrl);
           // Only a send that actually went out starts the week of quiet; a logged (no key) or failed delivery is tried again.
-          if ((await deliver(out, m, user.email, "comeback", c.subject, c.text)) === "sent") {
+          if ((await deliver(out, m, user.email, "comeback", c.subject, c.text, c.html)) === "sent") {
             await db.update(schema.memberships).set({ lastComebackAt: nowIso() }).where(eq(schema.memberships.id, m.id));
           }
           continue;
         }
-        const subject = streak > 0 ? `Day ${streak + 1}? Lock in your top 3` : `${first}, lock in your day`;
-        const text = `Pick your top 3. Set your energy. 60 seconds, +10 points.\n\n${streak > 0 ? `Your ${streak}-day streak is alive. ` : ""}Lock in: ${appUrl}/today`;
-        await deliver(out, m, user.email, "morning", subject, text);
+        // One true line the client does not already know: the streak, a streak that broke yesterday, or a rank within reach.
+        const points = await totalPoints(ws.id, m.userId);
+        const next = nextTier(points);
+        const brokenYesterday = streak === 0 && closed.has(addDays(today, -2)) && !closed.has(addDays(today, -1));
+        const e = brandedEmail(morningCopy({ first, streak, brokenYesterday, points, nextTier: next ? { name: next.name, minPoints: next.minPoints } : null }), { base: appUrl });
+        await deliver(out, m, user.email, "morning", e.subject, e.text, e.html);
       }
       if (wantsEvening && !log?.eveningDoneAt) {
-        const day = weeklyStreakDay(closed, today);
-        const bonus = streakBonus(day);
-        const subject = bonus ? `Close the day: +20 and a ${bonus}-point streak bonus` : `${first}, close the day`;
-        const text = `Log your numbers. Name the win. It takes 90 seconds.\n\n${bonus ? `Today is streak day ${day}: +${bonus} on top of +20.\n\n` : ""}Close: ${appUrl}/today#close`;
-        await deliver(out, m, user.email, "evening", subject, text);
+        // Today's close is day streak+1 of the run; its bonus is the weekly escalation for that close.
+        const bonus = streakBonus(weeklyStreakDay(closed, today));
+        const e = brandedEmail(eveningCopy({ first, streak: streak > 0 ? streak + 1 : 0, bonus }), { base: appUrl });
+        await deliver(out, m, user.email, "evening", e.subject, e.text, e.html);
       }
     }
   }

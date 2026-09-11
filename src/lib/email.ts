@@ -38,10 +38,14 @@ export function describeSendGridError(status: number, body: string): string {
   return `SendGrid failed: ${status} ${body.slice(0, 500)}`;
 }
 
-export async function sendEmail(to: string, subject: string, text: string): Promise<"sent" | "logged"> {
+/**
+ * Sends one email. With `html` the message is multipart, text first and HTML second, and the text part is never dropped: some
+ * people read text, some clients strip HTML, and the text part is what a raw fallback looks like.
+ */
+export async function sendEmail(to: string, subject: string, text: string, html?: string): Promise<"sent" | "logged"> {
   const key = process.env.SENDGRID_API_KEY;
   if (!key) {
-    console.log(`[email:logged] to=${to} subject=${JSON.stringify(subject)}\n${text}`);
+    console.log(`[email:logged] to=${to} subject=${JSON.stringify(subject)}${html ? " (html part attached)" : ""}\n${text}`);
     return "logged";
   }
   const from = parseFrom(process.env.EMAIL_FROM);
@@ -52,7 +56,7 @@ export async function sendEmail(to: string, subject: string, text: string): Prom
       personalizations: [{ to: [{ email: to }] }],
       from,
       subject,
-      content: [{ type: "text/plain", value: text }],
+      content: [{ type: "text/plain", value: text }, ...(html ? [{ type: "text/html", value: html }] : [])],
     }),
   });
   // SendGrid returns 202 Accepted on success; res.ok covers the whole 2xx range.

@@ -1,6 +1,6 @@
 import { NavProgress } from "@/components/nav-progress";
 import { PinToViewport } from "@/components/pin-to-viewport";
-import { BrandMark } from "@/components/brand-logo";
+import { AppLogo } from "@/components/brand-logo";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Viewer } from "@/lib/auth";
@@ -13,8 +13,8 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
   return (
     <div className="min-h-screen md:flex">
       <aside className="hidden w-60 shrink-0 flex-col overflow-y-auto border-r bg-surface px-3 py-4 md:flex md:sticky md:top-0 md:h-screen">
-        <Link href="/today" className="mb-5 flex items-center gap-2 px-2">
-          <BrandMark className="h-8 w-8 text-lg" />
+        <Link href="/today" className="mb-5 flex items-center gap-2.5 px-2">
+          <AppLogo size={40} />
           <div className="leading-tight">
             <div className="text-sm font-bold">HelixOS</div>
             <div className="text-[11px] text-ink-3">{viewer.workspace.name}</div>
@@ -51,7 +51,7 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
         <PinToViewport edge="top">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b bg-bg/90 px-4 py-2.5 backdrop-blur md:hidden">
           <Link href="/today" className="flex items-center gap-2 text-sm font-bold">
-            <BrandMark className="h-7 w-7 text-base" />
+            <AppLogo size={40} />
             HelixOS
           </Link>
           <div className="flex items-center gap-2 text-xs">

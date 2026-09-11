@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { safeEqual } from "@/lib/crypto";
 import { emailConfigured, sendEmail } from "@/lib/email";
+import { brandedEmail } from "@/lib/branded-email";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { hashPassword, verifyPassword } from "@/lib/password";
@@ -71,7 +72,22 @@ export async function forgotAction(_prev: ForgotState, formData: FormData): Prom
   const token = randomBytes(32).toString("base64url");
   await db.insert(schema.passwordResets).values({ id: newId(), userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + RESET_TTL_MS).toISOString() });
   const link = `${appUrl()}/reset/${token}`;
-  const delivery = await sendEmail(user.email, "Reset your HelixOS password", `Hi ${user.name.split(" ")[0]},\n\nSomeone asked to reset the password for this email. If it was you, open this link within 60 minutes:\n\n${link}\n\nIf it wasn't you, ignore this and nothing changes.`);
+  // The same words as before, laid into the branded template: the link is the button, the "if it wasn't you" line is the footer.
+  const reset = brandedEmail(
+    {
+      subject: "Reset your HelixOS password",
+      preheader: "If it was you, open this link within 60 minutes.",
+      greeting: `Hi ${user.name.split(" ")[0]},`,
+      stateLine: null,
+      asks: ["Someone asked to reset the password for this email. If it was you, open this link within 60 minutes:"],
+      buttonLabel: "Reset my password",
+      pointsLine: "",
+      path: `/reset/${token}`,
+      footerText: "If it wasn't you, ignore this and nothing changes.",
+    },
+    { settingsLink: false },
+  );
+  const delivery = await sendEmail(user.email, reset.subject, reset.text, reset.html);
   return { message, ...(delivery === "logged" && process.env.NODE_ENV !== "production" ? { devLink: link } : {}) };
 }
 
