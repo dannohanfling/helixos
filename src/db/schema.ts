@@ -470,6 +470,8 @@ export const offers = sqliteTable(
     objPartner: text("obj_partner"),
     objTriedBefore: text("obj_tried_before"),
     objDiy: text("obj_diy"),
+    /** The bank's objections this offer answers. The five fixed fields above are the older model, kept readable until moved into the bank. */
+    objectionAssetIds: text("objection_asset_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
     salesPageUrl: text("sales_page_url"),
     paymentLink: text("payment_link"),
     notes: text("notes"),
@@ -605,6 +607,9 @@ export const readinessReviews = sqliteTable("readiness_reviews", {
 
 /** Story / analogy / objection / belief bank. workspaceId null = ships with the template. */
 export const ASSET_TYPES = ["story", "analogy", "objection", "belief", "framework"] as const;
+/** The one belief vocabulary: the proof bank's "belief broken", the webinar's three acts, and an objection's "which belief". "none" is a real answer (decision avoidance is not a belief). */
+export const BELIEF_KEYS = ["vehicle", "internal", "external", "none"] as const;
+export type BeliefKey = (typeof BELIEF_KEYS)[number];
 
 export const libraryAssets = sqliteTable(
   "library_assets",
@@ -622,6 +627,12 @@ export const libraryAssets = sqliteTable(
     proof: text("proof"),
     isExample: integer("is_example", { mode: "boolean" }).notNull().default(false),
     extra: text("extra", { mode: "json" }).$type<Record<string, string | null>>().notNull().default({}),
+    /** Objections only. One objection often has more than one answer: `reframe` is the first, these are the rest. */
+    reframes: text("reframes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Objections only. The real concern behind the words; a reframe aimed at the stated objection rather than this one misses. */
+    underneath: text("underneath"),
+    /** Objections only. Which belief the objection is really about, in the proof bank's vocabulary; null when unmapped, "none" when it is not a belief at all. */
+    belief: text("belief", { enum: BELIEF_KEYS }),
     createdAt: createdAt(),
   },
   (t) => [index("assets_type").on(t.type, t.workspaceId)],
@@ -843,7 +854,7 @@ export const proofs = sqliteTable(
     problemBefore: text("problem_before"),
     shift: text("shift"),
     resultAfter: text("result_after"),
-    beliefBroken: text("belief_broken", { enum: ["vehicle", "internal", "external", "none"] }).notNull().default("none"),
+    beliefBroken: text("belief_broken", { enum: BELIEF_KEYS }).notNull().default("none"),
     shortVersion: text("short_version"),
     longVersion: text("long_version"),
     hook: text("hook"),

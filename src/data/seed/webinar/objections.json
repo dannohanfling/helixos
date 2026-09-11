@@ -9,7 +9,8 @@
   "proof": null,
   "frequency": "Common",
   "stage": "Early-mid call",
-  "universal": true
+  "universal": true,
+  "belief": "vehicle"
  },
  {
   "type": "objection",
@@ -21,7 +22,8 @@
   "proof": null,
   "frequency": "Common",
   "stage": "Mid-call",
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -33,7 +35,8 @@
   "proof": null,
   "frequency": "Occasional",
   "stage": "Late call",
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -45,7 +48,8 @@
   "proof": null,
   "frequency": "Common",
   "stage": "Late call",
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -57,7 +61,8 @@
   "proof": null,
   "frequency": "Common",
   "stage": "Mid-late call",
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -69,7 +74,8 @@
   "proof": null,
   "frequency": "Common",
   "stage": "Early-mid call",
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -81,7 +87,8 @@
   "proof": null,
   "frequency": "Occasional",
   "stage": "Mid-late call",
-  "universal": true
+  "universal": true,
+  "belief": "internal"
  },
  {
   "type": "objection",
@@ -93,7 +100,8 @@
   "proof": null,
   "frequency": "Common",
   "stage": "Mid-call",
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -105,7 +113,8 @@
   "proof": null,
   "frequency": null,
   "stage": null,
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -117,7 +126,8 @@
   "proof": null,
   "frequency": null,
   "stage": null,
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -129,7 +139,8 @@
   "proof": null,
   "frequency": "Constant",
   "stage": "Late call",
-  "universal": true
+  "universal": true,
+  "belief": "none"
  },
  {
   "type": "objection",
@@ -141,7 +152,8 @@
   "proof": "Readiness Review screenshot with verdict 🟩 Presentation-Ready",
   "frequency": null,
   "stage": null,
-  "universal": true
+  "universal": true,
+  "belief": "vehicle"
  },
  {
   "type": "objection",
@@ -153,7 +165,8 @@
   "proof": null,
   "frequency": null,
   "stage": null,
-  "universal": true
+  "universal": true,
+  "belief": "vehicle"
  },
  {
   "type": "objection",
@@ -165,7 +178,8 @@
   "proof": null,
   "frequency": null,
   "stage": null,
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -177,7 +191,8 @@
   "proof": null,
   "frequency": "Common",
   "stage": "Mid-late call",
-  "universal": true
+  "universal": true,
+  "belief": "internal"
  },
  {
   "type": "objection",
@@ -189,7 +204,8 @@
   "proof": null,
   "frequency": "Common",
   "stage": "End of call",
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -201,7 +217,8 @@
   "proof": null,
   "frequency": null,
   "stage": null,
-  "universal": true
+  "universal": true,
+  "belief": "external"
  },
  {
   "type": "objection",
@@ -213,7 +230,8 @@
   "proof": "Screenshot: install checklist finished in 3 sessions",
   "frequency": null,
   "stage": null,
-  "universal": true
+  "universal": true,
+  "belief": null
  },
  {
   "type": "objection",
@@ -225,6 +243,7 @@
   "proof": null,
   "frequency": "Common",
   "stage": "Mid-call",
-  "universal": true
+  "universal": true,
+  "belief": null
  }
 ]

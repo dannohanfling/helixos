@@ -51,6 +51,7 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       howItWorks: opt(formData, "howItWorks"),
       forYouIf: opt(formData, "forYouIf"),
       notForYouIf: opt(formData, "notForYouIf"),
+      objectionAssetIds: formData.getAll("objectionAssetIds").map(String).filter(Boolean),
       objTime: opt(formData, "objTime"),
       objMoney: opt(formData, "objMoney"),
       objPartner: opt(formData, "objPartner"),

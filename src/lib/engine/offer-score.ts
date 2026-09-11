@@ -34,7 +34,7 @@ const hasNumber = (s?: string | null) => /\d/.test(s ?? "");
 const hasTimeframe = (s?: string | null) => /\b(\d+\s*(day|days|week|weeks|month|months|year|years)|90-day|30-day|12-week|6-week|quarter)\b/i.test(s ?? "");
 const hasWithout = (s?: string | null) => /\bwithout\b/i.test(s ?? "");
 
-export function scoreOffer(offer: OfferInput, components: ComponentInput[]): { score: number; checks: Check[]; stackValue: number; multiple: number; verdict: "ready" | "needs_work" | "not_ready" } {
+export function scoreOffer(offer: OfferInput, components: ComponentInput[], objectionsFromBank = 0): { score: number; checks: Check[]; stackValue: number; multiple: number; verdict: "ready" | "needs_work" | "not_ready" } {
   const bonuses = components.filter((c) => c.type === "bonus");
   const cores = components.filter((c) => c.type === "core");
   const stackValue = components.filter((c) => c.type !== "guarantee").reduce((a, c) => a + (c.perceivedValue || 0), 0);
@@ -56,7 +56,8 @@ export function scoreOffer(offer: OfferInput, components: ComponentInput[]): { s
     { key: "one_belief", group: "belief", label: "The ONE belief (domino) is written", weight: 6, pass: filled(offer.oneBelief, 20), fix: "Finish: 'If they believe ___, they buy.' Everything in the webinar serves this line." },
     { key: "guarantee", group: "risk", label: "Guarantee or risk reversal", weight: 6, pass: filled(offer.guarantee, 15), fix: "What happens if it doesn't work? Say it plainly. Risk on you, not them." },
     { key: "why_now", group: "risk", label: "Why now (real urgency or scarcity)", weight: 4, pass: filled(offer.whyNow, 15) || filled(offer.urgency, 15) || filled(offer.scarcity, 15), fix: "Cohort dates, seat caps, bonus deadlines. Real, not manufactured." },
-    { key: "objections", group: "risk", label: "Top 5 objections answered", weight: 6, pass: [offer.objTime, offer.objMoney, offer.objPartner, offer.objTriedBefore, offer.objDiy].filter((o) => filled(o, 15)).length >= 4, fix: "Write your answer to: no time, no money, ask my partner, tried it before, I'll do it myself." },
+    // Answered objections: the bank's records this offer links that carry a reframe, plus any of the older fixed fields still filled. Same threshold, same weight, same group as before.
+    { key: "objections", group: "risk", label: "Top 5 objections answered", weight: 6, pass: objectionsFromBank + [offer.objTime, offer.objMoney, offer.objPartner, offer.objTriedBefore, offer.objDiy].filter((o) => filled(o, 15)).length >= 4, fix: "Write your answer to: no time, no money, ask my partner, tried it before, I'll do it myself." },
     { key: "fit", group: "clarity", label: "'For you if / not for you if' written", weight: 4, pass: filled(offer.forYouIf, 15) && filled(offer.notForYouIf, 15), fix: "Saying who it's NOT for is what makes the right people lean in." },
   ];
   const total = checks.reduce((a, c) => a + c.weight, 0);

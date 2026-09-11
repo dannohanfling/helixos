@@ -5,6 +5,9 @@ import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
 import socratesQuestions from "@/data/seed/socrates/questions.json";
 import researchSeed from "@/data/research-library-seed-v2.json";
+import objectionSeed from "@/data/seed/webinar/objections.json";
+import { and, eq, isNull } from "drizzle-orm";
+import { newId } from "@/lib/ids";
 import { ADMIN_ONBOARDING_KEYS } from "@/lib/engine/pathway";
 import { hashSecret } from "@/lib/crypto";
 
@@ -73,6 +76,14 @@ async function syncLibrary(): Promise<void> {
   for (const s of researchSeed) {
     const row = { name: s.name, authorsSource: s.authorsSource, category: s.category, confidenceLevel: s.confidenceLevel, shortSummary: s.shortSummary, whyItMatters: s.whyItMatters, fifteenSecondScript: s.fifteenSecondScript, thirtySecondReelScript: s.thirtySecondReelScript, clipHook: s.clipHook, supports: s.supports, doi: s.doi, url: s.url, openalexId: s.openalexId, citationQuality: s.citationQuality, verifiedTitle: s.verifiedTitle, verifiedYear: s.verifiedYear, citedByCount: s.citedByCount };
     await db.insert(schema.evidenceShared).values({ id: s.id, ...row }).onConflictDoUpdate({ target: schema.evidenceShared.id, set: row });
+  }
+  // The shared objection set: the template's own entries, matched by name (they have no stable key), inserted where missing
+  // and their belief mapping kept current. A client's own objections have a userId and are never touched.
+  for (const ob of objectionSeed as { name: string; body: string; reframe?: string | null; proof?: string | null; stage?: string | null; objectionType?: string | null; universal?: boolean; belief?: string | null }[]) {
+    const belief = (schema.BELIEF_KEYS as readonly string[]).includes(ob.belief ?? "") ? (ob.belief as schema.BeliefKey) : null;
+    const existing = await db.query.libraryAssets.findFirst({ where: and(eq(schema.libraryAssets.type, "objection"), isNull(schema.libraryAssets.workspaceId), isNull(schema.libraryAssets.userId), eq(schema.libraryAssets.name, ob.name)) });
+    if (existing) await db.update(schema.libraryAssets).set({ belief }).where(eq(schema.libraryAssets.id, existing.id));
+    else await db.insert(schema.libraryAssets).values({ id: newId(), type: "objection", name: ob.name, body: ob.body, reframe: ob.reframe ?? null, proof: ob.proof ?? null, useWhen: ob.stage ?? null, tag: ob.objectionType ?? null, isExample: !ob.universal, belief });
   }
   for (const q of socratesQuestions) {
     const row = { key: q.id, workspaceId: null, userId: null, question: q.question, clarityStage: q.clarityStage, nepqCategory: q.nepqCategory, source: q.source, scriptTypes: q.scriptTypes };

@@ -89,6 +89,24 @@ async function main() {
     await page.screenshot({ path: "screenshots/s02-questions.png", fullPage: true });
     console.log("✓ question library: 45, filters by beat and script type, own question added");
 
+    // Objections: one record. The shared set is Evolve Omega's with its belief mapping; a client's own carries what is underneath,
+    // which belief, and several reframes; the method is not shown until its words exist.
+    await page.goto(`${base}/socrates/objections`);
+    await expectText(page, "shared · Evolve Omega", "shared objections label");
+    if ((await page.locator('[data-testid="shared-objection"]').count()) < 19) throw new Error("the shared starter set must list the template's objections");
+    if ((await page.locator('[data-testid="shared-objection"][data-name="I\'ve tried this kind of thing before"]').getAttribute("data-belief")) !== "vehicle") throw new Error("the seed's belief mapping must show on the shared set");
+    if (await page.locator('[data-testid="objection-method"]').count()) throw new Error("the method must not show until every step has Danno's words");
+    await fillExact(page, '[data-testid="new-objection-name"]', "I need to run it past my business partner");
+    await fillExact(page, '[data-testid="new-objection-underneath"]', "They don't want to be the one who decided alone.");
+    await page.selectOption('[data-testid="new-objection-belief"]', "none");
+    await page.locator('[data-testid="new-objection-reframe"]').nth(0).fill("Bring them to the call.");
+    await page.locator('[data-testid="new-objection-reframe"]').nth(1).fill("What would they need to hear?");
+    await submit(page, 'button:has-text("Save to my objections")');
+    const own = page.locator('[data-testid="own-objections"] [data-testid="objection"]');
+    if ((await own.count()) !== 1 || (await own.first().getAttribute("data-belief")) !== "none") throw new Error("the client's own objection should be saved with belief none");
+    await expectText(page, "2 reframes", "several reframes on one record");
+    console.log("✓ objections: shared set with belief mapping, own record with underneath, belief and two reframes, method held for words");
+
     // Reframes: four groups, 3 / 3 / 3 / 2, the Hormozi credit back on Shoulder to Shoulder
     await page.goto(`${base}/socrates/reframes`);
     await expectText(page, "Leaky Pipe", "reframes");

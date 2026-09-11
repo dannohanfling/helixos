@@ -119,7 +119,7 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
             </fieldset>
             {s.scriptType === "Objection" && current.key === REFRAME_BEAT ? (
               <fieldset data-testid="beat-reframes">
-                <legend className="label">Reframes, by objection <Link href="/socrates/reframes" className="ml-1 font-normal underline">full library</Link></legend>
+                <legend className="label">Reframes, by objection <Link href="/socrates/reframes" className="ml-1 font-normal underline">full library</Link> · <Link href="/socrates/objections" className="font-normal underline" data-testid="beat-objections-link">your objections</Link></legend>
                 <div className="mt-1 space-y-3">
                   {reframesByGroup().map((g) => (
                     <div key={g.group}>

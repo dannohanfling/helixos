@@ -139,6 +139,14 @@ engine, which is the shape the 1800 bug took. The ladder body carries Facebook p
 page's: the page's "direct CTA" contradicts the method, where the CTA lives in the rungs and never in the body, and the
 ladder is the more specific layer, so it decides (the comment on `sectionTone` says so).
 
+Objections are one record: the asset bank's `objection` type, extended in place with what is underneath, which belief (the
+proof bank's own vocabulary, `BELIEF_KEYS`, where "none" is a real answer) and several reframes. The Objections page in
+Socrates Domain is a view over it, not a store; the offer wizard's step 6 ticks the bank's objections the offer answers and
+the optimiser counts those with a reframe alongside any of its five older fixed answers, which can each be moved into the bank
+with one click. The shared starter set is the template's own entries, upserted by name on every migrate with the belief
+mapping. The handling method is a sequence whose words are Danno's and arrive as data (`objection-method.json`); it is not
+shown until every step has them. Where an objection is already handled (a webinar section, an offer) is derived, never stored.
+
 A ladder's Threads chain is six to eight posts, and the composer schedules one post per target, so the chain is a copy-only
 target there: shown, counted in posts, copyable, never scheduled or polished as one post, with the reason beside it. Sending
 the chain as several drafts is a separate decision about how the composer models a multi-post target.

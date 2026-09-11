@@ -82,8 +82,8 @@ export async function seedLibrary(): Promise<void> {
     for (const an of analogies as (A & { concept?: string | null; emotion?: string | null })[]) {
       rows.push({ id: newId(), type: "analogy", name: an.name, body: an.body, summary: an.concept ?? null, useWhen: an.useWhen ?? null, tag: an.emotion ?? null, isExample: !an.universal });
     }
-    for (const ob of objections as (A & { objectionType?: string | null; stage?: string | null; storyResponse?: string | null })[]) {
-      rows.push({ id: newId(), type: "objection", name: ob.name, body: ob.body, reframe: ob.reframe ?? null, proof: ob.proof ?? null, useWhen: ob.stage ?? null, tag: ob.objectionType ?? null, isExample: !ob.universal });
+    for (const ob of objections as (A & { objectionType?: string | null; stage?: string | null; storyResponse?: string | null; belief?: string | null })[]) {
+      rows.push({ id: newId(), type: "objection", name: ob.name, body: ob.body, reframe: ob.reframe ?? null, proof: ob.proof ?? null, useWhen: ob.stage ?? null, tag: ob.objectionType ?? null, isExample: !ob.universal, belief: (schema.BELIEF_KEYS as readonly string[]).includes(ob.belief ?? "") ? (ob.belief as schema.BeliefKey) : null });
     }
     for (const be of beliefsSeed as (A & { beliefType?: string | null; howWeHandleIt?: string | null })[]) {
       rows.push({ id: newId(), type: "belief", name: be.name, body: be.body, reframe: be.howWeHandleIt ?? null, proof: be.proof ?? null, tag: be.beliefType ?? null, isExample: !be.universal });

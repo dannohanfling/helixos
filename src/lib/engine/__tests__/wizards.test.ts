@@ -34,6 +34,11 @@ const stack = [
 describe("offer score", () => {
   it("scores a complete offer as ready", () => {
     const r = scoreOffer(strongOffer, stack);
+    // Objections answered from the bank count the same as the older fixed fields, toward the same threshold
+    const noFields = { ...strongOffer, objTime: null, objMoney: null, objPartner: null, objTriedBefore: null, objDiy: null };
+    expect(scoreOffer(noFields, stack, 0).checks.find((c) => c.key === "objections")?.pass).toBe(false);
+    expect(scoreOffer(noFields, stack, 4).checks.find((c) => c.key === "objections")?.pass).toBe(true);
+    expect(scoreOffer({ ...noFields, objTime: strongOffer.objTime }, stack, 3).checks.find((c) => c.key === "objections")?.pass).toBe(true);
     expect(r.score).toBeGreaterThanOrEqual(80);
     expect(r.verdict).toBe("ready");
     expect(r.multiple).toBeCloseTo(7800 / 1500, 2);

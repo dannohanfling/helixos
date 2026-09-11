@@ -9,6 +9,8 @@ import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { offerOnePager, scoreOffer } from "@/lib/engine/offer-score";
 import { assetsFor } from "@/lib/queries/library";
+import { moveLegacyObjectionAction } from "@/lib/actions/objections";
+import { LEGACY_OFFER_OBJECTIONS, isSharedObjection, reframesOf } from "@/lib/engine/objections";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
   return (
@@ -30,7 +32,10 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
     assetsFor(v.workspace.id, v.user.id, "objection"),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
-  const r = scoreOffer(offer, components);
+  // The optimiser counts the bank's objections this offer links that carry a reframe, plus any older fixed answers still filled.
+  const answered = objections.filter((o) => offer.objectionAssetIds.includes(o.id) && reframesOf(o).length > 0).length;
+  const r = scoreOffer(offer, components, answered);
+  const legacyFilled = LEGACY_OFFER_OBJECTIONS.filter((l) => (offer[l.field] ?? "").trim());
   const onePager = offerOnePager(offer, components);
   const groups = ["clarity", "belief", "value", "risk"] as const;
 
@@ -142,41 +147,59 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
                 <T name="notForYouIf" label="This is not for you if…" value={offer.notForYouIf} />
               </div>
             </Card>
-            <Card id="objections" title="6 · Top 5 objections, answered">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <T name="objTime" label="“I don't have time.”" value={offer.objTime} />
-                <T name="objMoney" label="“I don't have the money.”" value={offer.objMoney} />
-                <T name="objPartner" label="“I need to ask my partner.”" value={offer.objPartner} />
-                <T name="objTriedBefore" label="“I've tried this before.”" value={offer.objTriedBefore} />
-                <T name="objDiy" label="“I'll do it myself.”" value={offer.objDiy} />
-                <div>
-                  <div className="label">Steal a reframe</div>
-                  <ul className="max-h-48 space-y-1 overflow-y-auto text-xs">
-                    {objections.slice(0, 12).map((o) => (
-                      <li key={o.id} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
-                        <span>
-                          <span className="font-semibold">{o.name}</span>
-                          {o.reframe ? <span className="block text-ink-2 line-clamp-2">{o.reframe}</span> : null}
+            <Card id="objections" title="6 · Top 5 objections, answered" action={<span className="text-xs text-ink-3" data-testid="objections-answered">{answered + legacyFilled.length} answered</span>}>
+              <p className="mb-2 text-xs text-ink-2">Your objections live in one place. Tick the ones this offer answers; the answer is the reframe on the record. Add or edit them on <Link href="/socrates/objections" className="underline">Objections</Link>.</p>
+              <ul className="max-h-72 space-y-1 overflow-y-auto text-sm" data-testid="offer-objections">
+                {objections.map((o) => {
+                  const rs = reframesOf(o);
+                  return (
+                    <li key={o.id} className="rounded-lg bg-surface-2 p-2">
+                      <label className="flex items-start gap-2">
+                        <input type="checkbox" name="objectionAssetIds" value={o.id} defaultChecked={offer.objectionAssetIds.includes(o.id)} className="mt-1" data-testid="offer-objection" data-has-reframe={rs.length ? "1" : "0"} />
+                        <span className="min-w-0 flex-1">
+                          <span className="font-medium">{o.name}</span>
+                          {isSharedObjection(o) ? <span className="text-xs text-ink-3"> · shared, Evolve Omega</span> : null}
+                          {rs.length ? <span className="block text-xs text-ink-2 line-clamp-2">{rs[0]}</span> : <span className="block text-xs text-warn">No reframe yet; it does not count until it has one.</span>}
                         </span>
-                        {o.reframe ? <CopyButton text={o.reframe} label="Copy" className="btn btn-ghost btn-xs" /> : null}
+                        {rs.length ? <CopyButton text={rs.join("\n\n")} label="Copy" className="btn btn-ghost btn-xs" /> : null}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              {legacyFilled.length ? (
+                <div className="mt-3 rounded-lg border p-3 text-xs" data-testid="legacy-objections">
+                  <div className="font-semibold">Answered here before the bank existed</div>
+                  <p className="mb-2 text-ink-3">Still counted. Move each into your objections so there is one place to answer it.</p>
+                  <ul className="space-y-2">
+                    {legacyFilled.map((l) => (
+                      <li key={l.field} className="flex items-start justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="font-medium">“{l.name}”</span>
+                          <span className="block text-ink-2">{offer[l.field]}</span>
+                        </span>
+                        {/* Same form as the offer (a nested form would be dropped by the browser); this button posts to the move action instead. */}
+                        <button className="btn btn-soft btn-xs" type="submit" formAction={moveLegacyObjectionAction.bind(null, l.field)} formNoValidate data-testid={`move-${l.field}`}>
+                          Move to my objections
+                        </button>
                       </li>
                     ))}
                   </ul>
-                  {proofs.length ? (
-                    <>
-                      <div className="label mt-3">Answer with proof</div>
-                      <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
-                        {proofs.map((pr) => (
-                          <li key={pr.id} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
-                            <span className="line-clamp-2">{pr.shortVersion ?? pr.name}</span>
-                            <CopyButton text={pr.shortVersion ?? pr.name} label="Copy" className="btn btn-ghost btn-xs" />
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : null}
                 </div>
-              </div>
+              ) : null}
+              {proofs.length ? (
+                <>
+                  <div className="label mt-3">Answer with proof</div>
+                  <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
+                    {proofs.map((pr) => (
+                      <li key={pr.id} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
+                        <span className="line-clamp-2">{pr.shortVersion ?? pr.name}</span>
+                        <CopyButton text={pr.shortVersion ?? pr.name} label="Copy" className="btn btn-ghost btn-xs" />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
             </Card>
             <Card title="Links">
               <div className="grid gap-3 sm:grid-cols-2">

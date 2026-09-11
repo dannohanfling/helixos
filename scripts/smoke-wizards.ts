@@ -95,6 +95,14 @@ async function main() {
   await expectText(page, "90-Day Reset", "offers");
   await page.click('a:has-text("90-Day Reset")');
   await page.waitForURL(/\/offers\//);
+  // Step 6 reads the bank: the older fixed answers still count and can move into it; a ticked bank objection with a reframe counts too
+  const answeredBefore = Number((await page.locator('[data-testid="objections-answered"]').innerText()).split(" ")[0]);
+  if (!(await page.locator('[data-testid="legacy-objections"]').count())) throw new Error("the example offer's older answers should be shown as still counted");
+  await submit(page, '[data-testid="move-objTime"]');
+  const answeredAfter = Number((await page.locator('[data-testid="objections-answered"]').innerText()).split(" ")[0]);
+  if (answeredAfter !== answeredBefore) throw new Error(`moving an answer into the bank must not change the count (${answeredBefore} → ${answeredAfter})`);
+  if (await page.locator('[data-testid="move-objTime"]').count()) throw new Error("a moved answer should leave the older field");
+  console.log(`✓ offer step 6 reads the bank; a legacy answer moved in without changing the optimiser's count (${answeredAfter})`);
   await expectText(page, "Optimizer", "offer wizard");
   await shot(page, "w06-offer-wizard");
   await page.fill('form:has(input[name="offerId"]) input[name="name"]', "Weekend & Wine Playbook v2");

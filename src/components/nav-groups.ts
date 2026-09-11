@@ -33,7 +33,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/socrates/foundations", label: "Foundations", icon: "🧭", hint: "7 lessons" },
       { href: "/socrates/questions", label: "Questions", icon: "❓", hint: "library" },
-      { href: "/socrates/reframes", label: "Reframes", icon: "🔁", hint: "objections" },
+      { href: "/socrates/reframes", label: "Reframes", icon: "🔁", hint: "the four groups" },
+      { href: "/socrates/objections", label: "Objections", icon: "🧱", hint: "one record" },
       { href: "/socrates/scripts", label: "Scripts", icon: "📝", hint: "wizard" },
     ],
   },
