@@ -3,7 +3,9 @@ import type { NextConfig } from "next";
 const dev = process.env.NODE_ENV !== "production";
 // A lead magnet file goes from the browser straight to the bucket, so the bucket's API origin is the one cross-origin
 // connection the page may open. Vercel Blob's API lives under vercel.com; locally the SDK is pointed at scripts/mock-blob.ts.
-const blobApiOrigin = new URL(process.env.NEXT_PUBLIC_VERCEL_BLOB_API_URL || "https://vercel.com/api/blob").origin;
+// Scoped to the API's own path, not the whole host: a CSP source with a trailing slash matches that path prefix only.
+const blobApi = new URL(process.env.NEXT_PUBLIC_VERCEL_BLOB_API_URL || "https://vercel.com/api/blob");
+const blobApiSource = `${blobApi.origin}${blobApi.pathname.replace(/\/?$/, "/")}`;
 
 /**
  * Content Security Policy. Next.js needs inline scripts and styles for hydration and Tailwind's runtime classes, so those stay
@@ -17,7 +19,7 @@ const csp = [
   "img-src 'self' data: blob: https:",
   "media-src 'self' https:",
   "font-src 'self' data:",
-  `connect-src 'self' ${blobApiOrigin}${dev ? " ws: wss:" : ""}`,
+  `connect-src 'self' ${blobApiSource}${dev ? " ws: wss:" : ""}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

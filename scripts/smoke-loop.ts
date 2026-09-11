@@ -113,10 +113,43 @@ async function main() {
     await page.goto(`${base}/conversations?new=1`);
     await page.fill('input[name="name"]', "Prefill Lead");
     await submit(page, 'form:has(input[name="name"]) button[type="submit"]');
+    const prefillTimes: Record<string, string> = { contactSubmitted: new Date().toISOString() };
     await page.goto(`${base}/today`);
+    prefillTimes.todayLoaded = new Date().toISOString();
     const early = page.locator('[data-testid="close-early"] > summary');
-    if (await early.isVisible()) await early.click();
-    await expectText(page, "Filled in from what you logged today", "close prefill");
+    const earlyVisible = await early.isVisible();
+    if (earlyVisible) await early.click();
+    prefillTimes.summaryClicked = new Date().toISOString();
+    // This step has failed intermittently with nothing to go on. On failure, everything that could explain it is written to a
+    // file under screenshots/logs (which the gate keeps) and printed, so the next occurrence is diagnosable rather than re-run.
+    await expectText(page, "Filled in from what you logged today", "close prefill").catch(async (e: Error) => {
+      prefillTimes.assertionFailed = new Date().toISOString();
+      const { todayActivity } = await import("@/lib/queries/daily");
+      const { todayInTz, hourInTz } = await import("@/lib/dates");
+      const membership = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) });
+      const tz = membership?.timezone || "UTC";
+      const prefill = page.locator('[data-testid="close-prefill"]');
+      const details = page.locator('[data-testid="close-early"]');
+      const diag = {
+        step: "close prefill",
+        expected: "Filled in from what you logged today",
+        actual: (await prefill.count()) ? await prefill.first().innerText() : "(no close-prefill element on the page)",
+        closeCard: (await page.locator("#close").count()) ? (await page.locator("#close").innerText()).replace(/\s+/g, " ").slice(0, 600) : "(no #close card)",
+        earlyDisclosure: { presentBeforeClick: earlyVisible, presentNow: (await details.count()) > 0, openNow: (await details.count()) ? await details.evaluate((el) => (el as HTMLDetailsElement).open) : null },
+        url: page.url(),
+        times: { ...prefillTimes, loadToAssertMs: Date.parse(prefillTimes.assertionFailed) - Date.parse(prefillTimes.todayLoaded), submitToAssertMs: Date.parse(prefillTimes.assertionFailed) - Date.parse(prefillTimes.contactSubmitted) },
+        member: { timezone: tz, today: todayInTz(tz), hour: hourInTz(tz), serverNow: new Date().toISOString() },
+        activity: await todayActivity(membership!.workspaceId, maya.id, todayInTz(tz)),
+        contactsToday: (await db.query.contacts.findMany({ where: eq(schema.contacts.userId, maya.id) })).filter((c) => c.createdAt.startsWith(todayInTz(tz))).map((c) => ({ name: c.name, createdAt: c.createdAt })),
+        screenshot: "screenshots/fail-close-prefill.png",
+      };
+      const { writeFileSync, mkdirSync } = await import("node:fs");
+      mkdirSync("screenshots/logs", { recursive: true });
+      const file = `screenshots/logs/close-prefill-failure-${prefillTimes.assertionFailed.replace(/[:.]/g, "-")}.json`;
+      writeFileSync(file, JSON.stringify(diag, null, 2));
+      console.error(`[close prefill] diagnostics written to ${file}\n${JSON.stringify(diag, null, 2)}`);
+      throw e;
+    });
     const dmsPrefill = await page.locator('input[name="dmsStarted"]').inputValue();
     if (Number(dmsPrefill) < 1) throw new Error(`dmsStarted should be pre-filled, got ${dmsPrefill}`);
     console.log(`✓ close pre-filled (DMs started = ${dmsPrefill})`);
