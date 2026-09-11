@@ -159,7 +159,8 @@ export async function buildMagnetPdfAction(formData: FormData): Promise<void> {
 }
 
 const UPLOAD_TYPES = ["application/pdf", "image/png", "image/jpeg", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/zip"];
-const UPLOAD_MAX = 6 * 1024 * 1024;
+/** Under Vercel's request body cap for a serverless function, which is where a server action's upload lands. */
+const UPLOAD_MAX = 4 * 1024 * 1024;
 
 /** A file made elsewhere (Canva, a designer), served at its own public URL. Same writer, same prefix. */
 export async function uploadMagnetFileAction(formData: FormData): Promise<void> {
@@ -167,7 +168,7 @@ export async function uploadMagnetFileAction(formData: FormData): Promise<void> 
   const m = await own(str(formData, "id"), userId);
   const file = formData.get("file");
   if (!(file instanceof File) || !file.size) redirect(`/magnets/${m.id}?error=${encodeURIComponent("Choose a file first.")}`);
-  if (file.size > UPLOAD_MAX) redirect(`/magnets/${m.id}?error=${encodeURIComponent("That file is over 6 MB. Export it smaller, or link to it from the page instead.")}`);
+  if (file.size > UPLOAD_MAX) redirect(`/magnets/${m.id}?error=${encodeURIComponent("That file is over 4 MB. Export it smaller, or link to it from the page instead.")}`);
   if (!UPLOAD_TYPES.includes(file.type)) redirect(`/magnets/${m.id}?error=${encodeURIComponent("That file type can't be served. PDF, PNG, JPEG, plain text, Word or ZIP.")}`);
   const stored = await putPublicMagnet(workspaceId, m.slug, file.name, Buffer.from(await file.arrayBuffer()), file.type);
   if (m.fileKey) await deleteObject(m.fileKey);

@@ -200,7 +200,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
             </form>
           </Card>
           <Card title="Upload a file">
-            <p className="text-xs text-ink-2">Made in Canva or by a designer. Served at its own public address. Up to 6 MB.</p>
+            <p className="text-xs text-ink-2">Made in Canva or by a designer. Served at its own public address. Up to 4 MB.</p>
             <form action={uploadMagnetFileAction} className="mt-2 flex flex-wrap items-center gap-2" encType="multipart/form-data">
               <input type="hidden" name="id" value={m.id} />
               <input className="text-sm" type="file" name="file" data-testid="magnet-file" />
