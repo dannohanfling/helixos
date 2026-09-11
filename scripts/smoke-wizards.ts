@@ -53,6 +53,28 @@ async function main() {
   await expectText(page, "drafted", "section saved");
   await page.goto(page.url().split("?")[0] + "?step=beliefs");
   await shot(page, "w03-webinar-beliefs");
+  // Belief breaks: a confirmed study can be picked, the search opens with the belief's text as the claim, and a typed proof
+  // is gated by the same permission tick as the bank; ticked and saved to the bank, it lands there as a draft
+  const beliefsUrl = page.url();
+  if ((await page.locator('[data-testid="belief-evidence-vehicle"] option').count()) < 2) throw new Error("the belief step must offer the shared starter shelf's studies");
+  const findHref = await page.locator('[data-testid="find-research-vehicle"]').getAttribute("href");
+  if (!findHref?.startsWith("/evidence?claim=")) throw new Error(`find research must open the search with the claim pre-filled, got ${findHref}`);
+  await page.fill('[data-testid="belief-freetext-vehicle"]', "Priya N. went from 2 to 9 discovery calls a week in her first month.");
+  await submit(page, 'button:has-text("Save beliefs"), button:has-text("Save and next"), form:has([data-testid="belief-freetext-vehicle"]) button[type="submit"]');
+  await page.goto(beliefsUrl);
+  if (!(await page.locator('[data-testid="belief-needs-tick-vehicle"]').count())) throw new Error("a typed proof without the tick must be marked unusable");
+  await page.fill('[data-testid="belief-who-vehicle"]', "Priya N.");
+  await page.check('[data-testid="belief-permission-vehicle"] input');
+  await page.check('form:has([data-testid="belief-freetext-vehicle"]) input[name="vehicle_toBank"]');
+  await submit(page, 'form:has([data-testid="belief-freetext-vehicle"]) button[type="submit"]');
+  await expectText(page, "Saved to your Proof Bank as a draft", "bank contribution");
+  await page.goto(beliefsUrl);
+  if (await page.locator('[data-testid="belief-needs-tick-vehicle"]').count()) throw new Error("with the tick recorded the typed proof is usable");
+  await expectText(page, "Priya N. has given me permission", "tick wording carries the name");
+  await page.goto(`${base}/proof`);
+  await expectText(page, "Priya N.", "the contribution is in the bank");
+  console.log("✓ belief breaks: evidence offered, search pre-filled, typed proof gated by tick two and routed to the bank as a draft");
+  await page.goto(beliefsUrl);
   await page.goto(page.url().split("?")[0] + "?step=deck");
   await expectText(page, "Deck outline", "deck");
   const deckHref = await page.locator('[data-testid="deck-pptx"]').getAttribute("href");

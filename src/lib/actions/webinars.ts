@@ -7,12 +7,13 @@ import { WEBINAR_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, readinessScore } from "@/lib/engine/webinar";
+import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, freeTextProofUsable, readinessScore } from "@/lib/engine/webinar";
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
-import { evidenceLines } from "@/lib/engine/evidence";
+import { evidenceLines, insertText } from "@/lib/engine/evidence";
+import { essenceFor } from "@/lib/queries/essence";
 import { citableEvidence } from "@/lib/queries/evidence";
 
 async function own(webinarId: string, userId: string) {
@@ -57,17 +58,41 @@ export async function updateWebinarFoundationAction(formData: FormData): Promise
 }
 
 export async function updateWebinarBeliefsAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { workspaceId, userId } = await ctx();
   const id = str(formData, "id");
   await own(id, userId);
+  const existing = await db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) });
+  let saved = 0;
   for (const type of ["vehicle", "internal", "external"] as const) {
+    const was = existing.find((b) => b.type === type);
+    const proof = opt(formData, `${type}_proof`);
+    const who = opt(formData, `${type}_proofWho`);
+    const ticked = formData.get(`${type}_permission`) === "on";
+    const changed = (proof ?? "") !== (was?.proof ?? "");
+    // Tick two for the free-text proof: recorded when ticked with a name; cleared when the text changes without a fresh tick.
+    const permission = proof && ticked && who ? { proofPermissionAt: nowIso(), proofPermissionBy: userId } : changed || !proof ? { proofPermissionAt: null, proofPermissionBy: null } : {};
     await db
       .update(schema.webinarBeliefs)
-      .set({ fromBelief: opt(formData, `${type}_from`), toBelief: opt(formData, `${type}_to`), proof: opt(formData, `${type}_proof`), proofId: opt(formData, `${type}_proofId`), storyAssetId: opt(formData, `${type}_story`) })
+      .set({
+        fromBelief: opt(formData, `${type}_from`),
+        toBelief: opt(formData, `${type}_to`),
+        proof,
+        proofWho: who,
+        proofChangedAt: changed ? nowIso() : was?.proofChangedAt ?? null,
+        ...permission,
+        proofId: opt(formData, `${type}_proofId`),
+        storyAssetId: opt(formData, `${type}_story`),
+        evidenceId: opt(formData, `${type}_evidence`),
+      })
       .where(and(eq(schema.webinarBeliefs.webinarId, id), eq(schema.webinarBeliefs.type, type)));
+    // "Add this to my Proof Bank": a draft with the tick already recorded, approved on the proof page like every other proof, never here.
+    if (proof && who && ticked && formData.get(`${type}_toBank`) === "on") {
+      await db.insert(schema.proofs).values({ id: newId(), workspaceId, userId, name: `${who}: ${proof.slice(0, 60)}`, type: "result", who, resultAfter: proof, longVersion: proof, beliefBroken: type, status: "draft", permissionAt: nowIso(), permissionBy: userId });
+      saved++;
+    }
   }
   refresh();
-  redirect(`/webinars/${id}?step=script`);
+  redirect(`/webinars/${id}?step=script${saved ? `&toBank=${saved}` : ""}`);
 }
 
 export async function updateSectionAction(formData: FormData): Promise<void> {
@@ -110,9 +135,18 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   const belief = beliefs.find((b) => b.type === tpl.act);
   // The picked proof is an approved row of the bank, the same rows the ladder reads; a draft can never get here.
   const picked = belief?.proofId ? await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, belief.proofId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }) : null;
-  const evidence = evidenceLines(await citableEvidence(userId));
+  const citable = await citableEvidence(userId);
+  const evidence = evidenceLines(citable);
   const evidenceLine = evidence.length ? `Verified research on the coach's shelf, each line a claim and its citation to be used together, and the only studies that may be cited:\n${evidence.join("\n")}` : "No verified research is on the coach's shelf: cite no study; write [EVIDENCE PLACEHOLDER] where one would help.";
-  const proofLine = picked ? `Approved proof, use it verbatim with first name and last initial: ${picked.who ?? picked.name}: "${picked.longVersion ?? picked.shortVersion ?? picked.resultAfter ?? ""}"` : `Proof: ${belief?.proof ?? ""}`;
+  // The study picked for this act, confirmed by definition (only citable studies are offered); the story, from the bank or the client's Essence.
+  const pickedStudy = belief?.evidenceId ? citable.find((e) => (e.source === "shared" ? `shared:${e.id}` : e.id) === belief.evidenceId) : null;
+  const studyLine = pickedStudy ? `Evidence for this act, claim and citation together: ${insertText(pickedStudy)}` : "";
+  const essenceStories = (await essenceFor(workspaceId, userId)).representative_stories?.stories as { name: string; summary: string; when_to_use: string }[] | undefined;
+  const essenceStory = belief?.storyAssetId?.startsWith("essence:") ? essenceStories?.[Number(belief.storyAssetId.slice(8))] : null;
+  const storyLine = essenceStory ? `The coach's own story that carries this act (from their Essence): ${essenceStory.name}. ${essenceStory.summary}` : "";
+  // A free-text proof reaches the script only with tick two, or when written before the tick existed.
+  const freeText = belief && freeTextProofUsable(belief) ? belief.proof : null;
+  const proofLine = picked ? `Approved proof, use it verbatim with first name and last initial: ${picked.who ?? picked.name}: "${picked.longVersion ?? picked.shortVersion ?? picked.resultAfter ?? ""}"` : freeText ? `Proof${belief?.proofWho ? ` (${belief.proofWho})` : ""}: ${freeText}` : "No usable proof for this act: write [PROOF PLACEHOLDER] where one belongs. Never invent one.";
   let text: string | null = null;
   if (str(formData, "mode") !== "example") {
     text = await draft(
@@ -126,6 +160,8 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
         `Desired result: ${w.desiredResult ?? "(not set)"}`,
         belief ? `Belief shift for this act: from "${belief.fromBelief ?? ""}" to "${belief.toBelief ?? ""}". ${proofLine}` : "",
         evidenceLine,
+        studyLine,
+        storyLine,
         `Act: ${act.name}. Purpose: ${act.purpose}`,
         `Section: ${tpl.name}. Coaching: ${tpl.prompt}`,
         asset ? `Use this ${asset.type} from the library, adapted to the audience:\n${asset.body}` : "",

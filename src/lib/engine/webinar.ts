@@ -113,6 +113,15 @@ export function nextStep(progress: Record<StepKey, number>): StepKey {
 }
 
 /** Derive a slide outline from the sections. One idea per slide. */
+/**
+ * A free-text proof is usable in a script only with tick two recorded, or when it was written before the tick existed
+ * (grandfathered, like the bank's early approvals). Nothing typed since then reaches a script without the tick.
+ */
+export function freeTextProofUsable(b: { proof: string | null; proofPermissionAt: string | null; proofChangedAt: string | null }): boolean {
+  if (!(b.proof ?? "").trim()) return false;
+  return Boolean(b.proofPermissionAt) || !b.proofChangedAt;
+}
+
 export function deckOutline(sections: { order: number; act: ActKey; name: string; keyPoints: string | null; script: string | null }[]) {
   const slides: { n: number; section: string; act: ActKey; headline: string; body: string; visual: string }[] = [];
   let n = 1;

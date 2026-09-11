@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDateTime } from "@/lib/dates";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
@@ -7,7 +8,9 @@ import { hasAiKey } from "@/lib/ai";
 import { deleteWebinarAction, draftSectionAction, linkOfferAction, saveReadinessAction, updateRunAction, updateSectionAction, updateWebinarBeliefsAction, updateWebinarFoundationAction } from "@/lib/actions/webinars";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/components/ui";
-import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, STEPS, WIZARD_STAGES, deckOutline, nextStep, readinessScore, webinarProgress, type StepKey } from "@/lib/engine/webinar";
+import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, STEPS, WIZARD_STAGES, deckOutline, freeTextProofUsable, nextStep, readinessScore, webinarProgress, type StepKey } from "@/lib/engine/webinar";
+import { essenceFor } from "@/lib/queries/essence";
+import type { Story } from "@/lib/engine/essence";
 import { assetsFor } from "@/lib/queries/library";
 import { citableEvidence } from "@/lib/queries/evidence";
 import { insertText } from "@/lib/engine/evidence";
@@ -17,14 +20,14 @@ import { AiPromise } from "@/components/ai-promise";
 
 const ACT_ICON: Record<string, string> = { opening: "🎬", vehicle: "🎯", internal: "💪", external: "🌍", closing: "🎭" };
 
-export default async function WebinarWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ step?: string; section?: string; act?: string; stripped?: string }> }) {
+export default async function WebinarWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ step?: string; section?: string; act?: string; stripped?: string; toBank?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
   const ai = await hasAiKey();
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) notFound();
-  const [sections, beliefs, reviews, offers, assets, proofs, evidence] = await Promise.all([
+  const [sections, beliefs, reviews, offers, assets, proofs, evidence, essence] = await Promise.all([
     db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, id), orderBy: asc(schema.webinarSections.order) }),
     db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) }),
     db.query.readinessReviews.findMany({ where: eq(schema.readinessReviews.webinarId, id), orderBy: desc(schema.readinessReviews.createdAt) }),
@@ -32,7 +35,9 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
     assetsFor(v.workspace.id, v.user.id),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
     citableEvidence(v.user.id),
+    essenceFor(v.workspace.id, v.user.id),
   ]);
+  const essenceStories = ((essence.representative_stories?.stories as Story[] | undefined) ?? []).filter((st) => st.name || st.summary);
   const review = reviews[0] ?? null;
   const progress = webinarProgress(w, sections, beliefs, review);
   const step = (STEPS.find((s) => s.key === sp.step)?.key ?? nextStep(progress.steps)) as StepKey;
@@ -167,6 +172,11 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
         </div>
       ) : null}
 
+      {sp.toBank ? (
+        <p className="mb-4 rounded-lg bg-good-soft p-3 text-sm" data-testid="to-bank-notice" role="status">
+          Saved to your Proof Bank as a draft. Approve it in the <Link href="/proof" className="underline">Proof Bank</Link> and it becomes a pick here and everywhere else.
+        </p>
+      ) : null}
       {step === "beliefs" ? (
         <form action={updateWebinarBeliefsAction} className="space-y-4">
           <input type="hidden" name="id" value={w.id} />
@@ -195,12 +205,51 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                         ))}
                       </select>
                     </Field>
-                    <Field label="Or proof you'll describe" hint="Only for proof that isn't in the bank yet.">
-                      <textarea className="field" name={`${type}_proof`} defaultValue={b?.proof ?? ""} placeholder="Data, a screenshot, a client result." />
+                    <Field label="Or proof you'll describe" hint="Only for proof that isn't in the bank yet. Someone else's result needs their permission, the same tick the bank asks for.">
+                      <textarea className="field" name={`${type}_proof`} defaultValue={b?.proof ?? ""} placeholder="Data, a screenshot, a client result." data-testid={`belief-freetext-${type}`} />
                     </Field>
-                    <Field label="Story that carries it">
+                    {b && (b.proof ?? "").trim() && !b.proofPermissionAt && !b.proofChangedAt ? (
+                      <p className="text-xs text-ink-3" data-testid={`belief-grandfathered-${type}`}>Written before the permission tick existed. It stays usable; the tick applies to anything you change from now on.</p>
+                    ) : null}
+                    {b && (b.proof ?? "").trim() && !freeTextProofUsable(b) ? (
+                      <p className="rounded-lg bg-warn-soft p-2 text-xs" data-testid={`belief-needs-tick-${type}`}>Not used in the script until you tick the permission line below.</p>
+                    ) : null}
+                    <div className="space-y-2 rounded-lg border p-2">
+                      <Field label="Whose result is it" hint="First name and last initial is enough.">
+                        <input className="field" name={`${type}_proofWho`} defaultValue={b?.proofWho ?? ""} data-testid={`belief-who-${type}`} />
+                      </Field>
+                      <label className="flex items-start gap-2 text-xs" data-testid={`belief-permission-${type}`}>
+                        <input type="checkbox" name={`${type}_permission`} className="mt-0.5" defaultChecked={Boolean(b?.proofPermissionAt)} />
+                        <span>{b?.proofWho || "This person"} has given me permission to use what they said here in my marketing.</span>
+                      </label>
+                      {b?.proofPermissionAt ? <p className="text-[11px] text-ink-3">Ticked {formatDateTime(b.proofPermissionAt, v.tz)}.</p> : null}
+                      <label className="flex items-start gap-2 text-xs">
+                        <input type="checkbox" name={`${type}_toBank`} className="mt-0.5" />
+                        <span>Add this to my Proof Bank (as a draft, approved there like every proof).</span>
+                      </label>
+                    </div>
+                    <Field label="Evidence" hint="A confirmed study from your shelf. Claim and citation travel together.">
+                      <select className="field" name={`${type}_evidence`} defaultValue={b?.evidenceId ?? ""} data-testid={`belief-evidence-${type}`}>
+                        <option value="">None picked</option>
+                        {evidence.map((e) => (
+                          <option key={`${e.source}:${e.id}`} value={e.source === "shared" ? `shared:${e.id}` : e.id}>
+                            {e.name}
+                            {e.source === "shared" ? " (shared, Evolve Omega)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <Link href={`/evidence?claim=${encodeURIComponent((b?.toBelief ?? "").trim())}`} className="mt-1 inline-block text-xs underline" data-testid={`find-research-${type}`}>
+                        Find research for this →
+                      </Link>
+                    </Field>
+                    <Field label="Story that carries it" hint="From your story bank, or one of your own from your Essence.">
                       <select className="field" name={`${type}_story`} defaultValue={b?.storyAssetId ?? ""}>
-                        <option value="">Pick from the story bank…</option>
+                        <option value="">Pick a story…</option>
+                        {essenceStories.map((st, i) => (
+                          <option key={`essence:${i}`} value={`essence:${i}`}>
+                            {st.name || st.summary.slice(0, 40)} (your Essence)
+                          </option>
+                        ))}
                         {stories.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name}
@@ -224,13 +273,16 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
             <button className="btn btn-accent" type="submit">
               Save and write the script →
             </button>
-            <Disclosure summary={<span className="btn btn-ghost btn-sm">+ Add a story to your bank</span>}>
-              <div className="card p-4">
-                <AssetForm type="story" back={`/webinars/${w.id}?step=beliefs`} />
-              </div>
-            </Disclosure>
           </div>
         </form>
+      ) : null}
+      {step === "beliefs" ? (
+        // Its own form, outside the beliefs form: nested, its required fields blocked the beliefs save silently.
+        <Disclosure summary={<span className="btn btn-ghost btn-sm">+ Add a story to your bank</span>} className="mt-3">
+          <div className="card p-4">
+            <AssetForm type="story" back={`/webinars/${w.id}?step=beliefs`} />
+          </div>
+        </Disclosure>
       ) : null}
 
       {step === "script" && section && tpl ? (

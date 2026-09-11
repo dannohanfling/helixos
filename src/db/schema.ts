@@ -551,7 +551,19 @@ export const webinarBeliefs = sqliteTable(
     proof: text("proof"),
     /** An approved row of the proof bank, the same rows the ladder reads; the free text above is the fallback for proof that isn't there. */
     proofId: text("proof_id"),
+    /** A story bank asset id, or "essence:<n>" for one of the client's own stories from their Essence. */
     storyAssetId: text("story_asset_id"),
+    /** A confirmed study: the client's own evidence id, or "shared:<id>" for the starter shelf. Never an unconfirmed one. */
+    evidenceId: text("evidence_id"),
+    /**
+     * Tick two for the free-text proof, the same gate the bank applies: whose result it is, and "[Name] has given me permission
+     * to use what they said here in my marketing", who ticked it and when. Text saved before the tick existed (proofChangedAt
+     * null) stays usable; the tick applies from then on.
+     */
+    proofWho: text("proof_who"),
+    proofPermissionAt: text("proof_permission_at"),
+    proofPermissionBy: text("proof_permission_by"),
+    proofChangedAt: text("proof_changed_at"),
   },
   (t) => [uniqueIndex("webinar_beliefs_type").on(t.webinarId, t.type)],
 );

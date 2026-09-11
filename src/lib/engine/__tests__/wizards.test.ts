@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { freeTextProofUsable } from "../webinar";
 import { offerOnePager, scoreOffer } from "../offer-score";
 import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll, toneClause } from "../repurpose";
 import { ACTS, SECTION_TEMPLATES, deckOutline, nextStep, readinessScore, webinarProgress } from "../webinar";
@@ -121,5 +122,14 @@ describe("webinar structure", () => {
     const slides = deckOutline(SECTION_TEMPLATES.map((t) => ({ order: t.order, act: t.act, name: t.name, keyPoints: t.exampleKeyPoints, script: t.exampleScript })));
     expect(slides.length).toBeGreaterThanOrEqual(20);
     expect(slides[0].section).toBe("Hook");
+  });
+});
+
+describe("a typed webinar proof is gated by tick two", () => {
+  it("usable with the tick, or when written before the tick existed; never when typed since without it", () => {
+    expect(freeTextProofUsable({ proof: "Priya went from 2 to 9 calls.", proofPermissionAt: "2026-09-11T00:00:00Z", proofChangedAt: "2026-09-11T00:00:00Z" })).toBe(true);
+    expect(freeTextProofUsable({ proof: "Priya went from 2 to 9 calls.", proofPermissionAt: null, proofChangedAt: null })).toBe(true);
+    expect(freeTextProofUsable({ proof: "Priya went from 2 to 9 calls.", proofPermissionAt: null, proofChangedAt: "2026-09-11T00:00:00Z" })).toBe(false);
+    expect(freeTextProofUsable({ proof: "   ", proofPermissionAt: "2026-09-11T00:00:00Z", proofChangedAt: null })).toBe(false);
   });
 });
