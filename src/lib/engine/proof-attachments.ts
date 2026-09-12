@@ -99,6 +99,9 @@ export const PERSON_QUESTION = "Is an identifiable person in this file?";
 export const OWN_SCREEN_TICK = "This is my own screen. Any other person's name, email or photo in it has been removed, or I have their permission.";
 
 /** The likeness sentence, with the app substituting the noun. Verbatim for a photo and a video; a document says what it is. */
+/** What a signed-in reader sees at a file that is not theirs to see: a colleague's link, or an id that never existed. Same words, same 404, for both. */
+export const NOT_YOURS = "There's no file here for you to see. If someone shared this link with you, the file is theirs: ask them for a copy.";
+
 export function likenessSentence(name: string, kind: ProofAttachmentKind): string {
   const noun = kind === "video" ? "video" : kind === "document" ? "document" : "photo";
   return `${name.trim() || "[Name]"} has given me permission to use this ${noun} of them in my marketing.`;

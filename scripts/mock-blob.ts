@@ -64,7 +64,9 @@ createServer((req, res) => {
       const access = storeAccess(store!);
       const asked = req.headers["x-vercel-blob-access"] === "private" ? "private" : "public";
       if (asked !== access) return json(res, 400, { error: { code: "bad_request", message: `this store is ${access}; access ${asked} is not available in it` } });
-      const o: Obj = { bytes: body, contentType: typeOf(pathname, req.headers["x-content-type"]), access, store: store!, uploadedAt: new Date().toISOString() };
+      // Test-only: a walk may back-date an object (x-mock-uploaded-at) to stand in for an upload that never finished recording half an hour ago.
+      const stamped = req.headers["x-mock-uploaded-at"] ? new Date(String(req.headers["x-mock-uploaded-at"])) : null;
+      const o: Obj = { bytes: body, contentType: typeOf(pathname, req.headers["x-content-type"]), access, store: store!, uploadedAt: (stamped && !Number.isNaN(stamped.getTime()) ? stamped : new Date()).toISOString() };
       objects.set(keyOf(store!, pathname), o);
       return json(res, 200, describe(pathname, o));
     }

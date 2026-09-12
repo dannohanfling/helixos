@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { readProofObject } from "@/lib/proof-storage";
-import { contentDisposition } from "@/lib/engine/proof-attachments";
+import { NOT_YOURS, contentDisposition } from "@/lib/engine/proof-attachments";
 
 /**
  * The only way to see a proof attachment: signed in, a member of the attachment's workspace (checked here, in the handler,
@@ -19,10 +19,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!v) return new NextResponse("Sign in first.", { status: 401, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" } });
   const { id } = await params;
   const att = await db.query.proofAttachments.findFirst({ where: eq(schema.proofAttachments.id, id) });
-  if (!att || att.workspaceId !== v.workspace.id) return new NextResponse("Not found.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" } });
+  // A file that is not the reader's to see and a file that does not exist read the same: one sentence, one status, so an
+  // id cannot be probed. A pasted link is the only way here (the proof page itself is the owner's), so the sentence is the screen.
+  const notYours = () => new NextResponse(NOT_YOURS, { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" } });
+  if (!att || att.workspaceId !== v.workspace.id) return notYours();
   // The proof bank is per client inside the workspace: the file is the proof owner's to see, and the coach's, and nobody else's.
   const proof = await db.query.proofs.findFirst({ where: eq(schema.proofs.id, att.proofId), columns: { userId: true, workspaceId: true } });
-  if (!proof || proof.workspaceId !== v.workspace.id || (proof.userId !== v.user.id && v.role !== "coach")) return new NextResponse("Not found.", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" } });
+  if (!proof || proof.workspaceId !== v.workspace.id || (proof.userId !== v.user.id && v.role !== "coach")) return notYours();
   const url = new URL(request.url);
   const display = url.searchParams.get("display") === "1" && att.displayKey;
   const objectUrl = display && att.displayUrl ? att.displayUrl : att.blobUrl;

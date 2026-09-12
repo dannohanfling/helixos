@@ -2,8 +2,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import sharp from "sharp";
-import heicConvert from "heic-convert";
+import { heicToJpeg, imageDimensions } from "@/lib/proof-renditions";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
@@ -111,16 +110,14 @@ export async function recordProofAttachmentAction(raw: unknown): Promise<RecordR
       const wholeRes = await readProofObject(object.url);
       if (!wholeRes.ok) throw new Error(`read ${wholeRes.status}`);
       const whole = Buffer.from(await wholeRes.arrayBuffer());
-      let forSizing = whole;
+      let forSizing: Buffer = whole;
       if (sniffed.heic) {
-        const jpeg = Buffer.from(await heicConvert({ buffer: whole, format: "JPEG", quality: 0.9 }));
+        const jpeg = await heicToJpeg(whole);
         const put = await putProofObject(displayKeyFor(input.key), jpeg, "image/jpeg");
         display = { key: put.key, url: put.url, size: jpeg.length };
         forSizing = jpeg;
       }
-      const meta = await sharp(forSizing).metadata();
-      width = meta.width ?? null;
-      height = meta.height ?? null;
+      ({ width, height } = await imageDimensions(forSizing));
     } catch (e) {
       log("could not read an image's dimensions or render a HEIC", { key: input.key, message: e instanceof Error ? e.message : String(e) });
       if (sniffed.heic) {

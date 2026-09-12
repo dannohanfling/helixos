@@ -10,6 +10,8 @@
  * (scripts/dev-server.sh sets all of them).
  */
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium, type Page } from "@playwright/test";
 
 const base = process.argv[2] ?? "http://localhost:3000";
@@ -36,6 +38,7 @@ type Listed = { objects: { pathname: string; access: string; store: string; size
 const listed = async (): Promise<Listed["objects"]> => ((await (await fetch(`http://localhost:${blobPort}/__list`)).json()) as Listed).objects;
 // A real PNG (1×1) and a web page wearing a .jpg name.
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+const HEIC = readFileSync(join(__dirname, "..", "src", "lib", "engine", "__tests__", "fixtures", "tiny.heic"));
 const FAKE_JPG = Buffer.from("<!DOCTYPE html><html><body><script>alert(1)</script></body></html>");
 
 async function main() {
@@ -118,7 +121,9 @@ async function main() {
           const rowsNow = await db.query.proofAttachmentReads.findMany({ where: eq(schema.proofAttachmentReads.attachmentId, rows[0].id) });
           if (rowsNow.some((r) => r.bytes === 10) && rowsNow.some((r) => r.bytes === PNG.length)) return rowsNow;
         } catch (e) {
-          if (!/SQLITE_BUSY|database is locked/.test(String(e))) throw e;
+          // The lock is named on the cause, two levels down from Drizzle's wrapper.
+          const chain = [e, (e as { cause?: unknown }).cause, ((e as { cause?: { cause?: unknown } }).cause ?? {})["cause"]].map((x) => (x instanceof Error ? x.message : String(x ?? ""))).join(" ");
+          if (!/SQLITE_BUSY|database is locked/.test(chain)) throw e;
         }
         await new Promise((r) => setTimeout(r, 250));
       }
@@ -176,6 +181,36 @@ async function main() {
     if ((await page.locator('[data-testid="copy-out-files"] a').count()) !== 2) throw new Error("a download per attachment beside the copy-quote buttons");
     console.log("✓ order and copy-out: the first is the thumbnail, downloads beside the quote");
 
+    // A real HEIC, the iPhone's default, end to end: stored as sent, a JPEG rendition beside it that the page shows and
+    // the quota counts, the original on download; deleted, both objects go
+    await page.goto(`${base}/proof/${proofId}`);
+    await upload({ name: "IMG_0412.heic", mimeType: "image/heic", buffer: HEIC }, { result: "no", person: "no", alt: "A whiteboard" });
+    await page.waitForURL(/attached=1/, { timeout: 30000 });
+    const heicRow = (await db.query.proofAttachments.findMany({ where: eq(schema.proofAttachments.proofId, proofId) })).find((r) => r.originalFilename === "IMG_0412.heic");
+    if (!heicRow || heicRow.mime !== "image/heic" || !/\.heic$/.test(heicRow.blobKey) || heicRow.bytes !== HEIC.length) throw new Error(`the HEIC is stored as sent: ${JSON.stringify(heicRow)}`);
+    if (!heicRow.displayKey || !/-display\.jpg$/.test(heicRow.displayKey) || !(heicRow.displayBytes && heicRow.displayBytes > 0)) throw new Error(`a JPEG rendition sits beside it and its bytes count: ${JSON.stringify(heicRow)}`);
+    if (heicRow.width !== 16 || heicRow.height !== 12) throw new Error(`dimensions read from the rendition: ${heicRow.width}x${heicRow.height}`);
+    const store = await listed();
+    if (!store.some((o) => o.pathname === heicRow.displayKey && /PROOF/i.test(o.store) && o.access === "private")) throw new Error("the rendition is in the private store");
+    const shown = await page.request.get(`${base}/api/proofs/attachments/${heicRow.id}?display=1`);
+    const shownBody = await shown.body();
+    if (shown.status() !== 200 || shown.headers()["content-type"] !== "image/jpeg" || shownBody[0] !== 0xff || shownBody[1] !== 0xd8) throw new Error(`the page is shown the JPEG: ${shown.status()} ${shown.headers()["content-type"]}`);
+    const original = await page.request.get(`${base}/api/proofs/attachments/${heicRow.id}?download=1`);
+    if (original.headers()["content-type"] !== "image/heic" || Buffer.compare(await original.body(), HEIC) !== 0 || !/IMG_0412\.heic/.test(original.headers()["content-disposition"] ?? "")) throw new Error("the download is the original HEIC under its own name");
+    if (!(await page.locator(`[data-testid="attachment"][data-kind="image"] img[src*="${heicRow.id}?display=1"]`).count())) throw new Error("the proof page shows the rendition, not the HEIC");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(`#att-${heicRow.id} [data-testid="attachment-delete"]`).click()]);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(400);
+    const after = await listed();
+    if (after.some((o) => o.pathname === heicRow.blobKey || o.pathname === heicRow.displayKey)) throw new Error("deleting a HEIC deletes the original and the rendition");
+    if ((await page.locator('[data-testid="attachment"]').count()) !== 2) throw new Error("two attachments remain");
+    console.log("✓ HEIC end to end: stored as sent, a JPEG rendition shown and counted, the original on download, both gone on delete");
+
+    // A signed-in reader at a file that is not theirs (or that never existed) sees one plain sentence
+    const notMine = await page.request.get(`${base}/api/proofs/attachments/not-an-id`);
+    if (notMine.status() !== 404 || (await notMine.text()) !== "There's no file here for you to see. If someone shared this link with you, the file is theirs: ask them for a copy.") throw new Error(`a blocked read is a sentence, not a broken image: ${notMine.status()} ${await notMine.text()}`);
+    console.log("✓ a file that is not yours reads as a sentence");
+
     // The composer offers the proof's media; a result-showing image inherits the typed-dollar block; an image without alt text warns
     await page.goto(`${base}/content/compose`);
     await page.waitForLoadState("networkidle");
@@ -217,10 +252,34 @@ async function main() {
     if (await page.locator('[data-testid="belief-proof-images-vehicle"]').count()) throw new Error("clearing the pick clears the images");
     console.log("✓ the list's thumbnail and the belief step's live images: offered, downloadable, never attached");
 
-    // Settings shows the quota and the bytes served
+    // Settings shows the quota, and the same visit reconciles the store: an object with no row older than the floor is
+    // deleted, a young one (an upload still being recorded) and every recorded object stay
+    const ws = (await db.query.proofAttachments.findFirst({ where: eq(schema.proofAttachments.proofId, proofId) }))!.workspaceId;
+    const plant = async (key: string, uploadedAt: string) => {
+      const r = await fetch(`http://localhost:${blobPort}/?pathname=${encodeURIComponent(key)}`, { method: "PUT", body: PNG, headers: { authorization: "Bearer vercel_blob_rw_PROOFSTORE_testsecret", "x-content-type": "image/png", "x-vercel-blob-access": "private", "x-mock-uploaded-at": uploadedAt } });
+      if (r.status !== 200) throw new Error(`could not plant an orphan: ${r.status}`);
+    };
+    const oldOrphan = `proofs/${ws}/${proofId}/orphan-old.png`;
+    const oldOrphanOtherProof = `proofs/${ws}/some-deleted-proof/orphan-old.png`;
+    const youngOrphan = `proofs/${ws}/${proofId}/orphan-young.png`;
+    await plant(oldOrphan, new Date(Date.now() - 45 * 60 * 1000).toISOString());
+    await plant(oldOrphanOtherProof, new Date(Date.now() - 45 * 60 * 1000).toISOString());
+    await plant(youngOrphan, new Date().toISOString());
+    const recordedBefore = (await listed()).filter((o) => o.pathname.startsWith("proofs/") && !o.pathname.includes("orphan-")).map((o) => o.pathname).sort();
     await page.goto(`${base}/settings`);
     await expectText(page, "of 2 GB used", "quota line");
-    console.log("✓ settings: storage against the quota");
+    // The reconcile runs after the response is sent: give it a moment.
+    let afterSettings: string[] = [];
+    for (let i = 0; i < 60; i++) {
+      afterSettings = (await listed()).map((o) => o.pathname);
+      if (!afterSettings.includes(oldOrphan) && !afterSettings.includes(oldOrphanOtherProof)) break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (afterSettings.includes(oldOrphan) || afterSettings.includes(oldOrphanOtherProof)) throw new Error("an object with no row, older than the floor, is deleted on the Settings visit, on any proof in the workspace");
+    if (!afterSettings.includes(youngOrphan)) throw new Error("an object younger than the floor is left alone: it may still be being recorded");
+    if (afterSettings.filter((k) => k.startsWith("proofs/") && !k.includes("orphan-")).sort().join() !== recordedBefore.join()) throw new Error("every recorded object stays");
+    await fetch(`http://localhost:${blobPort}/delete`, { method: "POST", body: JSON.stringify({ urls: [`http://localhost:${blobPort}/private/${youngOrphan}`] }), headers: { authorization: "Bearer vercel_blob_rw_PROOFSTORE_testsecret", "content-type": "application/json" } });
+    console.log("✓ settings: storage against the quota; the visit reconciles the workspace's tree (old orphans on any proof gone, a young one kept, recorded objects untouched)");
 
     // Deletion deletes the object first, then the row; deleting the proof takes every object with it
     await page.goto(`${base}/proof/${proofId}`);

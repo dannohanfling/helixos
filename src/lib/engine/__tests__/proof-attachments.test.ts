@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ACCEPTED, ACCEPT_ATTRIBUTE, DOCUMENT_MAX_BYTES, IMAGE_MAX_BYTES, MAX_PER_PROOF, OWN_SCREEN_TICK, PERSON_QUESTION, RESULT_QUESTION, VIDEO_MAX_BYTES, WORKSPACE_QUOTA_BYTES, admission, attachmentsBlockApproval, cleanFilename, consentAnswered, contentDisposition, displayKeyFor, likenessSentence, looksLikeMarkup, mb, moveFirst, needsOwnScreenTick, parseRecordInput, proofKey, proofKeyWorkspace, quotaState, refusal, sniff } from "../proof-attachments";
+import { heicToJpeg, imageDimensions } from "../../proof-renditions";
+import { ACCEPTED, ACCEPT_ATTRIBUTE, DOCUMENT_MAX_BYTES, IMAGE_MAX_BYTES, MAX_PER_PROOF, OWN_SCREEN_TICK, PERSON_QUESTION, RESULT_QUESTION, VIDEO_MAX_BYTES, WORKSPACE_QUOTA_BYTES, admission, attachmentsBlockApproval, cleanFilename, consentAnswered, contentDisposition, displayKeyFor, likenessSentence, NOT_YOURS, looksLikeMarkup, mb, moveFirst, needsOwnScreenTick, parseRecordInput, proofKey, proofKeyWorkspace, quotaState, refusal, sniff } from "../proof-attachments";
 
 const SRC = join(__dirname, "..", "..", "..");
 const bytes = (...parts: (number[] | string)[]) => new Uint8Array(parts.flatMap((p) => (typeof p === "string" ? Array.from(p).map((c) => c.charCodeAt(0)) : p)));
@@ -44,6 +45,61 @@ describe("proof attachments: what a file is, from its bytes", () => {
     expect(ACCEPT_ATTRIBUTE).toContain("image/heic");
     expect(ACCEPT_ATTRIBUTE).not.toContain("svg");
     expect(ACCEPTED.some((a) => a.mime.includes("svg"))).toBe(false);
+  });
+});
+
+describe("proof attachments: a real HEIC, the iPhone's default, through the real conversion path", () => {
+  const heic = readFileSync(join(__dirname, "fixtures", "tiny.heic"));
+  it("the fixture is a real HEIC by its bytes, sniffed as one", () => {
+    expect(heic.length).toBeGreaterThan(100);
+    expect(sniff(new Uint8Array(heic.subarray(0, 64)))).toEqual({ kind: "image", mime: "image/heic", ext: "heic", heic: true });
+    expect("sniffed" in refusal(new Uint8Array(heic.subarray(0, 64)), heic.length)).toBe(true);
+  });
+  it("converts to a JPEG the browser can show, with the picture's own dimensions read from the rendition", async () => {
+    const jpeg = await heicToJpeg(heic);
+    expect(sniff(new Uint8Array(jpeg.subarray(0, 16)))?.mime).toBe("image/jpeg");
+    expect(await imageDimensions(jpeg)).toEqual({ width: 16, height: 12 });
+    // The rendition sits beside the original under the display key; the original is what a download serves.
+    expect(displayKeyFor("proofs/ws/p/id.heic")).toBe("proofs/ws/p/id-display.jpg");
+  });
+});
+
+describe("proof attachments: the private store's addresses never leave the server", () => {
+  const walk = (dir: string, out: string[] = []): string[] => {
+    for (const f of readdirSync(dir)) {
+      const p = join(dir, f);
+      if (statSync(p).isDirectory()) walk(p, out);
+      else if (/\.tsx?$/.test(f) && !p.includes("__tests__")) out.push(p);
+    }
+    return out;
+  };
+  // The only files that may name blob_url or display_url: the schema, the record and delete actions, the queries that delete,
+  // and the read route that streams. A page, a component, a query that feeds a component or an export never sees them.
+  const MAY_NAME = ["db/schema.ts", "lib/actions/proof-attachments.ts", "lib/queries/proof-attachments.ts", "app/api/proofs/attachments/[id]/route.ts"];
+  it("blob_url and display_url are read in four server files and nowhere else; no client component names them", () => {
+    const naming = walk(SRC)
+      .filter((f) => /\b(blobUrl|displayUrl|blob_url|display_url)\b/.test(readFileSync(f, "utf8")))
+      .map((f) => f.slice(SRC.length + 1).replace(/\\/g, "/"))
+      .sort();
+    expect(naming).toEqual([...MAY_NAME].sort());
+    for (const f of MAY_NAME) expect(readFileSync(join(SRC, f), "utf8")).not.toMatch(/^\s*["']use client["']/m);
+  });
+  it("the orphan reconcile is workspace-wide, runs after the Settings response and gives up on a slow store; the upload door no longer lists", () => {
+    const queries = readFileSync(join(SRC, "lib/queries/proof-attachments.ts"), "utf8");
+    expect(queries).toMatch(/listProofObjects\(`proofs\/\$\{workspaceId\}\/`, budget\)/);
+    expect(queries).toContain("AbortSignal.timeout(RECONCILE_BUDGET_MS)");
+    const settings = readFileSync(join(SRC, "app/(app)/settings/page.tsx"), "utf8");
+    expect(settings).toMatch(/after\(\(\) => reapOrphans\(v\.workspace\.id\)\)/);
+    expect(readFileSync(join(SRC, "app/api/proofs/upload/route.ts"), "utf8")).not.toContain("reapOrphans");
+  });
+  it("the schema says why, beside the columns", () => {
+    expect(readFileSync(join(SRC, "db/schema.ts"), "utf8")).toMatch(/never put in a payload, a prop or an export[\s\S]{0,200}blobUrl: text\("blob_url"\)/);
+  });
+  it("a signed-in reader at a file that is not theirs sees one plain sentence, the same for an id that never existed", () => {
+    const route = readFileSync(join(SRC, "app/api/proofs/attachments/[id]/route.ts"), "utf8");
+    expect(route).toContain("NOT_YOURS");
+    expect(route).not.toContain('"Not found."');
+    expect(NOT_YOURS).toBe("There's no file here for you to see. If someone shared this link with you, the file is theirs: ask them for a copy.");
   });
 });
 

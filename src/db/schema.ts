@@ -1440,6 +1440,9 @@ export const proofAttachments = sqliteTable(
     workspaceId: text("workspace_id").notNull(),
     /** proofs/<workspace_id>/<proof_id>/<uuid>.<ext> in the private store, and the store's own URL for it (unreachable without the token). */
     blobKey: text("blob_key").notNull(),
+    // blob_url and display_url are the private store's addresses, unreachable without its token. They are read on the server
+    // only (the read route, deletion) and never put in a payload, a prop or an export: a browser is shown /api/proofs/attachments/<id>.
+    // They do not load in an <img>, and the fix for that is never the store's access setting. A test pins which files may name them.
     blobUrl: text("blob_url").notNull(),
     /** For a HEIC original, the JPEG rendition's key and URL beside it; the original is kept. */
     displayKey: text("display_key"),

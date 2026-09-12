@@ -84,7 +84,8 @@ back from the store, sniffs its first bytes (`sniff` in `src/lib/engine/proof-at
 by ftyp brand, mp4, mov, webm, pdf; anything that reads as markup, SVG included, is refused and deleted), applies the
 kind's cap (images 10 MB, video 100 MB, documents 20 MB; one number each), the ten-per-proof count and the 2 GB workspace
 quota, and only then writes the row. A HEIC gets a JPEG rendition beside it (`heic-convert`, libheif in WASM; sharp's build
-cannot decode HEIC) and the original is kept. Reads go through `/api/proofs/attachments/<id>`, which checks the session and
+cannot decode HEIC; `src/lib/proof-renditions.ts`, exercised end to end by the real fixture
+`src/lib/engine/__tests__/fixtures/tiny.heic` in the unit suite and in the proofs walk) and the original is kept. Reads go through `/api/proofs/attachments/<id>`, which checks the session and
 the workspace in the handler, streams with the token, honours Range so video seeks, sends `private, no-store` so no CDN ever
 holds a private object, and records bytes served per workspace and attachment (`proof_attachment_reads`): transfer is the
 number that bites on a private store, so it is instrumented from day one and no quota or throttle is built on it yet.
@@ -99,7 +100,20 @@ warned about in the composer. Deletion deletes the object first, then the row; a
 deleting a proof takes every object with it. Attachments travel by offer, never on their own: the composer lists them as
 media the client picks (and cannot send a private file to GoHighLevel, which needs a public address: the note says so with
 a download), the belief step shows the picked proof's images with a download, the copy-out view has a download per file,
-and a rung gets nothing. Settings shows the quota (warn at 80%, block at 100%) and bytes served this month.
+and a rung gets nothing. Settings shows the quota (warn at 80%, block at 100%); the same visit reconciles the workspace's
+tree in the store against its rows and deletes any object with no row older than thirty minutes (an upload that never
+finished recording is a file nobody consented to and bytes no quota counts). `blob_url` and `display_url` never leave the
+server: a browser is shown `/api/proofs/attachments/<id>`, and the unit suite pins the files that may name those columns.
+
+Bytes served are not on any screen; this is the query, ready for Turso (change the month):
+
+```sql
+SELECT workspace_id, strftime('%Y-%m', created_at) AS month, SUM(bytes) AS bytes_served, ROUND(SUM(bytes) / 1048576.0, 1) AS mb_served
+FROM proof_attachment_reads
+WHERE created_at >= '2026-09-01' AND created_at < '2026-10-01'
+GROUP BY workspace_id, month
+ORDER BY bytes_served DESC;
+```
 
 Environment: `PROOF_BLOB_READ_WRITE_TOKEN` (Production and Preview; without it the uploader says attachments aren't set
 up). `PROOF_BLOB_STORE_ID` and `PROOF_BLOB_WEBHOOK_PUBLIC_KEY` are set alongside it but not read. Locally

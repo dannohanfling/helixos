@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
@@ -9,7 +10,7 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { AiKeyCard } from "@/components/ai-key-card";
 import { FathomKeyCard } from "@/components/fathom-key-card";
 import { connectionFor } from "@/lib/ghl";
-import { storageQuota } from "@/lib/queries/proof-attachments";
+import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 
 export const metadata = { title: "Settings" };
@@ -18,6 +19,10 @@ const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string }> }) {
   const v = await requireViewer();
+  // The storage figure counts rows; an object without a row (an upload that never finished recording) is reconciled away
+  // here, the one place the workspace's holdings are looked at, so the figure and the store agree. After the response:
+  // the page never waits on the store, and a store that is down costs the reader nothing.
+  after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
   const { fathom: fathomNotice } = await searchParams;
   const [goal, conn] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id)]);

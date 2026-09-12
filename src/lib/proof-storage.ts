@@ -44,11 +44,11 @@ export async function headProofObject(key: string): Promise<ProofObject> {
 }
 
 /** Every object under a prefix in the proof store, for reconciling the store against the rows. */
-export async function listProofObjects(prefix: string): Promise<{ key: string; url: string; size: number; uploadedAt: Date }[]> {
+export async function listProofObjects(prefix: string, abortSignal?: AbortSignal): Promise<{ key: string; url: string; size: number; uploadedAt: Date }[]> {
   const out: { key: string; url: string; size: number; uploadedAt: Date }[] = [];
   let cursor: string | undefined;
   do {
-    const page = await list({ prefix, cursor, limit: 1000, token: proofToken() });
+    const page = await list({ prefix, cursor, limit: 1000, token: proofToken(), abortSignal });
     for (const b of page.blobs) out.push({ key: b.pathname, url: b.url, size: b.size, uploadedAt: b.uploadedAt });
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
@@ -56,8 +56,8 @@ export async function listProofObjects(prefix: string): Promise<{ key: string; u
 }
 
 /** Deletes the object. Throws when the store refuses, so the caller keeps the row: nothing goes missing from the client's view while the file is still live. */
-export async function deleteProofObject(url: string): Promise<void> {
-  await del(url, { token: proofToken() });
+export async function deleteProofObject(url: string, abortSignal?: AbortSignal): Promise<void> {
+  await del(url, { token: proofToken(), abortSignal });
 }
 
 /**
