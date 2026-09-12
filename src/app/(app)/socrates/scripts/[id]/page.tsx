@@ -64,7 +64,10 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
                     <p key={q.id}>{q.question}</p>
                   ))}
                   {a.reframes.map((r) => (
-                    <p key={r.id}><span className="italic">{r.transitionIn}</span> {r.memorablePhrase} {r.metaphor}</p>
+                    <p key={r.id}>
+                      <span className="italic">{r.transitionIn}</span> {r.memorablePhrase} {r.metaphor}
+                      {r.credit ? <span className="block text-xs text-ink-3">Credit: {r.credit}</span> : null}
+                    </p>
                   ))}
                   {a.override ? <p className="whitespace-pre-line">{a.override}</p> : null}
                 </div>

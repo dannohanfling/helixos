@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLARITY_BEATS, LESSONS, LIBRARY_QUESTIONS, OBJECTION_GROUPS, REFRAMES, SCRIPT_TYPES, assemble, beatByStage, hasBuildNote, lessonParagraphs, mentionsReframes, progress, questionsFor, reframesByGroup, scriptText } from "../socrates";
+import { CLARITY_BEATS, LESSONS, LIBRARY_QUESTIONS, OBJECTION_GROUPS, POSTURE_GROUP, PRINCIPLES, REFRAMES, SCRIPT_TYPES, SPOKEN_REFRAMES, assemble, principleNoteText, reframeCopyText, reframesCopyText, beatByStage, hasBuildNote, lessonParagraphs, mentionsReframes, progress, questionsFor, reframesByGroup, scriptText } from "../socrates";
 
 describe("Socrates Domain seed content, as shipped", () => {
   it("has seven lessons in order, Start Here to How-To, under fifteen minutes of reading", () => {
@@ -19,10 +19,40 @@ describe("Socrates Domain seed content, as shipped", () => {
     expect(count("A — Areas of Friction")).toBe(10);
     expect(count("T — Tailor the Solution")).toBe(2);
   });
-  it("has 11 reframes in the four groups, 3 / 3 / 3 / 2, and Shoulder to Shoulder carries its credit", () => {
+  it("has 11 reframes: nine spoken in the three objection groups, 3 / 3 / 3, and two posture principles apart; ids unique", () => {
     expect(REFRAMES).toHaveLength(11);
-    expect(reframesByGroup().map((g) => [g.group, g.reframes.length])).toEqual(OBJECTION_GROUPS.map((g, i) => [g, i === 3 ? 2 : 3]));
-    expect(REFRAMES.find((r) => r.name === "Shoulder to Shoulder")?.credit).toBe("Alex Hormozi");
+    expect(new Set(REFRAMES.map((r) => r.id)).size).toBe(11);
+    expect(SPOKEN_REFRAMES.map((r) => r.id)).toEqual(["r01", "r02", "r03", "r04", "r05", "r06", "r07", "r08", "r09"]);
+    expect(reframesByGroup().map((g) => [g.group, g.reframes.length])).toEqual(OBJECTION_GROUPS.map((g) => [g, 3]));
+    expect(PRINCIPLES.map((r) => [r.id, r.objectionGroup, r.transitionIn])).toEqual([["r10", POSTURE_GROUP, null], ["r11", POSTURE_GROUP, null]]);
+    // A principle is never in an objection group, even when the whole file is handed over.
+    expect(reframesByGroup(REFRAMES).flatMap((g) => g.reframes.map((r) => r.id))).not.toContain("r11");
+    // Every spoken line has a transition in; the data file, not the renderer, owns the words.
+    for (const r of SPOKEN_REFRAMES) expect(r.transitionIn, r.id).toBeTruthy();
+  });
+  it("the spoken lines read like speech, with contractions, and Shoulder to Shoulder carries Hormozi's credit", () => {
+    // The words are the data file's, pinned as delivered: the four phrases the fix named, with their contractions.
+    const phrase = (id: string) => REFRAMES.find((r) => r.id === id)?.memorablePhrase;
+    expect(phrase("r01")).toBe("Don't look only at the repair bill. Look at the leak.");
+    expect(phrase("r04")).toBe("This isn't time away from progress. It's time invested so progress gets easier.");
+    expect(phrase("r05")).toBe("You don't always need more hours. Sometimes you need a better tool.");
+    expect(phrase("r07")).toBe("This usually isn't about rejection. It's about alignment.");
+    expect(phrase("r11")).toBe("Guide, don't grapple.");
+    expect(REFRAMES.find((r) => r.name === "Shoulder to Shoulder")?.credit).toBe("Alex Hormozi — “shoulder to shoulder”");
+    expect(REFRAMES.filter((r) => r.credit)).toHaveLength(1);
+  });
+  it("copy: one spoken reframe copies clean; several carry group and name as headings; a principle copies only as a note to self, credited; no backslash anywhere", () => {
+    const r01 = REFRAMES.find((r) => r.id === "r01")!;
+    expect(reframeCopyText(r01)).toBe("Can I show you the way I'd look at that? Don't look only at the repair bill. Look at the leak. If there's a leak in a pipe at your house, you can avoid paying to fix it today — but the leak keeps costing you every day it stays there.");
+    expect(reframesCopyText([r01])).toBe(reframeCopyText(r01));
+    const r04 = REFRAMES.find((r) => r.id === "r04")!;
+    const two = reframesCopyText([r01, r04]);
+    expect(two.startsWith("Price / too expensive — Leaky Pipe\n")).toBe(true);
+    expect(two).toContain("\n\nNo time / too busy — Sharpening the Axe\n");
+    expect(two.endsWith(reframeCopyText(r04))).toBe(true);
+    const r11 = REFRAMES.find((r) => r.id === "r11")!;
+    expect(principleNoteText(r11)).toBe("Guide, don't grapple.\nSit shoulder to shoulder, on the same side, rather than across from the prospect. The posture changes the psychology.\nThe idea is bigger than physical seating. Handle objections like a guide standing beside the person, not a debater facing them down. The moment it feels like me versus you, resistance rises.\nCredit: Alex Hormozi — “shoulder to shoulder”");
+    for (const r of REFRAMES) expect(JSON.stringify(r)).not.toContain("\\\\");
   });
   it("lesson 4 closes on Danno's sentence, no lesson carries a build note, and a build note would still never reach the page", () => {
     const four = LESSONS.find((l) => l.order === 4)!;
@@ -64,7 +94,9 @@ describe("a script's beats", () => {
     expect(a[0].questions.map((q) => q.id)).toEqual(["q11", "q22"]);
     const text = scriptText("Test", "Objection", a);
     expect(text.indexOf("C — Context")).toBeLessThan(text.indexOf("T — Tailor the Solution"));
-    expect(text).toContain("Do not look only at the repair bill. Look at the leak.");
+    expect(text).toContain("Don't look only at the repair bill. Look at the leak.");
+    // A principle picked into a script (an older save) is not read out: it was never a line to say.
+    expect(assemble({ T: { questionIds: [], reframeIds: ["r11", "r01"], override: null } }, LIBRARY_QUESTIONS).find((x) => x.beat.key === "T")?.reframes.map((r) => r.id)).toEqual(["r01"]);
     expect(text).toContain("Then my bridge.");
     expect(text.indexOf("Look at the leak.")).toBeLessThan(text.indexOf("Then my bridge."));
   });

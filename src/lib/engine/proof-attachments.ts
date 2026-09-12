@@ -100,11 +100,14 @@ export const OWN_SCREEN_TICK = "This is my own screen. Any other person's name, 
 
 /** The likeness sentence, with the app substituting the noun. Verbatim for a photo and a video; a document says what it is. */
 /** What a signed-in reader sees at a file that is not theirs to see: a colleague's link, or an id that never existed. Same words, same 404, for both. */
-export const NOT_YOURS = "There's no file here for you to see. If someone shared this link with you, the file is theirs: ask them for a copy.";
+export const NOT_YOURS = "Nothing here. If someone sent you this link, ask them to send you the file itself.";
 
 export function likenessSentence(name: string, kind: ProofAttachmentKind): string {
-  const noun = kind === "video" ? "video" : kind === "document" ? "document" : "photo";
-  return `${name.trim() || "[Name]"} has given me permission to use this ${noun} of them in my marketing.`;
+  // A photo and a video depict the person, so "of them" is doing likeness work; a document mentions or quotes them, and "of
+  // them" has nothing to attach to. The third form drops it; the first two stay exactly as they are, not harmonised.
+  const who = name.trim() || "[Name]";
+  if (kind === "document") return `${who} has given me permission to use this document in my marketing.`;
+  return `${who} has given me permission to use this ${kind === "video" ? "video" : "photo"} of them in my marketing.`;
 }
 
 /** A file's own name, kept as the client knows it minus anything that is a path or a control character, and bounded. */

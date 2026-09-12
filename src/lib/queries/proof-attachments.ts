@@ -65,31 +65,47 @@ const RECONCILE_BUDGET_MS = 20 * 1000;
  * floor, which may be an upload still being recorded. Called from after(), so the page is sent first, and bounded in time.
  */
 export async function reapOrphans(workspaceId: string, now = new Date()): Promise<number> {
-  if (!proofStorageConfigured()) return 0;
+  // One line per run, including the empty ones: an empty run is what says the reconcile is running at all, and a run that
+  // hit its budget or could not list is an operational fact that is invisible from inside after() unless it is written down.
+  const started = Date.now();
+  const report = { workspaceId, outcome: "ok" as "ok" | "skipped" | "list-failed" | "budget-hit", objects: 0, rows: 0, deleted: 0, bytes: 0, deleteFailures: 0, ms: 0 };
+  const line = () => {
+    report.ms = Date.now() - started;
+    (report.outcome === "ok" || report.outcome === "skipped" ? console.log : console.error)(`[proof-storage] reconcile ${report.outcome}`, JSON.stringify(report));
+    return report.deleted;
+  };
+  if (!proofStorageConfigured()) {
+    report.outcome = "skipped";
+    return line();
+  }
   const budget = AbortSignal.timeout(RECONCILE_BUDGET_MS);
   let objects: Awaited<ReturnType<typeof listProofObjects>>;
   try {
     objects = await listProofObjects(`proofs/${workspaceId}/`, budget);
   } catch (e) {
+    report.outcome = budget.aborted ? "budget-hit" : "list-failed";
     console.error("[proof-storage] could not list a workspace's tree to reconcile it", redactUrls(JSON.stringify({ workspaceId, message: e instanceof Error ? e.message : String(e) })));
-    return 0;
+    return line();
   }
-  if (!objects.length) return 0;
+  report.objects = objects.length;
   const rows = await db.query.proofAttachments.findMany({ where: eq(schema.proofAttachments.workspaceId, workspaceId), columns: { blobKey: true, displayKey: true } });
+  report.rows = rows.length;
   const known = new Set(rows.flatMap((r) => [r.blobKey, r.displayKey].filter((k): k is string => Boolean(k))));
-  let removed = 0;
-  let orphanBytes = 0;
   for (const o of objects) {
     if (known.has(o.key) || now.getTime() - o.uploadedAt.getTime() < ORPHAN_AGE_MS) continue;
-    if (budget.aborted) break;
+    if (budget.aborted) {
+      report.outcome = "budget-hit";
+      break;
+    }
     try {
       await deleteProofObject(o.url, budget);
-      removed++;
-      orphanBytes += o.size;
+      report.deleted++;
+      report.bytes += o.size;
     } catch (e) {
+      if (budget.aborted) report.outcome = "budget-hit";
+      report.deleteFailures++;
       console.error("[proof-storage] could not delete an orphaned object", redactUrls(JSON.stringify({ key: o.key, message: e instanceof Error ? e.message : String(e) })));
     }
   }
-  if (removed) console.error("[proof-storage] reconciled a workspace's tree: objects without a row, older than the floor, deleted", JSON.stringify({ workspaceId, removed, bytes: orphanBytes }));
-  return removed;
+  return line();
 }

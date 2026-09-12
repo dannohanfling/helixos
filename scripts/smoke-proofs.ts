@@ -208,7 +208,7 @@ async function main() {
 
     // A signed-in reader at a file that is not theirs (or that never existed) sees one plain sentence
     const notMine = await page.request.get(`${base}/api/proofs/attachments/not-an-id`);
-    if (notMine.status() !== 404 || (await notMine.text()) !== "There's no file here for you to see. If someone shared this link with you, the file is theirs: ask them for a copy.") throw new Error(`a blocked read is a sentence, not a broken image: ${notMine.status()} ${await notMine.text()}`);
+    if (notMine.status() !== 404 || (await notMine.text()) !== "Nothing here. If someone sent you this link, ask them to send you the file itself.") throw new Error(`a blocked read is a sentence, not a broken image: ${notMine.status()} ${await notMine.text()}`);
     console.log("✓ a file that is not yours reads as a sentence");
 
     // The composer offers the proof's media; a result-showing image inherits the typed-dollar block; an image without alt text warns

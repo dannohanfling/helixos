@@ -93,7 +93,8 @@ number that bites on a private store, so it is instrumented from day one and no 
 Two questions at upload, in the brief's words: "Does this show a result — money, weight, followers, or any number someone
 could read as a promise?" (`showsAResult`: in the composer the file inherits the typed-dollar hard block, same label, and
 the post must carry "(Illustrative. Your numbers will differ.)") and "Is an identifiable person in this file?"
-(`showsAPerson`: the likeness sentence "[Name] has given me permission to use this photo/video of them in my marketing."
+(`showsAPerson`: the likeness sentence "[Name] has given me permission to use this photo/video of them in my marketing.",
+or for a document "[Name] has given me permission to use this document in my marketing.",
 recorded with a name and a time; a proof cannot move to approved while any attachment's permission is unrecorded, the same
 gate the proof already has, extended). Images and documents need the own-screen tick. Alt text is optional at upload and
 warned about in the composer. Deletion deletes the object first, then the row; a refused delete keeps the row and says so;
@@ -102,7 +103,9 @@ media the client picks (and cannot send a private file to GoHighLevel, which nee
 a download), the belief step shows the picked proof's images with a download, the copy-out view has a download per file,
 and a rung gets nothing. Settings shows the quota (warn at 80%, block at 100%); the same visit reconciles the workspace's
 tree in the store against its rows and deletes any object with no row older than thirty minutes (an upload that never
-finished recording is a file nobody consented to and bytes no quota counts). `blob_url` and `display_url` never leave the
+finished recording is a file nobody consented to and bytes no quota counts). Every run writes one `[proof-storage] reconcile`
+line, the empty ones included (objects listed, rows compared, deleted, bytes, ms), and a run that could not list or hit
+its twenty-second budget is written as its own outcome: grep the Vercel log for it to learn whether orphans are real. `blob_url` and `display_url` never leave the
 server: a browser is shown `/api/proofs/attachments/<id>`, and the unit suite pins the files that may name those columns.
 
 Bytes served are not on any screen; this is the query, ready for Turso (change the month):

@@ -112,15 +112,32 @@ async function main() {
     await expectText(page, "2 reframes", "several reframes on one record");
     console.log("✓ objections: shared set with belief mapping, own record with underneath, belief and two reframes, method shown with the loop drawn from step 5 back to step 2");
 
-    // Reframes: four groups, 3 / 3 / 3 / 2, the Hormozi credit back on Shoulder to Shoulder
+    // Reframes: three objection groups of spoken lines, 3 / 3 / 3, the two posture principles apart with no copy-to-prospect
+    // button, the Hormozi credit on Shoulder to Shoulder; what Copy puts on the clipboard is the line, exactly, no backslash
     await page.goto(`${base}/socrates/reframes`);
     await expectText(page, "Leaky Pipe", "reframes");
     const groups = await page.locator('[data-testid="reframe-group"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-group")}=${e.querySelectorAll('[data-testid="reframe"]').length}`));
-    if (groups.join("|") !== "Price / too expensive=3|No time / too busy=3|Needs a partner's sign-off=3|General resistance (posture)=2") throw new Error(`reframe groups wrong: ${groups.join("|")}`);
+    if (groups.join("|") !== "Price / too expensive=3|No time / too busy=3|Needs a partner's sign-off=3") throw new Error(`reframe groups wrong: ${groups.join("|")}`);
+    if ((await page.locator('[data-testid="reframe-principles"] [data-testid="reframe"][data-type="principle"]').count()) !== 2) throw new Error("the two principles sit apart under Posture");
+    if ((await page.locator('[data-testid="reframe-principles"] button:text-is("Copy")').count()) !== 0) throw new Error("a principle has no copy-to-prospect button");
+    if ((await page.locator('[data-testid="reframe-principles"] button:has-text("Copy note to self")').count()) !== 2) throw new Error("a principle copies only as a note to self");
+    if ((await page.locator('[data-testid="reframe"][data-id="r01"]').count()) !== 1) throw new Error("r01 renders once");
     const credit = await page.locator('[data-testid="reframe"][data-id="r11"] [data-testid="reframe-credit"]').innerText();
     if (!credit.includes("Alex Hormozi")) throw new Error("Shoulder to Shoulder must credit Alex Hormozi where it appears");
+    const clipText = async () => page.evaluate(() => navigator.clipboard.readText());
+    await page.locator('[data-testid="reframe"][data-id="r01"]').locator("xpath=ancestor::section[1]").locator('button:text-is("Copy")').click();
+    const one = await clipText();
+    if (one !== "Can I show you the way I'd look at that? Don't look only at the repair bill. Look at the leak. If there's a leak in a pipe at your house, you can avoid paying to fix it today — but the leak keeps costing you every day it stays there.") throw new Error(`one reframe copies clean: ${JSON.stringify(one)}`);
+    if (one.includes("\\")) throw new Error("no backslash on the clipboard");
+    await page.locator('[data-testid="reframe"][data-id="r01"]').locator("xpath=ancestor::section[1]").locator('[data-testid="reframe-pick"]').check();
+    await page.locator('[data-testid="reframe"][data-id="r04"]').locator("xpath=ancestor::section[1]").locator('[data-testid="reframe-pick"]').check();
+    await page.locator('[data-testid="reframe-copy-bar"] button:has-text("Copy 2")').click();
+    const two = await clipText();
+    if (!two.startsWith("Price / too expensive — Leaky Pipe\n") || !two.includes("\n\nNo time / too busy — Sharpening the Axe\n")) throw new Error(`several copy under their headings: ${JSON.stringify(two)}`);
+    await page.locator('[data-testid="reframe"][data-id="r11"]').locator("xpath=ancestor::section[1]").locator('button:has-text("Copy note to self")').click();
+    if (!(await clipText()).endsWith("Credit: Alex Hormozi — “shoulder to shoulder”")) throw new Error("the credit travels with the copy");
     await page.screenshot({ path: "screenshots/s03-reframes.png", fullPage: true });
-    console.log("✓ reframes grouped by objection, credit restored");
+    console.log("✓ reframes: spoken lines by objection, principles apart with no copy-to-prospect, credit on the card and on the clipboard, one copies clean and several under headings");
 
     // Script wizard: a DM script, library filtered by beat and type, own question offered, overrides where the library is thin, 7 of 7, read back and copy
     await page.goto(`${base}/socrates/scripts`);

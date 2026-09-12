@@ -24,16 +24,41 @@ export const SCRIPT_TYPES = ["High-Ticket Sales Call", "Cold Call", "DM", "Follo
 export type ScriptType = (typeof SCRIPT_TYPES)[number];
 export const NEPQ_CATEGORIES = ["Connecting", "Situation", "Problem Awareness", "Solution Awareness", "Consequence", "Qualifying", "Decision Making", "Committing", "Clarifying / Probing", "Transition", "Two Truths", "Past Situation", "Pre-Situation", "Referral"] as const;
 export const QUESTION_SOURCES = ["NEPQ", "Matt Ryder", "Danno Custom"] as const;
-/** The four objection groups, in the order the brief lists them. */
-export const OBJECTION_GROUPS = ["Price / too expensive", "No time / too busy", "Needs a partner's sign-off", "General resistance (posture)"] as const;
+/** The three objection groups, in the order the brief lists them: the groups a spoken reframe answers. */
+export const OBJECTION_GROUPS = ["Price / too expensive", "No time / too busy", "Needs a partner's sign-off"] as const;
+/** Where the principles live: coaching about how to hold yourself on a call, never a line said to a prospect. */
+export const POSTURE_GROUP = "Posture";
 
 export type Lesson = { order: number; section: string; topic: string; subtitle: string; body: string; whyItMatters: string; soundsLike: string };
 export type LibraryQuestion = { id: string; question: string; nepqCategory: string; source: string; clarityStage: string; scriptTypes: string[] };
-export type Reframe = { id: string; name: string; objectionGroup: string; memorablePhrase: string; metaphor: string; simpleExplanation: string; transitionIn: string; whenToUse: string; credit?: string };
+/**
+ * Two kinds share the file: a spoken reframe is a line said to a prospect (transition in, phrase, metaphor) and gets the copy
+ * button; a principle is coaching about posture, has no transition in and is never offered as something to paste to a prospect.
+ * The text is content: it changes in the data file, through Danno, never here.
+ */
+export type ReframeType = "spoken" | "principle";
+export type Reframe = { id: string; name: string; type: ReframeType; objectionGroup: string; credit: string | null; transitionIn: string | null; memorablePhrase: string; metaphor: string; simpleExplanation: string; whenToUse: string };
 
 export const LESSONS: Lesson[] = [...(foundationsJson as Lesson[])].sort((a, b) => a.order - b.order);
 export const LIBRARY_QUESTIONS: LibraryQuestion[] = questionsJson as LibraryQuestion[];
 export const REFRAMES: Reframe[] = reframesJson as Reframe[];
+export const SPOKEN_REFRAMES: Reframe[] = REFRAMES.filter((r) => r.type === "spoken");
+export const PRINCIPLES: Reframe[] = REFRAMES.filter((r) => r.type === "principle");
+
+/** What a spoken reframe is when copied or read into a script: the transition, the phrase, the metaphor; a credit, where there is one, travels with it. */
+export function reframeCopyText(r: Reframe): string {
+  const said = [r.transitionIn, r.memorablePhrase, r.metaphor].filter((x): x is string => Boolean(x && x.trim())).join(" ");
+  return r.credit ? `${said}\nCredit: ${r.credit}` : said;
+}
+/** A principle copied as a note to self, never as something to say: its phrase and its two paragraphs, credited where there is one. */
+export function principleNoteText(r: Reframe): string {
+  return [r.memorablePhrase, r.metaphor, r.simpleExplanation, r.credit ? `Credit: ${r.credit}` : null].filter(Boolean).join("\n");
+}
+/** Several reframes copied at once carry their objection group and name as a heading, a blank line between entries; one alone stays clean. */
+export function reframesCopyText(rs: Reframe[]): string {
+  if (rs.length === 1) return reframeCopyText(rs[0]);
+  return rs.map((r) => `${r.objectionGroup} — ${r.name}\n${reframeCopyText(r)}`).join("\n\n");
+}
 
 /** A paragraph addressed to the app build, not to a client, must never reach the page even if one lands in the seed again. */
 const BUILD_NOTE = /^\*\*Note for the app build:\*\*/;
@@ -55,9 +80,11 @@ export function questionsFor(all: QuestionLike[], stage: string | null, scriptTy
   return all.filter((q) => (!stage || q.clarityStage === stage) && (!scriptType || q.scriptTypes.includes(scriptType)));
 }
 
-export function reframesByGroup(reframes: Reframe[] = REFRAMES): { group: string; reframes: Reframe[] }[] {
-  const known = OBJECTION_GROUPS.map((group) => ({ group, reframes: reframes.filter((r) => r.objectionGroup === group) }));
-  const other = reframes.filter((r) => !(OBJECTION_GROUPS as readonly string[]).includes(r.objectionGroup));
+/** The spoken reframes by the objection in front of you; principles are not in these groups (see PRINCIPLES). */
+export function reframesByGroup(reframes: Reframe[] = SPOKEN_REFRAMES): { group: string; reframes: Reframe[] }[] {
+  const spoken = reframes.filter((r) => r.type === "spoken");
+  const known = OBJECTION_GROUPS.map((group) => ({ group, reframes: spoken.filter((r) => r.objectionGroup === group) }));
+  const other = spoken.filter((r) => !(OBJECTION_GROUPS as readonly string[]).includes(r.objectionGroup));
   return other.length ? [...known, { group: "Other", reframes: other }] : known;
 }
 
@@ -77,7 +104,7 @@ export function progress(beats: ScriptBeats): { done: number; total: number; com
 
 export type AssembledBeat = { beat: Beat; questions: QuestionLike[]; reframes: Reframe[]; override: string | null };
 /** The whole script in CLARITY order: library picks in library order, then reframes, then the client's own words. */
-export function assemble(beats: ScriptBeats, questions: QuestionLike[], reframes: Reframe[] = REFRAMES): AssembledBeat[] {
+export function assemble(beats: ScriptBeats, questions: QuestionLike[], reframes: Reframe[] = SPOKEN_REFRAMES): AssembledBeat[] {
   return CLARITY_BEATS.map((beat) => {
     const b = beatOf(beats, beat.key);
     return {
@@ -94,7 +121,7 @@ export function scriptText(name: string, scriptType: string, assembled: Assemble
   for (const a of assembled) {
     out.push(`${a.beat.letter} — ${a.beat.name}`);
     for (const q of a.questions) out.push(q.question);
-    for (const r of a.reframes) out.push(`${r.transitionIn} ${r.memorablePhrase} ${r.metaphor}`);
+    for (const r of a.reframes) out.push(reframeCopyText(r));
     if (a.override) out.push(a.override);
     out.push("");
   }

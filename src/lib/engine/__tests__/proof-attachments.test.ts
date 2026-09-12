@@ -91,6 +91,9 @@ describe("proof attachments: the private store's addresses never leave the serve
     const settings = readFileSync(join(SRC, "app/(app)/settings/page.tsx"), "utf8");
     expect(settings).toMatch(/after\(\(\) => reapOrphans\(v\.workspace\.id\)\)/);
     expect(readFileSync(join(SRC, "app/api/proofs/upload/route.ts"), "utf8")).not.toContain("reapOrphans");
+    // Every run writes one line, the empty ones included, and a run that hit its budget or could not list is a distinct line.
+    expect(queries).toMatch(/console\.log : console\.error\)\(`\[proof-storage\] reconcile \$\{report\.outcome\}`/);
+    for (const outcome of ['"skipped"', '"list-failed"', '"budget-hit"']) expect(queries).toContain(outcome);
   });
   it("the schema says why, beside the columns", () => {
     expect(readFileSync(join(SRC, "db/schema.ts"), "utf8")).toMatch(/never put in a payload, a prop or an export[\s\S]{0,200}blobUrl: text\("blob_url"\)/);
@@ -99,7 +102,7 @@ describe("proof attachments: the private store's addresses never leave the serve
     const route = readFileSync(join(SRC, "app/api/proofs/attachments/[id]/route.ts"), "utf8");
     expect(route).toContain("NOT_YOURS");
     expect(route).not.toContain('"Not found."');
-    expect(NOT_YOURS).toBe("There's no file here for you to see. If someone shared this link with you, the file is theirs: ask them for a copy.");
+    expect(NOT_YOURS).toBe("Nothing here. If someone sent you this link, ask them to send you the file itself.");
   });
 });
 
@@ -110,7 +113,7 @@ describe("proof attachments: the two questions and the consent they trigger", ()
     expect(OWN_SCREEN_TICK).toBe("This is my own screen. Any other person's name, email or photo in it has been removed, or I have their permission.");
     expect(likenessSentence("Maya T.", "image")).toBe("Maya T. has given me permission to use this photo of them in my marketing.");
     expect(likenessSentence("Maya T.", "video")).toBe("Maya T. has given me permission to use this video of them in my marketing.");
-    expect(likenessSentence("", "document")).toBe("[Name] has given me permission to use this document of them in my marketing.");
+    expect(likenessSentence("", "document")).toBe("[Name] has given me permission to use this document in my marketing.");
     expect(needsOwnScreenTick("image")).toBe(true);
     expect(needsOwnScreenTick("document")).toBe(true);
     expect(needsOwnScreenTick("video")).toBe(false);
