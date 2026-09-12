@@ -1,5 +1,7 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { CHANNELS } from "@/db/schema";
@@ -10,6 +12,7 @@ import { CHANNEL_SPECS, formatClause, toneClause, type Channel } from "@/lib/eng
 import { readRules } from "@/lib/engine/groups";
 import { explainFabricated, findFabricated, stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { channelTargets, draftFor, groupTargets, staggerSchedule, type Target } from "@/lib/engine/compose";
+import { ILLUSTRATIVE_LABEL, mediaBlock, mediaUrlProblem } from "@/lib/engine/compose-media";
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 import { background, pushSocialPost } from "@/lib/integrations";
@@ -24,15 +27,26 @@ export type ComposePayload = {
   cta: string;
   hasCta: boolean;
   mediaUrl: string;
+  /** A proof attachment picked as the post's media. Verified here (the client's own, approved, a photo or video); never a public URL, never sent on. */
+  mediaAttachmentId?: string | null;
   contentType: string;
   mode: "draft" | "schedule" | "now";
   targets: { key: string; channel: string; groupId: string; body: string; subject?: string; postAt?: string | null }[];
 };
 
-/** `blocked`: nothing was saved; the text says which fabricated statistic and what to say instead. */
+/** `blocked`: nothing was saved; the text says which fabricated statistic and what to say instead, or which rule the picked file carries. */
 export type ComposeResult = { id: string; scheduled: number; posted: number; pushed: number; blocked?: string };
 
 const isChannel = (c: string): c is Channel => (CHANNELS as readonly string[]).includes(c);
+
+/** The picked attachment, when it is a photo or video on one of this client's own approved proofs in this workspace. Anything else is nothing. */
+async function pickedAttachment(id: string | null | undefined, workspaceId: string, userId: string) {
+  if (!id) return null;
+  const att = await db.query.proofAttachments.findFirst({ where: and(eq(schema.proofAttachments.id, id), eq(schema.proofAttachments.workspaceId, workspaceId)) });
+  if (!att || att.kind === "document") return null;
+  const proof = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, att.proofId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) });
+  return proof ? att : null;
+}
 
 /** Saves the post and one variant per target. Schedules or marks posted; pushes scheduled channel posts to the Social Planner. */
 export async function saveComposeAction(payload: ComposePayload): Promise<ComposeResult> {
@@ -44,6 +58,14 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     const quotes = (await db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) })).flatMap((p) => [p.quote, p.longVersion, p.shortVersion].filter((x): x is string => Boolean(x)));
     return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: explainFabricated(fabricated, { text: everything, quotes }) };
   }
+  // The picked file, if it is the client's to pick. A file that shows a result carries the dollar-figure rule: the gate is the
+  // server's, not only the button's, so scheduling or posting without the marker saves nothing and says why. A draft may hold it.
+  const attachment = await pickedAttachment(payload.mediaAttachmentId, workspaceId, userId);
+  const mediaBlocked = payload.mode !== "draft" ? mediaBlock(attachment, [payload.body, ...payload.targets.map((t) => t.body)]) : null;
+  if (mediaBlocked) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: mediaBlocked };
+  // A typed address goes to the Social Planner as-is: it must be a public web address, never one of our private routes.
+  const urlProblem = mediaUrlProblem(payload.mediaUrl, payload.mode !== "draft");
+  if (urlProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: urlProblem };
   const title = payload.title.trim() || payload.hook.trim().slice(0, 80) || "Untitled post";
   const firstAt = payload.targets.map((t) => t.postAt).filter(Boolean).sort()[0] ?? null;
   const status = payload.mode === "now" ? "posted" : payload.mode === "schedule" ? "scheduled" : "ready";
@@ -53,7 +75,9 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     body: payload.body.trim() || null,
     cta: payload.cta.trim() || null,
     hasCta: payload.hasCta,
+    // The typed URL is the only media the Social Planner is ever handed; the attachment is a private file and stays an id here.
     mediaUrl: payload.mediaUrl.trim() || null,
+    mediaAttachmentId: attachment?.id ?? null,
     contentType: payload.contentType || "CTA Post",
     status: status as "posted" | "scheduled" | "ready",
     postAt: payload.mode === "schedule" ? firstAt : payload.mode === "now" ? nowIso().slice(0, 19) : null,
@@ -145,7 +169,7 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
   const targets: Target[] = [...groupTargets(picked), ...channelTargets()];
   const when = staggerSchedule(targets, `${startDate}T${startTime}:00`);
   const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, ctaText: item.cta, hashtag: v.membership.passHashtag, firstName: v.user.name.split(" ")[0] };
-  await saveComposeAction({
+  const result = await saveComposeAction({
     id: item.id,
     title: item.title,
     hook: item.hook ?? "",
@@ -153,6 +177,7 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
     cta: item.cta ?? "",
     hasCta: item.hasCta,
     mediaUrl: item.mediaUrl ?? "",
+    mediaAttachmentId: item.mediaAttachmentId,
     contentType: item.contentType,
     mode: "schedule",
     targets: targets.map((t) => {
@@ -160,4 +185,6 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
       return { key: t.key, channel: t.channel, groupId: t.groupId, body: d.body, subject: d.subject, postAt: when.get(t.key) ? `${when.get(t.key)}:00` : null };
     }),
   });
+  // A block is never silent: the page that offered the button names it.
+  if (result.blocked) redirect(`/content/${item.id}/repurpose?blocked=${result.blocked.startsWith(ILLUSTRATIVE_LABEL) ? "media" : mediaUrlProblem(item.mediaUrl ?? "") ? "url" : "fabricated"}`);
 }

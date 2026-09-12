@@ -97,6 +97,10 @@ const ENV_ALLOW: { file: string; token: string; why: string }[] = [
 // function that explains or describes an upstream reply, any returned template. A prompt built from a client's own draft is
 // neither, so a bare `return \`` outside such a function is not a context.
 const CONTEXT = /\b(error|note|lastError|externalError|refusal|reason)\s*:|new Error\(|\bthrow\s+`/;
+// A component's state setter fed an error object's own words (setError(e.message)) is a screen too; a setter fed the client's
+// own text (setBody(text)) is not, so only the error-object forms count here.
+const SETTER = /\bset[A-Z]\w*\(/;
+const SETTER_UPSTREAM = /\.message\b|String\((e|err|error)\)/;
 const EXPLAINER_RETURN = /\breturn\s+`/;
 const UPSTREAM_TOKENS = "msg|message|body|text|statusText|detail|reply";
 const UPSTREAM = new RegExp(`\\$\\{[^}]*(\\b(${UPSTREAM_TOKENS})\\b|\\.message\\b|String\\((e|err|error)\\)|res\\.text\\(\\))[^}]*\\}|\\+\\s*(${UPSTREAM_TOKENS})\\b|\\b(error|note|lastError|externalError|refusal|reason)\\s*:\\s*(e instanceof Error \\? e\\.message|\\(e as Error\\)\\.message|(e|err|error)\\.message|String\\((e|err|error)\\)|${UPSTREAM_TOKENS})\\b(?!\\s*\\()`);
@@ -149,7 +153,8 @@ describe("client-facing errors: what happened and what to do next, never our int
           if (decl) fn = decl[1] ?? decl[2] ?? "";
           if (/console\.(error|warn|log|info|debug)\(|\blog[A-Z]\w*\(/.test(line)) return;
           const context = CONTEXT.test(line) || (/^(explain|describe)/.test(fn) && EXPLAINER_RETURN.test(line));
-          if (!context || !UPSTREAM.test(line)) return;
+          const setter = SETTER.test(line) && SETTER_UPSTREAM.test(line);
+          if (!(context && UPSTREAM.test(line)) && !setter) return;
           if (UPSTREAM_ALLOW.some((a) => a.file === r && line.includes(a.snippet))) return;
           hits.push(`${r}:${i + 1}: ${line.trim().slice(0, 140)}`);
         });

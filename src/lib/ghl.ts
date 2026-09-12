@@ -80,7 +80,7 @@ export async function credentials(conn: SocialConnection): Promise<GhlResult<{ t
   if (!target.ok) {
     // The allowlist message names a variable for the operator who can set it, on the coach's Integrations page; a client's note gets a sentence.
     logGhl("API URL refused for a member's push", { reason: target.error });
-    return { ok: false, error: "Publishing isn't set up on this server yet. Ask your coach." };
+    return { ok: false, error: "Publishing isn't set up yet. Ask your coach." };
   }
   const token = open(conn.manualToken);
   if (!token) return { ok: false, error: "Paste your sub-account's Private Integration token on Settings → Publishing." };

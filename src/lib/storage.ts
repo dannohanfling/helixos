@@ -1,19 +1,20 @@
 /**
- * The object store: Vercel Blob, with the database keeping an index (key, url, size, type, public or not), never the bytes.
- * Two writers, on purpose: putPublicMagnet (and recordPublicMagnet, for a file the browser sent straight to the bucket)
- * write only under public/magnets/<slug>/ and are the only functions that mark an object public; putPrivateAttachment
- * writes only under private/attachments/<workspace>/ with private access and never marks it public. Not a flag on one
- * function. A public object's URL is the bucket's CDN address; a private object has no URL anywhere in the app. The read
- * path (/files) resolves a key to its URL only when the prefix and the recorded flag both agree.
+ * The PUBLIC object store: Vercel Blob (helixos-blob, created Public), with the database keeping an index (key, url, size,
+ * type, public or not), never the bytes. Only lead magnet files live here: putPublicMagnet (and recordPublicMagnet, for a
+ * file the browser sent straight to the bucket) write only under public/magnets/<slug>/ and are the only functions that
+ * mark an object public. Access is a property of the store, so nothing private can be written here at all: a proof's
+ * attachment goes to the private store in src/lib/proof-storage.ts, on that store's own token. The two-writer split now
+ * means two stores. A public object's URL is the bucket's CDN address; the read path (/files) resolves a key to its URL
+ * only when the prefix and the recorded flag both agree.
  *
- * Configuration: BLOB_READ_WRITE_TOKEN (Vercel Blob). Without it the store refuses to write and the pages say so; nothing
- * falls back to the database. VERCEL_BLOB_API_URL points the SDK at scripts/mock-blob.ts for local walks.
+ * Configuration: BLOB_READ_WRITE_TOKEN (the public store). Without it the store refuses to write and the pages say so;
+ * nothing falls back to the database. VERCEL_BLOB_API_URL points the SDK at scripts/mock-blob.ts for local walks.
  */
 import { del, head, put } from "@vercel/blob";
 import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
-import { keyIsPublic, privateAttachmentKey, publicMagnetKey } from "@/lib/engine/storage-policy";
+import { keyIsPublic, publicMagnetKey } from "@/lib/engine/storage-policy";
 
 export type Stored = { key: string; url: string | null; size: number; contentType: string };
 
@@ -50,16 +51,6 @@ export async function recordPublicMagnet(workspaceId: string, key: string, url: 
   if (blob.pathname !== key) throw new Error("the object at that URL is not the key it claims");
   await db.insert(schema.files).values({ key, workspaceId, contentType: blob.contentType, url: blob.url, size: blob.size, isPublic: true }).onConflictDoUpdate({ target: schema.files.key, set: { url: blob.url, size: blob.size, contentType: blob.contentType } });
   return { key, url: blob.url, size: blob.size, contentType: blob.contentType };
-}
-
-/** A private attachment (a proof's screenshot, a face, a DM capture). Private access in the bucket, never public, never at a public URL. */
-export async function putPrivateAttachment(workspaceId: string, name: string, bytes: Buffer, contentType: string): Promise<Stored> {
-  requireStorage();
-  const key = privateAttachmentKey(workspaceId, newId(), name);
-  if (keyIsPublic(key)) throw new Error("a private attachment can never carry a public key");
-  const blob = await put(key, bytes, { access: "private", contentType, addRandomSuffix: false });
-  await db.insert(schema.files).values({ key, workspaceId, contentType, url: blob.url, size: bytes.length, isPublic: false });
-  return { key, url: null, size: bytes.length, contentType };
 }
 
 /** The public URL of one object: both conditions, the prefix and the recorded flag, or nothing. */

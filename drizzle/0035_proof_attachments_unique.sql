@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX `proof_attachments_blob_key` ON `proof_attachments` (`blob_key`);--> statement-breakpoint
+CREATE UNIQUE INDEX `proof_attachments_display_key` ON `proof_attachments` (`display_key`);

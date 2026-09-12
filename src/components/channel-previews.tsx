@@ -13,8 +13,12 @@ function Avatar({ p, size = 36 }: { p: Persona; size?: number }) {
   );
 }
 
-function Media({ url, ratio = "16 / 9", hint = "Add a photo or video and it shows here" }: { url?: string; ratio?: string; hint?: string }) {
-  return url ? (
+type MediaKind = "image" | "video";
+
+function Media({ url, kind = "image", ratio = "16 / 9", hint = "Add a photo or video and it shows here" }: { url?: string; kind?: MediaKind; ratio?: string; hint?: string }) {
+  return url && kind === "video" ? (
+    <video src={url} muted playsInline controls preload="metadata" className="w-full rounded-md bg-ink object-cover" style={{ aspectRatio: ratio }} />
+  ) : url ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={url} alt="" className="w-full rounded-md object-cover" style={{ aspectRatio: ratio }} />
   ) : (
@@ -45,7 +49,7 @@ const Bar = ({ items }: { items: string[] }) => (
   </div>
 );
 
-function Facebook({ p, d, media, where }: { p: Persona; d: Draft; media?: string; where?: string }) {
+function Facebook({ p, d, media, mediaKind, where }: { p: Persona; d: Draft; media?: string; mediaKind?: MediaKind; where?: string }) {
   return (
     <div className="rounded-xl border bg-surface p-3">
       <div className="flex items-center gap-2">
@@ -63,7 +67,7 @@ function Facebook({ p, d, media, where }: { p: Persona; d: Draft; media?: string
       </div>
       {media ? (
         <div className="mt-2">
-          <Media url={media} />
+          <Media url={media} kind={mediaKind} />
         </div>
       ) : null}
       <Bar items={["👍 Like", "💬 Comment", "↗ Share"]} />
@@ -71,7 +75,7 @@ function Facebook({ p, d, media, where }: { p: Persona; d: Draft; media?: string
   );
 }
 
-function Instagram({ p, d, media }: { p: Persona; d: Draft; media?: string }) {
+function Instagram({ p, d, media, mediaKind }: { p: Persona; d: Draft; media?: string; mediaKind?: MediaKind }) {
   return (
     <div className="rounded-xl border bg-surface">
       <div className="flex items-center justify-between p-3">
@@ -81,7 +85,7 @@ function Instagram({ p, d, media }: { p: Persona; d: Draft; media?: string }) {
         </div>
         <span className="text-ink-3">···</span>
       </div>
-      <Media url={media} ratio="1 / 1" hint="Make your post stand out with a photo or reel" />
+      <Media url={media} kind={mediaKind} ratio="1 / 1" hint="Make your post stand out with a photo or reel" />
       <div className="p-3">
         <div className="flex items-center justify-between text-base">
           <span>♡ &nbsp;💬 &nbsp;➤</span>
@@ -96,7 +100,7 @@ function Instagram({ p, d, media }: { p: Persona; d: Draft; media?: string }) {
   );
 }
 
-function Threads({ p, d, media }: { p: Persona; d: Draft; media?: string }) {
+function Threads({ p, d, media, mediaKind }: { p: Persona; d: Draft; media?: string; mediaKind?: MediaKind }) {
   return (
     <div className="flex gap-3 rounded-xl border bg-surface p-3">
       <Avatar p={p} />
@@ -110,7 +114,7 @@ function Threads({ p, d, media }: { p: Persona; d: Draft; media?: string }) {
         </div>
         {media ? (
           <div className="mt-2">
-            <Media url={media} ratio="4 / 3" />
+            <Media url={media} kind={mediaKind} ratio="4 / 3" />
           </div>
         ) : null}
         <div className="mt-2 text-sm text-ink-3">♡ &nbsp; 💬 &nbsp; ↻ &nbsp; ➤</div>
@@ -119,7 +123,7 @@ function Threads({ p, d, media }: { p: Persona; d: Draft; media?: string }) {
   );
 }
 
-function LinkedIn({ p, d, media }: { p: Persona; d: Draft; media?: string }) {
+function LinkedIn({ p, d, media, mediaKind }: { p: Persona; d: Draft; media?: string; mediaKind?: MediaKind }) {
   return (
     <div className="rounded-xl border bg-surface p-3">
       <div className="flex items-center gap-2">
@@ -135,7 +139,7 @@ function LinkedIn({ p, d, media }: { p: Persona; d: Draft; media?: string }) {
       </div>
       {media ? (
         <div className="mt-2">
-          <Media url={media} />
+          <Media url={media} kind={mediaKind} />
         </div>
       ) : null}
       <Bar items={["👍 Like", "💬 Comment", "↻ Repost", "➤ Send"]} />
@@ -197,16 +201,16 @@ function Skool({ p, d, title }: { p: Persona; d: Draft; title: string }) {
   );
 }
 
-export function ChannelPreview({ t, d, p, media, title }: { t: Target; d: Draft; p: Persona; media?: string; title: string }) {
+export function ChannelPreview({ t, d, p, media, mediaKind, title }: { t: Target; d: Draft; p: Persona; media?: string; mediaKind?: MediaKind; title: string }) {
   const ch: Channel = t.channel;
-  if (t.group) return <Facebook p={p} d={d} media={media} where={t.group.name} />;
+  if (t.group) return <Facebook p={p} d={d} media={media} mediaKind={mediaKind} where={t.group.name} />;
   switch (ch) {
     case "instagram":
-      return <Instagram p={p} d={d} media={media} />;
+      return <Instagram p={p} d={d} media={media} mediaKind={mediaKind} />;
     case "threads":
-      return <Threads p={p} d={d} media={media} />;
+      return <Threads p={p} d={d} media={media} mediaKind={mediaKind} />;
     case "linkedin":
-      return <LinkedIn p={p} d={d} media={media} />;
+      return <LinkedIn p={p} d={d} media={media} mediaKind={mediaKind} />;
     case "email":
       return <Email p={p} d={d} />;
     case "stories":
@@ -214,10 +218,10 @@ export function ChannelPreview({ t, d, p, media, title }: { t: Target; d: Draft;
     case "skool":
       return <Skool p={p} d={d} title={title} />;
     case "fb_page":
-      return <Facebook p={{ ...p, name: p.business || p.name }} d={d} media={media} />;
+      return <Facebook p={{ ...p, name: p.business || p.name }} d={d} media={media} mediaKind={mediaKind} />;
     case "fb_group":
-      return <Facebook p={p} d={d} media={media} where="Your group" />;
+      return <Facebook p={p} d={d} media={media} mediaKind={mediaKind} where="Your group" />;
     default:
-      return <Facebook p={p} d={d} media={media} />;
+      return <Facebook p={p} d={d} media={media} mediaKind={mediaKind} />;
   }
 }

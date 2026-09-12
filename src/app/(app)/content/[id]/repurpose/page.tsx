@@ -7,6 +7,7 @@ import { hasAiKey } from "@/lib/ai";
 import { generateVariantsAction, updateVariantAction } from "@/lib/actions/variants";
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
 import { distributeAllAction } from "@/lib/actions/compose";
+import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, PRIVATE_URL_REFUSAL } from "@/lib/engine/compose-media";
 import { syncPostStatusAction } from "@/lib/actions/social";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
@@ -107,9 +108,12 @@ function GroupCard({ g, var_, src, slot }: { g: Group; var_?: ContentVariant; sr
   );
 }
 
-export default async function RepurposePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
+  const { blocked } = await searchParams;
+  // The page's own sentences, chosen by a code: a block on the one-click send is never silent and never free text from the address bar.
+  const blockedLine = blocked === "media" ? `${ILLUSTRATIVE_LABEL}\nAn attached file shows a result. Add ${ILLUSTRATIVE_MARK} to the post, in every version that goes out. Nothing was scheduled.` : blocked === "url" ? `${PRIVATE_URL_REFUSAL} Nothing was scheduled.` : blocked === "fabricated" ? "A statistic in this post is on the blacklist, so nothing was scheduled. Open it in the composer to see which one and what to say instead." : null;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
   if (!item) notFound();
   const [variants, groups] = await Promise.all([
@@ -143,6 +147,9 @@ export default async function RepurposePage({ params }: { params: Promise<{ id: 
         }
       />
 
+      {blockedLine ? (
+        <p className="mb-4 whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="distribute-blocked" role="alert">{blockedLine}</p>
+      ) : null}
       <Card className="mb-4" title="One click: everywhere" action={<Link href={`/content/${item.id}/compose`} className="text-xs underline">Open in composer</Link>}>
         <form action={distributeAllAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="contentItemId" value={item.id} />

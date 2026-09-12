@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
-import { UPLOAD_MAX_BYTES, UPLOAD_TYPES, publicFolderOf } from "@/lib/engine/storage-policy";
+import { UPLOAD_MAX_BYTES, UPLOAD_TYPES, UploadRefusal, publicFolderOf } from "@/lib/engine/storage-policy";
 import { STORAGE_UNCONFIGURED, storageConfigured } from "@/lib/storage";
 
 /**
@@ -27,19 +27,17 @@ export async function POST(request: Request) {
       onBeforeGenerateToken: async (pathname, clientPayload) => {
         const magnetId = (JSON.parse(clientPayload ?? "{}") as { magnetId?: string }).magnetId ?? "";
         const m = await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, magnetId), eq(schema.leadMagnets.userId, v.user.id)) });
-        if (!m) throw new Error("That lead magnet is not yours.");
-        if (publicFolderOf(pathname) !== m.slug) throw new Error("A magnet's file goes under the magnet's own folder and nowhere else.");
+        if (!m) throw new UploadRefusal("That lead magnet is not yours.");
+        if (publicFolderOf(pathname) !== m.slug) throw new UploadRefusal("A magnet's file goes under the magnet's own folder and nowhere else.");
         return { allowedContentTypes: [...UPLOAD_TYPES], maximumSizeInBytes: UPLOAD_MAX_BYTES, addRandomSuffix: false, allowOverwrite: false, tokenPayload: JSON.stringify({ magnetId: m.id }) };
       },
-      // Vercel's completion callback cannot reach a local server and may arrive late in production, so it records nothing:
-      // the browser calls recordMagnetUploadAction once the bytes are in, and that reads the object back from the bucket.
-      onUploadCompleted: async () => {},
+      // No completion callback (it would be minted into the client token and could not reach a local server anyway): the
+      // browser calls recordMagnetUploadAction once the bytes are in, and that reads the object back from the bucket.
     });
     return NextResponse.json(json);
   } catch (e) {
-    // Our own refusals (not the client's magnet, the wrong folder) are plain sentences and pass through; anything else is the SDK's and is logged, not shown.
-    const ours = e instanceof Error && /not yours|own folder/.test(e.message);
-    console.error("[storage] upload token refused", JSON.stringify({ message: e instanceof Error ? e.message : String(e) }));
-    return NextResponse.json({ error: ours ? (e as Error).message : "The upload was refused. Try again in a minute." }, { status: 400 });
+    // Only a refusal this door wrote reaches the screen; anything else is the SDK's and is logged, not shown.
+    console.error("[storage] upload token refused", JSON.stringify({ message: (e instanceof Error ? e.message : String(e)).slice(0, 300) }));
+    return NextResponse.json({ error: e instanceof UploadRefusal ? e.message : "The upload was refused. Try again in a minute." }, { status: 400 });
   }
 }

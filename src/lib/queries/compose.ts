@@ -7,7 +7,9 @@ import { readiness } from "@/lib/engine/ghl-map";
 import type { GroupTarget } from "@/lib/engine/compose";
 import type { Persona } from "@/components/channel-previews";
 import { visibleLibrary } from "./library-posts";
+import { attachmentsForProofs } from "./proof-attachments";
 import { withAttribution } from "@/lib/engine/fathom";
+import { downloadUrlFor, mediaUrlFor, type ComposerMedia } from "@/lib/engine/compose-media";
 
 /** Everything the composer needs: the user's groups (own + top 3 + members), persona for previews, AI and Social Planner state. */
 export async function composerContext(v: Viewer) {
@@ -18,10 +20,17 @@ export async function composerContext(v: Viewer) {
     db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
   // Approved proof only, a line or two with the name attached: a draft quote never reaches the composer.
+  // The same proofs' photos and videos are offered as media (a document is not post media); the client picks, nothing attaches on its own.
+  const proofName = new Map(approvedProofs.map((p) => [p.id, p.name]));
+  const attachments = await attachmentsForProofs(approvedProofs.map((p) => p.id));
+  const media: ComposerMedia[] = attachments
+    .filter((a): a is typeof a & { kind: "image" | "video" } => a.kind === "image" || a.kind === "video")
+    .map((a) => ({ id: a.id, proofId: a.proofId, proofTitle: proofName.get(a.proofId) ?? "", kind: a.kind, label: `${proofName.get(a.proofId) ?? ""} · ${a.originalFilename}`, url: mediaUrlFor(a), downloadUrl: downloadUrlFor(a), hasAlt: Boolean(a.altText?.trim()), showsAResult: a.showsAResult }));
   const snippets = {
     hooks: lib.filter((p) => p.kind === "hook").map((p) => ({ id: p.id, title: p.title, text: p.hook ?? p.body })),
     ctas: lib.filter((p) => p.kind === "cta").map((p) => ({ id: p.id, title: p.title, text: p.cta ?? p.body })),
     proofs: approvedProofs.map((p) => ({ id: p.id, title: p.name, text: p.quote ? withAttribution(p.shortVersion ?? p.quote, p.who) : (p.hook ?? p.punchline ?? p.shortVersion ?? "") })).filter((p) => p.text),
+    media,
   };
   const ordered: GroupTarget[] = [
     ...groups.filter((g) => g.kind === "own"),

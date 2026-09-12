@@ -9,6 +9,7 @@ import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { channelBodies, checklist, masterBlock, outputContract, parseLadderOutput, parseRungs, perPostInput, publishBlockers, scaffold, type Brief, type Parsed } from "@/lib/engine/ladder";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
+import { mediaBlock } from "@/lib/engine/compose-media";
 import { evidenceLines } from "@/lib/engine/evidence";
 import { citableEvidence } from "@/lib/queries/evidence";
 import { pushSocialPost } from "@/lib/integrations";
@@ -295,6 +296,9 @@ export async function pushLadderUpdateAction(formData: FormData): Promise<void> 
   await assertPublishable(l);
   const item = l.contentItemId ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, l.contentItemId), eq(schema.contentItems.userId, userId)) }) : null;
   const stale = item ? await staleScheduledFor(l) : [];
+  // The item may carry a picked file that shows a result: the rewritten bodies must still say illustrative, or nothing is pushed.
+  const picked = item?.mediaAttachmentId ? await db.query.proofAttachments.findFirst({ where: and(eq(schema.proofAttachments.id, item.mediaAttachmentId), eq(schema.proofAttachments.workspaceId, workspaceId)) }) : null;
+  if (mediaBlock(picked ?? null, stale.map((s) => s.body))) redirect(`/content/ladders/${l.id}?blocked=illustrative`);
   let pushed = 0;
   for (const s of stale) {
     await db.update(schema.contentVariants).set({ body: s.body, generatedBy: "ladder" }).where(eq(schema.contentVariants.id, s.variantId));

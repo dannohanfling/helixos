@@ -5,55 +5,163 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
-import { deleteWebinarAction, draftSectionAction, linkOfferAction, saveReadinessAction, updateRunAction, updateSectionAction, updateWebinarBeliefsAction, updateWebinarFoundationAction } from "@/lib/actions/webinars";
+import {
+  deleteWebinarAction,
+  draftSectionAction,
+  linkOfferAction,
+  saveReadinessAction,
+  updateRunAction,
+  updateSectionAction,
+  updateWebinarBeliefsAction,
+  updateWebinarFoundationAction,
+} from "@/lib/actions/webinars";
 import { CopyButton } from "@/components/copy-button";
-import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/components/ui";
-import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, STEPS, WIZARD_STAGES, deckOutline, freeTextProofUsable, nextStep, readinessScore, webinarProgress, type StepKey } from "@/lib/engine/webinar";
+import {
+  Badge,
+  Card,
+  Disclosure,
+  Field,
+  PageHeader,
+  Progress,
+} from "@/components/ui";
+import {
+  ACTS,
+  READINESS_DIMENSIONS,
+  SECTION_TEMPLATES,
+  STEPS,
+  WIZARD_STAGES,
+  deckOutline,
+  freeTextProofUsable,
+  nextStep,
+  readinessScore,
+  webinarProgress,
+  type StepKey,
+} from "@/lib/engine/webinar";
 import { essenceFor } from "@/lib/queries/essence";
 import type { Story } from "@/lib/engine/essence";
 import { assetsFor } from "@/lib/queries/library";
 import { citableEvidence } from "@/lib/queries/evidence";
+import { attachmentsForProofs } from "@/lib/queries/proof-attachments";
 import { insertText } from "@/lib/engine/evidence";
 import { AssetForm } from "@/components/asset-form";
+import { ProofPicker, type ProofImage } from "@/components/proof-picker";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 
-const ACT_ICON: Record<string, string> = { opening: "🎬", vehicle: "🎯", internal: "💪", external: "🌍", closing: "🎭" };
+const ACT_ICON: Record<string, string> = {
+  opening: "🎬",
+  vehicle: "🎯",
+  internal: "💪",
+  external: "🌍",
+  closing: "🎭",
+};
 
-export default async function WebinarWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ step?: string; section?: string; act?: string; stripped?: string; toBank?: string }> }) {
+export default async function WebinarWizardPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{
+    step?: string;
+    section?: string;
+    act?: string;
+    stripped?: string;
+    toBank?: string;
+  }>;
+}) {
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
   const ai = await hasAiKey();
-  const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
+  const w = await db.query.webinars.findFirst({
+    where: and(
+      eq(schema.webinars.id, id),
+      eq(schema.webinars.userId, v.user.id),
+    ),
+  });
   if (!w) notFound();
-  const [sections, beliefs, reviews, offers, assets, proofs, evidence, essence] = await Promise.all([
-    db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, id), orderBy: asc(schema.webinarSections.order) }),
-    db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) }),
-    db.query.readinessReviews.findMany({ where: eq(schema.readinessReviews.webinarId, id), orderBy: desc(schema.readinessReviews.createdAt) }),
+  const [
+    sections,
+    beliefs,
+    reviews,
+    offers,
+    assets,
+    proofs,
+    evidence,
+    essence,
+  ] = await Promise.all([
+    db.query.webinarSections.findMany({
+      where: eq(schema.webinarSections.webinarId, id),
+      orderBy: asc(schema.webinarSections.order),
+    }),
+    db.query.webinarBeliefs.findMany({
+      where: eq(schema.webinarBeliefs.webinarId, id),
+    }),
+    db.query.readinessReviews.findMany({
+      where: eq(schema.readinessReviews.webinarId, id),
+      orderBy: desc(schema.readinessReviews.createdAt),
+    }),
     db.query.offers.findMany({ where: eq(schema.offers.userId, v.user.id) }),
     assetsFor(v.workspace.id, v.user.id),
-    db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
+    db.query.proofs.findMany({
+      where: and(
+        eq(schema.proofs.userId, v.user.id),
+        eq(schema.proofs.status, "approved"),
+      ),
+    }),
     citableEvidence(v.user.id),
     essenceFor(v.workspace.id, v.user.id),
   ]);
-  const essenceStories = ((essence.representative_stories?.stories as Story[] | undefined) ?? []).filter((st) => st.name || st.summary);
+  const essenceStories = (
+    (essence.representative_stories?.stories as Story[] | undefined) ?? []
+  ).filter((st) => st.name || st.summary);
+  const proofImages: ProofImage[] = (
+    await attachmentsForProofs(proofs.map((pr) => pr.id))
+  )
+    .filter((a) => a.kind === "image")
+    .map((a) => ({
+      id: a.id,
+      proofId: a.proofId,
+      displayKey: a.displayKey,
+      altText: a.altText,
+      showsAResult: a.showsAResult,
+    }));
   const review = reviews[0] ?? null;
   const progress = webinarProgress(w, sections, beliefs, review);
-  const step = (STEPS.find((s) => s.key === sp.step)?.key ?? nextStep(progress.steps)) as StepKey;
+  const step = (STEPS.find((s) => s.key === sp.step)?.key ??
+    nextStep(progress.steps)) as StepKey;
   const stories = assets.filter((a) => a.type === "story");
-  const frameworks = assets.filter((a) => a.type === "framework").sort((a, b) => (a.extra.priority === "High" ? 0 : 1) - (b.extra.priority === "High" ? 0 : 1) || a.name.localeCompare(b.name));
+  const frameworks = assets
+    .filter((a) => a.type === "framework")
+    .sort(
+      (a, b) =>
+        (a.extra.priority === "High" ? 0 : 1) -
+          (b.extra.priority === "High" ? 0 : 1) || a.name.localeCompare(b.name),
+    );
   const offer = w.offerId ? offers.find((o) => o.id === w.offerId) : undefined;
-  const components = offer ? await db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, offer.id), orderBy: asc(schema.offerComponents.order) }) : [];
+  const components = offer
+    ? await db.query.offerComponents.findMany({
+        where: eq(schema.offerComponents.offerId, offer.id),
+        orderBy: asc(schema.offerComponents.order),
+      })
+    : [];
 
   // Script step state
-  const sectionKey = sp.section ?? sections.find((s) => s.status === "todo")?.sectionKey ?? sections[0]?.sectionKey;
-  const section = sections.find((s) => s.sectionKey === sectionKey) ?? sections[0];
+  const sectionKey =
+    sp.section ??
+    sections.find((s) => s.status === "todo")?.sectionKey ??
+    sections[0]?.sectionKey;
+  const section =
+    sections.find((s) => s.sectionKey === sectionKey) ?? sections[0];
   const tpl = SECTION_TEMPLATES.find((t) => t.key === section?.sectionKey);
   const actKey = sp.act ?? section?.act ?? "opening";
   const act = ACTS.find((a) => a.key === actKey)!;
-  const sectionAssets = tpl?.assetType ? assets.filter((a) => a.type === tpl.assetType) : [];
-  const chosenAsset = section?.assetId ? assets.find((a) => a.id === section.assetId) : undefined;
+  const sectionAssets = tpl?.assetType
+    ? assets.filter((a) => a.type === tpl.assetType)
+    : [];
+  const chosenAsset = section?.assetId
+    ? assets.find((a) => a.id === section.assetId)
+    : undefined;
   const idx = sections.findIndex((s) => s.sectionKey === section?.sectionKey);
   const nextSection = sections[idx + 1];
 
@@ -66,16 +174,28 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
             <Link href="/webinars" className="hover:underline">
               ← Webinars
             </Link>
-            <Badge tone={w.status === "ready" || w.status === "scheduled" ? "good" : "accent"}>{w.status}</Badge>
+            <Badge
+              tone={
+                w.status === "ready" || w.status === "scheduled"
+                  ? "good"
+                  : "accent"
+              }
+            >
+              {w.status}
+            </Badge>
             <span>
-              {progress.drafted}/{sections.length} sections · ~{progress.totalMinutes} min · {progress.overall}% built
+              {progress.drafted}/{sections.length} sections · ~
+              {progress.totalMinutes} min · {progress.overall}% built
             </span>
           </span>
         }
         action={
           <form action={deleteWebinarAction}>
             <input type="hidden" name="id" value={w.id} />
-            <button className="text-xs text-ink-3 hover:text-danger" type="submit">
+            <button
+              className="text-xs text-ink-3 hover:text-danger"
+              type="submit"
+            >
               Delete
             </button>
           </form>
@@ -88,11 +208,19 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
           const pct = Math.round((progress.steps[s.key] ?? 0) * 100);
           const active = s.key === step;
           return (
-            <Link key={s.key} href={`/webinars/${w.id}?step=${s.key}`} className={`rounded-xl border p-2.5 text-left transition hover:border-ink ${active ? "border-accent bg-accent-soft" : pct >= 100 ? "bg-good-soft" : "bg-surface"}`}>
+            <Link
+              key={s.key}
+              href={`/webinars/${w.id}?step=${s.key}`}
+              className={`rounded-xl border p-2.5 text-left transition hover:border-ink ${active ? "border-accent bg-accent-soft" : pct >= 100 ? "bg-good-soft" : "bg-surface"}`}
+            >
               <div className="text-base">{s.icon}</div>
               <div className="text-xs font-semibold">{s.label}</div>
               <div className="mt-1.5">
-                <Progress value={pct} tone={pct >= 100 ? "good" : "accent"} height={3} />
+                <Progress
+                  value={pct}
+                  tone={pct >= 100 ? "good" : "accent"}
+                  height={3}
+                />
               </div>
             </Link>
           );
@@ -102,47 +230,104 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
       {step === "foundation" ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
           <Card title="1 · Foundation">
-            <p className="mb-4 text-sm text-ink-2">{WIZARD_STAGES[0]?.description}</p>
-            <form action={updateWebinarFoundationAction} className="grid gap-3 sm:grid-cols-2">
+            <p className="mb-4 text-sm text-ink-2">
+              {WIZARD_STAGES[0]?.description}
+            </p>
+            <form
+              action={updateWebinarFoundationAction}
+              className="grid gap-3 sm:grid-cols-2"
+            >
               <input type="hidden" name="id" value={w.id} />
               <div className="sm:col-span-2">
                 <Field label="Title">
-                  <input className="field" name="title" defaultValue={w.title} required />
+                  <input
+                    className="field"
+                    name="title"
+                    defaultValue={w.title}
+                    required
+                  />
                 </Field>
               </div>
               <Field label="Type">
-                <select className="field" name="category" defaultValue={w.category}>
-                  {["Live", "Evergreen", "JV / partner", "Challenge"].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
+                <select
+                  className="field"
+                  name="category"
+                  defaultValue={w.category}
+                >
+                  {["Live", "Evergreen", "JV / partner", "Challenge"].map(
+                    (c) => (
+                      <option key={c}>{c}</option>
+                    ),
+                  )}
                 </select>
               </Field>
               <Field label="Call to action at the end">
-                <select className="field" name="ctaType" defaultValue={w.ctaType}>
-                  {["Book a call", "Buy now", "Apply", "Join the community", "Start the trial"].map((c) => (
+                <select
+                  className="field"
+                  name="ctaType"
+                  defaultValue={w.ctaType}
+                >
+                  {[
+                    "Book a call",
+                    "Buy now",
+                    "Apply",
+                    "Join the community",
+                    "Start the trial",
+                  ].map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>
               </Field>
               <div className="sm:col-span-2">
                 <Field label="Who is this for? (one specific person)">
-                  <textarea className="field" name="audience" defaultValue={w.audience ?? ""} placeholder="Busy moms of school-age kids who've tried every diet and quit by week three." />
+                  <textarea
+                    className="field"
+                    name="audience"
+                    defaultValue={w.audience ?? ""}
+                    placeholder="Busy moms of school-age kids who've tried every diet and quit by week three."
+                  />
                 </Field>
               </div>
               <Field label="Their core problem (in their words)">
-                <textarea className="field" name="coreProblem" defaultValue={w.coreProblem ?? ""} placeholder="I lose 10 lbs and gain it back every time." />
+                <textarea
+                  className="field"
+                  name="coreProblem"
+                  defaultValue={w.coreProblem ?? ""}
+                  placeholder="I lose 10 lbs and gain it back every time."
+                />
               </Field>
               <Field label="The result they want">
-                <textarea className="field" name="desiredResult" defaultValue={w.desiredResult ?? ""} placeholder="To stop starting over. To trust themselves around food." />
+                <textarea
+                  className="field"
+                  name="desiredResult"
+                  defaultValue={w.desiredResult ?? ""}
+                  placeholder="To stop starting over. To trust themselves around food."
+                />
               </Field>
               <div className="sm:col-span-2">
-                <Field label="The promise (specific, measurable, time-bound)" hint="What they walk away with by the end of the hour, and what changes if they act.">
-                  <textarea className="field" name="promise" defaultValue={w.promise ?? ""} placeholder="Leave with a 12-minute Tuesday plan and the 3 swaps that drop the first 5 lbs in 14 days." />
+                <Field
+                  label="The promise (specific, measurable, time-bound)"
+                  hint="What they walk away with by the end of the hour, and what changes if they act."
+                >
+                  <textarea
+                    className="field"
+                    name="promise"
+                    defaultValue={w.promise ?? ""}
+                    placeholder="Leave with a 12-minute Tuesday plan and the 3 swaps that drop the first 5 lbs in 14 days."
+                  />
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Your named mechanism" hint="Capital letters. Not 'my approach', a name they can repeat.">
-                  <input className="field" name="mechanismName" defaultValue={w.mechanismName ?? ""} placeholder="The 12-Minute Tuesday System" />
+                <Field
+                  label="Your named mechanism"
+                  hint="Capital letters. Not 'my approach', a name they can repeat."
+                >
+                  <input
+                    className="field"
+                    name="mechanismName"
+                    defaultValue={w.mechanismName ?? ""}
+                    placeholder="The 12-Minute Tuesday System"
+                  />
                 </Field>
               </div>
               <div className="sm:col-span-2">
@@ -166,84 +351,199 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
               </ol>
             </Card>
             <Card title="Done when">
-              <p className="text-sm text-ink-2">{WIZARD_STAGES[0]?.validation}</p>
+              <p className="text-sm text-ink-2">
+                {WIZARD_STAGES[0]?.validation}
+              </p>
             </Card>
           </div>
         </div>
       ) : null}
 
       {sp.toBank ? (
-        <p className="mb-4 rounded-lg bg-good-soft p-3 text-sm" data-testid="to-bank-notice" role="status">
-          Saved to your Proof Bank as a draft. Approve it in the <Link href="/proof" className="underline">Proof Bank</Link> and it becomes a pick here and everywhere else.
+        <p
+          className="mb-4 rounded-lg bg-good-soft p-3 text-sm"
+          data-testid="to-bank-notice"
+          role="status"
+        >
+          Saved to your Proof Bank as a draft. Approve it in the{" "}
+          <Link href="/proof" className="underline">
+            Proof Bank
+          </Link>{" "}
+          and it becomes a pick here and everywhere else.
         </p>
       ) : null}
       {step === "beliefs" ? (
         <form action={updateWebinarBeliefsAction} className="space-y-4">
           <input type="hidden" name="id" value={w.id} />
-          <p className="text-sm text-ink-2">{WIZARD_STAGES[1]?.description} Fill the three shifts. Each one becomes an act.</p>
+          <p className="text-sm text-ink-2">
+            {WIZARD_STAGES[1]?.description} Fill the three shifts. Each one
+            becomes an act.
+          </p>
           <div className="grid gap-4 lg:grid-cols-3">
             {(["vehicle", "internal", "external"] as const).map((type) => {
               const a = ACTS.find((x) => x.key === type)!;
               const b = beliefs.find((x) => x.type === type);
               return (
-                <Card key={type} title={`${ACT_ICON[type]} ${a.name.replace(/^[^\w]+/, "")}`}>
+                <Card
+                  key={type}
+                  title={`${ACT_ICON[type]} ${a.name.replace(/^[^\w]+/, "")}`}
+                >
                   <p className="mb-3 text-xs text-ink-2">{a.purpose}</p>
                   <div className="space-y-3">
-                    <Field label="They believe now" hint={a.beliefFrom ?? undefined}>
-                      <textarea className="field" name={`${type}_from`} defaultValue={b?.fromBelief ?? ""} />
+                    <Field
+                      label="They believe now"
+                      hint={a.beliefFrom ?? undefined}
+                    >
+                      <textarea
+                        className="field"
+                        name={`${type}_from`}
+                        defaultValue={b?.fromBelief ?? ""}
+                      />
                     </Field>
-                    <Field label="They must believe by the end" hint={a.beliefTo ?? undefined}>
-                      <textarea className="field" name={`${type}_to`} defaultValue={b?.toBelief ?? ""} />
+                    <Field
+                      label="They must believe by the end"
+                      hint={a.beliefTo ?? undefined}
+                    >
+                      <textarea
+                        className="field"
+                        name={`${type}_to`}
+                        defaultValue={b?.toBelief ?? ""}
+                      />
                     </Field>
-                    <Field label="Proof from the bank" hint="The same approved rows the ladder reads.">
-                      <select className="field" name={`${type}_proofId`} defaultValue={b?.proofId ?? ""} data-testid={`belief-proof-${type}`}>
-                        <option value="">None picked</option>
-                        {proofs.map((pr) => (
-                          <option key={pr.id} value={pr.id}>
-                            {pr.name}
-                          </option>
-                        ))}
-                      </select>
+                    <Field
+                      label="Proof from the bank"
+                      hint="The same approved rows the ladder reads."
+                    >
+                      <ProofPicker
+                        type={type}
+                        initialProofId={b?.proofId ?? ""}
+                        proofs={proofs.map((pr) => ({
+                          id: pr.id,
+                          name: pr.name,
+                        }))}
+                        images={proofImages}
+                      />
                     </Field>
-                    <Field label="Or proof you'll describe" hint="Only for proof that isn't in the bank yet. Someone else's result needs their permission, the same tick the bank asks for.">
-                      <textarea className="field" name={`${type}_proof`} defaultValue={b?.proof ?? ""} placeholder="Data, a screenshot, a client result." data-testid={`belief-freetext-${type}`} />
+                    <Field
+                      label="Or proof you'll describe"
+                      hint="Only for proof that isn't in the bank yet. Someone else's result needs their permission, the same tick the bank asks for."
+                    >
+                      <textarea
+                        className="field"
+                        name={`${type}_proof`}
+                        defaultValue={b?.proof ?? ""}
+                        placeholder="Data, a screenshot, a client result."
+                        data-testid={`belief-freetext-${type}`}
+                      />
                     </Field>
-                    {b && (b.proof ?? "").trim() && !b.proofPermissionAt && !b.proofChangedAt ? (
-                      <p className="text-xs text-ink-3" data-testid={`belief-grandfathered-${type}`}>Written before the permission tick existed. It stays usable; the tick applies to anything you change from now on.</p>
+                    {b &&
+                    (b.proof ?? "").trim() &&
+                    !b.proofPermissionAt &&
+                    !b.proofChangedAt ? (
+                      <p
+                        className="text-xs text-ink-3"
+                        data-testid={`belief-grandfathered-${type}`}
+                      >
+                        Written before the permission tick existed. It stays
+                        usable; the tick applies to anything you change from now
+                        on.
+                      </p>
                     ) : null}
                     {b && (b.proof ?? "").trim() && !freeTextProofUsable(b) ? (
-                      <p className="rounded-lg bg-warn-soft p-2 text-xs" data-testid={`belief-needs-tick-${type}`}>Not used in the script until you tick the permission line below.</p>
+                      <p
+                        className="rounded-lg bg-warn-soft p-2 text-xs"
+                        data-testid={`belief-needs-tick-${type}`}
+                      >
+                        Not used in the script until you tick the permission
+                        line below.
+                      </p>
                     ) : null}
                     <div className="space-y-2 rounded-lg border p-2">
-                      <Field label="Whose result is it" hint="First name and last initial is enough.">
-                        <input className="field" name={`${type}_proofWho`} defaultValue={b?.proofWho ?? ""} data-testid={`belief-who-${type}`} />
+                      <Field
+                        label="Whose result is it"
+                        hint="First name and last initial is enough."
+                      >
+                        <input
+                          className="field"
+                          name={`${type}_proofWho`}
+                          defaultValue={b?.proofWho ?? ""}
+                          data-testid={`belief-who-${type}`}
+                        />
                       </Field>
-                      <label className="flex items-start gap-2 text-xs" data-testid={`belief-permission-${type}`}>
-                        <input type="checkbox" name={`${type}_permission`} className="mt-0.5" defaultChecked={Boolean(b?.proofPermissionAt)} />
-                        <span>{b?.proofWho || "This person"} has given me permission to use what they said here in my marketing.</span>
+                      <label
+                        className="flex items-start gap-2 text-xs"
+                        data-testid={`belief-permission-${type}`}
+                      >
+                        <input
+                          type="checkbox"
+                          name={`${type}_permission`}
+                          className="mt-0.5"
+                          defaultChecked={Boolean(b?.proofPermissionAt)}
+                        />
+                        <span>
+                          {b?.proofWho || "This person"} has given me permission
+                          to use what they said here in my marketing.
+                        </span>
                       </label>
-                      {b?.proofPermissionAt ? <p className="text-[11px] text-ink-3">Ticked {formatDateTime(b.proofPermissionAt, v.tz)}.</p> : null}
+                      {b?.proofPermissionAt ? (
+                        <p className="text-[11px] text-ink-3">
+                          Ticked {formatDateTime(b.proofPermissionAt, v.tz)}.
+                        </p>
+                      ) : null}
                       <label className="flex items-start gap-2 text-xs">
-                        <input type="checkbox" name={`${type}_toBank`} className="mt-0.5" />
-                        <span>Add this to my Proof Bank (as a draft, approved there like every proof).</span>
+                        <input
+                          type="checkbox"
+                          name={`${type}_toBank`}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          Add this to my Proof Bank (as a draft, approved there
+                          like every proof).
+                        </span>
                       </label>
                     </div>
-                    <Field label="Evidence" hint="A confirmed study from your shelf. Claim and citation travel together.">
-                      <select className="field" name={`${type}_evidence`} defaultValue={b?.evidenceId ?? ""} data-testid={`belief-evidence-${type}`}>
+                    <Field
+                      label="Evidence"
+                      hint="A confirmed study from your shelf. Claim and citation travel together."
+                    >
+                      <select
+                        className="field"
+                        name={`${type}_evidence`}
+                        defaultValue={b?.evidenceId ?? ""}
+                        data-testid={`belief-evidence-${type}`}
+                      >
                         <option value="">None picked</option>
                         {evidence.map((e) => (
-                          <option key={`${e.source}:${e.id}`} value={e.source === "shared" ? `shared:${e.id}` : e.id}>
+                          <option
+                            key={`${e.source}:${e.id}`}
+                            value={
+                              e.source === "shared" ? `shared:${e.id}` : e.id
+                            }
+                          >
                             {e.name}
-                            {e.source === "shared" ? " (shared, Evolve Omega)" : ""}
+                            {e.source === "shared"
+                              ? " (shared, Evolve Omega)"
+                              : ""}
                           </option>
                         ))}
                       </select>
-                      <Link href={`/evidence?claim=${encodeURIComponent((b?.toBelief ?? "").trim())}`} className="mt-1 inline-block text-xs underline" data-testid={`find-research-${type}`}>
+                      <Link
+                        href={`/evidence?claim=${encodeURIComponent((b?.toBelief ?? "").trim())}`}
+                        className="mt-1 inline-block text-xs underline"
+                        data-testid={`find-research-${type}`}
+                      >
                         Find research for this →
                       </Link>
                     </Field>
-                    <Field label="Story that carries it" hint="From your story bank, or one of your own from your Essence.">
-                      <select className="field" name={`${type}_story`} defaultValue={b?.storyAssetId ?? ""}>
+                    <Field
+                      label="Story that carries it"
+                      hint="From your story bank, or one of your own from your Essence."
+                    >
+                      <select
+                        className="field"
+                        name={`${type}_story`}
+                        defaultValue={b?.storyAssetId ?? ""}
+                      >
                         <option value="">Pick a story…</option>
                         {essenceStories.map((st, i) => (
                           <option key={`essence:${i}`} value={`essence:${i}`}>
@@ -261,8 +561,12 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                   </div>
                   {a.example ? (
                     <details className="mt-3">
-                      <summary className="text-xs text-ink-3 underline">See the worked example</summary>
-                      <p className="mt-2 whitespace-pre-line text-xs text-ink-2">{a.example}</p>
+                      <summary className="text-xs text-ink-3 underline">
+                        See the worked example
+                      </summary>
+                      <p className="mt-2 whitespace-pre-line text-xs text-ink-2">
+                        {a.example}
+                      </p>
                     </details>
                   ) : null}
                 </Card>
@@ -278,7 +582,14 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
       ) : null}
       {step === "beliefs" ? (
         // Its own form, outside the beliefs form: nested, its required fields blocked the beliefs save silently.
-        <Disclosure summary={<span className="btn btn-ghost btn-sm">+ Add a story to your bank</span>} className="mt-3">
+        <Disclosure
+          summary={
+            <span className="btn btn-ghost btn-sm">
+              + Add a story to your bank
+            </span>
+          }
+          className="mt-3"
+        >
           <div className="card p-4">
             <AssetForm type="story" back={`/webinars/${w.id}?step=beliefs`} />
           </div>
@@ -294,45 +605,99 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                 const done = secs.filter((s) => s.status !== "todo").length;
                 const first = secs[0]?.sectionKey;
                 return (
-                  <Link key={a.key} href={`/webinars/${w.id}?step=script&section=${first}`} className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 font-medium ${a.key === act.key ? "bg-surface shadow-sm" : "text-ink-2"}`}>
-                    {ACT_ICON[a.key]} {a.name.replace(/^[^\w]+/, "").replace(/ — .*/, "")} <span className="badge">{done}/{secs.length}</span>
+                  <Link
+                    key={a.key}
+                    href={`/webinars/${w.id}?step=script&section=${first}`}
+                    className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 font-medium ${a.key === act.key ? "bg-surface shadow-sm" : "text-ink-2"}`}
+                  >
+                    {ACT_ICON[a.key]}{" "}
+                    {a.name.replace(/^[^\w]+/, "").replace(/ — .*/, "")}{" "}
+                    <span className="badge">
+                      {done}/{secs.length}
+                    </span>
                   </Link>
                 );
               })}
             </div>
             <Card title={act.name.replace(/^[^\w]+/, "")}>
               <p className="text-xs text-ink-2">{act.tooltip}</p>
-              {act.soundbite ? <p className="mt-2 text-xs italic text-ink-3">“{act.soundbite}”</p> : null}
+              {act.soundbite ? (
+                <p className="mt-2 text-xs italic text-ink-3">
+                  “{act.soundbite}”
+                </p>
+              ) : null}
               <ol className="-mx-2 mt-3 divide-y">
                 {sections
                   .filter((s) => s.act === act.key)
                   .map((s) => (
                     <li key={s.id}>
-                      <Link href={`/webinars/${w.id}?step=script&section=${s.sectionKey}`} className={`flex items-center gap-2 px-2 py-2 text-sm hover:bg-surface-2 ${s.sectionKey === section.sectionKey ? "bg-accent-soft" : ""}`}>
-                        <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${s.status === "final" ? "border-good bg-good text-white" : s.status === "drafted" ? "border-accent text-accent" : "border-line"}`}>
-                          {s.status === "final" ? "✓" : s.status === "drafted" ? "…" : s.order}
+                      <Link
+                        href={`/webinars/${w.id}?step=script&section=${s.sectionKey}`}
+                        className={`flex items-center gap-2 px-2 py-2 text-sm hover:bg-surface-2 ${s.sectionKey === section.sectionKey ? "bg-accent-soft" : ""}`}
+                      >
+                        <span
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${s.status === "final" ? "border-good bg-good text-white" : s.status === "drafted" ? "border-accent text-accent" : "border-line"}`}
+                        >
+                          {s.status === "final"
+                            ? "✓"
+                            : s.status === "drafted"
+                              ? "…"
+                              : s.order}
                         </span>
-                        <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                        <span className="text-[11px] text-ink-3">{s.durationMin}m</span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {s.name}
+                        </span>
+                        <span className="text-[11px] text-ink-3">
+                          {s.durationMin}m
+                        </span>
                       </Link>
                     </li>
                   ))}
               </ol>
               <details className="mt-3">
-                <summary className="text-xs text-ink-3 underline">Coaching for this act</summary>
-                <p className="mt-2 whitespace-pre-line text-xs text-ink-2">{act.coachingPrompt}</p>
+                <summary className="text-xs text-ink-3 underline">
+                  Coaching for this act
+                </summary>
+                <p className="mt-2 whitespace-pre-line text-xs text-ink-2">
+                  {act.coachingPrompt}
+                </p>
               </details>
             </Card>
           </div>
 
-          <Card title={`${section.order}. ${section.name}`} action={<Badge tone={section.status === "final" ? "good" : section.status === "drafted" ? "accent" : "neutral"}>{section.status}</Badge>}>
+          <Card
+            title={`${section.order}. ${section.name}`}
+            action={
+              <Badge
+                tone={
+                  section.status === "final"
+                    ? "good"
+                    : section.status === "drafted"
+                      ? "accent"
+                      : "neutral"
+                }
+              >
+                {section.status}
+              </Badge>
+            }
+          >
             <p className="text-sm text-ink-2">{tpl.prompt}</p>
             <form action={updateSectionAction} className="mt-4 space-y-3">
               <input type="hidden" name="id" value={w.id} />
-              <input type="hidden" name="sectionKey" value={section.sectionKey} />
+              <input
+                type="hidden"
+                name="sectionKey"
+                value={section.sectionKey}
+              />
               {sectionAssets.length ? (
-                <Field label={`Pull a ${tpl.assetType} from the bank (optional)`}>
-                  <select className="field" name="assetId" defaultValue={section.assetId ?? ""}>
+                <Field
+                  label={`Pull a ${tpl.assetType} from the bank (optional)`}
+                >
+                  <select
+                    className="field"
+                    name="assetId"
+                    defaultValue={section.assetId ?? ""}
+                  >
                     <option value="">Write my own</option>
                     {sectionAssets.map((a) => (
                       <option key={a.id} value={a.id}>
@@ -347,51 +712,118 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                 <div className="rounded-lg bg-surface-2 p-3 text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-semibold">{chosenAsset.name}</div>
-                    <CopyButton text={chosenAsset.body} label="Copy" className="btn btn-ghost btn-xs" />
+                    <CopyButton
+                      text={chosenAsset.body}
+                      label="Copy"
+                      className="btn btn-ghost btn-xs"
+                    />
                   </div>
-                  <p className="mt-1 line-clamp-6 whitespace-pre-line text-ink-2">{chosenAsset.body}</p>
-                  {chosenAsset.useWhen ? <p className="mt-1 text-ink-3">When: {chosenAsset.useWhen}</p> : null}
+                  <p className="mt-1 line-clamp-6 whitespace-pre-line text-ink-2">
+                    {chosenAsset.body}
+                  </p>
+                  {chosenAsset.useWhen ? (
+                    <p className="mt-1 text-ink-3">
+                      When: {chosenAsset.useWhen}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               <Field label="Key points (one per line)">
-                <textarea className="field min-h-20" name="keyPoints" defaultValue={section.keyPoints ?? ""} placeholder={tpl.exampleKeyPoints} />
+                <textarea
+                  className="field min-h-20"
+                  name="keyPoints"
+                  defaultValue={section.keyPoints ?? ""}
+                  placeholder={tpl.exampleKeyPoints}
+                />
               </Field>
               {sp.stripped ? (
-                <p className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-xs" data-testid="stripped-notice" role="alert">
+                <p
+                  className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-xs"
+                  data-testid="stripped-notice"
+                  role="alert"
+                >
                   {sp.stripped}
                 </p>
               ) : null}
               <Field label="Script (what you'll actually say)">
-                <textarea className="field min-h-56" name="script" defaultValue={section.script ?? ""} placeholder="Talk it out loud first. Then type what you said." />
+                <textarea
+                  className="field min-h-56"
+                  name="script"
+                  defaultValue={section.script ?? ""}
+                  placeholder="Talk it out loud first. Then type what you said."
+                />
               </Field>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Transition in">
-                  <input className="field" name="transitionIn" defaultValue={section.transitionIn ?? ""} placeholder={tpl.exampleTransition?.split("|")[0]?.replace("In:", "").trim()} />
+                  <input
+                    className="field"
+                    name="transitionIn"
+                    defaultValue={section.transitionIn ?? ""}
+                    placeholder={tpl.exampleTransition
+                      ?.split("|")[0]
+                      ?.replace("In:", "")
+                      .trim()}
+                  />
                 </Field>
                 <Field label="Transition out">
-                  <input className="field" name="transitionOut" defaultValue={section.transitionOut ?? ""} placeholder={tpl.exampleTransition?.split("|")[1]?.replace("Out:", "").trim()} />
+                  <input
+                    className="field"
+                    name="transitionOut"
+                    defaultValue={section.transitionOut ?? ""}
+                    placeholder={tpl.exampleTransition
+                      ?.split("|")[1]
+                      ?.replace("Out:", "")
+                      .trim()}
+                  />
                 </Field>
                 <Field label="Minutes">
-                  <input className="field tabular" name="durationMin" type="number" min={1} max={30} defaultValue={section.durationMin} />
+                  <input
+                    className="field tabular"
+                    name="durationMin"
+                    type="number"
+                    min={1}
+                    max={30}
+                    defaultValue={section.durationMin}
+                  />
                 </Field>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <label className="flex items-center gap-1 text-sm">
-                  <input type="radio" name="status" value="drafted" defaultChecked={section.status !== "final"} /> Drafted
+                  <input
+                    type="radio"
+                    name="status"
+                    value="drafted"
+                    defaultChecked={section.status !== "final"}
+                  />{" "}
+                  Drafted
                 </label>
                 <label className="flex items-center gap-1 text-sm">
-                  <input type="radio" name="status" value="final" defaultChecked={section.status === "final"} /> Final
+                  <input
+                    type="radio"
+                    name="status"
+                    value="final"
+                    defaultChecked={section.status === "final"}
+                  />{" "}
+                  Final
                 </label>
                 <span className="flex-1" />
                 <button className="btn btn-ghost" type="submit">
                   Save
                 </button>
                 {nextSection ? (
-                  <button className="btn btn-accent" type="submit" name="next" value={nextSection.sectionKey}>
+                  <button
+                    className="btn btn-accent"
+                    type="submit"
+                    name="next"
+                    value={nextSection.sectionKey}
+                  >
                     Save and next →
                   </button>
                 ) : (
-                  <Link href={`/webinars/${w.id}?step=offer`} className="btn btn-accent">
+                  <Link
+                    href={`/webinars/${w.id}?step=offer`}
+                    className="btn btn-accent"
+                  >
                     On to the offer →
                   </Link>
                 )}
@@ -400,34 +832,85 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
               <form action={draftSectionAction}>
                 <input type="hidden" name="id" value={w.id} />
-                <input type="hidden" name="sectionKey" value={section.sectionKey} />
-                <input type="hidden" name="mode" value={ai ? "ai" : "example"} />
+                <input
+                  type="hidden"
+                  name="sectionKey"
+                  value={section.sectionKey}
+                />
+                <input
+                  type="hidden"
+                  name="mode"
+                  value={ai ? "ai" : "example"}
+                />
                 <button className="btn btn-soft btn-sm" type="submit">
-                  {ai ? "✨ Draft this section for me" : "Start from the example"}
+                  {ai
+                    ? "✨ Draft this section for me"
+                    : "Start from the example"}
                 </button>
-                <AiFormStatus feature="webinar_section" enabled={ai} onlyWhen={{ field: "mode", value: "ai" }} />
-                <AiPromise enabled={ai}>Returns the spoken script for this section, 120 to 260 words, written to this act and the belief it has to move.</AiPromise>
+                <AiFormStatus
+                  feature="webinar_section"
+                  enabled={ai}
+                  onlyWhen={{ field: "mode", value: "ai" }}
+                />
+                <AiPromise enabled={ai}>
+                  Returns the spoken script for this section, 120 to 260 words,
+                  written to this act and the belief it has to move.
+                </AiPromise>
               </form>
               <details className="text-xs">
-                <summary className="text-ink-3 underline">See the Leaky Webinar version</summary>
+                <summary className="text-ink-3 underline">
+                  See the Leaky Webinar version
+                </summary>
                 <div className="mt-2 rounded-lg bg-surface-2 p-3">
                   <p className="whitespace-pre-line">{tpl.exampleScript}</p>
                   <p className="mt-2 text-ink-3">{tpl.exampleTransition}</p>
                 </div>
               </details>
-              <Disclosure summary={<span className="text-xs text-ink-3 underline">Frameworks, metaphors and proof ({frameworks.length + proofs.length})</span>}>
+              <Disclosure
+                summary={
+                  <span className="text-xs text-ink-3 underline">
+                    Frameworks, metaphors and proof (
+                    {frameworks.length + proofs.length})
+                  </span>
+                }
+              >
                 <div className="mt-2 grid w-full gap-3 sm:grid-cols-2">
                   <div>
                     <div className="label">Frameworks and metaphors</div>
                     <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
                       {frameworks.map((f) => (
-                        <li key={f.id} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
+                        <li
+                          key={f.id}
+                          className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2"
+                        >
                           <span className="min-w-0">
                             <span className="font-semibold">{f.name}</span>
-                            {f.extra.stage ? <span className="text-ink-3"> · {f.extra.stage}</span> : null}
-                            <span className="block text-ink-2 line-clamp-2">{f.summary ?? f.body}</span>
+                            {f.extra.stage ? (
+                              <span className="text-ink-3">
+                                {" "}
+                                · {f.extra.stage}
+                              </span>
+                            ) : null}
+                            <span className="block text-ink-2 line-clamp-2">
+                              {f.summary ?? f.body}
+                            </span>
                           </span>
-                          <CopyButton text={[f.summary, f.body, f.extra.transitionIn ? `In: ${f.extra.transitionIn}` : "", f.extra.transitionOut ? `Out: ${f.extra.transitionOut}` : ""].filter(Boolean).join("\n\n")} label="Copy" className="btn btn-ghost btn-xs" />
+                          <CopyButton
+                            text={[
+                              f.summary,
+                              f.body,
+                              f.extra.transitionIn
+                                ? `In: ${f.extra.transitionIn}`
+                                : "",
+                              f.extra.transitionOut
+                                ? `Out: ${f.extra.transitionOut}`
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join("\n\n")}
+                            label="Copy"
+                            className="btn btn-ghost btn-xs"
+                          />
                         </li>
                       ))}
                     </ul>
@@ -437,45 +920,100 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                     {proofs.length ? (
                       <ul className="max-h-56 space-y-1 overflow-y-auto text-xs">
                         {proofs.map((pr) => (
-                          <li key={pr.id} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
+                          <li
+                            key={pr.id}
+                            className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2"
+                          >
                             <span className="min-w-0">
                               <span className="font-semibold">{pr.name}</span>
-                              {pr.beliefBroken !== "none" ? <span className="text-ink-3"> · breaks {pr.beliefBroken}</span> : null}
-                              <span className="block text-ink-2 line-clamp-2">{pr.shortVersion ?? pr.resultAfter}</span>
+                              {pr.beliefBroken !== "none" ? (
+                                <span className="text-ink-3">
+                                  {" "}
+                                  · breaks {pr.beliefBroken}
+                                </span>
+                              ) : null}
+                              <span className="block text-ink-2 line-clamp-2">
+                                {pr.shortVersion ?? pr.resultAfter}
+                              </span>
                             </span>
-                            <CopyButton text={pr.longVersion ?? pr.shortVersion ?? pr.name} label="Copy" className="btn btn-ghost btn-xs" />
+                            <CopyButton
+                              text={
+                                pr.longVersion ?? pr.shortVersion ?? pr.name
+                              }
+                              label="Copy"
+                              className="btn btn-ghost btn-xs"
+                            />
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-xs text-ink-3">Approve proofs in the <Link href="/proof" className="underline">Proof Bank</Link> and they show up here.</p>
+                      <p className="text-xs text-ink-3">
+                        Approve proofs in the{" "}
+                        <Link href="/proof" className="underline">
+                          Proof Bank
+                        </Link>{" "}
+                        and they show up here.
+                      </p>
                     )}
                   </div>
                 </div>
                 <div className="mt-3">
                   <div className="label">Evidence (published research)</div>
                   {evidence.length ? (
-                    <ul className="max-h-56 space-y-1 overflow-y-auto text-xs" data-testid="webinar-evidence">
+                    <ul
+                      className="max-h-56 space-y-1 overflow-y-auto text-xs"
+                      data-testid="webinar-evidence"
+                    >
                       {evidence.map((e) => (
-                        <li key={`${e.source}:${e.id}`} className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2">
+                        <li
+                          key={`${e.source}:${e.id}`}
+                          className="flex items-start justify-between gap-2 rounded bg-surface-2 p-2"
+                        >
                           <span className="min-w-0">
                             <span className="font-semibold">{e.name}</span>
-                            {e.source === "shared" ? <span className="text-ink-3"> · shared, Evolve Omega</span> : null}
-                            <span className="block text-ink-2 line-clamp-2">{e.claim}</span>
+                            {e.source === "shared" ? (
+                              <span className="text-ink-3">
+                                {" "}
+                                · shared, Evolve Omega
+                              </span>
+                            ) : null}
+                            <span className="block text-ink-2 line-clamp-2">
+                              {e.claim}
+                            </span>
                           </span>
-                          <CopyButton text={insertText(e)} label="Copy" className="btn btn-ghost btn-xs" title="Copy the claim and the citation together" />
+                          <CopyButton
+                            text={insertText(e)}
+                            label="Copy"
+                            className="btn btn-ghost btn-xs"
+                            title="Copy the claim and the citation together"
+                          />
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-xs text-ink-3">Find and confirm a study in <Link href="/evidence" className="underline">Evidence</Link> and it shows up here.</p>
+                    <p className="text-xs text-ink-3">
+                      Find and confirm a study in{" "}
+                      <Link href="/evidence" className="underline">
+                        Evidence
+                      </Link>{" "}
+                      and it shows up here.
+                    </p>
                   )}
                 </div>
               </Disclosure>
               {tpl.assetType ? (
-                <Disclosure summary={<span className="text-xs text-ink-3 underline">+ Add a {tpl.assetType} to your bank</span>}>
+                <Disclosure
+                  summary={
+                    <span className="text-xs text-ink-3 underline">
+                      + Add a {tpl.assetType} to your bank
+                    </span>
+                  }
+                >
                   <div className="card p-4">
-                    <AssetForm type={tpl.assetType} back={`/webinars/${w.id}?step=script&section=${section.sectionKey}`} />
+                    <AssetForm
+                      type={tpl.assetType}
+                      back={`/webinars/${w.id}?step=script&section=${section.sectionKey}`}
+                    />
                   </div>
                 </Disclosure>
               ) : null}
@@ -487,11 +1025,17 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
       {step === "offer" ? (
         <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
           <Card title="7 · Offer">
-            <p className="mb-3 text-sm text-ink-2">{WIZARD_STAGES[6]?.description}</p>
+            <p className="mb-3 text-sm text-ink-2">
+              {WIZARD_STAGES[6]?.description}
+            </p>
             <form action={linkOfferAction} className="space-y-3">
               <input type="hidden" name="id" value={w.id} />
               <Field label="Which offer does this webinar sell?">
-                <select className="field" name="offerId" defaultValue={w.offerId ?? ""}>
+                <select
+                  className="field"
+                  name="offerId"
+                  defaultValue={w.offerId ?? ""}
+                >
                   <option value="">Choose an offer…</option>
                   {offers.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -501,8 +1045,18 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                 </select>
               </Field>
               <Field label="Call to action">
-                <select className="field" name="ctaType" defaultValue={w.ctaType}>
-                  {["Book a call", "Buy now", "Apply", "Join the community", "Start the trial"].map((c) => (
+                <select
+                  className="field"
+                  name="ctaType"
+                  defaultValue={w.ctaType}
+                >
+                  {[
+                    "Book a call",
+                    "Buy now",
+                    "Apply",
+                    "Join the community",
+                    "Start the trial",
+                  ].map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>
@@ -521,27 +1075,54 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
             {offer ? (
               <div className="space-y-2 text-sm">
                 <div className="font-semibold">{offer.name}</div>
-                {offer.promise ? <p className="text-ink-2">{offer.promise}</p> : null}
+                {offer.promise ? (
+                  <p className="text-ink-2">{offer.promise}</p>
+                ) : null}
                 <ul className="mt-2 divide-y">
                   {components.map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-2 py-1.5">
+                    <li
+                      key={c.id}
+                      className="flex items-center justify-between gap-2 py-1.5"
+                    >
                       <span>
-                        {c.type === "bonus" ? "🎁" : c.type === "guarantee" ? "🛡️" : "📦"} {c.name}
+                        {c.type === "bonus"
+                          ? "🎁"
+                          : c.type === "guarantee"
+                            ? "🛡️"
+                            : "📦"}{" "}
+                        {c.name}
                       </span>
                       <span className="flex items-center gap-2 text-xs">
-                        {c.beliefBreak !== "none" ? <Badge tone="accent">{ACT_ICON[c.beliefBreak]} solves {c.beliefBreak}</Badge> : <Badge tone="warn">untagged</Badge>}
-                        <span className="tabular text-ink-3">${c.perceivedValue.toLocaleString()}</span>
+                        {c.beliefBreak !== "none" ? (
+                          <Badge tone="accent">
+                            {ACT_ICON[c.beliefBreak]} solves {c.beliefBreak}
+                          </Badge>
+                        ) : (
+                          <Badge tone="warn">untagged</Badge>
+                        )}
+                        <span className="tabular text-ink-3">
+                          ${c.perceivedValue.toLocaleString()}
+                        </span>
                       </span>
                     </li>
                   ))}
                 </ul>
-                <p className="mt-2 text-xs text-ink-3">Every component should answer one of the three belief breaks. Three keys, three locks. Tag them in the Offer Wizard.</p>
-                <Link href={`/offers/${offer.id}#stack`} className="text-xs underline">
+                <p className="mt-2 text-xs text-ink-3">
+                  Every component should answer one of the three belief breaks.
+                  Three keys, three locks. Tag them in the Offer Wizard.
+                </p>
+                <Link
+                  href={`/offers/${offer.id}#stack`}
+                  className="text-xs underline"
+                >
                   Edit the stack →
                 </Link>
               </div>
             ) : (
-              <p className="text-sm text-ink-2">Pick an offer and its stack shows here, tagged by which belief break each component solves.</p>
+              <p className="text-sm text-ink-2">
+                Pick an offer and its stack shows here, tagged by which belief
+                break each component solves.
+              </p>
             )}
           </Card>
         </div>
@@ -553,12 +1134,35 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
 
       {step === "review" ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-          <Card title="10 · Readiness review" action={review ? <Badge tone={review.verdict === "ready" ? "good" : review.verdict === "needs_work" ? "warn" : "danger"}>{review.score}% · {review.verdict.replace("_", " ")}</Badge> : null}>
-            <p className="mb-3 text-sm text-ink-2">Grade honestly. 1 = missing, 5 = I&apos;d bet money on it. Anything at 2 or below blocks &ldquo;ready&rdquo;.</p>
+          <Card
+            title="10 · Readiness review"
+            action={
+              review ? (
+                <Badge
+                  tone={
+                    review.verdict === "ready"
+                      ? "good"
+                      : review.verdict === "needs_work"
+                        ? "warn"
+                        : "danger"
+                  }
+                >
+                  {review.score}% · {review.verdict.replace("_", " ")}
+                </Badge>
+              ) : null
+            }
+          >
+            <p className="mb-3 text-sm text-ink-2">
+              Grade honestly. 1 = missing, 5 = I&apos;d bet money on it.
+              Anything at 2 or below blocks &ldquo;ready&rdquo;.
+            </p>
             <form action={saveReadinessAction} className="space-y-3">
               <input type="hidden" name="id" value={w.id} />
               {READINESS_DIMENSIONS.map((d) => (
-                <div key={d.key} className="flex flex-wrap items-center justify-between gap-2 border-b py-2">
+                <div
+                  key={d.key}
+                  className="flex flex-wrap items-center justify-between gap-2 border-b py-2"
+                >
                   <div>
                     <div className="text-sm font-medium">{d.label}</div>
                     <div className="text-xs text-ink-3">{d.hint}</div>
@@ -566,18 +1170,36 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                   <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <label key={n} className="cursor-pointer">
-                        <input type="radio" name={`r_${d.key}`} value={n} defaultChecked={(review?.ratings[d.key] ?? 3) === n} className="peer sr-only" />
-                        <span className="grid h-8 w-8 place-items-center rounded-lg border text-sm peer-checked:border-accent peer-checked:bg-accent-soft">{n}</span>
+                        <input
+                          type="radio"
+                          name={`r_${d.key}`}
+                          value={n}
+                          defaultChecked={(review?.ratings[d.key] ?? 3) === n}
+                          className="peer sr-only"
+                        />
+                        <span className="grid h-8 w-8 place-items-center rounded-lg border text-sm peer-checked:border-accent peer-checked:bg-accent-soft">
+                          {n}
+                        </span>
                       </label>
                     ))}
                   </div>
                 </div>
               ))}
               <Field label="Biggest gaps">
-                <textarea className="field" name="biggestGaps" defaultValue={review?.biggestGaps ?? ""} placeholder="What's weakest? What would a skeptic poke at?" />
+                <textarea
+                  className="field"
+                  name="biggestGaps"
+                  defaultValue={review?.biggestGaps ?? ""}
+                  placeholder="What's weakest? What would a skeptic poke at?"
+                />
               </Field>
               <Field label="Next actions">
-                <textarea className="field" name="nextActions" defaultValue={review?.nextActions ?? ""} placeholder="Three fixes before the next run." />
+                <textarea
+                  className="field"
+                  name="nextActions"
+                  defaultValue={review?.nextActions ?? ""}
+                  placeholder="Three fixes before the next run."
+                />
               </Field>
               <button className="btn btn-accent" type="submit">
                 Save review
@@ -588,18 +1210,49 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
             {review ? (
               <Card title="Verdict">
                 <div className="text-4xl font-semibold">{review.score}%</div>
-                <div className="mt-1 text-sm">{review.verdict === "ready" ? "Presentation-ready. Schedule it." : review.verdict === "needs_work" ? "Close. Fix the weak spots and re-review." : "Not yet. Back to the script."}</div>
-                {readinessScore(review.ratings).weakest.length ? <p className="mt-2 text-xs text-warn">Blocking: {readinessScore(review.ratings).weakest.join(", ")}</p> : null}
+                <div className="mt-1 text-sm">
+                  {review.verdict === "ready"
+                    ? "Presentation-ready. Schedule it."
+                    : review.verdict === "needs_work"
+                      ? "Close. Fix the weak spots and re-review."
+                      : "Not yet. Back to the script."}
+                </div>
+                {readinessScore(review.ratings).weakest.length ? (
+                  <p className="mt-2 text-xs text-warn">
+                    Blocking:{" "}
+                    {readinessScore(review.ratings).weakest.join(", ")}
+                  </p>
+                ) : null}
               </Card>
             ) : null}
             <Card title="Build check">
               <ul className="space-y-1.5 text-sm">
-                <li>{progress.steps.foundation >= 1 ? "✅" : "⬜"} Foundation filled</li>
-                <li>{progress.steps.beliefs >= 1 ? "✅" : "⬜"} Three belief shifts written</li>
-                <li>{progress.drafted >= sections.length ? "✅" : "⬜"} All {sections.length} sections drafted ({progress.drafted})</li>
+                <li>
+                  {progress.steps.foundation >= 1 ? "✅" : "⬜"} Foundation
+                  filled
+                </li>
+                <li>
+                  {progress.steps.beliefs >= 1 ? "✅" : "⬜"} Three belief
+                  shifts written
+                </li>
+                <li>
+                  {progress.drafted >= sections.length ? "✅" : "⬜"} All{" "}
+                  {sections.length} sections drafted ({progress.drafted})
+                </li>
                 <li>{w.offerId ? "✅" : "⬜"} Offer linked</li>
-                <li>{components.length && components.every((c) => c.beliefBreak !== "none") ? "✅" : "⬜"} Stack mapped to belief breaks</li>
-                <li>{progress.totalMinutes >= 55 && progress.totalMinutes <= 95 ? "✅" : "⬜"} Runtime between 55 and 95 min ({progress.totalMinutes})</li>
+                <li>
+                  {components.length &&
+                  components.every((c) => c.beliefBreak !== "none")
+                    ? "✅"
+                    : "⬜"}{" "}
+                  Stack mapped to belief breaks
+                </li>
+                <li>
+                  {progress.totalMinutes >= 55 && progress.totalMinutes <= 95
+                    ? "✅"
+                    : "⬜"}{" "}
+                  Runtime between 55 and 95 min ({progress.totalMinutes})
+                </li>
               </ul>
             </Card>
           </div>
@@ -608,30 +1261,63 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
 
       {step === "run" ? (
         <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-          <Card title="Run it" action={<Badge tone={w.status === "delivered" ? "good" : "accent"}>{w.status}</Badge>}>
+          <Card
+            title="Run it"
+            action={
+              <Badge tone={w.status === "delivered" ? "good" : "accent"}>
+                {w.status}
+              </Badge>
+            }
+          >
             <form action={updateRunAction} className="space-y-4">
               <input type="hidden" name="id" value={w.id} />
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Status">
-                  <select className="field" name="status" defaultValue={w.status}>
-                    {["building", "ready", "scheduled", "delivered"].map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                  <select
+                    className="field"
+                    name="status"
+                    defaultValue={w.status}
+                  >
+                    {["building", "ready", "scheduled", "delivered"].map(
+                      (s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </Field>
                 <Field label="Date and time">
-                  <input className="field" name="scheduledAt" type="datetime-local" defaultValue={w.scheduledAt?.slice(0, 16) ?? ""} />
+                  <input
+                    className="field"
+                    name="scheduledAt"
+                    type="datetime-local"
+                    defaultValue={w.scheduledAt?.slice(0, 16) ?? ""}
+                  />
                 </Field>
                 <Field label="Registration page">
-                  <input className="field" name="registrationUrl" type="url" defaultValue={w.registrationUrl ?? ""} />
+                  <input
+                    className="field"
+                    name="registrationUrl"
+                    type="url"
+                    defaultValue={w.registrationUrl ?? ""}
+                  />
                 </Field>
                 <Field label="Deck link">
-                  <input className="field" name="deckUrl" type="url" defaultValue={w.deckUrl ?? ""} />
+                  <input
+                    className="field"
+                    name="deckUrl"
+                    type="url"
+                    defaultValue={w.deckUrl ?? ""}
+                  />
                 </Field>
                 <Field label="Replay link">
-                  <input className="field" name="replayUrl" type="url" defaultValue={w.replayUrl ?? ""} />
+                  <input
+                    className="field"
+                    name="replayUrl"
+                    type="url"
+                    defaultValue={w.replayUrl ?? ""}
+                  />
                 </Field>
               </div>
               <div className="label">The numbers (fill after the event)</div>
@@ -646,20 +1332,40 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                 ].map(([k, label]) => (
                   <label key={k} className="block">
                     <span className="label">{label}</span>
-                    <input className="field tabular" name={k} type="number" min={0} defaultValue={Number(w[k as "registered"])} />
+                    <input
+                      className="field tabular"
+                      name={k}
+                      type="number"
+                      min={0}
+                      defaultValue={Number(w[k as "registered"])}
+                    />
                   </label>
                 ))}
               </div>
               <div className="label">Debrief (this is the Optimize stage)</div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Biggest leak">
-                  <textarea className="field" name="debriefLeak" defaultValue={w.debriefLeak ?? ""} placeholder="Where did people drop off?" />
+                  <textarea
+                    className="field"
+                    name="debriefLeak"
+                    defaultValue={w.debriefLeak ?? ""}
+                    placeholder="Where did people drop off?"
+                  />
                 </Field>
                 <Field label="One fix">
-                  <textarea className="field" name="debriefFix" defaultValue={w.debriefFix ?? ""} placeholder="One thing. Not five." />
+                  <textarea
+                    className="field"
+                    name="debriefFix"
+                    defaultValue={w.debriefFix ?? ""}
+                    placeholder="One thing. Not five."
+                  />
                 </Field>
                 <Field label="Wins">
-                  <textarea className="field" name="debriefWins" defaultValue={w.debriefWins ?? ""} />
+                  <textarea
+                    className="field"
+                    name="debriefWins"
+                    defaultValue={w.debriefWins ?? ""}
+                  />
                 </Field>
               </div>
               <button className="btn btn-accent" type="submit">
@@ -677,19 +1383,31 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                   </li>
                   <li className="flex justify-between">
                     <span>Calls per attendee</span>
-                    <span>{w.showed ? Math.round((w.callsBooked / w.showed) * 100) : 0}%</span>
+                    <span>
+                      {w.showed
+                        ? Math.round((w.callsBooked / w.showed) * 100)
+                        : 0}
+                      %
+                    </span>
                   </li>
                   <li className="flex justify-between">
                     <span>Sales per attendee</span>
-                    <span>{w.showed ? Math.round((w.sales / w.showed) * 100) : 0}%</span>
+                    <span>
+                      {w.showed ? Math.round((w.sales / w.showed) * 100) : 0}%
+                    </span>
                   </li>
                   <li className="flex justify-between">
                     <span>Revenue per registrant</span>
-                    <span>${Math.round(w.revenue / w.registered).toLocaleString()}</span>
+                    <span>
+                      ${Math.round(w.revenue / w.registered).toLocaleString()}
+                    </span>
                   </li>
                 </ul>
               ) : (
-                <p className="text-sm text-ink-2">Log registrations and show-ups after the event and the funnel math appears here. Every leak shows up in these four numbers.</p>
+                <p className="text-sm text-ink-2">
+                  Log registrations and show-ups after the event and the funnel
+                  math appears here. Every leak shows up in these four numbers.
+                </p>
               )}
             </Card>
             <Card title="Before you go live">
@@ -700,7 +1418,10 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
                 <li>⬜ Replay + follow-up emails scheduled</li>
                 <li>⬜ Non-buyer DM follow-up planned</li>
               </ul>
-              <p className="mt-2 text-xs text-ink-3">These are pathway tasks in the Launch stage. Verify them there for points.</p>
+              <p className="mt-2 text-xs text-ink-3">
+                These are pathway tasks in the Launch stage. Verify them there
+                for points.
+              </p>
             </Card>
           </div>
         </div>
@@ -709,25 +1430,60 @@ export default async function WebinarWizardPage({ params, searchParams }: { para
   );
 }
 
-function DeckStep({ webinarId, sections }: { webinarId: string; sections: { order: number; act: "opening" | "vehicle" | "internal" | "external" | "closing"; name: string; keyPoints: string | null; script: string | null }[] }) {
+function DeckStep({
+  webinarId,
+  sections,
+}: {
+  webinarId: string;
+  sections: {
+    order: number;
+    act: "opening" | "vehicle" | "internal" | "external" | "closing";
+    name: string;
+    keyPoints: string | null;
+    script: string | null;
+  }[];
+}) {
   const slides = deckOutline(sections);
-  const md = slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.section}_\n${s.body}\n\nVisual: ${s.visual}`).join("\n\n");
+  const md = slides
+    .map(
+      (s) =>
+        `## ${s.n}. ${s.headline}\n_${s.section}_\n${s.body}\n\nVisual: ${s.visual}`,
+    )
+    .join("\n\n");
   return (
     <Card
       title={`9 · Deck outline · ${slides.length} slides`}
       action={
         <span className="flex flex-wrap gap-2">
-          <a className="btn btn-primary btn-sm" href={`/api/webinars/${webinarId}/deck?format=pptx`} download data-testid="deck-pptx">
+          <a
+            className="btn btn-primary btn-sm"
+            href={`/api/webinars/${webinarId}/deck?format=pptx`}
+            download
+            data-testid="deck-pptx"
+          >
             Download .pptx
           </a>
-          <a className="btn btn-ghost btn-sm" href={`/api/webinars/${webinarId}/deck?format=txt`} download>
+          <a
+            className="btn btn-ghost btn-sm"
+            href={`/api/webinars/${webinarId}/deck?format=txt`}
+            download
+          >
             Outline (.txt)
           </a>
-          <CopyButton text={md} label="Copy all" className="btn btn-ghost btn-sm" />
+          <CopyButton
+            text={md}
+            label="Copy all"
+            className="btn btn-ghost btn-sm"
+          />
         </span>
       }
     >
-      <p className="mb-3 text-sm text-ink-2">One idea per slide, derived from your key points, so tighten those first. The .pptx opens in PowerPoint, Keynote, Google Slides and Canva (Import) with the art direction in each slide&apos;s notes; or copy one slide at a time.</p>
+      <p className="mb-3 text-sm text-ink-2">
+        One idea per slide, derived from your key points, so tighten those
+        first. The .pptx opens in PowerPoint, Keynote, Google Slides and Canva
+        (Import) with the art direction in each slide&apos;s notes; or copy one
+        slide at a time.
+      </p>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {slides.map((s) => (
           <div key={s.n} className="rounded-lg border p-3 text-sm">
@@ -738,16 +1494,27 @@ function DeckStep({ webinarId, sections }: { webinarId: string; sections: { orde
               <span>{ACT_ICON[s.act]}</span>
             </div>
             <div className="mt-1 font-semibold">{s.headline}</div>
-            {s.body ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2">{s.body}</p> : null}
+            {s.body ? (
+              <p className="mt-1 whitespace-pre-line text-xs text-ink-2">
+                {s.body}
+              </p>
+            ) : null}
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-[11px] italic text-ink-3">{s.visual}</p>
-              <CopyButton text={`${s.headline}\n${s.body}\n\nVisual: ${s.visual}`} label="Copy" className="btn btn-ghost btn-xs" />
+              <CopyButton
+                text={`${s.headline}\n${s.body}\n\nVisual: ${s.visual}`}
+                label="Copy"
+                className="btn btn-ghost btn-xs"
+              />
             </div>
           </div>
         ))}
       </div>
       <div className="mt-4">
-        <Link href={`/webinars/${webinarId}?step=review`} className="btn btn-accent">
+        <Link
+          href={`/webinars/${webinarId}?step=review`}
+          className="btn btn-accent"
+        >
           On to the readiness review →
         </Link>
       </div>

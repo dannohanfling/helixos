@@ -34,6 +34,19 @@ export function keyIsPublic(key: string): boolean {
   return rest.length === 2 && rest.every((seg) => SEGMENT.test(seg));
 }
 
+/** A refusal the token door itself wrote, in the client's words: the one kind of error that may reach the screen from there. */
+export class UploadRefusal extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UploadRefusal";
+  }
+}
+
+/** Anything logged about a URL loses its query string: in a signed-URL scheme the query is the credential. */
+export function redactUrls(text: string): string {
+  return text.replace(/(https?:\/\/[^\s"'`)\]]+?)\?[^\s"'`)\]]*/g, "$1?[redacted]");
+}
+
 /** The app's stable address for a public object, or null for anything that is not public. Never a signed or guessable route for a private key. */
 export function publicUrlFor(key: string): string | null {
   return keyIsPublic(key) ? `/files/${key}` : null;

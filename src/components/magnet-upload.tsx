@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
 import { recordMagnetUploadAction } from "@/lib/actions/magnets";
-import { capLabel, publicMagnetKey, uploadRefusal } from "@/lib/engine/storage-policy";
+import { capLabel, publicMagnetKey, redactUrls, uploadRefusal } from "@/lib/engine/storage-policy";
 
 /**
  * A file made elsewhere (Canva, a designer) goes from the browser straight to the bucket on a token this app issues, under
@@ -30,8 +30,9 @@ export function MagnetUpload({ magnetId, slug, enabled, why }: { magnetId: strin
         if (!r.ok) return setError(r.error);
         router.push(`/magnets/${magnetId}?uploaded=1`);
       } catch (e) {
-        // The bucket's or its SDK's own words never reach the screen; they go to the browser console, where a report can quote them.
-        console.error("[upload]", e);
+        // The bucket's or its SDK's own words never reach the screen; they go to the browser console, where a report can quote
+        // them, with any query string stripped: a signed upload URL in an error's text is a credential.
+        console.error("[upload]", redactUrls(e instanceof Error ? `${e.name}: ${e.message}` : String(e)));
         setError("The upload didn't finish. Try again in a minute.");
       } finally {
         setProgress(null);

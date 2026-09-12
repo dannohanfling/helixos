@@ -8,6 +8,9 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { isTrim } from "@/lib/engine/fathom";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
+import { attachmentsBlockApproval } from "@/lib/engine/proof-attachments";
+import { attachmentsFor, deleteAttachmentsForProof } from "@/lib/queries/proof-attachments";
+import { redactUrls } from "@/lib/engine/storage-policy";
 
 const BELIEFS = ["vehicle", "internal", "external", "none"] as const;
 
@@ -86,6 +89,9 @@ export async function approveProofAction(formData: FormData): Promise<void> {
   const p = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.userId, userId)) });
   if (!p) return;
   if (formData.get("permission") !== "on") redirect(`/proof/${id}?needsPermission=1`);
+  // The same gate, extended: an attachment that shows a person needs their likeness permission recorded before the proof can be approved.
+  const held = attachmentsBlockApproval(await attachmentsFor(id));
+  if (held) redirect(`/proof/${id}?needsAttachmentConsent=1`);
   await db.update(schema.proofs).set({ status: "approved", permissionAt: nowIso(), permissionBy: userId }).where(eq(schema.proofs.id, id));
   refresh();
   redirect(`/proof/${id}`);
@@ -98,9 +104,19 @@ export async function unapproveProofAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/** Deletion actually deletes: every attachment's object leaves the store before the proof row goes. A refused object delete keeps the proof and says so. */
 export async function deleteProofAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
-  await db.delete(schema.proofs).where(and(eq(schema.proofs.id, str(formData, "id")), eq(schema.proofs.userId, userId)));
+  const { workspaceId, userId } = await ctx();
+  const id = str(formData, "id");
+  const p = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId)) });
+  if (!p) return;
+  try {
+    await deleteAttachmentsForProof(p.id, p.workspaceId);
+  } catch (e) {
+    console.error("[proof-storage] delete refused while deleting a proof; the proof stays", redactUrls(JSON.stringify({ proofId: p.id, message: e instanceof Error ? e.message : String(e) })));
+    redirect(`/proof/${p.id}?error=proofDeleteRefused`);
+  }
+  await db.delete(schema.proofs).where(eq(schema.proofs.id, p.id));
   refresh();
   redirect("/proof");
 }

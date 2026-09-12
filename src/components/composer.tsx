@@ -9,13 +9,14 @@ import { pushLadderUpdateAction } from "@/lib/actions/ladders";
 import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type Draft, type GroupTarget, type Target, type TargetKey } from "@/lib/engine/compose";
 import { hashtagsFor } from "@/lib/engine/repurpose";
 import { explainFabricated, findFabricated } from "@/lib/engine/blacklist";
+import { PRIVATE_MEDIA_NOTE, STORIES_MEDIA_NOTE, mediaBlock, mediaUrlProblem, mediaWarning, type ComposerMedia } from "@/lib/engine/compose-media";
 import { ChannelPreview, type Persona } from "./channel-previews";
 import { AiStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { useVoice } from "@/components/voice-context";
 import { CopyButton } from "@/components/copy-button";
 
-type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
+type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
 export type StaleNotice = { ladderId: string; back: string; channels: { key: string; label: string; inGhl: boolean }[] };
 /** Targets the composer shows and lets the client copy but never schedules, keyed by target, with the reason said beside the draft. */
@@ -26,7 +27,7 @@ const DEFAULT_SELECTED: TargetKey[] = ["ch:fb_personal", "ch:instagram", "ch:thr
 
 type Snippet = { id: string; title: string; text: string };
 
-export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale, copyOnly }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[] }; stale?: StaleNotice; copyOnly?: CopyOnly }) {
+export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale, copyOnly }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[]; media?: ComposerMedia[] }; stale?: StaleNotice; copyOnly?: CopyOnly }) {
   const router = useRouter();
   const voice = useVoice();
   const targets = useMemo(() => [...groupTargets(groups), ...channelTargets()], [groups]);
@@ -38,6 +39,8 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const [cta, setCta] = useState(initial?.cta ?? "");
   const [hasCta, setHasCta] = useState(initial?.hasCta ?? true);
   const [mediaUrl, setMediaUrl] = useState(initial?.mediaUrl ?? "");
+  // A proof's photo or video the client picked. Only what the item already carries is restored; nothing attaches on its own.
+  const [mediaAttachment, setMediaAttachment] = useState<ComposerMedia | null>(() => (initial?.mediaAttachmentId ? (snippets?.media ?? []).find((m) => m.id === initial.mediaAttachmentId) ?? null : null));
   const [contentType, setContentType] = useState(initial?.contentType ?? "CTA Post");
   const [selected, setSelected] = useState<TargetKey[]>(() => {
     const init = (initial?.selected ?? []).filter((k) => byKey.has(k as TargetKey)) as TargetKey[];
@@ -78,6 +81,14 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
     const m = findFabricated(body);
     return m.length ? explainFabricated(m, { text: body, quotes: proofQuotes }) : null;
   };
+  // A picked file that shows a result is a typed dollar figure in another form: same rule, same gate, same wording as the ladder's checklist.
+  const mediaProblem = mediaBlock(mediaAttachment, [body, ...schedulable.map((t) => draftOf(t).body)]);
+  const urlProblem = mediaUrlProblem(mediaUrl);
+  const storiesPicked = mediaAttachment && selected.includes("ch:stories" as TargetKey);
+  const mediaWarn = mediaWarning(mediaAttachment);
+  // The preview shows the picked file through the signed-in read route; the typed URL is the fallback. Only the URL ever leaves here.
+  const previewMedia = mediaAttachment?.url ?? (mediaUrl || undefined);
+  const previewKind = mediaAttachment?.kind;
   const active = tab !== "all" ? byKey.get(tab) : undefined;
   const activeDraft = active ? draftOf(active) : null;
 
@@ -109,6 +120,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
         cta,
         hasCta,
         mediaUrl,
+        mediaAttachmentId: mediaAttachment?.id ?? null,
         contentType,
         mode,
         targets: schedulable.map((t) => {
@@ -308,13 +320,61 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
               <AiStatus feature="composer_polish" active={pending && polishing} />
               {aiEnabled ? <AiPromise enabled>Returns one version of this draft per target you ticked, inside each one&apos;s limit. You review each tab before you schedule.</AiPromise> : null}
               <div className="grid gap-3 sm:grid-cols-2">
-                <input className="field text-sm" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} placeholder="Photo or video URL (optional)" />
+                <input className="field text-sm" value={mediaUrl} disabled={Boolean(mediaAttachment)} onChange={(e) => { setMediaUrl(e.target.value); if (e.target.value.trim()) setMediaAttachment(null); }} placeholder={mediaAttachment ? "A file from a proof is picked" : "Photo or video URL (optional)"} data-testid="media-url" />
                 <select className="field text-sm" value={contentType} onChange={(e) => setContentType(e.target.value)}>
                   {CONTENT_TYPES.map((t) => (
                     <option key={t}>{t}</option>
                   ))}
                 </select>
               </div>
+              {snippets?.media?.length ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select className="field w-auto py-1 text-xs" value="" onChange={(e) => { const m = snippets.media?.find((x) => x.id === e.target.value); if (m) { setMediaAttachment(m); setMediaUrl(""); } }} aria-label="Pick a photo or video from a proof" data-testid="media-from-proof">
+                      <option value="">🖼 Photo or video from a proof</option>
+                      {snippets.media.map((m) => (
+                        <option key={m.id} value={m.id}>{m.label}</option>
+                      ))}
+                    </select>
+                    {mediaAttachment ? (
+                      <span className="inline-flex items-center gap-2 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-xs" data-testid="media-chip">
+                        <span>{mediaAttachment.kind === "video" ? "🎬" : "🖼"} {mediaAttachment.label}</span>
+                        <button type="button" className="underline" onClick={() => setMediaAttachment(null)} data-testid="media-clear">
+                          Clear
+                        </button>
+                      </span>
+                    ) : null}
+                  </div>
+                  {urlProblem ? (
+                    <p className="rounded-lg border border-danger bg-danger-soft p-2 text-xs" data-testid="media-url-block" role="alert">
+                      {urlProblem}
+                    </p>
+                  ) : null}
+                  {mediaProblem ? (
+                    <p className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-2 text-xs" data-testid="result-media-block" role="alert">
+                      {mediaProblem}
+                    </p>
+                  ) : null}
+                  {mediaWarn ? (
+                    <p className="rounded-lg bg-warn-soft p-2 text-xs" data-testid="media-alt-warning" role="status">
+                      {mediaWarn}
+                    </p>
+                  ) : null}
+                  {mediaAttachment && socialConnected ? (
+                    <p className="rounded-lg bg-surface-2 p-2 text-xs text-ink-2" data-testid="media-private-note" role="status">
+                      {PRIVATE_MEDIA_NOTE}{" "}
+                      <a href={mediaAttachment.downloadUrl} className="underline">
+                        Download
+                      </a>
+                    </p>
+                  ) : null}
+                  {storiesPicked ? (
+                    <p className="rounded-lg bg-warn-soft p-2 text-xs" data-testid="media-stories-note" role="status">
+                      {STORIES_MEDIA_NOTE}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           )}
         </section>
@@ -351,14 +411,19 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                 {problems.length} {problems.length === 1 ? "version needs" : "versions need"} a fix: {problems.map((p) => p.label.split(" ")[0]).join(", ")}
               </span>
             ) : null}
+            {mediaProblem ? (
+              <span className="rounded-full border border-danger px-2.5 py-1 text-xs text-danger" title={mediaProblem}>
+                The attached file needs a fix: {mediaProblem.split("\n")[0]}
+              </span>
+            ) : null}
             <span className="flex-1" />
             <button type="button" className="btn btn-ghost" disabled={pending || !chosen.length} onClick={() => submit("draft")}>
               Save for later
             </button>
-            <button type="button" className="btn btn-soft" disabled={pending || !schedulable.length || problems.length > 0} onClick={() => submit("now")}>
+            <button type="button" className="btn btn-soft" disabled={pending || !schedulable.length || problems.length > 0 || Boolean(mediaProblem) || Boolean(urlProblem)} onClick={() => submit("now")}>
               Post now
             </button>
-            <button type="button" className="btn btn-accent" disabled={pending || !schedulable.length || problems.length > 0} onClick={() => submit("schedule")}>
+            <button type="button" className="btn btn-accent" disabled={pending || !schedulable.length || problems.length > 0 || Boolean(mediaProblem) || Boolean(urlProblem)} onClick={() => submit("schedule")}>
               {pending ? "Working…" : `Schedule ${chosen.length} ${chosen.length === 1 ? "post" : "posts"}`}
             </button>
           </div>
@@ -428,7 +493,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                       {fabricatedIn(d.body)}
                     </p>
                   ) : null}
-                  <ChannelPreview t={t} d={d} p={persona} media={mediaUrl || undefined} title={src.title} />
+                  <ChannelPreview t={t} d={d} p={persona} media={previewMedia} mediaKind={previewKind} title={src.title} />
                 </div>
               );
             })

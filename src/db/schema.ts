@@ -159,6 +159,8 @@ export const contentItems = sqliteTable(
     postedAt: text("posted_at"),
     postLink: text("post_link"),
     mediaUrl: text("media_url"),
+    /** A proof attachment the client picked as this post's media: previewed in-app, never written to mediaUrl or sent to the Social Planner (private storage has no public address). */
+    mediaAttachmentId: text("media_attachment_id"),
     engagements: integer("engagements").notNull().default(0),
     views: integer("views").notNull().default(0),
     leads: integer("leads").notNull().default(0),
@@ -1419,6 +1421,66 @@ export const leadMagnets = sqliteTable(
   (t) => [uniqueIndex("lead_magnets_slug").on(t.slug), uniqueIndex("lead_magnets_ws_keyword").on(t.workspaceId, t.keyword), index("lead_magnets_user").on(t.userId)],
 );
 export type LeadMagnet = typeof leadMagnets.$inferSelect;
+
+/**
+ * A proof's attachments: a third kind of evidence on the same row as the quote and the Fathom deep link. The bytes live in the
+ * private Blob store (src/lib/proof-storage.ts: its own token, never the public store's); this table is metadata only. The two
+ * questions asked at upload live here as showsAResult (inherits the typed-dollar hard block) and showsAPerson (needs the
+ * likeness consent, recorded with a name and a time, before the proof can be approved).
+ */
+export const PROOF_ATTACHMENT_KINDS = ["image", "video", "document"] as const;
+export type ProofAttachmentKind = (typeof PROOF_ATTACHMENT_KINDS)[number];
+export const proofAttachments = sqliteTable(
+  "proof_attachments",
+  {
+    id: id(),
+    proofId: text("proof_id")
+      .notNull()
+      .references(() => proofs.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id").notNull(),
+    /** proofs/<workspace_id>/<proof_id>/<uuid>.<ext> in the private store, and the store's own URL for it (unreachable without the token). */
+    blobKey: text("blob_key").notNull(),
+    blobUrl: text("blob_url").notNull(),
+    /** For a HEIC original, the JPEG rendition's key and URL beside it; the original is kept. */
+    displayKey: text("display_key"),
+    displayUrl: text("display_url"),
+    /** The rendition's size, so the quota counts every byte the workspace holds, not only the originals. */
+    displayBytes: integer("display_bytes"),
+    kind: text("kind", { enum: PROOF_ATTACHMENT_KINDS }).notNull(),
+    /** Sniffed from the bytes server-side, never the browser's claim. */
+    mime: text("mime").notNull(),
+    bytes: integer("bytes").notNull(),
+    originalFilename: text("original_filename").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    durationSeconds: real("duration_seconds"),
+    altText: text("alt_text"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    showsAPerson: integer("shows_a_person", { mode: "boolean" }).notNull().default(false),
+    showsAResult: integer("shows_a_result", { mode: "boolean" }).notNull().default(false),
+    /** The own-screen tick for an image or document, recorded when it was ticked. */
+    ownScreenAt: text("own_screen_at"),
+    consentRecordedAt: text("consent_recorded_at"),
+    consentName: text("consent_name"),
+    uploadedBy: text("uploaded_by").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("proof_attachments_proof").on(t.proofId, t.sortOrder), index("proof_attachments_ws").on(t.workspaceId), uniqueIndex("proof_attachments_blob_key").on(t.blobKey), uniqueIndex("proof_attachments_display_key").on(t.displayKey)],
+);
+export type ProofAttachment = typeof proofAttachments.$inferSelect;
+
+/** Bytes served on every authenticated read of an attachment: the one number to instrument from day one. Not a quota. */
+export const proofAttachmentReads = sqliteTable(
+  "proof_attachment_reads",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    attachmentId: text("attachment_id").notNull(),
+    bytes: integer("bytes").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("proof_attachment_reads_ws").on(t.workspaceId, t.createdAt)],
+);
 
 /** One click on a tracked link: how many, per magnet and per source. Never who; that is Community Loyalty's answer. */
 export const leadMagnetHits = sqliteTable(

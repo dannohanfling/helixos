@@ -102,7 +102,12 @@ async function wipeDemo(): Promise<void> {
   if (!ws) return;
   const members = await db.query.memberships.findMany({ where: eq(schema.memberships.workspaceId, ws.id) });
   const userIds = members.map((m) => m.userId);
-  const byWs = [schema.tasks, schema.contentItems, schema.contacts, schema.dailyLogs, schema.pointsLedger, schema.pathwayProgress, schema.curriculumProgress, schema.goals, schema.rewardClaims, schema.offers, schema.webinars, schema.clientRecords, schema.proofs, schema.groups, schema.targets, schema.lessonProgress, schema.certSubmissions, schema.integrations, schema.syncEvents, schema.socialConnections, schema.ladders, schema.leadMagnets, schema.files, schema.ladderProfiles, schema.aiCredentials, schema.aiUsage, schema.coachNotes, schema.memberships] as const;
+  // Attachments' objects leave the private store before their rows go (the cascade below would otherwise strand them).
+  if (process.env.PROOF_BLOB_READ_WRITE_TOKEN) {
+    const { deleteAttachmentsForProof } = await import("@/lib/queries/proof-attachments");
+    for (const p of await db.query.proofs.findMany({ where: eq(schema.proofs.workspaceId, ws.id), columns: { id: true } })) await deleteAttachmentsForProof(p.id, ws.id);
+  }
+  const byWs = [schema.tasks, schema.contentItems, schema.contacts, schema.dailyLogs, schema.pointsLedger, schema.pathwayProgress, schema.curriculumProgress, schema.goals, schema.rewardClaims, schema.offers, schema.webinars, schema.clientRecords, schema.proofs, schema.groups, schema.targets, schema.lessonProgress, schema.certSubmissions, schema.integrations, schema.syncEvents, schema.socialConnections, schema.ladders, schema.leadMagnets, schema.files, schema.proofAttachments, schema.proofAttachmentReads, schema.ladderProfiles, schema.aiCredentials, schema.aiUsage, schema.coachNotes, schema.memberships] as const;
   if (userIds.length) await db.delete(schema.libraryAssets).where(inArray(schema.libraryAssets.userId, userIds));
   if (userIds.length) await db.delete(schema.libraryPosts).where(inArray(schema.libraryPosts.userId, userIds));
   await db.delete(schema.libraryPosts).where(eq(schema.libraryPosts.workspaceId, ws.id));

@@ -38,7 +38,7 @@ export default async function EditComposePage({ params, searchParams }: { params
           {pushed} scheduled {pushed === "1" ? "post now carries" : "posts now carry"} the ladder&apos;s current text{Number(ghl) > 0 ? `; ${ghl} edited in GoHighLevel under the same id` : ""}.
         </p>
       ) : null}
-      <Composer {...c} initial={{ id: item.id, title: item.title, hook: item.hook ?? "", body: item.body ?? "", cta: item.cta ?? "", hasCta: item.hasCta, mediaUrl: item.mediaUrl ?? "", contentType: item.contentType, overrides, selected }} stale={stale} copyOnly={copyOnly} />
+      <Composer {...c} initial={{ id: item.id, title: item.title, hook: item.hook ?? "", body: item.body ?? "", cta: item.cta ?? "", hasCta: item.hasCta, mediaUrl: item.mediaUrl ?? "", mediaAttachmentId: item.mediaAttachmentId, contentType: item.contentType, overrides, selected }} stale={stale} copyOnly={copyOnly} />
     </>
   );
 }

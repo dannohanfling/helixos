@@ -9,11 +9,17 @@ import { attribution, withAttribution } from "@/lib/engine/fathom";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { formatDateTime } from "@/lib/dates";
+import { ProofUpload } from "@/components/proof-upload";
+import { deleteProofAttachmentAction, moveAttachmentFirstAction, updateAttachmentAltAction } from "@/lib/actions/proof-attachments";
+import { MAX_PER_PROOF, attachmentsBlockApproval, consentAnswered, likenessSentence, mb } from "@/lib/engine/proof-attachments";
+import { AttachmentConsentForm } from "@/components/attachment-consent-form";
+import { attachmentsFor, storageQuota } from "@/lib/queries/proof-attachments";
+import { PROOF_STORAGE_UNCONFIGURED, proofStorageConfigured } from "@/lib/proof-storage";
 
 const TYPE_LABEL: Record<string, string> = { result: "Result", testimonial: "Testimonial", screenshot: "Screenshot", case_study: "Case study", stat: "Stat", story: "Story" };
 const SHAPE_LABEL: Record<string, string> = { shortVersion: "short version", longVersion: "long version" };
 
-export default async function ProofDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ notVerbatim?: string; needsPermission?: string }> }) {
+export default async function ProofDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ notVerbatim?: string; needsPermission?: string; needsAttachmentConsent?: string; error?: string; attached?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
@@ -33,6 +39,17 @@ export default async function ProofDetailPage({ params, searchParams }: { params
   ].filter((s): s is { key: string; label: string; text: string } => Boolean(s.text));
   const grandfathered = p.status === "approved" && !p.permissionAt;
   const speakerName = p.who ?? p.name;
+  const [attachments, storage] = await Promise.all([attachmentsFor(p.id), storageQuota(v.workspace.id)]);
+  const held = attachmentsBlockApproval(attachments);
+  const storageOn = proofStorageConfigured();
+  const attUrl = (a: (typeof attachments)[number], display = false) => `/api/proofs/attachments/${a.id}${display && a.displayKey ? "?display=1" : ""}`;
+  // The page's own sentences, chosen by a code: nothing arriving in the address bar is printed as the app's word.
+  const ERRORS: Record<string, string> = {
+    deleteRefused: "That file couldn't be removed from storage just now, so it is still here. Try again in a minute.",
+    proofDeleteRefused: "An attached file couldn't be removed from storage just now, so the proof is still here. Try again in a minute.",
+    consent: "Write the person's name and tick the sentence to record their permission.",
+  };
+  const errorLine = sp.error ? ERRORS[sp.error] : null;
   return (
     <>
       <PageHeader
@@ -53,6 +70,15 @@ export default async function ProofDetailPage({ params, searchParams }: { params
       {sp.notVerbatim ? (
         <p className="mb-4 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="not-verbatim" role="alert">
           Not saved: the {SHAPE_LABEL[sp.notVerbatim] ?? sp.notVerbatim} isn&apos;t a trim of the quote. Cut with an ellipsis (…); never rewrite their words.
+        </p>
+      ) : null}
+      {errorLine ? (
+        <p className="mb-4 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="proof-error" role="alert">{errorLine}</p>
+      ) : null}
+      {sp.attached ? <p className="mb-4 rounded-lg bg-good-soft p-3 text-sm" data-testid="attached">Attached.</p> : null}
+      {sp.needsAttachmentConsent && held ? (
+        <p className="mb-4 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="needs-attachment-consent" role="alert">
+          {held} Record it below, or remove the file, before approving.
         </p>
       ) : null}
       {sp.needsPermission ? (
@@ -181,6 +207,71 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                 </form>
               )}
             </Card>
+          <Card title="Attachments" action={<Badge tone={attachments.length ? "accent" : "neutral"}>{attachments.length} of {MAX_PER_PROOF}</Badge>}>
+            <p className="mb-3 text-xs text-ink-2">A screenshot, a photo, a video or a PDF: evidence beside the words, on the same proof. A Fathom recording is a link, not an upload. The first one is the thumbnail.</p>
+            {attachments.length ? (
+              <ul className="space-y-3" data-testid="attachments">
+                {attachments.map((a, i) => {
+                  const needsConsent = !consentAnswered(a);
+                  return (
+                    <li key={a.id} id={`att-${a.id}`} className="rounded-lg border border-line p-2" data-testid="attachment" data-kind={a.kind} data-result={a.showsAResult ? "1" : "0"} data-person={a.showsAPerson ? "1" : "0"} data-consent={needsConsent ? "open" : "answered"}>
+                      <div className="flex items-start gap-3">
+                        <div className="w-28 shrink-0">
+                          {a.kind === "image" ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element -- served by an authenticated route; next/image would fetch it without the session */}
+                              <img src={attUrl(a, true)} alt={a.altText ?? ""} className="max-h-28 w-full rounded object-cover" data-testid="attachment-image" />
+                            </>
+                          ) : a.kind === "video" ? (
+                            <video src={attUrl(a)} controls preload="metadata" className="max-h-28 w-full rounded" data-testid="attachment-video" />
+                          ) : (
+                            <a href={attUrl(a)} target="_blank" rel="noreferrer" className="block rounded bg-surface-2 p-3 text-center text-xs underline" data-testid="attachment-document">PDF</a>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1 text-xs">
+                          <div className="truncate font-medium" title={a.originalFilename}>{i === 0 ? "★ " : ""}{a.originalFilename}</div>
+                          <div className="text-ink-3">{a.kind} · {mb(a.bytes)}{a.width && a.height ? ` · ${a.width}×${a.height}` : ""}{a.durationSeconds ? ` · ${Math.round(a.durationSeconds)}s` : ""}</div>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {a.showsAResult ? <Badge tone="warn">shows a result</Badge> : null}
+                            {a.showsAPerson ? <Badge tone={needsConsent ? "danger" : "good"}>{needsConsent ? "permission needed" : "permission recorded"}</Badge> : null}
+                          </div>
+                          {a.showsAPerson && !needsConsent ? (
+                            <p className="mt-1 text-ink-2" data-testid="attachment-consent-record">{likenessSentence(a.consentName!, a.kind)} <span className="text-ink-3">Ticked {formatDateTime(a.consentRecordedAt!, v.tz)}.</span></p>
+                          ) : null}
+                          {needsConsent ? <AttachmentConsentForm id={a.id} kind={a.kind} initialName={a.consentName ?? ""} /> : null}
+                          {a.kind === "image" ? (
+                            <form action={updateAttachmentAltAction} className="mt-2 flex gap-1">
+                              <input type="hidden" name="id" value={a.id} />
+                              <input className="field text-xs" name="altText" defaultValue={a.altText ?? ""} placeholder="Alt text (a screen reader's line)" data-testid="attachment-alt" />
+                              <button className="btn btn-ghost btn-xs" type="submit">Save</button>
+                            </form>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <a className="btn btn-ghost btn-xs" href={`${attUrl(a)}${attUrl(a).includes("?") ? "&" : "?"}download=1`} data-testid="attachment-download">Download</a>
+                            {i > 0 ? (
+                              <form action={moveAttachmentFirstAction}>
+                                <input type="hidden" name="id" value={a.id} />
+                                <button className="btn btn-ghost btn-xs" type="submit" data-testid="attachment-first">Make it the thumbnail</button>
+                              </form>
+                            ) : null}
+                            <form action={deleteProofAttachmentAction}>
+                              <input type="hidden" name="id" value={a.id} />
+                              <button className="btn btn-ghost btn-xs text-danger" type="submit" data-testid="attachment-delete">{a.showsAPerson ? "Withdraw permission and delete" : "Delete"}</button>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-3" data-testid="no-attachments">Nothing attached yet.</p>
+            )}
+            <div className="mt-3">
+              <ProofUpload proofId={p.id} workspaceId={v.workspace.id} enabled={storageOn} why={PROOF_STORAGE_UNCONFIGURED} full={storage.blocked ? storage.line : attachments.length >= MAX_PER_PROOF ? `This proof already carries ${MAX_PER_PROOF} files. Delete one you no longer need before adding another.` : null} quotaLine={storage.line} />
+            </div>
+          </Card>
           <Card title="Copy with attribution">
             {shapes.length ? (
               <ul className="space-y-2" data-testid="copy-out">
@@ -206,6 +297,16 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                       <span className="block">{s.text}</span>
                     </span>
                     <CopyButton text={s.text} label="Copy" className="btn btn-ghost btn-xs" />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {attachments.length ? (
+              <ul className="mt-3 space-y-1" data-testid="copy-out-files">
+                {attachments.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 p-2 text-sm">
+                    <span className="min-w-0 truncate">{a.originalFilename}</span>
+                    <a className="btn btn-ghost btn-xs" href={`${attUrl(a)}${attUrl(a).includes("?") ? "&" : "?"}download=1`}>Download</a>
                   </li>
                 ))}
               </ul>

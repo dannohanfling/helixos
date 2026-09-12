@@ -2,7 +2,7 @@
  * Lead magnets: type first, a keyword that two magnets never share, content in the type's shape written from what is
  * already true (blacklisted claims stripped and said so), a typeset PDF and an uploaded file served from the public magnets
  * prefix only, a hosted page and a tracked link that both work with no session, the link's counts per source with nothing
- * about the reader on it, a private attachment that never resolves anywhere, and a ladder that inherits the magnet's keyword.
+ * about the reader on it, and a ladder that inherits the magnet's keyword. (A proof's private attachment is the proofs walk's.)
  * Runs against scripts/mock-ai.ts and scripts/mock-blob.ts; the dev server must be started with AI_BASE_URL=http://localhost:4020,
  * BLOB_READ_WRITE_TOKEN set to any vercel_blob_rw_ token, and VERCEL_BLOB_API_URL and NEXT_PUBLIC_VERCEL_BLOB_API_URL at
  * http://localhost:4050 (scripts/dev-server.sh sets all of these).
@@ -13,9 +13,6 @@ import { chromium, type Page } from "@playwright/test";
 const base = process.argv[2] ?? "http://localhost:3000";
 const aiPort = 4020;
 const blobPort = 4050;
-// This process writes a private attachment through the same store the server uses, so it points the SDK at the mock too.
-process.env.BLOB_READ_WRITE_TOKEN ??= "vercel_blob_rw_TESTSTORE_testsecret";
-process.env.VERCEL_BLOB_API_URL ??= `http://localhost:${blobPort}`;
 
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
@@ -60,8 +57,7 @@ async function main() {
     });
     const { db, schema } = await import("@/db");
     const { eq } = await import("drizzle-orm");
-    const { putPrivateAttachment } = await import("@/lib/storage");
-    const { publicUrlFor, capLabel } = await import("@/lib/engine/storage-policy");
+    const { capLabel } = await import("@/lib/engine/storage-policy");
 
     await page.goto(`${base}/login`);
     await page.click('button:has-text("As a client")');
@@ -172,24 +168,6 @@ async function main() {
     const g4 = await anon(`${base}/g/the-12-minute-content-plan?src=dm`);
     if (g4.status !== 302 || g4.headers.get("location") !== pdfHref) throw new Error(`the link opens the nominated PDF at the bucket, one hop: ${g4.headers.get("location")}`);
     console.log("✓ the tracked link opens what the client nominated");
-
-    // A private attachment: written by the other writer with private access, never public, no URL, 404 on the public path
-    const priv = await putPrivateAttachment(membership.workspaceId, "proof-screenshot.png", Buffer.from("not really a png"), "image/png");
-    if (priv.url !== null || publicUrlFor(priv.key) !== null) throw new Error("a private attachment resolved to a URL");
-    const privStored = (await (await fetch(`http://localhost:${blobPort}/__list`)).json()) as { objects: { pathname: string; access: string }[] };
-    if (privStored.objects.find((o) => o.pathname === priv.key)?.access !== "private") throw new Error("the private attachment went to the bucket with private access");
-    if ((await anon(`http://localhost:${blobPort}/${priv.key}`)).status !== 403) throw new Error("the bucket refuses a private object without the token");
-    const privRes = await anon(`${base}/files/${priv.key}`);
-    if (privRes.status !== 404) throw new Error(`a private key must be 404 on /files: ${privRes.status}`);
-    const forged = await anon(`${base}/files/public/magnets/the-12-minute-content-plan/nope-proof-screenshot.png`);
-    if (forged.status !== 404) throw new Error("a guessed public key that was never written is 404");
-    const row = await db.query.files.findFirst({ where: eq(schema.files.key, priv.key) });
-    if (!row || row.isPublic) throw new Error("the private row is recorded private");
-    // Belt and braces: flip the flag on a private-prefix row and the prefix check still refuses it
-    await db.update(schema.files).set({ isPublic: true }).where(eq(schema.files.key, priv.key));
-    if ((await anon(`${base}/files/${priv.key}`)).status !== 404) throw new Error("a private-prefix key served because of a flag alone");
-    await db.delete(schema.files).where(eq(schema.files.key, priv.key));
-    console.log("✓ private attachment: no URL, 404 on the public path, the prefix wins over the flag");
 
     // Upload a file made elsewhere: browser to bucket on a token from this app, under the magnet's own folder, recorded after reading it back
     await page.goto(`${base}/magnets/${magnetId}`);

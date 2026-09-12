@@ -232,6 +232,34 @@
       "when": 1789154608543,
       "tag": "0032_files_url",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1789169597656,
+      "tag": "0033_proof_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1789170014110,
+      "tag": "0034_content_media_attachment",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1789171880150,
+      "tag": "0035_proof_attachments_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1789172779069,
+      "tag": "0036_proof_attachment_display_bytes",
+      "breakpoints": true
     }
   ]
 }

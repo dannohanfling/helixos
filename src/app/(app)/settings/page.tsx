@@ -9,6 +9,8 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { AiKeyCard } from "@/components/ai-key-card";
 import { FathomKeyCard } from "@/components/fathom-key-card";
 import { connectionFor } from "@/lib/ghl";
+import { storageQuota } from "@/lib/queries/proof-attachments";
+import { mb } from "@/lib/engine/proof-attachments";
 
 export const metadata = { title: "Settings" };
 
@@ -16,6 +18,7 @@ const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string }> }) {
   const v = await requireViewer();
+  const storage = await storageQuota(v.workspace.id);
   const { fathom: fathomNotice } = await searchParams;
   const [goal, conn] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id)]);
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
@@ -88,6 +91,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <a className="btn btn-ghost btn-sm" href="/api/export?format=csv&table=client_records" download>Client records (CSV)</a>
           </div>
           <p className="mt-2 text-xs text-ink-3">Passwords and your GoHighLevel token are never included.</p>
+        </Card>
+        <Card id="storage" title="Storage">
+          <p className="text-sm" data-testid="storage-line">{storage.line}</p>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded bg-surface-2" aria-hidden="true">
+            <div className={`h-full ${storage.blocked ? "bg-danger" : storage.warn ? "bg-warn" : "bg-accent"}`} style={{ width: `${Math.round(storage.fraction * 100)}%` }} />
+          </div>
+          {storage.warn ? <p className="mt-2 text-xs text-warn" data-testid="storage-warn">Getting close. New attachments stop at {mb(storage.limit)}; delete ones you no longer need to keep room.</p> : null}
+          {storage.blocked ? <p className="mt-2 text-xs text-danger" data-testid="storage-blocked">Full. New attachments are refused until something is deleted.</p> : null}
+          <p className="mt-2 text-xs text-ink-3">Attachments on your proofs, in private storage.</p>
         </Card>
         <Card id="goal" title="Your one goal">
           <form action={updateGoalAction} className="space-y-3">

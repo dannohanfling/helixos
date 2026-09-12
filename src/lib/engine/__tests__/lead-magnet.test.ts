@@ -52,7 +52,8 @@ describe("storage policy: two prefixes, two writers", () => {
       if (/from "@vercel\/blob/.test(text)) sdk.push(rel);
     }
     expect(hits).toEqual(["lib/storage.ts"]);
-    expect(sdk.sort()).toEqual(["app/api/magnets/upload/route.ts", "components/magnet-upload.tsx", "lib/storage.ts"]);
+    // Two stores, two thin modules, two browser doors and two token routes: nothing else touches the SDK.
+    expect(sdk.sort()).toEqual(["app/api/magnets/upload/route.ts", "app/api/proofs/upload/route.ts", "components/magnet-upload.tsx", "components/proof-upload.tsx", "lib/proof-storage.ts", "lib/storage.ts"]);
     const storage = readFileSync(join(SRC, "lib", "storage.ts"), "utf8");
     const fnOf = (name: string) => {
       const start = storage.indexOf(`export async function ${name}`);
@@ -62,9 +63,11 @@ describe("storage policy: two prefixes, two writers", () => {
     expect(fnOf("putPublicMagnet")).toMatch(/isPublic:\s*true/);
     expect(fnOf("putPublicMagnet")).toMatch(/access:\s*"public"/);
     expect(fnOf("recordPublicMagnet")).toMatch(/isPublic:\s*true/);
-    expect(fnOf("putPrivateAttachment")).not.toMatch(/isPublic:\s*true/);
-    expect(fnOf("putPrivateAttachment")).toMatch(/access:\s*"private"/);
-    expect(fnOf("putPrivateAttachment")).toMatch(/url:\s*null/);
+    // Access is a property of the store: the public store's module never writes private, and the private store's never writes public.
+    expect(storage).not.toMatch(/access:\s*"private"/);
+    expect(storage).not.toMatch(/PROOF_BLOB/);
+    const proofStorage = readFileSync(join(SRC, "lib", "proof-storage.ts"), "utf8");
+    expect(proofStorage).not.toMatch(/access:\s*"public"/);
     // Every public writer refuses a key outside the prefix before it touches the bucket.
     for (const name of ["putPublicMagnet", "recordPublicMagnet"]) expect(fnOf(name)).toMatch(/keyIsPublic\(key\)\) throw/);
     // The browser's door pins the folder to the magnet's slug and the cap and the types to the policy's.

@@ -65,6 +65,47 @@ Demo logins (or use the buttons on the login page):
 - Coach: `coach@demo.helixos.app` / `demo1234`
 - Client invite link: `/join/ACADEMY1`
 
+## Proof attachments: a third kind of evidence, in a private store
+
+An approved proof can carry files: screenshots, photos, video, PDFs. They hang off `proofs` (`proof_attachments`, metadata
+only), beside the verbatim quote and the Fathom deep link; there is no media library. The bytes live in a SECOND Vercel
+Blob store, `helixos-proof`, created Private: every object's URL is unreachable without the store's token, and Vercel's
+access setting is a property of the store, so a proof attachment cannot land at a public URL. `src/lib/proof-storage.ts` is
+the only module that touches that store and passes `PROOF_BLOB_READ_WRITE_TOKEN` explicitly on every call; it never reads
+the ambient `BLOB_READ_WRITE_TOKEN`, which the public lead-magnet store owns (an un-tokened proof write would land a
+client's face where anyone could open it). `src/lib/engine/__tests__/proof-attachments.test.ts` fails if any call there
+omits the token, if the public token is named there, if the public store's module ever writes private access, if the SDK is
+called from anywhere but the two stores' modules and their two browser doors (that six-file list is pinned in
+`src/lib/engine/__tests__/lead-magnet.test.ts`), or if the proxy lists a proof route as public.
+
+Uploads go browser-to-bucket on a client token from `/api/proofs/upload`, pinned to `proofs/<workspace>/<proof>/`, the
+accepted types and the largest cap. Nothing the browser said is trusted: `recordProofAttachmentAction` reads the object
+back from the store, sniffs its first bytes (`sniff` in `src/lib/engine/proof-attachments.ts`: jpeg, png, webp, heic/heif
+by ftyp brand, mp4, mov, webm, pdf; anything that reads as markup, SVG included, is refused and deleted), applies the
+kind's cap (images 10 MB, video 100 MB, documents 20 MB; one number each), the ten-per-proof count and the 2 GB workspace
+quota, and only then writes the row. A HEIC gets a JPEG rendition beside it (`heic-convert`, libheif in WASM; sharp's build
+cannot decode HEIC) and the original is kept. Reads go through `/api/proofs/attachments/<id>`, which checks the session and
+the workspace in the handler, streams with the token, honours Range so video seeks, sends `private, no-store` so no CDN ever
+holds a private object, and records bytes served per workspace and attachment (`proof_attachment_reads`): transfer is the
+number that bites on a private store, so it is instrumented from day one and no quota or throttle is built on it yet.
+
+Two questions at upload, in the brief's words: "Does this show a result — money, weight, followers, or any number someone
+could read as a promise?" (`showsAResult`: in the composer the file inherits the typed-dollar hard block, same label, and
+the post must carry "(Illustrative. Your numbers will differ.)") and "Is an identifiable person in this file?"
+(`showsAPerson`: the likeness sentence "[Name] has given me permission to use this photo/video of them in my marketing."
+recorded with a name and a time; a proof cannot move to approved while any attachment's permission is unrecorded, the same
+gate the proof already has, extended). Images and documents need the own-screen tick. Alt text is optional at upload and
+warned about in the composer. Deletion deletes the object first, then the row; a refused delete keeps the row and says so;
+deleting a proof takes every object with it. Attachments travel by offer, never on their own: the composer lists them as
+media the client picks (and cannot send a private file to GoHighLevel, which needs a public address: the note says so with
+a download), the belief step shows the picked proof's images with a download, the copy-out view has a download per file,
+and a rung gets nothing. Settings shows the quota (warn at 80%, block at 100%) and bytes served this month.
+
+Environment: `PROOF_BLOB_READ_WRITE_TOKEN` (Production and Preview; without it the uploader says attachments aren't set
+up). `PROOF_BLOB_STORE_ID` and `PROOF_BLOB_WEBHOOK_PUBLIC_KEY` are set alongside it but not read. Locally
+`scripts/mock-blob.ts` holds both stores and tells them apart by the token's store id: a store whose id contains PROOF is
+private, refuses a public put, and answers 403 at an object's URL without its token. Walk: `scripts/smoke-proofs.ts`.
+
 ## Client-facing errors
 
 An error a client can see says what happened to them and what to do next. It never names a variable, a host, a vendor's raw

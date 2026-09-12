@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { markRungAction, pushLadderUpdateAction, regenerateLadderAction, sendLadderToComposerAction, setLadderStatusAction, updateLadderAction } from "@/lib/actions/ladders";
+import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK } from "@/lib/engine/compose-media";
 import { staleScheduledFor } from "@/lib/queries/ladders";
 import { citableEvidence } from "@/lib/queries/evidence";
 import { insertText } from "@/lib/engine/evidence";
@@ -95,6 +96,12 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           </div>
         }
       />
+      {refused?.split(",").includes("illustrative") && !blockers.some((b) => b.key === "illustrative") ? (
+        <div className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" data-testid="media-blocked" role="alert">
+          <div className="font-semibold">That didn&apos;t go out. {ILLUSTRATIVE_LABEL}.</div>
+          <p className="mt-1">The post this ladder was sent to carries a picked file that shows a result. Add {ILLUSTRATIVE_MARK} to every version in the composer, then push again.</p>
+        </div>
+      ) : null}
       {blocked ? (
         <div className={`mb-4 rounded-xl border p-3 text-sm ${refused ? "border-danger bg-danger-soft" : "bg-warn-soft"}`} data-testid="publish-blocked" role="alert">
           <div className="font-semibold">{refused ? "That didn't go out." : "Not ready to go out yet."} Blocked until these pass:</div>

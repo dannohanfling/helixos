@@ -1,0 +1,1 @@
+ALTER TABLE `proof_attachments` ADD `display_bytes` integer;
