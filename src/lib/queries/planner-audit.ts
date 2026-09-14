@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { wallTimeToUtc } from "@/lib/dates";
 import { connectionFor, getPost, listPosts } from "@/lib/ghl";
 import { candidates, classify, type AuditRow, type LoggedLike, type PlannerPostLike, type TrackedLike } from "@/lib/engine/planner-audit";
 
@@ -25,6 +26,7 @@ const CAP = 40;
  */
 export async function plannerAudit(workspaceId: string): Promise<{ clients: ClientAudit[]; unconnected: string[] }> {
   const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.role, "client")) });
+  const workspace = await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, workspaceId) });
   const users = members.length ? await db.query.users.findMany({ where: inArray(schema.users.id, members.map((m) => m.userId)) }) : [];
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
   const clients: ClientAudit[] = [];
@@ -41,7 +43,7 @@ export async function plannerAudit(workspaceId: string): Promise<{ clients: Clie
     ]);
     const items = variants.length ? await db.query.contentItems.findMany({ where: inArray(schema.contentItems.id, [...new Set(variants.map((v) => v.contentItemId))]) }) : [];
     const titleOf = new Map(items.map((i) => [i.id, i.title]));
-    const tracked: TrackedLike[] = variants.map((v) => ({ variantId: v.id, externalId: v.externalId!, channel: v.channel, body: v.subject ? `${v.subject}\n\n${v.body}` : v.body, itemTitle: titleOf.get(v.contentItemId) ?? "(deleted post)", postAt: v.postAt }));
+    const tracked: TrackedLike[] = variants.map((v) => ({ variantId: v.id, externalId: v.externalId!, channel: v.channel, body: v.subject ? `${v.subject}\n\n${v.body}` : v.body, itemTitle: titleOf.get(v.contentItemId) ?? "(deleted post)", postAt: v.postAt ? (wallTimeToUtc(v.postAt, m.timezone || workspace?.timezone || "UTC") ?? null) : null }));
     const logged: LoggedLike[] = events
       .filter((e) => (e.event === "social.schedule" || e.event === "social.update") && typeof e.payload.ghlPostId === "string" && e.payload.ghlPostId)
       .map((e) => ({ ghlPostId: String(e.payload.ghlPostId), channel: typeof e.payload.channel === "string" ? e.payload.channel : null, accountId: typeof e.payload.accountId === "string" ? e.payload.accountId : null, loggedAt: e.createdAt }));

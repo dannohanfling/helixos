@@ -17,11 +17,12 @@ import { nowIso } from "@/lib/dates";
 import { getIntegration, logSync, resolveApiUrl } from "@/lib/integrations";
 import { open, seal } from "@/lib/crypto";
 import { autoMap } from "@/lib/engine/ghl-map";
+import { explainGhl, type GhlCall } from "@/lib/engine/ghl-errors";
 
 const VERSION = "2021-07-28";
 
 /** The six scopes a client ticks when creating the Private Integration. Shown in the UI and named in error messages. */
-export const REQUIRED_SCOPES = ["socialplanner/oauth.readonly", "socialplanner/oauth.write", "socialplanner/post.readonly", "socialplanner/post.write", "socialplanner/account.readonly", "socialplanner/account.write"] as const;
+export { REQUIRED_SCOPES } from "@/lib/engine/ghl-errors";
 
 /** `error` is what a client may see and what is persisted; `detail` is the upstream reply, for the classifier and the log only. */
 export type GhlResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number; detail?: string };
@@ -45,7 +46,8 @@ async function call<T>(base: string, token: string, path: string, init: RequestI
       json = null;
     }
     if (!res.ok) {
-      const msg = (json && typeof json === "object" && "message" in json ? String((json as { message: unknown }).message) : text).slice(0, 500);
+      const raw = json && typeof json === "object" && "message" in json ? (json as { message: unknown }).message : text;
+      const msg = (Array.isArray(raw) ? raw.map(String).join("; ") : String(raw)).slice(0, 500);
       logGhl(`upstream ${res.status}`, { status: res.status, path, body: msg });
       return { ok: false, error: `GoHighLevel didn't accept the request (${res.status}).`, status: res.status, detail: msg };
     }
@@ -57,17 +59,8 @@ async function call<T>(base: string, token: string, path: string, init: RequestI
   }
 }
 
-/** Turns GoHighLevel's reply into the reason a non-technical client can act on. */
-export function explain(r: { error: string; status?: number; detail?: string }): string {
-  const lower = (r.detail ?? "").toLowerCase();
-  if (r.status === 401) return "GoHighLevel rejected the token (401). It was pasted incompletely, or it was deleted in GoHighLevel. Create a new Private Integration and paste the new token.";
-  if (r.status === 403 || lower.includes("scope")) return `The token is valid but is missing Social Planner permissions (403). Edit the Private Integration in GoHighLevel and tick all six scopes: ${REQUIRED_SCOPES.join(", ")}.`;
-  if (r.status === 404 || r.status === 422 || lower.includes("location")) return "GoHighLevel says that location ID doesn't match this token (it belongs to a different sub-account, or has a typo). Copy the Location ID from Settings → Business Profile in the same sub-account where you created the token.";
-  if (r.status === 429) return "GoHighLevel is rate-limiting requests (429). Wait a minute and try again.";
-  if (lower.includes("abort") || lower.includes("fetch failed") || lower.includes("econn")) return "Couldn't reach GoHighLevel. Check the API base URL on Integrations, or try again in a minute.";
-  // The fallthrough keeps the case and drops the vendor's words: they are in the log under [ghl].
-  return `GoHighLevel didn't accept the request${r.status ? ` (${r.status})` : ""}. Try again in a minute.`;
-}
+/** Turns GoHighLevel's reply into the reason a non-technical client can act on, by the call that was made (src/lib/engine/ghl-errors.ts). */
+export const explain = (r: { error: string; status?: number; detail?: string }, call: GhlCall): string => explainGhl(r, call);
 
 export async function connectionFor(userId: string): Promise<SocialConnection | undefined> {
   return db.query.socialConnections.findFirst({ where: and(eq(schema.socialConnections.userId, userId), eq(schema.socialConnections.provider, "gohighlevel")) });
@@ -98,7 +91,7 @@ export async function refreshAccounts(conn: SocialConnection): Promise<GhlResult
   }
   const r = await call<{ results?: { accounts?: RawAccount[] } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/accounts`);
   if (!r.ok) {
-    const error = explain(r);
+    const error = explain(r, "accounts");
     await db.update(schema.socialConnections).set({ lastError: error, accounts: [], connectedAt: null }).where(eq(schema.socialConnections.id, conn.id));
     await logSync({ workspaceId: conn.workspaceId, userId: conn.userId, provider: "gohighlevel", direction: "out", event: "social.accounts", status: "failed", note: error });
     return { ok: false, error };
@@ -120,15 +113,15 @@ export async function createPost(conn: SocialConnection, post: NewPost): Promise
     accountIds: [post.accountId],
     summary: post.summary,
     media: post.media ?? [],
+    // The reference call that works: an immediate post is status "published" with no scheduleDate; a scheduled one carries the UTC instant.
     status: post.scheduleDate ? "scheduled" : "published",
-    scheduleDate: post.scheduleDate ?? new Date().toISOString(),
+    scheduleDate: post.scheduleDate ?? undefined,
     type: post.type,
     followUpComment: post.followUpComment ?? undefined,
     userId: conn.ghlUserId ?? "",
-    createdBy: conn.ghlUserId ?? undefined,
   };
   const r = await call<{ results?: { post?: { _id?: string; id?: string } } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return { ok: false, error: explain(r), status: r.status };
+  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
   const id = String(r.data.results?.post?._id ?? r.data.results?.post?.id ?? "");
   return id ? { ok: true, data: { id } } : { ok: false, error: "GoHighLevel accepted the post but returned no id" };
 }
@@ -142,13 +135,15 @@ export async function updatePost(conn: SocialConnection, id: string, post: NewPo
     summary: post.summary,
     media: post.media ?? [],
     status: post.scheduleDate ? "scheduled" : "published",
-    scheduleDate: post.scheduleDate ?? new Date().toISOString(),
+    scheduleDate: post.scheduleDate ?? undefined,
+    // The planner keys a re-schedule on this flag (PostCreateRequest.scheduleTimeUpdated: "if schedule datetime is updated").
+    scheduleTimeUpdated: post.scheduleDate ? true : undefined,
     type: post.type,
     followUpComment: post.followUpComment ?? undefined,
     userId: conn.ghlUserId ?? "",
   };
   const r = await call<unknown>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/${encodeURIComponent(id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return { ok: false, error: explain(r), status: r.status };
+  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
   return { ok: true, data: { id } };
 }
 
@@ -161,7 +156,7 @@ export async function getPost(conn: SocialConnection, id: string): Promise<GhlRe
   const cred = await credentials(conn);
   if (!cred.ok) return cred;
   const r = await call<{ results?: { post?: RawPost } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/${encodeURIComponent(id)}`);
-  if (!r.ok) return { ok: false, error: explain(r), status: r.status };
+  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
   const p = r.data.results?.post ?? {};
   return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p) } };
 }
@@ -175,7 +170,7 @@ export async function listPosts(conn: SocialConnection, type: "scheduled" | "all
   const now = Date.now();
   const body = { type, skip: "0", limit: String(limit), fromDate: new Date(now - 120 * 86400000).toISOString(), toDate: new Date(now + 400 * 86400000).toISOString(), includeUsers: "true" };
   const r = await call<{ results?: { posts?: RawPost[] } | RawPost[]; posts?: RawPost[] }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/list`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return { ok: false, error: explain(r), status: r.status };
+  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
   const raw = Array.isArray(r.data.results) ? r.data.results : (r.data.results?.posts ?? r.data.posts ?? []);
   return { ok: true, data: raw.map((p) => ({ id: String(p._id ?? p.id ?? ""), status: p.status ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p) })).filter((p) => p.id) };
 }
@@ -186,7 +181,7 @@ export async function upsertContact(conn: SocialConnection, contact: { name: str
   if (!cred.ok) return cred;
   const [firstName, ...rest] = contact.name.split(" ");
   const r = await call<{ contact?: { id?: string } }>(cred.data.base, cred.data.token, "/contacts/upsert", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ locationId: conn.locationId, firstName, lastName: rest.join(" "), email: contact.email ?? undefined, phone: contact.phone ?? undefined, source: contact.source ?? "HelixOS", tags: ["helixos", contact.stage] }) });
-  if (!r.ok) return { ok: false, error: explain(r), status: r.status };
+  if (!r.ok) return { ok: false, error: explain(r, "contact"), status: r.status };
   return { ok: true, data: { id: String(r.data.contact?.id ?? "") } };
 }
 

@@ -46,14 +46,20 @@ function rank(t: Target): number {
   return i === -1 ? ORDER.length : i;
 }
 
-/** Spreads posts across the day from a start time, 45 minutes apart, in the recommended order. */
+/**
+ * Spreads posts across the day from a start time, 45 minutes apart, in the recommended order. Wall-clock arithmetic only:
+ * the start is a naive wall time in the member's zone and so is every result, whatever zone the browser or server runs in.
+ * (Parsing it with new Date() read it in the runtime's zone and wrote it back in UTC, so the chips showed UTC hours.)
+ */
 export function staggerSchedule(targets: Target[], startIso: string, stepMinutes = 45): Map<TargetKey, string> {
   const sorted = targets.slice().sort((a, b) => rank(a) - rank(b));
-  const start = new Date(startIso);
+  const m = startIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
   const out = new Map<TargetKey, string>();
+  // A start that is not a wall time schedules nothing rather than inventing a date.
+  if (!m) return out;
+  const start = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
   sorted.forEach((t, i) => {
-    const d = new Date(start.getTime() + i * stepMinutes * 60000);
-    out.set(t.key, d.toISOString().slice(0, 16));
+    out.set(t.key, new Date(start + i * stepMinutes * 60000).toISOString().slice(0, 16));
   });
   return out;
 }

@@ -2,11 +2,12 @@
  * Outbound integrations: Community Loyalty (pass + points), GoHighLevel (contacts + pipeline), and the member's own Evolve Omega pass.
  * Every push is logged to sync_events. A missing or disabled integration is a skip, never an error.
  */
+import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { PROVIDERS } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { nowIso } from "@/lib/dates";
+import { nowIso, wallTimeToUtc } from "@/lib/dates";
 import { open } from "@/lib/crypto";
 
 export type Provider = (typeof PROVIDERS)[number];
@@ -132,34 +133,40 @@ export async function pushContact(ctx: { workspaceId: string; userId: string }, 
  * A variant the Social Planner already holds as scheduled is edited in place under the same id, so re-scheduling or
  * pushing an update never leaves a second copy in the planner.
  */
-export async function pushSocialPost(ctx: { workspaceId: string; userId: string }, post: { variantId: string; channel: string; body: string; postAt: string | null; mediaUrl?: string | null; title?: string; followUpComment?: string | null }): Promise<boolean> {
+export async function pushSocialPost(ctx: { workspaceId: string; userId: string; tz: string }, post: { variantId: string; channel: string; body: string; postAt: string | null; mediaUrl?: string | null; title?: string; followUpComment?: string | null }): Promise<boolean> {
   const { connectionFor, createPost, updatePost } = await import("@/lib/ghl");
   const { PUBLISHABLE, mediaTypeFor, postTypeFor } = await import("@/lib/engine/ghl-map");
   const channel = post.channel as keyof typeof PUBLISHABLE;
-  const skip = async (note: string) => {
+  // "manual" is a channel that is pasted by design; "failed" is something the client can fix, said beside the post.
+  const skip = async (note: string, as: "manual" | "failed" = "manual") => {
     await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt }, status: "skipped", note });
-    await db.update(schema.contentVariants).set({ externalStatus: "manual", externalError: note, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
+    await db.update(schema.contentVariants).set({ externalStatus: as, externalError: note, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
     return false;
   };
   if (!PUBLISHABLE[channel]?.via) return skip(PUBLISHABLE[channel]?.note ?? "This channel is posted by hand");
   const conn = await connectionFor(ctx.userId);
   if (!conn) return skip("Connect your GoHighLevel sub-account in Settings to auto-publish");
   const accountId = conn.mapping[post.channel];
-  if (!accountId) return skip(`No ${PUBLISHABLE[channel].note} chosen for this channel in Settings`);
   if (channel === "stories" && !post.mediaUrl) return skip("Stories need a photo or video");
-  const scheduleDate = post.postAt ? new Date(post.postAt).toISOString() : null;
+  // The Social Planner requires the posting user (CreatePostDTO: type, accountIds, userId). Without one the post is refused
+  // with a validation error, so it is refused here first, with the place to fix it.
+  if (!conn.ghlUserId?.trim()) return skip("Add your GHL user ID on Settings → Publishing; the Social Planner won't take a post without it", "failed");
+  if (!accountId) return skip(`No ${PUBLISHABLE[channel].note} chosen for this channel in Settings`);
+  // postAt is a wall time in the member's own zone; the Social Planner wants the UTC instant, with milliseconds and a Z.
+  const scheduleDate = post.postAt ? wallTimeToUtc(post.postAt, ctx.tz) : null;
+  if (post.postAt && !scheduleDate) return skip("The schedule time couldn't be read. Set the date and time again and re-schedule.", "failed");
   const variant = await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, post.variantId) });
   const held = variant?.externalId && variant.externalStatus === "scheduled" ? variant.externalId : null;
   const event = held ? "social.update" : "social.schedule";
   const draft = { accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: post.mediaUrl ? [{ url: post.mediaUrl, type: mediaTypeFor(post.mediaUrl) }] : [], followUpComment: post.followUpComment };
   const r = held ? await updatePost(conn, held, draft) : await createPost(conn, draft);
   if (!r.ok) {
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, accountId, ghlPostId: held ?? undefined }, status: "failed", note: r.error });
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: held ?? undefined }, status: "failed", note: r.error });
+    // The post's failure is said on the post (Distribute page) and in the sync log; the connection itself is not marked broken by it.
     await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: r.error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
-    await db.update(schema.socialConnections).set({ lastError: r.error }).where(eq(schema.socialConnections.id, conn.id));
     return false;
   }
-  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, accountId, ghlPostId: r.data.id }, status: "sent", note: `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Published via"} Social Planner · ${r.data.id}` });
+  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: r.data.id }, status: "sent", note: `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Published via"} Social Planner · ${r.data.id}` });
   await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: scheduleDate ? "scheduled" : "published", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
   await db.update(schema.socialConnections).set({ lastSyncAt: nowIso(), lastError: null }).where(eq(schema.socialConnections.id, conn.id));
   return true;
@@ -178,7 +185,17 @@ export async function pushPassMessage(ctx: { workspaceId: string; userId: string
   return ok;
 }
 
-/** Fire-and-forget wrapper: integrations never break the action that triggered them. */
+/**
+ * Runs an integration push after the response is sent, and keeps the serverless invocation alive until it settles: a bare
+ * detached promise is frozen with the function the moment the action returns, so the fetch never completes and nothing is
+ * written down. Never breaks the action that triggered it. Outside a request (a script, a test) the promise simply runs.
+ */
 export function background(p: Promise<unknown>): void {
-  p.catch((e) => console.error("[integrations]", e instanceof Error ? e.message : e));
+  const settled = p.catch((e) => console.error("[integrations]", e instanceof Error ? e.message : e));
+  try {
+    after(settled);
+  } catch (e) {
+    // No request scope (a script, a test), or a host without waitUntil: the promise is already running, detached. Say so.
+    console.warn("[integrations] after() unavailable, running detached:", e instanceof Error ? e.message : e);
+  }
 }

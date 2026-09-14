@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { CHANNELS } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { nowIso } from "@/lib/dates";
+import { nowIso, nowWallInTz } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { CHANNEL_SPECS, formatClause, toneClause, type Channel } from "@/lib/engine/repurpose";
 import { readRules } from "@/lib/engine/groups";
@@ -80,7 +80,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     mediaAttachmentId: attachment?.id ?? null,
     contentType: payload.contentType || "CTA Post",
     status: status as "posted" | "scheduled" | "ready",
-    postAt: payload.mode === "schedule" ? firstAt : payload.mode === "now" ? nowIso().slice(0, 19) : null,
+    postAt: payload.mode === "schedule" ? firstAt : payload.mode === "now" ? nowWallInTz(v.tz) : null,
     postedAt: payload.mode === "now" ? nowIso() : null,
   };
   let id = payload.id ?? null;
@@ -116,7 +116,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     // Groups are posted by hand (Facebook has no group-posting API); channels go through the Social Planner when it's mapped.
     if (!groupId && vStatus !== "draft") {
       pushed++;
-      background(pushSocialPost({ workspaceId, userId }, { variantId, channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, title }));
+      background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId, channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, title }));
     }
   }
   if (payload.mode === "now") await award({ workspaceId, userId }, "content", contentPoints(payload.hasCta), `Posted: ${title}`, `content:${id}`);
@@ -160,8 +160,9 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
 export async function distributeAllAction(formData: FormData): Promise<void> {
   const { v, userId } = await ctx();
   const itemId = String(formData.get("contentItemId") ?? "");
-  const startDate = String(formData.get("startDate") ?? v.today);
-  const startTime = String(formData.get("startTime") ?? "09:00");
+  // A cleared date or time input submits "", which ?? would keep: an empty start would schedule nothing.
+  const startDate = String(formData.get("startDate") || v.today);
+  const startTime = String(formData.get("startTime") || "09:00");
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) });
   if (!item) return;
   const groups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });

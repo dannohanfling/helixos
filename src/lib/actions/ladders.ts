@@ -290,7 +290,7 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
  * other outward step, and the schedule itself (dates, targets) is never altered.
  */
 export async function pushLadderUpdateAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx();
   const l = await own(str(formData, "id"), userId);
   const back = str(formData, "back").startsWith("/") ? str(formData, "back") : `/content/ladders/${l.id}`;
   await assertPublishable(l);
@@ -302,7 +302,7 @@ export async function pushLadderUpdateAction(formData: FormData): Promise<void> 
   let pushed = 0;
   for (const s of stale) {
     await db.update(schema.contentVariants).set({ body: s.body, generatedBy: "ladder" }).where(eq(schema.contentVariants.id, s.variantId));
-    if (s.inGhl && (await pushSocialPost({ workspaceId, userId }, { variantId: s.variantId, channel: s.channel, body: s.body, postAt: s.postAt, mediaUrl: item?.mediaUrl, title: item?.title }))) pushed++;
+    if (s.inGhl && (await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: s.variantId, channel: s.channel, body: s.body, postAt: s.postAt, mediaUrl: item?.mediaUrl, title: item?.title }))) pushed++;
   }
   refresh();
   const sep = back.includes("?") ? "&" : "?";

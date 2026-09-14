@@ -37,10 +37,12 @@ export async function setGhlMappingAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const conn = await connectionFor(userId);
   if (!conn) return;
+  // "Don't auto-publish" is kept as an explicit "" so the next account check does not fill the channel back in.
   const mapping: Record<string, string> = {};
-  for (const ch of Object.keys(PUBLISHABLE)) {
+  for (const ch of Object.keys(PUBLISHABLE) as (keyof typeof PUBLISHABLE)[]) {
+    if (!PUBLISHABLE[ch].via) continue;
     const v = str(formData, `map_${ch}`);
-    if (v && conn.accounts.some((a) => a.id === v)) mapping[ch] = v;
+    mapping[ch] = v && conn.accounts.some((a) => a.id === v) ? v : "";
   }
   await db.update(schema.socialConnections).set({ mapping }).where(eq(schema.socialConnections.id, conn.id));
   refresh();

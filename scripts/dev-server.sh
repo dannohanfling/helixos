@@ -22,6 +22,7 @@ main() {
       return
     fi
     # Values here are for local walks only. Production reads its own environment; AI_BASE_URL is ignored there by design.
+    # TZ=UTC: the server runs in UTC as Vercel does, so a wall time parsed in the server's zone shows up in the walks hours off.
     SETUP_TOKEN="${SETUP_TOKEN:-main-setup-token}" \
     CRON_SECRET="${CRON_SECRET:-change-me}" \
     SESSION_SECRET="${SESSION_SECRET:-dev-secret-dev-secret-dev-secret-123}" \
@@ -35,6 +36,7 @@ main() {
     VERCEL_BLOB_API_URL="${VERCEL_BLOB_API_URL:-http://localhost:4050}" \
     NEXT_PUBLIC_VERCEL_BLOB_API_URL="${NEXT_PUBLIC_VERCEL_BLOB_API_URL:-http://localhost:4050}" \
     REWARDS_CONFIG_OVERRIDE="${REWARDS_CONFIG_OVERRIDE:-screenshots/logs/rewards-config.override.json}" \
+    TZ=UTC \
       nohup npx next dev -p "$PORT" >"$LOG" 2>&1 &
     for _ in $(seq 1 60); do
       if curl -sf -o /dev/null "http://localhost:$PORT/login"; then

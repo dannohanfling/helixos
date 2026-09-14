@@ -44,6 +44,7 @@ createServer((req, res) => {
             { id: `${loc}_ig_1`, name: "@torresnutrition", platform: "instagram", type: "business", isExpired: false },
             { id: `${loc}_li_1`, name: "Maya Torres", platform: "linkedin", type: "profile", isExpired: false },
             { id: `${loc}_li_old`, name: "Old LinkedIn", platform: "linkedin", type: "page", isExpired: true },
+            { id: `${loc}_threads_1_profile`, name: "@torresnutrition on Threads", platform: "threads", type: "profile", isExpired: false },
           ],
           groups: [],
         },
@@ -51,7 +52,10 @@ createServer((req, res) => {
     }
     if (kind === "posts" && req.method === "POST" && !id) {
       const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
-      if (!Array.isArray(body.accountIds) || !body.accountIds.length || !body.type) return json(422, { message: "accountIds and type are required" });
+      if (!Array.isArray(body.accountIds) || !body.accountIds.length || !body.type) return json(422, { statusCode: 422, message: ["accountIds must contain at least 1 elements", "type must be one of the following values: post, story, reel"], error: "Unprocessable Entity" });
+      if (typeof body.userId !== "string" || !body.userId) return json(422, { statusCode: 422, message: ["userId must be a string", "userId should not be empty"], error: "Unprocessable Entity" });
+      // A walk hook: this user id is refused as GoHighLevel refuses one it does not know.
+      if (body.userId === "user_refused") return json(422, { statusCode: 422, message: ["userId must be a valid user id"], error: "Unprocessable Entity" });
       const _id = `post_${++n}`;
       posts.set(_id, { _id, ...body, error: null, postId: null });
       return json(201, { success: true, statusCode: 201, message: "Post created", results: { post: posts.get(_id) } });

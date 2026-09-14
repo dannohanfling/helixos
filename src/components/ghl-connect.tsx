@@ -1,6 +1,6 @@
 import type { SocialConnection } from "@/db/schema";
 import { connectGhlAction, disconnectGhlAction, refreshGhlAccountsAction, setGhlMappingAction } from "@/lib/actions/social";
-import { PUBLISHABLE, candidates, readiness } from "@/lib/engine/ghl-map";
+import { PUBLISHABLE, candidates, manualChannelsSentence, readiness } from "@/lib/engine/ghl-map";
 import { REQUIRED_SCOPES } from "@/lib/ghl";
 import { CHANNEL_SPECS, type Channel } from "@/lib/engine/repurpose";
 import { formatDateTime } from "@/lib/dates";
@@ -8,8 +8,10 @@ import { Badge, Field } from "./ui";
 
 /** A member connects their own GoHighLevel sub-account with a location-level Private Integration token. Used on Settings. */
 export function GhlConnect({ conn, tz }: { conn: SocialConnection | null; tz: string }) {
-  const ready = conn ? readiness(conn.mapping) : { mapped: 0, total: 5 };
   const connected = Boolean(conn && conn.accounts.length && !conn.lastError);
+  const hasUser = Boolean(conn?.ghlUserId?.trim());
+  // Nothing publishes without the user id, whatever the map says.
+  const ready = conn && hasUser ? readiness(conn.mapping) : { ...readiness({}), mapped: 0 };
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-surface-2 p-3 text-sm">
@@ -34,7 +36,7 @@ export function GhlConnect({ conn, tz }: { conn: SocialConnection | null; tz: st
         <Field label="Location ID" hint="Settings → Business Profile">
           <input className="field" name="locationId" defaultValue={conn?.locationId ?? ""} required placeholder="ve9EPM428h8vShlRW1KT" />
         </Field>
-        <Field label="Your GHL user ID (optional)" hint="Posts show as created by this user. Settings → My Staff → your profile.">
+        <Field label="Your GHL user ID (required)" hint="The Social Planner refuses a post without it. Settings → My Staff → your profile, or the user who owns the connected accounts.">
           <input className="field" name="ghlUserId" defaultValue={conn?.ghlUserId ?? ""} placeholder="Lx1EI6YIgQYMQi0ytFXv" />
         </Field>
         <div className="sm:col-span-2">
@@ -71,6 +73,25 @@ export function GhlConnect({ conn, tz }: { conn: SocialConnection | null; tz: st
               {conn.lastError}
             </p>
           ) : null}
+          {connected && !hasUser ? (
+            <p className="rounded-lg bg-warn-soft p-3 text-sm" data-testid="ghl-no-user">
+              Add your GHL user ID above. The Social Planner refuses a post without it, so nothing publishes until it is filled in.
+            </p>
+          ) : null}
+          {conn.accounts.length ? (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-ink-3">What GoHighLevel returned ({conn.accounts.length} accounts)</summary>
+              <ul className="mt-1 divide-y rounded-lg border" data-testid="ghl-accounts">
+                {conn.accounts.map((a) => (
+                  <li key={a.id} className="flex flex-wrap items-center gap-2 px-2 py-1" data-platform={a.platform} data-type={a.type}>
+                    <span className="font-medium">{a.name}</span>
+                    <span className="text-ink-3">{a.platform} {a.type}{a.isExpired ? " · expired" : ""}</span>
+                    <code className="ml-auto break-all text-[10px] text-ink-3">{a.id}</code>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
           {connected ? (
             <form action={setGhlMappingAction} className="space-y-2">
               <div className="grid gap-2 sm:grid-cols-2">
@@ -100,7 +121,7 @@ export function GhlConnect({ conn, tz }: { conn: SocialConnection | null; tz: st
                 <button className="btn btn-soft btn-xs" type="submit">
                   Save channel map
                 </button>
-                <span className="text-[11px] text-ink-3">Personal profile, other people&apos;s groups, Threads, Skool and email stay copy-and-paste. That&apos;s a platform limit, not ours.</span>
+                <span className="text-[11px] text-ink-3">{manualChannelsSentence()}</span>
               </div>
             </form>
           ) : !conn.lastError ? (

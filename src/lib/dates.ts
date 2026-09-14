@@ -74,3 +74,46 @@ export function relativeDay(d: string, today: string): string {
 export function nowIso(): string {
   return new Date().toISOString();
 }
+
+/** Now as a naive wall time (`YYYY-MM-DDTHH:MM:SS`) in the member's zone: the shape every stored postAt has. */
+export function nowWallInTz(tz: string, now: Date = new Date()): string {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(now).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${String(Number(p.hour) % 24).padStart(2, "0")}:${p.minute}:${p.second}`;
+}
+
+/**
+ * A wall-clock time in a member's own zone (`YYYY-MM-DDTHH:MM` or with `:SS`, no offset) as the UTC instant it names, ISO
+ * with milliseconds and a Z: what the Social Planner wants. A zoneless string handed to `new Date()` is read as the SERVER's
+ * local time, which on Vercel is UTC, so 9:30am in Los Angeles would be sent as 09:30Z; this reads it in the member's zone.
+ * A string that already carries an offset or a Z is honoured as is.
+ */
+export function wallTimeToUtc(wall: string, tz: string): string | null {
+  try {
+    if (/(?:Z|[+-]\d{2}:?\d{2})$/.test(wall)) {
+      const t = new Date(wall).getTime();
+      return Number.isNaN(t) ? null : new Date(t).toISOString();
+    }
+    const m = wall.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!m) return null;
+    const [y, mo, d, h, mi, s] = [m[1], m[2], m[3], m[4], m[5], m[6] ?? "0"].map(Number);
+    const asked = Date.UTC(y, mo - 1, d, h, mi, s);
+    // Guess the instant as if UTC, read that instant back in the zone, and correct by the difference; twice, for DST edges.
+    let guess = asked;
+    for (let i = 0; i < 2; i++) {
+      const seen = partsInTz(new Date(guess), tz);
+      guess += asked - Date.UTC(seen.y, seen.mo - 1, seen.d, seen.h, seen.mi, seen.s);
+    }
+    // A wall time that does not exist (the hour a clock springs forward) moves forward by the length of the gap, as a clock would, never earlier.
+    const seen = partsInTz(new Date(guess), tz);
+    const drift = asked - Date.UTC(seen.y, seen.mo - 1, seen.d, seen.h, seen.mi, seen.s);
+    if (drift > 0) guess += drift;
+    return new Date(guess).toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function partsInTz(at: Date, tz: string): { y: number; mo: number; d: number; h: number; mi: number; s: number } {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(at).map((x) => [x.type, x.value]));
+  return { y: Number(p.year), mo: Number(p.month), d: Number(p.day), h: Number(p.hour) % 24, mi: Number(p.minute), s: Number(p.second) };
+}

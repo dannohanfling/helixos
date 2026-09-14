@@ -15,6 +15,7 @@ import { AiStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { useVoice } from "@/components/voice-context";
 import { CopyButton } from "@/components/copy-button";
+import { manualChannelsSentence, publishedChannelsSentence } from "@/lib/engine/ghl-map";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
@@ -136,7 +137,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       }
       setResult(r);
       if (mode === "draft") router.push(`/content/${r.id}/repurpose`);
-      else setNotice(mode === "now" ? `Posted to ${r.posted} places. Groups are ready to paste; channels went to the Social Planner${socialConnected ? "" : " queue (connect GoHighLevel to auto-publish)"}.` : `Scheduled ${r.scheduled} posts starting ${date} ${time}.`);
+      else setNotice(mode === "now" ? `Posted to ${r.posted} places. Groups are ready to paste; channels are on their way to the Social Planner${socialConnected ? " (See every version shows what it said)" : " queue (connect GoHighLevel to auto-publish)"}.` : `Scheduled ${r.scheduled} posts starting ${date} ${time}.`);
     });
 
   const polish = () =>
@@ -440,7 +441,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
               ) : null}
             </p>
           ) : null}
-          <p className="mt-2 text-[11px] text-ink-3">Group posts are copied and pasted by you (Facebook has no group API). Profile, page, Instagram, LinkedIn and Threads publish through the Social Planner once GoHighLevel is connected on Integrations.</p>
+          <p className="mt-2 text-[11px] text-ink-3">{manualChannelsSentence()} {publishedChannelsSentence()}</p>
         </section>
       </div>
 
