@@ -112,13 +112,10 @@ export function progress(beats: ScriptBeats): { done: number; total: number; com
 
 /** The beats where a branch is on by default; at the other five it is available but off. */
 export const BRANCH_DEFAULT_BEATS = ["T", "Y"] as const;
-/**
- * The condition line above a branch, one per objection group. The first and third are the brief's words; the second is a
- * rendering of the group's own name and is the one line here Danno has not written.
- */
+/** The condition line above a branch, one per objection group: a move the prospect makes, not a sentence they say. Danno's words, all three. */
 export const BRANCH_CONDITIONS: Record<string, string> = {
   "Price / too expensive": "If they go to the number",
-  "No time / too busy": "If they say they're too busy",
+  "No time / too busy": "If it comes back to time",
   "Needs a partner's sign-off": "If they need to talk to a partner",
 };
 /** The prefilled branches at a beat that carries them by default: the first spoken reframe of each objection group. Spoken only, ever. */

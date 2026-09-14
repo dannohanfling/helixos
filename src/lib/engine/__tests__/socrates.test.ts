@@ -167,6 +167,7 @@ describe("the call sheet: blanks filled once, two sides, three outputs, and neve
     expect(branchesFor({ questionIds: [], reframeIds: [], override: null, branchIds: ["r11", "r07"] }, "C").map((r) => r.id)).toEqual(["r07"]);
     expect(Object.keys(BRANCH_CONDITIONS)).toEqual([...OBJECTION_GROUPS]);
     expect(BRANCH_CONDITIONS["Price / too expensive"]).toBe("If they go to the number");
+    expect(BRANCH_CONDITIONS["No time / too busy"]).toBe("If it comes back to time");
     expect(BRANCH_CONDITIONS["Needs a partner's sign-off"]).toBe("If they need to talk to a partner");
   });
   it("the sheet text: no framework letters, YOU then listen-for then branches in quotes with the reframe's name, writing space; the prospect's lines nowhere", () => {

@@ -164,14 +164,19 @@ async function main() {
       await page.goto(`${base}/socrates/scripts/${scriptId}?beat=${beat}`);
       if (beat === "I" && !(await page.locator('[data-testid="beat-empty"]').count())) throw new Error("Implications × DM has no library questions; the empty state must say so");
       if (beat === "A") {
-        // Four in the library: the question, then follow-ups capped at two by the server (the first two in library order), and
-        // the question itself never doubles as its own follow-up.
+        // Four in the library: the question, then follow-ups capped at two by the form itself (a third cannot be ticked and the
+        // line says why), the question never its own follow-up; the server checks the same again.
         if (!(await page.locator('[data-testid="beat-follow-ups"]').count())) throw new Error("Areas × DM offers follow-ups");
         await page.check('[data-testid="pick"][value="socrates-q18"]');
+        if (!(await page.locator('[data-testid="pick-follow"][value="socrates-q18"]').isDisabled())) throw new Error("the question itself cannot be its own follow-up");
         await page.check('[data-testid="pick-follow"][value="socrates-q34"]');
+        if (await page.locator('[data-testid="follow-up-cap"]').count()) throw new Error("no cap line before the cap");
         await page.check('[data-testid="pick-follow"][value="socrates-q36"]');
+        if (!(await page.locator('[data-testid="pick-follow"][value="socrates-q32"]').isDisabled())) throw new Error("a third follow-up cannot be ticked");
+        if ((await page.locator('[data-testid="follow-up-cap"]').innerText()) !== "Two follow-ups per beat. Untick one to swap.") throw new Error("the cap says why, in Danno's words");
+        await page.uncheck('[data-testid="pick-follow"][value="socrates-q34"]');
+        if (await page.locator('[data-testid="pick-follow"][value="socrates-q32"]').isDisabled()) throw new Error("unticking one frees the slot");
         await page.check('[data-testid="pick-follow"][value="socrates-q32"]');
-        await page.check('[data-testid="pick-follow"][value="socrates-q18"]');
       }
       if (beat === "T") {
         const own = await page.locator('[data-testid="beat-library"] [data-testid="pick"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
@@ -190,7 +195,7 @@ async function main() {
     await page.waitForURL(/beat=fill/);
     await expectText(page, "7 of 7", "complete");
     const saved = await db.query.socratesScripts.findFirst({ where: eq(schema.socratesScripts.id, scriptId) });
-    if (saved?.beats.A?.questionIds.join(",") !== "socrates-q18,socrates-q32,socrates-q34") throw new Error(`the question first, two follow-ups, the rest dropped: ${saved?.beats.A?.questionIds.join(",")}`);
+    if (saved?.beats.A?.questionIds.join(",") !== "socrates-q18,socrates-q32,socrates-q36") throw new Error(`the question first, then the two follow-ups the client left ticked: ${saved?.beats.A?.questionIds.join(",")}`);
     if (saved?.beats.T?.branchIds?.join(",") !== "r01,r07") throw new Error(`the branches the client left on at T: ${saved?.beats.T?.branchIds?.join(",")}`);
     // The blanks, once each, in the order they are met; [3 pillars] prefilled from the live offer
     const keys = await page.locator('[data-testid="fill"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-key")));

@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { deleteScriptAction, saveBeatAction, saveFillsAction, updateScriptAction } from "@/lib/actions/socrates";
-import { BRANCH_CONDITIONS, BRANCH_DEFAULT_BEATS, CLARITY_BEATS, MAX_FOLLOW_UPS, PLACEHOLDER_PROMPTS, REFRAME_BEAT, SCRIPT_TYPES, assemble, beatByKey, beatDone, beatOf, callSheet, callSheetHtml, callSheetText, copyBlockText, defaultBranchIds, placeholdersOf, progress, questionsFor, reframesByGroup, unfilledIn } from "@/lib/engine/socrates";
+import { BRANCH_CONDITIONS, BRANCH_DEFAULT_BEATS, CLARITY_BEATS, PLACEHOLDER_PROMPTS, REFRAME_BEAT, SCRIPT_TYPES, assemble, beatByKey, beatDone, beatOf, callSheet, callSheetHtml, callSheetText, copyBlockText, defaultBranchIds, placeholdersOf, progress, questionsFor, reframesByGroup, unfilledIn } from "@/lib/engine/socrates";
 import { fillsFor, ownScript, visibleQuestions } from "@/lib/queries/socrates";
 import { CallSheetView } from "@/components/call-sheet";
+import { QuestionPicker } from "@/components/question-picker";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/components/ui";
 
@@ -149,47 +150,7 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
             <form action={saveBeatAction} className="space-y-4" data-testid="beat-form" data-beat={current.key}>
               <input type="hidden" name="id" value={s.id} />
               <input type="hidden" name="beat" value={current.key} />
-              <fieldset>
-                <legend className="label">The question</legend>
-                {library.length ? (
-                  <ul className="mt-1 space-y-1.5" data-testid="beat-library">
-                    <li>
-                      <label className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm text-ink-3 hover:bg-surface-2">
-                        <input type="radio" name="primary" value="" defaultChecked={!primaryId} className="mt-1" data-testid="pick-none" />
-                        <span>No library question here; my own words below.</span>
-                      </label>
-                    </li>
-                    {library.map((q) => (
-                      <li key={q.id}>
-                        <label className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
-                          <input type="radio" name="primary" value={q.id} defaultChecked={primaryId === q.id} className="mt-1" data-testid="pick" />
-                          <span className="min-w-0 flex-1">
-                            {q.question}
-                            <span className="ml-1 text-[11px] text-ink-3">{q.own ? "yours" : q.nepqCategory ?? q.source}</span>
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-1 text-sm text-ink-3" data-testid="beat-empty">Nothing tagged for this beat and {s.scriptType}. Write your own below.</p>
-                )}
-              </fieldset>
-              {library.length > 1 ? (
-                <fieldset data-testid="beat-follow-ups">
-                  <legend className="label">Follow-ups, up to {MAX_FOLLOW_UPS} (optional)</legend>
-                  <ul className="mt-1 space-y-1.5">
-                    {library.map((q) => (
-                      <li key={q.id}>
-                        <label className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
-                          <input type="checkbox" name="followUpIds" value={q.id} defaultChecked={followUpIds.includes(q.id)} className="mt-1" data-testid="pick-follow" />
-                          <span className="min-w-0 flex-1">{q.question}</span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </fieldset>
-              ) : null}
+              <QuestionPicker library={library} primaryId={primaryId} followUpIds={followUpIds} scriptType={s.scriptType} />
               {s.scriptType === "Objection" && current.key === REFRAME_BEAT ? (
                 <fieldset data-testid="beat-reframes">
                   <legend className="label">Reframes, by objection <Link href="/socrates/reframes" className="ml-1 font-normal underline">full library</Link> · <Link href="/socrates/objections" className="font-normal underline" data-testid="beat-objections-link">your objections</Link></legend>
