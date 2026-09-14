@@ -11,9 +11,14 @@ import { INBOUND_SECRET_COOKIE, PROVIDER_META } from "@/lib/integrations";
 import { readiness } from "@/lib/engine/ghl-map";
 import { formatDateTime } from "@/lib/dates";
 
+import { coachDisconnectGhlAction, replayContactSyncAction } from "@/lib/actions/social";
+import { replayCandidates } from "@/lib/queries/contact-sync";
+import { ConfirmButton } from "@/components/confirm-button";
+import { DISCONNECT_MESSAGE } from "@/lib/engine/ghl-scopes";
+
 export const metadata = { title: "Integrations" };
 
-export default async function IntegrationsPage() {
+export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ replay?: string }> }) {
   const v = await requireCoach();
   const [rows, events, members, conns] = await Promise.all([
     db.query.integrations.findMany({ where: eq(schema.integrations.workspaceId, v.workspace.id) }),
@@ -22,6 +27,15 @@ export default async function IntegrationsPage() {
     db.query.socialConnections.findMany({ where: eq(schema.socialConnections.workspaceId, v.workspace.id) }),
   ]);
   const connOf = new Map(conns.map((c) => [c.userId, c]));
+  const candidates = new Map(await Promise.all(members.map(async (m) => [m.userId, await replayCandidates(v.workspace.id, m.userId)] as const)));
+  const { replay: replayRaw } = await searchParams;
+  type Replay = { userId: string; mode: string; sent: number; failed: number; notes: string[] };
+  let replay: Replay | null = null;
+  try {
+    replay = replayRaw ? (JSON.parse(replayRaw) as Replay) : null;
+  } catch {
+    replay = null;
+  }
   const users = members.length ? await db.query.users.findMany({ where: inArray(schema.users.id, members.map((m) => m.userId)) }) : [];
   const userName = new Map(users.map((u) => [u.id, u.name]));
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
@@ -122,6 +136,50 @@ export default async function IntegrationsPage() {
                 <Badge tone={c?.lastError ? "danger" : ok ? "good" : c ? "accent" : "neutral"}>{c?.lastError ? "token problem" : ok ? `${r?.mapped}/${r?.total} channels` : c ? "no accounts yet" : "not connected"}</Badge>
                 {c ? <span className="text-xs text-ink-3">{c.locationId}</span> : null}
                 {c?.lastError ? <span className="min-w-0 flex-1 truncate text-xs text-ink-3">{c.lastError}</span> : null}
+                {c ? (
+                  <form action={coachDisconnectGhlAction} className="ml-auto">
+                    <input type="hidden" name="userId" value={m.userId} />
+                    <ConfirmButton className="text-xs text-ink-3 underline" message={`Remove ${userName.get(m.userId) ?? "this client"}'s GoHighLevel connection? ${DISCONNECT_MESSAGE}`} title="Remove this client's connection">
+                      Disconnect
+                    </ConfirmButton>
+                  </form>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+
+      <Card className="mt-4" id="contact-sync" title="👤 Contact sync replay (GoHighLevel)">
+        <p className="mb-3 text-sm text-ink-2">Pushes that never happened, per client: client records and pipeline contacts with an email or phone and no GoHighLevel id yet. Nothing runs on its own. Run one record first and read it back in GoHighLevel, then the rest. Every push stores the id GoHighLevel returns, so it is also what links the records made before the id existed. A record with no email or phone is not pushed; the client sees that on the contact.</p>
+        {replay ? (
+          <p className="mb-3 rounded-lg bg-surface-2 p-2 text-sm" data-testid="replay-result">
+            {replay.mode === "all" ? "Ran on every ready record" : "Ran on one record"} for {userName.get(replay.userId) ?? replay.userId}: {replay.sent} sent, {replay.failed} failed.{replay.notes.length ? ` ${replay.notes.join(" · ")}` : ""}
+          </p>
+        ) : null}
+        <ul className="divide-y text-sm">
+          {members.map((m) => {
+            const r = candidates.get(m.userId) ?? { ready: [], noIdentity: 0, linked: 0 };
+            return (
+              <li key={m.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="replay-row" data-user={m.userId} data-ready={r.ready.length} data-no-identity={r.noIdentity}>
+                <span className="w-40 truncate font-medium">{userName.get(m.userId) ?? m.userId}</span>
+                <span className="text-xs text-ink-3">{r.ready.length} ready · {r.noIdentity} with no email or phone · {r.linked} linked</span>
+                {r.ready.length && connOf.get(m.userId) ? (
+                  <span className="ml-auto flex gap-2">
+                    <form action={replayContactSyncAction}>
+                      <input type="hidden" name="userId" value={m.userId} />
+                      <input type="hidden" name="mode" value="one" />
+                      <button className="btn btn-ghost btn-xs" type="submit" data-testid="replay-one">Run on one record</button>
+                    </form>
+                    <form action={replayContactSyncAction}>
+                      <input type="hidden" name="userId" value={m.userId} />
+                      <input type="hidden" name="mode" value="all" />
+                      <ConfirmButton className="btn btn-soft btn-xs" message={`Push ${r.ready.length} record(s) for ${userName.get(m.userId) ?? "this client"} to their GoHighLevel now?`}>
+                        Run on all {r.ready.length}
+                      </ConfirmButton>
+                    </form>
+                  </span>
+                ) : null}
               </li>
             );
           })}

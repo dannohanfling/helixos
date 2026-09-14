@@ -41,7 +41,7 @@ export async function createClientRecordAction(formData: FormData): Promise<void
     avatarEmoji: str(formData, "avatarEmoji") || "🙂",
   });
   if (contactId) await db.update(schema.contacts).set({ stage: "client" }).where(and(eq(schema.contacts.id, contactId), eq(schema.contacts.userId, userId)));
-  background(pushContact({ workspaceId, userId }, { name, email: opt(formData, "email"), phone: opt(formData, "phone"), stage: "client", source: "HelixOS client" }));
+  background(pushContact({ workspaceId, userId }, { kind: "client", rowId: id, name, email: opt(formData, "email"), phone: opt(formData, "phone"), stage: "client", source: "HelixOS client" }));
   refresh();
   redirect(`/clients/${id}`);
 }

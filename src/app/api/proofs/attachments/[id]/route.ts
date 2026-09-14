@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
@@ -37,8 +37,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
   // Bytes are counted as they are delivered, not as offered: a viewer who stops a video after a megabyte is a megabyte.
   let served = 0;
-  const record = () => {
-    if (served > 0) db.insert(schema.proofAttachmentReads).values({ id: newId(), workspaceId: att.workspaceId, attachmentId: att.id, bytes: served }).catch((e) => console.error("[proof-storage] could not record bytes served", JSON.stringify({ attachmentId: att.id, message: e instanceof Error ? e.message.slice(0, 300) : String(e) })));
+  // The record is written when the stream ends, after the response: after() keeps the invocation alive until it is written,
+  // where a detached insert would be frozen with the function on a serverless host and the read never counted.
+  let recorded!: () => void;
+  const done = new Promise<void>((resolve) => (recorded = resolve));
+  after(done);
+  const record = async () => {
+    try {
+      if (served > 0) await db.insert(schema.proofAttachmentReads).values({ id: newId(), workspaceId: att.workspaceId, attachmentId: att.id, bytes: served });
+    } catch (e) {
+      console.error("[proof-storage] could not record bytes served", JSON.stringify({ attachmentId: att.id, message: e instanceof Error ? e.message.slice(0, 300) : String(e) }));
+    } finally {
+      recorded();
+    }
   };
   const counted = upstream.body?.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({ transform: (chunk, ctl) => { served += chunk.byteLength; ctl.enqueue(chunk); }, flush: record })) ?? null;
   const headers = new Headers({ "content-type": display ? "image/jpeg" : att.mime, "cache-control": "private, no-store", "accept-ranges": "bytes", "x-content-type-options": "nosniff" });

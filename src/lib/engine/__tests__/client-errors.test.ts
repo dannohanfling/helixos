@@ -106,7 +106,7 @@ const UPSTREAM_TOKENS = "msg|message|body|text|statusText|detail|reply";
 const UPSTREAM = new RegExp(`\\$\\{[^}]*(\\b(${UPSTREAM_TOKENS})\\b|\\.message\\b|String\\((e|err|error)\\)|res\\.text\\(\\))[^}]*\\}|\\+\\s*(${UPSTREAM_TOKENS})\\b|\\b(error|note|lastError|externalError|refusal|reason)\\s*:\\s*(e instanceof Error \\? e\\.message|\\(e as Error\\)\\.message|(e|err|error)\\.message|String\\((e|err|error)\\)|${UPSTREAM_TOKENS})\\b(?!\\s*\\()`);
 const UPSTREAM_ALLOW: { file: string; snippet: string; why: string }[] = [
   { file: "src/lib/integrations.ts", snippet: "note: `${res.status} ${text}`", why: "a sync note on the coach's Integrations page (operators only): the upstream body is the diagnosis of a bad webhook URL or key" },
-  { file: "src/lib/integrations.ts", snippet: "note: e instanceof Error ? e.message : String(e)", why: "the same coach-only sync note, network failure" },
+  { file: "src/lib/integrations.ts", snippet: "note: redactSecrets(e instanceof Error ? e.message : String(e))", why: "the same coach-only sync note, network failure, with anything token-shaped taken out" },
   { file: "src/lib/actions/integrations.ts", snippet: "note: `${res.status} ${res.statusText}`", why: "the coach's own ping on the Integrations page; a status line, not a body" },
   { file: "src/lib/actions/integrations.ts", snippet: "lastError: `${res.status} ${res.statusText}`", why: "the same ping, persisted for the coach" },
   { file: "src/lib/email.ts", snippet: '`SendGrid failed: ${status} ${errors.join("; ")}`', why: "thrown server-side and caught by every caller, which log it; the only way to diagnose an unverified sender" },

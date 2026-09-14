@@ -185,6 +185,13 @@ export const contacts = sqliteTable(
     stage: text("stage", { enum: CONTACT_STAGES }).notNull().default("new"),
     warmth: text("warmth", { enum: ["cold", "warm", "hot"] }).notNull().default("warm"),
     source: text("source"),
+    /** The identity a push needs: an email or a phone. Optional to note a name just met; required to move to a stage that pushes. */
+    email: text("email"),
+    phone: text("phone"),
+    /** GoHighLevel's id for this person, stored on the first push: every push after that targets it, and matching never happens again. */
+    ghlContactId: text("ghl_contact_id"),
+    /** The chatbot subscriber id, for a lead with neither email nor phone; the key that path pushes on. Phase 2 fills it. */
+    userNs: text("user_ns"),
     whatTheyreBuilding: text("what_theyre_building"),
     notes: text("notes"),
     lastOutboundAt: text("last_outbound_at"),
@@ -743,6 +750,8 @@ export const clientRecords = sqliteTable(
     name: text("name").notNull(),
     email: text("email"),
     phone: text("phone"),
+    /** GoHighLevel's id for this client, stored on the first push. */
+    ghlContactId: text("ghl_contact_id"),
     avatarEmoji: text("avatar_emoji").notNull().default("🙂"),
     status: text("status", { enum: CLIENT_STATUSES }).notNull().default("active"),
     offerId: text("offer_id"),

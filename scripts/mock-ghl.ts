@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? 4010);
 const posts = new Map<string, Record<string, unknown>>();
+const contacts = new Map<string, Record<string, unknown>>();
 let n = 0;
 
 createServer((req, res) => {
@@ -22,9 +23,32 @@ createServer((req, res) => {
     if (!auth.startsWith("Bearer ") || version !== "2021-07-28") return json(401, { message: "Invalid JWT" });
     const token = auth.slice(7);
     if (url.startsWith("/__posts") && req.method === "GET") return json(200, { posts: [...posts.values()] }); // walk introspection, not a GHL route
+    if (url.startsWith("/__reset") && req.method === "POST") {
+      posts.clear();
+      contacts.clear();
+      return json(200, { ok: true });
+    }
+    if (url.startsWith("/__contacts") && req.method === "GET") return json(200, { contacts: [...contacts.values()] }); // walk introspection
     if (url.startsWith("/contacts/upsert") && req.method === "POST") {
       if (!token.startsWith("pit-") || token === "pit-noscope") return json(401, { message: "Invalid JWT" });
-      return json(200, { contact: { id: `contact_${++n}` } });
+      const body = JSON.parse(Buffer.concat(chunks).toString() || "{}") as Record<string, unknown>;
+      // As the real endpoint: matched on email or phone under the location's duplicate setting, else created; `new` says which.
+      const match = [...contacts.values()].find((c) => (body.email && c.email === body.email) || (body.phone && c.phone === body.phone));
+      if (match) {
+        Object.assign(match, body, { updates: Number(match.updates ?? 0) + 1 });
+        return json(200, { new: false, contact: { id: match.id }, traceId: "t" });
+      }
+      const id = `contact_${++n}`;
+      contacts.set(id, { id, ...body, updates: 0 });
+      return json(200, { new: true, contact: { id }, traceId: "t" });
+    }
+    const cm = url.match(/^\/contacts\/([^/?]+)$/);
+    if (cm && req.method === "PUT") {
+      if (!token.startsWith("pit-") || token === "pit-noscope") return json(401, { message: "Invalid JWT" });
+      const c = contacts.get(cm[1]);
+      if (!c) return json(404, { message: "Contact not found" });
+      Object.assign(c, JSON.parse(Buffer.concat(chunks).toString() || "{}"), { updates: Number(c.updates ?? 0) + 1 });
+      return json(200, { succeded: true, contact: { id: c.id } });
     }
     const m = url.match(/^\/social-media-posting\/([^/]+)\/(accounts|posts)(?:\/([^/?]+))?/);
     if (!m) return json(404, { message: "Not found" });

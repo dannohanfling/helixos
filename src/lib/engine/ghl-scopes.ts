@@ -34,3 +34,6 @@ export function scopeNamedIn(detail: string): string | null {
   const m = detail.match(/(socialplanner\/[a-z]+\.[a-z]+|medias\.[a-z]+|emails\/[a-z]+\.[a-z]+|contacts\.[a-z]+|conversations\/[a-z]+\.[a-z]+)/i);
   return m ? m[1] : null;
 }
+
+/** What Disconnect asks before it acts: what stops, and that the token itself is still alive until it is deleted in GoHighLevel. */
+export const DISCONNECT_MESSAGE = "Disconnect GoHighLevel? Publishing, contact sync and the planner audit stop for this account. This removes HelixOS's copy of the token only: the token stays alive until the Private Integration is deleted in GoHighLevel, and until then a leaked copy can write the CRM and send email. Delete it there too.";

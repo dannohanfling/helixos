@@ -18,6 +18,8 @@ import { getIntegration, logSync, resolveApiUrl } from "@/lib/integrations";
 import { open, seal } from "@/lib/crypto";
 import { autoMap } from "@/lib/engine/ghl-map";
 import { explainGhl, type GhlCall } from "@/lib/engine/ghl-errors";
+import { redactSecrets } from "@/lib/engine/redact";
+import { USER_NS_FIELD_KEY, clean } from "@/lib/engine/contact-sync";
 
 const VERSION = "2021-07-28";
 
@@ -47,13 +49,14 @@ async function call<T>(base: string, token: string, path: string, init: RequestI
     }
     if (!res.ok) {
       const raw = json && typeof json === "object" && "message" in json ? (json as { message: unknown }).message : text;
-      const msg = (Array.isArray(raw) ? raw.map(String).join("; ") : String(raw)).slice(0, 500);
+      // Nothing token-shaped survives into the log or the classifier's detail, whoever put it in the body.
+      const msg = redactSecrets((Array.isArray(raw) ? raw.map(String).join("; ") : String(raw)).slice(0, 500));
       logGhl(`upstream ${res.status}`, { status: res.status, path, body: msg });
       return { ok: false, error: `GoHighLevel didn't accept the request (${res.status}).`, status: res.status, detail: msg };
     }
     return { ok: true, data: json as T };
   } catch (e) {
-    const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    const detail = redactSecrets(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
     logGhl("request failed", { path, detail });
     return { ok: false, error: "Couldn't reach GoHighLevel.", detail };
   }
@@ -176,13 +179,51 @@ export async function listPosts(conn: SocialConnection, type: "scheduled" | "all
 }
 
 /** A GoHighLevel contact in the member's own sub-account (needs contacts.write on their token; skipped otherwise). */
-export async function upsertContact(conn: SocialConnection, contact: { name: string; email?: string | null; phone?: string | null; stage: string; source?: string | null }): Promise<GhlResult<{ id: string }>> {
+export type ContactPush = { name: string; email?: string | null; phone?: string | null; userNs?: string | null; stage: string; source?: string | null };
+/**
+ * The first push for a person: GoHighLevel matches on email or phone under the sub-account's own duplicate setting and says
+ * whether it created or linked (`new`). The chatbot id, when that is the identity, goes into the custom field the sub-account
+ * holds for it. The id that comes back is the join from then on. Needs contacts.write.
+ */
+export async function upsertContact(conn: SocialConnection, contact: ContactPush): Promise<GhlResult<{ id: string; isNew: boolean | null }>> {
   const cred = await credentials(conn);
   if (!cred.ok) return cred;
   const [firstName, ...rest] = contact.name.split(" ");
-  const r = await call<{ contact?: { id?: string } }>(cred.data.base, cred.data.token, "/contacts/upsert", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ locationId: conn.locationId, firstName, lastName: rest.join(" "), email: contact.email ?? undefined, phone: contact.phone ?? undefined, source: contact.source ?? "HelixOS", tags: ["helixos", contact.stage] }) });
+  const email = clean(contact.email);
+  const phone = clean(contact.phone);
+  const userNs = clean(contact.userNs);
+  const body = {
+    locationId: conn.locationId,
+    firstName,
+    lastName: rest.join(" ") || undefined,
+    email: email ?? undefined,
+    phone: phone ?? undefined,
+    source: contact.source ?? "HelixOS",
+    tags: [`helixos:${contact.stage}`],
+    customFields: userNs ? [{ key: USER_NS_FIELD_KEY, field_value: userNs }] : undefined,
+  };
+  const r = await call<{ new?: boolean; contact?: { id?: string } }>(cred.data.base, cred.data.token, "/contacts/upsert", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) return { ok: false, error: explain(r, "contact"), status: r.status };
-  return { ok: true, data: { id: String(r.data.contact?.id ?? "") } };
+  const id = String(r.data.contact?.id ?? "");
+  if (!id) return { ok: false, error: "GoHighLevel accepted the contact but returned no id" };
+  return { ok: true, data: { id, isNew: typeof r.data.new === "boolean" ? r.data.new : null } };
+}
+
+/** Every push after the first: the stored id is the target, and no matching happens. Needs contacts.write. */
+export async function updateContact(conn: SocialConnection, ghlContactId: string, contact: ContactPush): Promise<GhlResult<{ id: string; isNew: null }>> {
+  const cred = await credentials(conn);
+  if (!cred.ok) return cred;
+  const [firstName, ...rest] = contact.name.split(" ");
+  const body = {
+    firstName,
+    lastName: rest.join(" ") || undefined,
+    email: clean(contact.email) ?? undefined,
+    phone: clean(contact.phone) ?? undefined,
+    tags: [`helixos:${contact.stage}`],
+  };
+  const r = await call<unknown>(cred.data.base, cred.data.token, `/contacts/${encodeURIComponent(ghlContactId)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) return { ok: false, error: explain(r, "contact"), status: r.status };
+  return { ok: true, data: { id: ghlContactId, isNew: null } };
 }
 
 /**

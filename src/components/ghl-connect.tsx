@@ -5,6 +5,8 @@ import { GHL_SCOPES, REQUIRED_SCOPES } from "@/lib/engine/ghl-scopes";
 import { CHANNEL_SPECS, type Channel } from "@/lib/engine/repurpose";
 import { formatDateTime } from "@/lib/dates";
 import { Badge, Field } from "./ui";
+import { ConfirmButton } from "./confirm-button";
+import { DISCONNECT_MESSAGE } from "@/lib/engine/ghl-scopes";
 
 /** A member connects their own GoHighLevel sub-account with a location-level Private Integration token. Used on Settings. */
 export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | null; tz: string; role: string; open: boolean }) {
@@ -81,9 +83,9 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
               </button>
             </form>
             <form action={disconnectGhlAction}>
-              <button className="text-ink-3 underline" type="submit">
+              <ConfirmButton className="text-ink-3 underline" message={DISCONNECT_MESSAGE}>
                 Disconnect
-              </button>
+              </ConfirmButton>
             </form>
           </div>
           {conn.lastError ? (

@@ -8,6 +8,7 @@ import { db, schema } from "@/db";
 import type { PROVIDERS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso, wallTimeToUtc } from "@/lib/dates";
+import { redactSecrets } from "@/lib/engine/redact";
 import { open } from "@/lib/crypto";
 
 export type Provider = (typeof PROVIDERS)[number];
@@ -81,10 +82,10 @@ async function post(url: string, body: unknown, headers: Record<string, string>)
     const t = setTimeout(() => ctrl.abort(), 6000);
     const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body), signal: ctrl.signal });
     clearTimeout(t);
-    const text = (await res.text()).slice(0, 200);
+    const text = redactSecrets((await res.text()).slice(0, 200));
     return { ok: res.ok, note: `${res.status} ${text}`.trim() };
   } catch (e) {
-    return { ok: false, note: e instanceof Error ? e.message : String(e) };
+    return { ok: false, note: redactSecrets(e instanceof Error ? e.message : String(e)) };
   }
 }
 
@@ -118,19 +119,42 @@ export async function pushPoints(ctx: { workspaceId: string; userId: string }, p
 }
 
 /** A booked call or a new client becomes a contact in the member's own GoHighLevel sub-account (their token needs contacts.write; skipped with a note otherwise). */
-export async function pushContact(ctx: { workspaceId: string; userId: string }, contact: { name: string; email?: string | null; phone?: string | null; stage: string; source?: string | null }): Promise<void> {
+/**
+ * Pushes one person to the member's own GoHighLevel sub-account under the identity rule (src/lib/engine/contact-sync.ts):
+ * a stored GoHighLevel id is updated in place; otherwise an email, a phone or a chatbot id is required for the first push,
+ * whose returned id is stored on the row; a name alone makes no call and says why in the sync log. The failure of a push is
+ * written on the sync log; the contact itself says whether it has an identity to sync with.
+ */
+export async function pushContact(ctx: { workspaceId: string; userId: string }, person: { kind: "contact" | "client"; rowId: string; ghlContactId?: string | null; name: string; email?: string | null; phone?: string | null; userNs?: string | null; stage: string; source?: string | null }): Promise<{ ok: boolean; note: string }> {
   const integ = await getIntegration(ctx.workspaceId, "gohighlevel");
-  if (!integ?.enabled) return;
-  const { connectionFor, upsertContact } = await import("@/lib/ghl");
+  if (!integ?.enabled) return { ok: false, note: "GoHighLevel is off" };
+  const { connectionFor, updateContact, upsertContact } = await import("@/lib/ghl");
+  const { NO_IDENTITY_NOTE, identityOf, pushedNote } = await import("@/lib/engine/contact-sync");
   const conn = await connectionFor(ctx.userId);
-  const payload = { name: contact.name, stage: contact.stage };
+  const payload = { name: person.name, stage: person.stage, kind: person.kind, rowId: person.rowId };
+  const log = (status: "sent" | "failed" | "skipped", note: string) => logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "contact.upsert", payload, status, note });
   if (!conn) {
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "contact.upsert", payload, status: "skipped", note: "Member hasn't connected their sub-account on Settings" });
-    return;
+    await log("skipped", "Member hasn't connected their sub-account on Settings");
+    return { ok: false, note: "not connected" };
   }
-  const r = await upsertContact(conn, contact);
-  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "contact.upsert", payload, status: r.ok ? "sent" : "failed", note: r.ok ? `Contact ${r.data.id || "upserted"} in ${conn.locationId}` : r.error });
-  if (r.ok) await db.update(schema.integrations).set({ lastSyncAt: nowIso() }).where(eq(schema.integrations.id, integ.id));
+  // No identity, no call: a name alone would create an orphan in the client's CRM, and a second push a second one.
+  if (!person.ghlContactId && !identityOf(person)) {
+    await log("skipped", NO_IDENTITY_NOTE);
+    return { ok: false, note: NO_IDENTITY_NOTE };
+  }
+  const r = person.ghlContactId ? await updateContact(conn, person.ghlContactId, person) : await upsertContact(conn, person);
+  if (!r.ok) {
+    await log("failed", r.error);
+    return { ok: false, note: r.error };
+  }
+  if (!person.ghlContactId) {
+    const table = person.kind === "client" ? schema.clientRecords : schema.contacts;
+    await db.update(table).set({ ghlContactId: r.data.id }).where(eq(table.id, person.rowId));
+  }
+  const note = pushedNote(r.data, conn.locationId);
+  await log("sent", note);
+  await db.update(schema.integrations).set({ lastSyncAt: nowIso() }).where(eq(schema.integrations.id, integ.id));
+  return { ok: true, note };
 }
 
 /**

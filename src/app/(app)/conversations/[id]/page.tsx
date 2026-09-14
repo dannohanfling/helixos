@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { identityOf, stageNeedsIdentity } from "@/lib/engine/contact-sync";
 import { db, schema } from "@/db";
 import { CONTACT_STAGES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
@@ -12,7 +13,8 @@ import { addDays, formatDateTime } from "@/lib/dates";
 import { templatesFor } from "@/lib/queries/templates";
 import { STAGE_META } from "@/lib/stage-meta";
 
-export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContactPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ needsIdentity?: string }> }) {
+  const { needsIdentity } = await searchParams;
   const v = await requireViewer();
   const { id } = await params;
   const contact = await db.query.contacts.findFirst({ where: and(eq(schema.contacts.id, id), eq(schema.contacts.userId, v.user.id)) });
@@ -95,8 +97,24 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="space-y-4">
           <Card title="Where this stands">
+            {needsIdentity ? (
+              <p className="mb-3 rounded-lg bg-warn-soft p-2 text-sm" data-testid="needs-identity">
+                {stageNeedsIdentity(needsIdentity)}
+              </p>
+            ) : null}
             <form action={updateContactAction} className="space-y-3">
               <input type="hidden" name="id" value={contact.id} />
+              <Field label="Email">
+                <input className="field" name="email" type="email" defaultValue={contact.email ?? ""} data-testid="contact-email" />
+              </Field>
+              <Field label="Phone">
+                <input className="field" name="phone" type="tel" defaultValue={contact.phone ?? ""} data-testid="contact-phone" />
+              </Field>
+              {contact.ghlContactId ? (
+                <p className="text-xs text-ink-3" data-testid="contact-linked">Linked to GoHighLevel contact {contact.ghlContactId}.</p>
+              ) : !identityOf(contact) ? (
+                <p className="text-xs text-warn" data-testid="contact-sync-hint">Add an email or phone to sync this contact to GoHighLevel when a call is booked.</p>
+              ) : null}
               <Field label="Stage">
                 <select className="field" name="stage" defaultValue={contact.stage}>
                   {CONTACT_STAGES.map((s) => (

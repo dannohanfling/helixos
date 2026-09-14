@@ -9,6 +9,7 @@ import { addDays, nowIso } from "@/lib/dates";
 import { POINTS } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 import { background, pushContact } from "@/lib/integrations";
+import { clean, identityOf, pushesAt } from "@/lib/engine/contact-sync";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function createContactAction(formData: FormData): Promise<void> {
@@ -24,6 +25,8 @@ export async function createContactAction(formData: FormData): Promise<void> {
     name,
     platform: str(formData, "platform") || "Facebook",
     profileUrl: opt(formData, "profileUrl"),
+    email: clean(opt(formData, "email")),
+    phone: clean(opt(formData, "phone")),
     warmth: (["cold", "warm", "hot"] as const).find((w) => w === str(formData, "warmth")) ?? "warm",
     source: opt(formData, "source"),
     whatTheyreBuilding: opt(formData, "whatTheyreBuilding"),
@@ -74,10 +77,16 @@ export async function updateContactAction(formData: FormData): Promise<void> {
   if (!contact) return;
   const stage = CONTACT_STAGES.find((s) => s === str(formData, "stage")) ?? contact.stage;
   const callAt = opt(formData, "callAt");
+  const email = formData.has("email") ? clean(opt(formData, "email")) : contact.email;
+  const phone = formData.has("phone") ? clean(opt(formData, "phone")) : contact.phone;
+  // A stage that pushes needs an identity to push on. The refusal is said on the page, with which one is missing; nothing is saved.
+  if (pushesAt(stage) && stage !== contact.stage && !contact.ghlContactId && !identityOf({ email, phone, userNs: contact.userNs })) redirect(`/conversations/${id}?needsIdentity=${stage}`);
   await db
     .update(schema.contacts)
     .set({
       stage,
+      email,
+      phone,
       warmth: (["cold", "warm", "hot"] as const).find((w) => w === str(formData, "warmth")) ?? contact.warmth,
       nextFollowUpAt: stage === "cold" || stage === "client" ? null : (opt(formData, "nextFollowUpAt") ?? contact.nextFollowUpAt),
       callAt: callAt ?? contact.callAt,
@@ -88,11 +97,11 @@ export async function updateContactAction(formData: FormData): Promise<void> {
     .where(eq(schema.contacts.id, id));
   if (stage === "call_booked" && contact.stage !== "call_booked") {
     await award({ workspaceId, userId }, "call", POINTS.callBooked, `Call booked with ${contact.name}`, `call:${id}`);
-    background(pushContact({ workspaceId, userId }, { name: contact.name, stage: "call_booked", source: contact.source }));
+    background(pushContact({ workspaceId, userId }, { kind: "contact", rowId: id, ghlContactId: contact.ghlContactId, name: contact.name, email, phone, userNs: contact.userNs, stage: "call_booked", source: contact.source }));
   }
   if (stage === "client" && contact.stage !== "client") {
     await award({ workspaceId, userId }, "call", POINTS.newClient, `New client: ${contact.name}`, `client:${id}`);
-    background(pushContact({ workspaceId, userId }, { name: contact.name, stage: "client", source: contact.source }));
+    background(pushContact({ workspaceId, userId }, { kind: "contact", rowId: id, ghlContactId: contact.ghlContactId, name: contact.name, email, phone, userNs: contact.userNs, stage: "client", source: contact.source }));
   }
   void v;
   refresh();

@@ -32,6 +32,8 @@ async function saveConnection(page: Page, locationId: string, token: string, ghl
 async function main() {
   const mock = spawn("npx", ["tsx", "scripts/mock-ghl.ts", String(mockPort)], { stdio: "ignore", detached: true });
   await new Promise((r) => setTimeout(r, 2500));
+  // A mock left behind by an earlier run keeps its posts and contacts: start from nothing either way.
+  await fetch(`http://localhost:${mockPort}/__reset`, { method: "POST", headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } }).catch(() => null);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
@@ -157,6 +159,41 @@ async function main() {
     if ((await page.inputValue('select[name="map_linkedin"]')) !== "") throw new Error("the client's don't-auto-publish survives a re-check");
     console.log("✓ the GHL user ID is required: refused before the call, said on the Distribute page, saved on Settings");
 
+    // Contacts: a name alone is never pushed; a stage that pushes needs an email or phone and says so; the first push stores
+    // GoHighLevel's id and the next push updates by it (no second contact); a client record with an email upserts
+    const mockContacts = async () => ((await (await fetch(`http://localhost:${mockPort}/__contacts`, { headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } })).json()) as { contacts: { id: string; email?: string; firstName?: string; updates: number }[] }).contacts;
+    const priya = `Priya Natarajan ${Date.now().toString(36).slice(-4)}`;
+    await page.goto(`${base}/conversations?new=1`);
+    await page.fill('input[name="name"]', priya);
+    await submit(page, 'form:has(input[name="name"]) button[type="submit"]');
+    const { db: dbc, schema: sc } = await import("@/db");
+    const { eq: eqc } = await import("drizzle-orm");
+    const priyaRow = await dbc.query.contacts.findFirst({ where: eqc(sc.contacts.name, priya) });
+    if (!priyaRow) throw new Error("the contact was created");
+    const priyaUrl = `${base}/conversations/${priyaRow.id}`;
+    await page.goto(priyaUrl);
+    await expectText(page, "Add an email or phone to sync this contact", "a contact with no identity says so on the contact");
+    await page.selectOption('select[name="stage"]', "call_booked");
+    await submit(page, 'form:has(select[name="stage"]) button[type="submit"]');
+    await page.waitForURL(/needsIdentity=call_booked/);
+    await expectText(page, "Add an email or phone before marking the call booked", "the stage change is refused with which one is missing");
+    if ((await mockContacts()).length) throw new Error("no call is made for a name alone");
+    await page.fill('[data-testid="contact-email"]', "priya@example.com");
+    await page.selectOption('select[name="stage"]', "call_booked");
+    await submit(page, 'form:has(select[name="stage"]) button[type="submit"]');
+    await page.waitForTimeout(1500);
+    let ghlContacts = await mockContacts();
+    if (ghlContacts.length !== 1 || ghlContacts[0].email !== "priya@example.com") throw new Error(`the first push upserts on the email: ${JSON.stringify(ghlContacts)}`);
+    await page.goto(priyaUrl);
+    await expectText(page, `Linked to GoHighLevel contact ${ghlContacts[0].id}`, "the returned id is stored and shown");
+    await page.selectOption('select[name="stage"]', "client");
+    await submit(page, 'form:has(select[name="stage"]) button[type="submit"]');
+    await page.waitForTimeout(1500);
+    ghlContacts = await mockContacts();
+    if (ghlContacts.length !== 1 || ghlContacts[0].updates !== 1) throw new Error(`the second push updates by id, never a second contact: ${JSON.stringify(ghlContacts)}`);
+    await page.goto(`${base}/integrations`).catch(() => null);
+    console.log("✓ contacts: a name alone is never pushed and the contact says why; the first push stores the id; the next push updates it, no duplicate");
+
     // Publish through the Social Planner
     await page.goto(`${base}/content/compose`);
     await page.fill('input[placeholder^="Working title"]', "GHL end to end");
@@ -247,6 +284,29 @@ async function main() {
     if (!stillThere) throw new Error("the audit changed the planner");
     await page.screenshot({ path: "screenshots/g03-planner-audit.png", fullPage: true });
     console.log("✓ planner audit: the leftover is named a duplicate with its twin; tracked posts are not listed; nothing deleted");
+
+    // The replay: one record first, stored id, then the coach's disconnect, which also says the token lives on.
+    // The demo's client records carry no email, so one gets one here: a record with an identity and no id is what a replay is for.
+    {
+      const { db: dbr, schema: sr } = await import("@/db");
+      const { eq: eqr } = await import("drizzle-orm");
+      await dbr.update(sr.clientRecords).set({ email: "sarah.kim@example.com" }).where(eqr(sr.clientRecords.name, "Sarah Kim"));
+    }
+    await page.goto(`${base}/integrations`);
+    const replayRow = page.locator('[data-testid="replay-row"]', { hasText: "Maya Torres" });
+    const readyBefore = Number(await replayRow.getAttribute("data-ready"));
+    if (readyBefore < 1) throw new Error("the demo client's records with an email and no id are ready to replay");
+    await Promise.all([page.waitForURL(/replay=/), replayRow.locator('[data-testid="replay-one"]').click()]);
+    await expectText(page, "Ran on one record", "the replay ran on one record");
+    await expectText(page, "1 sent, 0 failed", "and stored its id");
+    if (Number(await page.locator('[data-testid="replay-row"]', { hasText: "Maya Torres" }).getAttribute("data-ready")) !== readyBefore - 1) throw new Error("the replayed record is no longer ready: its id is stored");
+    page.once("dialog", (d) => d.accept());
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('form:has(input[name="userId"]) button:has-text("Disconnect")').first().click()]);
+    await page.waitForLoadState("networkidle");
+    await page.reload();
+    await expectText(page, "not connected", "the coach removed the client's connection");
+    await expectText(page, "Connection removed by the coach", "and the sync log says who did it and that the token lives on");
+    console.log("✓ replay one record and store its id; the coach can disconnect a client, with the token's afterlife said");
   } finally {
     await browser.close();
     try {

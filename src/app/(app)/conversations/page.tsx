@@ -108,6 +108,12 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                 <Field label="Profile link (optional)">
                   <input className="field" name="profileUrl" type="url" placeholder="https://…" />
                 </Field>
+                <Field label="Email (optional)" hint="What GoHighLevel matches on when a call is booked.">
+                  <input className="field" name="email" type="email" placeholder="priya@example.com" />
+                </Field>
+                <Field label="Phone (optional)">
+                  <input className="field" name="phone" type="tel" placeholder="+1 555 010 0000" />
+                </Field>
                 <Field label="Warmth">
                   <select className="field" name="warmth" defaultValue="warm">
                     <option value="cold">❄️ Cold — never spoken</option>
