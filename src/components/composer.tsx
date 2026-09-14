@@ -15,7 +15,7 @@ import { AiStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { useVoice } from "@/components/voice-context";
 import { CopyButton } from "@/components/copy-button";
-import { manualChannelsSentence, publishedChannelsSentence } from "@/lib/engine/ghl-map";
+import { PUBLISHABLE, manualChannelsSentence, publishedChannelsSentence } from "@/lib/engine/ghl-map";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
@@ -186,8 +186,9 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                 {targets.map((t) => {
                   const on = selected.includes(t.key);
                   return (
-                    <button key={t.key} type="button" onClick={() => toggle(t.key)} className={`rounded-full border px-2.5 py-1 text-xs transition ${on ? "border-accent bg-accent-soft text-ink" : "text-ink-2 hover:border-ink"}`} title={t.label}>
+                    <button key={t.key} type="button" onClick={() => toggle(t.key)} className={`rounded-full border px-2.5 py-1 text-xs transition ${on ? "border-accent bg-accent-soft text-ink" : "text-ink-2 hover:border-ink"}`} title={t.label} data-paste={t.groupId || !PUBLISHABLE[t.channel]?.via ? "1" : "0"}>
                       {t.icon} {t.label.replace("Facebook ", "FB ").replace(" caption", "").replace(" community", "").replace(" (FB / IG)", "")}
+                      {t.groupId || !PUBLISHABLE[t.channel]?.via ? <span className="ml-1 rounded bg-surface-2 px-1 text-[10px] text-ink-3" title="Copied and pasted by you">paste</span> : null}
                     </button>
                   );
                 })}

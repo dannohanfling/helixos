@@ -27,6 +27,10 @@ export async function saveIntegrationAction(formData: FormData): Promise<void> {
   const config: Record<string, string> = { ...(existing?.config ?? {}) };
   for (const f of PROVIDER_META[provider].fields) {
     const val = str(formData, f.key);
+    if (f.toggle) {
+      config[f.key] = val === "1" ? "1" : "";
+      continue;
+    }
     if (f.secret && !val) continue; // keep the stored secret when the field is left blank
     config[f.key] = f.secret ? (seal(val) ?? "") : val;
   }

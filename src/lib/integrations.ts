@@ -15,7 +15,7 @@ export type Provider = (typeof PROVIDERS)[number];
 /** Cookie that carries a just-created inbound webhook secret to the Integrations page, once (10 minutes). */
 export const INBOUND_SECRET_COOKIE = "helix_inbound_secret";
 
-export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb: string; fields: { key: string; label: string; hint?: string; secret?: boolean }[] }> = {
+export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb: string; fields: { key: string; label: string; hint?: string; secret?: boolean; toggle?: boolean }[] }> = {
   community_loyalty: {
     name: "Community Loyalty",
     icon: "🎟️",
@@ -31,9 +31,15 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
     name: "Omnichannel Marketing System (GoHighLevel)",
     icon: "📡",
     blurb: "Social Planner publishing and contacts, through each client's own sub-account. Every member pastes their own location-level Private Integration token on Settings → Publishing; nothing agency-level is needed or stored.",
-    fields: [{ key: "apiUrl", label: "API base URL (advanced)", hint: "https://services.leadconnectorhq.com" }],
+    fields: [
+      { key: "apiUrl", label: "API base URL (advanced)", hint: "https://services.leadconnectorhq.com" },
+      // Scopes are granted once. Until the list is final, no client is walked through creating a Private Integration.
+      { key: "onboardingOpen", label: "Open Publishing setup to clients", hint: "Off until the scope list is final: a token made early has to be made again when a scope is added. Coaches always see the setup.", toggle: true },
+    ],
   },
 };
+/** Whether a client may be walked through creating their Private Integration: the coach's switch, off by default. */
+export const onboardingOpen = (config: Record<string, string> | undefined) => config?.onboardingOpen === "1";
 
 const BUILT_IN_HOSTS: Record<Provider, string[]> = {
   gohighlevel: ["services.leadconnectorhq.com"],
@@ -168,7 +174,8 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   }
   await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: r.data.id }, status: "sent", note: `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Published via"} Social Planner · ${r.data.id}` });
   await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: scheduleDate ? "scheduled" : "published", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
-  await db.update(schema.socialConnections).set({ lastSyncAt: nowIso(), lastError: null }).where(eq(schema.socialConnections.id, conn.id));
+  // A push is not a check: "checked" on Settings moves only when the accounts call runs.
+  await db.update(schema.socialConnections).set({ lastError: null }).where(eq(schema.socialConnections.id, conn.id));
   return true;
 }
 

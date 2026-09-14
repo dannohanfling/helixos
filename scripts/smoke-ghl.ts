@@ -51,6 +51,31 @@ async function main() {
     await ghlForm.locator('input[name="apiUrl"]').fill(`http://localhost:${mockPort}`);
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), ghlForm.locator('button:has-text("Save")').click()]);
     await page.waitForLoadState("networkidle");
+    // The setup is closed to clients until the coach opens it: scopes are granted once. The demo client starts with no connection.
+    {
+      const { db: db0, schema: s0 } = await import("@/db");
+      const { eq: eq0 } = await import("drizzle-orm");
+      const maya0 = await db0.query.users.findFirst({ where: eq0(s0.users.email, "client@demo.helixos.app") });
+      await db0.delete(s0.socialConnections).where(eq0(s0.socialConnections.userId, maya0!.id));
+    }
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As a client")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/settings`);
+    await expectText(page, "Publishing setup isn't open yet", "a client is not walked through the setup before the list is final");
+    if (await page.locator('input[name="manualToken"]').count()) throw new Error("no token field while the setup is closed");
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As the coach")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/integrations`);
+    await page.locator('[data-testid="integration-onboardingOpen"]').check();
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('form:has(input[name="provider"][value="gohighlevel"])').first().locator('button:has-text("Save")').click()]);
+    await page.waitForLoadState("networkidle");
+    await page.reload();
+    if (!(await page.locator('[data-testid="integration-onboardingOpen"]').isChecked())) throw new Error("the switch is saved");
     await expectText(page, "Client sub-accounts", "coach sees connection status list");
     console.log("✓ coach: GoHighLevel enabled without any agency credential");
 
@@ -63,10 +88,12 @@ async function main() {
     await page.goto(`${base}/settings`);
     await expectText(page, "Private Integrations → Create new integration", "guidance shown");
     await expectText(page, "socialplanner/post.write", "scopes listed");
+    const listedScopes = await page.locator('[data-testid="ghl-scope-list"] li').evaluateAll((els) => els.map((e) => e.textContent?.trim()));
+    if (listedScopes.length !== 15 || !listedScopes.includes("medias.write") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
     await saveConnection(page, "loc_maya", "wrong-token");
     await expectText(page, "rejected the token (401)", "bad token reason");
     await saveConnection(page, "loc_maya", "pit-noscope");
-    await expectText(page, "missing Social Planner permissions (403)", "missing scope reason");
+    await expectText(page, "socialplanner/account.readonly was not granted (403)", "the missing scope is named");
     await saveConnection(page, "loc_other", "pit-loc_maya");
     await expectText(page, "doesn't match this token", "wrong location reason");
     await saveConnection(page, "loc_maya", "pit-loc_maya");

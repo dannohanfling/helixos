@@ -51,7 +51,12 @@ export default async function IntegrationsPage() {
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" name="enabled" value="1" defaultChecked={row?.enabled ?? false} /> Enabled
                 </label>
-                {meta.fields.map((f) => (
+                {meta.fields.map((f) => f.toggle ? (
+                  <label key={f.key} className="flex items-start gap-2 text-sm">
+                    <input type="checkbox" name={f.key} value="1" defaultChecked={row?.config[f.key] === "1"} className="mt-1" data-testid={`integration-${f.key}`} />
+                    <span>{f.label}{f.hint ? <span className="block text-xs text-ink-3">{f.hint}</span> : null}</span>
+                  </label>
+                ) : (
                   <Field key={f.key} label={f.label} hint={f.secret && row?.config[f.key] ? "Saved. Leave blank to keep." : f.hint}>
                     <input className="field" name={f.key} type={f.secret ? "password" : "text"} defaultValue={f.secret ? "" : (row?.config[f.key] ?? "")} placeholder={f.secret && row?.config[f.key] ? "••••••••" : f.hint} autoComplete="off" />
                   </Field>

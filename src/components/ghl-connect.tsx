@@ -1,13 +1,21 @@
 import type { SocialConnection } from "@/db/schema";
 import { connectGhlAction, disconnectGhlAction, refreshGhlAccountsAction, setGhlMappingAction } from "@/lib/actions/social";
 import { PUBLISHABLE, candidates, manualChannelsSentence, readiness } from "@/lib/engine/ghl-map";
-import { REQUIRED_SCOPES } from "@/lib/ghl";
+import { GHL_SCOPES, REQUIRED_SCOPES } from "@/lib/engine/ghl-scopes";
 import { CHANNEL_SPECS, type Channel } from "@/lib/engine/repurpose";
 import { formatDateTime } from "@/lib/dates";
 import { Badge, Field } from "./ui";
 
 /** A member connects their own GoHighLevel sub-account with a location-level Private Integration token. Used on Settings. */
-export function GhlConnect({ conn, tz }: { conn: SocialConnection | null; tz: string }) {
+export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | null; tz: string; role: string; open: boolean }) {
+  // Scopes are granted once, so no client is walked through creating a Private Integration until the coach opens the setup.
+  if (role !== "coach" && !open && !conn) {
+    return (
+      <p className="rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="ghl-not-open">
+        Publishing setup isn&apos;t open yet. Your coach will tell you when to connect your GoHighLevel sub-account; until then, posts you schedule are ready to copy and paste.
+      </p>
+    );
+  }
   const connected = Boolean(conn && conn.accounts.length && !conn.lastError);
   const hasUser = Boolean(conn?.ghlUserId?.trim());
   // Nothing publishes without the user id, whatever the map says.
@@ -22,7 +30,14 @@ export function GhlConnect({ conn, tz }: { conn: SocialConnection | null; tz: st
             Open <b>Settings → Private Integrations → Create new integration</b>. Name it <b>HelixOS</b>.
           </li>
           <li>
-            Tick these six scopes and nothing else: <code className="text-xs">{REQUIRED_SCOPES.join(", ")}</code>.
+            Tick these {REQUIRED_SCOPES.length} scopes and nothing else:
+            <ul className="mt-1 grid gap-x-4 sm:grid-cols-2" data-testid="ghl-scope-list">
+              {GHL_SCOPES.map((sc) => (
+                <li key={sc.scope}>
+                  <code className="text-xs">{sc.scope}</code>
+                </li>
+              ))}
+            </ul>
           </li>
           <li>
             Copy the token that appears. <b>It is shown only once.</b> Paste it below.
@@ -51,6 +66,9 @@ export function GhlConnect({ conn, tz }: { conn: SocialConnection | null; tz: st
           <span className="text-xs text-ink-3">Saving asks GoHighLevel for your connected pages, so you&apos;ll know right away if the token or location is wrong.</span>
         </div>
       </form>
+      {role === "coach" && !open ? (
+        <p className="text-xs text-ink-3" data-testid="ghl-coach-gate-note">Clients don&apos;t see this setup yet. Open it on Integrations once the scope list is final.</p>
+      ) : null}
       {conn ? (
         <>
           <div className="flex flex-wrap items-center gap-2 text-xs">

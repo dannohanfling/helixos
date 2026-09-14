@@ -9,7 +9,8 @@
 export type GhlCall = "accounts" | "post" | "contact";
 export type GhlFailure = { error: string; status?: number; detail?: string };
 
-export const REQUIRED_SCOPES = ["socialplanner/oauth.readonly", "socialplanner/oauth.write", "socialplanner/post.readonly", "socialplanner/post.write", "socialplanner/account.readonly", "socialplanner/account.write"] as const;
+import { REQUIRED_SCOPES, scopeNamedIn } from "./ghl-scopes";
+export { REQUIRED_SCOPES };
 
 const LOCATION = "GoHighLevel says that location ID doesn't match this token (it belongs to a different sub-account, or has a typo). Copy the Location ID from Settings → Business Profile in the same sub-account where you created the token.";
 
@@ -26,7 +27,12 @@ export function refusedField(detail: string): "userId" | "accountIds" | "schedul
 export function explainGhl(r: GhlFailure, call: GhlCall): string {
   const lower = (r.detail ?? "").toLowerCase();
   if (r.status === 401) return "GoHighLevel rejected the token (401). It was pasted incompletely, or it was deleted in GoHighLevel. Create a new Private Integration and paste the new token.";
-  if (r.status === 403 || lower.includes("scope")) return `The token is valid but is missing Social Planner permissions (403). Edit the Private Integration in GoHighLevel and tick all six scopes: ${REQUIRED_SCOPES.join(", ")}.`;
+  if (r.status === 403 || lower.includes("scope")) {
+    // GoHighLevel names the scope it refused; the client fixes that one alone. Without a name, the whole list.
+    const named = scopeNamedIn(r.detail ?? "");
+    if (named) return `The token is valid but ${named} was not granted (403). Edit the Private Integration in GoHighLevel, tick it, and paste the new token.`;
+    return `The token is valid but is missing Social Planner permissions (403). Edit the Private Integration in GoHighLevel and tick every scope on the list: ${REQUIRED_SCOPES.join(", ")}.`;
+  }
   if (r.status === 429) return "GoHighLevel is rate-limiting requests (429). Wait a minute and try again.";
   if (lower.includes("abort") || lower.includes("fetch failed") || lower.includes("econn")) return "Couldn't reach GoHighLevel. Check the API base URL on Integrations, or try again in a minute.";
   if (call === "accounts") {

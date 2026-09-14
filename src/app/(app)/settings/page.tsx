@@ -10,6 +10,7 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { AiKeyCard } from "@/components/ai-key-card";
 import { FathomKeyCard } from "@/components/fathom-key-card";
 import { connectionFor } from "@/lib/ghl";
+import { getIntegration, onboardingOpen } from "@/lib/integrations";
 import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 
@@ -25,14 +26,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
   const { fathom: fathomNotice } = await searchParams;
-  const [goal, conn] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id)]);
+  const [goal, conn, ghlIntegration] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel")]);
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   return (
     <>
       <PageHeader title="Settings" />
       <Card className="mb-4" title="🚀 Publishing (your GoHighLevel sub-account)">
         <p className="mb-3 text-sm text-ink-2">Connect your own GoHighLevel sub-account once. Posts you schedule in the composer land in your Social Planner and go out on their own. Your token is encrypted and only ever used for your sub-account.</p>
-        <GhlConnect conn={conn ?? null} tz={v.tz} />
+        <GhlConnect conn={conn ?? null} tz={v.tz} role={v.role} open={onboardingOpen(ghlIntegration?.config)} />
       </Card>
       <div className="mb-4" id="ai">
         <AiKeyCard v={v} />
