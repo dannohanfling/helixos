@@ -52,6 +52,30 @@
   }
 }
 
+/* On paper the sheet is ink on white whatever the screen's scheme: a dark palette printed is grey ink on an unprinted background. */
+@media print {
+  :root,
+  :root:not(.light) {
+    color-scheme: light;
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f0eee8;
+    --line: #e3e0d7;
+    --ink: #16181d;
+    --ink-2: #4b4f58;
+    --ink-3: #8a8e97;
+    --accent: #b7791f;
+    --accent-ink: #7a4f0f;
+    --accent-soft: #fbf0d9;
+    --good: #1a7f37;
+    --good-soft: #dff5e6;
+    --warn: #b45309;
+    --warn-soft: #fdebd3;
+    --danger: #b3261e;
+    --danger-soft: #fbe1df;
+  }
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);

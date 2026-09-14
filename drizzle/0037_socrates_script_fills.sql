@@ -1,0 +1,1 @@
+ALTER TABLE `socrates_scripts` ADD `fills` text DEFAULT '{}' NOT NULL;

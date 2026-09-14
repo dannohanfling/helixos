@@ -710,7 +710,7 @@ export const socratesQuestions = sqliteTable(
 );
 export type SocratesQuestion = typeof socratesQuestions.$inferSelect;
 
-export type SocratesBeat = { questionIds: string[]; reframeIds: string[]; override: string | null };
+export type SocratesBeat = { questionIds: string[]; reframeIds: string[]; override: string | null; listenFor?: string | null; branchIds?: string[] };
 
 export const socratesScripts = sqliteTable(
   "socrates_scripts",
@@ -721,6 +721,8 @@ export const socratesScripts = sqliteTable(
     name: text("name").notNull(),
     scriptType: text("script_type", { enum: SOCRATES_SCRIPT_TYPES }).notNull().default("High-Ticket Sales Call"),
     beats: text("beats", { mode: "json" }).$type<Record<string, SocratesBeat>>().notNull().default({}),
+    /** The blanks the chosen questions carry, filled once each by their key (the text inside the brackets): `[X]` asked once, used everywhere. */
+    fills: text("fills", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
     createdAt: createdAt(),
   },

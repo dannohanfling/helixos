@@ -6,7 +6,7 @@ import { db, schema } from "@/db";
 import { SOCRATES_SCRIPT_TYPES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { CLARITY_BEATS, NEPQ_CATEGORIES, SPOKEN_REFRAMES, REFRAME_BEAT, beatByKey, beatByStage, beatOf } from "@/lib/engine/socrates";
+import { CLARITY_BEATS, MAX_FOLLOW_UPS, NEPQ_CATEGORIES, SPOKEN_REFRAMES, REFRAME_BEAT, assemble, beatByKey, beatByStage, beatOf, noBrackets, placeholdersOf } from "@/lib/engine/socrates";
 import { visibleQuestions, ownScript } from "@/lib/queries/socrates";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
@@ -55,21 +55,45 @@ export async function updateScriptAction(formData: FormData): Promise<void> {
   refresh();
 }
 
-/** One beat: the library picks (only questions this client can see, and reframes that exist) and the client's own words. */
+/**
+ * One beat: the question and up to two follow-ups (only questions this client can see, the question first), the client's own
+ * "listen for" note, the branches if they push back (spoken reframes only), and the client's own words.
+ */
 export async function saveBeatAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const s = await ownScript(str(formData, "id"), userId);
   const beat = beatByKey(str(formData, "beat"));
   if (!s || !beat) return;
   const visible = new Set((await visibleQuestions(userId)).map((q) => q.id));
-  const questionIds = formData.getAll("questionIds").map(String).filter((id) => visible.has(id));
+  const primary = str(formData, "primary");
+  // Follow-ups follow a question: with none picked there is nothing to follow, so none are kept; a repeated id is one id.
+  const followUps = visible.has(primary) ? Array.from(new Set(formData.getAll("followUpIds").map(String))).filter((id) => id !== primary && visible.has(id)).slice(0, MAX_FOLLOW_UPS) : [];
+  const questionIds = [...(visible.has(primary) ? [primary] : []), ...followUps];
   // Reframes are deployed at one beat of an Objection script; picks sent for any other beat are dropped.
   const reframeIds = s.scriptType === "Objection" && beat.key === REFRAME_BEAT ? formData.getAll("reframeIds").map(String).filter((id) => SPOKEN_REFRAMES.some((r) => r.id === id)) : [];
-  const beats = { ...s.beats, [beat.key]: { ...beatOf(s.beats, beat.key), questionIds, reframeIds, override: opt(formData, "override") } };
+  // A principle is never a branch: the id list is checked against the spoken set, whatever the form sent.
+  const branchIds = formData.getAll("branchIds").map(String).filter((id) => SPOKEN_REFRAMES.some((r) => r.id === id));
+  const beats = { ...s.beats, [beat.key]: { ...beatOf(s.beats, beat.key), questionIds, reframeIds, override: opt(formData, "override"), listenFor: opt(formData, "listenFor"), branchIds } };
   await db.update(schema.socratesScripts).set({ beats, updatedAt: nowIso() }).where(eq(schema.socratesScripts.id, s.id));
   refresh();
-  const next = beatByKey(str(formData, "next"));
-  redirect(`/socrates/scripts/${s.id}?beat=${next ? next.key : beat.key}`);
+  const next = str(formData, "next");
+  redirect(`/socrates/scripts/${s.id}?beat=${next === "fill" ? "fill" : (beatByKey(next)?.key ?? beat.key)}`);
+}
+
+/** The blanks, filled once each by key. Only keys the script actually carries are kept, so a stale fill never lingers. */
+export async function saveFillsAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const s = await ownScript(str(formData, "id"), userId);
+  if (!s) return;
+  const keys = placeholdersOf(assemble(s.beats, await visibleQuestions(userId)));
+  const fills: Record<string, string> = {};
+  for (const k of keys) {
+    const v = noBrackets(str(formData, `fill:${k}`)).trim();
+    if (v) fills[k] = v;
+  }
+  await db.update(schema.socratesScripts).set({ fills, updatedAt: nowIso() }).where(eq(schema.socratesScripts.id, s.id));
+  refresh();
+  redirect(`/socrates/scripts/${s.id}?beat=fill`);
 }
 
 export async function deleteScriptAction(formData: FormData): Promise<void> {

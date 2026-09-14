@@ -260,6 +260,13 @@
       "when": 1789172779069,
       "tag": "0036_proof_attachment_display_bytes",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1789411923694,
+      "tag": "0037_socrates_script_fills",
+      "breakpoints": true
     }
   ]
 }
