@@ -137,7 +137,10 @@ async function main() {
   // Rewards pass card
   await page.goto(`${base}/rewards`);
   await expectText(page, "My Evolve Omega pass", "pass card");
-  await submit(page, 'button:has-text("Send me a test push")');
+  // Passes aren't switched on: the card says so, and no test-push button is offered while nothing would be sent.
+  await expectText(page, "Wallet passes aren't switched on yet", "pass card says passes are off");
+  await expectText(page, "Test push: wallet passes aren't switched on yet.", "test push refused visibly");
+  if (await page.locator('button:has-text("Send me a test push")').count()) throw new Error("a test-push button is offered while nothing is sent");
   await shot(page, "x11-rewards-pass");
 
   // Coach side
@@ -160,9 +163,9 @@ async function main() {
   if ((await page.locator('[data-testid="inbound-secret"]').count()) !== 0) throw new Error("secret still visible after hiding");
   await expectText(page, "can't be shown again", "secret hidden");
   await shot(page, "x12-integrations");
-  await page.fill('textarea[name="body"]', "Call in 30. Bring one win.");
-  await submit(page, 'button:has-text("Push to passes")');
-  await expectText(page, "pass.push", "broadcast logged");
+  // Passes aren't wired up: the card says so where the button was, and no push is offered.
+  await expectText(page, "Points aren't wired up yet: nothing is sent.", "pass push refused visibly");
+  if (await page.locator('button:has-text("Push to passes")').count()) throw new Error("a push button is offered while nothing is sent");
   await page.goto(`${base}/certification`);
   await expectText(page, "To score", "coach cert queue");
   await page.fill('input[name="score"]', "96");

@@ -2,6 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { markPassInstalledAction, sendTestPushAction } from "@/lib/actions/integrations";
+import { passWired } from "@/lib/integrations";
 import { Badge, Card, PageHeader, Progress } from "@/components/ui";
 import { ClaimButton } from "@/components/claim-button";
 import { TIERS, TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
@@ -81,7 +82,7 @@ export default async function RewardsPage() {
       <Card className="mb-4" title="🎫 My Evolve Omega pass" action={v.membership.eoPassInstalledAt ? <Badge tone="good">installed</Badge> : v.membership.eoPassUrl ? <Badge tone="accent">ready to add</Badge> : <Badge tone="neutral">coming</Badge>}>
         <div className="flex flex-wrap items-center gap-4">
           <div className="min-w-0 flex-1 text-sm">
-            <p className="text-ink-2">Your pass lives in your phone wallet. Points you earn here land on it, and it&apos;s how your coach reaches you between calls.</p>
+            <p className="text-ink-2">Your points are tracked here. Wallet passes aren&apos;t switched on yet — when they are, your balance comes with you.</p>
             <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink-3">
               {v.membership.eoPassSerial ? <span>Serial {v.membership.eoPassSerial}</span> : null}
               {v.membership.eoPassLastPushAt ? <span>· last message {formatDateTime(v.membership.eoPassLastPushAt, v.workspace.timezone)}</span> : null}
@@ -98,10 +99,12 @@ export default async function RewardsPage() {
                 <button className="btn btn-ghost btn-sm" type="submit">I added it</button>
               </form>
             ) : null}
-            {v.membership.eoPassSerial ? (
+            {v.membership.eoPassSerial && passWired("walletpush") ? (
               <form action={sendTestPushAction}>
                 <button className="btn btn-ghost btn-sm" type="submit">Send me a test push</button>
               </form>
+            ) : v.membership.eoPassSerial ? (
+              <span className="text-xs text-ink-3" data-testid="test-push-off">Test push: wallet passes aren&apos;t switched on yet.</span>
             ) : null}
           </div>
         </div>

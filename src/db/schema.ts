@@ -53,7 +53,10 @@ export const memberships = sqliteTable(
     passCommunityUrl: text("pass_community_url"),
     certEnabled: integer("cert_enabled", { mode: "boolean" }).notNull().default(false),
     eoPassUrl: text("eo_pass_url"),
+    /** The Evolve Omega pass on eLoyalty, three identifiers (src/lib/engine/eloyalty.ts): the customer id is the key; the serial is a cache that goes stale on reinstall; the pass type id addresses v1 writes. Filled by the creation call. */
+    eoCustomerId: text("eo_customer_id"),
     eoPassSerial: text("eo_pass_serial"),
+    eoPassTypeId: text("eo_pass_type_id"),
     eoPassInstalledAt: text("eo_pass_installed_at"),
     eoPassLastPushAt: text("eo_pass_last_push_at"),
     /** Coach override of the workspace's daily AI cap for this member. */

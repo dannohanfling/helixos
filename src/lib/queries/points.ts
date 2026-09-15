@@ -37,7 +37,7 @@ export async function award(
     .values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, type, points, reason, refId: refId ?? null })
     .onConflictDoNothing();
   const inserted = (res.rowsAffected ?? 0) > 0;
-  if (inserted && points > 0) background(pushPoints(ctx, points, reason));
+  if (inserted) background(pushPoints(ctx, points, reason));
   return inserted;
 }
 

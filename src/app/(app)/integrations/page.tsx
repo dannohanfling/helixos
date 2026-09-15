@@ -7,7 +7,7 @@ import { requireCoach } from "@/lib/auth";
 import { broadcastPassAction, clearSyncLogAction, hideInboundSecretAction, rotateInboundSecretAction, saveIntegrationAction, testIntegrationAction } from "@/lib/actions/integrations";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
-import { INBOUND_SECRET_COOKIE, PROVIDER_META } from "@/lib/integrations";
+import { INBOUND_SECRET_COOKIE, PASS_NOT_WIRED, PROVIDER_META, passWired } from "@/lib/integrations";
 import { readiness } from "@/lib/engine/ghl-map";
 import { formatDateTime } from "@/lib/dates";
 
@@ -53,7 +53,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     <>
       <PageHeader title="Integrations" subtitle="Points, passes, contacts and messages flow out. Rewards and bookings flow back in. Everything is logged." />
       <div className="grid gap-4 lg:grid-cols-2">
-        {PROVIDERS.filter((p) => p !== "walletpush").map((p) => {
+        {PROVIDERS.map((p) => {
           const meta = PROVIDER_META[p];
           const row = rows.find((r) => r.provider === p);
           const hookPath = p === "community_loyalty" ? "community-loyalty" : p === "gohighlevel" ? "ghl" : null;
@@ -193,6 +193,8 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
         <Card title="🎫 Evolve Omega passes" action={<span className="text-xs text-ink-3">{installed}/{withPass} installed · {members.length} members</span>}>
+          {passWired("walletpush") ? (
+          <>
           <p className="mb-3 text-sm text-ink-2">Each member carries their own Evolve Omega pass. Points land on it, and you can message the whole cohort from here. Assign pass links per client on the Coach page.</p>
           <form action={broadcastPassAction} className="space-y-2">
             <Field label="Title">
@@ -209,6 +211,10 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             </Field>
             <button className="btn btn-accent btn-sm" type="submit">Push to passes</button>
           </form>
+          </>
+          ) : (
+            <p className="text-sm text-ink-2" data-testid="pass-push-off">{PASS_NOT_WIRED} Evolve Omega passes on the new pass platform don&apos;t exist yet; points are tracked in HelixOS meanwhile. Pass links per client are on the Coach page.</p>
+          )}
         </Card>
         <Card title="Sync log" action={events.length ? <form action={clearSyncLogAction}><button className="text-xs text-ink-3 underline" type="submit">Clear</button></form> : null}>
           {events.length ? (

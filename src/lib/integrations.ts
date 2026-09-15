@@ -10,6 +10,7 @@ import { newId } from "@/lib/ids";
 import { nowIso, wallTimeToUtc } from "@/lib/dates";
 import { redactSecrets } from "@/lib/engine/redact";
 import { open } from "@/lib/crypto";
+import { address, pointsDelta } from "@/lib/engine/eloyalty";
 
 export type Provider = (typeof PROVIDERS)[number];
 
@@ -20,9 +21,9 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
   // Not shown to coaches: Evolve Omega sets the pass up and holds its credentials (decision, 15 Sep). The vendor underneath
   // (the WalletPush instance at the loyalty host behind the Community Loyalty Mini-App) is named in code and the README only.
   walletpush: {
-    name: "Points and wallet passes (set up by Evolve Omega)",
+    name: "Evolve Omega pass",
     icon: "🎟️",
-    blurb: "Points and push messages on each member's Evolve Omega wallet pass. Nothing is sent yet: the call is not wired up.",
+    blurb: "Points and push messages on each client's Evolve Omega wallet pass. Nothing is sent yet: the program on the new pass platform doesn't exist, so the call is not wired up.",
     fields: [
       // A hostname becomes a built-in constant only after a live call to it has returned 2xx. Until then it is a default to confirm.
       { key: "apiUrl", label: "Loyalty host URL", hint: "Default https://eloyalty.ai; confirm it against the Loyalty - Host URL in the Mini-App settings before saving" },
@@ -127,18 +128,26 @@ async function send(workspaceId: string, userId: string | null, provider: Provid
 }
 
 /**
- * Points earned in HelixOS go to the member's Evolve Omega pass, which is a WalletPush pass. Silent when nothing is configured.
- * The path and body here are the 6 September placeholder and have never been verified against the service: WalletPush's own
- * call is POST {host}/api/public/admin/points/add with { customerId, points, reason } (read off a live flow node on 15 Sep),
- * keyed on the customer id, not the pass serial. Rebuilt only once the sync log has said whether a push ever succeeded.
+ * Points earned in HelixOS go to the member's Evolve Omega pass on eLoyalty (a WalletPush instance), addressed through
+ * src/lib/engine/eloyalty.ts: add or deduct by customer id, never a set. The program does not exist on that platform yet
+ * (15 Sep), so send() refuses every call for this provider until a live call has returned 2xx; this is the path it will take.
  */
 export async function pushPoints(ctx: { workspaceId: string; userId: string }, points: number, reason: string): Promise<void> {
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, ctx.workspaceId), eq(schema.memberships.userId, ctx.userId)) });
-  if (!m?.eoPassSerial) return;
+  if (!m || (!m.eoCustomerId && !m.eoPassSerial)) return;
   const integ = await getIntegration(ctx.workspaceId, "walletpush");
   if (!integ?.enabled) return;
   const rate = Number(integ.config.pointsRate ?? "1") || 1;
-  await send(ctx.workspaceId, ctx.userId, "walletpush", "points.add", "/v1/points", { serial: m.eoPassSerial, points: Math.round(points * rate), reason });
+  const delta = pointsDelta(points * rate);
+  if (!delta) return;
+  const event = delta.call === "pointsAdd" ? "points.add" : "points.deduct";
+  // Points move through v3 by customer id. A member with only a serial cannot be addressed for points; the log says so.
+  const a = address(delta.call, { customerId: m.eoCustomerId, serial: m.eoPassSerial, passTypeId: m.eoPassTypeId }, { points: delta.points, reason });
+  if (!a.ok) {
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "walletpush", direction: "out", event, payload: { points: delta.points, reason }, status: "skipped", note: "No customer id on this member yet: points cannot be addressed until their pass is created through HelixOS" });
+    return;
+  }
+  await send(ctx.workspaceId, ctx.userId, "walletpush", event, a.path, a.body ?? {});
 }
 
 /** A booked call or a new client becomes a contact in the member's own GoHighLevel sub-account (their token needs contacts.write; skipped with a note otherwise). */
@@ -226,14 +235,20 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   return true;
 }
 
-/** A push notification to one member's Evolve Omega pass. Same placeholder status as pushPoints: the WalletPush path is not yet verified. */
+/** A push notification to one member's Evolve Omega pass, written onto the pass through v1. Refused by send() until the program exists. */
 export async function pushPassMessage(ctx: { workspaceId: string; userId: string }, title: string, body: string): Promise<boolean> {
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, ctx.workspaceId), eq(schema.memberships.userId, ctx.userId)) });
   if (!m?.eoPassSerial) {
     await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "walletpush", direction: "out", event: "pass.push", payload: { title, body }, status: "skipped", note: "Member has no Evolve Omega pass yet" });
     return false;
   }
-  const ok = await send(ctx.workspaceId, ctx.userId, "walletpush", "pass.push", "/v1/passes/push", { serial: m.eoPassSerial, title, body });
+  // A push is written onto the pass through v1: pass type id plus serial. v1 has no title; the message is the value.
+  const a = address("pushNotification", { customerId: m.eoCustomerId, serial: m.eoPassSerial, passTypeId: m.eoPassTypeId }, { value: title ? `${title}: ${body}` : body });
+  if (!a.ok) {
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "walletpush", direction: "out", event: "pass.push", payload: { title, body }, status: "skipped", note: `No ${a.missing === "passTypeId" ? "pass type id" : "serial"} on this member yet: a push is addressed by pass type id and serial` });
+    return false;
+  }
+  const ok = await send(ctx.workspaceId, ctx.userId, "walletpush", "pass.push", a.path, a.body ?? {});
   await db.update(schema.memberships).set({ eoPassLastPushAt: nowIso() }).where(eq(schema.memberships.id, m.id));
   return ok;
 }
