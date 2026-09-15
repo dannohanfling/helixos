@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { THREADS_EXCLUSIVE, threadsRefusal } from "@/lib/engine/rung-drip";
+import { dripSetup } from "@/lib/rung-drip";
 import { CHANNELS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso, nowWallInTz } from "@/lib/dates";
@@ -11,7 +13,7 @@ import { draft } from "@/lib/ai";
 import { CHANNEL_SPECS, formatClause, toneClause, type Channel } from "@/lib/engine/repurpose";
 import { readRules } from "@/lib/engine/groups";
 import { explainFabricated, findFabricated, stripFabricated, stripNote } from "@/lib/engine/blacklist";
-import { channelTargets, draftFor, groupTargets, staggerSchedule, type Target } from "@/lib/engine/compose";
+import { type Target, channelTargets, draftFor, groupTargets, normaliseTargets, staggerSchedule } from "@/lib/engine/compose";
 import { ILLUSTRATIVE_LABEL, mediaBlock, mediaUrlProblem } from "@/lib/engine/compose-media";
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
@@ -66,6 +68,12 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
   // A typed address goes to the Social Planner as-is: it must be a public web address, never one of our private routes.
   const urlProblem = mediaUrlProblem(payload.mediaUrl, payload.mode !== "draft");
   if (urlProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: urlProblem };
+  // While the comment-ladder handoff is on, Threads is Community Loyalty's: the server refuses it as the chip does. The
+  // refusal looks at the targets as they will be saved: a group id that is not the member's own is a plain channel post.
+  const ownGroups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
+  const targets = normaliseTargets(payload.targets, ownGroups.map((g) => g.id));
+  const threads = payload.mode !== "draft" ? threadsRefusal(targets, dripSetup(v.membership).on) : null;
+  if (threads) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: threads };
   const title = payload.title.trim() || payload.hook.trim().slice(0, 80) || "Untitled post";
   const firstAt = payload.targets.map((t) => t.postAt).filter(Boolean).sort()[0] ?? null;
   const status = payload.mode === "now" ? "posted" : payload.mode === "schedule" ? "scheduled" : "ready";
@@ -97,10 +105,9 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
   let scheduled = 0;
   let posted = 0;
   let pushed = 0;
-  const ownGroups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
-  for (const t of payload.targets) {
+  for (const t of targets) {
     if (!isChannel(t.channel)) continue;
-    const groupId = t.groupId && ownGroups.some((g) => g.id === t.groupId) ? t.groupId : "";
+    const groupId = t.groupId;
     const vStatus = payload.mode === "now" ? "posted" : payload.mode === "schedule" ? "scheduled" : "draft";
     const row = { body: t.body, subject: t.subject ?? null, status: vStatus as "posted" | "scheduled" | "draft", postAt: payload.mode === "schedule" ? (t.postAt ?? firstAt) : null, postedAt: payload.mode === "now" ? nowIso() : null, generatedBy: "composer" };
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, id), eq(schema.contentVariants.channel, t.channel), eq(schema.contentVariants.groupId, groupId)) });
@@ -167,7 +174,9 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
   if (!item) return;
   const groups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
   const picked = groups.filter((g) => g.kind === "own" || (g.kind === "prospect" && g.rank >= 1 && g.rank <= 3));
-  const targets: Target[] = [...groupTargets(picked), ...channelTargets()];
+  // While the handoff is on, Threads is Community Loyalty's and is not part of "everywhere".
+  const dripOn = dripSetup(v.membership).on;
+  const targets: Target[] = [...groupTargets(picked), ...channelTargets().filter((t) => !(dripOn && t.channel === "threads"))];
   const when = staggerSchedule(targets, `${startDate}T${startTime}:00`);
   const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, ctaText: item.cta, hashtag: v.membership.passHashtag, firstName: v.user.name.split(" ")[0] };
   const result = await saveComposeAction({
@@ -187,5 +196,5 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
     }),
   });
   // A block is never silent: the page that offered the button names it.
-  if (result.blocked) redirect(`/content/${item.id}/repurpose?blocked=${result.blocked.startsWith(ILLUSTRATIVE_LABEL) ? "media" : mediaUrlProblem(item.mediaUrl ?? "") ? "url" : "fabricated"}`);
+  if (result.blocked) redirect(`/content/${item.id}/repurpose?blocked=${result.blocked.startsWith(ILLUSTRATIVE_LABEL) ? "media" : mediaUrlProblem(item.mediaUrl ?? "") ? "url" : result.blocked === THREADS_EXCLUSIVE ? "threads" : "fabricated"}`);
 }

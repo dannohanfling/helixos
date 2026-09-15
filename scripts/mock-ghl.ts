@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? 4010);
 const posts = new Map<string, Record<string, unknown>>();
+const drips: { path: string; body: Record<string, unknown>; at: string }[] = [];
 const contacts = new Map<string, Record<string, unknown>>();
 let n = 0;
 
@@ -20,11 +21,22 @@ createServer((req, res) => {
       res.writeHead(code, { "content-type": "application/json" });
       res.end(JSON.stringify(body));
     };
+    if (url.startsWith("/__drips") && req.method === "GET") return json(200, { drips }); // walk introspection
+    if (url.startsWith("/__delete/") && req.method === "POST") {
+      posts.delete(url.slice("/__delete/".length)); // a post deleted by hand in the planner
+      return json(200, { ok: true });
+    }
+    // A Community Loyalty inbound webhook (the Rung Dripper's): no auth, the URL is the credential; answers {"status":"ok"}.
+    if (url.startsWith("/api/iwh/") && req.method === "POST") {
+      drips.push({ path: url, body: JSON.parse(Buffer.concat(chunks).toString() || "{}"), at: new Date().toISOString() });
+      return json(200, { status: "ok" });
+    }
     if (!auth.startsWith("Bearer ") || version !== "2021-07-28") return json(401, { message: "Invalid JWT" });
     const token = auth.slice(7);
     if (url.startsWith("/__posts") && req.method === "GET") return json(200, { posts: [...posts.values()] }); // walk introspection, not a GHL route
     if (url.startsWith("/__reset") && req.method === "POST") {
       posts.clear();
+      drips.length = 0;
       contacts.clear();
       return json(200, { ok: true });
     }
@@ -81,7 +93,9 @@ createServer((req, res) => {
       // A walk hook: this user id is refused as GoHighLevel refuses one it does not know.
       if (body.userId === "user_refused") return json(422, { statusCode: 422, message: ["userId must be a valid user id"], error: "Unprocessable Entity" });
       const _id = `post_${++n}`;
-      posts.set(_id, { _id, ...body, error: null, postId: null });
+      posts.set(_id, { _id, ...body, error: null, postId: null, createdAt: new Date().toISOString() });
+      // A walk hook: seen live 15 Sep, a 2xx whose body carries no id. The post exists all the same.
+      if (String(body.summary ?? "").includes("[noid]")) return json(201, { success: true, statusCode: 201, message: "Post created", results: {} });
       return json(201, { success: true, statusCode: 201, message: "Post created", results: { post: posts.get(_id) } });
     }
     if (kind === "posts" && req.method === "POST" && id === "list") {

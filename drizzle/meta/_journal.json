@@ -281,6 +281,13 @@
       "when": 1789497060382,
       "tag": "0039_eloyalty_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1789508191164,
+      "tag": "0040_drip_handoffs",
+      "breakpoints": true
     }
   ]
 }

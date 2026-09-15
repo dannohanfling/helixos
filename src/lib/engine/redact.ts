@@ -4,6 +4,7 @@
  */
 const PATTERNS: [RegExp, string][] = [
   [/\bpit-[A-Za-z0-9_-]{6,}/g, "pit-[redacted]"],
+  [/\/api\/iwh\/[A-Za-z0-9]{8,}/g, "/api/iwh/[redacted]"],
   [/\bBearer\s+[A-Za-z0-9._\-+/=]{8,}/gi, "Bearer [redacted]"],
   [/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?/g, "[jwt redacted]"],
   [/\b[A-Za-z0-9+/_-]{40,}={0,2}\b/g, "[redacted]"],

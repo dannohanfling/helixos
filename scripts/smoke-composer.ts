@@ -98,7 +98,7 @@ async function main() {
   await expectText(page, "Custom Instagram caption", "preview reflects override");
   await shot(page, "c02-composer-custom");
   await page.click('button:has-text("Schedule")');
-  await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
+  await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
   await page.click('a:has-text("See every version")');
   await page.waitForURL(/\/repurpose/);
   const itemId = page.url().match(/\/content\/([a-z0-9-]+)\/repurpose/i)![1];

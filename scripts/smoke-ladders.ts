@@ -186,7 +186,7 @@ async function main() {
     if (!(await page.locator('[data-testid="copy-only"] button:has-text("Copy the chain")').count())) throw new Error("the chain must be copyable from the composer");
     if (await page.locator('[data-testid="over-limit"]').count()) throw new Error("a chain must not be shown as one over-long post");
     await page.click('button:has-text("Schedule")');
-    await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
+    await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
     const fbVariant = () => db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, "fb_personal"), eq(schema.contentVariants.groupId, "")) });
     const scheduled = await fbVariant();
     if (scheduled?.status !== "scheduled") throw new Error(`Facebook version should be scheduled, is ${scheduled?.status}`);

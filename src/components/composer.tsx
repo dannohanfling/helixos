@@ -17,6 +17,7 @@ import { useVoice } from "@/components/voice-context";
 import { CopyButton } from "@/components/copy-button";
 import { ChannelOutcomePanel } from "@/components/channel-outcome-panel";
 import { PUBLISHABLE, manualChannelsSentence, publishedChannelsSentence } from "@/lib/engine/ghl-map";
+import { THREADS_EXCLUSIVE } from "@/lib/engine/rung-drip";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
@@ -29,7 +30,7 @@ const DEFAULT_SELECTED: TargetKey[] = ["ch:fb_personal", "ch:instagram", "ch:thr
 
 type Snippet = { id: string; title: string; text: string };
 
-export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale, copyOnly }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[]; media?: ComposerMedia[] }; stale?: StaleNotice; copyOnly?: CopyOnly }) {
+export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale, copyOnly: copyOnlyGiven, dripOn = false }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[]; media?: ComposerMedia[] }; stale?: StaleNotice; copyOnly?: CopyOnly; dripOn?: boolean }) {
   const router = useRouter();
   const voice = useVoice();
   const targets = useMemo(() => [...groupTargets(groups), ...channelTargets()], [groups]);
@@ -65,6 +66,8 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const src = useMemo(() => ({ title: title || hook.slice(0, 60), hook, body, hasCta, ctaText: cta, hashtag, firstName: persona.name.split(" ")[0] }), [title, hook, body, hasCta, cta, hashtag, persona.name]);
   const chosen = useMemo(() => selected.map((k) => byKey.get(k)).filter((t): t is Target => Boolean(t)), [selected, byKey]);
   // A copy-only target (a Threads chain from a ladder) is shown and copied here but never scheduled or polished as one post.
+  // Channel ownership is exclusive while the comment-ladder handoff is on: Threads goes out through Community Loyalty.
+  const copyOnly = useMemo<CopyOnly | undefined>(() => (dripOn ? { ...(copyOnlyGiven ?? {}), "ch:threads": THREADS_EXCLUSIVE } : copyOnlyGiven), [copyOnlyGiven, dripOn]);
   const copyOnlyReason = (t: Target): string | undefined => copyOnly?.[t.key];
   const schedulable = useMemo(() => chosen.filter((t) => !copyOnly?.[t.key]), [chosen, copyOnly]);
   const draftOf = (t: Target): Draft => {
@@ -138,7 +141,8 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       }
       setResult(r);
       if (mode === "draft") router.push(`/content/${r.id}/repurpose`);
-      else setNotice(mode === "now" ? `Posted to ${r.posted} places. Groups are ready to paste; channels are on their way to the Social Planner${socialConnected ? " (See every version shows what it said)" : " queue (connect GoHighLevel to auto-publish)"}.` : `Scheduled ${r.scheduled} posts starting ${date} ${time}.`);
+      // The banner never counts outcomes: the panel beneath it reads them from the one rule, and the two cannot disagree.
+      else setNotice(`Saved ${r.scheduled + r.posted} versions. ${mode === "now" ? "Each channel says below what happened." : "Each channel says below when it goes."}`);
     });
 
   const polish = () =>
@@ -189,7 +193,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   return (
                     <button key={t.key} type="button" onClick={() => toggle(t.key)} className={`rounded-full border px-2.5 py-1 text-xs transition ${on ? "border-accent bg-accent-soft text-ink" : "text-ink-2 hover:border-ink"}`} title={t.label} data-paste={t.groupId || !PUBLISHABLE[t.channel]?.via ? "1" : "0"}>
                       {t.icon} {t.label.replace("Facebook ", "FB ").replace(" caption", "").replace(" community", "").replace(" (FB / IG)", "")}
-                      {t.groupId || !PUBLISHABLE[t.channel]?.via ? <span className="ml-1 rounded bg-surface-2 px-1 text-[10px] text-ink-3" title="Copied and pasted by you">paste</span> : null}
+                      {t.groupId || !PUBLISHABLE[t.channel]?.via ? <span className="ml-1 rounded bg-surface-2 px-1 text-[10px] text-ink-3" title="Copied and pasted by you">paste</span> : copyOnlyReason(t) ? <span className="ml-1 rounded bg-warn-soft px-1 text-[10px] text-warn" title={copyOnlyReason(t)} data-testid="chip-copy-only">copy</span> : null}
                     </button>
                   );
                 })}

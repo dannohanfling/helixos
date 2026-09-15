@@ -59,6 +59,10 @@ export const memberships = sqliteTable(
     eoPassTypeId: text("eo_pass_type_id"),
     eoPassInstalledAt: text("eo_pass_installed_at"),
     eoPassLastPushAt: text("eo_pass_last_push_at"),
+    /** The coach's Community Loyalty inbound webhook for the Rung Dripper: the URL is the credential (no auth on it), sealed at rest, never rendered, never logged. */
+    clDripWebhookUrl: text("cl_drip_webhook_url"),
+    /** The Community Loyalty contact that holds the drip state for this coach (user_ns). */
+    clUserNs: text("cl_user_ns"),
     /** Coach override of the workspace's daily AI cap for this member. */
     aiCapExempt: integer("ai_cap_exempt", { mode: "boolean" }).notNull().default(false),
     /** Highest tier level the member has seen the celebration for. Null until first seen: then stamped silently. */
@@ -1165,6 +1169,32 @@ export const essences = sqliteTable(
   (t) => [uniqueIndex("essences_ws_user").on(t.workspaceId, t.userId)],
 );
 export type Essence = typeof essences.$inferSelect;
+
+/* ───────────────────────── Comment ladder handoffs ───────────────────────── */
+
+/**
+ * One row per ladder handed to Community Loyalty's Rung Dripper: when, how many rungs, and until when the coach's one drip
+ * slot is taken (the state lives on one Community Loyalty contact, so two at once would tangle). HelixOS is never told when
+ * a rung lands, so a row here means "handed", never "posted".
+ */
+export const dripHandoffs = sqliteTable(
+  "drip_handoffs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    contentItemId: text("content_item_id").notNull(),
+    ladderId: text("ladder_id").notNull(),
+    handedAt: text("handed_at").notNull(),
+    rungCount: integer("rung_count").notNull(),
+    threadsAt: text("threads_at"),
+    expiresAt: text("expires_at").notNull(),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("drip_handoffs_user").on(t.userId, t.expiresAt), index("drip_handoffs_item").on(t.contentItemId)],
+);
+export type DripHandoff = typeof dripHandoffs.$inferSelect;
 
 /* ───────────────────────── Integrations ───────────────────────── */
 

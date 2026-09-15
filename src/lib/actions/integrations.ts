@@ -96,9 +96,12 @@ export async function testIntegrationAction(formData: FormData): Promise<void> {
 export async function setMemberPassAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
   const membershipId = str(formData, "membershipId");
+  // The drip webhook URL is a credential: sealed at rest, kept when the field is left blank, cleared with "clear".
+  const url = opt(formData, "clDripWebhookUrl");
+  const drip = url === "clear" ? { clDripWebhookUrl: null } : url ? { clDripWebhookUrl: seal(url) } : {};
   await db
     .update(schema.memberships)
-    .set({ eoPassUrl: opt(formData, "eoPassUrl"), eoPassSerial: opt(formData, "eoPassSerial") })
+    .set({ eoPassUrl: opt(formData, "eoPassUrl"), eoPassSerial: opt(formData, "eoPassSerial"), clUserNs: opt(formData, "clUserNs"), ...drip })
     .where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
   refresh();
 }

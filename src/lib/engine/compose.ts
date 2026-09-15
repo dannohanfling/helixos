@@ -72,3 +72,8 @@ export function overLimit(body: string, max: number): boolean {
 export function localIso(date: string, time: string): string {
   return `${date}T${time || "09:00"}:00`;
 }
+
+/** A target's group id is honoured only when the group is the member's own; anything else is a plain channel post. Pure, so the refusal that follows sees what will be saved. */
+export function normaliseTargets<T extends { groupId?: string | null }>(targets: T[], ownGroupIds: string[]): (T & { groupId: string })[] {
+  return targets.map((t) => ({ ...t, groupId: t.groupId && ownGroupIds.includes(t.groupId) ? t.groupId : "" }));
+}

@@ -218,7 +218,14 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   const scheduleDate = post.postAt ? wallTimeToUtc(post.postAt, ctx.tz) : null;
   if (post.postAt && !scheduleDate) return skip("The schedule time couldn't be read. Set the date and time again and re-schedule.", "failed");
   const variant = await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, post.variantId) });
-  const held = variant?.externalId && variant.externalStatus === "scheduled" ? variant.externalId : null;
+  // A row the planner accepted without an id is looked up in the planner's list before anything is created again: the same
+  // matcher that recovers a lost id is the guard against a second copy.
+  if (variant && variant.externalStatus === "accepted" && !variant.externalId) {
+    const { reconcileLostId } = await import("@/lib/planner-status");
+    const found = await reconcileLostId(variant, conn);
+    if (found) variant.externalId = found;
+  }
+  const held = variant?.externalId && (variant.externalStatus === "scheduled" || variant.externalStatus === "accepted") ? variant.externalId : null;
   const event = held ? "social.update" : "social.schedule";
   const draft = { accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: post.mediaUrl ? [{ url: post.mediaUrl, type: mediaTypeFor(post.mediaUrl) }] : [], followUpComment: post.followUpComment };
   const r = held ? await updatePost(conn, held, draft) : await createPost(conn, draft);
@@ -228,9 +235,10 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
     await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: r.error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
     return false;
   }
-  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: r.data.id }, status: "sent", note: `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Published via"} Social Planner · ${r.data.id}` });
-  // Accepted is not published: an immediate post is "in_progress" until the readback (Check status) says it went out.
-  await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: scheduleDate ? "scheduled" : "in_progress", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
+  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: r.data.id ?? undefined }, status: "sent", note: r.data.id ? `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Accepted by"} Social Planner · ${r.data.id}` : "Accepted by the Social Planner without an id; found from its list on the next check" });
+  // Accepted is not published: an immediate post is "in_progress" until the readback (Check status) says it went out; a
+  // 2xx with no id is "accepted" until the planner's list gives the id back.
+  await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: r.data.id ? (scheduleDate ? "scheduled" : "in_progress") : "accepted", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
   // A push is not a check: "checked" on Settings moves only when the accounts call runs.
   await db.update(schema.socialConnections).set({ lastError: null }).where(eq(schema.socialConnections.id, conn.id));
   return true;

@@ -7,7 +7,9 @@ import { setContentStatusAction } from "@/lib/actions/content";
 import { ContentForm } from "@/components/content-form";
 import { Badge, Card, Disclosure, Empty, PageHeader, Tabs } from "@/components/ui";
 import { OutcomeHeadline, OutcomeRows } from "@/components/channel-outcome";
-import { nowFor, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
+import { nowFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
+import { refreshStale } from "@/lib/planner-status";
+import { outcomesForItem } from "@/lib/queries/outcomes";
 import { addDays, formatDate, rangeDays, startOfWeek } from "@/lib/dates";
 
 export const metadata = { title: "Content" };
@@ -67,10 +69,10 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
     orderBy: [asc(schema.contentItems.postAt), desc(schema.contentItems.createdAt)],
   });
   // Every version of every listed post, so each card can say what happened per channel from the one rule.
-  const allVariants = items.length ? await db.query.contentVariants.findMany({ where: eq(schema.contentVariants.userId, v.user.id) }) : [];
+  const allVariants = items.length ? await refreshStale(v.user.id, await db.query.contentVariants.findMany({ where: eq(schema.contentVariants.userId, v.user.id) })) : [];
   const now = nowFor(v);
   const outcomesByItem = new Map<string, ChannelOutcome[]>();
-  for (const item of items) outcomesByItem.set(item.id, outcomesFor(allVariants.filter((x) => x.contentItemId === item.id), now));
+  for (const item of items) outcomesByItem.set(item.id, await outcomesForItem(v, item, allVariants, now));
   const posted = items.filter((i) => i.status === "posted").sort((a, b) => (b.postedAt ?? "").localeCompare(a.postedAt ?? ""));
   const pipeline = items.filter((i) => i.status !== "posted");
   const thisWeek = posted.filter((i) => (i.postedAt ?? "").slice(0, 10) >= startOfWeek(v.today)).length;

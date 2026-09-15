@@ -109,7 +109,7 @@ export async function refreshAccounts(conn: SocialConnection): Promise<GhlResult
 export type NewPost = { accountId: string; summary: string; type: "post" | "story" | "reel"; scheduleDate: string | null; media?: { url: string; type: string }[]; followUpComment?: string | null };
 
 /** Creates a post in the Social Planner. Scheduled when a date is given, published now otherwise. Returns GHL's post id. */
-export async function createPost(conn: SocialConnection, post: NewPost): Promise<GhlResult<{ id: string }>> {
+export async function createPost(conn: SocialConnection, post: NewPost): Promise<GhlResult<{ id: string | null }>> {
   const cred = await credentials(conn);
   if (!cred.ok) return cred;
   const body = {
@@ -126,7 +126,14 @@ export async function createPost(conn: SocialConnection, post: NewPost): Promise
   const r = await call<{ results?: { post?: { _id?: string; id?: string } } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
   const id = String(r.data.results?.post?._id ?? r.data.results?.post?.id ?? "");
-  return id ? { ok: true, data: { id } } : { ok: false, error: "GoHighLevel accepted the post but returned no id" };
+  // Seen live 15 Sep: a 2xx with no id in results.post for an immediate post that was published within the minute. That is
+  // accepted, not failed; the id is found from the planner's own list on the next check. The body's shape goes to the log
+  // (keys only, never the text) so the next time it is known rather than guessed.
+  if (!id) {
+    const shape = (o: unknown): unknown => (o && typeof o === "object" && !Array.isArray(o) ? Object.fromEntries(Object.entries(o as Record<string, unknown>).map(([k, v]) => [k, v && typeof v === "object" ? shape(v) : typeof v])) : Array.isArray(o) ? `array(${o.length})` : typeof o);
+    console.warn("[ghl] create returned 2xx without an id", JSON.stringify({ shape: shape(r.data) }).slice(0, 600));
+  }
+  return { ok: true, data: { id: id || null } };
 }
 
 /** Edits a post the Social Planner already holds (a scheduled one), keeping its id: no second copy appears in the planner. */
@@ -151,7 +158,7 @@ export async function updatePost(conn: SocialConnection, id: string, post: NewPo
 }
 
 export type PostStatus = { status: string; error: string | null; postId: string | null; publishedAt: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[] };
-type RawPost = { _id?: string; id?: string; status?: string; error?: string; postId?: string; publishedAt?: string; summary?: string; scheduleDate?: string; accountIds?: unknown };
+type RawPost = { _id?: string; id?: string; status?: string; error?: string; postId?: string; publishedAt?: string; createdAt?: string; summary?: string; scheduleDate?: string; accountIds?: unknown };
 
 const accountIdsOf = (p: RawPost) => (Array.isArray(p.accountIds) ? p.accountIds.map(String) : []);
 
@@ -164,7 +171,7 @@ export async function getPost(conn: SocialConnection, id: string): Promise<GhlRe
   return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p) } };
 }
 
-export type PlannerPost = { id: string; status: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[] };
+export type PlannerPost = { id: string; status: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[]; createdAt: string | null; publishedAt: string | null };
 
 /** Read-only: the posts the Social Planner holds for this location in one state (default: scheduled). Never changes anything. */
 export async function listPosts(conn: SocialConnection, type: "scheduled" | "all" = "scheduled", limit = 100): Promise<GhlResult<PlannerPost[]>> {
@@ -175,7 +182,7 @@ export async function listPosts(conn: SocialConnection, type: "scheduled" | "all
   const r = await call<{ results?: { posts?: RawPost[] } | RawPost[]; posts?: RawPost[] }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/list`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
   const raw = Array.isArray(r.data.results) ? r.data.results : (r.data.results?.posts ?? r.data.posts ?? []);
-  return { ok: true, data: raw.map((p) => ({ id: String(p._id ?? p.id ?? ""), status: p.status ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p) })).filter((p) => p.id) };
+  return { ok: true, data: raw.map((p) => ({ id: String(p._id ?? p.id ?? ""), status: p.status ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p), createdAt: p.createdAt ?? null, publishedAt: p.publishedAt ?? null })).filter((p) => p.id) };
 }
 
 /** A GoHighLevel contact in the member's own sub-account (needs contacts.write on their token; skipped otherwise). */

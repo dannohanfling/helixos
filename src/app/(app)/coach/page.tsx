@@ -182,6 +182,8 @@ export default async function CoachPage() {
                     <input type="hidden" name="membershipId" value={r.m.id} />
                     <input className="field min-w-40 flex-1 py-1 text-xs" name="eoPassUrl" placeholder="Evolve Omega pass link" defaultValue={r.m.eoPassUrl ?? ""} />
                     <input className="field w-28 py-1 text-xs" name="eoPassSerial" placeholder="serial" defaultValue={r.m.eoPassSerial ?? ""} />
+                    <input className="field min-w-40 flex-1 py-1 text-xs" name="clDripWebhookUrl" type="password" autoComplete="off" placeholder={r.m.clDripWebhookUrl ? "Community Loyalty drip webhook: saved (blank keeps it, \"clear\" removes it)" : "Community Loyalty drip webhook URL"} title="The inbound webhook of the coach's Rung Dripper. It is a credential: stored sealed, never shown again." />
+                    <input className="field w-36 py-1 text-xs" name="clUserNs" placeholder="CL contact (user_ns)" defaultValue={r.m.clUserNs ?? ""} title="The Community Loyalty contact that holds the drip state" />
                     <button className="btn btn-ghost btn-xs" type="submit">Save</button>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>

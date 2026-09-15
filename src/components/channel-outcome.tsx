@@ -5,7 +5,7 @@ import { summarize, type ChannelOutcome, type OutcomeState } from "@/lib/engine/
  * failure the reason. Used by the content card, the composer after scheduling and the Distribute page; none of them
  * renders a status any other way. Plain props, no server imports, so it renders on either side.
  */
-const LIGHT: Record<OutcomeState, string> = { published: "var(--good)", scheduled: "var(--accent)", sending: "var(--ink-3)", failed: "var(--danger)", manual: "transparent", unknown: "var(--warn)" };
+const LIGHT: Record<OutcomeState, string> = { published: "var(--good)", scheduled: "var(--accent)", sending: "var(--ink-3)", failed: "var(--danger)", manual: "transparent", unknown: "var(--warn)", handed: "var(--accent)", unhanded: "var(--warn)" };
 
 export function OutcomeLight({ state }: { state: OutcomeState }) {
   return <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border" style={{ background: LIGHT[state], borderColor: state === "manual" ? "var(--ink-3)" : LIGHT[state] }} />;
@@ -29,7 +29,7 @@ export function OutcomeRows({ outcomes, checkAction, compact = false }: { outcom
         <li key={o.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5" data-state={o.state} data-channel={o.channel}>
           <OutcomeLight state={o.state} />
           <span className="font-medium">{o.label}</span>
-          <span className={o.state === "failed" ? "text-danger" : o.state === "unknown" ? "text-warn" : o.state === "published" ? "text-good" : "text-ink-2"}>{o.word}</span>
+          <span className={o.state === "failed" ? "text-danger" : o.state === "unknown" || o.state === "unhanded" ? "text-warn" : o.state === "published" ? "text-good" : "text-ink-2"}>{o.word}</span>
           {o.when ? <span className="text-ink-3">{o.when}</span> : null}
           {o.reason ? (
             <span className="basis-full text-ink-2 sm:basis-auto" data-testid="outcome-reason">

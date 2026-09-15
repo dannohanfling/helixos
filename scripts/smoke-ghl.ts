@@ -62,6 +62,15 @@ async function main() {
     await ghlForm.locator('input[name="apiUrl"]').fill(`http://localhost:${mockPort}`);
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), ghlForm.locator('button:has-text("Save")').click()]);
     await page.waitForLoadState("networkidle");
+    // Danno installs the client's Community Loyalty drip: the webhook URL (a credential, never shown back) and the contact.
+    await page.goto(`${base}/coach`);
+    const mayaRow = page.locator('form:has(input[name="eoPassUrl"][value*="maya-torres"])').first();
+    await mayaRow.locator('input[name="clDripWebhookUrl"]').fill(`http://localhost:${mockPort}/api/iwh/abcdef0123456789abcdef0123456789`);
+    await mayaRow.locator('input[name="clUserNs"]').fill("f52594u50757435");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), mayaRow.locator('button:has-text("Save")').click()]);
+    await page.waitForLoadState("networkidle");
+    if (/abcdef0123456789/.test(await page.content())) throw new Error("the drip webhook URL is rendered back on the page");
+    if (!/saved \(blank keeps it/.test(await page.locator('form:has(input[name="eoPassUrl"][value*="maya-torres"]) input[name="clDripWebhookUrl"]').first().getAttribute("placeholder") ?? "")) throw new Error("the coach cannot tell the webhook is set");
     // The setup is closed to clients until the coach opens it: scopes are granted once. The demo client starts with no connection.
     {
       const { db: db0, schema: s0 } = await import("@/db");
@@ -128,7 +137,7 @@ async function main() {
     await page.fill('textarea[placeholder^="Type content"]', "This must not reach the planner.");
     await page.click('button[title="Facebook business page"]');
     await page.click('button:has-text("Schedule")');
-    await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
+    await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
     await page.click('a:has-text("See every version")');
     await page.waitForURL(/\/repurpose/);
     await page.waitForTimeout(1500);
@@ -147,7 +156,7 @@ async function main() {
     await page.fill('textarea[placeholder^="Type content"]', "This is refused by the planner.");
     await page.click('button[title="Facebook business page"]');
     await page.click('button:has-text("Schedule")');
-    await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
+    await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
     await page.click('a:has-text("See every version")');
     await page.waitForURL(/\/repurpose/);
     await page.waitForTimeout(1500);
@@ -210,7 +219,7 @@ async function main() {
     // A time still ahead in the member's own zone: a scheduled row whose time has passed with no readback is honestly "sending", then "lost track".
     await page.locator('input[type="date"]').first().fill(new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
     await page.click('button:has-text("Schedule")');
-    await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
+    await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
     await page.click('a:has-text("See every version")');
     await page.waitForURL(/\/repurpose/);
     await page.waitForTimeout(1500);
@@ -243,7 +252,7 @@ async function main() {
     await page.click('label:has-text("Customize for each channel") input'); // one source for every version again
     await page.fill('input[placeholder^="Hook"]', "Twelve minutes on Tuesday, edited.");
     await page.click('button:has-text("Schedule")');
-    await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
+    await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
     await page.waitForTimeout(2500);
     const edited = await plannerPosts();
     if (edited.length !== created.length || edited.some((p) => p.edits !== 1) || edited.some((p) => !p.summary.includes("edited"))) throw new Error(`expected the same ${created.length} planner post(s) each edited once, got ${JSON.stringify(edited.map((p) => [p._id, p.edits, p.summary.slice(0, 30)]))}`);
@@ -253,6 +262,86 @@ async function main() {
     await expectOutcome(page, "fb_page", "published", "status synced from the readback");
     await page.screenshot({ path: "screenshots/g02-distribute-ghl.png", fullPage: true });
     console.log("✓ scheduled through the Social Planner with the member's token and synced status");
+
+    // A 2xx with no id (seen live 15 Sep): accepted with the id pending, never "didn't send"; the planner's list gives the id back, no second copy
+    const before = (await plannerPosts()).length;
+    await page.goto(`${base}/content/compose`);
+    await page.fill('input[placeholder^="Working title"]', "GHL accepted without an id");
+    await page.fill('input[placeholder^="Hook"]', "No id came back.");
+    await page.fill('textarea[placeholder^="Type content"]', "The planner took it and said nothing. [noid]");
+    for (const t of ["Facebook personal", "Instagram caption", "Threads", "LinkedIn"]) await page.click(`button[title="${t}"]`); // off: only the page
+    await page.click('button[title="Facebook business page"]');
+    await page.click('button:has-text("Post now")');
+    const banner = page.locator("p", { hasText: /Saved \d+ versions/ }).first();
+    await banner.waitFor({ timeout: 20000 });
+    if (/Posted to/.test(await banner.innerText())) throw new Error("the banner must not count outcomes; the panel does");
+    const acceptedRow = page.locator('[data-testid="compose-outcomes"] li[data-channel="fb_page"][data-state="sending"]');
+    await acceptedRow.waitFor({ timeout: 15000 });
+    if (!(await acceptedRow.innerText()).includes("Accepted, id pending")) throw new Error("a 2xx without an id reads accepted with the id pending");
+    if ((await plannerPosts()).length !== before + 1) throw new Error("the post exists in the planner");
+    await page.click('a:has-text("See every version")');
+    await page.waitForURL(/\/repurpose/);
+    await submit(page, 'button:has-text("Check every version with GoHighLevel")');
+    await expectOutcome(page, "fb_page", "published", "the planner's list gave the id back and the readback said published");
+    if ((await plannerPosts()).length !== before + 1) throw new Error("reconciling a lost id must never create a second post");
+    console.log("✓ a 2xx with no id is accepted, the id is found from the planner's list, no second copy; the banner never counts outcomes");
+
+    // The comment ladder handoff: HelixOS publishes the Facebook page and Instagram posts, Community Loyalty posts Threads and drips the rungs
+    await page.goto(`${base}/content/ladders`);
+    await page.click('a:has-text("SKIN — Mistakes Ladder")');
+    await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+$/i);
+    const { db: dbl, schema: sl } = await import("@/db");
+    const { eq: eql } = await import("drizzle-orm");
+    const ladderRow = await dbl.query.ladders.findFirst({ where: eql(sl.ladders.id, page.url().split("/").pop()!.split("?")[0]) });
+    await submit(page, '[data-testid="send-to-composer"]');
+    await page.waitForURL(/\/content\/[a-z0-9-]+\/compose/i);
+    const ladderItemId = page.url().match(/\/content\/([a-z0-9-]+)\/compose/i)![1];
+    // Threads is Community Loyalty's while the handoff is on: the chip carries the reason and the preview says it; nothing toggled
+    const threadsChip = page.locator('button[title="Threads"] [data-testid="chip-copy-only"]');
+    if ((await threadsChip.getAttribute("title")) !== "Threads belongs to Community Loyalty while the comment ladder runs. Untick it here; Community Loyalty handles it.") throw new Error("the Threads chip says why it is copy-only while the handoff is on");
+    await expectText(page, "Threads belongs to Community Loyalty while the comment ladder runs", "Threads refused visibly in the composer");
+    // The chips arrive with the ladder's own selection: set each one rather than toggle it. Facebook page and Instagram on, the rest off.
+    const setChip = async (title: string, on: boolean) => {
+      const chip = page.locator(`button[title="${title}"]`).first();
+      const isOn = /border-accent/.test((await chip.getAttribute("class")) ?? "");
+      if (isOn !== on) await chip.click();
+    };
+    for (const [t, on] of [["Facebook business page", true], ["Instagram caption", true], ["Facebook personal", false], ["LinkedIn", false], ["Stories (FB / IG)", false], ["Email", false], ["Skool community", false]] as const) await setChip(t, on);
+    await page.click('button:has-text("Post now")');
+    await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
+    const threadsRow = await dbl.query.contentVariants.findFirst({ where: eql(sl.contentVariants.contentItemId, ladderItemId) }).then(async () => (await dbl.query.contentVariants.findMany({ where: eql(sl.contentVariants.contentItemId, ladderItemId) })).find((x) => x.channel === "threads"));
+    if (threadsRow && threadsRow.status !== "draft") throw new Error("Threads must not be pushed while the handoff is on");
+    // The pushes run after the response: wait until both rows carry the planner's answer before reading anything back.
+    for (let i = 0; i < 30; i++) {
+      const rows = await dbl.query.contentVariants.findMany({ where: eql(sl.contentVariants.contentItemId, ladderItemId) });
+      if (["fb_page", "instagram"].every((c) => rows.find((x) => x.channel === c && x.groupId === "")?.externalStatus)) break;
+      await page.waitForTimeout(500);
+    }
+    await page.goto(`${base}/content/${ladderItemId}/repurpose`);
+    const unhanded = page.locator('[data-testid="channel-outcomes"] li[data-channel="comments"][data-state="unhanded"]').first();
+    await unhanded.waitFor({ timeout: 15000 });
+    if (!(await unhanded.innerText()).includes("confirmed by GoHighLevel first")) throw new Error("the handoff says why it is held: the posts have to be confirmed first");
+    if (await page.locator('[data-testid="handoff-form"]').count()) throw new Error("no handoff button while the gate says no");
+    await submit(page, 'button:has-text("Check every version with GoHighLevel")');
+    await expectOutcome(page, "fb_page", "published", "the ladder's Facebook page post read back as published");
+    await expectOutcome(page, "instagram", "published", "the ladder's Instagram post read back as published");
+    await submit(page, '[data-testid="handoff-form"] button:has-text("Send comments to Community Loyalty")');
+    const handed = page.locator('[data-testid="channel-outcomes"] li[data-channel="comments"][data-state="handed"]').first();
+    await handed.waitFor({ timeout: 15000 });
+    const handedText = await handed.innerText();
+    if (!handedText.includes("Comments: handed to Community Loyalty")) throw new Error(`the handoff row says handed, got "${handedText}"`);
+    if (/\b(posted|published|live|sent)\b/i.test(handedText)) throw new Error(`the handoff row must never say posted: "${handedText}"`);
+    if (await page.locator('[data-testid="handoff-form"]').count()) throw new Error("no second handoff while one is running");
+    const drips = ((await (await fetch(`http://localhost:${mockPort}/__drips`)).json()) as { drips: { path: string; body: Record<string, string> }[] }).drips;
+    if (drips.length !== 1) throw new Error(`expected one webhook call, got ${drips.length}`);
+    const sent = drips[0].body;
+    if (drips[0].path !== "/api/iwh/abcdef0123456789abcdef0123456789" || sent.user_ns !== "f52594u50757435") throw new Error("the webhook call goes to the coach's URL with the coach's contact");
+    const rungTexts = sent.rungs.split(/\r?\n\s*-{3,}\s*\r?\n/).map((r) => r.replace(/^\s*\d+\s*\\?\.\s*/, "").trim()).filter(Boolean);
+    if (rungTexts.length !== ladderRow!.rungs.length) throw new Error(`rungs start at rung 1 when HelixOS published: expected ${ladderRow!.rungs.length}, got ${rungTexts.length}`);
+    if (!sent.first_comment || sent.first_comment !== ladderRow!.rungs[0].body.trim()) throw new Error("first_comment is rung 1 for the Threads post");
+    if (sent.schedule_at !== "") throw new Error("Threads posts now when no time is given");
+    if (/\\n|\\"/.test(sent.post) === false && !sent.post.includes(ladderRow!.copy.slice(0, 20))) throw new Error("the post is the raw text");
+    console.log("✓ comment ladder handed to Community Loyalty only once both posts read Published; rungs from rung 1, first comment for Threads, Threads never pushed by HelixOS; the row never says posted");
 
     // The push went through after(): the server never fell back to a detached promise (under next dev either completes; on Vercel only after() does)
     const { readFileSync: readLog } = await import("node:fs");

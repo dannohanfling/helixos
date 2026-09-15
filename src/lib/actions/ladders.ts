@@ -3,6 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
+import { dripSetup } from "@/lib/rung-drip";
 import { LADDER_AUDIENCES, LADDER_FORMAT_KEYS, LADDER_STATUSES, type LadderKeyword, type LadderStat } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
@@ -300,9 +301,11 @@ export async function pushLadderUpdateAction(formData: FormData): Promise<void> 
   const picked = item?.mediaAttachmentId ? await db.query.proofAttachments.findFirst({ where: and(eq(schema.proofAttachments.id, item.mediaAttachmentId), eq(schema.proofAttachments.workspaceId, workspaceId)) }) : null;
   if (mediaBlock(picked ?? null, stale.map((s) => s.body))) redirect(`/content/ladders/${l.id}?blocked=illustrative`);
   let pushed = 0;
+  // While the comment-ladder handoff is on, Threads is Community Loyalty's: its text is updated here, never re-pushed.
+  const dripOn = dripSetup(v.membership).on;
   for (const s of stale) {
     await db.update(schema.contentVariants).set({ body: s.body, generatedBy: "ladder" }).where(eq(schema.contentVariants.id, s.variantId));
-    if (s.inGhl && (await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: s.variantId, channel: s.channel, body: s.body, postAt: s.postAt, mediaUrl: item?.mediaUrl, title: item?.title }))) pushed++;
+    if (s.inGhl && !(dripOn && s.channel === "threads") && (await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: s.variantId, channel: s.channel, body: s.body, postAt: s.postAt, mediaUrl: item?.mediaUrl, title: item?.title }))) pushed++;
   }
   refresh();
   const sep = back.includes("?") ? "&" : "?";

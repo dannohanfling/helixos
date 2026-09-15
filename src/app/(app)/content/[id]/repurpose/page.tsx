@@ -10,6 +10,10 @@ import { distributeAllAction } from "@/lib/actions/compose";
 import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, PRIVATE_URL_REFUSAL } from "@/lib/engine/compose-media";
 import { checkAllPostStatusAction, syncPostStatusAction } from "@/lib/actions/social";
 import { nowFor, outcomeOf, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
+import { refreshStale } from "@/lib/planner-status";
+import { handoffRow } from "@/lib/queries/outcomes";
+import { handOffLadderAction } from "@/lib/actions/drip";
+import { THREADS_EXCLUSIVE } from "@/lib/engine/rung-drip";
 import { OutcomeHeadline, OutcomeRows } from "@/components/channel-outcome";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
@@ -98,12 +102,12 @@ function GroupCard({ g, var_, src, slot, outcome }: { g: Group; var_?: ContentVa
   );
 }
 
-export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string }> }) {
+export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
-  const { blocked } = await searchParams;
+  const { blocked, drip } = await searchParams;
   // The page's own sentences, chosen by a code: a block on the one-click send is never silent and never free text from the address bar.
-  const blockedLine = blocked === "media" ? `${ILLUSTRATIVE_LABEL}\nAn attached file shows a result. Add ${ILLUSTRATIVE_MARK} to the post, in every version that goes out. Nothing was scheduled.` : blocked === "url" ? `${PRIVATE_URL_REFUSAL} Nothing was scheduled.` : blocked === "fabricated" ? "A statistic in this post is on the blacklist, so nothing was scheduled. Open it in the composer to see which one and what to say instead." : null;
+  const blockedLine = blocked === "threads" ? THREADS_EXCLUSIVE : blocked === "media" ? `${ILLUSTRATIVE_LABEL}\nAn attached file shows a result. Add ${ILLUSTRATIVE_MARK} to the post, in every version that goes out. Nothing was scheduled.` : blocked === "url" ? `${PRIVATE_URL_REFUSAL} Nothing was scheduled.` : blocked === "fabricated" ? "A statistic in this post is on the blacklist, so nothing was scheduled. Open it in the composer to see which one and what to say instead." : null;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
   if (!item) notFound();
   const [variants, groups] = await Promise.all([
@@ -113,9 +117,14 @@ export default async function RepurposePage({ params, searchParams }: { params: 
   const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, ctaText: item.cta };
   // One rule for every version's outcome, read once for the page: the same one the card and the composer read.
   const now = nowFor(v);
-  const outcomeFor = (x: ContentVariant) => outcomeOf(x, now);
-  const outcomes = outcomesFor(variants, now);
+  // Rows due a readback (an accepted one with no id, or any not read back for an hour) are checked as the page opens.
+  const fresh = await refreshStale(v.user.id, variants);
+  const freshById = new Map(fresh.map((x) => [x.id, x]));
+  const outcomeFor = (x: ContentVariant) => (x.status === "draft" || x.status === "skipped" ? undefined : outcomeOf(freshById.get(x.id) ?? x, now));
+  const handoff = await handoffRow(v, item, fresh, now);
+  const outcomes = outcomesFor(fresh, now, [handoff.row]);
   const canCheck = outcomes.some((o) => o.canCheck);
+  const canHandOff = Boolean(handoff.ladder) && !handoff.reasons.length && handoff.row?.state !== "handed";
   const own = groups.filter((g) => g.kind === "own");
   const top3 = groups.filter((g) => g.kind === "prospect" && g.rank >= 1 && g.rank <= 3).sort((a, b) => a.rank - b.rank);
   const others = groups.filter((g) => g.kind === "member" || (g.kind === "prospect" && !top3.includes(g)));
@@ -150,6 +159,23 @@ export default async function RepurposePage({ params, searchParams }: { params: 
         }
       />
 
+      {drip ? (
+        <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="drip-refused" role="alert">{drip}</p>
+      ) : null}
+      {handoff.row ? (
+        <Card className="mb-4" title="💬 Comment ladder" action={<span className="text-xs text-ink-3">Community Loyalty posts the rungs</span>}>
+          <OutcomeRows outcomes={[handoff.row]} />
+          {canHandOff ? (
+            <form action={handOffLadderAction} className="mt-3 flex flex-wrap items-end gap-2" data-testid="handoff-form">
+              <input type="hidden" name="contentId" value={item.id} />
+              <Field label="Threads time (optional, at least 15 minutes out; blank asks Community Loyalty for it now)">
+                <input className="field" name="threadsAt" type="datetime-local" />
+              </Field>
+              <button className="btn btn-primary btn-sm" type="submit">Send comments to Community Loyalty</button>
+            </form>
+          ) : null}
+        </Card>
+      ) : null}
       {blockedLine ? (
         <p className="mb-4 whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="distribute-blocked" role="alert">{blockedLine}</p>
       ) : null}

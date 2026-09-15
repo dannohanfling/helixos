@@ -1,5 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { dripSetup } from "@/lib/rung-drip";
 import type { Viewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { connectionFor } from "@/lib/ghl";
@@ -13,6 +14,7 @@ import { downloadUrlFor, mediaUrlFor, type ComposerMedia } from "@/lib/engine/co
 
 /** Everything the composer needs: the user's groups (own + top 3 + members), persona for previews, AI and Social Planner state. */
 export async function composerContext(v: Viewer) {
+  const dripOn = dripSetup(v.membership).on;
   const [groups, conn, lib, approvedProofs] = await Promise.all([
     db.query.groups.findMany({ where: eq(schema.groups.userId, v.user.id), orderBy: [asc(schema.groups.kind), asc(schema.groups.rank), asc(schema.groups.name)] }),
     connectionFor(v.user.id),
@@ -43,7 +45,7 @@ export async function composerContext(v: Viewer) {
     avatar: v.user.avatarEmoji ?? "🙂",
     business: v.membership.businessName ?? "",
   };
-  return {
+  return { dripOn,
     groups: ordered,
     persona,
     hashtag: v.membership.passHashtag,

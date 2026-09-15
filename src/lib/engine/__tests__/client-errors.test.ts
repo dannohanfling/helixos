@@ -166,3 +166,32 @@ describe("client-facing errors: what happened and what to do next, never our int
     for (const a of UPSTREAM_ALLOW) expect(readFileSync(join(ROOT, a.file), "utf8"), `${a.file} no longer contains ${a.snippet}; drop the allowlist entry`).toContain(a.snippet);
   });
 });
+
+/**
+ * The Community Loyalty drip webhook URL is a credential (no auth on it). It is sealed on the way in, opened only inside the
+ * call that posts to it, and never appears in a note, a log line, a thrown message, a redirect or a rendered value. This is
+ * the scanner for that: the column may be named only where it is stored, sealed, opened or given a blank input.
+ */
+describe("the drip webhook URL is a credential", () => {
+  const TOKEN = /\bclDripWebhookUrl\b|cl_drip_webhook_url/;
+  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/rung-drip.ts", "src/app/(app)/coach/page.tsx", "src/lib/queries/compose.ts", "src/lib/actions/compose.ts"];
+  const LEAK = /console\.|\bnote:|\bthrow\b|new Error\(|redirect\(|defaultValue=|\bvalue=\{|JSON\.stringify\(|logSync\(/;
+  it("is named only where it is stored, sealed, opened or blanked, and never on a line that logs, notes, throws, redirects or renders a value", () => {
+    for (const f of walk(SRC)) {
+      const text = readFileSync(f, "utf8");
+      if (!TOKEN.test(text)) continue;
+      expect(ALLOWED, `${rel(f)} names the drip webhook column`).toContain(rel(f));
+      for (const [i, line] of stripComments(text).split("\n").entries()) if (TOKEN.test(line)) expect(LEAK.test(line), `${rel(f)}:${i + 1} puts the webhook URL where it could be seen: ${line.trim().slice(0, 120)}`).toBe(false);
+    }
+  });
+  it("is opened in one place, the call that posts to it, and that call's notes go through the redactor", () => {
+    for (const f of walk(SRC)) {
+      const text = readFileSync(f, "utf8");
+      const opens = text.match(/open\((setup|m|membership|v\.membership)\.(clDripWebhookUrl|url)\)/g) ?? [];
+      if (opens.length) expect(rel(f)).toBe("src/lib/rung-drip.ts");
+    }
+    const lib = readFileSync(join(SRC, "lib/rung-drip.ts"), "utf8");
+    expect(lib).toContain("redactSecrets(");
+    expect(lib).not.toMatch(/console\.(log|warn|error)\([^)]*url/);
+  });
+});
