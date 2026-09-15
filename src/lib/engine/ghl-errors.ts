@@ -59,3 +59,22 @@ export function explainGhl(r: GhlFailure, call: GhlCall): string {
   // The fallthrough keeps the case and drops the vendor's words: they are in the log under [ghl].
   return `GoHighLevel didn't accept the request${r.status ? ` (${r.status})` : ""}. Try again in a minute.`;
 }
+
+/**
+ * What the Social Planner's readback said went wrong at the platform, as a client sentence. The vendor's text is classified
+ * by pattern and never repeated: an expired page token, a revoked permission, a media rule, a time already passed. Anything
+ * else is the honest fallback. `platform` is the outside service the client has their own relationship with.
+ */
+export function explainPlatformError(raw: string | null | undefined, platform: string): string | null {
+  const r = (raw ?? "").trim();
+  if (!r) return null;
+  const d = r.toLowerCase();
+  if (/token|expired|reconnect|permission|revoked|unauthori|re-authenticate|reauth|session/.test(d)) return `${platform} needs reconnecting in GoHighLevel.`;
+  if (/scope/.test(d)) return "This needs a permission your GoHighLevel connection doesn't have yet. Check the list on Settings → Publishing.";
+  if (/media|image|video|photo|aspect|resolution|file/.test(d)) return `${platform} needs a photo or video on every post, in a size it accepts.`;
+  if (/past|already passed|in the past|elapsed/.test(d)) return "That time had already passed when we sent it.";
+  if (/character|too long|length|limit|exceed/.test(d)) return `${platform} wouldn't accept this post: it is longer than ${platform} allows.`;
+  if (/duplicate|same content|identical/.test(d)) return `${platform} wouldn't accept this post: it is the same as one already posted.`;
+  if (/rate|throttl|429|try again later|temporar|timeout|timed out|5\d\d/.test(d)) return "GoHighLevel didn't answer. Nothing was posted — try again.";
+  return "This didn't send. We've logged why and it isn't something you did.";
+}

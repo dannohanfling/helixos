@@ -253,7 +253,7 @@ export default async function TodayPage() {
                           <input type="hidden" name="id" value={c.id} />
                           <input type="hidden" name="status" value="posted" />
                           <button className="btn btn-soft btn-xs" type="submit">
-                            Posted ✓
+                            Mark as posted
                           </button>
                         </form>
                       </li>

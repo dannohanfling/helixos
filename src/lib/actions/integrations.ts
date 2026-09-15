@@ -111,7 +111,7 @@ export async function markPassInstalledAction(): Promise<void> {
 
 export async function sendTestPushAction(): Promise<void> {
   const { v, workspaceId, userId } = await ctx();
-  await pushPassMessage({ workspaceId, userId }, "HelixOS", `Hey ${v.user.name.split(" ")[0]}, your pass is connected. Points you earn show up here.`);
+  await pushPassMessage({ workspaceId, userId }, "HelixOS", `${v.user.name.split(" ")[0]}, your pass is connected. Points you earn here are on their way to it.`);
   refresh();
 }
 

@@ -11,6 +11,14 @@
  * idempotency keys on any endpoint, so a points call whose outcome is unknown is retried only after the customer's events
  * have been read and the award is confirmed absent. Update Loyalty Points (PUT …/values/Points) SETS a balance and is not in
  * this table on purpose: check-ins and redemptions inside the bot also move points, and a set would erase them.
+ *
+ * The first-live-call checklist, once the Evolve Omega program exists on the platform:
+ *   1. One v3 points/add returns 2xx: that promotes the host to a built-in constant and verifies { success, eventId, newBalance }.
+ *   2. Open the pass on a phone and confirm the DISPLAYED balance moved. The guard above assumes a v3 add flows through to
+ *      the pass display; that is the Mini-App's migration note, not an observation. If it did not move, the display is a v1
+ *      field v3 does not touch, and the balance would be right at eLoyalty and stale on the phone.
+ *   3. One createPass: confirm customerId, serialNumber and passTypeIdentifier are in the response as parseCreatedPass expects.
+ *   4. One v1 pushNotification with a stale serial: confirm the 404, then refresh-then-retry.
  */
 export type Generation = "v1" | "v3";
 export type Needs = "customerId" | "passTypeId+serial" | "templateId";

@@ -8,7 +8,9 @@ import { generateVariantsAction, updateVariantAction } from "@/lib/actions/varia
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
 import { distributeAllAction } from "@/lib/actions/compose";
 import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, PRIVATE_URL_REFUSAL } from "@/lib/engine/compose-media";
-import { syncPostStatusAction } from "@/lib/actions/social";
+import { checkAllPostStatusAction, syncPostStatusAction } from "@/lib/actions/social";
+import { nowFor, outcomeOf, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
+import { OutcomeHeadline, OutcomeRows } from "@/components/channel-outcome";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
@@ -17,7 +19,7 @@ import type { ContentVariant, Group } from "@/db/schema";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 
-function VariantForm({ var_, maxChars, email = false }: { var_: ContentVariant; maxChars: number; email?: boolean }) {
+function VariantForm({ var_, maxChars, email = false, outcome }: { var_: ContentVariant; maxChars: number; email?: boolean; outcome?: ChannelOutcome }) {
   return (
     <form action={updateVariantAction} className="space-y-2">
       <input type="hidden" name="id" value={var_.id} />
@@ -40,7 +42,7 @@ function VariantForm({ var_, maxChars, email = false }: { var_: ContentVariant; 
         <select className="field w-auto py-1 text-xs" name="status" defaultValue={var_.status}>
           <option value="draft">Draft</option>
           <option value="scheduled">Scheduled</option>
-          <option value="posted">Posted ✓</option>
+          <option value="posted">Posted</option>
           <option value="skipped">Skip</option>
         </select>
         <input className="field w-40 py-1 text-xs" name="postUrl" placeholder="Post URL" defaultValue={var_.postUrl ?? ""} />
@@ -48,19 +50,7 @@ function VariantForm({ var_, maxChars, email = false }: { var_: ContentVariant; 
           Save
         </button>
       </div>
-      {var_.externalStatus ? (
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <Badge tone={var_.externalStatus === "published" ? "good" : var_.externalStatus === "failed" ? "danger" : var_.externalStatus === "manual" ? "neutral" : "accent"}>
-            {var_.externalStatus === "manual" ? "paste by hand" : `Social Planner: ${var_.externalStatus}`}
-          </Badge>
-          {var_.externalError ? <span className="text-ink-3">{var_.externalError}</span> : null}
-          {var_.externalId ? (
-            <button className="btn btn-ghost btn-xs" type="submit" formAction={syncPostStatusAction}>
-              Check status
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} compact /> : null}
       {var_.status === "posted" ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["reactions", "comments", "dms", "leads"] as const).map((k) => (
@@ -79,7 +69,7 @@ function StatusBadge({ v }: { v?: ContentVariant }) {
   return v ? <Badge tone={v.status === "posted" ? "good" : v.status === "scheduled" ? "accent" : "neutral"}>{v.status}</Badge> : <span className="text-xs text-ink-3">not generated</span>;
 }
 
-function GroupCard({ g, var_, src, slot }: { g: Group; var_?: ContentVariant; src: { title: string; hook: string | null; body: string | null; hasCta: boolean; ctaText: string | null }; slot?: string }) {
+function GroupCard({ g, var_, src, slot, outcome }: { g: Group; var_?: ContentVariant; src: { title: string; hook: string | null; body: string | null; hasCta: boolean; ctaText: string | null }; slot?: string; outcome?: ChannelOutcome }) {
   const aligned = alignPost(src, g);
   const ready = groupReadiness(g);
   return (
@@ -96,7 +86,7 @@ function GroupCard({ g, var_, src, slot }: { g: Group; var_?: ContentVariant; sr
         {g.adminName ? `Admin ${g.adminName}. ` : ""}
         {g.mission ? `Mission: ${g.mission.split(/[.\n]/)[0]}.` : `Profile ${ready}% complete. Add the mission and rules so the draft can honor them.`}
       </p>
-      {var_ ? <VariantForm var_={var_} maxChars={groupSpec(g.kind).maxChars} /> : <p className="text-sm text-ink-3">Tick this group above and generate.</p>}
+      {var_ ? <VariantForm var_={var_} maxChars={groupSpec(g.kind).maxChars} outcome={outcome} /> : <p className="text-sm text-ink-3">Tick this group above and generate.</p>}
       <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
         {aligned.checks.map((c) => (
           <li key={c.key} title={c.note} className={c.ok ? "text-good" : "text-warn"}>
@@ -121,9 +111,15 @@ export default async function RepurposePage({ params, searchParams }: { params: 
     db.query.groups.findMany({ where: eq(schema.groups.userId, v.user.id), orderBy: [asc(schema.groups.kind), asc(schema.groups.rank)] }),
   ]);
   const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, ctaText: item.cta };
+  // One rule for every version's outcome, read once for the page: the same one the card and the composer read.
+  const now = nowFor(v);
+  const outcomeFor = (x: ContentVariant) => outcomeOf(x, now);
+  const outcomes = outcomesFor(variants, now);
+  const canCheck = outcomes.some((o) => o.canCheck);
   const own = groups.filter((g) => g.kind === "own");
   const top3 = groups.filter((g) => g.kind === "prospect" && g.rank >= 1 && g.rank <= 3).sort((a, b) => a.rank - b.rank);
   const others = groups.filter((g) => g.kind === "member" || (g.kind === "prospect" && !top3.includes(g)));
+  const outcomeOfGroup = (g: Group) => { const x = forGroup(g); return x ? outcomeFor(x) : undefined; };
   const forGroup = (g: Group) => variants.find((x) => x.groupId === g.id);
   const generic = (key: string) => variants.find((x) => x.channel === key && x.groupId === "");
   const everywhere = CHANNEL_SPECS.filter((c) => !(own.length && c.key === "fb_group") && !(top3.length && c.key === "other_groups"));
@@ -143,6 +139,13 @@ export default async function RepurposePage({ params, searchParams }: { params: 
             <span>
               {posted} posted · 👍 {reach.reactions} · 💬 {reach.comments} · 📨 {reach.dms} DMs · 🆕 {reach.leads} leads
             </span>
+            {outcomes.length ? <OutcomeHeadline outcomes={outcomes} /> : null}
+            {canCheck ? (
+              <form action={checkAllPostStatusAction}>
+                <input type="hidden" name="contentId" value={item.id} />
+                <button className="btn btn-ghost btn-xs" type="submit">Check every version with GoHighLevel</button>
+              </form>
+            ) : null}
           </span>
         }
       />
@@ -197,19 +200,19 @@ export default async function RepurposePage({ params, searchParams }: { params: 
       {own.length ? (
         <>
           <h2 className="mt-5 mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">🏠 My group</h2>
-          <div className="grid gap-3 lg:grid-cols-2">{own.map((g) => <GroupCard key={g.id} g={g} var_={forGroup(g)} src={src} />)}</div>
+          <div className="grid gap-3 lg:grid-cols-2">{own.map((g) => <GroupCard key={g.id} g={g} var_={forGroup(g)} src={src} outcome={outcomeOfGroup(g)} />)}</div>
         </>
       ) : null}
       {top3.length ? (
         <>
           <h2 className="mt-5 mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">🎯 Top 3 to prospect in</h2>
-          <div className="grid gap-3 lg:grid-cols-3">{top3.map((g) => <GroupCard key={g.id} g={g} var_={forGroup(g)} src={src} slot={String(g.rank)} />)}</div>
+          <div className="grid gap-3 lg:grid-cols-3">{top3.map((g) => <GroupCard key={g.id} g={g} var_={forGroup(g)} src={src} slot={String(g.rank)} outcome={outcomeOfGroup(g)} />)}</div>
         </>
       ) : null}
       {others.some((g) => forGroup(g)) ? (
         <>
           <h2 className="mt-5 mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">👥 Other groups</h2>
-          <div className="grid gap-3 lg:grid-cols-3">{others.filter((g) => forGroup(g)).map((g) => <GroupCard key={g.id} g={g} var_={forGroup(g)} src={src} />)}</div>
+          <div className="grid gap-3 lg:grid-cols-3">{others.filter((g) => forGroup(g)).map((g) => <GroupCard key={g.id} g={g} var_={forGroup(g)} src={src} outcome={outcomeOfGroup(g)} />)}</div>
         </>
       ) : null}
 
@@ -240,7 +243,7 @@ export default async function RepurposePage({ params, searchParams }: { params: 
           return (
             <Card key={c.key} title={`${c.icon} ${c.label}`} action={<StatusBadge v={var_} />}>
               <p className="mb-2 text-xs text-ink-3">{c.why}</p>
-              {var_ ? <VariantForm var_={var_} maxChars={c.maxChars} email={c.key === "email"} /> : <p className="text-sm text-ink-3">Generate drafts above.</p>}
+              {var_ ? <VariantForm var_={var_} maxChars={c.maxChars} email={c.key === "email"} outcome={outcomeFor(var_)} /> : <p className="text-sm text-ink-3">Generate drafts above.</p>}
             </Card>
           );
         })}

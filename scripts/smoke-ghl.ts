@@ -5,6 +5,15 @@ import { chromium, type Page } from "@playwright/test";
 const base = process.argv[2] ?? "http://localhost:3000";
 const mockPort = 4010;
 
+/** One channel row on the Distribute page shows this state (the word beside the light), and says the reason when given. */
+async function expectOutcome(page: Page, channel: string, state: string, label: string, reason?: string) {
+  const row = page.locator(`[data-testid="channel-outcomes"] li[data-channel="${channel}"][data-state="${state}"]`).first();
+  await row.waitFor({ timeout: 15000 }).catch(async () => {
+    await page.screenshot({ path: `screenshots/fail-${label.replace(/\W+/g, "-")}.png`, fullPage: true });
+    throw new Error(`[${label}] expected the ${channel} row to read ${state} on ${page.url()}`);
+  });
+  if (reason && !(await row.innerText()).includes(reason)) throw new Error(`[${label}] the ${channel} row does not say "${reason}"`);
+}
 async function expectText(page: Page, text: string, label: string) {
   const re = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
   // The app says when it is still loading a page; wait for that to clear before judging what is on it.
@@ -124,8 +133,7 @@ async function main() {
     await page.waitForURL(/\/repurpose/);
     await page.waitForTimeout(1500);
     await page.reload();
-    await expectText(page, "Add your GHL user ID on Settings → Publishing", "the missing user id is named where the post is");
-    await expectText(page, "Social Planner: failed", "a fixable refusal is a failure, not a hand-pasted channel");
+    await expectOutcome(page, "fb_page", "failed", "a fixable refusal is a failure, not a hand-pasted channel", "Add your GHL user ID on Settings → Publishing");
     if ((await plannerPosts()).length) throw new Error("nothing is sent to the planner without a user id");
     await page.goto(`${base}/settings`);
     await expectText(page, "nothing publishes until it is filled in", "Settings says the user id is missing");
@@ -144,8 +152,7 @@ async function main() {
     await page.waitForURL(/\/repurpose/);
     await page.waitForTimeout(1500);
     await page.reload();
-    await expectText(page, "doesn't accept the GHL user ID on Settings → Publishing", "a 422 names the refused field");
-    await expectText(page, "Social Planner: failed", "the post is marked failed");
+    await expectOutcome(page, "fb_page", "failed", "a 422 names the refused field", "doesn't accept the GHL user ID on Settings → Publishing");
     if (/location ID/i.test(await page.locator("main").innerText())) throw new Error("a 422 on a post is never the location");
     await page.goto(`${base}/settings`);
     if (await page.locator('[data-testid="ghl-error"]').count()) throw new Error("a post's failure does not paint the connection red");
@@ -200,14 +207,17 @@ async function main() {
     await page.fill('input[placeholder^="Hook"]', "Twelve minutes on Tuesday.");
     await page.fill('textarea[placeholder^="Type content"]', "Beats three hours on Sunday.\nEvery single week.");
     await page.click('button[title="Facebook business page"]');
+    // A time still ahead in the member's own zone: a scheduled row whose time has passed with no readback is honestly "sending", then "lost track".
+    await page.locator('input[type="date"]').first().fill(new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
     await page.click('button:has-text("Schedule")');
     await page.getByText(/Scheduled \d+ posts/).waitFor({ timeout: 20000 });
     await page.click('a:has-text("See every version")');
     await page.waitForURL(/\/repurpose/);
     await page.waitForTimeout(1500);
     await page.reload();
-    await expectText(page, "Social Planner: scheduled", "variant pushed to social planner");
-    await expectText(page, "paste by hand", "manual channels marked");
+    await expectOutcome(page, "fb_page", "scheduled", "variant pushed to social planner");
+    await expectOutcome(page, "fb_personal", "manual", "a channel we cannot publish to is copy and paste, not a failure");
+    if (!(await page.locator('[data-testid="outcome-headline"]').first().innerText()).includes("scheduled")) throw new Error("the headline counts the scheduled versions");
     const created = await plannerPosts();
     if (!created.length || created.some((p) => p.edits)) throw new Error(`expected fresh planner posts, got ${JSON.stringify(created.map((p) => [p._id, p.edits]))}`);
     // The planner holds the member's wall time as the UTC instant it names (milliseconds and a Z), and the user id
@@ -239,8 +249,8 @@ async function main() {
     if (edited.length !== created.length || edited.some((p) => p.edits !== 1) || edited.some((p) => !p.summary.includes("edited"))) throw new Error(`expected the same ${created.length} planner post(s) each edited once, got ${JSON.stringify(edited.map((p) => [p._id, p.edits, p.summary.slice(0, 30)]))}`);
     console.log(`✓ re-scheduling edited ${edited.length} planner post(s) in place under the same id`);
     await page.goto(`${itemUrl}/repurpose`);
-    await submit(page, 'button:has-text("Check status")');
-    await expectText(page, "Social Planner: published", "status synced");
+    await submit(page, 'button:has-text("Check every version with GoHighLevel")');
+    await expectOutcome(page, "fb_page", "published", "status synced from the readback");
     await page.screenshot({ path: "screenshots/g02-distribute-ghl.png", fullPage: true });
     console.log("✓ scheduled through the Social Planner with the member's token and synced status");
 

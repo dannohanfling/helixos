@@ -199,7 +199,7 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   const { connectionFor, createPost, updatePost } = await import("@/lib/ghl");
   const { PUBLISHABLE, mediaTypeFor, postTypeFor } = await import("@/lib/engine/ghl-map");
   const channel = post.channel as keyof typeof PUBLISHABLE;
-  // "manual" is a channel that is pasted by design; "failed" is something the client can fix, said beside the post.
+  // "manual" is a channel that is pasted by design; "failed" is something the client can fix, said beside the post: a missing connection, account or user id is a failure, never "paste by hand".
   const skip = async (note: string, as: "manual" | "failed" = "manual") => {
     await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.schedule", payload: { channel: post.channel, postAt: post.postAt }, status: "skipped", note });
     await db.update(schema.contentVariants).set({ externalStatus: as, externalError: note, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
@@ -207,13 +207,13 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   };
   if (!PUBLISHABLE[channel]?.via) return skip(PUBLISHABLE[channel]?.note ?? "This channel is posted by hand");
   const conn = await connectionFor(ctx.userId);
-  if (!conn) return skip("Connect your GoHighLevel sub-account in Settings to auto-publish");
+  if (!conn) return skip("Connect your GoHighLevel sub-account in Settings to auto-publish", "failed");
   const accountId = conn.mapping[post.channel];
-  if (channel === "stories" && !post.mediaUrl) return skip("Stories need a photo or video");
+  if (channel === "stories" && !post.mediaUrl) return skip("Stories need a photo or video", "failed");
   // The Social Planner requires the posting user (CreatePostDTO: type, accountIds, userId). Without one the post is refused
   // with a validation error, so it is refused here first, with the place to fix it.
   if (!conn.ghlUserId?.trim()) return skip("Add your GHL user ID on Settings → Publishing; the Social Planner won't take a post without it", "failed");
-  if (!accountId) return skip(`No ${PUBLISHABLE[channel].note} chosen for this channel in Settings`);
+  if (!accountId) return skip(`No ${PUBLISHABLE[channel].note} chosen for this channel in Settings`, "failed");
   // postAt is a wall time in the member's own zone; the Social Planner wants the UTC instant, with milliseconds and a Z.
   const scheduleDate = post.postAt ? wallTimeToUtc(post.postAt, ctx.tz) : null;
   if (post.postAt && !scheduleDate) return skip("The schedule time couldn't be read. Set the date and time again and re-schedule.", "failed");
@@ -229,7 +229,8 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
     return false;
   }
   await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: r.data.id }, status: "sent", note: `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Published via"} Social Planner · ${r.data.id}` });
-  await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: scheduleDate ? "scheduled" : "published", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
+  // Accepted is not published: an immediate post is "in_progress" until the readback (Check status) says it went out.
+  await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: scheduleDate ? "scheduled" : "in_progress", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
   // A push is not a check: "checked" on Settings moves only when the accounts call runs.
   await db.update(schema.socialConnections).set({ lastError: null }).where(eq(schema.socialConnections.id, conn.id));
   return true;

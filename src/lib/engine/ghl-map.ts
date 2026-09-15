@@ -20,6 +20,10 @@ export const PUBLISHABLE: Record<Channel, { via: "facebook" | "instagram" | "lin
   skool: { via: null, note: "Skool has no posting API. Paste it." },
 };
 
+/** The outside service a channel publishes to, as the client knows it: the name a reason sentence may use. */
+const PLATFORM_NAMES: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", threads: "Threads", linkedin: "LinkedIn" };
+export const platformName = (channel: string): string => PLATFORM_NAMES[PUBLISHABLE[channel as Channel]?.via ?? ""] ?? "the platform";
+
 /** The Social Planner post type for a channel. */
 export function postTypeFor(channel: Channel): "post" | "story" | "reel" {
   return channel === "stories" ? "story" : "post";

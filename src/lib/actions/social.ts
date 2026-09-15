@@ -2,9 +2,11 @@
 
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { explainPlatformError } from "@/lib/engine/ghl-errors";
+import { redactSecrets } from "@/lib/engine/redact";
 import { nowIso } from "@/lib/dates";
 import { connectionFor, getPost, refreshAccounts, upsertConnection } from "@/lib/ghl";
-import { PUBLISHABLE } from "@/lib/engine/ghl-map";
+import { PUBLISHABLE, platformName } from "@/lib/engine/ghl-map";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { requireCoach } from "@/lib/auth";
 import { logSync, pushContact } from "@/lib/integrations";
@@ -66,17 +68,38 @@ export async function syncPostStatusAction(formData: FormData): Promise<void> {
   if (!variant?.externalId) return;
   const conn = await connectionFor(userId);
   if (!conn) return;
+  await recordReadback(variant, conn);
+  refresh();
+}
+
+/** Every version of one post that the planner holds, read back in one click. */
+export async function checkAllPostStatusAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const contentId = str(formData, "contentId");
+  const conn = await connectionFor(userId);
+  if (!conn) return;
+  const variants = await db.query.contentVariants.findMany({ where: and(eq(schema.contentVariants.contentItemId, contentId), eq(schema.contentVariants.userId, userId)) });
+  for (const variant of variants) if (variant.externalId) await recordReadback(variant, conn);
+  refresh();
+}
+
+/**
+ * Stores what the planner said about one post. The platform's error text is classified into a client sentence
+ * (explainPlatformError) and never stored as the vendor wrote it; the raw words go to the server log under [ghl].
+ */
+async function recordReadback(variant: schema.ContentVariant, conn: NonNullable<Awaited<ReturnType<typeof connectionFor>>>): Promise<void> {
+  if (!variant.externalId) return;
   const r = await getPost(conn, variant.externalId);
   if (!r.ok) {
-    await db.update(schema.contentVariants).set({ externalError: r.error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, id));
-  } else {
-    const published = r.data.status === "published";
-    await db
-      .update(schema.contentVariants)
-      .set({ externalStatus: r.data.status, externalError: r.data.error, externalSyncedAt: nowIso(), ...(published ? { status: "posted", postedAt: variant.postedAt ?? r.data.publishedAt ?? nowIso() } : {}) })
-      .where(eq(schema.contentVariants.id, id));
+    await db.update(schema.contentVariants).set({ externalError: r.error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, variant.id));
+    return;
   }
-  refresh();
+  const published = r.data.status === "published";
+  if (r.data.error) console.error("[ghl] readback error", JSON.stringify({ variantId: variant.id, postId: variant.externalId, status: r.data.status, error: redactSecrets(String(r.data.error)).slice(0, 300) }));
+  await db
+    .update(schema.contentVariants)
+    .set({ externalStatus: r.data.status, externalError: explainPlatformError(r.data.error, platformName(variant.channel)), externalSyncedAt: nowIso(), ...(published ? { status: "posted", postedAt: variant.postedAt ?? r.data.publishedAt ?? nowIso() } : {}) })
+    .where(eq(schema.contentVariants.id, variant.id));
 }
 
 /** The coach removes a client's connection: HelixOS's copy of the token goes; the sync log says who did it. The token itself lives on in GoHighLevel. */

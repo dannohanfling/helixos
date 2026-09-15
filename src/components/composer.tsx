@@ -15,6 +15,7 @@ import { AiStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { useVoice } from "@/components/voice-context";
 import { CopyButton } from "@/components/copy-button";
+import { ChannelOutcomePanel } from "@/components/channel-outcome-panel";
 import { PUBLISHABLE, manualChannelsSentence, publishedChannelsSentence } from "@/lib/engine/ghl-map";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
@@ -442,6 +443,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
               ) : null}
             </p>
           ) : null}
+          {result && !result.blocked ? <ChannelOutcomePanel contentId={result.id} /> : null}
           <p className="mt-2 text-[11px] text-ink-3">{manualChannelsSentence()} {publishedChannelsSentence()}</p>
         </section>
       </div>
