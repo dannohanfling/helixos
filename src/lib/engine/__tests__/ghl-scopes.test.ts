@@ -10,7 +10,7 @@ describe("the one GoHighLevel scope list", () => {
   it("covers what the app calls now and within two releases, once each", () => {
     expect(new Set(REQUIRED_SCOPES).size).toBe(REQUIRED_SCOPES.length);
     for (const s of ["socialplanner/account.readonly", "socialplanner/post.readonly", "socialplanner/post.write", "contacts.write"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("now");
-    for (const s of ["socialplanner/statistics.readonly", "socialplanner/comment.readonly", "socialplanner/comment.write", "medias.write", "emails/builder.write", "locations/customFields.write"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("next");
+    for (const s of ["socialplanner/statistics.readonly", "socialplanner/comment.readonly", "socialplanner/comment.write", "medias.write", "emails/builder.write", "locations/customFields.write", "locations/customFields.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("next");
     // Nothing this product will ever touch.
     for (const s of ["category", "tag", "csv", "watermark"]) expect(REQUIRED_SCOPES.some((x) => x.includes(s))).toBe(false);
   });

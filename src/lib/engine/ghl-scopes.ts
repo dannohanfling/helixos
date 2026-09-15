@@ -24,6 +24,7 @@ export const GHL_SCOPES: GhlScope[] = [
   { scope: "emails/builder.write", why: "POST /emails/builder and /emails/builder/data: HelixOS writes the client's marketing email template", use: "next" },
   { scope: "contacts.write", why: "POST /contacts/upsert: booked calls and new clients become contacts in the sub-account", use: "now" },
   { scope: "locations/customFields.write", why: "POST /locations/{locationId}/customFields: creating the helixos_user_ns custom field that carries a chatbot lead's id; not called today, on the list so the Community Loyalty path never needs a new token", use: "next" },
+  { scope: "locations/customFields.readonly", why: "GET /locations/{locationId}/customFields: reading the sub-account's field definitions so the chatbot-lead path can see whether helixos_user_ns exists before creating it; not called today", use: "next" },
   { scope: "conversations/message.write", why: "POST /conversations/messages: sending an email to one contact from the client's own account, the send path the email template work will need", use: "next" },
 ];
 

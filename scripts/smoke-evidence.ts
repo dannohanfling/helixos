@@ -63,6 +63,13 @@ async function main() {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
     page.on("request", (r) => browserRequests.push(r.url()));
+    // The search count is per UTC day and the walk reads it back at the end, so a run that starts within four minutes of
+    // midnight UTC waits for the day to turn: the two searches and the count must land on the same day.
+    const untilMidnight = 86_400_000 - (Date.now() % 86_400_000);
+    if (untilMidnight < 4 * 60_000) {
+      console.log(`  ${Math.ceil(untilMidnight / 1000)}s to midnight UTC: waiting for the day to turn so today's count is one day's`);
+      await new Promise((r) => setTimeout(r, untilMidnight + 5_000));
+    }
     await login(page, "client");
 
     // The section, its one-line description, and the Proof Bank's, so the two are not confused
