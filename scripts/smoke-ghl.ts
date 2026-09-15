@@ -91,7 +91,7 @@ async function main() {
     await expectText(page, "Private Integrations → Create new integration", "guidance shown");
     await expectText(page, "socialplanner/post.write", "scopes listed");
     const listedScopes = await page.locator('[data-testid="ghl-scope-list"] li').evaluateAll((els) => els.map((e) => e.textContent?.trim()));
-    if (listedScopes.length !== 15 || !listedScopes.includes("medias.write") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
+    if (listedScopes.length !== 16 || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
     await saveConnection(page, "loc_maya", "wrong-token");
     await expectText(page, "rejected the token (401)", "bad token reason");
     await saveConnection(page, "loc_maya", "pit-noscope");

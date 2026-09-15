@@ -23,6 +23,7 @@ export const GHL_SCOPES: GhlScope[] = [
   { scope: "emails/builder.readonly", why: "GET /emails/builder: the client's email templates", use: "next" },
   { scope: "emails/builder.write", why: "POST /emails/builder and /emails/builder/data: HelixOS writes the client's marketing email template", use: "next" },
   { scope: "contacts.write", why: "POST /contacts/upsert: booked calls and new clients become contacts in the sub-account", use: "now" },
+  { scope: "locations/customFields.write", why: "POST /locations/{locationId}/customFields: creating the helixos_user_ns custom field that carries a chatbot lead's id; not called today, on the list so the Community Loyalty path never needs a new token", use: "next" },
   { scope: "conversations/message.write", why: "POST /conversations/messages: sending an email to one contact from the client's own account, the send path the email template work will need", use: "next" },
 ];
 
@@ -31,7 +32,7 @@ export const REQUIRED_SCOPES: readonly string[] = GHL_SCOPES.map((s) => s.scope)
 
 /** The scope GoHighLevel named in a 403 body ("The token does not have access to this scope: socialplanner/post.write"), or null. */
 export function scopeNamedIn(detail: string): string | null {
-  const m = detail.match(/(socialplanner\/[a-z]+\.[a-z]+|medias\.[a-z]+|emails\/[a-z]+\.[a-z]+|contacts\.[a-z]+|conversations\/[a-z]+\.[a-z]+)/i);
+  const m = detail.match(/(socialplanner\/[a-z]+\.[a-z]+|medias\.[a-z]+|emails\/[a-z]+\.[a-z]+|contacts\.[a-z]+|conversations\/[a-z]+\.[a-z]+|locations\/[a-z]+\.[a-z]+)/i);
   return m ? m[1] : null;
 }
 
