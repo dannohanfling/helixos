@@ -56,7 +56,8 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         {PROVIDERS.map((p) => {
           const meta = PROVIDER_META[p];
           const row = rows.find((r) => r.provider === p);
-          const hook = `${appUrl}/api/webhooks/${p === "community_loyalty" ? "community-loyalty" : "ghl"}`;
+          const hookPath = p === "community_loyalty" ? "community-loyalty" : p === "gohighlevel" ? "ghl" : null;
+          const hook = hookPath ? `${appUrl}/api/webhooks/${hookPath}` : null;
           return (
             <Card key={p} title={`${meta.icon} ${meta.name}`} action={row?.enabled ? <Badge tone="good">on</Badge> : <Badge tone="neutral">off</Badge>}>
               <p className="mb-3 text-sm text-ink-2">{meta.blurb}</p>
@@ -86,11 +87,14 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                   <input type="hidden" name="provider" value={p} />
                   <button className="btn btn-ghost btn-xs" type="submit">Send test ping</button>
                 </form>
-                <form action={rotateInboundSecretAction}>
-                  <input type="hidden" name="provider" value={p} />
-                  <button className="btn btn-ghost btn-xs" type="submit">{row?.inboundSecretHash ? "Rotate inbound secret" : "Create inbound secret"}</button>
-                </form>
+                {hook ? (
+                  <form action={rotateInboundSecretAction}>
+                    <input type="hidden" name="provider" value={p} />
+                    <button className="btn btn-ghost btn-xs" type="submit">{row?.inboundSecretHash ? "Rotate inbound secret" : "Create inbound secret"}</button>
+                  </form>
+                ) : null}
               </div>
+              {hook ? (
               <Disclosure summary={<span className="text-xs text-ink-3 underline">Inbound webhook</span>} className="mt-3">
                 <div className="mt-2 space-y-2 text-xs">
                   <p className="text-ink-2">Point {meta.name.split(" (")[0]} at this URL. Send the secret as the <code>x-helix-secret</code> header. It is not accepted in the URL, because URLs end up in server logs.</p>
@@ -118,6 +122,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                   <p className="text-ink-3">{p === "community_loyalty" ? "Events: pass.installed (email or serial), points.earned (email, points, reason)." : "Events: contact.created, appointment.booked (email, full_name, startTime)."}</p>
                 </div>
               </Disclosure>
+              ) : null}
             </Card>
           );
         })}

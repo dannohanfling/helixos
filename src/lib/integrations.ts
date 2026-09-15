@@ -17,16 +17,21 @@ export type Provider = (typeof PROVIDERS)[number];
 export const INBOUND_SECRET_COOKIE = "helix_inbound_secret";
 
 export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb: string; fields: { key: string; label: string; hint?: string; secret?: boolean; toggle?: boolean }[] }> = {
-  community_loyalty: {
-    name: "Community Loyalty",
+  walletpush: {
+    name: "WalletPush (the Evolve Omega pass)",
     icon: "🎟️",
-    blurb: "Wallet passes, points and push notifications. Points earned in HelixOS flow to each member's Evolve Omega pass.",
+    blurb: "The pass itself: points and push messages on each member's Evolve Omega wallet pass, through the WalletPush instance behind the Community Loyalty Mini-App. HelixOS calls it directly; the bot flows go through the Mini-App.",
     fields: [
-      { key: "apiUrl", label: "API base URL", hint: "https://api.communityloyalty.app" },
-      { key: "apiKey", label: "API key", secret: true },
-      { key: "programId", label: "Loyalty program ID" },
+      { key: "apiUrl", label: "Loyalty host URL", hint: "https://eloyalty.ai" },
+      { key: "apiKey", label: "App key", secret: true },
       { key: "pointsRate", label: "Points multiplier", hint: "1 = HelixOS points map 1:1" },
     ],
+  },
+  community_loyalty: {
+    name: "Community Loyalty (uChat)",
+    icon: "🤖",
+    blurb: "The chatbot platform. Its bot flows call the inbound webhook below when a pass is installed or points are earned inside the bot. HelixOS sends nothing to it: points and push messages go to WalletPush.",
+    fields: [],
   },
   gohighlevel: {
     name: "Omnichannel Marketing System (GoHighLevel)",
@@ -44,7 +49,8 @@ export const onboardingOpen = (config: Record<string, string> | undefined) => co
 
 const BUILT_IN_HOSTS: Record<Provider, string[]> = {
   gohighlevel: ["services.leadconnectorhq.com"],
-  community_loyalty: ["api.communityloyalty.app"],
+  walletpush: ["eloyalty.ai"],
+  community_loyalty: [],
 };
 
 /**
@@ -52,7 +58,7 @@ const BUILT_IN_HOSTS: Record<Provider, string[]> = {
  * a built-in host, one listed in INTEGRATION_URL_ALLOWLIST, or (outside production only) anything, so tests can point at a mock.
  */
 export function resolveApiUrl(provider: Provider, configured: string | null | undefined): { ok: true; base: string } | { ok: false; error: string } {
-  const raw = (configured ?? "").trim() || `https://${BUILT_IN_HOSTS[provider][0]}`;
+  const raw = (configured ?? "").trim() || (BUILT_IN_HOSTS[provider][0] ? `https://${BUILT_IN_HOSTS[provider][0]}` : "");
   let u: URL;
   try {
     u = new URL(raw);
@@ -108,14 +114,19 @@ async function send(workspaceId: string, userId: string | null, provider: Provid
   return r.ok;
 }
 
-/** Points earned in HelixOS go to the member's Evolve Omega pass. Silent when nothing is configured. */
+/**
+ * Points earned in HelixOS go to the member's Evolve Omega pass, which is a WalletPush pass. Silent when nothing is configured.
+ * The path and body here are the 6 September placeholder and have never been verified against the service: WalletPush's own
+ * call is POST {host}/api/public/admin/points/add with { customerId, points, reason } (read off a live flow node on 15 Sep),
+ * keyed on the customer id, not the pass serial. Rebuilt only once the sync log has said whether a push ever succeeded.
+ */
 export async function pushPoints(ctx: { workspaceId: string; userId: string }, points: number, reason: string): Promise<void> {
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, ctx.workspaceId), eq(schema.memberships.userId, ctx.userId)) });
   if (!m?.eoPassSerial) return;
-  const integ = await getIntegration(ctx.workspaceId, "community_loyalty");
+  const integ = await getIntegration(ctx.workspaceId, "walletpush");
   if (!integ?.enabled) return;
   const rate = Number(integ.config.pointsRate ?? "1") || 1;
-  await send(ctx.workspaceId, ctx.userId, "community_loyalty", "points.add", "/v1/points", { programId: integ.config.programId ?? "", serial: m.eoPassSerial, points: Math.round(points * rate), reason });
+  await send(ctx.workspaceId, ctx.userId, "walletpush", "points.add", "/v1/points", { serial: m.eoPassSerial, points: Math.round(points * rate), reason });
 }
 
 /** A booked call or a new client becomes a contact in the member's own GoHighLevel sub-account (their token needs contacts.write; skipped with a note otherwise). */
@@ -203,15 +214,14 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   return true;
 }
 
-/** A push notification to one member's Evolve Omega pass. */
+/** A push notification to one member's Evolve Omega pass. Same placeholder status as pushPoints: the WalletPush path is not yet verified. */
 export async function pushPassMessage(ctx: { workspaceId: string; userId: string }, title: string, body: string): Promise<boolean> {
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, ctx.workspaceId), eq(schema.memberships.userId, ctx.userId)) });
   if (!m?.eoPassSerial) {
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "community_loyalty", direction: "out", event: "pass.push", payload: { title, body }, status: "skipped", note: "Member has no Evolve Omega pass yet" });
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "walletpush", direction: "out", event: "pass.push", payload: { title, body }, status: "skipped", note: "Member has no Evolve Omega pass yet" });
     return false;
   }
-  const integ = await getIntegration(ctx.workspaceId, "community_loyalty");
-  const ok = await send(ctx.workspaceId, ctx.userId, "community_loyalty", "pass.push", "/v1/passes/push", { programId: integ?.config.programId ?? "", serial: m.eoPassSerial, title, body });
+  const ok = await send(ctx.workspaceId, ctx.userId, "walletpush", "pass.push", "/v1/passes/push", { serial: m.eoPassSerial, title, body });
   await db.update(schema.memberships).set({ eoPassLastPushAt: nowIso() }).where(eq(schema.memberships.id, m.id));
   return ok;
 }

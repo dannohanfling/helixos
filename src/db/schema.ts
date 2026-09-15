@@ -1165,7 +1165,8 @@ export type Essence = typeof essences.$inferSelect;
 
 /* ───────────────────────── Integrations ───────────────────────── */
 
-export const PROVIDERS = ["community_loyalty", "gohighlevel"] as const;
+/** walletpush: the pass itself (points, push messages). community_loyalty: the uChat chatbot platform, inbound only. */
+export const PROVIDERS = ["walletpush", "community_loyalty", "gohighlevel"] as const;
 
 export const integrations = sqliteTable(
   "integrations",

@@ -227,7 +227,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 </Field>
               </div>
               {v.membership.passEnabled ? (
-                <Field label="Pass serial (Community Loyalty)">
+                <Field label="Pass serial (WalletPush)">
                   <input className="field" name="passSerial" defaultValue={c.passSerial ?? ""} />
                 </Field>
               ) : null}

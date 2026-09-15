@@ -83,11 +83,12 @@ export async function seedDemoWave2(wsId: string, mayaId: string, jordanId: stri
 
   // Integrations: configured but off, so nothing leaves the demo. Secrets are placeholders.
   await db.insert(schema.integrations).values([
-    { id: newId(), workspaceId: wsId, provider: "community_loyalty", enabled: false, config: { apiUrl: "https://api.communityloyalty.app", programId: "evolve-omega", pointsRate: "1" }, inboundSecretHash: hashSecret("hx_demo_community_loyalty_secret") },
+    { id: newId(), workspaceId: wsId, provider: "walletpush", enabled: false, config: { apiUrl: "https://eloyalty.ai", pointsRate: "1" } },
+    { id: newId(), workspaceId: wsId, provider: "community_loyalty", enabled: false, config: {}, inboundSecretHash: hashSecret("hx_demo_community_loyalty_secret") },
     { id: newId(), workspaceId: wsId, provider: "gohighlevel", enabled: false, config: { apiUrl: "https://services.leadconnectorhq.com" }, inboundSecretHash: hashSecret("hx_demo_ghl_secret") },
   ]);
   await db.insert(schema.syncEvents).values([
-    { id: newId(), workspaceId: wsId, userId: mayaId, provider: "community_loyalty", direction: "out", event: "points.add", payload: { serial: "EO-0001-MT", points: 20, reason: "Closed the day" }, status: "skipped", note: "Integration disabled", createdAt: `${addDays(today, -1)}T03:10:00.000Z` },
+    { id: newId(), workspaceId: wsId, userId: mayaId, provider: "walletpush", direction: "out", event: "points.add", payload: { serial: "EO-0001-MT", points: 20, reason: "Closed the day" }, status: "skipped", note: "Integration disabled", createdAt: `${addDays(today, -1)}T03:10:00.000Z` },
     { id: newId(), workspaceId: wsId, userId: mayaId, provider: "community_loyalty", direction: "in", event: "pass.installed", payload: { serial: "EO-0001-MT", email: "client@demo.helixos.app" }, status: "received", note: "Pass marked installed", createdAt: `${addDays(today, -22)}T18:00:00.000Z` },
     { id: newId(), workspaceId: wsId, userId: mayaId, provider: "gohighlevel", direction: "out", event: "contact.upsert", payload: { firstName: "Priya", lastName: "Natarajan", tags: ["helixos", "client"] }, status: "skipped", note: "Integration disabled", createdAt: `${addDays(today, -2)}T17:30:00.000Z` },
   ]);
