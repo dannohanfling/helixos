@@ -6,7 +6,7 @@ import { PROVIDERS } from "@/db/schema";
 import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { INBOUND_SECRET_COOKIE, PROVIDER_META, getIntegration, logSync, pushPassMessage, resolveApiUrl, type Provider } from "@/lib/integrations";
+import { INBOUND_SECRET_COOKIE, PASS_NOT_WIRED, PROVIDER_META, getIntegration, logSync, passWired, pushPassMessage, resolveApiUrl, type Provider } from "@/lib/integrations";
 import { cookies } from "next/headers";
 import { hashSecret, open, randomSecret, seal } from "@/lib/crypto";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
@@ -63,8 +63,8 @@ export async function testIntegrationAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
   const provider = PROVIDERS.find((p) => p === str(formData, "provider")) as Provider | undefined;
   if (!provider) return;
-  if (provider !== "walletpush") {
-    const note = provider === "gohighlevel" ? "GoHighLevel has no agency credential to ping. Each member's token is checked when they save it on Settings." : "Community Loyalty is inbound only: its bot flows call the webhook below. Points and push messages are pinged on WalletPush.";
+  if (provider !== "walletpush" || !passWired(provider)) {
+    const note = provider === "gohighlevel" ? "GoHighLevel has no agency credential to ping. Each member's token is checked when they save it on Settings." : provider === "community_loyalty" ? "Community Loyalty is inbound only: its bot flows call the webhook below." : PASS_NOT_WIRED;
     await logSync({ workspaceId: coach.workspace.id, userId: coach.user.id, provider, direction: "out", event: "ping", status: "skipped", note });
     refresh();
     return;

@@ -17,13 +17,16 @@ export type Provider = (typeof PROVIDERS)[number];
 export const INBOUND_SECRET_COOKIE = "helix_inbound_secret";
 
 export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb: string; fields: { key: string; label: string; hint?: string; secret?: boolean; toggle?: boolean }[] }> = {
+  // Not shown to coaches: Evolve Omega sets the pass up and holds its credentials (decision, 15 Sep). The vendor underneath
+  // (the WalletPush instance at the loyalty host behind the Community Loyalty Mini-App) is named in code and the README only.
   walletpush: {
-    name: "WalletPush (the Evolve Omega pass)",
+    name: "Points and wallet passes (set up by Evolve Omega)",
     icon: "🎟️",
-    blurb: "The pass itself: points and push messages on each member's Evolve Omega wallet pass, through the WalletPush instance behind the Community Loyalty Mini-App. HelixOS calls it directly; the bot flows go through the Mini-App.",
+    blurb: "Points and push messages on each member's Evolve Omega wallet pass. Nothing is sent yet: the call is not wired up.",
     fields: [
-      { key: "apiUrl", label: "Loyalty host URL", hint: "https://eloyalty.ai" },
-      { key: "apiKey", label: "App key", secret: true },
+      // A hostname becomes a built-in constant only after a live call to it has returned 2xx. Until then it is a default to confirm.
+      { key: "apiUrl", label: "Loyalty host URL", hint: "Default https://eloyalty.ai; confirm it against the Loyalty - Host URL in the Mini-App settings before saving" },
+      { key: "apiKey", label: "App key", secret: true, hint: "Points aren't wired up yet — this saves your key but nothing is sent." },
       { key: "pointsRate", label: "Points multiplier", hint: "1 = HelixOS points map 1:1" },
     ],
   },
@@ -49,7 +52,8 @@ export const onboardingOpen = (config: Record<string, string> | undefined) => co
 
 const BUILT_IN_HOSTS: Record<Provider, string[]> = {
   gohighlevel: ["services.leadconnectorhq.com"],
-  walletpush: ["eloyalty.ai"],
+  // Empty on purpose: no call to any pass host has ever returned 2xx from this codebase, so none is a constant yet.
+  walletpush: [],
   community_loyalty: [],
 };
 
@@ -95,7 +99,15 @@ async function post(url: string, body: unknown, headers: Record<string, string>)
   }
 }
 
+/** The pass call is a 6 September placeholder (path and body unverified), so nothing is sent for this provider: not a push, not a ping, and never the app key. Lifted when the real call is built. */
+export const PASS_NOT_WIRED = "Points aren't wired up yet: nothing is sent.";
+export const passWired = (provider: Provider) => provider !== "walletpush";
+
 async function send(workspaceId: string, userId: string | null, provider: Provider, event: string, path: string, payload: Record<string, unknown>): Promise<boolean> {
+  if (!passWired(provider)) {
+    await logSync({ workspaceId, userId, provider, direction: "out", event, payload, status: "skipped", note: PASS_NOT_WIRED });
+    return false;
+  }
   const integ = await getIntegration(workspaceId, provider);
   if (!integ || !integ.enabled) {
     await logSync({ workspaceId, userId, provider, direction: "out", event, payload, status: "skipped", note: integ ? "Integration disabled" : "Integration not configured" });

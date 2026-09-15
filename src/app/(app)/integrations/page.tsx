@@ -53,7 +53,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     <>
       <PageHeader title="Integrations" subtitle="Points, passes, contacts and messages flow out. Rewards and bookings flow back in. Everything is logged." />
       <div className="grid gap-4 lg:grid-cols-2">
-        {PROVIDERS.map((p) => {
+        {PROVIDERS.filter((p) => p !== "walletpush").map((p) => {
           const meta = PROVIDER_META[p];
           const row = rows.find((r) => r.provider === p);
           const hookPath = p === "community_loyalty" ? "community-loyalty" : p === "gohighlevel" ? "ghl" : null;
