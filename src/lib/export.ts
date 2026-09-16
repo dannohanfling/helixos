@@ -58,7 +58,11 @@ export async function exportTable(table: ExportTable, workspaceId: string, userI
       db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)) }),
       db.query.socialConnections.findFirst({ where: and(eq(schema.socialConnections.workspaceId, workspaceId), eq(schema.socialConnections.userId, userId)) }),
     ]);
-    return clean([{ ...(user ?? {}), membership: membership ?? null, publishing: connection ? { locationId: connection.locationId, mapping: connection.mapping, connectedAt: connection.connectedAt } : null }]);
+    // Credentials never leave in an export, sealed or not: the two Community Loyalty webhook URLs are dropped from the membership.
+    const { passWebhookUrl: _pass, clDripWebhookUrl: _drip, ...membershipSafe } = membership ?? ({} as Record<string, unknown>);
+    void _pass;
+    void _drip;
+    return clean([{ ...(user ?? {}), membership: membership ? membershipSafe : null, publishing: connection ? { locationId: connection.locationId, mapping: connection.mapping, connectedAt: connection.connectedAt } : null }]);
   }
   if (table === "offer_components") {
     const ids = (await own("offers", workspaceId, userId)).map((o) => o.id as string);

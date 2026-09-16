@@ -3,6 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
+import { open, seal } from "@/lib/crypto";
 import { CLIENT_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { addDays, nowIso } from "@/lib/dates";
@@ -128,7 +129,8 @@ export async function awardMemberPointsAction(formData: FormData): Promise<void>
   if (!points) return;
   const id = newId();
   await db.insert(schema.memberPoints).values({ id, clientRecordId, userId, points, reason, syncStatus: "local" });
-  const webhook = v.membership.passWebhookUrl;
+  // The client's own Community Loyalty inbound webhook: a credential (no auth on it), sealed at rest, opened only here.
+  const webhook = open(v.membership.passWebhookUrl);
   if (webhook) {
     try {
       const res = await fetch(webhook, {
@@ -139,7 +141,8 @@ export async function awardMemberPointsAction(formData: FormData): Promise<void>
       });
       await db.update(schema.memberPoints).set({ syncStatus: res.ok ? "sent" : "failed", syncNote: res.ok ? null : `HTTP ${res.status}` }).where(eq(schema.memberPoints.id, id));
     } catch (err) {
-      await db.update(schema.memberPoints).set({ syncStatus: "failed", syncNote: err instanceof Error ? err.message : "network error" }).where(eq(schema.memberPoints.id, id));
+      // Never the error's own words: a malformed address would put the credential itself into the note.
+      await db.update(schema.memberPoints).set({ syncStatus: "failed", syncNote: err instanceof Error && err.name === "TimeoutError" ? "Your Community Loyalty webhook didn't answer in time." : "Couldn't reach your Community Loyalty webhook." }).where(eq(schema.memberPoints.id, id));
     }
   }
   refresh();
@@ -153,7 +156,8 @@ export async function updatePassAction(formData: FormData): Promise<void> {
     .set({
       passName: opt(formData, "passName"),
       passUrl: opt(formData, "passUrl"),
-      passWebhookUrl: opt(formData, "passWebhookUrl"),
+      // Sealed on the way in; blank keeps what is saved, "clear" removes it.
+      ...(opt(formData, "passWebhookUrl") === "clear" ? { passWebhookUrl: null } : opt(formData, "passWebhookUrl") ? { passWebhookUrl: seal(opt(formData, "passWebhookUrl")) } : {}),
       passHashtag: opt(formData, "passHashtag"),
       passCommunityUrl: opt(formData, "passCommunityUrl"),
     })

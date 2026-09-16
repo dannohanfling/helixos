@@ -122,8 +122,8 @@ export default async function CommunityPage() {
               <Field label="Pass install link" hint="From Community Loyalty. Send this to members.">
                 <input className="field" name="passUrl" type="url" defaultValue={m.passUrl ?? ""} />
               </Field>
-              <Field label="Points webhook URL" hint="Your Community Loyalty inbound webhook. Points you award post here.">
-                <input className="field" name="passWebhookUrl" type="url" defaultValue={m.passWebhookUrl ?? ""} placeholder="https://communityloyalty.io/api/iwh/…" />
+              <Field label="Points webhook URL" hint={m.passWebhookUrl ? "Your Community Loyalty inbound webhook. It is a credential, so it is kept sealed and not shown again: leave this blank to keep it, type clear to remove it." : "Your Community Loyalty inbound webhook. Points you award post here. It is a credential: it is kept sealed and never shown again."}>
+                <input className="field" name="passWebhookUrl" type="password" autoComplete="off" placeholder={m.passWebhookUrl ? "••••••••  saved" : "https://communityloyalty.io/api/iwh/…"} />
               </Field>
               <Field label="Daily hashtag">
                 <input className="field" name="passHashtag" defaultValue={m.passHashtag ?? ""} placeholder="#showedup" />

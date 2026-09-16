@@ -114,8 +114,9 @@ createServer((req, res) => {
     if (kind === "posts" && req.method === "GET" && id) {
       const p = posts.get(id);
       if (!p) return json(404, { message: "Post not found" });
-      // The planner "publishes" a post whose time has come (within a day); one scheduled further out stays scheduled.
-      const due = !p.scheduleDate || new Date(String(p.scheduleDate)).getTime() <= Date.now() + 86400000;
+      // The planner "publishes" a post whose time has come (within two days, so a walk's "tomorrow" is due at any hour of
+      // the day it runs); one scheduled further out stays scheduled.
+      const due = !p.scheduleDate || new Date(String(p.scheduleDate)).getTime() <= Date.now() + 2 * 86400000;
       const flipped = due ? { ...p, status: "published", postId: `fb_${id}`, publishedAt: new Date().toISOString() } : p;
       return json(200, { success: true, statusCode: 200, message: "Fetched Post", results: { post: flipped } });
     }

@@ -54,7 +54,7 @@ function VariantForm({ var_, maxChars, email = false, outcome }: { var_: Content
           Save
         </button>
       </div>
-      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} compact /> : null}
+      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} compact inForm /> : null}
       {var_.status === "posted" ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["reactions", "comments", "dms", "leads"] as const).map((k) => (
@@ -149,13 +149,16 @@ export default async function RepurposePage({ params, searchParams }: { params: 
               {posted} posted · 👍 {reach.reactions} · 💬 {reach.comments} · 📨 {reach.dms} DMs · 🆕 {reach.leads} leads
             </span>
             {outcomes.length ? <OutcomeHeadline outcomes={outcomes} /> : null}
-            {canCheck ? (
-              <form action={checkAllPostStatusAction}>
-                <input type="hidden" name="contentId" value={item.id} />
-                <button className="btn btn-ghost btn-xs" type="submit">Check every version with GoHighLevel</button>
-              </form>
-            ) : null}
           </span>
+        }
+        action={
+          // A form is not valid inside the subtitle's paragraph (the browser re-nests it and React re-renders the tree), so it lives in the header's action slot.
+          canCheck ? (
+            <form action={checkAllPostStatusAction}>
+              <input type="hidden" name="contentId" value={item.id} />
+              <button className="btn btn-ghost btn-xs" type="submit">Check every version with GoHighLevel</button>
+            </form>
+          ) : undefined
         }
       />
 

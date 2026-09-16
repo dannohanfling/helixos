@@ -173,8 +173,9 @@ describe("client-facing errors: what happened and what to do next, never our int
  * the scanner for that: the column may be named only where it is stored, sealed, opened or given a blank input.
  */
 describe("the drip webhook URL is a credential", () => {
-  const TOKEN = /\bclDripWebhookUrl\b|cl_drip_webhook_url/;
-  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/rung-drip.ts", "src/app/(app)/coach/page.tsx", "src/lib/queries/compose.ts", "src/lib/actions/compose.ts"];
+  // Both Community Loyalty inbound webhook URLs: the coach's Rung Dripper one and the client's own community one.
+  const TOKEN = /\bclDripWebhookUrl\b|cl_drip_webhook_url|\bpassWebhookUrl\b|pass_webhook_url/;
+  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/rung-drip.ts", "src/app/(app)/coach/page.tsx", "src/lib/queries/compose.ts", "src/lib/actions/compose.ts", "src/lib/actions/clients.ts", "src/app/(app)/community/page.tsx", "src/lib/export.ts"];
   const LEAK = /console\.|\bnote:|\bthrow\b|new Error\(|redirect\(|defaultValue=|\bvalue=\{|JSON\.stringify\(|logSync\(/;
   it("is named only where it is stored, sealed, opened or blanked, and never on a line that logs, notes, throws, redirects or renders a value", () => {
     for (const f of walk(SRC)) {
@@ -184,12 +185,14 @@ describe("the drip webhook URL is a credential", () => {
       for (const [i, line] of stripComments(text).split("\n").entries()) if (TOKEN.test(line)) expect(LEAK.test(line), `${rel(f)}:${i + 1} puts the webhook URL where it could be seen: ${line.trim().slice(0, 120)}`).toBe(false);
     }
   });
-  it("is opened in one place, the call that posts to it, and that call's notes go through the redactor", () => {
+  it("is opened in one place each, the call that posts to it, and that call's notes go through the redactor", () => {
+    const OPENS: Record<string, string> = { clDripWebhookUrl: "src/lib/rung-drip.ts", url: "src/lib/rung-drip.ts", passWebhookUrl: "src/lib/actions/clients.ts" };
     for (const f of walk(SRC)) {
       const text = readFileSync(f, "utf8");
-      const opens = text.match(/open\((setup|m|membership|v\.membership)\.(clDripWebhookUrl|url)\)/g) ?? [];
-      if (opens.length) expect(rel(f)).toBe("src/lib/rung-drip.ts");
+      for (const m of text.matchAll(/open\((?:setup|m|membership|v\.membership)\.(clDripWebhookUrl|url|passWebhookUrl)\)/g)) expect(rel(f), `${m[1]} opened in ${rel(f)}`).toBe(OPENS[m[1]]);
     }
+    const clients = readFileSync(join(SRC, "lib/actions/clients.ts"), "utf8");
+    expect(clients).not.toMatch(/syncNote:[^\n]*(err|error)\.message/);
     const lib = readFileSync(join(SRC, "lib/rung-drip.ts"), "utf8");
     expect(lib).toContain("redactSecrets(");
     expect(lib).not.toMatch(/console\.(log|warn|error)\([^)]*url/);

@@ -21,7 +21,11 @@ export function OutcomeHeadline({ outcomes, className = "" }: { outcomes: Channe
   );
 }
 
-export function OutcomeRows({ outcomes, checkAction, compact = false }: { outcomes: ChannelOutcome[]; checkAction?: (formData: FormData) => Promise<void>; compact?: boolean }) {
+/**
+ * `inForm`: the rows sit inside another form (a version's own), so the check is a button with its own action rather than a
+ * nested form, which HTML does not allow and which made the browser re-nest the page and React regenerate it on the client.
+ */
+export function OutcomeRows({ outcomes, checkAction, compact = false, inForm = false }: { outcomes: ChannelOutcome[]; checkAction?: (formData: FormData) => Promise<void>; compact?: boolean; inForm?: boolean }) {
   if (!outcomes.length) return null;
   return (
     <ul className={`divide-y ${compact ? "text-xs" : "text-sm"}`} data-testid="channel-outcomes">
@@ -36,7 +40,12 @@ export function OutcomeRows({ outcomes, checkAction, compact = false }: { outcom
               {o.reason}
             </span>
           ) : null}
-          {checkAction && o.canCheck ? (
+          {checkAction && o.canCheck && inForm ? (
+            <span className="ml-auto">
+              <input type="hidden" name="variantId" value={o.id} />
+              <button className="btn btn-ghost btn-xs" type="submit" formAction={checkAction}>Check status</button>
+            </span>
+          ) : checkAction && o.canCheck ? (
             <form action={checkAction} className="ml-auto">
               <input type="hidden" name="variantId" value={o.id} />
               <button className="btn btn-ghost btn-xs" type="submit">Check status</button>
