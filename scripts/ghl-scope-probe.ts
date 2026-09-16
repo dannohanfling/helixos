@@ -26,3 +26,5 @@ const probes: { scope: string; method: "GET" | "POST"; path: string; body?: unkn
     console.log(`${p.scope.padEnd(36)} ${res.status}  ${text}`);
   }
 })();
+
+export {};

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { HANDED_NOTE, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, handoffReasons, joinRungs, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
 import { handoffOutcome, outcomesFor, summarize, OUTCOME_WORD } from "../channel-outcome";
-import { matchPlannerPost, needsCheck, orderForCheck } from "../planner-match";
+import { matchPlannerPost, needsCheck, orderForCheck, reconcileWindow } from "../planner-match";
 import { normaliseTargets } from "../compose";
 import { redactSecrets } from "../redact";
 
@@ -95,6 +95,12 @@ describe("a 2xx with no id: accepted, then reconciled from the planner's own lis
     ];
     expect(matchPlannerPost(twins, { accountId: "acc_fb", summary: "Twelve minutes on Tuesday.", sinceIso: "2026-09-15T19:52:14.000Z" })).toBeNull();
     expect(matchPlannerPost(twins.slice(1), { accountId: "acc_fb", summary: "Twelve minutes on Tuesday.", sinceIso: "2026-09-15T19:52:14.000Z" })?.id).toBe("b");
+  });
+  it("the reconcile asks the planner for a window around the request and a day past the row's own time, so the answer never depends on list order", () => {
+    const w = reconcileWindow({ externalSyncedAt: "2026-09-15T19:52:14.000Z", createdAt: "2026-09-15T19:52:00.000Z", postAt: null }, "2026-09-15T20:00:00.000Z", null);
+    expect(w).toEqual({ sinceIso: "2026-09-15T19:52:14.000Z", fromIso: "2026-09-15T19:42:14.000Z", toIso: "2026-09-16T20:00:00.000Z" });
+    const s = reconcileWindow({ externalSyncedAt: null, createdAt: "2026-09-15T19:52:00.000Z", postAt: "2026-09-20T09:00:00" }, "2026-09-15T20:00:00.000Z", "2026-09-20T16:00:00.000Z");
+    expect(s.toIso).toBe("2026-09-21T16:00:00.000Z");
   });
   it("rows are checked least-recently-checked first, never-checked first of all, so the cap is a rate and not a cliff", () => {
     const rows = [{ id: "new", externalSyncedAt: "2026-09-15T19:00:00.000Z" }, { id: "never", externalSyncedAt: null }, { id: "old", externalSyncedAt: "2026-09-15T10:00:00.000Z" }];

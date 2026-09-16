@@ -50,3 +50,14 @@ export function matchPlannerPost(posts: PlannerPostLike[], want: { accountId: st
 export function orderForCheck<T extends { externalSyncedAt: string | null }>(rows: T[]): T[] {
   return rows.slice().sort((a, b) => (a.externalSyncedAt ?? "").localeCompare(b.externalSyncedAt ?? ""));
 }
+
+/**
+ * The window the reconcile asks the planner for, so the answer does not depend on how the planner orders its list: from ten
+ * minutes before the request to a day after the later of now and the row's own scheduled time (the planner's date filter
+ * may read the created time or the scheduled one, and the window covers both). The account filter narrows it further.
+ */
+export function reconcileWindow(row: { externalSyncedAt: string | null; createdAt: string; postAt: string | null }, nowIso: string, postAtIso: string | null): { fromIso: string; toIso: string; sinceIso: string } {
+  const since = new Date(row.externalSyncedAt ?? row.createdAt).getTime();
+  const upper = Math.max(new Date(nowIso).getTime(), postAtIso ? new Date(postAtIso).getTime() : 0);
+  return { sinceIso: new Date(since).toISOString(), fromIso: new Date(since - SLACK_MS).toISOString(), toIso: new Date(upper + 86_400_000).toISOString() };
+}

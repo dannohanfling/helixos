@@ -101,8 +101,16 @@ createServer((req, res) => {
     if (kind === "posts" && req.method === "POST" && id === "list") {
       const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
       const all = [...posts.values()];
-      const list = body.type && body.type !== "all" && body.type !== "recent" ? all.filter((p) => p.status === body.type) : all;
-      return json(200, { success: true, statusCode: 200, message: "Fetched Posts", results: { posts: list, count: list.length } });
+      const accounts = String(body.accounts ?? "").split(",").map((a) => a.trim()).filter(Boolean);
+      const from = body.fromDate ? new Date(String(body.fromDate)).getTime() : -Infinity;
+      const to = body.toDate ? new Date(String(body.toDate)).getTime() : Infinity;
+      const inWindow = (p: Record<string, unknown>) => [p.createdAt, p.scheduleDate].filter(Boolean).some((d) => { const t = new Date(String(d)).getTime(); return t >= from && t <= to; });
+      const list = all
+        .filter((p) => (body.type && body.type !== "all" && body.type !== "recent" ? p.status === body.type : true))
+        .filter((p) => (accounts.length ? (Array.isArray(p.accountIds) ? p.accountIds.some((a) => accounts.includes(String(a))) : false) : true))
+        .filter((p) => (body.fromDate || body.toDate ? inWindow(p) : true));
+      const limit = Number(body.limit ?? 100) || 100;
+      return json(200, { success: true, statusCode: 200, message: "Fetched Posts", results: { posts: list.slice(0, limit), count: list.length } });
     }
     if (kind === "posts" && req.method === "PUT" && id) {
       const p = posts.get(id);

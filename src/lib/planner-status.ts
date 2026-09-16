@@ -9,14 +9,14 @@
  */
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { nowIso } from "@/lib/dates";
+import { nowIso, wallTimeToUtc } from "@/lib/dates";
 import { DELETED_IN_PLANNER } from "@/lib/engine/channel-outcome";
 import { explainPlatformError } from "@/lib/engine/ghl-errors";
 import { platformName } from "@/lib/engine/ghl-map";
-import { matchPlannerPost, needsCheck, orderForCheck } from "@/lib/engine/planner-match";
+import { matchPlannerPost, needsCheck, orderForCheck, reconcileWindow } from "@/lib/engine/planner-match";
 import { redactSecrets } from "@/lib/engine/redact";
 import type { SocialConnection } from "@/db/schema";
-import { connectionFor, getPost, listPosts } from "@/lib/ghl";
+import { connectionFor, getPost, listPostsIn } from "@/lib/ghl";
 
 export async function recordReadback(variant: schema.ContentVariant, conn: SocialConnection): Promise<void> {
   if (!variant.externalId) return;
@@ -42,12 +42,16 @@ export async function recordReadback(variant: schema.ContentVariant, conn: Socia
 export async function reconcileLostId(variant: schema.ContentVariant, conn: SocialConnection): Promise<string | null> {
   const accountId = conn.mapping[variant.channel];
   if (!accountId) return null;
-  const r = await listPosts(conn, "all", 100);
-  if (!r.ok) {
+  // The planner is asked for this account inside the request's window, so the answer does not depend on how it orders a
+  // list longer than one page; a window it says holds more than one page is refused as unresolvable, not guessed at.
+  const tz = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, variant.userId) }))?.timezone;
+  const win = reconcileWindow(variant, nowIso(), variant.postAt ? wallTimeToUtc(variant.postAt, tz || "UTC") : null);
+  const r = await listPostsIn(conn, { accountId, fromIso: win.fromIso, toIso: win.toIso, limit: 100 });
+  if (!r.ok || (r.data.total !== null && r.data.total > r.data.posts.length)) {
     await db.update(schema.contentVariants).set({ externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, variant.id));
     return null;
   }
-  const hit = matchPlannerPost(r.data, { accountId, summary: variant.body, sinceIso: variant.externalSyncedAt ?? variant.createdAt });
+  const hit = matchPlannerPost(r.data.posts, { accountId, summary: variant.body, sinceIso: win.sinceIso });
   if (!hit) {
     await db.update(schema.contentVariants).set({ externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, variant.id));
     return null;

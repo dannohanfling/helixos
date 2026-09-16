@@ -185,6 +185,23 @@ export async function listPosts(conn: SocialConnection, type: "scheduled" | "all
   return { ok: true, data: raw.map((p) => ({ id: String(p._id ?? p.id ?? ""), status: p.status ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p), createdAt: p.createdAt ?? null, publishedAt: p.publishedAt ?? null })).filter((p) => p.id) };
 }
 
+/**
+ * The posts the planner holds for one account inside a window, with the planner's own count when it gives one. The reconcile
+ * reads this rather than the whole list, so it does not depend on how the planner orders a list longer than one page.
+ */
+export async function listPostsIn(conn: SocialConnection, opts: { accountId: string; fromIso: string; toIso: string; limit?: number }): Promise<GhlResult<{ posts: PlannerPost[]; total: number | null }>> {
+  const cred = await credentials(conn);
+  if (!cred.ok) return cred;
+  const limit = opts.limit ?? 100;
+  const body = { type: "all", accounts: opts.accountId, skip: "0", limit: String(limit), fromDate: opts.fromIso, toDate: opts.toIso, includeUsers: "false" };
+  const r = await call<{ results?: { posts?: RawPost[]; count?: number } | RawPost[]; posts?: RawPost[]; count?: number }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/list`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
+  const raw = Array.isArray(r.data.results) ? r.data.results : (r.data.results?.posts ?? r.data.posts ?? []);
+  const count = Array.isArray(r.data.results) ? null : (r.data.results?.count ?? r.data.count ?? null);
+  const posts = raw.map((p) => ({ id: String(p._id ?? p.id ?? ""), status: p.status ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p), createdAt: p.createdAt ?? null, publishedAt: p.publishedAt ?? null })).filter((p) => p.id);
+  return { ok: true, data: { posts, total: typeof count === "number" ? count : null } };
+}
+
 /** A GoHighLevel contact in the member's own sub-account (needs contacts.write on their token; skipped otherwise). */
 export type ContactPush = { name: string; email?: string | null; phone?: string | null; userNs?: string | null; stage: string; source?: string | null };
 /**
