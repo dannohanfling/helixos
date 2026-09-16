@@ -13,7 +13,7 @@ import { nowIso } from "@/lib/dates";
 import { DELETED_IN_PLANNER } from "@/lib/engine/channel-outcome";
 import { explainPlatformError } from "@/lib/engine/ghl-errors";
 import { platformName } from "@/lib/engine/ghl-map";
-import { matchPlannerPost, needsCheck } from "@/lib/engine/planner-match";
+import { matchPlannerPost, needsCheck, orderForCheck } from "@/lib/engine/planner-match";
 import { redactSecrets } from "@/lib/engine/redact";
 import type { SocialConnection } from "@/db/schema";
 import { connectionFor, getPost, listPosts } from "@/lib/ghl";
@@ -28,6 +28,8 @@ export async function recordReadback(variant: schema.ContentVariant, conn: Socia
     return;
   }
   const published = r.data.status === "published";
+  // The postId question (is it the platform's own id, e.g. Facebook's {pageId}_{postId}?) is settled by shape, never by value.
+  if (published && variant.externalStatus !== "published") console.info("[ghl] readback shape", JSON.stringify({ channel: variant.channel, status: r.data.status, hasPostId: Boolean(r.data.postId), postIdLooksLikeFacebook: /^\d+_\d+$/.test(r.data.postId ?? ""), postIdSameAsPlannerId: r.data.postId === variant.externalId, hasPublishedAt: Boolean(r.data.publishedAt), keys: Object.keys(r.data).filter((k) => (r.data as Record<string, unknown>)[k] !== null && (r.data as Record<string, unknown>)[k] !== undefined) }));
   if (r.data.error) console.error("[ghl] readback error", JSON.stringify({ variantId: variant.id, postId: variant.externalId, status: r.data.status, error: redactSecrets(String(r.data.error)).slice(0, 300) }));
   const error = r.data.status === "deleted" ? DELETED_IN_PLANNER : explainPlatformError(r.data.error, platformName(variant.channel));
   await db
@@ -61,7 +63,7 @@ export async function reconcileLostId(variant: schema.ContentVariant, conn: Soci
 /** Reads back the rows that are due, at most `max` calls, and returns the rows with what was learned. */
 export async function refreshStale(userId: string, rows: schema.ContentVariant[], max = 8): Promise<schema.ContentVariant[]> {
   const nowMs = Date.now();
-  const due = rows.filter((r) => needsCheck(r, nowMs)).slice(0, max);
+  const due = orderForCheck(rows.filter((r) => needsCheck(r, nowMs))).slice(0, max);
   if (!due.length) return rows;
   const conn = await connectionFor(userId);
   if (!conn) return rows;

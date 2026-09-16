@@ -3,9 +3,11 @@
  * two immediate posts, both published within the minute, no id in the body). One matcher, two uses: find the id that was
  * lost, and, before any retry, make sure the post is not created a second time. Pure.
  *
- * A match is the newest post on the same account whose text starts the same way, created (or published, or scheduled) no
- * earlier than a little before the request. A post with no timestamps at all is allowed to match: the account and the text
- * are the strong signals, and the list is bounded to the location.
+ * A match is the one post on the same account whose text starts the same way (the first eighty characters, whitespace
+ * folded), created (or published, or scheduled) no earlier than ten minutes before the request. Two or more candidates in
+ * that window is ambiguous, and ambiguity refuses: adopting the wrong post would mean editing a post that belongs to
+ * something else, so the row stays accepted with the id pending, which is the honest state. A post with no timestamps at
+ * all is allowed to match: the account and the text are the strong signals, and the list is bounded to the location.
  */
 export const STALE_AFTER_MS = 60 * 60_000;
 const ACCEPTED_RECHECK_MS = 20_000;
@@ -41,6 +43,10 @@ export function matchPlannerPost(posts: PlannerPostLike[], want: { accountId: st
     const t = stamp(p);
     return t === null || t >= since;
   });
-  if (!hits.length) return null;
-  return hits.sort((a, b) => (stamp(b) ?? 0) - (stamp(a) ?? 0))[0];
+  return hits.length === 1 ? hits[0] : null;
+}
+
+/** The order rows are checked in when a page opens: least recently checked first, never checked first of all, so a cap is a rate, not a cliff. */
+export function orderForCheck<T extends { externalSyncedAt: string | null }>(rows: T[]): T[] {
+  return rows.slice().sort((a, b) => (a.externalSyncedAt ?? "").localeCompare(b.externalSyncedAt ?? ""));
 }
