@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { THREADS_EXCLUSIVE, threadsRefusal } from "@/lib/engine/rung-drip";
+import { THREADS_EXCLUSIVE, firstCommentRefusal, threadsRefusal } from "@/lib/engine/rung-drip";
 import { dripSetup } from "@/lib/rung-drip";
 import { CHANNELS } from "@/db/schema";
 import { newId } from "@/lib/ids";
@@ -74,8 +74,14 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
   // refusal looks at the targets as they will be saved: a group id that is not the member's own is a plain channel post.
   const ownGroups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
   const targets = normaliseTargets(payload.targets, ownGroups.map((g) => g.id));
-  const threads = payload.mode !== "draft" ? threadsRefusal(targets, dripSetup(v.membership).on) : null;
+  const dripOn = dripSetup(v.membership).on;
+  const threads = payload.mode !== "draft" ? threadsRefusal(targets, dripOn) : null;
   if (threads) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: threads };
+  // A ladder post's first comment is rung 1 and the drip supplies rung 1: the composer locks the field, and the server refuses
+  // the same choice, in every mode, so a draft cannot carry one into a later schedule.
+  const ladderPost = payload.id ? Boolean(await db.query.ladders.findFirst({ where: and(eq(schema.ladders.contentItemId, payload.id), eq(schema.ladders.userId, userId)), columns: { id: true } })) : false;
+  const firstCommentProblem = firstCommentRefusal({ ladderPost, dripOn, firstComment: payload.firstComment });
+  if (firstCommentProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: firstCommentProblem };
   const title = payload.title.trim() || payload.hook.trim().slice(0, 80) || "Untitled post";
   const firstAt = payload.targets.map((t) => t.postAt).filter(Boolean).sort()[0] ?? null;
   const status = payload.mode === "now" ? "posted" : payload.mode === "schedule" ? "scheduled" : "ready";
@@ -181,6 +187,8 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
   // While the handoff is on, Threads is Community Loyalty's and is not part of "everywhere".
   const dripOn = dripSetup(v.membership).on;
   const targets: Target[] = [...groupTargets(picked), ...channelTargets().filter((t) => !(dripOn && t.channel === "threads"))];
+  // A ladder post's first comment is the drip's rung 1: one click everywhere carries none, whatever the item held before the lock.
+  const ladderPost = Boolean(await db.query.ladders.findFirst({ where: and(eq(schema.ladders.contentItemId, item.id), eq(schema.ladders.userId, userId)), columns: { id: true } }));
   const when = staggerSchedule(targets, `${startDate}T${startTime}:00`);
   const src = { title: item.title, hook: item.hook, body: item.body, hasCta: item.hasCta, ctaText: item.cta, hashtag: v.membership.passHashtag, firstName: v.user.name.split(" ")[0] };
   const result = await saveComposeAction({
@@ -189,7 +197,7 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
     hook: item.hook ?? "",
     body: item.body ?? "",
     cta: item.cta ?? "",
-    firstComment: item.firstComment ?? "",
+    firstComment: ladderPost && dripOn ? "" : item.firstComment ?? "",
     hasCta: item.hasCta,
     mediaUrl: item.mediaUrl ?? "",
     mediaAttachmentId: item.mediaAttachmentId,

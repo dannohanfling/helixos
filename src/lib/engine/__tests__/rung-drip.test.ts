@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HANDED_NOTE, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, handoffReasons, joinRungs, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
+import { FIRST_COMMENT_LOCKED, HANDED_NOTE, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, firstCommentRefusal, handoffReasons, joinRungs, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
 import { handoffOutcome, outcomesFor, summarize, OUTCOME_WORD } from "../channel-outcome";
 import { matchPlannerPost, needsCheck, orderForCheck, reconcileWindow } from "../planner-match";
 import { normaliseTargets } from "../compose";
@@ -46,13 +46,21 @@ describe("handing a ladder to the Rung Dripper", () => {
     expect(threadsRefusal(normaliseTargets([{ channel: "threads", groupId: "not-mine" }], ["g1"]), true)).toBe(THREADS_EXCLUSIVE);
     expect(threadsRefusal(normaliseTargets([{ channel: "threads", groupId: "g1" }], ["g1"]), true)).toBeNull();
   });
+  it("a first comment on a ladder post with the handoff on is refused, with the reason; elsewhere it is not", () => {
+    // The drip supplies rung 1 as the first comment: one typed here would land rung 1 twice on each platform.
+    expect(firstCommentRefusal({ ladderPost: true, dripOn: true, firstComment: "See the link." })).toBe(FIRST_COMMENT_LOCKED);
+    expect(firstCommentRefusal({ ladderPost: true, dripOn: true, firstComment: "  " })).toBeNull();
+    expect(firstCommentRefusal({ ladderPost: true, dripOn: true, firstComment: null })).toBeNull();
+    expect(firstCommentRefusal({ ladderPost: true, dripOn: false, firstComment: "See the link." })).toBeNull();
+    expect(firstCommentRefusal({ ladderPost: false, dripOn: true, firstComment: "See the link." })).toBeNull();
+  });
   it("a Threads version already with the planner holds the handoff, with the reason", () => {
     expect(handoffReasons({ webhook: true, userNs: true, ladder: true, rungs: 3, blockers: 0, fbPublished: true, igPublished: true, lockedUntil: null, threadsWithPlanner: true })).toEqual(["A Threads version of this is already with the Social Planner. Remove it there first; Community Loyalty handles Threads with the ladder."]);
   });
   it("the handoff row never says posted: its two words and its note carry no publish word, and the headline keeps it out of the publish count", () => {
     const everyReason = handoffReasons({ webhook: false, webhookHttps: false, userNs: false, ladder: true, rungs: 0, blockers: 2, fbPublished: false, igPublished: false, lockedUntil: "1:30 PM", threadsWithPlanner: true });
     const times = [scheduleAtProblem("x", now.iso)!, scheduleAtProblem("2026-09-15T20:01:00.000Z", now.iso)!];
-    for (const text of [HANDOFF_WORDS.handed, HANDOFF_WORDS.unhanded, HANDED_NOTE, THREADS_EXCLUSIVE, ...everyReason, ...times]) for (const w of PUBLISH_WORDS) expect(text.toLowerCase(), `${text} / ${w}`).not.toMatch(new RegExp(`\\b${w}\\b`));
+    for (const text of [HANDOFF_WORDS.handed, HANDOFF_WORDS.unhanded, HANDED_NOTE, THREADS_EXCLUSIVE, FIRST_COMMENT_LOCKED, ...everyReason, ...times]) for (const w of PUBLISH_WORDS) expect(text.toLowerCase(), `${text} / ${w}`).not.toMatch(new RegExp(`\\b${w}\\b`));
     expect(OUTCOME_WORD.handed).toBe(HANDOFF_WORDS.handed);
     const handed = handoffOutcome({ handedAt: "2026-09-15T19:56:34.000Z" }, null, now)!;
     expect(handed.state).toBe("handed");

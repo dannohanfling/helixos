@@ -6,6 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { composerContext } from "@/lib/queries/compose";
 import { ladderForItem, staleScheduledFor } from "@/lib/queries/ladders";
 import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
+import { FIRST_COMMENT_LOCKED } from "@/lib/engine/rung-drip";
 import { Composer, type StaleNotice } from "@/components/composer";
 import { PageHeader } from "@/components/ui";
 
@@ -23,6 +24,8 @@ export default async function EditComposePage({ params, searchParams }: { params
   const stale: StaleNotice | undefined = ladder && staleRows.length ? { ladderId: ladder.id, back: `/content/${item.id}/compose`, channels: staleRows.map((s) => ({ key: `ch:${s.channel}`, label: CHANNEL_SPECS.find((x) => x.key === s.channel)?.label ?? s.channel, inGhl: s.inGhl })) } : undefined;
   // A ladder's Threads chain is 6–8 posts; the composer schedules one post per target, so the chain is shown and copied, never scheduled.
   const copyOnly = ladder && (ladder.threadsChain?.length ?? 0) > 1 ? { "ch:threads": "A Threads chain posts as separate posts. Copy them out, or schedule the other channels here." } : undefined;
+  // A ladder post with the handoff on: the drip supplies rung 1 as the first comment, so the field is locked, with the reason beside it.
+  const firstCommentLocked = ladder && c.dripOn ? FIRST_COMMENT_LOCKED : undefined;
   const overrides: Record<string, { body: string; subject?: string }> = {};
   const selected: string[] = [];
   for (const x of variants) {
@@ -38,7 +41,7 @@ export default async function EditComposePage({ params, searchParams }: { params
           {pushed} scheduled {pushed === "1" ? "post now carries" : "posts now carry"} the ladder&apos;s current text{Number(ghl) > 0 ? `; ${ghl} edited in GoHighLevel under the same id` : ""}.
         </p>
       ) : null}
-      <Composer {...c} initial={{ id: item.id, title: item.title, hook: item.hook ?? "", body: item.body ?? "", cta: item.cta ?? "", firstComment: item.firstComment ?? "", hasCta: item.hasCta, mediaUrl: item.mediaUrl ?? "", mediaAttachmentId: item.mediaAttachmentId, contentType: item.contentType, overrides, selected }} stale={stale} copyOnly={copyOnly} />
+      <Composer {...c} initial={{ id: item.id, title: item.title, hook: item.hook ?? "", body: item.body ?? "", cta: item.cta ?? "", firstComment: item.firstComment ?? "", hasCta: item.hasCta, mediaUrl: item.mediaUrl ?? "", mediaAttachmentId: item.mediaAttachmentId, contentType: item.contentType, overrides, selected }} stale={stale} copyOnly={copyOnly} firstCommentLocked={firstCommentLocked} />
     </>
   );
 }

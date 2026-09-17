@@ -308,6 +308,9 @@ async function main() {
     const threadsChip = page.locator('button[title="Threads"] [data-testid="chip-copy-only"]');
     if ((await threadsChip.getAttribute("title")) !== "Threads belongs to Community Loyalty while the comment ladder runs. Untick it here; Community Loyalty handles it.") throw new Error("the Threads chip says why it is copy-only while the handoff is on");
     await expectText(page, "Threads belongs to Community Loyalty while the comment ladder runs", "Threads refused visibly in the composer");
+    // The first comment is the drip's rung 1: on a ladder post with the handoff on the field is disabled, with the reason beside it
+    if (!(await page.locator('[data-testid="first-comment"]').isDisabled())) throw new Error("the first-comment field is locked on a ladder post while the handoff is on");
+    if (!(await page.locator('[data-testid="first-comment-locked"]').innerText()).includes("would land rung 1 twice")) throw new Error("the locked first-comment field says why");
     // The chips arrive with the ladder's own selection: set each one rather than toggle it. Facebook page and Instagram on, the rest off.
     const setChip = async (title: string, on: boolean) => {
       const chip = page.locator(`button[title="${title}"]`).first();
@@ -325,6 +328,11 @@ async function main() {
       if (["fb_page", "instagram"].every((c) => rows.find((x) => x.channel === c && x.groupId === "")?.externalStatus)) break;
       await page.waitForTimeout(500);
     }
+    // Neither of the ladder's planner posts carries a first comment: rung 1 is the drip's to add
+    const ladderIds = (await dbl.query.contentVariants.findMany({ where: eql(sl.contentVariants.contentItemId, ladderItemId) })).map((x) => x.externalId).filter(Boolean);
+    const ladderPosts = (await plannerPosts() as unknown as { _id: string; followUpComment?: string }[]).filter((p) => ladderIds.includes(p._id));
+    if (ladderPosts.length < 2) throw new Error(`expected the ladder's two planner posts, got ${ladderPosts.length}`);
+    for (const p of ladderPosts) if (p.followUpComment) throw new Error(`a ladder post must reach the planner with no first comment, got ${JSON.stringify(p.followUpComment)}`);
     await page.goto(`${base}/content/${ladderItemId}/repurpose`);
     const unhanded = page.locator('[data-testid="channel-outcomes"] li[data-channel="comments"][data-state="unhanded"]').first();
     await unhanded.waitFor({ timeout: 15000 });
