@@ -168,6 +168,11 @@ export default async function RepurposePage({ params, searchParams }: { params: 
       {handoff.row ? (
         <Card className="mb-4" title="💬 Comment ladder" action={<span className="text-xs text-ink-3">Community Loyalty posts the rungs</span>}>
           <OutcomeRows outcomes={[handoff.row]} />
+          {handoff.fallback && handoff.ladder ? (
+            <p className="mt-2 text-xs">
+              <Link href={`/content/ladders/${handoff.ladder.id}`} className="underline" data-testid="handoff-fallback">Open Live posting hour</Link>
+            </p>
+          ) : null}
           {canHandOff ? (
             <form action={handOffLadderAction} className="mt-3 flex flex-wrap items-end gap-2" data-testid="handoff-form">
               <input type="hidden" name="contentId" value={item.id} />

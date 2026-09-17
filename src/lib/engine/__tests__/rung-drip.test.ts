@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIRST_COMMENT_LOCKED, HANDED_NOTE, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, firstCommentRefusal, handoffReasons, joinRungs, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
+import { FIRST_COMMENT_LOCKED, HANDED_NOTE, HANDOFF_FALLBACK, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, firstCommentRefusal, handoffReasons, joinRungs, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
 import { handoffOutcome, outcomesFor, summarize, OUTCOME_WORD } from "../channel-outcome";
 import { matchPlannerPost, needsCheck, orderForCheck, reconcileWindow } from "../planner-match";
 import { normaliseTargets } from "../compose";
@@ -60,7 +60,8 @@ describe("handing a ladder to the Rung Dripper", () => {
   it("the handoff row never says posted: its two words and its note carry no publish word, and the headline keeps it out of the publish count", () => {
     const everyReason = handoffReasons({ webhook: false, webhookHttps: false, userNs: false, ladder: true, rungs: 0, blockers: 2, fbPublished: false, igPublished: false, lockedUntil: "1:30 PM", threadsWithPlanner: true });
     const times = [scheduleAtProblem("x", now.iso)!, scheduleAtProblem("2026-09-15T20:01:00.000Z", now.iso)!];
-    for (const text of [HANDOFF_WORDS.handed, HANDOFF_WORDS.unhanded, HANDED_NOTE, THREADS_EXCLUSIVE, FIRST_COMMENT_LOCKED, ...everyReason, ...times]) for (const w of PUBLISH_WORDS) expect(text.toLowerCase(), `${text} / ${w}`).not.toMatch(new RegExp(`\\b${w}\\b`));
+    // "Live posting hour" is the name of the ladder page's card, not a claim about a rung: that name alone is exempt.
+    for (const text of [HANDOFF_WORDS.handed, HANDOFF_WORDS.unhanded, HANDED_NOTE, HANDOFF_FALLBACK, THREADS_EXCLUSIVE, FIRST_COMMENT_LOCKED, ...everyReason, ...times]) for (const w of PUBLISH_WORDS) expect(text.replace("Live posting hour", "").toLowerCase(), `${text} / ${w}`).not.toMatch(new RegExp(`\\b${w}\\b`));
     expect(OUTCOME_WORD.handed).toBe(HANDOFF_WORDS.handed);
     const handed = handoffOutcome({ handedAt: "2026-09-15T19:56:34.000Z" }, null, now)!;
     expect(handed.state).toBe("handed");
@@ -71,6 +72,12 @@ describe("handing a ladder to the Rung Dripper", () => {
     const not = handoffOutcome(null, ["Facebook page and Instagram have to be confirmed by GoHighLevel first: the rungs land on the newest one on each."], now)!;
     expect(not.state).toBe("unhanded");
     expect(not.reason).toContain("confirmed by GoHighLevel first");
+    // Before the post is public there is nothing to comment under, so no fallback is named
+    expect(not.reason).not.toContain(HANDOFF_FALLBACK);
+    // Once the post is public and the handoff is still refused, the refusal names the fallback in the same breath
+    const publicRefused = handoffOutcome(null, ["A ladder is already dripping until about 1:30 PM. One at a time: two would tangle."], now, true)!;
+    expect(publicRefused.state).toBe("unhanded");
+    expect(publicRefused.reason).toBe(`A ladder is already dripping until about 1:30 PM. One at a time: two would tangle. ${HANDOFF_FALLBACK}`);
     expect(handoffOutcome(null, null, now)).toBeNull();
   });
   it("the webhook URL is a credential: anything shaped like it is redacted from a note", () => {

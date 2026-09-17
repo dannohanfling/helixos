@@ -310,7 +310,7 @@ async function main() {
     await expectText(page, "Threads belongs to Community Loyalty while the comment ladder runs", "Threads refused visibly in the composer");
     // The first comment is the drip's rung 1: on a ladder post with the handoff on the field is disabled, with the reason beside it
     if (!(await page.locator('[data-testid="first-comment"]').isDisabled())) throw new Error("the first-comment field is locked on a ladder post while the handoff is on");
-    if (!(await page.locator('[data-testid="first-comment-locked"]').innerText()).includes("would land rung 1 twice")) throw new Error("the locked first-comment field says why");
+    if (!(await page.locator('[data-testid="first-comment-locked"]').innerText()).includes("would repeat rung 1")) throw new Error("the locked first-comment field says why");
     // The chips arrive with the ladder's own selection: set each one rather than toggle it. Facebook page and Instagram on, the rest off.
     const setChip = async (title: string, on: boolean) => {
       const chip = page.locator(`button[title="${title}"]`).first();

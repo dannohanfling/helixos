@@ -327,7 +327,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   <input type="checkbox" checked={hasCta} onChange={(e) => setHasCta(e.target.checked)} /> Has a call to action
                 </label>
               </div>
-              <textarea className="field min-h-16 text-sm" value={firstCommentLocked ? "" : firstComment} disabled={Boolean(firstCommentLocked)} onChange={(e) => setFirstComment(e.target.value)} placeholder={firstCommentLocked ? "First comment: supplied by the ladder" : "First comment (optional): posted under the Facebook page and Instagram versions by the Social Planner, right after the post"} data-testid="first-comment" />
+              <textarea className="field min-h-16 text-sm" value={firstCommentLocked ? "" : firstComment} disabled={Boolean(firstCommentLocked)} onChange={(e) => setFirstComment(e.target.value)} placeholder={firstCommentLocked ? "Handled by the ladder." : "First comment (optional): posted under the Facebook page and Instagram versions by the Social Planner, right after the post"} data-testid="first-comment" />
               {firstCommentLocked ? <p className="text-xs text-ink-3" data-testid="first-comment-locked">{firstCommentLocked}</p> : null}
               <AiStatus feature="composer_polish" active={pending && polishing} />
               {aiEnabled ? <AiPromise enabled>Returns one version of this draft per target you ticked, inside each one&apos;s limit. You review each tab before you schedule.</AiPromise> : null}

@@ -13,7 +13,7 @@
 import { PUBLISHABLE, platformName } from "./ghl-map";
 import { CHANNEL_SPECS, type Channel } from "./repurpose";
 import { formatDateTime, nowWallInTz, relativeDay } from "@/lib/dates";
-import { HANDED_NOTE, HANDOFF_WORDS } from "./rung-drip";
+import { HANDED_NOTE, HANDOFF_WORDS, HANDOFF_FALLBACK } from "./rung-drip";
 
 export type OutcomeState = "published" | "scheduled" | "sending" | "failed" | "manual" | "unknown" | "handed" | "unhanded";
 export const OUTCOME_WORD: Record<OutcomeState, string> = { published: "Published", scheduled: "Scheduled", sending: "Sending", failed: "Didn't send", manual: "Copy and paste", unknown: "Lost track", handed: HANDOFF_WORDS.handed, unhanded: HANDOFF_WORDS.unhanded };
@@ -89,10 +89,11 @@ export const DELETED_IN_PLANNER = "This post was deleted in the Social Planner."
  * The comment ladder's row: handed to Community Loyalty at a time, or not handed off with the reasons. Never a publish word,
  * because HelixOS is not told when a rung lands. Null when the handoff is not set up for this member at all.
  */
-export function handoffOutcome(handoff: { handedAt: string } | null, reasons: string[] | null, now: Now): ChannelOutcome | null {
+export function handoffOutcome(handoff: { handedAt: string } | null, reasons: string[] | null, now: Now, fallback = false): ChannelOutcome | null {
   if (handoff) return { id: "comments", channel: "comments", label: "Comments", state: "handed", word: HANDOFF_WORDS.handed, when: formatDateTime(handoff.handedAt, now.tz), reason: HANDED_NOTE, canCheck: false };
   if (reasons === null) return null;
-  return { id: "comments", channel: "comments", label: "Comments", state: "unhanded", word: HANDOFF_WORDS.unhanded, when: null, reason: reasons.join(" "), canCheck: false };
+  // A refusal once the post is public names what to do instead, in the same breath: the rungs are ready to post by hand.
+  return { id: "comments", channel: "comments", label: "Comments", state: "unhanded", word: HANDOFF_WORDS.unhanded, when: null, reason: [...reasons, ...(fallback ? [HANDOFF_FALLBACK] : [])].join(" "), canCheck: false };
 }
 
 /** The rows a post has outcomes for: drafts and skipped versions are not outcomes. */

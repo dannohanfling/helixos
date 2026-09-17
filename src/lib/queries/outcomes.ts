@@ -19,13 +19,15 @@ export async function ladderBlockers(l: schema.Ladder): Promise<number> {
 }
 
 /** The handoff row for one item: handed, not handed (with reasons), or null when the drip is not set up. */
-export async function handoffRow(v: Viewer, item: schema.ContentItem, variants: schema.ContentVariant[], now: Now): Promise<{ row: ChannelOutcome | null; reasons: string[]; ladder: schema.Ladder | null; blockers: number }> {
-  if (!dripSetup(v.membership).on) return { row: null, reasons: [], ladder: null, blockers: 0 };
+export async function handoffRow(v: Viewer, item: schema.ContentItem, variants: schema.ContentVariant[], now: Now): Promise<{ row: ChannelOutcome | null; reasons: string[]; ladder: schema.Ladder | null; blockers: number; fallback: boolean }> {
+  if (!dripSetup(v.membership).on) return { row: null, reasons: [], ladder: null, blockers: 0, fallback: false };
   const handed = await handoffRowFor(v.user.id, item.id);
   const ladder = (await db.query.ladders.findFirst({ where: and(eq(schema.ladders.contentItemId, item.id), eq(schema.ladders.userId, v.user.id)) })) ?? null;
   const blockers = ladder ? await ladderBlockers(ladder) : 0;
-  const { reasons } = await handoffGate(v, item, variants, ladder, blockers, now);
-  return { row: handoffOutcome(handed, handed ? null : reasons, now), reasons, ladder, blockers };
+  const { reasons, gate } = await handoffGate(v, item, variants, ladder, blockers, now);
+  // The one case where the post is public while the ladder is not: the refusal names the fallback with the reasons.
+  const fallback = Boolean(ladder) && !handed && reasons.length > 0 && (gate.fbPublished || gate.igPublished);
+  return { row: handoffOutcome(handed, handed ? null : reasons, now, fallback), reasons, ladder, blockers, fallback };
 }
 
 export async function outcomesForItem(v: Viewer, item: schema.ContentItem, variants: schema.ContentVariant[], now: Now): Promise<ChannelOutcome[]> {

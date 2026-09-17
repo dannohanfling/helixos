@@ -57,7 +57,7 @@ export function threadsRefusal(targets: { channel: string; groupId?: string | nu
 }
 
 /** A ladder post's first comment is rung 1, and the drip supplies rung 1: a first comment typed here would land it twice. */
-export const FIRST_COMMENT_LOCKED = "The ladder already supplies rung 1 as this post's first comment. Community Loyalty adds it with the rungs, so a first comment typed here would land rung 1 twice.";
+export const FIRST_COMMENT_LOCKED = "Comments on this post come from the ladder. Anything typed here would repeat rung 1.";
 export function firstCommentRefusal(input: { ladderPost: boolean; dripOn: boolean; firstComment: string | null | undefined }): string | null {
   if (!input.ladderPost || !input.dripOn) return null;
   return (input.firstComment ?? "").trim() ? FIRST_COMMENT_LOCKED : null;
@@ -66,6 +66,8 @@ export function firstCommentRefusal(input: { ladderPost: boolean; dripOn: boolea
 /** The two words the handoff row may use; neither means posted, because HelixOS has no confirmation that any rung landed. */
 export const HANDOFF_WORDS = { handed: "Comments: handed to Community Loyalty", unhanded: "Comments: not handed off" } as const;
 export const HANDED_NOTE = "Community Loyalty is set to add the rungs over the next hour or two. HelixOS isn't told whether each one landed.";
+/** Said with a refusal once a post is public: the rungs are ready in Live posting hour, where each is ticked by hand. */
+export const HANDOFF_FALLBACK = "The rungs are ready to post by hand in Live posting hour.";
 /** Words that would assert an outcome HelixOS cannot see; a test pins that no handoff word contains one. */
 export const PUBLISH_WORDS = ["published", "posted", "live", "sent", "went out", "goes out", "go out", "posts on", "post on their own", "delivered", "commented"];
 
