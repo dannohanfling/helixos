@@ -8,6 +8,7 @@
  * If Community Loyalty is ever the Facebook/Instagram publisher again, `first_comment` is rung 1 there too and `rungs`
  * starts at rung 2, or rung 1 lands twice. The choice is encoded, not hard-coded.
  */
+import { LIVE_POSTING_HOUR } from "./ladder";
 export type Publisher = "helixos" | "community_loyalty";
 export type DripPayload = { user_ns: string; post: string; first_comment: string; schedule_at: string; rungs: string };
 
@@ -66,8 +67,8 @@ export function firstCommentRefusal(input: { ladderPost: boolean; dripOn: boolea
 /** The two words the handoff row may use; neither means posted, because HelixOS has no confirmation that any rung landed. */
 export const HANDOFF_WORDS = { handed: "Comments: handed to Community Loyalty", unhanded: "Comments: not handed off" } as const;
 export const HANDED_NOTE = "Community Loyalty is set to add the rungs over the next hour or two. HelixOS isn't told whether each one landed.";
-/** Said with a refusal once a post is public: the rungs are ready in Live posting hour, where each is ticked by hand. */
-export const HANDOFF_FALLBACK = "The rungs are ready to post by hand in Live posting hour.";
+/** Said with a refusal once a post is public: the rungs are ready in the ladder page's card, where each is ticked by hand. */
+export const HANDOFF_FALLBACK = `The rungs are ready to post by hand in ${LIVE_POSTING_HOUR}.`;
 /** Words that would assert an outcome HelixOS cannot see; a test pins that no handoff word contains one. */
 export const PUBLISH_WORDS = ["published", "posted", "live", "sent", "went out", "goes out", "go out", "posts on", "post on their own", "delivered", "commented"];
 

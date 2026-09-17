@@ -560,3 +560,6 @@ export function rungGapMinutes(count: number): number {
   if (count <= 0) return 5;
   return Math.max(3, Math.min(6, Math.round(55 / count)));
 }
+
+/** The name of the ladder page's card where each rung is ticked by hand; the handoff fallback names it and a test exempts exactly it. */
+export const LIVE_POSTING_HOUR = "Live posting hour";

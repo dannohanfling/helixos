@@ -13,7 +13,7 @@ import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
 import { CopyButton } from "@/components/copy-button";
 import { LiveClock } from "@/components/rung-runner";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
-import { checkScore, checklist, formatFor, headlineParts, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, threadsText } from "@/lib/engine/ladder";
+import { LIVE_POSTING_HOUR, checkScore, checklist, formatFor, headlineParts, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, threadsText } from "@/lib/engine/ladder";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 
@@ -250,7 +250,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
             </ul>
             <p className="mt-2 text-[11px] text-ink-3">{score.pass}/{score.total} passing. Warnings don&apos;t block; failures do. Things no checker can see: every stat cited plainly, no contempt, the photo argues the headline.</p>
           </Card>
-          <Card title="Live posting hour">
+          <Card title={LIVE_POSTING_HOUR}>
             <p className="mb-2 text-xs text-ink-2">Post the body. Then copy each rung and post it as your own comment, one every {rungGapMinutes(l.rungs.length)} minutes. Tick them as they go up.</p>
             {(() => {
               const posted = l.rungs.filter((r) => r.postedAt);

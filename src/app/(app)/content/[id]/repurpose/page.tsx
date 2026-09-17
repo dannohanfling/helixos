@@ -22,6 +22,7 @@ import { alignPost, groupReadiness, groupSpec } from "@/lib/engine/groups";
 import type { ContentVariant, Group } from "@/db/schema";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
+import { LIVE_POSTING_HOUR } from "@/lib/engine/ladder";
 
 function VariantForm({ var_, maxChars, email = false, outcome }: { var_: ContentVariant; maxChars: number; email?: boolean; outcome?: ChannelOutcome }) {
   return (
@@ -170,7 +171,7 @@ export default async function RepurposePage({ params, searchParams }: { params: 
           <OutcomeRows outcomes={[handoff.row]} />
           {handoff.fallback && handoff.ladder ? (
             <p className="mt-2 text-xs">
-              <Link href={`/content/ladders/${handoff.ladder.id}`} className="underline" data-testid="handoff-fallback">Open Live posting hour</Link>
+              <Link href={`/content/ladders/${handoff.ladder.id}`} className="underline" data-testid="handoff-fallback">Open {LIVE_POSTING_HOUR}</Link>
             </p>
           ) : null}
           {canHandOff ? (

@@ -4,6 +4,7 @@ import { handoffOutcome, outcomesFor, summarize, OUTCOME_WORD } from "../channel
 import { matchPlannerPost, needsCheck, orderForCheck, reconcileWindow } from "../planner-match";
 import { normaliseTargets } from "../compose";
 import { redactSecrets } from "../redact";
+import { LIVE_POSTING_HOUR } from "../ladder";
 
 const rungs = ["1\\. Mistake one.\n\nSecond line of it.", "2. Mistake two.", "3. Mistake three."];
 const now = { wall: "2026-09-15T13:00:00", iso: "2026-09-15T20:00:00.000Z", today: "2026-09-15", tz: "America/Los_Angeles" };
@@ -60,8 +61,10 @@ describe("handing a ladder to the Rung Dripper", () => {
   it("the handoff row never says posted: its two words and its note carry no publish word, and the headline keeps it out of the publish count", () => {
     const everyReason = handoffReasons({ webhook: false, webhookHttps: false, userNs: false, ladder: true, rungs: 0, blockers: 2, fbPublished: false, igPublished: false, lockedUntil: "1:30 PM", threadsWithPlanner: true });
     const times = [scheduleAtProblem("x", now.iso)!, scheduleAtProblem("2026-09-15T20:01:00.000Z", now.iso)!];
-    // "Live posting hour" is the name of the ladder page's card, not a claim about a rung: that name alone is exempt.
-    for (const text of [HANDOFF_WORDS.handed, HANDOFF_WORDS.unhanded, HANDED_NOTE, HANDOFF_FALLBACK, THREADS_EXCLUSIVE, FIRST_COMMENT_LOCKED, ...everyReason, ...times]) for (const w of PUBLISH_WORDS) expect(text.replace("Live posting hour", "").toLowerCase(), `${text} / ${w}`).not.toMatch(new RegExp(`\\b${w}\\b`));
+    // The ladder page's card is named by its constant, not a claim about a rung: that constant alone is exempt, whatever it is renamed to.
+    for (const text of [HANDOFF_WORDS.handed, HANDOFF_WORDS.unhanded, HANDED_NOTE, HANDOFF_FALLBACK, THREADS_EXCLUSIVE, FIRST_COMMENT_LOCKED, ...everyReason, ...times]) for (const w of PUBLISH_WORDS) expect(text.replace(LIVE_POSTING_HOUR, "").toLowerCase(), `${text} / ${w}`).not.toMatch(new RegExp(`\\b${w}\\b`));
+    // The fallback names the card by its constant, so a rename of the card moves the sentence and the exemption together.
+    expect(HANDOFF_FALLBACK).toContain(LIVE_POSTING_HOUR);
     expect(OUTCOME_WORD.handed).toBe(HANDOFF_WORDS.handed);
     const handed = handoffOutcome({ handedAt: "2026-09-15T19:56:34.000Z" }, null, now)!;
     expect(handed.state).toBe("handed");
