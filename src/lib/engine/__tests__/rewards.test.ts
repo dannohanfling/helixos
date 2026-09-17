@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capStatus, catalogue, claimability, periodWindow, reopenText, requirementText, type CatalogueItem, type RewardsConfig } from "../rewards";
+import { EARNED_SOON, OPENING_SOON, capStatus, catalogue, claimability, periodWindow, reopenText, requirementText, type CatalogueItem, type RewardsConfig } from "../rewards";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 
@@ -59,7 +59,11 @@ describe("claimability", () => {
   const items = catalogue(rewards, prizes, withLinks);
   const vip = byName(items, "VIP Laser Coaching Call"); // Sage, 750, 5 a month
   it("refuses without a link, whatever else is true", () => {
-    expect(claimability(byName(items, "1-on-1 Funnel Makeover Call"), base)).toMatchObject({ ok: false, reason: "opening-soon", message: "Opening soon" });
+    // No link: a client who has met tier and points reads that they earned it; one who has not reads Opening soon. Never a button.
+    expect(claimability(byName(items, "1-on-1 Funnel Makeover Call"), base)).toMatchObject({ ok: false, reason: "earned-soon", message: EARNED_SOON });
+    expect(claimability(byName(items, "1-on-1 Funnel Makeover Call"), { ...base, points: 100, tierLevel: 1 })).toMatchObject({ ok: false, reason: "opening-soon", message: OPENING_SOON });
+    expect(claimability(byName(items, "1-on-1 Funnel Makeover Call"), { ...base, points: 100000, tierLevel: 2 })).toMatchObject({ ok: false, reason: "opening-soon" });
+    expect(EARNED_SOON).not.toBe(OPENING_SOON);
     expect(claimability(byName(items, "Custom Chatbot Strategy Blueprint"), base)).toMatchObject({ ok: false, reason: "not-earnable" });
   });
   it("enforces tier, balance, one-per-client and the workspace cap, in that order", () => {

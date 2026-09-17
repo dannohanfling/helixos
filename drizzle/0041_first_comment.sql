@@ -1,0 +1,1 @@
+ALTER TABLE `content_items` ADD `first_comment` text;

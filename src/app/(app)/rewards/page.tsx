@@ -6,7 +6,7 @@ import { passWired } from "@/lib/integrations";
 import { Badge, Card, PageHeader, Progress } from "@/components/ui";
 import { ClaimButton } from "@/components/claim-button";
 import { TIERS, TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
-import { catalogue, claimability, requirementText, type CatalogueItem, type Claimability } from "@/lib/engine/rewards";
+import { SOME_RUNGS_NOT_OPEN, catalogue, claimability, requirementText, type CatalogueItem, type Claimability } from "@/lib/engine/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import { leaderboard, recentLedger, totalPoints } from "@/lib/queries/points";
 import { claimDatesByName } from "@/lib/queries/rewards";
@@ -43,6 +43,9 @@ export default async function RewardsPage() {
   return (
     <>
       <PageHeader title="Rewards" subtitle="Points are proof of work. Tiers open doors." />
+      {items.some((i) => i.earnable && !i.bookingUrl) ? (
+        <p className="-mt-3 mb-4 text-sm text-ink-2" data-testid="rewards-openness">{SOME_RUNGS_NOT_OPEN}</p>
+      ) : null}
       <div className="mb-4 grid gap-4 md:grid-cols-[1fr_1.4fr]">
         <div className="card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Your points</div>
@@ -170,7 +173,7 @@ export default async function RewardsPage() {
  */
 function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdict: Claimability; claim?: { id: string; createdAt: string; bookingOpenedAt: string | null }; tz: string }) {
   const locked = !claim && !verdict.ok;
-  const soon = !verdict.ok && (verdict.reason === "opening-soon" || verdict.reason === "not-earnable");
+  const soon = !verdict.ok && (verdict.reason === "opening-soon" || verdict.reason === "not-earnable" || verdict.reason === "earned-soon");
   return (
     <li className={`rounded-lg border p-3 ${claim ? "border-good" : locked && !soon ? "opacity-75" : ""}`} data-testid="catalogue-item" data-reward={item.name}>
       <div className="flex items-center justify-between gap-2">
@@ -196,7 +199,7 @@ function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdi
           ) : verdict.ok ? (
             <ClaimButton name={item.name} label={item.cost ? `Claim for ${item.cost.toLocaleString()}` : "Claim"} className={item.kind === "prize" ? "btn btn-accent btn-xs" : "btn btn-soft btn-xs"} />
           ) : (
-            <Badge tone={verdict.reason === "cap" ? "warn" : soon ? "neutral" : "accent"}>
+            <Badge tone={verdict.reason === "cap" ? "warn" : verdict.reason === "earned-soon" ? "good" : soon ? "neutral" : "accent"}>
               <span data-testid="reward-status">{verdict.message}</span>
             </Badge>
           )}

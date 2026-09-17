@@ -27,6 +27,8 @@ export type ComposePayload = {
   body: string;
   /** The call to action, its own field: composed onto each version at render, never appended to the body. */
   cta: string;
+  /** The first comment under the post, for the Facebook page and Instagram pushes; blank sends none. */
+  firstComment?: string;
   hasCta: boolean;
   mediaUrl: string;
   /** A proof attachment picked as the post's media. Verified here (the client's own, approved, a photo or video); never a public URL, never sent on. */
@@ -82,6 +84,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     hook: payload.hook.trim() || null,
     body: payload.body.trim() || null,
     cta: payload.cta.trim() || null,
+    firstComment: (payload.firstComment ?? "").trim() || null,
     hasCta: payload.hasCta,
     // The typed URL is the only media the Social Planner is ever handed; the attachment is a private file and stays an id here.
     mediaUrl: payload.mediaUrl.trim() || null,
@@ -123,7 +126,8 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     // Groups are posted by hand (Facebook has no group-posting API); channels go through the Social Planner when it's mapped.
     if (!groupId && vStatus !== "draft") {
       pushed++;
-      background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId, channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, title }));
+      // The first comment rides on the Facebook page and Instagram posts only: the two the comment ladder lives on.
+      background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId, channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, title, followUpComment: t.channel === "fb_page" || t.channel === "instagram" ? item.firstComment : null }));
     }
   }
   if (payload.mode === "now") await award({ workspaceId, userId }, "content", contentPoints(payload.hasCta), `Posted: ${title}`, `content:${id}`);
@@ -185,6 +189,7 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
     hook: item.hook ?? "",
     body: item.body ?? "",
     cta: item.cta ?? "",
+    firstComment: item.firstComment ?? "",
     hasCta: item.hasCta,
     mediaUrl: item.mediaUrl ?? "",
     mediaAttachmentId: item.mediaAttachmentId,

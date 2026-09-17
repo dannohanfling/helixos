@@ -85,7 +85,9 @@ describe("a 2xx with no id: accepted, then reconciled from the planner's own lis
     ];
     expect(matchPlannerPost(posts, { accountId: "acc_fb", summary: "Twelve minutes on Tuesday.\n\nBeats three hours on Sunday.", sinceIso: "2026-09-15T19:52:14.000Z" })?.id).toBe("mine");
     expect(matchPlannerPost(posts, { accountId: "acc_li", summary: "Twelve minutes", sinceIso: "2026-09-15T19:52:14.000Z" })).toBeNull();
-    expect(matchPlannerPost([{ id: "nostamp", summary: "Twelve minutes on Tuesday.", accountIds: ["acc_fb"] }], { accountId: "acc_fb", summary: "Twelve minutes on Tuesday.", sinceIso: now.iso })?.id).toBe("nostamp");
+    // A candidate whose age cannot be established is skipped, not accepted: with no timestamps at all there is no match.
+    expect(matchPlannerPost([{ id: "nostamp", summary: "Twelve minutes on Tuesday.", accountIds: ["acc_fb"] }], { accountId: "acc_fb", summary: "Twelve minutes on Tuesday.", sinceIso: now.iso })).toBeNull();
+    expect(matchPlannerPost([{ id: "badstamp", summary: "Twelve minutes on Tuesday.", accountIds: ["acc_fb"], createdAt: "not a date" }], { accountId: "acc_fb", summary: "Twelve minutes on Tuesday.", sinceIso: now.iso })).toBeNull();
     expect(matchPlannerPost(posts, { accountId: "acc_fb", summary: "", sinceIso: now.iso })).toBeNull();
   });
   it("two candidates in the window is ambiguous, and ambiguity refuses rather than adopting the newest", () => {

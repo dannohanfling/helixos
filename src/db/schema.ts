@@ -162,6 +162,8 @@ export const contentItems = sqliteTable(
     body: text("body"),
     /** The call to action, kept apart from the body and composed onto each channel version at render. */
     cta: text("cta"),
+    /** The first comment under the post, sent to the Social Planner as its follow-up comment on the Facebook page and Instagram. Optional, the client's words. */
+    firstComment: text("first_comment"),
     postAt: text("post_at"),
     postedAt: text("posted_at"),
     postLink: text("post_link"),

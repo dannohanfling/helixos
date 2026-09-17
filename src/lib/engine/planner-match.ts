@@ -6,8 +6,9 @@
  * A match is the one post on the same account whose text starts the same way (the first eighty characters, whitespace
  * folded), created (or published, or scheduled) no earlier than ten minutes before the request. Two or more candidates in
  * that window is ambiguous, and ambiguity refuses: adopting the wrong post would mean editing a post that belongs to
- * something else, so the row stays accepted with the id pending, which is the honest state. A post with no timestamps at
- * all is allowed to match: the account and the text are the strong signals, and the list is bounded to the location.
+ * something else, so the row stays accepted with the id pending, which is the honest state. A candidate whose age cannot
+ * be established (no createdAt, publishedAt or scheduleDate that parses) is skipped, never accepted: a comparison against
+ * nothing is not a check that passed. If every candidate is like that, there is no match and the row stays pending.
  */
 export const STALE_AFTER_MS = 60 * 60_000;
 const ACCEPTED_RECHECK_MS = 20_000;
@@ -41,7 +42,7 @@ export function matchPlannerPost(posts: PlannerPostLike[], want: { accountId: st
   };
   const hits = posts.filter((p) => p.accountIds.includes(want.accountId) && norm(p.summary).startsWith(prefix) && p.status !== "deleted").filter((p) => {
     const t = stamp(p);
-    return t === null || t >= since;
+    return t !== null && t >= since;
   });
   return hits.length === 1 ? hits[0] : null;
 }

@@ -68,8 +68,13 @@ async function main() {
     const prizeCount = await page.locator('[data-testid="prize-list"] [data-testid="catalogue-item"]').count();
     if (rewardCount !== 12 || prizeCount !== 4) throw new Error(`expected 12 rewards and 4 prizes, saw ${rewardCount} and ${prizeCount}`);
     await expectText(page, "Evolve Omega Lux Partnership Conversation", "top of the ladder visible");
+    // No link: the demo client has met Sage and 1,500 points for the Funnel Makeover, so it says so; Lux (Olympian) reads Opening soon
     const funnel = await row(page, "1-on-1 Funnel Makeover Call").locator('[data-testid="reward-status"]').innerText();
-    if (!/Opening soon/.test(funnel)) throw new Error(`reward without a link should read "Opening soon", got "${funnel}"`);
+    if (!/You've earned this\. It opens soon\./.test(funnel)) throw new Error(`an earned reward without a link says it was earned, got "${funnel}"`);
+    if (await row(page, "1-on-1 Funnel Makeover Call").locator('[data-testid="claim-form"]').count()) throw new Error("no Claim button without a link, earned or not");
+    const lux = await row(page, "Evolve Omega Lux Partnership Conversation").locator('[data-testid="reward-status"]').innerText();
+    if (!/Opening soon/.test(lux)) throw new Error(`an unearned reward without a link reads "Opening soon", got "${lux}"`);
+    await expectText(page, "Some rungs aren't open yet", "the page says some of the ladder is not open");
     const chatbot = await row(page, "Custom Chatbot Strategy Blueprint").locator('[data-testid="reward-status"]').innerText();
     if (!/not live yet/.test(chatbot)) throw new Error(`behaviour-trigger reward should be marked not live, got "${chatbot}"`);
     const forms = await page.locator('[data-testid="claim-form"]').count();

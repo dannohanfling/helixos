@@ -136,7 +136,14 @@ export function tierLevelOf(name: string | null): number {
   return TIERS.find((t) => t.name === cleanTier(name))?.level ?? Number.MAX_SAFE_INTEGER;
 }
 
-export type Claimability = { ok: true } | { ok: false; reason: "claimed" | "not-earnable" | "opening-soon" | "tier" | "points" | "cap"; message: string };
+export type Claimability = { ok: true } | { ok: false; reason: "claimed" | "not-earnable" | "opening-soon" | "earned-soon" | "tier" | "points" | "cap"; message: string };
+
+/** An item with no link yet, for a client who has not met its tier and points. */
+export const OPENING_SOON = "Opening soon";
+/** The same item for a client who has: the moment of crossing, said at the moment it is true. Never a Claim button without a link. */
+export const EARNED_SOON = "You've earned this. It opens soon.";
+/** The page's own line when some of the ladder has no link yet. Drafted for Danno; one constant to swap. */
+export const SOME_RUNGS_NOT_OPEN = "Some rungs aren't open yet. Where you see Opening soon, keep going — the points count, and it opens.";
 
 /**
  * Every rule the server enforces, in the order the client should hear them. The UI shows the same result; the action is
@@ -145,9 +152,13 @@ export type Claimability = { ok: true } | { ok: false; reason: "claimed" | "not-
 export function claimability(item: CatalogueItem, c: { points: number; tierLevel: number; claimed: Set<string>; claimDates: string[]; today: string; mode: PerMonthMode }): Claimability {
   if (c.claimed.has(item.name)) return { ok: false, reason: "claimed", message: "Claimed" };
   if (!item.earnable) return { ok: false, reason: "not-earnable", message: "Earned by doing, not by spending · not live yet" };
-  if (!item.bookingUrl) return { ok: false, reason: "opening-soon", message: "Opening soon" };
-  if (item.tierRequired && tierLevelOf(item.tierRequired) > c.tierLevel) return { ok: false, reason: "tier", message: `Unlocks at ${item.tierRequired}` };
-  if (c.points < item.minPoints) return { ok: false, reason: "points", message: `${(item.minPoints - c.points).toLocaleString()} more points` };
+  const tierMet = !item.tierRequired || tierLevelOf(item.tierRequired) <= c.tierLevel;
+  const pointsMet = c.points >= item.minPoints;
+  // No link yet: the client who has met tier and points must not read the same words as one who has not. The ledger
+  // knows the threshold was crossed, so the badge says so; the button still never appears without a link.
+  if (!item.bookingUrl) return tierMet && pointsMet ? { ok: false, reason: "earned-soon", message: EARNED_SOON } : { ok: false, reason: "opening-soon", message: OPENING_SOON };
+  if (!tierMet) return { ok: false, reason: "tier", message: `Unlocks at ${item.tierRequired}` };
+  if (!pointsMet) return { ok: false, reason: "points", message: `${(item.minPoints - c.points).toLocaleString()} more points` };
   const cap = capStatus(item, c.claimDates, c.today, c.mode);
   if (!cap.open) {
     const when = cap.reopens ? ` Opens again ${reopenText(cap.reopens)}.` : "";

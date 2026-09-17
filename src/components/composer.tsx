@@ -19,7 +19,7 @@ import { ChannelOutcomePanel } from "@/components/channel-outcome-panel";
 import { PUBLISHABLE, manualChannelsSentence, publishedChannelsSentence } from "@/lib/engine/ghl-map";
 import { THREADS_EXCLUSIVE } from "@/lib/engine/rung-drip";
 
-type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
+type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; firstComment?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
 export type StaleNotice = { ladderId: string; back: string; channels: { key: string; label: string; inGhl: boolean }[] };
 /** Targets the composer shows and lets the client copy but never schedules, keyed by target, with the reason said beside the draft. */
@@ -41,6 +41,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   // The CTA is its own field. Picking one replaces it; each channel version places it once at render. It is never appended to the body.
   const [cta, setCta] = useState(initial?.cta ?? "");
   const [hasCta, setHasCta] = useState(initial?.hasCta ?? true);
+  const [firstComment, setFirstComment] = useState(initial?.firstComment ?? "");
   const [mediaUrl, setMediaUrl] = useState(initial?.mediaUrl ?? "");
   // A proof's photo or video the client picked. Only what the item already carries is restored; nothing attaches on its own.
   const [mediaAttachment, setMediaAttachment] = useState<ComposerMedia | null>(() => (initial?.mediaAttachmentId ? (snippets?.media ?? []).find((m) => m.id === initial.mediaAttachmentId) ?? null : null));
@@ -123,6 +124,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
         hook,
         body,
         cta,
+        firstComment,
         hasCta,
         mediaUrl,
         mediaAttachmentId: mediaAttachment?.id ?? null,
@@ -324,6 +326,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   <input type="checkbox" checked={hasCta} onChange={(e) => setHasCta(e.target.checked)} /> Has a call to action
                 </label>
               </div>
+              <textarea className="field min-h-16 text-sm" value={firstComment} onChange={(e) => setFirstComment(e.target.value)} placeholder="First comment (optional): posted under the Facebook page and Instagram versions by the Social Planner, right after the post" data-testid="first-comment" />
               <AiStatus feature="composer_polish" active={pending && polishing} />
               {aiEnabled ? <AiPromise enabled>Returns one version of this draft per target you ticked, inside each one&apos;s limit. You review each tab before you schedule.</AiPromise> : null}
               <div className="grid gap-3 sm:grid-cols-2">

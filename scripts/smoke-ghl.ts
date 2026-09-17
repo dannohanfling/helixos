@@ -215,6 +215,7 @@ async function main() {
     await page.fill('input[placeholder^="Working title"]', "GHL end to end");
     await page.fill('input[placeholder^="Hook"]', "Twelve minutes on Tuesday.");
     await page.fill('textarea[placeholder^="Type content"]', "Beats three hours on Sunday.\nEvery single week.");
+    await page.fill('[data-testid="first-comment"]', "First comment test.");
     await page.click('button[title="Facebook business page"]');
     // A time still ahead in the member's own zone: a scheduled row whose time has passed with no readback is honestly "sending", then "lost track".
     await page.locator('input[type="date"]').first().fill(new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
@@ -229,6 +230,13 @@ async function main() {
     if (!(await page.locator('[data-testid="outcome-headline"]').first().innerText()).includes("scheduled")) throw new Error("the headline counts the scheduled versions");
     const created = await plannerPosts();
     if (!created.length || created.some((p) => p.edits)) throw new Error(`expected fresh planner posts, got ${JSON.stringify(created.map((p) => [p._id, p.edits]))}`);
+    // The first comment reaches the planner as followUpComment on the Facebook page and Instagram posts, and on nothing else
+    for (const p of created as unknown as { accountIds: string[]; followUpComment?: string }[]) {
+      const ig = p.accountIds.some((a) => a.includes("_ig_"));
+      const fb = p.accountIds.some((a) => a.includes("fbpage"));
+      if ((fb || ig) && p.followUpComment !== "First comment test.") throw new Error(`the first comment rides on the page and Instagram posts: ${JSON.stringify(p.accountIds)} got ${JSON.stringify(p.followUpComment)}`);
+      if (!fb && !ig && p.followUpComment) throw new Error(`no first comment on ${JSON.stringify(p.accountIds)}`);
+    }
     // The planner holds the member's wall time as the UTC instant it names (milliseconds and a Z), and the user id
     const { db: dbx, schema: sx } = await import("@/db");
     const { and: andx, eq: eqx, isNotNull } = await import("drizzle-orm");
