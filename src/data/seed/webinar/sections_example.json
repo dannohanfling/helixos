@@ -5,7 +5,7 @@
   "type": "Hook",
   "act": "opening",
   "keyPoints": "• The real reason webinars stall isn't traffic or offer\n• Introduce the 'pipeline has no memory' frame\n• Promise the Synchronized Journey blueprint by the end",
-  "script": "If you've ever run a launch that did 'okay' and then watched 80% of those leads vanish into the ether by Friday — you don't have a traffic problem or an offer problem. You have a memory problem. And in the next 75 minutes I'm going to show you exactly how to give your pipeline a brain.",
+  "script": "If you've ever run a launch that did 'okay' and then watched [X]% of those leads vanish into the ether by Friday — you don't have a traffic problem or an offer problem. You have a memory problem. And in the next 75 minutes I'm going to show you exactly how to give your pipeline a brain.",
   "transition": "In: — cold open, no intro — | Out: So who am I to make that promise? Quick context, then we dig in.",
   "energy": null,
   "durationSec": null
@@ -37,8 +37,8 @@
   "name": "Opportunity Frame",
   "type": "Opportunity Frame",
   "act": "vehicle",
-  "keyPoints": "• 42% of conversions are former no's\n• Introduce 'not yet ≠ never'\n• Paint the revenue hiding in the recycle path",
-  "script": "Here's the data: 42% of the clients I've converted in the last twelve months said no on a prior event. Your highest-LTV buyers are hiding inside your 'not yets' folder — you just haven't given them a path back in.",
+  "keyPoints": "• [X]% of conversions are former no's\n• Introduce 'not yet ≠ never'\n• Paint the revenue hiding in the recycle path",
+  "script": "Here's the data: [X]% of the clients I've converted in the last [N] months said no on a prior event. Your highest-LTV buyers are hiding inside your 'not yets' folder — you just haven't given them a path back in.",
   "transition": "In: Now for the part nobody talks about. | Out: So what actually makes a pipeline remember?",
   "energy": null,
   "durationSec": null
@@ -60,7 +60,7 @@
   "type": "Proof Block",
   "act": "vehicle",
   "keyPoints": "• Aggregate results across clients\n• Dashboard screenshots\n• Transition into Maya case study",
-  "script": "Across 47 installs in the last 18 months: average show-up rate moved from 19% to 34%, average recycled revenue in the first 60 days was $41K, and zero of the installs took more than 3 weeks. Here's one client in particular.",
+  "script": "Across [N] installs in the last [N] months: average show-up rate moved from [X]% to [Y]%, average recycled revenue in the first 60 days was [$N], and zero of the installs took more than 3 weeks. Here's one client in particular.",
   "transition": "In: Don't take my word for it. Look at the data. | Out: Meet Maya.",
   "energy": null,
   "durationSec": null
@@ -70,8 +70,8 @@
   "name": "Case Study",
   "type": "Case Study",
   "act": "vehicle",
-  "keyPoints": "• Maya's before state\n• The pivot moment\n• The after (38% show-up, $62K recycled)\n• Explicit callback: 'she didn't change her offer'",
-  "script": "Maya was running the same evergreen webinar for 18 months. 11% show-up. Team exhausted. Then she realized: she wasn't selling the wrong thing — her pipeline just forgot every lead after 72 hours. Three weeks later: Lead State installed, reminders rebuilt, recycle loop running. 38% show-up. $62K in recycled revenue in 60 days. From leads she'd already given up on. She didn't change her offer. She changed her pipeline's memory.",
+  "keyPoints": "• Maya's before state\n• The pivot moment\n• The after ([Y]% show-up, [$N] recycled)\n• Explicit callback: 'she didn't change her offer'",
+  "script": "Maya was running the same evergreen webinar for [N] months. [X]% show-up. Team exhausted. Then she realized: she wasn't selling the wrong thing — her pipeline just forgot every lead after [N] hours. Three weeks later: Lead State installed, reminders rebuilt, recycle loop running. [Y]% show-up. [$N] in recycled revenue in 60 days. From leads she'd already given up on. She didn't change her offer. She changed her pipeline's memory.",
   "transition": "In: Let me walk you through her exact before and after. | Out: So how do you do this inside your business?",
   "energy": null,
   "durationSec": null
@@ -82,7 +82,7 @@
   "type": "Problem Frame",
   "act": "internal",
   "keyPoints": "• Name the enemy: \"I'm not systems-minded enough to pull this off\"\n• The 14-Zap moment. The 200-field CRM tab-close.\n• Don't fix it yet. Just let them feel caught.",
-  "script": "Here's the part nobody says out loud. When I talk to someone whose webinar underperformed, the real objection isn't \"I don't have time\" or \"my offer's wrong.\" It's quieter than that. It's \"I'm not the kind of person who can actually wire this up.\" You've watched someone on YouTube drag 14 Zaps across a screen and thought — that's not me. You've opened a CRM with 200 fields in it and closed the tab. You think the problem is that you're not technical enough, not systems-y enough, not the kind of brain that keeps all the wires straight. Here's what I've learned from 47 installs: not one of them was a systems person. Not one. We're about to fix what you actually need to fix, and it's not your brain.",
+  "script": "Here's the part nobody says out loud. When I talk to someone whose webinar underperformed, the real objection isn't \"I don't have time\" or \"my offer's wrong.\" It's quieter than that. It's \"I'm not the kind of person who can actually wire this up.\" You've watched someone on YouTube drag 14 Zaps across a screen and thought — that's not me. You've opened a CRM with 200 fields in it and closed the tab. You think the problem is that you're not technical enough, not systems-y enough, not the kind of brain that keeps all the wires straight. Here's what I've learned from [N] installs: not one of them was a systems person. Not one. We're about to fix what you actually need to fix, and it's not your brain.",
   "transition": "In: Maya changed her pipeline's memory. But I know the question you're actually asking right now. | Out: So here's what's actually true.",
   "energy": null,
   "durationSec": null
@@ -92,8 +92,8 @@
   "name": "Opportunity Frame (Internal)",
   "type": "Opportunity Frame",
   "act": "internal",
-  "keyPoints": "• Reframe: you don't need to BE systems-minded. You need a protocol.\n• 47 installs, zero systems people. Show the proof.\n• Paint what becomes possible: any brain can ship this.",
-  "script": "Here's the reframe. You don't need to become a systems person. You need a follow-along protocol that does the systems-thinking for you. 47 installs. Not one was a Zapier wizard. Not one understood JSON. Not one could name every field in their CRM without looking. What they had in common wasn't skill — it was a 4-step sequence they followed in order without deviating. That's the whole trick. The Synchronized Journey doesn't ask you to invent. It asks you to install. And installing is a thing anyone with a Monday morning can do.",
+  "keyPoints": "• Reframe: you don't need to BE systems-minded. You need a protocol.\n• [N] installs, zero systems people. Show the proof.\n• Paint what becomes possible: any brain can ship this.",
+  "script": "Here's the reframe. You don't need to become a systems person. You need a follow-along protocol that does the systems-thinking for you. [N] installs. Not one was a Zapier wizard. Not one understood JSON. Not one could name every field in their CRM without looking. What they had in common wasn't skill — it was a 4-step sequence they followed in order without deviating. That's the whole trick. The Synchronized Journey doesn't ask you to invent. It asks you to install. And installing is a thing anyone with a Monday morning can do.",
   "transition": "In: So here's what's actually true. | Out: Let me show you the exact protocol.",
   "energy": null,
   "durationSec": null
@@ -114,8 +114,8 @@
   "name": "Proof Block (Internal)",
   "type": "Proof Block",
   "act": "internal",
-  "keyPoints": "• Gallery of \"I'm not technical\" installers who shipped\n• 4-week completion rate across 47 installs: 44 of 47 finished on time\n• Named archetypes: the therapist, the retired teacher, the dog groomer",
-  "script": "Let me show you who's actually doing this. Of the last 47 installs, 44 finished inside 4 weeks. 3 took 5. Zero took longer. The installer who finished fastest? A family therapist in Oregon who hadn't opened a CRM before the protocol. Took her 11 days. The oldest installer? 67, retired math teacher, built his whole thing between Wheel of Fortune reruns. The 44 who finished — painters, coaches, therapists, bookkeepers, one dog groomer, exactly one actual software engineer. The software engineer wasn't faster. He was slightly slower because he kept trying to optimize it.",
+  "keyPoints": "• Gallery of \"I'm not technical\" installers who shipped\n• 4-week completion rate across [N] installs: [N] of [N] finished on time\n• Named archetypes: the therapist, the retired teacher, the dog groomer",
+  "script": "Let me show you who's actually doing this. Of the last [N] installs, [N] finished inside 4 weeks. [N] took 5. Zero took longer. The installer who finished fastest? A family therapist in Oregon who hadn't opened a CRM before the protocol. Took her [N] days. The oldest installer? [age], [occupation], built his whole thing between Wheel of Fortune reruns. The [N] who finished — painters, coaches, therapists, bookkeepers, one dog groomer, exactly one actual software engineer. The software engineer wasn't faster. He was slightly slower because he kept trying to optimize it.",
   "transition": "In: And here's the proof this works for people exactly like you. | Out: Let me zoom in on one of them.",
   "energy": null,
   "durationSec": null
@@ -125,8 +125,8 @@
   "name": "Case Study (Internal)",
   "type": "Case Study",
   "act": "internal",
-  "keyPoints": "• Dave, a grief counselor with zero tech background\n• The moment he stopped inventing and started following\n• 4 weeks later, $18K recycled from leads he'd given up on",
-  "script": "Meet Dave. Grief counselor, 22 years in practice, zero tech background. Dave watched my Act 1 explanation three times and panicked. He emailed me: \"I can't do this. I don't know what JSON is.\" I sent him the protocol. Week 1 — planted the Lead State. Did it in 40 minutes. Week 2 — wired three channels. 90 minutes. Week 3 — used the reminder sequence as-written, didn't change a word. Week 4 — flipped the recycle loop and walked away. 60 days after go-live: $18,400 in recycled revenue. From leads he'd stopped emailing eight months ago. Dave didn't become a systems guy. He followed four steps in order. That's the whole difference.",
+  "keyPoints": "• Dave, a grief counselor with zero tech background\n• The moment he stopped inventing and started following\n• 4 weeks later, [$N] recycled from leads he'd given up on",
+  "script": "Meet Dave. Grief counselor, [N] years in practice, zero tech background. Dave watched my Act 1 explanation three times and panicked. He emailed me: \"I can't do this. I don't know what JSON is.\" I sent him the protocol. Week 1 — planted the Lead State. Did it in [N] minutes. Week 2 — wired three channels. [N] minutes. Week 3 — used the reminder sequence as-written, didn't change a word. Week 4 — flipped the recycle loop and walked away. 60 days after go-live: [$N] in recycled revenue. From leads he'd stopped emailing eight months ago. Dave didn't become a systems guy. He followed four steps in order. That's the whole difference.",
   "transition": "In: Let me zoom in on one of them. | Out: Okay, so your brain's not the problem. Let's talk about what IS.",
   "energy": null,
   "durationSec": null
@@ -137,7 +137,7 @@
   "type": "Problem Frame",
   "act": "external",
   "keyPoints": "• Name the external force: dying channels (algorithm, email, ads)\n• Validate the facts — yes, these are actually decaying\n• Set up the reframe — the facts are real, the meaning is wrong",
-  "script": "Okay, your brain's not the problem. Now let's talk about what IS real. You're right that organic reach is dying. Facebook's down 71% since 2019. Email deliverability across Gmail dropped another 14% last quarter. CPMs on Meta are up 47% year-over-year. These are real. I'm not here to tell you the environment is fine. It's not. Every channel you relied on in 2020 is decaying on a schedule. Every. Single. One. What you have wrong isn't the facts. What you have wrong is what the facts mean.",
+  "script": "Okay, your brain's not the problem. Now let's talk about what IS real. You're right that organic reach is dying. Facebook's down [X]% since [year]. Email deliverability across Gmail dropped another [X]% last quarter. CPMs on Meta are up [X]% year-over-year. These are real. I'm not here to tell you the environment is fine. It's not. Every channel you relied on in 2020 is decaying on a schedule. Every. Single. One. What you have wrong isn't the facts. What you have wrong is what the facts mean.",
   "transition": "In: Okay, so your brain's not the problem. Let's talk about what IS. | Out: And here's what they actually mean.",
   "energy": null,
   "durationSec": null
@@ -148,7 +148,7 @@
   "type": "Opportunity Frame",
   "act": "external",
   "keyPoints": "• Reframe: channel decay is exactly why you win\n• Big players lose when one channel breaks. You don't.\n• Paint the hunter's advantage for the synchronized player",
-  "script": "Here's the reframe. Channel decay is exactly why a synchronized pipeline wins. Big players have a problem: they built their whole revenue engine on one channel. When that channel breaks, they bleed. When Meta's CPM spikes, the $20M/year brand relying on Meta ads has a six-figure monthly problem. When email deliverability drops, the operator who only emails has no backup. But when your pipeline has memory across six channels, channel decay is noise, not failure. One channel slows down? The pipeline routes to the three still working. That's not a disadvantage. That's a moat. The environment killing your competitors is the exact environment your pipeline was built for.",
+  "script": "Here's the reframe. Channel decay is exactly why a synchronized pipeline wins. Big players have a problem: they built their whole revenue engine on one channel. When that channel breaks, they bleed. When Meta's CPM spikes, the [$N]/year brand relying on Meta ads has a six-figure monthly problem. When email deliverability drops, the operator who only emails has no backup. But when your pipeline has memory across six channels, channel decay is noise, not failure. One channel slows down? The pipeline routes to the three still working. That's not a disadvantage. That's a moat. The environment killing your competitors is the exact environment your pipeline was built for.",
   "transition": "In: And here's what they actually mean. | Out: Here's the tactic that makes it real.",
   "energy": null,
   "durationSec": null
@@ -169,8 +169,8 @@
   "name": "Proof Block (External)",
   "type": "Proof Block",
   "act": "external",
-  "keyPoints": "• 12 clients ran the Decay Rotation through Meta's 2024 cost surge\n• Small solo operators beat $10M brands on the same keywords\n• Aggregate: 2.3x ROAS vs. single-channel players",
-  "script": "Data from the last 12 months, 12 clients running the Decay Rotation through Meta's cost surge: average return on ad spend was 2.3x higher than their single-channel peer group. One client, a bookkeeper named Terri, 40 hours a week of leads, was outranking a $10M competitor on the same 6 keywords by November. Another, a women's health coach, ran her whole launch when Meta ads broke her third week in — pipeline just routed around it. Zero refunds. $71K total revenue on a launch that should have died. These aren't the biggest spenders. These are the smallest. What they had was a pipeline that didn't care which channel was dying this week.",
+  "keyPoints": "• [N] clients ran the Decay Rotation through Meta's 2024 cost surge\n• Small solo operators beat [$N] brands on the same keywords\n• Aggregate: [N]x ROAS vs. single-channel players",
+  "script": "Data from the last [N] months, [N] clients running the Decay Rotation through Meta's cost surge: average return on ad spend was [N]x higher than their single-channel peer group. One client, a bookkeeper named Terri, 40 hours a week of leads, was outranking a [$N] competitor on the same [N] keywords by November. Another, a women's health coach, ran her whole launch when Meta ads broke her third week in — pipeline just routed around it. Zero refunds. [$N] total revenue on a launch that should have died. These aren't the biggest spenders. These are the smallest. What they had was a pipeline that didn't care which channel was dying this week.",
   "transition": "In: And here's who's already doing it. | Out: Let me zoom in on one of them.",
   "energy": null,
   "durationSec": null
@@ -180,8 +180,8 @@
   "name": "Case Study (External)",
   "type": "Case Study",
   "act": "external",
-  "keyPoints": "• Terri the bookkeeper, $10M competitor on the same keywords\n• The week Meta broke, Terri's pipeline kept routing\n• $71K launch on a launch that \"should\" have died",
-  "script": "Meet Terri. Bookkeeper, 41, operates out of a spare bedroom in Tulsa. Three weeks into her launch, Meta's ad platform had a platform-wide issue. Every ad-dependent business in her niche went dark for five days. Terri's pipeline noticed in 48 hours — ads under 60% of last week. The Decay Rotation cut Meta to zero and rerouted the budget to email and organic DM. Not by her — automatically. Her launch finished the week with $71,000 in revenue. Her closest competitor, a $10M-a-year firm in Dallas, lost the full five days and had to refund early-bird buyers. Terri didn't outspend them. She didn't outwork them. She had a pipeline that could read the room. The big player couldn't, because their pipeline didn't have memory. Terri's did.",
+  "keyPoints": "• Terri the bookkeeper, [$N] competitor on the same keywords\n• The week Meta broke, Terri's pipeline kept routing\n• [$N] launch on a launch that \"should\" have died",
+  "script": "Meet Terri. Bookkeeper, [age], operates out of a spare bedroom in Tulsa. Three weeks into her launch, Meta's ad platform had a platform-wide issue. Every ad-dependent business in her niche went dark for five days. Terri's pipeline noticed in [N] hours — ads under 60% of last week. The Decay Rotation cut Meta to zero and rerouted the budget to email and organic DM. Not by her — automatically. Her launch finished the week with [$N] in revenue. Her closest competitor, a [$N]-a-year firm in Dallas, lost the full five days and had to refund early-bird buyers. Terri didn't outspend them. She didn't outwork them. She had a pipeline that could read the room. The big player couldn't, because their pipeline didn't have memory. Terri's did.",
   "transition": "In: Let me zoom in on one of them. | Out: Okay. So what do you actually do with all this?",
   "energy": null,
   "durationSec": null
@@ -203,7 +203,7 @@
   "type": "Offer Stack",
   "act": "closing",
   "keyPoints": "• Core: WebinarOS Wizard Access\n• Bonus: Install Sprint\n• Guarantee\n• CTA: book a call",
-  "script": "Here's what I'm handing you. One: full WebinarOS Wizard access. Two: we personally install the Synchronized Journey on your stack in 3 sessions. Total value of what's on this slide is $7,497. If that's a fit, the next step is a 20-minute call with my team. Link is on the screen right now.",
+  "script": "Here's what I'm handing you. One: full WebinarOS Wizard access. Two: we personally install the Synchronized Journey on your stack in 3 sessions. Total value of what's on this slide is [$N]. If that's a fit, the next step is a 20-minute call with my team. Link is on the screen right now.",
   "transition": "In: Here's exactly what's in the box. | Out: Last thing before we open Q&A.",
   "energy": null,
   "durationSec": null

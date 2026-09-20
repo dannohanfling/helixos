@@ -18,6 +18,8 @@ export type Snapshot = {
   runningStreak: number;
   clientsDueCheckin?: number;
   webinarInProgress?: { id: string; title: string; step: string; stepLabel: string } | null;
+  /** A webinar marked ready or scheduled whose build checks have since broken; the note names them. */
+  webinarBroken?: { id: string; title: string; status: string; note: string } | null;
 };
 
 export type Action = {
@@ -112,6 +114,16 @@ export function nextBestActions(s: Snapshot): Action[] {
       why: "Retention is a rhythm. Wins first, then blockers, then one next step.",
       href: "/clients?filter=due",
       cta: "Check in",
+      tone: "primary",
+    });
+  }
+  if (s.webinarBroken) {
+    out.push({
+      key: "webinar-broken",
+      title: `Webinar: ${s.webinarBroken.title} is marked ${s.webinarBroken.status}, and ${s.webinarBroken.note.replace(/ since it was marked \w+/, "")}`,
+      why: "The status stays where you set it; the checks underneath it don't.",
+      href: `/webinars/${s.webinarBroken.id}?step=review`,
+      cta: "See what broke",
       tone: "primary",
     });
   }

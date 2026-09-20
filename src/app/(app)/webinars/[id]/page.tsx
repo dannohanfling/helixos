@@ -38,6 +38,7 @@ import {
   readyDecision,
   reviewStale,
   sectionPace,
+  statusStale,
   SELF_RATED_FOR_NOW,
   type StepKey,
 } from "@/lib/engine/webinar";
@@ -140,7 +141,13 @@ export default async function WebinarWizardPage({
       })
     : [];
   // Every progress signal on the page is this one read of the record; no rating moves it.
-  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, approvedProofIds: proofs.map((pr) => pr.id), review });
+  const known = {
+    proofIds: proofs.map((pr) => pr.id),
+    storyIds: [...assets.filter((a) => a.type === "story").map((a) => a.id), ...essenceStories.map((_, i) => `essence:${i}`)],
+    evidenceIds: evidence.map((e) => (e.source === "shared" ? `shared:${e.id}` : e.id)),
+  };
+  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, review });
+  const staleStatus = statusStale(w.status, build);
   const progress = build;
   const decision = readyDecision(review ? readinessScore(review.ratings) : null, build);
   const stale = reviewStale(review, w.updatedAt);
@@ -194,6 +201,11 @@ export default async function WebinarWizardPage({
             >
               {w.status}
             </Badge>
+            {staleStatus.stale ? (
+              <span className="text-xs text-warn" data-testid="status-stale" title={staleStatus.note}>
+                {staleStatus.note}
+              </span>
+            ) : null}
             <span
               data-testid="build-summary"
               title={build.must.length || build.warn.length ? `Open: ${[...build.must, ...build.warn].map((c) => c.label).join(" · ")}` : "Every check passes"}
@@ -1283,6 +1295,7 @@ export default async function WebinarWizardPage({
                 ))}
               </ul>
               <p className="mt-2 text-xs text-ink-3">Read off the record every time the page opens. Warnings don&apos;t block; the rest do.</p>
+              <p className="mt-1 text-xs text-ink-3" data-testid="deck-unchecked">The deck is not checked yet: nothing here reads the slides. That check lands with slide density.</p>
             </Card>
           </div>
         </div>

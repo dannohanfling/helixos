@@ -154,17 +154,21 @@ export type BuildBelief = { type: string; fromBelief: string | null; toBelief: s
 /** The acts as the coach reads them on the page. */
 export const ACT_NUMBER: Record<string, string> = { vehicle: "Act 1", internal: "Act 2", external: "Act 3" };
 
+/** The ids that still exist and still qualify: approved proofs, stories in scope (bank or Essence), citable studies. */
+export type KnownRefs = { proofIds: string[]; storyIds: string[]; evidenceIds: string[] };
+
 /**
  * What is wired to each act: a proof (an approved bank row, or a typed one with its permission tick), a story and a citation.
- * Presence is a check; the quality of each stays the coach's own rating. `approvedProofIds`, when given, means a picked proof
- * that has since lost its approval no longer counts.
+ * Presence is a check; the quality of each stays the coach's own rating. With `known`, an id whose row is gone or no longer
+ * qualifies (a proof's approval withdrawn, a study deleted, a story removed) no longer counts: a reference is not a presence.
  */
-export function actPresence(beliefs: BuildBelief[], approvedProofIds?: string[]): { key: "proofs" | "stories" | "citations"; label: string; missing: string[] }[] {
+export function actPresence(beliefs: BuildBelief[], known?: KnownRefs): { key: "proofs" | "stories" | "citations"; label: string; missing: string[] }[] {
   const acts = ["vehicle", "internal", "external"];
+  const exists = (id: string | null | undefined, ids?: string[]) => Boolean(id && (!ids || ids.includes(id)));
   const has = {
-    proofs: (b: BuildBelief | undefined) => Boolean(b && ((b.proofId && (!approvedProofIds || approvedProofIds.includes(b.proofId))) || freeTextProofUsable({ proof: b.proof ?? null, proofPermissionAt: b.proofPermissionAt ?? null, proofChangedAt: b.proofChangedAt ?? null }))),
-    stories: (b: BuildBelief | undefined) => Boolean(b?.storyAssetId),
-    citations: (b: BuildBelief | undefined) => Boolean(b?.evidenceId),
+    proofs: (b: BuildBelief | undefined) => Boolean(b && (exists(b.proofId, known?.proofIds) || freeTextProofUsable({ proof: b.proof ?? null, proofPermissionAt: b.proofPermissionAt ?? null, proofChangedAt: b.proofChangedAt ?? null }))),
+    stories: (b: BuildBelief | undefined) => exists(b?.storyAssetId, known?.storyIds),
+    citations: (b: BuildBelief | undefined) => exists(b?.evidenceId, known?.evidenceIds),
   };
   const word = { proofs: "proof", stories: "story", citations: "citation" } as const;
   return (["proofs", "stories", "citations"] as const).map((key) => ({
@@ -174,7 +178,7 @@ export function actPresence(beliefs: BuildBelief[], approvedProofIds?: string[])
   }));
 }
 
-export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; approvedProofIds?: string[]; review: { verdict: string } | null }): BuildResult {
+export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; known?: KnownRefs; review: { verdict: string } | null }): BuildResult {
   const { webinar: w, sections, beliefs, components, review } = input;
   const checks: BuildCheck[] = [];
   const missingFoundation = [
@@ -189,7 +193,7 @@ export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLik
   const missingBeliefs = ["vehicle", "internal", "external"].filter((t) => !beliefs.some((b) => b.type === t && b.fromBelief && b.toBelief));
   checks.push({ key: "beliefs", label: "Three belief shifts written", ok: !missingBeliefs.length, level: "must", detail: missingBeliefs.length ? `No from/to pair yet for: ${missingBeliefs.join(", ")}.` : "From and to written for all three acts." });
   // The three things a webinar most needs, per act, read off what is wired rather than asked of a slider.
-  for (const p of actPresence(beliefs, input.approvedProofIds)) checks.push({ key: p.key, label: p.label, ok: !p.missing.length, level: "must", detail: p.missing.length ? `${p.missing.join("; ")}.` : "All three acts." });
+  for (const p of actPresence(beliefs, input.known)) checks.push({ key: p.key, label: p.label, ok: !p.missing.length, level: "must", detail: p.missing.length ? `${p.missing.join("; ")}.` : "All three acts." });
   const scriptedRows = sections.filter(hasScript);
   const pointsOnly = sections.filter((s) => !hasScript(s) && (s.status !== "todo" || (s.keyPoints ?? "").trim()));
   const untouched = sections.length - scriptedRows.length - pointsOnly.length;
@@ -231,6 +235,15 @@ export function readyDecision(rating: { verdict: "ready" | "needs_work" | "not_r
   else if (rating.verdict !== "ready") reasons.push(rating.weakest.length ? `Your rating has ${rating.weakest.join(", ")} at 2 or below.` : "Your rating is under 80%.");
   if (build.must.length) reasons.push(`${build.must.length} ${build.must.length === 1 ? "check" : "checks"} open: ${build.must.map((c) => c.label).join("; ")}.`);
   return { ready: !reasons.length, reasons };
+}
+
+/**
+ * A status of ready or scheduled outlives its checks the way a review outlives its version: nothing demotes it when a proof's
+ * approval is withdrawn or a study is deleted. So the status is marked stale wherever it is shown, and the broken checks named.
+ */
+export function statusStale(status: string, build: BuildResult): { stale: boolean; note: string } {
+  const stale = (status === "ready" || status === "scheduled") && build.must.length > 0;
+  return { stale, note: stale ? `${build.must.length} ${build.must.length === 1 ? "check has" : "checks have"} broken since it was marked ${status}: ${build.must.map((c) => c.label).join("; ")}.` : "" };
 }
 
 /** A review saved before the record's last content edit is stale: it graded something that has since changed. */

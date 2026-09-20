@@ -4,7 +4,8 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { createWebinarAction, duplicateExampleAction } from "@/lib/actions/webinars";
 import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
-import { STEPS, buildChecks, nextStep } from "@/lib/engine/webinar";
+import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
+import { knownFor } from "@/lib/queries/webinar";
 import { formatDate } from "@/lib/dates";
 
 export const metadata = { title: "Webinars" };
@@ -28,6 +29,8 @@ export default async function WebinarsPage() {
         db.query.readinessReviews.findMany({ where: inArray(schema.readinessReviews.webinarId, ids), orderBy: desc(schema.readinessReviews.createdAt) }),
       ])
     : [[], [], []];
+  // What each webinar's beliefs still point at, read once: a withdrawn approval or a deleted study is seen here too, not only on the Readiness step.
+  const known = ids.length ? await knownFor(v.user.id, v.workspace.id) : { proofIds: [], storyIds: [], evidenceIds: [] };
   const delivered = list.filter((w) => w.status === "delivered");
   const totals = delivered.reduce((a, w) => ({ registered: a.registered + w.registered, showed: a.showed + w.showed, sales: a.sales + w.sales, revenue: a.revenue + w.revenue }), { registered: 0, showed: 0, sales: 0, revenue: 0 });
 
@@ -92,7 +95,8 @@ export default async function WebinarsPage() {
             const secs = sections.filter((s) => s.webinarId === w.id);
             const bel = beliefs.filter((b) => b.webinarId === w.id);
             const rev = reviews.find((r) => r.webinarId === w.id) ?? null;
-            const p = buildChecks({ webinar: w, sections: secs, beliefs: bel, review: rev });
+            const p = buildChecks({ webinar: w, sections: secs, beliefs: bel, known, review: rev });
+            const stale = statusStale(w.status, p);
             const next = STEPS.find((s) => s.key === nextStep(p.steps))!;
             return (
               <Link key={w.id} href={`/webinars/${w.id}?step=${w.status === "delivered" ? "run" : next.key}`} className="card block p-4 transition hover:border-ink">
@@ -108,6 +112,7 @@ export default async function WebinarsPage() {
                   <Badge tone={STATUS[w.status].tone}>{STATUS[w.status].label}</Badge>
                 </div>
                 {w.promise ? <p className="mt-2 text-sm text-ink-2">{w.promise}</p> : null}
+                {stale.stale ? <p className="mt-2 text-xs text-warn" data-testid="status-stale">{stale.note}</p> : null}
                 <div className="mt-3">
                   <Progress value={Math.round((p.passed / p.total) * 100)} tone={p.passed >= p.total ? "good" : "accent"} height={6} />
                 </div>

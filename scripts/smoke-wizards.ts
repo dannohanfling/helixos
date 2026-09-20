@@ -100,6 +100,7 @@ async function main() {
   if ((await page.locator('[data-testid="build-check"] li[data-ok="0"]').count()) !== openBefore) throw new Error("the rating moved a build check");
   if (!page.url().includes("step=review")) throw new Error("an unready webinar stays on the review step rather than advancing to Run it");
   if (!(await page.locator('[data-testid="self-rated-proof"]').count())) throw new Error("proof sufficiency is marked as still self-rated");
+  if (!(await page.locator('[data-testid="deck-unchecked"]').count())) throw new Error("the readiness step says the deck is not checked yet");
   for (const k of ["proofs", "stories", "citations"]) if (!(await page.locator(`[data-testid="build-check"] li[data-check="${k}"]`).count())) throw new Error(`the build check has a per-act ${k} presence line`);
   const citations = await page.locator('[data-testid="build-check"] li[data-check="citations"]').innerText();
   if (!/Every act has a citation/.test(citations) || !/(Act [123] has no citation|All three acts)/.test(citations)) throw new Error(`the citation check says which act lacks one, got "${citations}"`);

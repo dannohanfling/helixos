@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { freeTextProofUsable } from "../webinar";
 import { offerOnePager, scoreOffer } from "../offer-score";
 import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll, toneClause } from "../repurpose";
-import { ACTS, SECTION_TEMPLATES, buildChecks, deckOutline, nextStep, offerStart, readinessScore, readyDecision, reviewStale, sectionPace } from "../webinar";
+import { ACTS, SECTION_TEMPLATES, buildChecks, deckOutline, nextStep, offerStart, readinessScore, readyDecision, reviewStale, sectionPace, statusStale } from "../webinar";
 
 const strongOffer = {
   name: "90-Day Reset",
@@ -187,7 +187,22 @@ describe("webinar structure", () => {
       const typed = bare.map((x) => ({ ...x, proof: "Priya N.: 2 to 9 calls a week", proofChangedAt: "2026-09-01T00:00:00.000Z", proofPermissionAt: null, storyAssetId: "s1", evidenceId: "e1" }));
       expect(buildChecks({ webinar: full, sections, beliefs: typed, components: mapped, review: null }).must.map((c) => c.key)).toEqual(["proofs"]);
       expect(buildChecks({ webinar: full, sections, beliefs: typed.map((x) => ({ ...x, proofPermissionAt: "2026-09-02T00:00:00.000Z" })), components: mapped, review: null }).must).toEqual([]);
-      expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, approvedProofIds: ["other"], review: null }).checks.find((c) => c.key === "proofs")!.detail).toBe("Act 1 has no proof; Act 2 has no proof; Act 3 has no proof.");
+      expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, known: { proofIds: ["other"], storyIds: ["s1"], evidenceIds: ["e1"] }, review: null }).checks.find((c) => c.key === "proofs")!.detail).toBe("Act 1 has no proof; Act 2 has no proof; Act 3 has no proof.");
+    });
+    it("a reference is not a presence: a deleted study or a removed story no longer counts once the known ids are supplied", () => {
+      const known = { proofIds: ["p1"], storyIds: ["s1"], evidenceIds: ["e1"] };
+      expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, known, review: null }).must).toEqual([]);
+      const gone = buildChecks({ webinar: full, sections, beliefs, components: mapped, known: { ...known, evidenceIds: [], storyIds: ["essence:0"] }, review: null });
+      expect(gone.must.map((c) => c.key)).toEqual(["stories", "citations"]);
+      expect(gone.checks.find((c) => c.key === "citations")!.detail).toBe("Act 1 has no citation; Act 2 has no citation; Act 3 has no citation.");
+      // Without the known ids (the list and Today before they loaded them) the id alone counted; that blind spot is what known closes
+      expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, review: null }).must).toEqual([]);
+    });
+    it("a status of ready or scheduled outlives its checks, so it is marked stale with the broken checks named; nothing demotes it", () => {
+      const broken = buildChecks({ webinar: full, sections, beliefs, components: mapped, known: { proofIds: [], storyIds: ["s1"], evidenceIds: ["e1"] }, review: null });
+      expect(statusStale("scheduled", broken)).toEqual({ stale: true, note: "1 check has broken since it was marked scheduled: Every act has a proof." });
+      expect(statusStale("building", broken).stale).toBe(false);
+      expect(statusStale("ready", buildChecks({ webinar: full, sections, beliefs, components: mapped, review: null })).stale).toBe(false);
     });
     it("the stack check is left out, not guessed, when the components were not loaded", () => {
       const b = buildChecks({ webinar: full, sections, beliefs, review: null });

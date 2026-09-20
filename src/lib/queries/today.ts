@@ -9,7 +9,8 @@ import { tierProgress } from "@/lib/engine/tiers";
 import { roadLine, simplePath } from "@/lib/engine/pathway";
 import { closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
 import { brokenStreak } from "@/lib/engine/streak";
-import { STEPS, buildChecks, nextStep } from "@/lib/engine/webinar";
+import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
+import { knownFor } from "@/lib/queries/webinar";
 import { totalPoints } from "./points";
 
 /** The one pathway task to show today: revisions first, then the next must-do on the simple path. */
@@ -131,6 +132,19 @@ export async function todayData(v: Viewer) {
     const step = nextStep(p.steps);
     webinarInProgress = { id: building.id, title: building.title, step, stepLabel: STEPS.find((s) => s.key === step)?.label ?? step };
   }
+  // A webinar already marked ready or scheduled whose checks have since broken: the status does not fall back on its own, so Today says so.
+  let webinarBroken: Snapshot["webinarBroken"] = null;
+  const live = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["ready", "scheduled"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) });
+  if (live) {
+    const [secs, bels, comps, known] = await Promise.all([
+      db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, live.id) }),
+      db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, live.id) }),
+      live.offerId ? db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, live.offerId) }) : Promise.resolve([]),
+      knownFor(userId, workspaceId),
+    ]);
+    const stale = statusStale(live.status, buildChecks({ webinar: live, sections: secs, beliefs: bels, components: comps, known, review: null }));
+    if (stale.stale) webinarBroken = { id: live.id, title: live.title, status: live.status, note: stale.note };
+  }
 
   const snapshot: Snapshot = {
     today,
@@ -150,6 +164,7 @@ export async function todayData(v: Viewer) {
     runningStreak: streak.running,
     clientsDueCheckin,
     webinarInProgress,
+    webinarBroken,
   };
   const actions: Action[] = nextBestActions(snapshot);
 
