@@ -149,6 +149,8 @@ async function main() {
   };
   await page.goto(`${wizardUrl0}?step=deck`);
   if (await page.locator('[data-testid="deck-refused"]').count()) throw new Error(`the demo webinar exports clean as seeded, got "${await page.locator('[data-testid="deck-refused"]').innerText()}"`);
+  // Clean because the seed dropped the one line with a hole, not every line: the Hook's three example points are on three slides
+  if ((await page.locator('[data-testid="deck-slide"][data-section="hook"]').count()) !== 3) throw new Error(`the seeded Hook keeps its three key points, got ${await page.locator('[data-testid="deck-slide"][data-section="hook"]').count()} slides`);
   // Clause (a), planted: a numeric placeholder in a sentence carrying a percentage
   await saveSection("opportunity_frame", { keyPoints: "[X]% of conversions are former no's\nThe no is data" });
   await page.goto(`${wizardUrl0}?step=deck`);
@@ -176,6 +178,15 @@ async function main() {
   if (!/^1 unfilled \[placeholder\]/.test(await page.locator('[data-testid="deck-placeholders"]').innerText())) throw new Error("the count of unfilled slots is shown");
   if (await page.locator('[data-testid="deck-slide"][data-section="credibility_origin"]').count()) throw new Error("a section left out on purpose has no slide");
   if (!(await page.locator('[data-testid="deck-slide"][data-kind="proof"]').count())) throw new Error("the Proof Block renders the typed proof as a slide");
+  // The count against a rate: slides a minute over the minutes without Q&A, the arithmetic checked rather than the number assumed
+  const paceText = await page.locator('[data-testid="deck-pace"]').innerText();
+  const paceMatch = paceText.match(/^(\d+) slides · ~(\d+) min without Q&A · ([\d.]+) slides a minute\. Reference pace is 1\.7; the band is 1\.2 to 1\.5\./);
+  if (!paceMatch) throw new Error(`the deck step reads slides against the clock, got "${paceText}"`);
+  const [, slideCount, minutes, rate] = paceMatch;
+  if (Math.round((Number(slideCount) / Number(minutes)) * 10) / 10 !== Number(rate)) throw new Error(`the rate is the count over the minutes, got ${slideCount}/${minutes} = ${rate}`);
+  if ((await page.locator('[data-testid="deck-slide"]').count()) !== Number(slideCount)) throw new Error("the readout counts the slides shown");
+  if ((await page.locator('[data-testid="deck-slide"][data-kind="divider"]').count()) !== 3 || !(await page.locator('[data-testid="deck-slide"][data-kind="recap"]').count())) throw new Error("a divider per belief act and a recap for the act that has lines");
+  console.log(`  deck density: ${paceText}`);
   const pptx = await page.request.get(`${base}${deckHref}`);
   const pptxBody = await pptx.body();
   if (!pptx.ok() || !(pptx.headers()["content-type"] ?? "").includes("presentationml") || pptxBody.subarray(0, 2).toString() !== "PK" || pptxBody.length < 5000) throw new Error(`pptx export failed: ${pptx.status()} ${pptxBody.length} bytes`);
@@ -242,13 +253,16 @@ async function main() {
   if (!sheetProof.includes("Priya N. went from 2 to 9 discovery calls a week in her first month.") || /47 moms/.test(sheetProof)) throw new Error(`the sheet carries the proof the walk typed and nothing of the seed's, got "${sheetProof}"`);
   // The sheet counts the whole section and says which slots the deck does not show: the drafted scripts' [Drafted] markers are off-slide
   const sheetCount = await page.locator('[data-testid="runsheet-placeholders"]').innerText();
-  if (!/^\d+ unfilled, \d+ of them in points or scripts the deck does not show: /.test(sheetCount) || !/\[Drafted\]/.test(sheetCount)) throw new Error(`the run sheet names off-slide slots as off-slide, got "${sheetCount}"`);
+  if (!/^\d+ unfilled, \d+ of them in scripts the deck does not show: /.test(sheetCount) || !/\[Drafted\]/.test(sheetCount)) throw new Error(`the run sheet names off-slide slots as off-slide, got "${sheetCount}"`);
   if (!(await page.locator('[data-testid="runsheet-evidence"]').count())) throw new Error("the picked study is rendered on its act");
   if (!(await page.locator('[data-testid="runsheet-offer"]').count())) throw new Error("the linked offer is rendered on the closing frame");
   await shot(page, "w05b-webinar-runsheet");
   await page.goto(`${wizardUrl}?step=review`);
   console.log("✓ run sheet: five acts, a cumulative clock, the delivery note, the proof, the study and the offer rendered where they are wired");
-  if (!(await page.locator('[data-testid="deck-unchecked"]').count())) throw new Error("the readiness step says the deck is not checked yet");
+  // The twelfth check reads the deck: it is on the list, and the "not checked yet" line is gone
+  if (await page.locator('[data-testid="deck-unchecked"]').count()) throw new Error("the deck is checked now; the placeholder line retired");
+  const deckCheck = await page.locator('[data-testid="build-check"] li[data-check="deck"]').innerText();
+  if (!/Deck (exports|moves at a live pace)/.test(deckCheck) || !/slides a minute; the band is 1\.2 to 1\.5/.test(deckCheck)) throw new Error(`the build check reads the deck's pace, got "${deckCheck}"`);
   for (const k of ["proofs", "stories", "citations"]) if (!(await page.locator(`[data-testid="build-check"] li[data-check="${k}"]`).count())) throw new Error(`the build check has a per-act ${k} presence line`);
   const citations = await page.locator('[data-testid="build-check"] li[data-check="citations"]').innerText();
   if (!/Every act has a citation/.test(citations) || !/(Act [123] has no citation|All three acts)/.test(citations)) throw new Error(`the citation check says which act lacks one, got "${citations}"`);
@@ -288,6 +302,18 @@ async function main() {
   if (answeredAfter !== answeredBefore) throw new Error(`moving an answer into the bank must not change the count (${answeredBefore} → ${answeredAfter})`);
   if (await page.locator('[data-testid="move-objTime"]').count()) throw new Error("a moved answer should leave the older field");
   console.log(`✓ offer step 6 reads the bank; a legacy answer moved in without changing the optimiser's count (${answeredAfter})`);
+  // The deck footer is one line on the offer: it lands on every slide from the Offer Stack onward and on none before, and a re-export carries it
+  await fillField(page, 'textarea[name="ctaFooter"]', "DM me the word PLAN to book your call");
+  await submit(page, 'button:has-text("Save offer")');
+  const again = await page.request.get(`${base}${deckHref}`);
+  if (!again.ok()) throw new Error(`re-export failed: ${again.status()}`);
+  const zip2 = await JSZip.loadAsync(await again.body());
+  const slideFiles = Object.keys(zip2.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => Number(a.match(/\d+/)![0]) - Number(b.match(/\d+/)![0]));
+  const xml = await Promise.all(slideFiles.map((f) => zip2.file(f)!.async("string")));
+  const withFooter = xml.map((x, i) => (x.includes("DM me the word PLAN") ? i + 1 : 0)).filter(Boolean);
+  if (!withFooter.length || withFooter[0] < 3 || withFooter[withFooter.length - 1] !== xml.length) throw new Error(`the footer runs from the offer to the last slide, got slides ${withFooter.join(",")} of ${xml.length}`);
+  if (xml[1].includes("DM me the word PLAN")) throw new Error("no footer before the offer");
+  console.log(`✓ deck footer on slides ${withFooter[0]}–${xml.length} of ${xml.length} after a re-export`);
   await expectText(page, "Optimizer", "offer wizard");
   await shot(page, "w06-offer-wizard");
   await page.fill('form:has(input[name="offerId"]) input[name="name"]', "Weekend & Wine Playbook v2");

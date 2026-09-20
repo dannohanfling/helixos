@@ -64,6 +64,7 @@ function draw(pptx: PptxGenJS, plan: SlidePlan) {
     const eyebrow = plan.boxes.find((b) => b.role === "eyebrow");
     const headline = plan.boxes.find((b) => b.role === "headline");
     const lines = plan.boxes.filter((b) => b.role === "body" || b.role === "attribution");
+    const footer = plan.boxes.find((b) => b.role === "footer");
     if (eyebrow) slide.addText(eyebrow.text, { x: 0.5, y: 0.25, w: 9, h: 0.4, fontSize: eyebrow.size, color: eyebrow.color, fontFace: eyebrow.face });
     if (headline) slide.addText(headline.text, { x: 0.5, y: 0.8, w: 9, h: 1.5, fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, valign: "top", ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
     if (lines.length) {
@@ -72,6 +73,7 @@ function draw(pptx: PptxGenJS, plan: SlidePlan) {
         { x: 0.7, y: 2.4, w: 8.6, h: 2.6, valign: "top" },
       );
     }
+    if (footer) slide.addText(footer.text, { x: 0.5, y: 5.05, w: 9, h: 0.35, fontSize: footer.size, color: footer.color, fontFace: footer.face, align: "center", ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
   }
   for (const r of plan.rules) slide.addShape(pptx.ShapeType.line, { x: 0.5, y: r.y, w: 9, h: 0, line: { color: r.color, width: 1.5 } });
   if (plan.notes) slide.addNotes(plan.notes);

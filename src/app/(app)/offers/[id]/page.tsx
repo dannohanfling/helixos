@@ -147,6 +147,9 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
                 <T name="whyTrust" label="Why trust you" value={offer.whyTrust} placeholder="Results, years, your own story." />
                 <T name="scarcity" label="Scarcity (real)" value={offer.scarcity} />
                 <T name="urgency" label="Urgency (real)" value={offer.urgency} />
+                <div className="sm:col-span-2">
+                  <T name="ctaFooter" label="Deck footer" hint="one line drawn on every slide from the offer onward: where to go and what to do. Leave it empty for none." value={offer.ctaFooter} />
+                </div>
               </div>
             </Card>
             <Card id="fit" title="5 · Fit">

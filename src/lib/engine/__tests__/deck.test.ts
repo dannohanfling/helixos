@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PLACEHOLDER_FALLBACK, deckSlides, headlineTier, offSlidePlaceholders, outlineText, placeholderHits, renderPlan, type DeckKit } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, type DeckKit } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -34,12 +34,13 @@ describe("the headline steps down a tier as it lengthens and is never cut", () =
     const long = "This is the sentence that runs on and on, well past the last tier a headline can step down to, so it is moved whole to the body of the slide rather than shrunk any further.";
     expect(long.length).toBeGreaterThan(HEADLINE_MAX_CHARS);
     const d = deckSlides(ctx(base({ hook: { keyPoints: `${long}\nSecond point` } })), kit);
-    const hook = bySection(d, "hook")[0];
+    const [hook, second] = bySection(d, "hook");
     expect(hook.overflow).toBe(true);
     expect(hook.headline).toBe("Hook");
     expect(hook.headlineSize).toBe(HEADLINE_FLOOR);
-    expect(hook.body).toEqual([long, "Second point"]);
-    expect(d.warnings.some((w) => w.startsWith("Slide 2 (Hook): the first key point is over 160 characters"))).toBe(true);
+    expect(hook.body).toEqual([long]);
+    expect(second).toMatchObject({ headline: "Second point", body: [], overflow: false, headlineSize: 40 });
+    expect(d.warnings.some((w) => w.startsWith("Slide 2 (Hook): the key point is over 160 characters"))).toBe(true);
     expect(d.refused).toEqual([]);
   });
 });
@@ -47,12 +48,14 @@ describe("the headline steps down a tier as it lengthens and is never cut", () =
 describe("what a slide holds is what the record holds, or there is no slide", () => {
   it("the Proof Block is the bank's proof as the bank stores it: first name and initial, no consent date; the key points follow", () => {
     const d = deckSlides(ctx(base({ proof_block: { keyPoints: "Results across clients\nSecond" } }), [{ type: "vehicle", fromBelief: "a", toBelief: "b", proofId: "p1" }]), kit);
-    const [quote, points] = bySection(d, "proof_block");
+    const [quote, first, second] = bySection(d, "proof_block");
     expect(quote.kind).toBe("proof");
     expect(quote.headline).toBe("“I now see identity as the foundation.”");
     expect(quote.body).toEqual(["— Kate A."]);
     expect(quote.notes.join("\n")).not.toMatch(/2026|consent|permission/);
-    expect(points).toMatchObject({ kind: "proof", headline: "Results across clients", body: ["Second"] });
+    // One key point per slide, each under the section's eyebrow
+    expect(first).toMatchObject({ kind: "proof", headline: "Results across clients", body: [], eyebrow: "Proof Block · Vehicle" });
+    expect(second).toMatchObject({ kind: "proof", headline: "Second", body: [] });
   });
   it("with no proof the citation stands; with neither, no slide and no sentence about the absence", () => {
     const withStudy = deckSlides(ctx(base(), [{ type: "vehicle", fromBelief: "a", toBelief: "b", evidenceId: "e1" }]), kit);
@@ -67,11 +70,58 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
     expect(bySection(story, "case_study")[0]).toMatchObject({ kind: "story", headline: "Chasing the symptom", body: ["She fixed the wrong thing.", "Then she named the drift.", "It held."] });
     expect(bySection(deckSlides(ctx(base()), kit), "case_study")).toEqual([]);
   });
-  it("the Offer Stack is the linked stack with its currency; unlinked, nothing", () => {
+  it("the Offer Stack is the linked stack as a build with its currency, then the price; unlinked, nothing", () => {
     const d = deckSlides(ctx(base()), kit);
-    const stack = bySection(d, "offer_stack_cta")[0];
-    expect(stack).toMatchObject({ kind: "offer", headline: "The 90-Minute Diagnostic", body: ["Diagnostic — 90 minutes, 1:1", "NZD $1,997"] });
+    const [item, anchor] = bySection(d, "offer_stack_cta");
+    expect(item).toMatchObject({ kind: "offer", headline: "Diagnostic", body: ["90 minutes, 1:1"] });
+    // The one item carries no value, so no total renders anywhere and the price stands alone
+    expect(anchor).toMatchObject({ kind: "offer", headline: "The 90-Minute Diagnostic", body: ["NZD $1,997"] });
     expect(bySection(deckSlides(ctx(base(), [], false), kit), "offer_stack_cta")).toEqual([]);
+  });
+  it("the build re-shows the running total after each item and the price against it; any item without a value and no total renders at all", () => {
+    const o = { name: "The 90-Day Reset", price: 1997, currency: "NZD", container: "group", guarantee: "Free until you lose 10.", paymentPlan: "3 x $700", scarcity: null, urgency: "Doors close Friday.", ctaFooter: null, objections: [], components: [
+      { name: "The program", type: "core", oneLiner: "12 weeks", perceivedValue: 3000, beliefBreak: "vehicle" },
+      { name: "Template library", type: "bonus", description: "You pick.", perceivedValue: 497, beliefBreak: "internal" },
+      { name: "Free until you lose 10", type: "guarantee", perceivedValue: 0, beliefBreak: "none" },
+    ] };
+    expect(offerBuild(o)).toEqual([
+      { headline: "The program", body: ["12 weeks", "Total value so far: NZD $3,000"] },
+      { headline: "Template library", body: ["You pick.", "Total value so far: NZD $3,497"] },
+      { headline: "The 90-Day Reset", body: ["Total value: NZD $3,497", "Your price: NZD $1,997", "You save NZD $1,500", "Payment plan: 3 x $700"] },
+      { headline: "Free until you lose 10.", body: [] },
+      { headline: "Doors close Friday.", body: [] },
+    ]);
+    const zero = offerBuild({ ...o, components: [o.components[0], { ...o.components[1], perceivedValue: 0 }, o.components[2]] });
+    expect(zero.map((x) => x.body)).toEqual([["12 weeks"], ["You pick."], ["NZD $1,997", "Payment plan: 3 x $700"], [], []]);
+    expect(JSON.stringify(zero)).not.toMatch(/Total|save/);
+  });
+  it("a divider opens each belief act with the shift from the record, on the kit's inverse pair; a recap closes it with each section's first line", () => {
+    const d = deckSlides(ctx(base({ problem_frame: { keyPoints: "Name the enemy\nSecond" }, mechanism_reveal: { keyPoints: "Draw the hub" } }), [{ type: "vehicle", fromBelief: "Diets are all the same.", toBelief: "It was the plan." }]), kit);
+    const divider = d.slides.find((s) => s.kind === "divider")!;
+    expect(divider).toMatchObject({ n: 2, act: "vehicle", headline: "Act 1 · Vehicle", body: ["From: Diets are all the same.", "To: It was the plan."], inverse: true, sectionKey: null });
+    const recap = d.slides.find((s) => s.kind === "recap")!;
+    expect(recap).toMatchObject({ act: "vehicle", headline: "Act 1 · Vehicle · recap", body: ["Name the enemy", "Draw the hub"], inverse: false });
+    expect(d.slides.filter((s) => s.kind === "divider").map((s) => s.act)).toEqual(["vehicle", "internal", "external"]);
+    expect(d.slides.filter((s) => s.kind === "recap")).toHaveLength(1);
+    const plan = renderPlan(d);
+    expect(plan[1].background).toBe("6E6256");
+    for (const b of plan[1].boxes) expect(b.color).toBe("FAF8F5");
+    expect(plan[0].background).toBe("6E6256");
+    // No inverse pair on the kit: the dark surfaces sit on ground like everything else
+    expect(renderPlan(deckSlides(d.slides.length ? ctx(base()) : ctx(base()), { ...kit, inverseGround: null, inverseInk: null }))[1].background).toBe("FAF8F5");
+  });
+  it("the footer is the offer's one line on every slide from the Offer Stack onward and on none before; a hole in it refuses", () => {
+    const withFooter = { ...offer, offer: { ...offer.offer, ctaFooter: "DM me the word PLAN" } };
+    const c = resolveSections({ webinar: { title: "t" }, presenter: "L", sections: base({ hook: { keyPoints: "Open" }, offer_transition: { keyPoints: "DIY or done with you" }, q_a_close: { keyPoints: "Ask anything" } }), beliefs: [], proofs, assets, essenceStories: [], citable, offer: withFooter });
+    const d = deckSlides(c, kit);
+    expect(bySection(d, "hook")[0].footer).toBeNull();
+    expect(bySection(d, "offer_transition")[0].footer).toBeNull();
+    expect(bySection(d, "offer_stack_cta").map((s) => s.footer)).toEqual(["DM me the word PLAN", "DM me the word PLAN"]);
+    expect(bySection(d, "q_a_close")[0].footer).toBe("DM me the word PLAN");
+    const plan = renderPlan(d);
+    expect(plan[plan.length - 1].boxes.find((b) => b.role === "footer")).toMatchObject({ text: "DM me the word PLAN", size: EYEBROW_SIZE, color: "4B5563" });
+    const holed = deckSlides(resolveSections({ webinar: { title: "t" }, presenter: "L", sections: base(), beliefs: [], proofs, assets, essenceStories: [], citable, offer: { ...offer, offer: { ...offer.offer, ctaFooter: "Go to [SALES PAGE URL]" } } }), kit);
+    expect(holed.refused[0]).toMatch(/\[SALES PAGE URL\] sits on a price slide/);
   });
   it("an omitted section is absent from the deck and the outline", () => {
     const d = deckSlides(ctx(base({ credibility_origin: { status: "omitted", keyPoints: "My origin\nThe week it changed" } })), kit);
@@ -104,17 +154,19 @@ describe("placeholders: refused in a claim or on a proof or price slide, warned 
   });
   it("the deck refuses with the slide named, from the same function the route runs, and a warning carries the count", () => {
     const d = deckSlides(ctx(base({ hook: { keyPoints: "Promise [X]% fewer no-shows" }, problem_frame: { keyPoints: "Send them to [SALES PAGE URL]" }, proof_block: { keyPoints: "[CLIENT NAME] doubled her list" } })), kit);
-    expect(d.refused).toEqual(["Slide 2 (Hook): [X]% sits in a sentence that carries a number: a claim with a hole in it.", "Slide 4 (Proof Block): [CLIENT NAME] sits on a proof slide, which is a claim by its nature."]);
-    expect(d.warnings).toEqual(["Slide 3 (Problem Frame): [SALES PAGE URL] is a gap to fill."]);
-    expect(d.placeholderCount).toBe(3);
-    expect(outlineText("t", d)).toContain("Deck outline · 5 slides · 3 unfilled on slides");
+    // 1 cover · 2 Hook · 3 Act 1 divider · 4 Problem Frame · 5 Proof Block · 6 Act 1 recap · 7, 8 dividers · 9 item · 10 price
+    expect(d.refused).toEqual(["Slide 2 (Hook): [X]% sits in a sentence that carries a number: a claim with a hole in it.", "Slide 5 (Proof Block): [CLIENT NAME] sits on a proof slide, which is a claim by its nature."]);
+    // The recap repeats the act's lines, so a gap on a line is a gap on the recap too; there it is a gap, not a claim
+    expect(d.warnings).toEqual(["Slide 4 (Problem Frame): [SALES PAGE URL] is a gap to fill.", "Slide 6 (Act 1 · Vehicle): [SALES PAGE URL] is a gap to fill.", "Slide 6 (Act 1 · Vehicle): [CLIENT NAME] is a gap to fill."]);
+    expect(d.placeholderCount).toBe(5);
+    expect(outlineText("t", d)).toContain("Deck outline · 10 slides · 5 unfilled on slides");
   });
   it("the deck refuses only on what it renders; the run sheet names the rest as off-slide", () => {
-    // A fifth key point past the four a slide carries, and a placeholder in the script: neither is on a slide
-    const c = ctx(base({ hook: { keyPoints: "Open the loop\nTwo\nThree\nFour\nFive\nSix\nSeven\nEight\nPromise [X]% fewer no-shows", script: "Send them to [SALES PAGE URL]." }, problem_frame: { keyPoints: "Costs [$N] a month" } }));
+    // Every key point is on a slide now, so the only slot the deck does not show is one in a script
+    const c = ctx(base({ hook: { keyPoints: "Open the loop", script: "Send them to [SALES PAGE URL]." }, problem_frame: { keyPoints: "Costs [$N] a month" } }));
     const d = deckSlides(c, kit);
-    expect(d.refused).toEqual(["Slide 4 (Problem Frame): [$N] sits in a sentence that carries a number: a claim with a hole in it."]);
-    expect(offSlidePlaceholders(c, d)).toEqual({ total: 3, offSlide: 2, sections: [{ section: "Hook", onSlide: [], offSlide: ["[X]%", "[SALES PAGE URL]"] }, { section: "Problem Frame", onSlide: ["[$N]"], offSlide: [] }] });
+    expect(d.refused[0]).toBe("Slide 4 (Problem Frame): [$N] sits in a sentence that carries a number: a claim with a hole in it.");
+    expect(offSlidePlaceholders(c, d)).toEqual({ total: 2, offSlide: 1, sections: [{ section: "Hook", onSlide: [], offSlide: ["[SALES PAGE URL]"] }, { section: "Problem Frame", onSlide: ["[$N]"], offSlide: [] }] });
   });
 });
 
@@ -123,12 +175,13 @@ describe("the brand kit on the file", () => {
     const d = deckSlides(ctx(base({ hook: { keyPoints: "Open the loop\nSend them to [SALES PAGE URL]" }, proof_block: {} }), [{ type: "vehicle", fromBelief: "a", toBelief: "b", proofId: "p1" }]), kit);
     const plan = renderPlan(d);
     for (const p of plan) {
-      expect(p.background).toBe("FAF8F5");
+      const dark = d.slides[p.n - 1].inverse;
+      expect(p.background).toBe(dark ? "6E6256" : "FAF8F5");
       for (const b of p.boxes) {
-        // Letters are ink or muted, both refused under 4.5:1 by the kit rules; the accent never colours a text box or sits under one
-        expect(["6E6256", "4B5563"]).toContain(b.color);
+        // Letters are ink or muted (inverseInk on the dark surfaces), all refused under 4.5:1 by the kit rules; the accent never colours a text box or sits under one
+        expect(dark ? ["FAF8F5"] : ["6E6256", "4B5563"]).toContain(b.color);
         expect(b.fill).not.toBe("DD2727");
-        if (b.role === "eyebrow") expect(b).toMatchObject({ size: EYEBROW_SIZE, color: "4B5563" });
+        if (b.role === "eyebrow" && !dark) expect(b).toMatchObject({ size: EYEBROW_SIZE, color: "4B5563" });
       }
       for (const r of p.rules) expect(r.color).toBe("DD2727");
     }
@@ -136,7 +189,9 @@ describe("the brand kit on the file", () => {
     expect(plan[1].rules).toHaveLength(1);
     const hook = plan[1];
     expect(hook.boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Open the loop", size: 40, color: "6E6256", fill: null, face: "Red Hat Display", bold: true });
-    expect(hook.boxes.find((b) => b.role === "body")).toMatchObject({ text: "Send them to [SALES PAGE URL]", size: BODY_SIZE, fill: "FFF3A3", face: "Helvetica Now Display", placeholder: true });
+    // The second key point is its own slide; its headline is the unfilled slot, drawn on the kit's placeholder colour
+    expect(plan[2].boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Send them to [SALES PAGE URL]", fill: "FFF3A3", face: "Red Hat Display", placeholder: true });
+    expect(plan.flatMap((p) => p.boxes).find((b) => b.role === "body")?.size).toBe(BODY_SIZE);
     const proof = plan.find((p) => d.slides[p.n - 1].kind === "proof")!;
     expect(proof.boxes.find((b) => b.role === "headline")).toMatchObject({ face: "Libre Baskerville", italic: true, bold: false });
     expect(proof.boxes.find((b) => b.role === "attribution")).toMatchObject({ text: "— Kate A.", color: "4B5563" });
@@ -151,5 +206,26 @@ describe("the brand kit on the file", () => {
     const noSlot = deckSlides(ctx(base({ hook: { keyPoints: "Send them to [SALES PAGE URL]" } })), { ...kit, placeholder: null });
     expect(noSlot.warnings).toContain(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
     expect(renderPlan(noSlot)[1].boxes.find((b) => b.role === "headline")?.fill).toBe(PLACEHOLDER_FALLBACK);
+  });
+});
+
+describe("the deck against the clock", () => {
+  it("slides a minute over the minutes without Q&A, per act, with the thin acts named and the offer's share", () => {
+    const c = ctx(base({ hook: { keyPoints: "One\nTwo\nThree" }, problem_frame: { keyPoints: "Four" } }));
+    const d = deckSlides(c, kit);
+    const p = deckPace(c, d);
+    const qa = c.sections.find((s) => s.sectionKey === "q_a_close")!.durationMin;
+    expect(qa).toBeGreaterThan(0);
+    expect(p.minutes).toBe(c.totalMin - qa);
+    expect(p.slides).toBe(d.slides.length);
+    expect(p.rate).toBe(Math.round((d.slides.length / p.minutes) * 10) / 10);
+    expect(p.offerSlides).toBe(2);
+    const vehicle = p.acts.find((a) => a.key === "vehicle")!;
+    // divider, Problem Frame, recap: three slides over the act's minutes
+    expect(vehicle.slides).toBe(3);
+    expect(vehicle.thin).toBe(vehicle.rate !== null && vehicle.rate < PACE_BAND[0]);
+    const closing = p.acts.find((a) => a.key === "closing")!;
+    expect(closing.minutes).toBe(c.acts.find((a) => a.key === "closing")!.durationMin - qa);
+    expect(paceLine(p)).toMatch(/^\d+ slides · ~\d+ min without Q&A · [\d.]+ slides a minute\. Reference pace is 1\.7; the band is 1\.2 to 1\.5\.( Thin: .+\.)? Offer segment is 2 of \d+ slides\.$/);
   });
 });

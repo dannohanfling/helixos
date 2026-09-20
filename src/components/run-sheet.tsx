@@ -129,7 +129,7 @@ export function RunSheetView({ c, unfilled }: { c: WebinarContext; unfilled: Ret
         </p>
         {unfilled.total ? (
           <p className="mt-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="runsheet-placeholders">
-            {unfilled.total} unfilled, {unfilled.offSlide} of them in points or scripts the deck does not show: {unfilled.sections.map((p) => `${p.section} (${[...p.onSlide, ...p.offSlide].join(" ")})`).join("; ")}.
+            {unfilled.total} unfilled, {unfilled.offSlide} of them in scripts the deck does not show: {unfilled.sections.map((p) => `${p.section} (${[...p.onSlide, ...p.offSlide].join(" ")})`).join("; ")}.
           </p>
         ) : null}
       </header>

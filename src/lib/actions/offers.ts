@@ -46,6 +46,7 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       guarantee: opt(formData, "guarantee"),
       scarcity: opt(formData, "scarcity"),
       urgency: opt(formData, "urgency"),
+      ctaFooter: opt(formData, "ctaFooter"),
       oneBelief: opt(formData, "oneBelief"),
       difference: opt(formData, "difference"),
       whyNow: opt(formData, "whyNow"),

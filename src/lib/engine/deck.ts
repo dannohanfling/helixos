@@ -6,7 +6,7 @@
  */
 import { formatPrice } from "./offer-score";
 import { brandKitProblems, normaliseHex } from "./subject";
-import { QA_SECTION_KEY, placeholdersIn, type SectionContext, type WebinarContext } from "./webinar-context";
+import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type SectionContext, type WebinarContext } from "./webinar-context";
 
 /** The brand as the renderer reads it. Null renders the neutral kit and says so. */
 export type DeckKit = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null };
@@ -30,7 +30,7 @@ export const HEADLINE_MAX_CHARS = 160;
 export const BODY_SIZE = 18;
 export const EYEBROW_SIZE = 11;
 
-export type SlideKind = "cover" | "section" | "proof" | "evidence" | "story" | "offer";
+export type SlideKind = "cover" | "divider" | "recap" | "section" | "proof" | "evidence" | "story" | "offer";
 export type PlaceholderHit = { text: string; refuse: boolean; why: string };
 export type Slide = {
   n: number;
@@ -47,6 +47,10 @@ export type Slide = {
   placeholders: PlaceholderHit[];
   /** The headline was longer than the floor allows, so the sentence is the first body line and the section name stands in. */
   overflow: boolean;
+  /** The cover and the act dividers: the dark surfaces, on the kit's inverse pair when it has one. */
+  inverse: boolean;
+  /** The offer's one line, on every slide from the offer onward. */
+  footer: string | null;
 };
 export type DeckResult = {
   slides: Slide[];
@@ -60,9 +64,13 @@ export type DeckResult = {
 };
 
 const ACT_LABEL: Record<string, string> = { opening: "Opening frame", vehicle: "Vehicle", internal: "Internal", external: "External", closing: "Closing frame" };
+const BELIEF_ACTS = new Set(["vehicle", "internal", "external"]);
 const isProofBlock = (s: SectionContext) => /proof block/i.test(s.name);
 const isCaseStudy = (s: SectionContext) => /case study/i.test(s.name);
 const isOfferStack = (s: SectionContext) => /offer stack/i.test(s.name);
+/** The reference deck's pace and the band a first draft should land in (code-deck-density-spec §4). Slides a minute. */
+export const REFERENCE_PACE = 1.7;
+export const PACE_BAND: [number, number] = [1.2, 1.5];
 
 export function headlineTier(text: string): { size: number; overflow: boolean } {
   const n = text.trim().length;
@@ -105,60 +113,102 @@ function direction(kind: SlideKind, body: string[]): string | null {
   if (kind === "proof") return "One quote, large. The attribution small beneath it. Nothing else on the slide.";
   if (kind === "evidence") return "The claim as the line. The source small beneath it.";
   if (kind === "story") return "The person's name as the line; the beats build beneath it.";
-  if (kind === "offer") return "The stack, one line each. The price on its own, last.";
+  if (kind === "offer") return body.length ? "The stack builds one line at a time. The price on its own, last." : "One line, lots of air.";
+  if (kind === "divider") return "Full-bleed on the dark ground. The act's name, then the shift.";
+  if (kind === "recap") return "The act's lines, one under another. Nothing new on this slide.";
   if (!body.length) return "One line, lots of air.";
   return null;
 }
 
-function slideOf(n: number, kind: SlideKind, s: SectionContext | null, headlineRaw: string, body: string[], extraNotes: string[] = []): Slide {
-  const tier = headlineTier(headlineRaw);
-  const headline = tier.overflow ? (s?.name ?? "") : headlineRaw.trim();
-  const finalBody = tier.overflow ? [headlineRaw.trim(), ...body] : body;
-  const notes = [s ? `Section: ${s.name}` : "", direction(kind, finalBody) ? `Visual direction: ${direction(kind, finalBody)}` : "", s?.deliveryNote ? `Delivery: ${s.deliveryNote}` : "", ...extraNotes].filter(Boolean);
-  return { n, kind, sectionKey: s?.sectionKey ?? null, section: s?.name ?? "", act: s?.act ?? "opening", eyebrow: s ? `${s.name} · ${ACT_LABEL[s.act] ?? s.act}` : "", headline, headlineSize: tier.overflow ? HEADLINE_FLOOR : tier.size, body: finalBody, notes, placeholders: placeholderHits(kind, [headline, ...finalBody]), overflow: tier.overflow };
+type SlideInput = { n: number; kind: SlideKind; s: SectionContext | null; headline: string; body?: string[]; extraNotes?: string[]; eyebrow?: string; act?: string; inverse?: boolean; footer?: string | null };
+function slideOf(i: SlideInput): Slide {
+  const { n, kind, s } = i;
+  const body = i.body ?? [];
+  const tier = headlineTier(i.headline);
+  const headline = tier.overflow ? (s?.name ?? "") : i.headline.trim();
+  const finalBody = tier.overflow ? [i.headline.trim(), ...body] : body;
+  const notes = [s ? `Section: ${s.name}` : "", direction(kind, finalBody) ? `Visual direction: ${direction(kind, finalBody)}` : "", s?.deliveryNote ? `Delivery: ${s.deliveryNote}` : "", ...(i.extraNotes ?? [])].filter(Boolean);
+  const footer = i.footer ?? null;
+  // The footer is the offer's line on a price slide: a hole in it refuses as clause (b) does, on every slide it sits on.
+  const placeholders = [...placeholderHits(kind, [headline, ...finalBody]), ...(footer ? placeholderHits("offer", [footer]) : [])].filter((h, idx, all) => all.findIndex((x) => x.text === h.text) === idx);
+  return { n, kind, sectionKey: s?.sectionKey ?? null, section: s?.name ?? "", act: i.act ?? s?.act ?? "opening", eyebrow: i.eyebrow ?? (s ? `${s.name} · ${ACT_LABEL[s.act] ?? s.act}` : ""), headline, headlineSize: tier.overflow ? HEADLINE_FLOOR : tier.size, body: finalBody, notes, placeholders, overflow: tier.overflow, inverse: Boolean(i.inverse), footer };
 }
 
-/** The slides for one webinar: one read of the resolver, nothing invented, nothing narrated. */
+/**
+ * The offer as a build, read off the Offer record: one slide per item, the running total re-shown after each, then the price
+ * against the total (the anchor, the standard close; a coach who does not want it removes the slide), the payment plan, the
+ * guarantee, and the scarcity and urgency lines only when the offer carries them. The total is a real sum or it is not shown:
+ * any item without a value and no total renders anywhere, because a total that quietly leaves an item out is a wrong number.
+ */
+export function offerBuild(o: ResolvedOffer): { headline: string; body: string[] }[] {
+  const items = o.components.filter((x) => x.type !== "guarantee");
+  const totals = items.length > 0 && items.every((x) => x.perceivedValue > 0);
+  const out: { headline: string; body: string[] }[] = [];
+  let running = 0;
+  for (const x of items) {
+    running += x.perceivedValue;
+    const line = (x.oneLiner ?? x.description ?? "").trim();
+    out.push({ headline: x.name, body: [...(line ? [line] : []), ...(totals ? [`Total value so far: ${formatPrice(running, o.currency)}`] : [])] });
+  }
+  const saving = totals ? running - o.price : 0;
+  out.push({ headline: o.name, body: [...(totals ? [`Total value: ${formatPrice(running, o.currency)}`, `Your price: ${formatPrice(o.price, o.currency)}`, ...(saving > 0 ? [`You save ${formatPrice(saving, o.currency)}`] : [])] : [formatPrice(o.price, o.currency)]), ...(o.paymentPlan ? [`Payment plan: ${o.paymentPlan}`] : [])] });
+  if (o.guarantee) out.push({ headline: o.guarantee, body: [] });
+  if (o.scarcity) out.push({ headline: o.scarcity, body: [] });
+  if (o.urgency) out.push({ headline: o.urgency, body: [] });
+  return out;
+}
+
+/** The slides for one webinar: one read of the resolver, nothing invented, nothing narrated. One idea per slide. */
 export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult {
   const kit = kitIn ?? NEUTRAL_KIT;
   const slides: Slide[] = [];
   const warnings: string[] = [];
   let n = 1;
-  slides.push({ n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false });
-  for (const s of c.sections) {
-    if (s.status === "omitted") continue;
-    const points = s.keyPoints;
-    const pointsSlide = () => (points.length ? slides.push(slideOf(n++, "section", s, points[0], points.slice(1, 4))) : 0);
-    if (isProofBlock(s)) {
-      // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
-      if (s.proof) slides.push(slideOf(n++, "proof", s, `“${s.proof.quote}”`, s.proof.who ? [`— ${s.proof.who}`] : []));
-      else if (s.evidence) slides.push(slideOf(n++, "evidence", s, s.evidence.claim, [s.evidence.citation]));
-      if (points.length) slides.push(slideOf(n++, "proof", s, points[0], points.slice(1, 4)));
-      continue;
+  const offer = c.sections.find((s) => s.offer)?.offer ?? null;
+  const stackOrder = c.sections.find(isOfferStack)?.order ?? Infinity;
+  // The footer runs from the offer onward: every slide of a section at or after the Offer Stack.
+  const footerFor = (s: SectionContext) => (offer?.ctaFooter && s.order >= stackOrder ? offer.ctaFooter : null);
+  slides.push({ n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
+  for (const act of c.acts) {
+    const belief = act.sections.find((s) => s.belief)?.belief ?? null;
+    // A divider opens each belief act: the act's label the wizard already holds, and the shift it makes, from the record.
+    if (BELIEF_ACTS.has(act.key)) slides.push(slideOf({ n: n++, kind: "divider", s: null, headline: act.label, body: belief ? [`From: ${belief.from}`, `To: ${belief.to}`] : [], eyebrow: act.label, act: act.key, inverse: true }));
+    for (const s of act.sections) {
+      if (s.status === "omitted") continue;
+      const points = s.keyPoints;
+      const footer = footerFor(s);
+      // One key point per slide, each under the section's eyebrow: the builder's own rule, kept by the exporter.
+      const pointSlides = (kind: SlideKind, extraOnFirst: string[] = []) => points.forEach((p, i) => slides.push(slideOf({ n: n++, kind, s, headline: p, extraNotes: i === 0 ? extraOnFirst : [], footer })));
+      if (isProofBlock(s)) {
+        // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
+        if (s.proof) slides.push(slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer }));
+        else if (s.evidence) slides.push(slideOf({ n: n++, kind: "evidence", s, headline: s.evidence.claim, body: [s.evidence.citation], footer }));
+        pointSlides("proof");
+        continue;
+      }
+      if (isCaseStudy(s)) {
+        if (s.story) slides.push(slideOf({ n: n++, kind: "story", s, headline: s.story.name, body: sentencesOf(s.story.body).slice(0, 3), footer }));
+        else pointSlides("section");
+        continue;
+      }
+      if (isOfferStack(s)) {
+        if (s.offer) for (const b of offerBuild(s.offer)) slides.push(slideOf({ n: n++, kind: "offer", s, headline: b.headline, body: b.body, footer }));
+        pointSlides("offer");
+        continue;
+      }
+      pointSlides("section", s.sectionKey === QA_SECTION_KEY && s.objections.length ? [`Objections to hand: ${s.objections.map((o) => o.name).join("; ")}`] : []);
     }
-    if (isCaseStudy(s)) {
-      if (s.story) slides.push(slideOf(n++, "story", s, s.story.name, sentencesOf(s.story.body).slice(0, 3)));
-      else pointsSlide();
-      continue;
-    }
-    if (isOfferStack(s)) {
-      if (s.offer) slides.push(slideOf(n++, "offer", s, s.offer.name, [...s.offer.components.map((x) => (x.oneLiner ? `${x.name} — ${x.oneLiner}` : x.name)), formatPrice(s.offer.price, s.offer.currency)]));
-      if (points.length) slides.push(slideOf(n++, "offer", s, points[0], points.slice(1, 4)));
-      continue;
-    }
-    if (points.length) {
-      const extra = s.sectionKey === QA_SECTION_KEY && s.objections.length ? [`Objections to hand: ${s.objections.map((o) => o.name).join("; ")}`] : [];
-      slides.push(slideOf(n++, "section", s, points[0], points.slice(1, 4), extra));
-      if (points.length > 4) slides.push(slideOf(n++, "section", s, points[4], points.slice(5, 8)));
-    }
+    // A recap closes each belief act: the first line of every section that has one. Nothing new on it.
+    const lines = act.sections.filter((s) => s.status !== "omitted" && s.keyPoints.length).map((s) => s.keyPoints[0]);
+    if (BELIEF_ACTS.has(act.key) && lines.length) slides.push(slideOf({ n: n++, kind: "recap", s: null, headline: `${act.label} · recap`, body: lines.slice(0, 6), eyebrow: act.label, act: act.key }));
   }
   const refused: string[] = [];
   for (const sl of slides) {
     for (const p of sl.placeholders) {
-      if (p.refuse) refused.push(`Slide ${sl.n} (${sl.section || "cover"}): ${p.why}`);
-      else warnings.push(`Slide ${sl.n} (${sl.section || "cover"}): ${p.why}`);
+      if (p.refuse) refused.push(`Slide ${sl.n} (${sl.section || sl.eyebrow || "cover"}): ${p.why}`);
+      else warnings.push(`Slide ${sl.n} (${sl.section || sl.eyebrow || "cover"}): ${p.why}`);
     }
-    if (sl.overflow) warnings.push(`Slide ${sl.n} (${sl.section}): the first key point is over ${HEADLINE_MAX_CHARS} characters, so it is the first body line and the section name stands as the headline. Shorten the key point to bring it back up.`);
+    if (sl.overflow) warnings.push(`Slide ${sl.n} (${sl.section}): the key point is over ${HEADLINE_MAX_CHARS} characters, so it is the body and the section name stands as the headline. Shorten the key point to bring it back up.`);
   }
   const kitProblems = kitIn ? brandKitProblems(kitIn) : [];
   for (const p of kitProblems) refused.push(`Brand kit: ${p}`);
@@ -167,9 +217,32 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn) };
 }
 
+/**
+ * The deck against the clock: slides a minute over the minutes a generator actually fills (Q&A netted off, as the reference
+ * deck's 90 minutes were), per act too, and the offer's share. A count on its own says nothing; a count against a rate does.
+ */
+export type DeckPace = { slides: number; minutes: number; rate: number | null; acts: { key: string; label: string; slides: number; minutes: number; rate: number | null; thin: boolean }[]; offerSlides: number };
+export function deckPace(c: WebinarContext, d: DeckResult): DeckPace {
+  const qa = c.sections.find((s) => s.sectionKey === QA_SECTION_KEY);
+  const per = (slides: number, minutes: number) => (minutes > 0 ? Math.round((slides / minutes) * 10) / 10 : null);
+  const minutes = c.totalMin - (qa?.durationMin ?? 0);
+  const acts = c.acts.map((a) => {
+    const mins = a.durationMin - (a.key === "closing" ? (qa?.durationMin ?? 0) : 0);
+    const count = d.slides.filter((s) => s.act === a.key && s.kind !== "cover").length;
+    const rate = per(count, mins);
+    return { key: a.key, label: a.label, slides: count, minutes: mins, rate, thin: rate !== null && rate < PACE_BAND[0] };
+  });
+  return { slides: d.slides.length, minutes, rate: per(d.slides.length, minutes), acts, offerSlides: d.slides.filter((s) => s.kind === "offer").length };
+}
+/** The readout on the Deck step, one line. */
+export function paceLine(p: DeckPace): string {
+  const thin = p.acts.filter((a) => a.thin).map((a) => `${a.label} is at ${a.rate}`);
+  return `${p.slides} slides · ~${p.minutes} min without Q&A · ${p.rate ?? "–"} slides a minute. Reference pace is ${REFERENCE_PACE}; the band is ${PACE_BAND[0]} to ${PACE_BAND[1]}.${thin.length ? ` Thin: ${thin.join("; ")}.` : ""} Offer segment is ${p.offerSlides} of ${p.slides} slides.`;
+}
+
 /* ───────────── The render plan ───────────── */
 
-export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "cover-title" | "cover-presenter"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean };
+export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean };
 /** A rule drawn in the accent: the one thing the accent draws besides a fill. Never under text. */
 export type Rule = { slide: number; color: string; y: number };
 export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string };
@@ -183,21 +256,27 @@ export function renderPlan(d: DeckResult): SlidePlan[] {
   const k = d.kit;
   const hex = (v: string) => normaliseHex(v);
   const placeholderColor = hex(k.placeholder ?? "") || PLACEHOLDER_FALLBACK;
+  const hasInverse = Boolean(hex(k.inverseGround ?? "") && hex(k.inverseInk ?? ""));
   return d.slides.map((s) => {
     const boxes: TextBox[] = [];
     const mark = (text: string) => placeholdersIn(text).length > 0;
+    // The dark surfaces take the inverse pair when the kit has one; on it every letter is inverseInk, the one pair the kit checked.
+    const dark = s.inverse && hasInverse;
+    const ink = dark ? hex(k.inverseInk!) : hex(k.ink);
+    const muted = dark ? hex(k.inverseInk!) : hex(k.muted);
     if (s.kind === "cover") {
-      boxes.push({ slide: s.n, role: "cover-title", text: s.headline, size: s.headlineSize, color: hex(k.ink), fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
-      boxes.push({ slide: s.n, role: "cover-presenter", text: s.body[0] ?? "", size: BODY_SIZE, color: hex(k.muted), fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "cover-title", text: s.headline, size: s.headlineSize, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "cover-presenter", text: s.body[0] ?? "", size: BODY_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
     } else {
-      boxes.push({ slide: s.n, role: "eyebrow", text: s.eyebrow, size: EYEBROW_SIZE, color: hex(k.muted), fill: null, face: k.displayFont, bold: false, italic: false, bullet: false, placeholder: false });
-      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: s.headlineSize, color: mark(s.headline) ? hex(k.ink) : hex(k.ink), fill: mark(s.headline) ? placeholderColor : null, face: s.kind === "proof" && k.quoteFont ? k.quoteFont : k.displayFont, bold: s.kind !== "proof", italic: s.kind === "proof", bullet: false, placeholder: mark(s.headline) });
+      boxes.push({ slide: s.n, role: "eyebrow", text: s.eyebrow, size: EYEBROW_SIZE, color: muted, fill: null, face: k.displayFont, bold: false, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: s.headlineSize, color: ink, fill: mark(s.headline) ? placeholderColor : null, face: s.kind === "proof" && k.quoteFont ? k.quoteFont : k.displayFont, bold: s.kind !== "proof", italic: s.kind === "proof", bullet: false, placeholder: mark(s.headline) });
       for (const line of s.body) {
         const attribution = s.kind === "proof" && line.startsWith("— ");
-        boxes.push({ slide: s.n, role: attribution ? "attribution" : "body", text: line, size: attribution ? EYEBROW_SIZE + 3 : BODY_SIZE, color: attribution ? hex(k.muted) : hex(k.ink), fill: mark(line) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: !attribution && s.kind !== "offer" ? true : false, placeholder: mark(line) });
+        boxes.push({ slide: s.n, role: attribution ? "attribution" : "body", text: line, size: attribution ? EYEBROW_SIZE + 3 : BODY_SIZE, color: attribution ? muted : ink, fill: mark(line) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: !attribution && s.kind !== "offer" && s.kind !== "divider", placeholder: mark(line) });
       }
+      if (s.footer) boxes.push({ slide: s.n, role: "footer", text: s.footer, size: EYEBROW_SIZE, color: muted, fill: mark(s.footer) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: mark(s.footer) });
     }
-    return { n: s.n, background: hex(k.ground), boxes, rules: s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }], notes: s.notes.join("\n") };
+    return { n: s.n, background: dark ? hex(k.inverseGround!) : hex(k.ground), boxes, rules: s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }], notes: s.notes.join("\n") };
   });
 }
 

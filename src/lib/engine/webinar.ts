@@ -179,7 +179,12 @@ export function actPresence(beliefs: BuildBelief[], known?: KnownRefs): { key: "
   }));
 }
 
-export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; known?: KnownRefs; presenter?: string; presenterAliases?: string[]; review: { verdict: string } | null }): BuildResult {
+/** What the deck check reads: how many refusals the Deck step shows, and the deck's pace in slides a minute (null with no minutes). */
+export type DeckCheckInput = { refused: number; rate: number | null };
+/** The band a first draft should land in, from the reference deck (code-deck-density-spec §4). */
+export const DECK_PACE_FLOOR = 1.2;
+
+export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; known?: KnownRefs; presenter?: string; presenterAliases?: string[]; deck?: DeckCheckInput; review: { verdict: string } | null }): BuildResult {
   const { webinar: w, beliefs, components, review } = input;
   // A section left out on purpose is not a section waiting for a script: it is out of every count below and off the clock.
   const omitted = input.sections.filter((s) => s.status === "omitted");
@@ -222,6 +227,12 @@ export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLik
   if (input.presenter) {
     const wrong = sections.map((s) => ({ s, m: nameMismatch(s.script, input.presenter!, input.presenterAliases ?? []) })).filter((x) => x.m);
     checks.push({ key: "presenterName", label: "Scripts speak as the presenter", ok: !wrong.length, level: "warn", detail: wrong.length ? wrong.map((x) => `${x.s.name ?? x.s.sectionKey} says "I'm ${x.m!.found}"; the presenter is ${x.m!.presenter}.`).join(" ") : `No script introduces anyone but ${input.presenter}.` });
+  }
+  // The twelfth check reads the deck the export would make: a refused export is a must; a deck under the pace band is a warning.
+  if (input.deck) {
+    const { refused, rate } = input.deck;
+    const thin = rate !== null && rate < DECK_PACE_FLOOR;
+    checks.push({ key: "deck", label: refused ? "Deck exports" : "Deck moves at a live pace", ok: !refused && !thin, level: refused ? "must" : "warn", detail: refused ? `${refused} ${refused === 1 ? "refusal" : "refusals"} on the Deck step: a claim with a hole in it never leaves as a slide.` : rate === null ? "No minutes to pace the deck against." : `${rate} slides a minute; the band is ${DECK_PACE_FLOOR} to 1.5.${thin ? " Under the band: the deck sits still while the presenter talks." : ""}` });
   }
   const must = checks.filter((c) => c.level === "must" && !c.ok);
   const warn = checks.filter((c) => c.level === "warn" && !c.ok);

@@ -45,7 +45,7 @@ import {
 } from "@/lib/engine/webinar";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, presenterOf } from "@/lib/queries/webinar";
-import { HEADLINE_MAX_CHARS, deckSlides, type DeckResult } from "@/lib/engine/deck";
+import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult } from "@/lib/engine/deck";
 import { formatPrice } from "@/lib/engine/offer-score";
 import { essenceFor } from "@/lib/queries/essence";
 import type { Story } from "@/lib/engine/essence";
@@ -154,7 +154,11 @@ export default async function WebinarWizardPage({
   // One builder for every id a check reads: the same one the subject uses, so a new kind of reference is one line, once.
   const known = knownReferences({ proofs, stories: assets.filter((a) => a.type === "story"), essenceStories, citable: evidence, offers });
   const presenterName = presenterOf(w, v.user.name);
-  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, presenter: presenterName, presenterAliases, review });
+  // The deck as the export will make it, from the same function the route runs: what refuses there refuses here, before the click, and the twelfth check reads it.
+  const context = await contextFor(v, w);
+  const deck: DeckResult = deckSlides(context, brandKit ?? null);
+  const pace: DeckPace = deckPace(context, deck);
+  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, presenter: presenterName, presenterAliases, deck: { refused: deck.refused.length, rate: pace.rate }, review });
   const numbers = { runtime: build.totalMinutes, openingMinutes: sections.filter((s) => s.act === "opening").reduce((a, s) => a + s.durationMin, 0) };
   const staleStatus = statusStale(w.status, build);
   const presence = actPresence(beliefs, known);
@@ -170,8 +174,6 @@ export default async function WebinarWizardPage({
     nextStep(progress.steps)) as StepKey;
   // A step the URL names that does not exist is sent, visibly, to the step that does: never rendered as another step under the wrong address.
   if (sp.step && sp.step !== step) redirect(`/webinars/${w.id}?step=${step}`);
-  // The deck as the export will make it, from the same function the route runs: what refuses there refuses here, before the click.
-  const deck: DeckResult | null = step === "deck" ? deckSlides(await contextFor(v, w), brandKit ?? null) : null;
   const stories = assets.filter((a) => a.type === "story");
   const frameworks = assets
     .filter((a) => a.type === "framework")
@@ -1264,7 +1266,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep webinarId={w.id} deck={deck!} />
+        <DeckStep webinarId={w.id} deck={deck} pace={pace} />
       ) : null}
 
       {step === "review" ? (
@@ -1409,7 +1411,6 @@ export default async function WebinarWizardPage({
                 ))}
               </ul>
               <p className="mt-2 text-xs text-ink-3">Read off the record every time the page opens. Warnings don&apos;t block; the rest do.</p>
-              <p className="mt-1 text-xs text-ink-3" data-testid="deck-unchecked">The deck is not checked yet: nothing here reads the slides. That check lands with slide density.</p>
             </Card>
           </div>
         </div>
@@ -1597,7 +1598,7 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, deck }: { webinarId: string; deck: DeckResult }) {
+function DeckStep({ webinarId, deck, pace }: { webinarId: string; deck: DeckResult; pace: DeckPace }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
   const refused = deck.refused.length > 0;
   return (
@@ -1617,6 +1618,9 @@ function DeckStep({ webinarId, deck }: { webinarId: string; deck: DeckResult }) 
         )
       }
     >
+      <p className="mb-2 text-sm font-medium" data-testid="deck-pace">
+        {paceLine(pace)}
+      </p>
       <p className="mb-3 text-sm text-ink-2" data-testid="deck-honesty">
         A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in {deck.kit.name}
         {deck.kitApplied ? "" : " (no brand kit on this workspace yet)"}.
@@ -1645,7 +1649,7 @@ function DeckStep({ webinarId, deck }: { webinarId: string; deck: DeckResult }) 
       ) : null}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {deck.slides.map((s) => (
-          <div key={s.n} className="rounded-lg border p-3 text-sm" data-testid="deck-slide" data-kind={s.kind} data-section={s.sectionKey ?? ""}>
+          <div key={s.n} className={`rounded-lg border p-3 text-sm ${s.inverse ? "bg-surface-2" : ""}`} data-testid="deck-slide" data-kind={s.kind} data-section={s.sectionKey ?? ""}>
             <div className="flex items-center justify-between text-[11px] text-ink-3">
               <span>
                 {s.n} · {s.section || "Cover"} · {s.headlineSize}pt
@@ -1653,9 +1657,10 @@ function DeckStep({ webinarId, deck }: { webinarId: string; deck: DeckResult }) 
               <span>{ACT_ICON[s.act]}</span>
             </div>
             <div className={`mt-1 font-semibold ${s.kind === "proof" && s.headline.startsWith("“") ? "italic" : ""}`}>{s.headline}</div>
+            {s.footer ? <p className="mt-1 text-[11px] text-ink-3" data-testid="deck-footer">{s.footer}</p> : null}
             {s.overflow ? (
               <p className="mt-1 text-[11px] text-warn" data-testid="deck-overflow">
-                The first key point is over {HEADLINE_MAX_CHARS} characters, so it is the first body line and the section name stands as the headline.
+                The key point is over {HEADLINE_MAX_CHARS} characters, so it is the body and the section name stands as the headline.
               </p>
             ) : null}
             {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2">{s.body.join("\n")}</p> : null}

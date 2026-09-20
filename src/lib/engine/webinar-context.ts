@@ -10,7 +10,7 @@ export type ProofRow = { id: string; who: string | null; name: string; quote?: s
 export type AssetRow = { id: string; type: string; name: string; body: string; summary?: string | null; useWhen?: string | null; reframe?: string | null; proof?: string | null; extra?: Record<string, string | null> };
 export type EssenceStory = { name: string; summary: string; when_to_use?: string };
 export type CitableRow = { id: string; source: "own" | "shared"; claim: string; authors: string; year: number | null; title: string; url?: string | null; doi?: string | null };
-export type OfferRow = { name: string; price: number; currency?: string | null; container: string; guarantee?: string | null; paymentPlan?: string | null; objectionAssetIds?: string[] };
+export type OfferRow = { name: string; price: number; currency?: string | null; container: string; guarantee?: string | null; paymentPlan?: string | null; scarcity?: string | null; urgency?: string | null; ctaFooter?: string | null; objectionAssetIds?: string[] };
 export type ComponentRow = { name: string; type: string; description?: string | null; oneLiner?: string | null; perceivedValue: number; beliefBreak: string };
 export type BeliefRow = { type: string; fromBelief: string | null; toBelief: string | null; proofId?: string | null; proof?: string | null; proofWho?: string | null; proofPermissionAt?: string | null; proofChangedAt?: string | null; storyAssetId?: string | null; evidenceId?: string | null };
 export type SectionRow = { sectionKey: string; act: ActKey; order: number; name: string; status: string; keyPoints: string | null; script: string | null; transitionIn: string | null; transitionOut: string | null; deliveryNote?: string | null; assetId: string | null; durationMin: number };
@@ -19,7 +19,7 @@ export type ResolvedProof = { id: string; who: string; quote: string; source: "b
 export type ResolvedStory = { id: string; name: string; body: string; moral: string | null; useWhen: string | null; source: "bank" | "essence" };
 export type ResolvedEvidence = { id: string; claim: string; citation: string };
 export type ResolvedObjection = { id: string; name: string; body: string; reframe: string | null; proof: string | null };
-export type ResolvedOffer = { name: string; price: number; currency: string; container: string; guarantee: string | null; paymentPlan: string | null; components: ComponentRow[]; objections: ResolvedObjection[] };
+export type ResolvedOffer = { name: string; price: number; currency: string; container: string; guarantee: string | null; paymentPlan: string | null; scarcity: string | null; urgency: string | null; ctaFooter: string | null; components: ComponentRow[]; objections: ResolvedObjection[] };
 
 export type SectionContext = {
   sectionKey: string;
@@ -109,6 +109,9 @@ export function resolveSections(input: { webinar: { title: string }; presenter: 
         container: input.offer.offer.container,
         guarantee: input.offer.offer.guarantee ?? null,
         paymentPlan: input.offer.offer.paymentPlan ?? null,
+        scarcity: input.offer.offer.scarcity?.trim() || null,
+        urgency: input.offer.offer.urgency?.trim() || null,
+        ctaFooter: input.offer.offer.ctaFooter?.trim() || null,
         components: input.offer.components,
         objections: (input.offer.offer.objectionAssetIds ?? []).map((id) => input.assets.find((a) => a.id === id && a.type === "objection")).filter((a): a is AssetRow => Boolean(a)).map(objection),
       }

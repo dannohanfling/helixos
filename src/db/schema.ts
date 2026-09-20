@@ -479,6 +479,8 @@ export const offers = sqliteTable(
     guarantee: text("guarantee"),
     scarcity: text("scarcity"),
     urgency: text("urgency"),
+    /** The one line every slide carries from the offer onward: where to go and what to do. Empty means no footer. */
+    ctaFooter: text("cta_footer"),
     oneBelief: text("one_belief"),
     difference: text("difference"),
     whyNow: text("why_now"),

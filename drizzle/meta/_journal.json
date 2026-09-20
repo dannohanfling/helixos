@@ -330,6 +330,13 @@
       "when": 1789931231589,
       "tag": "0046_deck_kit",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1789938926614,
+      "tag": "0047_offer_cta_footer",
+      "breakpoints": true
     }
   ]
 }
