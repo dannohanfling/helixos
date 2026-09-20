@@ -546,6 +546,10 @@ export const webinars = sqliteTable(
     mechanismWaivedReason: text("mechanism_waived_reason"),
     /** Who presents: the title slide, the file's author and the script's first person. Empty means the subject's own name. */
     presenter: text("presenter"),
+    /** The one line for staying to the end; empty means no slide. */
+    stayLine: text("stay_line"),
+    /** The origin story in eight beats, keyed by ORIGIN_BEATS; a beat left empty makes no slide. */
+    originStory: text("origin_story", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     /** Whose material this is built from. Null is the workspace owner, the only value today; later "client_records:<id>". */
     subjectRef: text("subject_ref"),
     offerId: text("offer_id"),
@@ -623,6 +627,8 @@ export const webinarSections = sqliteTable(
     durationMin: integer("duration_min").notNull().default(4),
     /** Omitted: the section is left out on purpose (no consented case study for this act); the deck and the run sheet skip it. */
     status: text("status", { enum: ["todo", "drafted", "final", "omitted"] }).notNull().default("todo"),
+    /** reveal: the section's key points build up one slide at a time, the way a live presenter paces a reveal. */
+    buildStyle: text("build_style", { enum: ["none", "reveal"] }).notNull().default("none"),
   },
   (t) => [uniqueIndex("webinar_sections_key").on(t.webinarId, t.sectionKey)],
 );

@@ -94,6 +94,18 @@ export function readinessScore(ratings: Record<string, number>): { score: number
 }
 
 export type SectionLike = { sectionKey: string; act: ActKey; order?: number; name?: string; status: string; script: string | null; assetId?: string | null; durationMin: number; keyPoints?: string | null };
+/** The origin story's eight beats (code-deck-density-spec §2.1): one slide each when filled. Labels and help are provisional. */
+export const ORIGIN_BEATS: { key: string; label: string; help: string }[] = [
+  { key: "wanted", label: "What you wanted", help: "The thing you were after before any of this: one sentence, in the past tense." },
+  { key: "outside", label: "The struggle outside", help: "What was in the way that you could point at: the market, the money, the hours." },
+  { key: "inside", label: "The struggle inside", help: "What was in the way that you could not point at: the doubt, the story you told yourself." },
+  { key: "wall", label: "The wall", help: "The moment it stopped working. A day, a number, a conversation." },
+  { key: "epiphany", label: "The epiphany", help: "What you saw that you had not seen. The belief that changed." },
+  { key: "plan", label: "The plan", help: "What you built from it. Name the mechanism if it has one." },
+  { key: "result", label: "The result", help: "What happened, with the number if you have one and the permission to say it." },
+  { key: "transformation", label: "The transformation", help: "Who you are now that you were not then. The line the room remembers." },
+];
+
 export type BuildWebinar = { audience?: string | null; coreProblem?: string | null; promise?: string | null; mechanismName?: string | null; mechanismWaivedReason?: string | null; desiredResult?: string | null; offerId?: string | null; updatedAt?: string | null };
 export type BuildCheck = { key: string; label: string; ok: boolean; level: "must" | "warn"; detail: string };
 export type BuildResult = {

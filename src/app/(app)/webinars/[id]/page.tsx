@@ -26,6 +26,7 @@ import {
 } from "@/components/ui";
 import {
   ACTS,
+  ORIGIN_BEATS,
   READINESS_DIMENSIONS,
   SECTION_TEMPLATES,
   STEPS,
@@ -416,6 +417,22 @@ export default async function WebinarWizardPage({
                     data-testid="mechanism-waived"
                   />
                 </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Stay to the end" hint="one line, its own slide after the hook: what they get by staying. Empty means no slide.">
+                  <input className="field" name="stayLine" defaultValue={w.stayLine ?? ""} data-testid="stay-line" />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="label">Your origin story, in eight beats</p>
+                <p className="mb-2 text-xs text-ink-3">One slide per beat you fill, in this order, as the Credibility / Origin section&apos;s own slides. A beat left empty makes no slide. Who it is for and not for come from the linked offer.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {ORIGIN_BEATS.map((b) => (
+                    <Field key={b.key} label={b.label} hint={b.help}>
+                      <input className="field" name={`beat_${b.key}`} defaultValue={w.originStory?.[b.key] ?? ""} data-testid={`beat-${b.key}`} />
+                    </Field>
+                  ))}
+                </div>
               </div>
               <div className="sm:col-span-2">
                 <button className="btn btn-accent" type="submit">
@@ -894,6 +911,9 @@ export default async function WebinarWizardPage({
                     data-testid="delivery-note"
                   />
                 </Field>
+                <label className="flex items-center gap-2 text-sm" title="The first key point stays as the line; each further point is added beneath it on the next slide, the way a live presenter paces a reveal.">
+                  <input type="checkbox" name="buildStyle" value="reveal" defaultChecked={section.buildStyle === "reveal"} data-testid="build-reveal" /> Build it up, one point per slide
+                </label>
                 <Field label="Minutes">
                   <input
                     className="field tabular"

@@ -68,6 +68,9 @@ const BELIEF_ACTS = new Set(["vehicle", "internal", "external"]);
 const isProofBlock = (s: SectionContext) => /proof block/i.test(s.name);
 const isCaseStudy = (s: SectionContext) => /case study/i.test(s.name);
 const isOfferStack = (s: SectionContext) => /offer stack/i.test(s.name);
+const isOrigin = (s: SectionContext) => /credibility|origin/i.test(s.name);
+/** The fit slides' lines: the Offer form's own labels for the two fields they read. */
+export const FIT_HEADLINES = { forYouIf: "This is for you if…", notForYouIf: "This is not for you if…" };
 /** The reference deck's pace and the band a first draft should land in (code-deck-density-spec §4). Slides a minute. */
 export const REFERENCE_PACE = 1.7;
 export const PACE_BAND: [number, number] = [1.2, 1.5];
@@ -177,8 +180,12 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
       if (s.status === "omitted") continue;
       const points = s.keyPoints;
       const footer = footerFor(s);
-      // One key point per slide, each under the section's eyebrow: the builder's own rule, kept by the exporter.
-      const pointSlides = (kind: SlideKind, extraOnFirst: string[] = []) => points.forEach((p, i) => slides.push(slideOf({ n: n++, kind, s, headline: p, extraNotes: i === 0 ? extraOnFirst : [], footer })));
+      // One key point per slide, each under the section's eyebrow: the builder's own rule, kept by the exporter. A section set to
+      // reveal builds instead: the first point as the line, then the same line with each further point added beneath it.
+      const pointSlides = (kind: SlideKind, extraOnFirst: string[] = []) =>
+        points.forEach((p, i) => slides.push(slideOf(s.buildStyle === "reveal" ? { n: n++, kind, s, headline: points[0], body: points.slice(1, i + 1), extraNotes: i === 0 ? extraOnFirst : [], footer } : { n: n++, kind, s, headline: p, extraNotes: i === 0 ? extraOnFirst : [], footer })));
+      // The origin story's beats are the Credibility / Origin section's own slides, one each, before its key points.
+      if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer }));
       if (isProofBlock(s)) {
         // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
         if (s.proof) slides.push(slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer }));
@@ -197,6 +204,13 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
         continue;
       }
       pointSlides("section", s.sectionKey === QA_SECTION_KEY && s.objections.length ? [`Objections to hand: ${s.objections.map((o) => o.name).join("; ")}`] : []);
+      // After the opening act's first section: who this is for and not for, off the Offer record, and the line for staying to the end.
+      if (act.key === "opening" && s === act.sections.find((x) => x.status !== "omitted")) {
+        // These are the record's, not the section's: no section key, so a section's own count and notes stay its own.
+        if (c.fit.forYouIf) slides.push(slideOf({ n: n++, kind: "section", s: null, act: "opening", headline: FIT_HEADLINES.forYouIf, body: sentencesOf(c.fit.forYouIf).slice(0, 4), eyebrow: `Who it is for · ${ACT_LABEL.opening}` }));
+        if (c.fit.notForYouIf) slides.push(slideOf({ n: n++, kind: "section", s: null, act: "opening", headline: FIT_HEADLINES.notForYouIf, body: sentencesOf(c.fit.notForYouIf).slice(0, 4), eyebrow: `Who it is for · ${ACT_LABEL.opening}` }));
+        if (c.stayLine) slides.push(slideOf({ n: n++, kind: "section", s: null, act: "opening", headline: c.stayLine, eyebrow: `Stay to the end · ${ACT_LABEL.opening}` }));
+      }
     }
     // A recap closes each belief act: the first line of every section that has one. Nothing new on it.
     const lines = act.sections.filter((s) => s.status !== "omitted" && s.keyPoints.length).map((s) => s.keyPoints[0]);

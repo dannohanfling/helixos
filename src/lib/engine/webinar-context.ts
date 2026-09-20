@@ -5,21 +5,22 @@
  */
 import { ACTS, ACT_NUMBER, clock, freeTextProofUsable, sectionPace, type ActKey } from "./webinar";
 import { formatPrice } from "./offer-score";
+import { ORIGIN_BEATS } from "./webinar";
 
 export type ProofRow = { id: string; who: string | null; name: string; quote?: string | null; longVersion?: string | null; shortVersion?: string | null; resultAfter?: string | null; status: string };
 export type AssetRow = { id: string; type: string; name: string; body: string; summary?: string | null; useWhen?: string | null; reframe?: string | null; proof?: string | null; extra?: Record<string, string | null> };
 export type EssenceStory = { name: string; summary: string; when_to_use?: string };
 export type CitableRow = { id: string; source: "own" | "shared"; claim: string; authors: string; year: number | null; title: string; url?: string | null; doi?: string | null };
-export type OfferRow = { name: string; price: number; currency?: string | null; container: string; guarantee?: string | null; paymentPlan?: string | null; scarcity?: string | null; urgency?: string | null; ctaFooter?: string | null; objectionAssetIds?: string[] };
+export type OfferRow = { name: string; price: number; currency?: string | null; container: string; guarantee?: string | null; paymentPlan?: string | null; scarcity?: string | null; urgency?: string | null; ctaFooter?: string | null; forYouIf?: string | null; notForYouIf?: string | null; objectionAssetIds?: string[] };
 export type ComponentRow = { name: string; type: string; description?: string | null; oneLiner?: string | null; perceivedValue: number; beliefBreak: string };
 export type BeliefRow = { type: string; fromBelief: string | null; toBelief: string | null; proofId?: string | null; proof?: string | null; proofWho?: string | null; proofPermissionAt?: string | null; proofChangedAt?: string | null; storyAssetId?: string | null; evidenceId?: string | null };
-export type SectionRow = { sectionKey: string; act: ActKey; order: number; name: string; status: string; keyPoints: string | null; script: string | null; transitionIn: string | null; transitionOut: string | null; deliveryNote?: string | null; assetId: string | null; durationMin: number };
+export type SectionRow = { sectionKey: string; act: ActKey; order: number; name: string; status: string; buildStyle?: string | null; keyPoints: string | null; script: string | null; transitionIn: string | null; transitionOut: string | null; deliveryNote?: string | null; assetId: string | null; durationMin: number };
 
 export type ResolvedProof = { id: string; who: string; quote: string; source: "bank" | "typed" };
 export type ResolvedStory = { id: string; name: string; body: string; moral: string | null; useWhen: string | null; source: "bank" | "essence" };
 export type ResolvedEvidence = { id: string; claim: string; citation: string };
 export type ResolvedObjection = { id: string; name: string; body: string; reframe: string | null; proof: string | null };
-export type ResolvedOffer = { name: string; price: number; currency: string; container: string; guarantee: string | null; paymentPlan: string | null; scarcity: string | null; urgency: string | null; ctaFooter: string | null; components: ComponentRow[]; objections: ResolvedObjection[] };
+export type ResolvedOffer = { name: string; price: number; currency: string; container: string; guarantee: string | null; paymentPlan: string | null; scarcity: string | null; urgency: string | null; ctaFooter: string | null; forYouIf: string | null; notForYouIf: string | null; components: ComponentRow[]; objections: ResolvedObjection[] };
 
 export type SectionContext = {
   sectionKey: string;
@@ -38,6 +39,8 @@ export type SectionContext = {
   transitionOut: string | null;
   deliveryNote: string | null;
   status: string;
+  /** reveal: the key points build up one slide at a time. */
+  buildStyle: "none" | "reveal";
   belief: { from: string; to: string } | null;
   proof: ResolvedProof | null;
   story: ResolvedStory | null;
@@ -54,6 +57,12 @@ export type ActContext = { key: ActKey; label: string; startMin: number; endMin:
 export type WebinarContext = {
   title: string;
   presenter: string;
+  /** The one line for staying to the end, or null. */
+  stayLine: string | null;
+  /** The origin story's filled beats, in order. */
+  originStory: { key: string; label: string; text: string }[];
+  /** Who the offer is for and not for, read off the Offer record. */
+  fit: { forYouIf: string | null; notForYouIf: string | null };
   acts: ActContext[];
   sections: SectionContext[];
   totalMin: number;
@@ -98,7 +107,7 @@ export function resolveEvidence(b: BeliefRow | undefined, citable: CitableRow[])
 
 const objection = (a: AssetRow): ResolvedObjection => ({ id: a.id, name: a.name, body: a.body, reframe: a.reframe ?? null, proof: a.proof ?? null });
 
-export function resolveSections(input: { webinar: { title: string }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null }): WebinarContext {
+export function resolveSections(input: { webinar: { title: string; stayLine?: string | null; originStory?: Record<string, string> | null }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null }): WebinarContext {
   // Left out on purpose means left out: no clock, no slide, no row on the run sheet.
   const ordered = input.sections.filter((s) => s.status !== "omitted").slice().sort((a, b) => a.order - b.order);
   const offer: ResolvedOffer | null = input.offer
@@ -112,6 +121,8 @@ export function resolveSections(input: { webinar: { title: string }; presenter: 
         scarcity: input.offer.offer.scarcity?.trim() || null,
         urgency: input.offer.offer.urgency?.trim() || null,
         ctaFooter: input.offer.offer.ctaFooter?.trim() || null,
+        forYouIf: input.offer.offer.forYouIf?.trim() || null,
+        notForYouIf: input.offer.offer.notForYouIf?.trim() || null,
         components: input.offer.components,
         objections: (input.offer.offer.objectionAssetIds ?? []).map((id) => input.assets.find((a) => a.id === id && a.type === "objection")).filter((a): a is AssetRow => Boolean(a)).map(objection),
       }
@@ -140,6 +151,7 @@ export function resolveSections(input: { webinar: { title: string }; presenter: 
       transitionOut: s.transitionOut?.trim() || null,
       deliveryNote: s.deliveryNote?.trim() || null,
       status: s.status,
+      buildStyle: s.buildStyle === "reveal" ? "reveal" : "none",
       belief: b && b.fromBelief && b.toBelief ? { from: b.fromBelief, to: b.toBelief } : null,
       proof: resolveProof(b, input.proofs),
       story: resolveStory(b, input.assets, input.essenceStories),
@@ -160,6 +172,9 @@ export function resolveSections(input: { webinar: { title: string }; presenter: 
   return {
     title: input.webinar.title,
     presenter: input.presenter,
+    stayLine: input.webinar.stayLine?.trim() || null,
+    originStory: ORIGIN_BEATS.map((b) => ({ key: b.key, label: b.label, text: (input.webinar.originStory?.[b.key] ?? "").trim() })).filter((b) => b.text),
+    fit: { forYouIf: offer?.forYouIf ?? null, notForYouIf: offer?.notForYouIf ?? null },
     acts,
     sections,
     totalMin: cursor,

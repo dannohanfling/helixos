@@ -70,6 +70,10 @@ async function main() {
   // The presenter is a field: the title slide, the file's author and the script's "I" read it; empty means the subject's own name
   await page.goto(page.url().split("?")[0] + "?step=foundation");
   await page.fill('[data-testid="presenter"]', "Lindsey Brittain");
+  // The opening the record can fill: the stay line and two of the eight beats; each filled one is a slide, each empty one is not
+  await fillField(page, '[data-testid="stay-line"]', "Stay to the end for the one swap that matters.");
+  await fillField(page, '[data-testid="beat-wanted"]', "I wanted a practice that ran without me.");
+  await fillField(page, '[data-testid="beat-wall"]', "The week I rebuilt everything at 2am.");
   await submit(page, 'button:has-text("Save and map beliefs")');
   await page.goto(page.url().split("?")[0] + "?step=script");
   await page.waitForURL(/[?&]section=/);
@@ -140,10 +144,11 @@ async function main() {
   // The deck: what refuses at the route refuses on the step, before the click. The seed exports clean; the walk plants both
   // clauses' refusals itself, on the Opportunity Frame (a) and the Proof Block (b).
   const wizardUrl0 = page.url().split("?")[0];
-  const saveSection = async (key: string, fields: { keyPoints?: string; status?: "drafted" | "final" | "omitted" }) => {
+  const saveSection = async (key: string, fields: { keyPoints?: string; status?: "drafted" | "final" | "omitted"; reveal?: boolean }) => {
     await page.goto(`${wizardUrl0}?step=script&section=${key}`);
     if (fields.keyPoints !== undefined) await fillField(page, 'textarea[name="keyPoints"]', fields.keyPoints);
     if (fields.status) await page.check(`input[name="status"][value="${fields.status}"]`);
+    if (fields.reveal) await page.check('[data-testid="build-reveal"]');
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button[type="submit"]', { hasText: /^Save$/ }).first().click()]);
     await page.waitForLoadState("networkidle");
   };
@@ -171,7 +176,15 @@ async function main() {
   await saveSection("opportunity_frame", { keyPoints: "Former no's are the biggest pool you have\nSend them to [SALES PAGE URL]" });
   await saveSection("proof_block", { keyPoints: "Results across clients" });
   await saveSection("credibility_origin", { status: "omitted" });
+  await saveSection("hook", { reveal: true });
   await page.goto(`${wizardUrl0}?step=deck`);
+  // The beats belong to the omitted section and go with it; the stay line stands after the Hook; the Hook builds up, three slides still
+  if (await page.getByText("I wanted a practice that ran without me.").count()) throw new Error("the beats of a section left out are left out with it");
+  if (!(await page.locator('[data-testid="deck-slide"]', { hasText: "Stay to the end for the one swap that matters." }).count())) throw new Error("the stay line is its own slide");
+  const hookCards = await page.locator('[data-testid="deck-slide"][data-section="hook"]').allInnerTexts();
+  // Card lines: the eyebrow row, the headline, then the body; the second card's body line is on the third card too
+  const secondBody = hookCards[1]?.split("\n")[2] ?? "";
+  if (hookCards.length !== 3 || !secondBody || secondBody === "Copy" || !hookCards[2].includes(secondBody) || hookCards[0].split("\n")[1] !== hookCards[2].split("\n")[1]) throw new Error(`a reveal keeps one slide per point and builds the body up under the same line, got ${JSON.stringify(hookCards)}`);
   await expectText(page, "A structured text deck, styled in your own template", "the deck step says what the file is");
   if (await page.locator('[data-testid="deck-refused"]').count()) throw new Error(`the filled deck is no longer refused, got "${await page.locator('[data-testid="deck-refused"]').innerText()}"`);
   if (!/\[SALES PAGE URL\] is a gap to fill/.test(await page.locator('[data-testid="deck-warnings"]').innerText())) throw new Error("a placeholder outside a claim warns rather than refuses");

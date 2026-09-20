@@ -79,7 +79,7 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
     expect(bySection(deckSlides(ctx(base(), [], false), kit), "offer_stack_cta")).toEqual([]);
   });
   it("the build re-shows the running total after each item and the price against it; any item without a value and no total renders at all", () => {
-    const o = { name: "The 90-Day Reset", price: 1997, currency: "NZD", container: "group", guarantee: "Free until you lose 10.", paymentPlan: "3 x $700", scarcity: null, urgency: "Doors close Friday.", ctaFooter: null, objections: [], components: [
+    const o = { name: "The 90-Day Reset", price: 1997, currency: "NZD", container: "group", guarantee: "Free until you lose 10.", paymentPlan: "3 x $700", scarcity: null, urgency: "Doors close Friday.", ctaFooter: null, forYouIf: null, notForYouIf: null, objections: [], components: [
       { name: "The program", type: "core", oneLiner: "12 weeks", perceivedValue: 3000, beliefBreak: "vehicle" },
       { name: "Template library", type: "bonus", description: "You pick.", perceivedValue: 497, beliefBreak: "internal" },
       { name: "Free until you lose 10", type: "guarantee", perceivedValue: 0, beliefBreak: "none" },
@@ -227,5 +227,34 @@ describe("the deck against the clock", () => {
     const closing = p.acts.find((a) => a.key === "closing")!;
     expect(closing.minutes).toBe(c.acts.find((a) => a.key === "closing")!.durationMin - qa);
     expect(paceLine(p)).toMatch(/^\d+ slides · ~\d+ min without Q&A · [\d.]+ slides a minute\. Reference pace is 1\.7; the band is 1\.2 to 1\.5\.( Thin: .+\.)? Offer segment is 2 of \d+ slides\.$/);
+  });
+});
+
+describe("the opening the record can fill, and a section that builds", () => {
+  it("who it is for and not for come off the Offer record and the stay line off Foundation, after the opening act's first section; the beats are the origin section's own slides, only the filled ones, in order", () => {
+    const withFit = { ...offer, offer: { ...offer.offer, forYouIf: "You run a practice. You have tried a plan before.", notForYouIf: "You want a pill." } };
+    const c = resolveSections({ webinar: { title: "t", stayLine: "Stay to the end for the one swap that matters.", originStory: { wall: "The week I rebuilt everything at 2am.", wanted: "I wanted a practice that ran without me.", nope: "ignored" } }, presenter: "L", sections: base({ hook: { keyPoints: "Open the loop" }, credibility_origin: { keyPoints: "The week it changed" } }), beliefs: [], proofs, assets, essenceStories: [], citable, offer: withFit });
+    expect(c.originStory).toEqual([{ key: "wanted", label: "What you wanted", text: "I wanted a practice that ran without me." }, { key: "wall", label: "The wall", text: "The week I rebuilt everything at 2am." }]);
+    const d = deckSlides(c, kit);
+    expect(d.slides.slice(1, 8).map((s) => [s.headline, s.eyebrow])).toEqual([
+      ["Open the loop", "Hook · Opening frame"],
+      ["This is for you if…", "Who it is for · Opening frame"],
+      ["This is not for you if…", "Who it is for · Opening frame"],
+      ["Stay to the end for the one swap that matters.", "Stay to the end · Opening frame"],
+      ["I wanted a practice that ran without me.", "Credibility / Origin · What you wanted"],
+      ["The week I rebuilt everything at 2am.", "Credibility / Origin · The wall"],
+      ["The week it changed", "Credibility / Origin · Opening frame"],
+    ]);
+    expect(d.slides[2].body).toEqual(["You run a practice.", "You have tried a plan before."]);
+    // Nothing on the record, nothing on the deck; an omitted origin section takes its beats with it
+    const bare = deckSlides(ctx(base({ hook: { keyPoints: "Open the loop" } })), kit);
+    expect(bare.slides.slice(1, 3).map((s) => s.kind)).toEqual(["section", "divider"]);
+    const omitted = deckSlides(resolveSections({ webinar: { title: "t", originStory: { wall: "x" } }, presenter: "L", sections: base({ credibility_origin: { status: "omitted" } }), beliefs: [], proofs, assets, essenceStories: [], citable, offer: null }), kit);
+    expect(omitted.slides.some((s) => s.headline === "x")).toBe(false);
+  });
+  it("a section set to reveal keeps its first point as the line and adds each further point beneath it, one slide per point", () => {
+    const d = deckSlides(ctx(base({ hook: { keyPoints: "One\nTwo\nThree", buildStyle: "reveal" }, problem_frame: { keyPoints: "A\nB" } })), kit);
+    expect(bySection(d, "hook").map((s) => [s.headline, s.body])).toEqual([["One", []], ["One", ["Two"]], ["One", ["Two", "Three"]]]);
+    expect(bySection(d, "problem_frame").map((s) => [s.headline, s.body])).toEqual([["A", []], ["B", []]]);
   });
 });

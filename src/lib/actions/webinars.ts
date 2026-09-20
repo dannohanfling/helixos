@@ -7,7 +7,7 @@ import { WEBINAR_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { ACTS, DERIVED_DIMENSIONS, READINESS_DIMENSIONS, SECTION_TEMPLATES, applyOverride, derivedGrades, freeTextProofUsable, readinessScore, readyDecision, type Override } from "@/lib/engine/webinar";
+import { ACTS, DERIVED_DIMENSIONS, ORIGIN_BEATS, READINESS_DIMENSIONS, SECTION_TEMPLATES, applyOverride, derivedGrades, freeTextProofUsable, readinessScore, readyDecision, type Override } from "@/lib/engine/webinar";
 import { buildFor, presenterOf } from "@/lib/queries/webinar";
 import { fillRuntime } from "@/lib/engine/subject";
 import { award } from "@/lib/queries/points";
@@ -53,6 +53,8 @@ export async function updateWebinarFoundationAction(formData: FormData): Promise
       mechanismName: opt(formData, "mechanismName"),
       mechanismWaivedReason: opt(formData, "mechanismWaivedReason"),
       presenter: opt(formData, "presenter"),
+      stayLine: opt(formData, "stayLine"),
+      originStory: Object.fromEntries(ORIGIN_BEATS.map((b) => [b.key, str(formData, `beat_${b.key}`)]).filter(([, v]) => v)),
       ctaType: str(formData, "ctaType") || "Book a call",
       status: "building",
       updatedAt: nowIso(),
@@ -120,6 +122,7 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
       assetId: asset?.id ?? null,
       durationMin: Math.max(1, num(formData, "durationMin") || 4),
       status: status ?? (script && script.length > 40 ? "drafted" : "todo"),
+      buildStyle: str(formData, "buildStyle") === "reveal" ? "reveal" : "none",
     })
     .where(and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)));
   await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
