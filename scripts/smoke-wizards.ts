@@ -22,6 +22,13 @@ async function submit(page: Page, selector: string) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(500);
 }
+/** Fill after the page has hydrated: a fill that lands mid-hydration can insert at the caret instead of replacing, so the value is checked. */
+async function fillField(page: Page, selector: string, value: string) {
+  await page.waitForLoadState("networkidle");
+  await page.fill(selector, value);
+  if ((await page.inputValue(selector)) !== value) await page.fill(selector, value);
+  if ((await page.inputValue(selector)) !== value) throw new Error(`${selector} did not take the value typed into it`);
+}
 async function shot(page: Page, name: string) {
   await page.screenshot({ path: `screenshots/${name}.png`, fullPage: true });
   console.log(`✓ ${name}`);
@@ -34,6 +41,21 @@ async function main() {
   page.on("response", (r) => {
     if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
   });
+  // The brand kit the deck renders in, saved by the coach first: the Turas kit with its placeholder colour and one permitted name
+  const coach = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  await coach.goto(`${base}/login`);
+  await coach.click('button:has-text("As the coach")');
+  await coach.waitForURL(/\/today/);
+  await coach.goto(`${base}/settings`);
+  await coach.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
+  const kit: Record<string, string> = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: "000000", placeholder: "FFF3A3", aliases: "Turas" };
+  for (const [k, v] of Object.entries(kit)) await coach.fill(`[data-testid="brand-form"] input[name="${k}"]`, v);
+  await submit(coach, '[data-testid="brand-form"] button[type="submit"]');
+  await coach.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
+  if ((await coach.locator('[data-testid="brand-aliases"]').inputValue()) !== "Turas") throw new Error("the permitted name is read back");
+  await coach.context().close();
+  console.log("✓ the coach saved the Turas kit with its placeholder colour and one permitted name");
+
   await page.goto(`${base}/login`);
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
@@ -71,15 +93,20 @@ async function main() {
   await shot(page, "w02-webinar-script");
   // A script that introduces someone else is caught on the section and in the build check, by name
   const firstKey = await page.locator('form input[name="sectionKey"]').first().inputValue();
-  await page.fill('textarea[name="script"]', "I'm Danno Hanfling, and I've spent years at this. If you've ever lost 10 pounds and gained it back, this is for you.");
+  await fillField(page, 'textarea[name="script"]', "I'm Danno Hanfling, and I've spent years at this. If you've ever lost 10 pounds and gained it back, this is for you.");
   await submit(page, 'button:has-text("Save and next")');
   await page.goto(page.url().split("?")[0] + `?step=script&section=${firstKey}`);
   const mismatch = await page.locator('[data-testid="name-mismatch"]').innerText();
   if (!mismatch.includes("Danno Hanfling") || !mismatch.includes("Lindsey Brittain")) throw new Error(`the script step names the wrong name and the presenter, got "${mismatch}"`);
-  await page.fill('textarea[name="script"]', "Hi everyone. If you've ever lost 10 pounds and gained it back, this is for you. Here's the plan for the next hour.");
+  // A permitted name from the kit opens a script with no warning and is never reported as the presenter
+  await fillField(page, 'textarea[name="script"]', "Turas here. I'm Turas, and this is for you.");
+  await submit(page, 'button:has-text("Save and next")');
+  await page.goto(page.url().split("?")[0] + `?step=script&section=${firstKey}`);
+  if (await page.locator('[data-testid="name-mismatch"]').count()) throw new Error(`a permitted name is not a second presenter, got "${await page.locator('[data-testid="name-mismatch"]').innerText()}"`);
+  await fillField(page, 'textarea[name="script"]', "Hi everyone. If you've ever lost 10 pounds and gained it back, this is for you. Here's the plan for the next hour.");
   await submit(page, 'button:has-text("Save and next")');
   await expectText(page, "drafted", "section saved");
-  console.log("✓ presenter saved; a script introducing someone else is named on the section, and cleared");
+  console.log("✓ presenter saved; a script introducing someone else is named on the section, and cleared; a permitted name passes");
   await page.goto(page.url().split("?")[0] + "?step=beliefs");
   await shot(page, "w03-webinar-beliefs");
   // Belief breaks: a confirmed study can be picked, the search opens with the belief's text as the claim, and a typed proof
@@ -106,14 +133,48 @@ async function main() {
   await expectText(page, "Priya N.", "the contribution is in the bank");
   console.log("✓ belief breaks: evidence offered, search pre-filled, typed proof gated by tick two and routed to the bank as a draft");
   await page.goto(beliefsUrl);
-  await page.goto(page.url().split("?")[0] + "?step=deck");
-  await expectText(page, "Deck outline", "deck");
-  const deckHref = await page.locator('[data-testid="deck-pptx"]').getAttribute("href");
+  // The deck: what refuses at the route refuses on the step, before the click. The seeded Opportunity Frame opens with "[X]% of
+  // conversions are former no's": a claim with a hole (the Hook's own [X]% sits past the points a slide carries, so it is not on one).
+  const wizardUrl0 = page.url().split("?")[0];
+  const saveSection = async (key: string, fields: { keyPoints?: string; status?: "drafted" | "final" | "omitted" }) => {
+    await page.goto(`${wizardUrl0}?step=script&section=${key}`);
+    if (fields.keyPoints !== undefined) await fillField(page, 'textarea[name="keyPoints"]', fields.keyPoints);
+    if (fields.status) await page.check(`input[name="status"][value="${fields.status}"]`);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button[type="submit"]', { hasText: /^Save$/ }).first().click()]);
+    await page.waitForLoadState("networkidle");
+  };
+  await page.goto(`${wizardUrl0}?step=deck`);
+  await page.locator('[data-testid="deck-refused"]').waitFor({ timeout: 15000 });
+  if (await page.locator('[data-testid="deck-pptx"]').count()) throw new Error("a refused deck has no download button");
+  let refusedText = await page.locator('[data-testid="deck-refused"]').innerText();
+  if (!/\(Opportunity Frame\): \[X\]% sits in a sentence that carries a number/.test(refusedText)) throw new Error(`a numeric placeholder is refused before the click, with the slide named, got "${refusedText}"`);
+  const deckHref = `/api/webinars/${wizardUrl0.split("/webinars/")[1]}/deck?format=pptx`;
+  const refusedRes = await page.request.get(`${base}${deckHref}`);
+  if (refusedRes.status() !== 409 || !((await refusedRes.json()).refused ?? []).length) throw new Error(`the route refuses the same deck with the reasons, got ${refusedRes.status()}`);
+  // Clause (b): a placeholder on a Proof Block refuses whatever the sentence around it says
+  await saveSection("proof_block", { keyPoints: "[CLIENT NAME] doubled her list" });
+  await page.goto(`${wizardUrl0}?step=deck`);
+  refusedText = await page.locator('[data-testid="deck-refused"]').innerText();
+  if (!/\(Proof Block\): \[CLIENT NAME\] sits on a proof slide, which is a claim by its nature/.test(refusedText)) throw new Error(`a Proof Block placeholder is refused with no digit in the sentence, got "${refusedText}"`);
+  console.log("✓ deck: a numeric placeholder and a Proof Block placeholder each refuse the export before the click, with the slide named; the route says the same");
+  // Fill the claims, leave one gap that only warns, and leave a section out on purpose
+  await saveSection("opportunity_frame", { keyPoints: "Former no's are the biggest pool you have\nSend them to [SALES PAGE URL]" });
+  await saveSection("proof_block", { keyPoints: "Results across clients" });
+  await saveSection("credibility_origin", { status: "omitted" });
+  await page.goto(`${wizardUrl0}?step=deck`);
+  await expectText(page, "A structured text deck, styled in your own template", "the deck step says what the file is");
+  if (await page.locator('[data-testid="deck-refused"]').count()) throw new Error(`the filled deck is no longer refused, got "${await page.locator('[data-testid="deck-refused"]').innerText()}"`);
+  if (!/\[SALES PAGE URL\] is a gap to fill/.test(await page.locator('[data-testid="deck-warnings"]').innerText())) throw new Error("a placeholder outside a claim warns rather than refuses");
+  if (!/^1 unfilled \[placeholder\]/.test(await page.locator('[data-testid="deck-placeholders"]').innerText())) throw new Error("the count of unfilled slots is shown");
+  if (await page.locator('[data-testid="deck-slide"][data-section="credibility_origin"]').count()) throw new Error("a section left out on purpose has no slide");
+  if (!(await page.locator('[data-testid="deck-slide"][data-kind="proof"]').count())) throw new Error("the Proof Block renders the typed proof as a slide");
   const pptx = await page.request.get(`${base}${deckHref}`);
   const pptxBody = await pptx.body();
   if (!pptx.ok() || !(pptx.headers()["content-type"] ?? "").includes("presentationml") || pptxBody.subarray(0, 2).toString() !== "PK" || pptxBody.length < 5000) throw new Error(`pptx export failed: ${pptx.status()} ${pptxBody.length} bytes`);
-  const txt = await page.request.get(`${base}${deckHref!.replace("pptx", "txt")}`);
-  if (!txt.ok() || !/Deck outline · \d+ slides/.test(await txt.text())) throw new Error("txt export failed");
+  const txt = await page.request.get(`${base}${deckHref.replace("pptx", "txt")}`);
+  const txtText = await txt.text();
+  if (!txt.ok() || !/Deck outline · \d+ slides · 1 unfilled/.test(txtText)) throw new Error("txt export failed");
+  if (/Credibility/.test(txtText) || /Visual/.test(txtText) || !/discovery calls/.test(txtText)) throw new Error("the outline carries the proof, not the omitted section, and no art direction");
   // The file says whose it is: the presenter as author, the workspace as company, the webinar as subject, never the generator
   const { default: JSZip } = await import("jszip");
   const zip = await JSZip.loadAsync(pptxBody);
@@ -124,7 +185,16 @@ async function main() {
   if (/PptxGenJS/.test(core) || /<Company>PptxGenJS/.test(app)) throw new Error("the generator's name is nowhere in the file's properties");
   if (!/<dc:subject>[^<]+<\/dc:subject>/.test(core) || /<dc:subject>PptxGenJS/.test(core)) throw new Error("dc:subject is the webinar's title");
   if (!/Lindsey Brittain/.test(slide1)) throw new Error("the title slide carries the presenter");
-  console.log(`  deck export: pptx ${pptxBody.length} bytes, txt ok; author, company and subject are the presenter's, the workspace's and the webinar's`);
+  // The kit on the file: its hex verbatim and its faces named; the proof slide's text from the record; no art direction on any face
+  const faces = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")))).join("\n");
+  const notes = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")))).join("\n");
+  for (const hex of ["FAF8F5", "6E6256", "DD2727", "FFF3A3"]) if (!faces.includes(hex)) throw new Error(`the kit's ${hex} is written verbatim on the slides`);
+  for (const face of ["Red Hat Display", "Helvetica Now Display", "Libre Baskerville"]) if (!faces.includes(face)) throw new Error(`the kit's face ${face} is named on the slides`);
+  if (/Visual/.test(faces)) throw new Error("no art direction on any face");
+  if (!/Visual direction/.test(notes)) throw new Error("the art direction is in the speaker notes");
+  if (!/discovery calls/.test(faces) || !/Priya N\./.test(faces)) throw new Error("the proof slide's text is the typed proof with its tick, as the record stores it");
+  if (/Credibility/.test(faces)) throw new Error("the omitted section is absent from the file");
+  console.log(`  deck export: pptx ${pptxBody.length} bytes in the Turas kit, txt ok; author, company and subject are the presenter's, the workspace's and the webinar's`);
   await shot(page, "w04-webinar-deck");
   await page.goto(page.url().split("?")[0] + "?step=review");
   // The header is the build check, itemised, and no rating moves it: eleven fives leave an unscripted webinar "building"
@@ -148,14 +218,16 @@ async function main() {
   // The delivery note and the run sheet: the sheet is the whole webinar in running order with the clock, everything wired rendered in place
   await page.goto(page.url().split("?")[0] + "?step=script");
   await page.waitForURL(/[?&]section=/);
-  await page.fill('[data-testid="delivery-note"]', "Wait for the chat to fill before you go on.");
+  await fillField(page, '[data-testid="delivery-note"]', "Wait for the chat to fill before you go on.");
   await submit(page, 'button:has-text("Save and next")');
   const wizardUrl = page.url().split("?")[0];
   await page.goto(`${wizardUrl}/runsheet`);
   await page.locator('[data-testid="run-sheet"]').waitFor({ timeout: 20000 });
   if ((await page.locator('[data-testid="runsheet-act"]').count()) !== 5) throw new Error("five acts on the run sheet");
   const clocks = await page.locator('[data-testid="runsheet-clock"]').allInnerTexts();
-  if (clocks.length < 20 || !clocks[0].endsWith("0:00") || !/\d+ min · \d+:\d\d/.test(clocks[5])) throw new Error(`a cumulative clock per section, got ${JSON.stringify(clocks.slice(0, 6))}`);
+  // 19 sections on the sheet: the record has 20 and this walk left Credibility / Origin out on purpose above
+  if (clocks.length !== 19 || !clocks[0].endsWith("0:00") || !/\d+ min · \d+:\d\d/.test(clocks[5])) throw new Error(`a cumulative clock per section, the omitted one absent, got ${clocks.length}: ${JSON.stringify(clocks.slice(0, 6))}`);
+  if (await page.locator('[data-testid="run-sheet"]').getByText("Credibility / Origin").count()) throw new Error("a section left out on purpose is not on the run sheet");
   await expectText(page, "Wait for the chat to fill before you go on.", "the delivery note is on the run sheet");
   if (!(await page.locator('[data-testid="runsheet-proof"]').count())) throw new Error("the typed proof with its tick is rendered on its act");
   if (!(await page.locator('[data-testid="runsheet-evidence"]').count())) throw new Error("the picked study is rendered on its act");

@@ -619,7 +619,8 @@ export const webinarSections = sqliteTable(
     deliveryNote: text("delivery_note"),
     assetId: text("asset_id"),
     durationMin: integer("duration_min").notNull().default(4),
-    status: text("status", { enum: ["todo", "drafted", "final"] }).notNull().default("todo"),
+    /** Omitted: the section is left out on purpose (no consented case study for this act); the deck and the run sheet skip it. */
+    status: text("status", { enum: ["todo", "drafted", "final", "omitted"] }).notNull().default("todo"),
   },
   (t) => [uniqueIndex("webinar_sections_key").on(t.webinarId, t.sectionKey)],
 );
@@ -659,6 +660,10 @@ export const brandKits = sqliteTable("brand_kits", {
   quoteFont: text("quote_font"),
   fontFallback: text("font_fallback").notNull().default("Arial"),
   bannedColors: text("banned_colors", { mode: "json" }).$type<string[]>().notNull().default([]),
+  /** Reserved for an unfilled slot on a slide, and nothing else: unmissable when flipping through. */
+  placeholder: text("placeholder"),
+  /** Names allowed to open a script without a warning ("Turas here"): permitted names, never a second presenter. */
+  aliases: text("aliases", { mode: "json" }).$type<string[]>().notNull().default([]),
   notes: text("notes"),
   createdAt: createdAt(),
 });

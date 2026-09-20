@@ -179,8 +179,11 @@ export function actPresence(beliefs: BuildBelief[], known?: KnownRefs): { key: "
   }));
 }
 
-export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; known?: KnownRefs; presenter?: string; review: { verdict: string } | null }): BuildResult {
-  const { webinar: w, sections, beliefs, components, review } = input;
+export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; known?: KnownRefs; presenter?: string; presenterAliases?: string[]; review: { verdict: string } | null }): BuildResult {
+  const { webinar: w, beliefs, components, review } = input;
+  // A section left out on purpose is not a section waiting for a script: it is out of every count below and off the clock.
+  const omitted = input.sections.filter((s) => s.status === "omitted");
+  const sections = input.sections.filter((s) => s.status !== "omitted");
   const checks: BuildCheck[] = [];
   const missingFoundation = [
     !filled(w.audience) ? "audience" : "",
@@ -198,7 +201,8 @@ export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLik
   const scriptedRows = sections.filter(hasScript);
   const pointsOnly = sections.filter((s) => !hasScript(s) && (s.status !== "todo" || (s.keyPoints ?? "").trim()));
   const untouched = sections.length - scriptedRows.length - pointsOnly.length;
-  checks.push({ key: "sections", label: `All ${sections.length} sections scripted (${scriptedRows.length})`, ok: sections.length > 0 && scriptedRows.length === sections.length, level: "must", detail: scriptedRows.length === sections.length ? "Every section has a script." : `${pointsOnly.length} with key points only${pointsOnly.length ? ` (${pointsOnly.map((s) => s.name ?? s.sectionKey).slice(0, 4).join(", ")}${pointsOnly.length > 4 ? ", …" : ""})` : ""}; ${untouched} not started.` });
+  const omittedNote = omitted.length ? ` ${omitted.length} left out on purpose: ${omitted.map((s) => s.name ?? s.sectionKey).join(", ")}.` : "";
+  checks.push({ key: "sections", label: `All ${sections.length} sections scripted (${scriptedRows.length})`, ok: sections.length > 0 && scriptedRows.length === sections.length, level: "must", detail: (scriptedRows.length === sections.length ? "Every section has a script." : `${pointsOnly.length} with key points only${pointsOnly.length ? ` (${pointsOnly.map((s) => s.name ?? s.sectionKey).slice(0, 4).join(", ")}${pointsOnly.length > 4 ? ", …" : ""})` : ""}; ${untouched} not started.`) + omittedNote });
   // The offer is a reference too: with the known ids, a linked offer whose row is gone no longer counts, and the stack says why it is empty.
   const offerGone = Boolean(w.offerId && input.known?.offerIds && !input.known.offerIds.includes(w.offerId));
   checks.push({ key: "offer", label: "Offer linked", ok: Boolean(w.offerId) && !offerGone, level: "must", detail: offerGone ? "The linked offer no longer exists. Pick another on the Offer step." : w.offerId ? "The closing frame has an offer to present." : "Pick an offer on the Offer step; the stack and the price come from it." });
@@ -216,7 +220,7 @@ export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLik
   checks.push({ key: "pace", label: "Scripts fit their slots", ok: !paced.length, level: "warn", detail: !scriptedRows.length ? "Nothing scripted yet to measure." : !paced.length ? `Every script is within its slot at ${WORDS_PER_MINUTE} words a minute.` : [long.length ? `Written long: ${long.join(", ")}.` : "", thin.length ? `Thin for the slot: ${thin.join(", ")}.` : ""].filter(Boolean).join(" ") });
   // A script that introduces someone other than the presenter: the wrong name survived a review, a build check and an export once.
   if (input.presenter) {
-    const wrong = sections.map((s) => ({ s, m: nameMismatch(s.script, input.presenter!) })).filter((x) => x.m);
+    const wrong = sections.map((s) => ({ s, m: nameMismatch(s.script, input.presenter!, input.presenterAliases ?? []) })).filter((x) => x.m);
     checks.push({ key: "presenterName", label: "Scripts speak as the presenter", ok: !wrong.length, level: "warn", detail: wrong.length ? wrong.map((x) => `${x.s.name ?? x.s.sectionKey} says "I'm ${x.m!.found}"; the presenter is ${x.m!.presenter}.`).join(" ") : `No script introduces anyone but ${input.presenter}.` });
   }
   const must = checks.filter((c) => c.level === "must" && !c.ok);
@@ -301,19 +305,3 @@ export function freeTextProofUsable(b: { proof: string | null; proofPermissionAt
   return Boolean(b.proofPermissionAt) || !b.proofChangedAt;
 }
 
-export function deckOutline(sections: { order: number; act: ActKey; name: string; keyPoints: string | null; script: string | null }[]) {
-  const slides: { n: number; section: string; act: ActKey; headline: string; body: string; visual: string }[] = [];
-  let n = 1;
-  for (const s of sections.slice().sort((a, b) => a.order - b.order)) {
-    const points = (s.keyPoints ?? "")
-      .split(/\n/)
-      .map((p) => p.replace(/^[•\-*]\s*/, "").trim())
-      .filter(Boolean);
-    const firstLine = (s.script ?? "").split(/[.!?]\s/)[0]?.trim() ?? "";
-    const headline = points[0] || firstLine || s.name;
-    const visual = /proof/i.test(s.name) ? "One huge number. Source line small." : /case study/i.test(s.name) ? "Before / after bars. Photo. One quote." : /mechanism/i.test(s.name) ? "Hand-drawn diagram of the mechanism. Icons per part." : /offer stack/i.test(s.name) ? "Stack rows with checkmarks and values. Strikethrough total. Arrow to price." : /hook/i.test(s.name) ? "Big bold title. No bullets. Your name." : /q&a/i.test(s.name) ? "Split: 'Ask anything' / 'Claim your spot'. Timer." : "One line of text, lots of air.";
-    slides.push({ n: n++, section: s.name, act: s.act, headline: headline.slice(0, 90), body: points.slice(1, 4).join("\n"), visual });
-    if (points.length > 4) slides.push({ n: n++, section: s.name, act: s.act, headline: points[4].slice(0, 90), body: points.slice(5, 8).join("\n"), visual: "Bullets, max three." });
-  }
-  return slides;
-}

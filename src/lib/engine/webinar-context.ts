@@ -99,7 +99,8 @@ export function resolveEvidence(b: BeliefRow | undefined, citable: CitableRow[])
 const objection = (a: AssetRow): ResolvedObjection => ({ id: a.id, name: a.name, body: a.body, reframe: a.reframe ?? null, proof: a.proof ?? null });
 
 export function resolveSections(input: { webinar: { title: string }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null }): WebinarContext {
-  const ordered = input.sections.slice().sort((a, b) => a.order - b.order);
+  // Left out on purpose means left out: no clock, no slide, no row on the run sheet.
+  const ordered = input.sections.filter((s) => s.status !== "omitted").slice().sort((a, b) => a.order - b.order);
   const offer: ResolvedOffer | null = input.offer
     ? {
         name: input.offer.offer.name,

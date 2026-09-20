@@ -28,6 +28,11 @@ describe("the subject: what still resolves, who presents, what the brand allows"
     expect(nameMismatch(null, "Lindsey Brittain")).toBeNull();
     expect(nameMismatch("I'm Danno.", "")).toBeNull();
   });
+  it("a permitted name opens a script with no warning and is never reported as the presenter", () => {
+    expect(nameMismatch("Turas here. I'm Turas and this is for you.", "Lindsey Brittain", ["Turas"])).toBeNull();
+    expect(nameMismatch("I'm Turas and this is for you.", "Lindsey Brittain")).toEqual({ found: "Turas", presenter: "Lindsey Brittain" });
+    expect(nameMismatch("I'm Danno Hanfling.", "Lindsey Brittain", ["Turas"])).toEqual({ found: "Danno Hanfling", presenter: "Lindsey Brittain" });
+  });
   it("fills the numbers the record knows into coaching copy that carries a slot for them", () => {
     expect(fillRuntime("Earn the next {runtime} minutes. You have about {openingMinutes} minutes.", { runtime: 76, openingMinutes: 7 })).toBe("Earn the next 76 minutes. You have about 7 minutes.");
   });

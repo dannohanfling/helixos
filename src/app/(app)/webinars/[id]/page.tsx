@@ -30,7 +30,6 @@ import {
   SECTION_TEMPLATES,
   STEPS,
   WIZARD_STAGES,
-  deckOutline,
   freeTextProofUsable,
   nextStep,
   readinessScore,
@@ -45,7 +44,8 @@ import {
   type StepKey,
 } from "@/lib/engine/webinar";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
-import { presenterOf } from "@/lib/queries/webinar";
+import { contextFor, presenterOf } from "@/lib/queries/webinar";
+import { HEADLINE_MAX_CHARS, deckSlides, type DeckResult } from "@/lib/engine/deck";
 import { formatPrice } from "@/lib/engine/offer-score";
 import { essenceFor } from "@/lib/queries/essence";
 import type { Story } from "@/lib/engine/essence";
@@ -101,6 +101,7 @@ export default async function WebinarWizardPage({
     proofs,
     evidence,
     essence,
+    brandKit,
   ] = await Promise.all([
     db.query.webinarSections.findMany({
       where: eq(schema.webinarSections.webinarId, id),
@@ -123,7 +124,10 @@ export default async function WebinarWizardPage({
     }),
     citableEvidence(v.user.id),
     essenceFor(v.workspace.id, v.user.id),
+    db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) }),
   ]);
+  // A permitted name (the kit's aliases) opens a script with no warning and is never reported as the presenter.
+  const presenterAliases = brandKit?.aliases ?? [];
   const essenceStories = (
     (essence.representative_stories?.stories as Story[] | undefined) ?? []
   ).filter((st) => st.name || st.summary);
@@ -150,7 +154,7 @@ export default async function WebinarWizardPage({
   // One builder for every id a check reads: the same one the subject uses, so a new kind of reference is one line, once.
   const known = knownReferences({ proofs, stories: assets.filter((a) => a.type === "story"), essenceStories, citable: evidence, offers });
   const presenterName = presenterOf(w, v.user.name);
-  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, presenter: presenterName, review });
+  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, presenter: presenterName, presenterAliases, review });
   const numbers = { runtime: build.totalMinutes, openingMinutes: sections.filter((s) => s.act === "opening").reduce((a, s) => a + s.durationMin, 0) };
   const staleStatus = statusStale(w.status, build);
   const presence = actPresence(beliefs, known);
@@ -166,6 +170,8 @@ export default async function WebinarWizardPage({
     nextStep(progress.steps)) as StepKey;
   // A step the URL names that does not exist is sent, visibly, to the step that does: never rendered as another step under the wrong address.
   if (sp.step && sp.step !== step) redirect(`/webinars/${w.id}?step=${step}`);
+  // The deck as the export will make it, from the same function the route runs: what refuses there refuses here, before the click.
+  const deck: DeckResult | null = step === "deck" ? deckSlides(await contextFor(v, w), brandKit ?? null) : null;
   const stories = assets.filter((a) => a.type === "story");
   const frameworks = assets
     .filter((a) => a.type === "framework")
@@ -716,13 +722,15 @@ export default async function WebinarWizardPage({
                         className={`flex items-center gap-2 px-2 py-2 text-sm hover:bg-surface-2 ${s.sectionKey === section.sectionKey ? "bg-accent-soft" : ""}`}
                       >
                         <span
-                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${s.status === "final" ? "border-good bg-good text-white" : s.status === "drafted" ? "border-accent text-accent" : "border-line"}`}
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${s.status === "final" ? "border-good bg-good text-white" : s.status === "drafted" ? "border-accent text-accent" : s.status === "omitted" ? "border-line text-ink-3 line-through" : "border-line"}`}
                         >
                           {s.status === "final"
                             ? "✓"
                             : s.status === "drafted"
                               ? "…"
-                              : s.order}
+                              : s.status === "omitted"
+                                ? "–"
+                                : s.order}
                         </span>
                         <span className="min-w-0 flex-1 truncate">
                           {s.name}
@@ -768,7 +776,7 @@ export default async function WebinarWizardPage({
               </p>
             ) : null}
             {(() => {
-              const m = nameMismatch(section.script, presenterName);
+              const m = nameMismatch(section.script, presenterName, presenterAliases);
               return m ? (
                 <p className="mt-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="name-mismatch" role="status">
                   This script says &ldquo;I&apos;m {m.found}&rdquo;; the presenter is {m.presenter}.
@@ -910,7 +918,7 @@ export default async function WebinarWizardPage({
                     type="radio"
                     name="status"
                     value="drafted"
-                    defaultChecked={section.status !== "final"}
+                    defaultChecked={section.status !== "final" && section.status !== "omitted"}
                   />{" "}
                   Drafted
                 </label>
@@ -922,6 +930,16 @@ export default async function WebinarWizardPage({
                     defaultChecked={section.status === "final"}
                   />{" "}
                   Final
+                </label>
+                <label className="flex items-center gap-1 text-sm" title="Left out of this webinar on purpose: not counted as unscripted, not on the run sheet, not in the deck.">
+                  <input
+                    type="radio"
+                    name="status"
+                    value="omitted"
+                    defaultChecked={section.status === "omitted"}
+                    data-testid="section-omitted"
+                  />{" "}
+                  Left out
                 </label>
                 <span className="flex-1" />
                 <button className="btn btn-ghost" type="submit">
@@ -1246,7 +1264,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep webinarId={w.id} sections={sections} />
+        <DeckStep webinarId={w.id} deck={deck!} />
       ) : null}
 
       {step === "review" ? (
@@ -1579,91 +1597,76 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({
-  webinarId,
-  sections,
-}: {
-  webinarId: string;
-  sections: {
-    order: number;
-    act: "opening" | "vehicle" | "internal" | "external" | "closing";
-    name: string;
-    keyPoints: string | null;
-    script: string | null;
-  }[];
-}) {
-  const slides = deckOutline(sections);
-  const md = slides
-    .map(
-      (s) =>
-        `## ${s.n}. ${s.headline}\n_${s.section}_\n${s.body}\n\nVisual: ${s.visual}`,
-    )
-    .join("\n\n");
+function DeckStep({ webinarId, deck }: { webinarId: string; deck: DeckResult }) {
+  const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
+  const refused = deck.refused.length > 0;
   return (
     <Card
-      title={`9 · Deck outline · ${slides.length} slides`}
+      title={`9 · Deck · ${deck.slides.length} slides`}
       action={
-        <span className="flex flex-wrap gap-2">
-          <a
-            className="btn btn-primary btn-sm"
-            href={`/api/webinars/${webinarId}/deck?format=pptx`}
-            download
-            data-testid="deck-pptx"
-          >
-            Download .pptx
-          </a>
-          <a
-            className="btn btn-ghost btn-sm"
-            href={`/api/webinars/${webinarId}/deck?format=txt`}
-            download
-          >
-            Outline (.txt)
-          </a>
-          <CopyButton
-            text={md}
-            label="Copy all"
-            className="btn btn-ghost btn-sm"
-          />
-        </span>
+        refused ? null : (
+          <span className="flex flex-wrap gap-2">
+            <a className="btn btn-primary btn-sm" href={`/api/webinars/${webinarId}/deck?format=pptx`} download data-testid="deck-pptx">
+              Download .pptx
+            </a>
+            <a className="btn btn-ghost btn-sm" href={`/api/webinars/${webinarId}/deck?format=txt`} download data-testid="deck-txt">
+              Outline (.txt)
+            </a>
+            <CopyButton text={md} label="Copy all" className="btn btn-ghost btn-sm" />
+          </span>
+        )
       }
     >
-      <p className="mb-3 text-sm text-ink-2">
-        One idea per slide, derived from your key points, so tighten those
-        first. The .pptx opens in PowerPoint, Keynote, Google Slides and Canva
-        (Import) with the art direction in each slide&apos;s notes; or copy one
-        slide at a time.
+      <p className="mb-3 text-sm text-ink-2" data-testid="deck-honesty">
+        A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in {deck.kit.name}
+        {deck.kitApplied ? "" : " (no brand kit on this workspace yet)"}.
       </p>
+      {refused ? (
+        <div className="mb-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="deck-refused" role="alert">
+          <p className="font-semibold">Not exported yet. A claim with a hole in it never leaves as a slide:</p>
+          <ul className="mt-1 list-disc pl-5">
+            {deck.refused.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {deck.warnings.length ? (
+        <ul className="mb-3 list-disc rounded-lg bg-warn-soft p-3 pl-7 text-sm" data-testid="deck-warnings">
+          {deck.warnings.map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+        </ul>
+      ) : null}
+      {deck.placeholderCount ? (
+        <p className="mb-3 text-xs text-ink-3" data-testid="deck-placeholders">
+          {deck.placeholderCount} unfilled [placeholder]{deck.placeholderCount === 1 ? "" : "s"} across the deck, each drawn in {deck.kit.placeholder ?? "FFF3A3"} so it cannot be missed.
+        </p>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {slides.map((s) => (
-          <div key={s.n} className="rounded-lg border p-3 text-sm">
+        {deck.slides.map((s) => (
+          <div key={s.n} className="rounded-lg border p-3 text-sm" data-testid="deck-slide" data-kind={s.kind} data-section={s.sectionKey ?? ""}>
             <div className="flex items-center justify-between text-[11px] text-ink-3">
               <span>
-                {s.n} · {s.section}
+                {s.n} · {s.section || "Cover"} · {s.headlineSize}pt
               </span>
               <span>{ACT_ICON[s.act]}</span>
             </div>
-            <div className="mt-1 font-semibold">{s.headline}</div>
-            {s.body ? (
-              <p className="mt-1 whitespace-pre-line text-xs text-ink-2">
-                {s.body}
+            <div className={`mt-1 font-semibold ${s.kind === "proof" && s.headline.startsWith("“") ? "italic" : ""}`}>{s.headline}</div>
+            {s.overflow ? (
+              <p className="mt-1 text-[11px] text-warn" data-testid="deck-overflow">
+                The first key point is over {HEADLINE_MAX_CHARS} characters, so it is the first body line and the section name stands as the headline.
               </p>
             ) : null}
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-[11px] italic text-ink-3">{s.visual}</p>
-              <CopyButton
-                text={`${s.headline}\n${s.body}\n\nVisual: ${s.visual}`}
-                label="Copy"
-                className="btn btn-ghost btn-xs"
-              />
+            {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2">{s.body.join("\n")}</p> : null}
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <CopyButton text={`${s.headline}\n${s.body.join("\n")}`} label="Copy" className="btn btn-ghost btn-xs" />
             </div>
           </div>
         ))}
       </div>
       <div className="mt-4">
-        <Link
-          href={`/webinars/${webinarId}?step=review`}
-          className="btn btn-accent"
-        >
+        <Link href={`/webinars/${webinarId}?step=review`} className="btn btn-accent">
           On to the readiness review →
         </Link>
       </div>

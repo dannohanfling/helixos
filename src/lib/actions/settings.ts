@@ -99,6 +99,9 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
     quoteFont: opt(formData, "quoteFont"),
     fontFallback: str(formData, "fontFallback") || "Arial",
     bannedColors: str(formData, "bannedColors").split(/[,\s]+/).map(normaliseHex).filter(Boolean),
+    placeholder: normaliseHex(str(formData, "placeholder")) || null,
+    // Permitted names: a script may introduce one with no warning; none is ever reported as the presenter.
+    aliases: str(formData, "aliases").split(/[,\n]+/).map((a) => a.trim()).filter(Boolean),
     notes: opt(formData, "notes"),
   };
   const problems = brandKitProblems(kit);

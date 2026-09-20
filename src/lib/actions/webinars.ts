@@ -106,7 +106,7 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
   const id = str(formData, "id");
   const sectionKey = str(formData, "sectionKey");
   await own(id, userId);
-  const status = (["todo", "drafted", "final"] as const).find((s) => s === str(formData, "status"));
+  const status = (["todo", "drafted", "final", "omitted"] as const).find((s) => s === str(formData, "status"));
   const script = opt(formData, "script");
   const asset = await assetFor(workspaceId, userId, opt(formData, "assetId"));
   await db

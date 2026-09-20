@@ -18,10 +18,12 @@ export function knownReferences(input: { proofs: { id: string; status: string }[
 }
 
 /** The name a script introduces, when it is not the presenter's: "I'm Danno Hanfling" in Lindsey's webinar. */
-export function nameMismatch(script: string | null | undefined, presenter: string): { found: string; presenter: string } | null {
+export function nameMismatch(script: string | null | undefined, presenter: string, aliases: string[] = []): { found: string; presenter: string } | null {
   const text = script ?? "";
   const first = presenter.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   if (!first) return null;
+  // A permitted name ("Turas here") opens a script without a warning; it is never reported as the presenter.
+  const allowed = new Set(aliases.map((a) => a.trim().split(/\s+/)[0]?.toLowerCase()).filter(Boolean));
   // "I'm Danno", "I'm Danno Hanfling", "My name is Kate Amos", and "Danno here," at the start of a sentence.
   const re = /(?:\b(?:I'm|I’m|I am|My name is|My name's)\s+|(?:^|[.!?]\s+))([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+)?)(?=\s+here\b|[\s.,;:!?]|$)/gu;
   const skip = new Set(["not", "going", "here", "sure", "just", "also", "still", "very", "the", "so", "only", "now", "really", "about", "always", "never", "sorry", "glad", "happy", "done", "back", "right", "over", "look", "come", "stay", "start", "from", "this", "that", "what", "when", "where", "which", "there", "then", "and", "but", "yes", "okay", "well", "welcome", "hello", "thanks", "thank", "let's", "lets", "today", "tonight", "first", "second", "next", "one", "two", "three"]);
@@ -31,7 +33,7 @@ export function nameMismatch(script: string | null | undefined, presenter: strin
     if (!introduced && !/\s+here\b/.test(text.slice(m.index! + m[0].length, m.index! + m[0].length + 8))) continue;
     const found = m[1].replace(/[.,;:!?]$/, "");
     const word = found.split(/\s+/)[0].toLowerCase();
-    if (skip.has(word)) continue;
+    if (skip.has(word) || allowed.has(word)) continue;
     if (word !== first) return { found, presenter: presenter.trim() };
   }
   return null;
@@ -44,7 +46,7 @@ export function fillRuntime(text: string, n: { runtime: number; openingMinutes: 
 
 /* ───────────── Brand kit ───────────── */
 
-export type BrandKitInput = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[] };
+export type BrandKitInput = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null };
 export const BRAND_COLOR_ROLES = ["ground", "ink", "accent", "muted", "surface"] as const;
 /** The contrast a headline needs against its ground before the kit is accepted. */
 export const MIN_CONTRAST = 4.5;
@@ -84,10 +86,14 @@ export function brandKitProblems(kit: BrandKitInput): string[] {
   if (mutedRatio < MIN_CONTRAST) out.push(`muted on ground is ${mutedRatio}:1; it needs ${MIN_CONTRAST}:1 to read on a slide.`);
   const inverse = normaliseHex(kit.inverseGround) && normaliseHex(kit.inverseInk) ? contrastRatio(kit.inverseGround!, kit.inverseInk!) : null;
   if (inverse !== null && inverse < MIN_CONTRAST) out.push(`inverseInk on inverseGround is ${inverse}:1; it needs ${MIN_CONTRAST}:1.`);
-  for (const role of [...BRAND_COLOR_ROLES, "inverseGround", "inverseInk"] as const) {
+  for (const role of [...BRAND_COLOR_ROLES, "inverseGround", "inverseInk", "placeholder"] as const) {
     const v = normaliseHex(kit[role]);
     if (v && banned.includes(v)) out.push(`${role} is ${v}, which this brand bans.`);
   }
+  // The placeholder colour is a fill under ink, so it is a text pair like the others.
+  const placeholder = normaliseHex(kit.placeholder);
+  if (placeholder && !isHex(placeholder)) out.push("placeholder needs a six-digit hex colour, or leave it empty.");
+  else if (placeholder && contrastRatio(placeholder, kit.ink) < MIN_CONTRAST) out.push(`ink on placeholder is ${contrastRatio(placeholder, kit.ink)}:1; it needs ${MIN_CONTRAST}:1, or the unfilled slot cannot be read.`);
   return out;
 }
 

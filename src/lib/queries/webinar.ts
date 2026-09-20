@@ -28,7 +28,7 @@ export async function buildFor(w: schema.Webinar): Promise<{ build: BuildResult;
   const presence = actPresence(beliefs, subject.known);
   const count = (key: "proofs" | "stories") => 3 - (presence.find((p) => p.key === key)?.missing.length ?? 3);
   const derived: DerivedInput = { proofs: count("proofs"), stories: count("stories"), offer: { linked: Boolean(offer), components: components.length, mapped: components.filter((c) => c.beliefBreak !== "none").length, price: offer?.price ?? 0 } };
-  return { build: buildChecks({ webinar: w, sections, beliefs, components, known: subject.known, presenter: presenterOf(w, subject.name), review: review ?? null }), review: review ?? null, derived };
+  return { build: buildChecks({ webinar: w, sections, beliefs, components, known: subject.known, presenter: presenterOf(w, subject.name), presenterAliases: subject.brandKit?.aliases ?? [], review: review ?? null }), review: review ?? null, derived };
 }
 
 /** Everything wired to every section of one webinar, in running order: the run sheet, the deck and the grades read this. */

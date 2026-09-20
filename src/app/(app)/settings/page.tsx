@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { rotateInviteAction, saveBrandKitAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
-import { contrastRatio } from "@/lib/engine/subject";
+import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
@@ -175,6 +175,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Card title="Brand kit" action={savedKit ? <span className="text-xs text-ink-3">ink on ground {contrastRatio(savedKit.ground, savedKit.ink)}:1</span> : null}>
               <div id="brand-kit" />
               <p className="mb-3 text-sm text-ink-2">The colours and faces a client-facing file is rendered in: the deck reads these. Six-digit hex, no #. A pair that cannot read on a slide is refused here, not discovered on screen.</p>
+              {savedKit && brandKitWarnings(savedKit).length ? (
+                <ul className="mb-3 list-disc rounded-lg bg-warn-soft p-2 pl-6 text-sm" data-testid="brand-warnings">
+                  {brandKitWarnings(savedKit).map((x) => (
+                    <li key={x}>{x}</li>
+                  ))}
+                </ul>
+              ) : null}
               {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
               <form action={saveBrandKitAction} className="grid gap-3 sm:grid-cols-2" data-testid="brand-form">
                 <div className="sm:col-span-2">
@@ -207,6 +214,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </Field>
                 <Field label="Banned colours" hint="hex, comma-separated: a kit using one is refused">
                   <input className="field font-mono" name="bannedColors" defaultValue={brandKit?.bannedColors?.join(", ") ?? ""} />
+                </Field>
+                <Field label="Placeholder colour" hint="the fill an unfilled [placeholder] is drawn in on a slide, so it cannot be missed; empty means FFF3A3. Ink must read on it.">
+                  <input className="field font-mono" name="placeholder" defaultValue={brandKit?.placeholder ?? ""} maxLength={7} />
+                </Field>
+                <Field label="Permitted names" hint="names a script may introduce without a warning, comma-separated: a permitted name, never a second presenter">
+                  <input className="field" name="aliases" defaultValue={brandKit?.aliases?.join(", ") ?? ""} data-testid="brand-aliases" />
                 </Field>
                 <Field label="Notes" hint="shown to you, never rendered">
                   <input className="field" name="notes" defaultValue={brandKit?.notes ?? ""} />

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { freeTextProofUsable } from "../webinar";
 import { formatPrice, hasTimeframe, offerOnePager, scoreOffer } from "../offer-score";
 import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll, toneClause } from "../repurpose";
-import { ACTS, SECTION_TEMPLATES, buildChecks, deckOutline, nextStep, offerStart, readinessScore, readyDecision, reviewStale, sectionPace, statusStale } from "../webinar";
+import { ACTS, SECTION_TEMPLATES, buildChecks, nextStep, offerStart, readinessScore, readyDecision, reviewStale, sectionPace, statusStale } from "../webinar";
 
 const strongOffer = {
   name: "90-Day Reset",
@@ -265,11 +265,6 @@ describe("webinar structure", () => {
       expect(reviewStale({ createdAt: "2026-09-16T10:00:00.000Z" }, null)).toBe(false);
       expect(reviewStale(null, "2026-09-16T10:00:00.000Z")).toBe(false);
     });
-  });
-  it("derives a deck from sections", () => {
-    const slides = deckOutline(SECTION_TEMPLATES.map((t) => ({ order: t.order, act: t.act, name: t.name, keyPoints: t.exampleKeyPoints, script: t.exampleScript })));
-    expect(slides.length).toBeGreaterThanOrEqual(20);
-    expect(slides[0].section).toBe("Hook");
   });
 });
 
