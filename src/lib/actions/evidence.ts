@@ -7,7 +7,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { EVIDENCE_CACHE_DAYS, fallbackTerms, flagsFor, outOfQuotaMessage, queryKey, quotaState, resetPhrase, utcDay } from "@/lib/engine/evidence";
+import { EVIDENCE_CACHE_DAYS, OPENALEX_FIELDS, fallbackTerms, fieldIdFor, flagsFor, outOfQuotaMessage, queryKey, quotaState, resetPhrase, utcDay } from "@/lib/engine/evidence";
 import { searchWorks } from "@/lib/openalex";
 
 function back(params: Record<string, string | number | undefined>): never {
@@ -28,24 +28,27 @@ export async function proposeTermsAction(formData: FormData): Promise<void> {
   const year = str(formData, "year");
   let terms: string[] = [];
   let note = "";
+  let field = "";
   const text = await draft(
-    `You turn a plain-words claim a coach wants to support into what a researcher would search for. Return ONLY a JSON object {"terms": string[] (3 to 6 search terms a researcher would use), "effect": string (the named effect or finding if there is one, else ""), "field": string (the field and the terms its researchers use)}. Never invent a study, an author, a year or a number.`,
+    `You turn a plain-words claim a coach wants to support into what a researcher would search for. Return ONLY a JSON object {"terms": string[] (3 to 6 search terms a researcher would use), "effect": string (the named effect or finding if there is one, else ""), "field": string (the field and the terms its researchers use), "openalexField": string (exactly one of: ${OPENALEX_FIELDS.map((f) => f.name).join("; ")})}. Never invent a study, an author, a year or a number.`,
     `Claim: ${claim}${author ? `\nAuthor they have in mind: ${author}` : ""}${year ? `\nYear they have in mind: ${year}` : ""}`,
     400,
     { feature: "evidence_terms" },
   );
   if (text) {
     try {
-      const j = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as { terms?: unknown[]; effect?: string; field?: string };
+      const j = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as { terms?: unknown[]; effect?: string; field?: string; openalexField?: string };
       terms = (j.terms ?? []).map(String).map((t) => t.trim()).filter(Boolean).slice(0, 8);
       note = [j.effect, j.field].filter(Boolean).join(" · ");
+      // The field the search is restricted to: the model's pick from OpenAlex's own list, else what it wrote, mapped when it can be.
+      field = String(j.openalexField ?? j.field ?? "").trim();
     } catch {
       terms = [];
     }
   }
   const proposed = terms.length ? "ai" : "words";
   if (!terms.length) terms = fallbackTerms(claim);
-  back({ claim, author, year, terms: terms.join(", "), note, proposed });
+  back({ claim, author, year, terms: terms.join(", "), note, field, proposed });
 }
 
 /**
@@ -59,13 +62,16 @@ export async function searchEvidenceAction(formData: FormData): Promise<void> {
   const author = str(formData, "author");
   const yearRaw = str(formData, "year");
   const note = str(formData, "note");
+  const field = str(formData, "field");
   const proposed = str(formData, "proposed");
   const terms = str(formData, "terms").split(/[,\n]/).map((t) => t.trim()).filter(Boolean);
-  const carry = { claim, author, year: yearRaw, note, proposed, terms: terms.join(", ") };
+  const carry = { claim, author, year: yearRaw, note, field, proposed, terms: terms.join(", ") };
   if (!terms.length) back({ ...carry, error: "Give it at least one search term." });
   const year = Number(yearRaw) || undefined;
-  const askedFor = { claim, terms, author: author || undefined, year };
-  const key = queryKey(terms);
+  const fieldId = fieldIdFor(field) ?? undefined;
+  const askedFor = { claim, terms, author: author || undefined, year, field: field || undefined, fieldId };
+  // A search restricted to a field is a different search: it keys the cache with the field.
+  const key = queryKey(fieldId ? [...terms, `field:${fieldId}`] : terms);
   const day = utcDay();
   const since = new Date(Date.now() - EVIDENCE_CACHE_DAYS * 86400000).toISOString().slice(0, 10);
   const cached = await db.query.evidenceSearches.findFirst({ where: and(eq(schema.evidenceSearches.queryKey, key), eq(schema.evidenceSearches.fromCache, false), gte(schema.evidenceSearches.createdAt, since)), orderBy: desc(schema.evidenceSearches.createdAt) });
@@ -78,7 +84,7 @@ export async function searchEvidenceAction(formData: FormData): Promise<void> {
     const reported = today.find((r) => r.creditsRemaining != null)?.creditsRemaining ?? null;
     const q = quotaState(today, userId, day, reported, resetsAt);
     if (!q.allowed) back({ ...carry, error: q.refusal ?? "Not now." });
-    const r = await searchWorks(terms);
+    const r = await searchWorks(terms, { fieldId });
     // The pool itself answered 429: the same words, with the reset in the member's own clock rather than the pool's.
     if (!r.ok) back({ ...carry, error: r.status === 429 ? outOfQuotaMessage(resetsAt) : r.error });
     results = r.data;

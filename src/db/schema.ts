@@ -1325,7 +1325,7 @@ export const passwordResets = sqliteTable(
  * request beside the result so the two are always shown side by side.
  */
 export const EVIDENCE_QUALITY = ["unverified", "verified"] as const;
-export type EvidenceAskedFor = { claim: string; terms: string[]; author?: string; year?: number };
+export type EvidenceAskedFor = { claim: string; terms: string[]; author?: string; year?: number; field?: string; fieldId?: string };
 export const evidence = sqliteTable(
   "evidence",
   {
@@ -1391,7 +1391,7 @@ export const evidenceHidden = sqliteTable(
 );
 
 /** One OpenAlex search: kept as the cache (by normalised query) and as the per-client daily count. `day` is the UTC date. */
-export type EvidenceResult = { openalexId: string; title: string; authors: string; year: number | null; doi: string | null; url: string | null; citedByCount: number };
+export type EvidenceResult = { openalexId: string; title: string; authors: string; authorNames?: string[]; year: number | null; doi: string | null; url: string | null; citedByCount: number; relevanceScore?: number | null };
 export const evidenceSearches = sqliteTable(
   "evidence_searches",
   {

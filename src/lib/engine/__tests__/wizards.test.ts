@@ -198,6 +198,16 @@ describe("webinar structure", () => {
       // Without the known ids (the list and Today before they loaded them) the id alone counted; that blind spot is what known closes
       expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, review: null }).must).toEqual([]);
     });
+    it("the offer is a reference too: a linked offer whose row is gone fails offer linked and stack mapped, and says so", () => {
+      const known = { proofIds: ["p1"], storyIds: ["s1"], evidenceIds: ["e1"], offerIds: ["o1"] };
+      expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, known, review: null }).must).toEqual([]);
+      const gone = buildChecks({ webinar: full, sections, beliefs, components: [], known: { ...known, offerIds: [] }, review: null });
+      expect(gone.must.map((c) => c.key)).toEqual(["offer", "stack"]);
+      expect(gone.checks.find((c) => c.key === "offer")!.detail).toBe("The linked offer no longer exists. Pick another on the Offer step.");
+      expect(gone.checks.find((c) => c.key === "stack")!.detail).toBe("The linked offer no longer exists.");
+      // Without offer ids in the known set (older callers), the id alone still counts, as before
+      expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, known: { proofIds: ["p1"], storyIds: ["s1"], evidenceIds: ["e1"] }, review: null }).must).toEqual([]);
+    });
     it("a status of ready or scheduled outlives its checks, so it is marked stale with the broken checks named; nothing demotes it", () => {
       const broken = buildChecks({ webinar: full, sections, beliefs, components: mapped, known: { proofIds: [], storyIds: ["s1"], evidenceIds: ["e1"] }, review: null });
       expect(statusStale("scheduled", broken)).toEqual({ stale: true, note: "1 check has broken since it was marked scheduled: Every act has a proof." });

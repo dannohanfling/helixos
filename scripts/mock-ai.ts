@@ -36,7 +36,7 @@ function reply(system: string, user: string): string {
   }
   // The Evidence prompt: a claim becomes the terms a researcher would search, the effect, and the field.
   if (/search terms/i.test(system) && /"terms"/.test(system)) {
-    return JSON.stringify({ terms: ["foot-in-the-door", "compliance", "small request", "commitment"], effect: "Foot-in-the-door effect", field: "Social psychology, compliance research" });
+    return JSON.stringify({ terms: ["foot-in-the-door", "compliance", "small request", "commitment"], effect: "Foot-in-the-door effect", field: "Social psychology, compliance research", openalexField: "Psychology" });
   }
   if (/JSON object keyed by/i.test(system)) {
     const keys = Array.from(user.matchAll(/^- ([\w:_-]+):/gm)).map((m) => m[1]);

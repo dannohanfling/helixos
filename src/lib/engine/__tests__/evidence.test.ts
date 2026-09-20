@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BLACKLIST, QUOTE_NOTE, explainFabricated, findFabricated, inQuote, stripFabricated, stripNote } from "../blacklist";
-import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_GLOBAL_BUDGET, byCitations, fallbackTerms, flagsFor, insertText, lastDays, queryKey, quotaState, resetLabel, resetPhrase } from "../evidence";
+import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_GLOBAL_BUDGET, allFlagged, byCitations, byRelevance, fallbackTerms, fieldIdFor, flagsFor, insertText, lastDays, queryKey, quotaState, resetLabel, resetPhrase, significantTokens } from "../evidence";
 import seed from "@/data/research-library-seed-v2.json";
 
 describe("fabricated-stat blacklist", () => {
@@ -136,13 +136,43 @@ describe("evidence", () => {
     expect(fallbackTerms("Hypnotherapy helps people quit smoking.")).toEqual(["hypnotherapy", "quit", "smoking"]);
     expect(queryKey(["Smoking", "hypnotherapy "])).toBe(queryKey(["hypnotherapy", "smoking"]));
   });
-  it("flags a year that differs and a title with none of the terms; a flag is never a rejection", () => {
+  it("flags a year that differs and a title with none of the terms' words; a flag is never a rejection", () => {
     const asked = { claim: "Self-perception theory", terms: ["self-perception", "attitude"], year: 1972 };
-    expect(flagsFor(asked, { title: "The Psychology of Change: Self-Affirmation and Social Psychological Intervention", year: 2014 })).toEqual([
+    expect(flagsFor(asked, { title: "The Psychology of Change: Social Psychological Intervention", year: 2014 })).toEqual([
       "Year differs: you asked for 1972, this is 2014.",
-      "The title has none of your terms (self-perception, attitude).",
+      "The title has none of your terms' words (self, perception, attitude).",
     ]);
     expect(flagsFor(asked, { title: "Self-perception theory", year: 1972 })).toEqual([]);
+  });
+  it("the term flag is on words, not phrases: the best result is not flagged for failing to repeat a phrase verbatim", () => {
+    const impostor = { claim: "", terms: ["impostor phenomenon", "impostor syndrome prevalence", "impostor phenomenon professionals", "impostorism high achievers"] };
+    expect(flagsFor(impostor, { title: "Prevalence, Predictors, and Treatment of Impostor Syndrome: a Systematic Review", year: 2019 })).toEqual([]);
+    expect(flagsFor(impostor, { title: "Toys and Tools in Pink", year: 2010 })).toEqual(["The title has none of your terms' words (impostor, phenomenon, syndrome, prevalence)."]);
+    const lonely = { claim: "", terms: ["executive loneliness", "leadership isolation", "occupational loneliness leaders vs subordinates", "emotional labor in leadership positions"] };
+    // leader, leaders and leadership are one word to the flag
+    expect(flagsFor(lonely, { title: "Leader and leadership loneliness: A review-based critique and path to future research", year: 2024 })).toEqual([]);
+    expect(significantTokens(["self-concordance", "goal self-concordance attainment"])).toEqual(["self", "concordance", "goal", "attainment"]);
+  });
+  it("the named author is a flag when absent, on the surname, never a filter that hides results", () => {
+    const asked = { claim: "", terms: ["reflection", "performance"], author: "Di Stefano" };
+    expect(flagsFor(asked, { title: "Learning by thinking: reflection and performance", year: 2014, authorNames: ["Giada Di Stefano", "Francesca Gino"] })).toEqual([]);
+    expect(flagsFor(asked, { title: "Learning by thinking: reflection and performance", year: 2014, authorNames: ["Someone Else"] })).toEqual(["The author you named (Di Stefano) isn't on this one."]);
+    expect(flagsFor({ ...asked, author: "" }, { title: "Learning by thinking: reflection and performance", year: 2014, authorNames: ["Someone Else"] })).toEqual([]);
+  });
+  it("every result flagged is a search that found nothing, and the model's field maps onto OpenAlex's list", () => {
+    const asked = { claim: "", terms: ["self-concordance"] };
+    expect(allFlagged(asked, [{ title: "A Novel Coronavirus from Patients with Pneumonia in China, 2019", year: 2020 }, { title: "The expression of the emotions in man and animals", year: 1872 }])).toBe(true);
+    expect(allFlagged(asked, [{ title: "Self-concordance and goal attainment", year: 1999 }, { title: "The expression of the emotions in man and animals", year: 1872 }])).toBe(false);
+    expect(allFlagged(asked, [])).toBe(false);
+    expect(fieldIdFor("Psychology")).toBe("32");
+    expect(fieldIdFor("psychology — motivation science, specifically self-determination theory")).toBe("32");
+    // "management" is distinctive enough: management learning lives in Business, Management and Accounting on OpenAlex
+    expect(fieldIdFor("organizational behavior / management learning")).toBe("14");
+    expect(fieldIdFor("a field nobody classifies")).toBeNull();
+    expect(fieldIdFor("Business, Management and Accounting")).toBe("14");
+    expect(fieldIdFor("")).toBeNull();
+    expect(byRelevance([{ relevanceScore: 12.5, t: "b" }, { relevanceScore: 91.2, t: "a" }, { relevanceScore: 40.1, t: "c" }]).map((r) => r.t)).toEqual(["a", "c", "b"]);
+    expect(byRelevance([{ relevanceScore: null, t: "b" }, { relevanceScore: 91.2, t: "a" }]).map((r) => r.t)).toEqual(["b", "a"]);
   });
   it("inserts the claim and the citation together, and sorts by the one number a client can read", () => {
     expect(insertText({ claim: "A small yes makes a bigger yes easier later.", authors: "Freedman & Fraser", year: 1966, title: "Compliance without pressure: The foot-in-the-door technique.", url: "https://doi.org/10.1037/h0023552" })).toBe(

@@ -5,7 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { addEvidenceAction, confirmEvidenceAction, hideSharedAction, proposeTermsAction, removeEvidenceAction, restoreSharedAction, searchEvidenceAction } from "@/lib/actions/evidence";
 import { evidenceShelf } from "@/lib/queries/evidence";
-import { EVIDENCE_DAILY_LIMIT, byCitations, flagsFor, insertText, isVerified, sharedAsEvidence } from "@/lib/engine/evidence";
+import { EVIDENCE_DAILY_LIMIT, allFlagged, byRelevance, flagsFor, insertText, isVerified, sharedAsEvidence } from "@/lib/engine/evidence";
 import { CopyButton } from "@/components/copy-button";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
@@ -76,6 +76,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                 <input type="hidden" name="author" value={sp.author ?? ""} />
                 <input type="hidden" name="year" value={sp.year ?? ""} />
                 <input type="hidden" name="note" value={sp.note ?? ""} />
+                <input type="hidden" name="field" value={sp.field ?? ""} />
                 <input type="hidden" name="proposed" value={sp.proposed ?? ""} />
                 {sp.note ? <p className="text-sm" data-testid="terms-note">Look for: <span className="font-medium">{sp.note}</span></p> : null}
                 {sp.proposed === "words" ? <p className="rounded-lg bg-warn-soft p-2 text-xs" data-testid="terms-fallback">No AI key is connected, so these are the claim&apos;s own words. Edit them into what a researcher would search before you run it.</p> : null}
@@ -89,11 +90,18 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
           ) : null}
           {search ? (
             <Card title={`Results for “${search.askedFor.claim || search.query}”`} action={search.fromCache ? <Badge tone="neutral">from this week&apos;s cache</Badge> : null}>
-              <p className="mb-2 text-xs text-ink-3">Terms: {search.query}. Most cited first. Citation count is the quality signal you can read; a flag means look closer, not no.</p>
+              <p className="mb-2 text-xs text-ink-3">
+                Terms: {search.query}.{search.askedFor.fieldId ? ` Within ${search.askedFor.field}.` : ""} Most relevant to the terms first; the citation count is beside each. A flag means look closer, not no.
+              </p>
+              {search.results.length && allFlagged(search.askedFor, search.results) ? (
+                <p className="mb-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="no-match">
+                  None of these fits your terms: every one is flagged, so the search found nothing to add. Try the words a researcher would use, or fewer of them. What came back is listed so you can see why.
+                </p>
+              ) : null}
               {search.results.length ? (
                 <>
                 <ul className="divide-y" data-testid="results">
-                  {byCitations(search.results).map((r) => {
+                  {byRelevance(search.results).map((r) => {
                     const added = shelf.own.find((e) => e.openalexId === r.openalexId);
                     const flags = flagsFor(search.askedFor, r);
                     return (
@@ -115,7 +123,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                         </div>
                         {added ? (
                           <Badge tone={isVerified(added) ? "good" : "neutral"}>{isVerified(added) ? "on your shelf" : "on your shelf, unconfirmed"}</Badge>
-                        ) : (
+                        ) : allFlagged(search.askedFor, search.results) ? null : (
                           <form action={addEvidenceAction}>
                             <input type="hidden" name="searchId" value={search.id} />
                             <input type="hidden" name="openalexId" value={r.openalexId} />

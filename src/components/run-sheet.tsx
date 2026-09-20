@@ -122,6 +122,9 @@ export function RunSheetView({ c }: { c: WebinarContext }) {
         <p className="mt-1 text-sm text-ink-2">
           Presented by {c.presenter} · {c.totalMin} min · scripted ≈ {c.scriptedMin} min
         </p>
+        <p className="mt-1 text-xs text-ink-3" data-testid="runsheet-legend">
+          Proof marked [approved] is from the bank with permission on record; [typed, permission ticked] was typed here with the same tick. Nothing else reaches this sheet.
+        </p>
         {c.placeholders.length ? (
           <p className="mt-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="runsheet-placeholders">
             {c.placeholders.length} {c.placeholders.length === 1 ? "section has" : "sections have"} unfilled slots: {c.placeholders.map((p) => `${p.section} (${p.tokens.join(" ")})`).join("; ")}.

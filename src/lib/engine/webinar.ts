@@ -155,7 +155,7 @@ export type BuildBelief = { type: string; fromBelief: string | null; toBelief: s
 export const ACT_NUMBER: Record<string, string> = { vehicle: "Act 1", internal: "Act 2", external: "Act 3" };
 
 /** The ids that still exist and still qualify: approved proofs, stories in scope (bank or Essence), citable studies. */
-export type KnownRefs = { proofIds: string[]; storyIds: string[]; evidenceIds: string[] };
+export type KnownRefs = { proofIds: string[]; storyIds: string[]; evidenceIds: string[]; offerIds?: string[] };
 
 /**
  * What is wired to each act: a proof (an approved bank row, or a typed one with its permission tick), a story and a citation.
@@ -198,10 +198,12 @@ export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLik
   const pointsOnly = sections.filter((s) => !hasScript(s) && (s.status !== "todo" || (s.keyPoints ?? "").trim()));
   const untouched = sections.length - scriptedRows.length - pointsOnly.length;
   checks.push({ key: "sections", label: `All ${sections.length} sections scripted (${scriptedRows.length})`, ok: sections.length > 0 && scriptedRows.length === sections.length, level: "must", detail: scriptedRows.length === sections.length ? "Every section has a script." : `${pointsOnly.length} with key points only${pointsOnly.length ? ` (${pointsOnly.map((s) => s.name ?? s.sectionKey).slice(0, 4).join(", ")}${pointsOnly.length > 4 ? ", …" : ""})` : ""}; ${untouched} not started.` });
-  checks.push({ key: "offer", label: "Offer linked", ok: Boolean(w.offerId), level: "must", detail: w.offerId ? "The closing frame has an offer to present." : "Pick an offer on the Offer step; the stack and the price come from it." });
+  // The offer is a reference too: with the known ids, a linked offer whose row is gone no longer counts, and the stack says why it is empty.
+  const offerGone = Boolean(w.offerId && input.known?.offerIds && !input.known.offerIds.includes(w.offerId));
+  checks.push({ key: "offer", label: "Offer linked", ok: Boolean(w.offerId) && !offerGone, level: "must", detail: offerGone ? "The linked offer no longer exists. Pick another on the Offer step." : w.offerId ? "The closing frame has an offer to present." : "Pick an offer on the Offer step; the stack and the price come from it." });
   if (components !== undefined) {
     const unmapped = components.filter((c) => c.beliefBreak === "none").length;
-    checks.push({ key: "stack", label: "Stack mapped to belief breaks", ok: components.length > 0 && unmapped === 0, level: "must", detail: !w.offerId ? "No offer linked yet." : !components.length ? "The offer has no stack components." : unmapped ? `${unmapped} of ${components.length} components not tied to a belief break.` : `All ${components.length} components tied to a belief break.` });
+    checks.push({ key: "stack", label: "Stack mapped to belief breaks", ok: components.length > 0 && unmapped === 0 && !offerGone, level: "must", detail: offerGone ? "The linked offer no longer exists." : !w.offerId ? "No offer linked yet." : !components.length ? "The offer has no stack components." : unmapped ? `${unmapped} of ${components.length} components not tied to a belief break.` : `All ${components.length} components tied to a belief break.` });
   }
   const totalMinutes = sections.reduce((a, s) => a + s.durationMin, 0);
   checks.push({ key: "runtime", label: `Runtime between 55 and 95 min (${totalMinutes})`, ok: totalMinutes >= 55 && totalMinutes <= 95, level: "must", detail: totalMinutes < 55 ? "Short for a webinar that teaches and then offers." : totalMinutes > 95 ? "Long: the end is what gets cut when a session overruns." : "In range." });

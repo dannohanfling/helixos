@@ -108,21 +108,97 @@ export function utcDay(now = new Date()): string {
 }
 
 /**
- * Auto-flag, never auto-decide: a returned year that differs from the one asked for, or a title missing the key terms, marks
- * the row. A flag says look closer; it does not reject. The client confirms or not.
+ * OpenAlex's fields (the ASJC top level it classifies every work into), by the id its filter takes. The model names one of
+ * these for a claim; the search is then restricted to it, so a motivation-science claim cannot match a genome paper.
  */
-export function flagsFor(asked: EvidenceAskedFor, found: Pick<EvidenceResult, "title" | "year">): string[] {
+export const OPENALEX_FIELDS: { id: string; name: string }[] = [
+  { id: "10", name: "Multidisciplinary" },
+  { id: "11", name: "Agricultural and Biological Sciences" },
+  { id: "12", name: "Arts and Humanities" },
+  { id: "13", name: "Biochemistry, Genetics and Molecular Biology" },
+  { id: "14", name: "Business, Management and Accounting" },
+  { id: "15", name: "Chemical Engineering" },
+  { id: "16", name: "Chemistry" },
+  { id: "17", name: "Computer Science" },
+  { id: "18", name: "Decision Sciences" },
+  { id: "19", name: "Earth and Planetary Sciences" },
+  { id: "20", name: "Economics, Econometrics and Finance" },
+  { id: "21", name: "Energy" },
+  { id: "22", name: "Engineering" },
+  { id: "23", name: "Environmental Science" },
+  { id: "24", name: "Immunology and Microbiology" },
+  { id: "25", name: "Materials Science" },
+  { id: "26", name: "Mathematics" },
+  { id: "27", name: "Medicine" },
+  { id: "28", name: "Neuroscience" },
+  { id: "29", name: "Nursing" },
+  { id: "30", name: "Pharmacology, Toxicology and Pharmaceutics" },
+  { id: "31", name: "Physics and Astronomy" },
+  { id: "32", name: "Psychology" },
+  { id: "33", name: "Social Sciences" },
+  { id: "34", name: "Veterinary" },
+  { id: "35", name: "Dentistry" },
+  { id: "36", name: "Health Professions" },
+];
+/** Words every other field shares: matching on them would send "motivation science" to Computer Science. */
+const GENERIC_FIELD_WORDS = new Set(["science", "sciences", "professions"]);
+/**
+ * The field id for what the model named: the exact field; else a field whose whole name the text contains; else the field
+ * with the longest distinctive word the text contains ("psychology" beats "social" for "social psychology"). Null when none.
+ */
+export function fieldIdFor(field: string | null | undefined): string | null {
+  const text = (field ?? "").trim().toLowerCase();
+  if (!text) return null;
+  const exact = OPENALEX_FIELDS.find((f) => f.name.toLowerCase() === text);
+  if (exact) return exact.id;
+  const whole = OPENALEX_FIELDS.find((f) => text.includes(f.name.toLowerCase()));
+  if (whole) return whole.id;
+  let best: { id: string; word: string } | null = null;
+  for (const f of OPENALEX_FIELDS) {
+    for (const w of f.name.toLowerCase().split(/[,\s]+/)) {
+      if (w.length >= 6 && !GENERIC_FIELD_WORDS.has(w) && text.includes(w) && (!best || w.length > best.word.length)) best = { id: f.id, word: w };
+    }
+  }
+  return best?.id ?? null;
+}
+
+/** The words in the terms that carry meaning: split on commas, spaces and hyphens, stop words and short words out, one each. */
+export function significantTokens(terms: string[]): string[] {
+  return [...new Set(terms.flatMap((t) => t.toLowerCase().split(/[\s,;/-]+/)).map((w) => w.replace(/[^\p{L}\p{N}]/gu, "")).filter((w) => w.length >= 4 && !STOP.has(w)))];
+}
+/** Loose stem: the first five letters, so leader, leaders and leadership are one word. */
+const stem = (w: string): string => w.slice(0, 5);
+
+/**
+ * Auto-flag, never auto-decide: a year that differs from the one asked for; a title sharing none of the terms' words (the
+ * words, not the phrases: "impostor syndrome prevalence" matches a title that says "Prevalence of Impostor Syndrome"); the
+ * named author absent from the author list. A flag says look closer; it does not reject. The client confirms or not.
+ */
+export function flagsFor(asked: EvidenceAskedFor, found: Pick<EvidenceResult, "title" | "year"> & { authorNames?: string[]; authors?: string }): string[] {
   const flags: string[] = [];
   if (asked.year && found.year && found.year !== asked.year) flags.push(`Year differs: you asked for ${asked.year}, this is ${found.year}.`);
-  const title = found.title.toLowerCase();
-  const key = asked.terms.map((t) => t.toLowerCase()).filter((t) => t.length > 3);
-  if (key.length && !key.some((t) => title.includes(t))) flags.push(`The title has none of your terms (${key.slice(0, 4).join(", ")}).`);
+  const tokens = significantTokens(asked.terms);
+  const titleStems = new Set(found.title.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(stem));
+  if (tokens.length && !tokens.some((t) => titleStems.has(stem(t)))) flags.push(`The title has none of your terms' words (${tokens.slice(0, 4).join(", ")}).`);
+  const author = (asked.author ?? "").trim().toLowerCase();
+  if (author) {
+    const names = (found.authorNames ?? (found.authors ? [found.authors] : [])).map((n) => n.toLowerCase());
+    const surname = author.split(/\s+/).pop() ?? author;
+    if (names.length && !names.some((n) => n.includes(surname))) flags.push(`The author you named (${asked.author}) isn't on this one.`);
+  }
   return flags;
 }
 
-/** Sorted by citation count, the one quality signal a client can read. */
+/** Every result flagged means the search found nothing that fits: said as that, with nothing offered to add. */
+export const allFlagged = (asked: EvidenceAskedFor, results: (Pick<EvidenceResult, "title" | "year"> & { authorNames?: string[]; authors?: string })[]): boolean => results.length > 0 && results.every((r) => flagsFor(asked, r).length > 0);
+
+/** Sorted by citation count, the one quality signal a client can read. Second to relevance since the relevance sort landed. */
 export function byCitations<T extends { citedByCount: number }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => b.citedByCount - a.citedByCount);
+}
+/** In the order OpenAlex ranked them for the terms (its relevance score, when it sent one); the citation count is shown beside each. */
+export function byRelevance<T extends { relevanceScore?: number | null }>(rows: T[]): T[] {
+  return rows.every((r) => r.relevanceScore != null) ? [...rows].sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0)) : [...rows];
 }
 
 export const isVerified = (e: Pick<Evidence, "citationQuality">): boolean => e.citationQuality === "verified";

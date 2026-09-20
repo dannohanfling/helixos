@@ -18,14 +18,17 @@ export const openalexConfigured = (): boolean => Boolean(process.env.OPENALEX_AP
 export type OpenAlexQuota = { limit: number | null; remaining: number | null };
 export type OpenAlexResult<T> = { ok: true; data: T; quota: OpenAlexQuota } | { ok: false; error: string; status?: number; quota?: OpenAlexQuota };
 
-type Work = { id?: string; doi?: string | null; title?: string | null; display_name?: string | null; publication_year?: number | null; cited_by_count?: number; authorships?: { author?: { display_name?: string | null } }[] };
+type Work = { id?: string; doi?: string | null; title?: string | null; display_name?: string | null; publication_year?: number | null; cited_by_count?: number; relevance_score?: number | null; authorships?: { author?: { display_name?: string | null } }[] };
 
 function toResult(w: Work): EvidenceResult {
   const doi = (w.doi ?? "").replace(/^https?:\/\/doi\.org\//, "") || null;
+  const names = (w.authorships ?? []).map((a) => a.author?.display_name ?? "").filter(Boolean);
   return {
     openalexId: (w.id ?? "").replace(/^https?:\/\/openalex\.org\//, ""),
     title: w.title ?? w.display_name ?? "(untitled)",
-    authors: authorLine((w.authorships ?? []).map((a) => a.author?.display_name ?? "")),
+    authors: authorLine(names),
+    authorNames: names,
+    relevanceScore: w.relevance_score ?? null,
     year: w.publication_year ?? null,
     doi,
     url: doi ? `https://doi.org/${doi}` : null,
@@ -63,6 +66,8 @@ async function call<T>(path: string, params: Record<string, string>): Promise<Op
   }
   const url = new URL(`${openalexBase()}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  // The exact request, before the key joins it: what was asked of OpenAlex is the first thing to read when a result looks wrong.
+  console.log("[openalex] request", JSON.stringify({ path, params }));
   url.searchParams.set("api_key", key);
   try {
     const ctrl = new AbortController();
@@ -84,9 +89,20 @@ async function call<T>(path: string, params: Record<string, string>): Promise<Op
   }
 }
 
-/** Real papers for a set of terms, most cited first. */
-export async function searchWorks(terms: string[]): Promise<OpenAlexResult<EvidenceResult[]>> {
-  const r = await call<{ results?: Work[] }>("/works", { search: terms.join(" "), "per-page": "10", sort: "cited_by_count:desc", select: "id,doi,title,display_name,publication_year,cited_by_count,authorships" });
+/**
+ * Real papers for a set of terms, in OpenAlex's own relevance order (its default when `search` is given; no citation sort, which
+ * surfaced the most-cited members of a loose match), restricted to the field the model named when it named one. A filter the
+ * API rejects (400) is dropped and the search repeated without it, and the log says so; the terms are never sent unfiltered
+ * by silent fallback for any other reason.
+ */
+export async function searchWorks(terms: string[], opts: { fieldId?: string | null } = {}): Promise<OpenAlexResult<EvidenceResult[]>> {
+  const base = { search: terms.join(" "), "per-page": "10", select: "id,doi,title,display_name,publication_year,cited_by_count,relevance_score,authorships" };
+  const params = opts.fieldId ? { ...base, filter: `primary_topic.field.id:${opts.fieldId}` } : base;
+  let r = await call<{ results?: Work[] }>("/works", params);
+  if (!r.ok && r.status === 400 && opts.fieldId) {
+    logOpenAlex("the field filter was rejected; searching again without it", { fieldId: opts.fieldId });
+    r = await call<{ results?: Work[] }>("/works", base);
+  }
   if (!r.ok) return r;
   return { ok: true, data: (r.data.results ?? []).map(toResult), quota: r.quota };
 }

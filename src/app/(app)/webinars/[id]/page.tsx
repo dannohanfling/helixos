@@ -147,6 +147,7 @@ export default async function WebinarWizardPage({
     proofIds: proofs.map((pr) => pr.id),
     storyIds: [...assets.filter((a) => a.type === "story").map((a) => a.id), ...essenceStories.map((_, i) => `essence:${i}`)],
     evidenceIds: evidence.map((e) => (e.source === "shared" ? `shared:${e.id}` : e.id)),
+    offerIds: offers.map((o) => o.id),
   };
   const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, review });
   const staleStatus = statusStale(w.status, build);

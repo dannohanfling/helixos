@@ -12,17 +12,19 @@ import { essenceFor } from "@/lib/queries/essence";
  * picker's "essence:<n>" values, indexed the way the picker indexes them), and citable studies ("shared:<id>" for the shelf).
  */
 export async function knownFor(userId: string, workspaceId: string): Promise<KnownRefs> {
-  const [proofs, stories, citable, essence] = await Promise.all([
+  const [proofs, stories, citable, essence, offers] = await Promise.all([
     db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")), columns: { id: true } }),
     assetsFor(workspaceId, userId, "story"),
     citableEvidence(userId),
     essenceFor(workspaceId, userId),
+    db.query.offers.findMany({ where: eq(schema.offers.userId, userId), columns: { id: true } }),
   ]);
   const own = ((essence.representative_stories?.stories as { name?: string; summary?: string }[] | undefined) ?? []).filter((st) => st.name || st.summary);
   return {
     proofIds: proofs.map((p) => p.id),
     storyIds: [...stories.map((s) => s.id), ...own.map((_, i) => `essence:${i}`)],
     evidenceIds: citable.map((e) => (e.source === "shared" ? `shared:${e.id}` : e.id)),
+    offerIds: offers.map((o) => o.id),
   };
 }
 

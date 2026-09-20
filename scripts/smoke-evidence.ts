@@ -48,6 +48,7 @@ async function login(page: Page, who: "client" | "coach") {
   await page.waitForURL(/\/today/);
 }
 const calls = async () => ((await (await fetch(`http://localhost:${openalexPort}/__calls`)).json()) as { calls: number }).calls;
+const lastRequest = async () => (await (await fetch(`http://localhost:${openalexPort}/__last`)).json()) as Record<string, string>;
 const lastSystem = async () => ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] }).system.map((b) => b.text).join("\n\n");
 
 async function main() {
@@ -116,24 +117,41 @@ async function main() {
     if (!/foot-in-the-door/.test(terms)) throw new Error(`proposed terms should come from the model, got "${terms}"`);
     console.log(`✓ the claim became terms: "${terms}"`);
 
-    // Search: real papers, most cited first, year and DOI shown, the wrong-year one flagged and never auto-decided
+    // Search: real papers in relevance order with the citation count beside each, restricted to the field the model named,
+    // year and DOI shown, the wrong-year one flagged and never auto-decided
     const before = await calls();
     await submit(page, 'button:has-text("Find studies")');
     await page.locator('[data-testid="results"]').waitFor({ timeout: 10000 });
+    const sent = await lastRequest();
+    if (sent.sort) throw new Error(`no citation sort on the request: OpenAlex ranks by relevance, got sort=${sent.sort}`);
+    if (sent.filter !== "primary_topic.field.id:32") throw new Error(`the field the model named is passed as a filter, got ${JSON.stringify(sent.filter)}`);
+    if (!/relevance_score/.test(sent.select ?? "")) throw new Error("the relevance score is asked for");
     const rows = page.locator('[data-testid="result"]');
     if ((await rows.count()) !== 3) throw new Error(`expected 3 results, got ${await rows.count()}`);
     const citedOrder = await rows.evaluateAll((els) => els.map((e) => Number(e.getAttribute("data-cited"))));
-    if (citedOrder.join(",") !== "1624,1187,3") throw new Error(`results must be sorted by citations, got ${citedOrder.join(",")}`);
+    if (citedOrder.join(",") !== "1624,3,1187") throw new Error(`results in relevance order, not citation order, got ${citedOrder.join(",")}`);
+    await expectText(page, "Within Psychology", "the field restriction is said on the page");
     await expectText(page, "cited 1,624 times", "citation count");
     if (!(await page.locator('[data-testid="result"] a[href="https://doi.org/10.1037/h0023552"]').count())) throw new Error("the DOI must be a working link");
     const flagged = page.locator('[data-testid="result"][data-flagged="1"]');
     if ((await flagged.count()) < 1) throw new Error("the 2014 self-affirmation paper must be flagged");
     await expectText(page, "Year differs: you asked for 1966, this is 2014.", "year flag");
     if ((await rows.first().getAttribute("data-flagged")) !== "0") throw new Error("the right paper must not be flagged");
+    await expectText(page, "The author you named (Freedman) isn't on this one.", "the named author's absence is flagged");
     if ((await calls()) !== before + 1) throw new Error("one search is one OpenAlex call");
     const under = (await page.locator('[data-testid="none-fitting"]').innerText()).replace(/\s+/g, " ").trim();
     if (under !== "None of these fitting is an answer too. A study that is close but not about your claim is worse than no study at all — it holds up right until someone reads it.") throw new Error(`the line under the results differs: "${under}"`);
-    console.log("✓ results: sorted by citations, year and DOI shown, the wrong paper flagged, the right one not, and the standing line beneath");
+    console.log("✓ results: relevance order within the named field, citations shown, the wrong paper flagged by year and author, the right one not, and the standing line beneath");
+    const searchUrl = page.url();
+
+    // A search whose every result is flagged is a search that found nothing: said as that, with nothing offered to add
+    await page.goto(`${base}/evidence?claim=${encodeURIComponent("Self-concordant goals sustain wellbeing.")}&terms=${encodeURIComponent("leaderboard, self-concordance")}`);
+    await submit(page, 'button:has-text("Find studies")');
+    await page.locator('[data-testid="results"]').waitFor({ timeout: 10000 });
+    await page.locator('[data-testid="no-match"]').waitFor({ timeout: 5000 });
+    if ((await page.locator('[data-testid="result"][data-flagged="0"]').count()) !== 0) throw new Error("every leaderboard paper is flagged: none shares a word with the terms");
+    if ((await page.locator('[data-testid="results"] button:has-text("Add to my shelf")').count()) !== 0) throw new Error("no add button when nothing fits");
+    console.log("✓ the citation leaderboard is not an answer: every row flagged, the search says it found nothing, no add buttons");
 
     // The key never reaches the browser
     if (browserRequests.some((u) => u.includes(`:${openalexPort}`) || u.includes("openalex") || u.includes("api_key"))) throw new Error("the browser must never call OpenAlex or carry the key");
@@ -141,8 +159,8 @@ async function main() {
     console.log("✓ OpenAlex is called server-side only; the key never reaches the browser");
 
     // The same terms again this week come from the cache: no second call
-    const searchUrl = page.url();
-    await page.goto(`${base}/evidence?claim=${encodeURIComponent("A small yes makes a bigger yes easier later.")}&terms=${encodeURIComponent(terms)}&author=Freedman&year=1966`);
+    // The same terms within the same field are the same search; a search restricted to a field keys the cache with it
+    await page.goto(`${base}/evidence?claim=${encodeURIComponent("A small yes makes a bigger yes easier later.")}&terms=${encodeURIComponent(terms)}&author=Freedman&year=1966&field=Psychology`);
     const beforeCache = await calls();
     await submit(page, 'button:has-text("Find studies")');
     await expectText(page, "from this week's cache", "cache badge");
@@ -171,7 +189,8 @@ async function main() {
 
     // Picking the wrong paper: unverified, what was asked for beside what came back, the flag on the row; removable
     await page.goto(searchUrl);
-    await submit(page, '[data-testid="result"][data-flagged="1"] button:has-text("Add to my shelf")');
+    // The wrong paper by its DOI: in relevance order the thin one now sits above it among the flagged rows
+    await submit(page, '[data-testid="result"]:has(a[href="https://doi.org/10.1146/annurev-psych-010213-115137"]) button:has-text("Add to my shelf")');
     const unverified = page.locator('[data-testid="own-study"][data-quality="unverified"]');
     await unverified.first().waitFor({ timeout: 5000 });
     await expectText(page, "Not citable until you confirm", "unverified state");
@@ -264,7 +283,7 @@ async function main() {
     await page.goto(`${base}/coach`);
     await expectText(page, "Evidence searches: the shared OpenAlex key", "quota card");
     const today = await page.locator('[data-testid="evidence-quota-today"]').innerText();
-    if (!/^2 of 10,000 today$/.test(today.trim())) throw new Error(`two real searches today (the results one and the empty one), the cache hit and the 429 not counted; got "${today}"`);
+    if (!/^3 of 10,000 today$/.test(today.trim())) throw new Error(`three real searches today (the results one, the leaderboard one and the empty one), the cache hit and the 429 not counted; got "${today}"`);
     const credits = await page.locator('[data-testid="evidence-credits"]').innerText();
     if (!/OpenAlex reports 99,9\d0 of 100,000 credits left/.test(credits)) throw new Error(`the card must show what OpenAlex reported: "${credits}"`);
     if ((await page.locator('[data-testid="evidence-quota"] tr[data-day]').count()) !== 7) throw new Error("seven days, zero-filled");
