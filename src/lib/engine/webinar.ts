@@ -23,7 +23,7 @@ const PROMPTS: Record<string, { prompt: string; asset: SectionTemplate["assetTyp
   "Case Study": { prompt: "One person, in depth. Before, the pivot, after. Pick someone whose starting point matches the audience.", asset: "story", minutes: 4 },
   "Problem Frame (Internal)": { prompt: "Say the quiet part: 'even if this works, I can't do it.' Name the self-doubt so they feel seen.", asset: "belief", minutes: 3 },
   "Opportunity Frame (Internal)": { prompt: "They don't need to become someone else. The formula does the work. Show people like them who shipped.", asset: "story", minutes: 3 },
-  "Mechanism Reveal (Internal)": { prompt: "The install protocol: what they do week by week, with zero invention required.", asset: null, minutes: 4 },
+  "Mechanism Reveal (Internal)": { prompt: "The install protocol: what they do as the programme unfolds, with zero invention required.", asset: null, minutes: 4 },
   "Proof Block (Internal)": { prompt: "Proof that non-experts finish. Completion rates, archetypes, the least technical person who did it.", asset: null, minutes: 2 },
   "Case Study (Internal)": { prompt: "One person who thought they couldn't, and did. Use their words.", asset: "story", minutes: 3 },
   "Problem Frame (External)": { prompt: "Name the outside forces they blame. Agree the facts are real. Set up the reframe.", asset: "objection", minutes: 3 },

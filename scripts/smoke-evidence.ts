@@ -222,6 +222,24 @@ async function main() {
     if (!(await page.locator('[data-testid="own-study"] button:has-text("Copy claim + citation")').count())) throw new Error("a verified study must be copyable, claim and citation together");
     console.log("✓ the right paper: confirmed by the client, now citable");
 
+    // A source with no DOI joins the shelf unconfirmed, and the claim can be narrowed before it is confirmed
+    await page.goto(`${base}/evidence`);
+    await page.locator('[data-testid="add-source"] summary').click();
+    await page.fill('[data-testid="add-source"] input[name="sourceClaim"]', "Leaders report more stress, anger, sadness and loneliness than the people they manage.");
+    await page.fill('[data-testid="add-source"] input[name="sourceTitle"]', "State of the Global Workplace 2026");
+    await page.fill('[data-testid="add-source"] input[name="sourcePublisher"]', "Gallup");
+    await page.fill('[data-testid="add-source"] input[name="sourceYear"]', "2026");
+    await page.fill('[data-testid="add-source"] input[name="sourceUrl"]', "https://www.gallup.com/workplace/state-of-the-global-workplace.aspx");
+    await submit(page, '[data-testid="add-source"] button[type="submit"]');
+    const source = page.locator('[data-testid="own-study"][data-quality="unverified"]').first();
+    await source.waitFor({ timeout: 5000 });
+    await expectText(page, "Not citable until you confirm", "a non-DOI source is unconfirmed like any other");
+    await page.fill('[data-testid="own-study"][data-quality="unverified"] [data-testid="confirm-claim"]', "Leaders report more stress, anger, sadness and loneliness than non-managers.");
+    await submit(page, '[data-testid="own-study"][data-quality="unverified"] [data-testid="confirm-study"]');
+    await expectText(page, "than non-managers", "the claim was narrowed before it was confirmed");
+    await expectText(page, "2 confirmed and citable", "the source counts as citable once confirmed");
+    console.log("✓ a source with no DOI: on the shelf unconfirmed, the claim narrowed, then citable");
+
     // Removing a shared study changes this client's shelf only
     await submit(page, '[data-testid="shared-study"][data-id="s01"] [data-testid="hide-shared"]');
     if ((await page.locator('[data-testid="shared-study"]').count()) !== 8) throw new Error("removing a shared study should leave 8 on this shelf");
@@ -238,7 +256,7 @@ async function main() {
     if (/Mere Exposure|10\.1037\/h0025848/.test(sys)) throw new Error("a shared study the client removed must not reach their prompt");
     if (/Self-Affirmation/.test(sys)) throw new Error("an unconfirmed study must never reach a prompt");
     const ladderEvidence = page.locator('[data-testid="ladder-evidence"] li');
-    if ((await ladderEvidence.count()) !== 9) throw new Error(`ladder should list 8 shared + 1 own studies, got ${await ladderEvidence.count()}`);
+    if ((await ladderEvidence.count()) !== 10) throw new Error(`ladder should list 8 shared + 2 own studies (the confirmed study and the confirmed non-DOI source), got ${await ladderEvidence.count()}`);
     if (!(await page.locator('[data-testid="ladder-evidence"] li[data-source="own"]').count())) throw new Error("the client's own verified study must be on the ladder page");
     console.log("✓ the ladder prompt and page carry the client's citable evidence, and nothing unconfirmed or removed");
 
@@ -278,6 +296,7 @@ async function main() {
     await page.click('main a[href^="/webinars/"]');
     await page.waitForURL(/\/webinars\/[a-z0-9-]+/i);
     await page.goto(page.url().split("?")[0] + "?step=script");
+    await page.waitForURL(/[?&]section=/);
     if (!(await page.locator('[data-testid="webinar-evidence"] li').count())) throw new Error("the webinar script step must list the client's citable evidence");
     console.log("✓ webinar wizard lists the shelf beside the proof");
 

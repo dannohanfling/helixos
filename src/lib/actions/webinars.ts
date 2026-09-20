@@ -12,7 +12,7 @@ import { buildFor, presenterOf } from "@/lib/queries/webinar";
 import { fillRuntime } from "@/lib/engine/subject";
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
-import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { ctx, num, opt, optNum, refresh, str } from "@/lib/action-helpers";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { evidenceLines, insertText } from "@/lib/engine/evidence";
 import { essenceFor } from "@/lib/queries/essence";
@@ -190,16 +190,17 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
       { feature: "webinar_section" },
     );
   }
+  // No model, or the example asked for: nothing is written. The example is shown beside the field, for shape, and never becomes a value.
   if (!text) {
-    const swap = (s: string) => s.replace(/Synchronized Journey( Framework)?/g, w.mechanismName ?? "[your mechanism]").replace(/75 minutes/g, `${runtime} minutes`);
-    text = `${swap(tpl.exampleScript)}\n\n[Example from The Leaky Webinar. Rewrite in your words: your audience is "${w.audience ?? "…"}", your promise is "${w.promise ?? "…"}".]`;
+    refresh();
+    redirect(`/webinars/${id}?step=script&section=${sectionKey}&example=1`);
   }
   // A fabricated statistic the model wrote comes out, and the page says what went and why. The coach's own words are never edited here.
   const stripped = stripFabricated(text);
   const note = stripNote(stripped.removed);
   await db
     .update(schema.webinarSections)
-    .set({ script: stripped.text, status: "drafted", keyPoints: section?.keyPoints ?? tpl.exampleKeyPoints })
+    .set({ script: stripped.text, status: "drafted", keyPoints: section?.keyPoints ?? null })
     .where(and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)));
   await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
   refresh();
@@ -266,12 +267,12 @@ export async function updateRunAction(formData: FormData): Promise<void> {
       registrationUrl: opt(formData, "registrationUrl"),
       replayUrl: opt(formData, "replayUrl"),
       deckUrl: opt(formData, "deckUrl"),
-      registered: num(formData, "registered"),
-      showed: num(formData, "showed"),
-      offersMade: num(formData, "offersMade"),
-      callsBooked: num(formData, "callsBooked"),
-      sales: num(formData, "sales"),
-      revenue: num(formData, "revenue"),
+      registered: optNum(formData, "registered"),
+      showed: optNum(formData, "showed"),
+      offersMade: optNum(formData, "offersMade"),
+      callsBooked: optNum(formData, "callsBooked"),
+      sales: optNum(formData, "sales"),
+      revenue: optNum(formData, "revenue"),
       debriefLeak: opt(formData, "debriefLeak"),
       debriefFix: opt(formData, "debriefFix"),
       debriefWins: opt(formData, "debriefWins"),

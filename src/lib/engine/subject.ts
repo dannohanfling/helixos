@@ -22,9 +22,13 @@ export function nameMismatch(script: string | null | undefined, presenter: strin
   const text = script ?? "";
   const first = presenter.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   if (!first) return null;
-  const re = /\b(?:I'm|I’m|I am|My name is|My name's)\s+([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+)?)/gu;
-  const skip = new Set(["not", "going", "here", "sure", "just", "also", "still", "very", "the", "so", "only", "now", "really", "about", "always", "never", "sorry", "glad", "happy", "done", "back"]);
+  // "I'm Danno", "I'm Danno Hanfling", "My name is Kate Amos", and "Danno here," at the start of a sentence.
+  const re = /(?:\b(?:I'm|I’m|I am|My name is|My name's)\s+|(?:^|[.!?]\s+))([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+)?)(?=\s+here\b|[\s.,;:!?]|$)/gu;
+  const skip = new Set(["not", "going", "here", "sure", "just", "also", "still", "very", "the", "so", "only", "now", "really", "about", "always", "never", "sorry", "glad", "happy", "done", "back", "right", "over", "look", "come", "stay", "start", "from", "this", "that", "what", "when", "where", "which", "there", "then", "and", "but", "yes", "okay", "well", "welcome", "hello", "thanks", "thank", "let's", "lets", "today", "tonight", "first", "second", "next", "one", "two", "three"]);
   for (const m of text.matchAll(re)) {
+    const introduced = m[0].startsWith("I") || m[0].startsWith("My");
+    // A bare capitalised word at a sentence start counts only as "<Name> here"
+    if (!introduced && !/\s+here\b/.test(text.slice(m.index! + m[0].length, m.index! + m[0].length + 8))) continue;
     const found = m[1].replace(/[.,;:!?]$/, "");
     const word = found.split(/\s+/)[0].toLowerCase();
     if (skip.has(word)) continue;
@@ -73,10 +77,31 @@ export function brandKitProblems(kit: BrandKitInput): string[] {
   if (!kit.fontFallback.trim()) out.push("Name the fallback face: it is what the file names when a brand face is missing on the reader's machine.");
   const banned = kit.bannedColors.map(normaliseHex).filter(isHex);
   if (out.length) return out;
+  // Text pairs are refused: ink and muted on ground, inverseInk on inverseGround. The accent pairs warn (see brandKitWarnings).
   const ratio = contrastRatio(kit.ground, kit.ink);
   if (ratio < MIN_CONTRAST) out.push(`ink on ground is ${ratio}:1; it needs ${MIN_CONTRAST}:1 to read on a slide.`);
+  const mutedRatio = contrastRatio(kit.ground, kit.muted);
+  if (mutedRatio < MIN_CONTRAST) out.push(`muted on ground is ${mutedRatio}:1; it needs ${MIN_CONTRAST}:1 to read on a slide.`);
   const inverse = normaliseHex(kit.inverseGround) && normaliseHex(kit.inverseInk) ? contrastRatio(kit.inverseGround!, kit.inverseInk!) : null;
   if (inverse !== null && inverse < MIN_CONTRAST) out.push(`inverseInk on inverseGround is ${inverse}:1; it needs ${MIN_CONTRAST}:1.`);
-  for (const role of BRAND_COLOR_ROLES) if (banned.includes(normaliseHex(kit[role]))) out.push(`${role} is ${normaliseHex(kit[role])}, which this brand bans.`);
+  for (const role of [...BRAND_COLOR_ROLES, "inverseGround", "inverseInk"] as const) {
+    const v = normaliseHex(kit[role]);
+    if (v && banned.includes(v)) out.push(`${role} is ${v}, which this brand bans.`);
+  }
+  return out;
+}
+
+/**
+ * The accent pairs, said beside a saved kit rather than refused: an accent is a word or a rule more often than a paragraph,
+ * and a brand may accept a lower ratio for it on purpose. Under 4.5:1 is named so nobody discovers it on screen.
+ */
+export function brandKitWarnings(kit: Pick<BrandKitInput, "ground" | "accent" | "inverseGround">): string[] {
+  const out: string[] = [];
+  const onGround = contrastRatio(kit.ground, kit.accent);
+  if (onGround < MIN_CONTRAST) out.push(`accent on ground is ${onGround}:1: fine for a rule or a large word, under ${MIN_CONTRAST}:1 for text.`);
+  if (normaliseHex(kit.inverseGround)) {
+    const onInverse = contrastRatio(kit.inverseGround!, kit.accent);
+    if (onInverse < MIN_CONTRAST) out.push(`accent on inverseGround is ${onInverse}:1: not for text on a full-bleed slide.`);
+  }
   return out;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { freeTextProofUsable } from "../webinar";
-import { offerOnePager, scoreOffer } from "../offer-score";
+import { formatPrice, hasTimeframe, offerOnePager, scoreOffer } from "../offer-score";
 import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll, toneClause } from "../repurpose";
 import { ACTS, SECTION_TEMPLATES, buildChecks, deckOutline, nextStep, offerStart, readinessScore, readyDecision, reviewStale, sectionPace, statusStale } from "../webinar";
 
@@ -100,6 +100,19 @@ describe("repurpose", () => {
   it("threads stays under 500 and stories has 3 frames", () => {
     expect(repurpose(src, "threads").body.length).toBeLessThanOrEqual(500);
     expect(repurpose(src, "stories").body.split("Frame ").length - 1).toBe(3);
+  });
+});
+
+describe("a timeframe is any clock, and a price carries its currency", () => {
+  it("recognises a single sitting as a timeframe, not only days and weeks", () => {
+    for (const s of ["in 90 days", "over 12 weeks", "this quarter", "in one 90-minute session", "in a single session", "in one call", "in a VIP day", "over one weekend", "in a 3-day intensive"]) expect(hasTimeframe(s), s).toBe(true);
+    for (const s of ["without unpicking the career they've built", "to stop starting over"]) expect(hasTimeframe(s), s).toBe(false);
+  });
+  it("writes the code beside the symbol so NZD $1,997 is never read as US dollars", () => {
+    expect(formatPrice(1997, "NZD")).toBe("NZD $1,997");
+    expect(formatPrice(1200, null)).toBe("USD $1,200");
+    expect(formatPrice(997, "GBP")).toBe("GBP £997");
+    expect(formatPrice(5, "CHF")).toBe("CHF 5");
   });
 });
 

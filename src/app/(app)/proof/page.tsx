@@ -319,6 +319,10 @@ export default async function ProofPage() {
                   </Field>
                 </div>
               </Disclosure>
+              <label className="flex items-start gap-2 text-sm" data-testid="proof-permission">
+                <input type="checkbox" name="permission" className="mt-1" />
+                <span>This person has given me permission to use what they said here in my marketing. The same tick as on the Beliefs step; approval still happens on the proof&apos;s page.</span>
+              </label>
               <button className="btn btn-primary" type="submit">
                 Save proof
               </button>

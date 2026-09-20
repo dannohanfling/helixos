@@ -1,3 +1,4 @@
+import { formatPrice } from "@/lib/engine/offer-score";
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -16,7 +17,7 @@ export default async function LadderProfilePage() {
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
   ]);
   const p = profile ?? null;
-  const priceGuess = offer?.price ? `$${offer.price.toLocaleString()}${offer.paymentPlan ? `, or ${offer.paymentPlan}` : ""}` : "";
+  const priceGuess = offer?.price ? `${formatPrice(offer.price, offer.currency)}${offer.paymentPlan ? `, or ${offer.paymentPlan}` : ""}` : "";
   return (
     <>
       <PageHeader title="Your ladder facts" subtitle={<span><Link href="/content/ladders" className="hover:underline">← Ladders</Link> · Everything a ladder may say about you, your offer and your numbers. Set once, used by every ladder.</span>} />

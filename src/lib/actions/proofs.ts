@@ -46,8 +46,9 @@ export async function createProofAction(formData: FormData): Promise<void> {
   const f = fields(formData);
   if (!f.name) return;
   const id = newId();
-  // Every proof starts as a draft; approval goes through the permission tick, harvested or typed.
-  await db.insert(schema.proofs).values({ id, workspaceId, userId, ...f, status: "draft", shortVersion: autoShort(f), clientRecordId: opt(formData, "clientRecordId") });
+  // Every proof starts as a draft; the same permission tick as the Beliefs door is recorded here when given, and approval still happens on the proof's page.
+  const ticked = formData.get("permission") === "on" && Boolean(f.who);
+  await db.insert(schema.proofs).values({ id, workspaceId, userId, ...f, status: "draft", shortVersion: autoShort(f), clientRecordId: opt(formData, "clientRecordId"), ...(ticked ? { permissionAt: nowIso(), permissionBy: userId } : {}) });
   refresh();
   const back = str(formData, "back");
   redirect(back.startsWith("/") ? back : `/proof/${id}`);

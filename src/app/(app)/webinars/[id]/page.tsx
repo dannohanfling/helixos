@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { formatDateTime } from "@/lib/dates";
 import { and, asc, desc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
@@ -46,6 +46,7 @@ import {
 } from "@/lib/engine/webinar";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { presenterOf } from "@/lib/queries/webinar";
+import { formatPrice } from "@/lib/engine/offer-score";
 import { essenceFor } from "@/lib/queries/essence";
 import type { Story } from "@/lib/engine/essence";
 import { assetsFor } from "@/lib/queries/library";
@@ -77,6 +78,7 @@ export default async function WebinarWizardPage({
     stripped?: string;
     toBank?: string;
     held?: string;
+    example?: string;
   }>;
 }) {
   const v = await requireViewer();
@@ -162,6 +164,8 @@ export default async function WebinarWizardPage({
   const stale = reviewStale(review, w.updatedAt);
   const step = (STEPS.find((s) => s.key === sp.step)?.key ??
     nextStep(progress.steps)) as StepKey;
+  // A step the URL names that does not exist is sent, visibly, to the step that does: never rendered as another step under the wrong address.
+  if (sp.step && sp.step !== step) redirect(`/webinars/${w.id}?step=${step}`);
   const stories = assets.filter((a) => a.type === "story");
   const frameworks = assets
     .filter((a) => a.type === "framework")
@@ -191,6 +195,14 @@ export default async function WebinarWizardPage({
     : undefined;
   const idx = sections.findIndex((s) => s.sectionKey === section?.sectionKey);
   const nextSection = sections[idx + 1];
+  // The section being edited is always in the address, so a bookmark, a share or the back button never edits a different one.
+  if (step === "script" && !sp.section && section) {
+    const qs = new URLSearchParams();
+    for (const [k, val] of Object.entries(sp)) if (val) qs.set(k, val);
+    qs.set("step", "script");
+    qs.set("section", section.sectionKey);
+    redirect(`/webinars/${w.id}?${qs.toString()}`);
+  }
 
   return (
     <>
@@ -417,10 +429,11 @@ export default async function WebinarWizardPage({
                 ))}
               </ol>
             </Card>
-            <Card title="Done when">
+            <Card title="Evolve Omega's own checklist for this step">
               <p className="text-sm text-ink-2">
                 {WIZARD_STAGES[0]?.validation}
               </p>
+              <p className="mt-2 text-xs text-ink-3">A house checklist, not a measure: what the record reads is the build check on the Readiness step.</p>
             </Card>
           </div>
         </div>
@@ -629,7 +642,7 @@ export default async function WebinarWizardPage({
                   {a.example ? (
                     <details className="mt-3">
                       <summary className="text-xs text-ink-3 underline">
-                        See the worked example
+                        See the worked example (The Leaky Webinar&apos;s, not yours)
                       </summary>
                       <p className="mt-2 whitespace-pre-line text-xs text-ink-2">
                         {a.example}
@@ -689,8 +702,8 @@ export default async function WebinarWizardPage({
             <Card title={act.name.replace(/^[^\w]+/, "")}>
               <p className="text-xs text-ink-2">{fillRuntime(act.tooltip ?? "", numbers)}</p>
               {act.soundbite ? (
-                <p className="mt-2 text-xs italic text-ink-3">
-                  “{act.soundbite}”
+                <p className="mt-2 text-xs italic text-ink-3" data-testid="act-soundbite">
+                  Example soundbite, from The Leaky Webinar: “{act.soundbite}”
                 </p>
               ) : null}
               <ol className="-mx-2 mt-3 divide-y">
@@ -749,6 +762,11 @@ export default async function WebinarWizardPage({
             }
           >
             <p className="text-sm text-ink-2">{fillRuntime(tpl.prompt, numbers)}</p>
+            {sp.example ? (
+              <p className="mt-2 rounded-lg bg-warn-soft p-2 text-sm" data-testid="example-not-written" role="status">
+                Nothing was written into this section. The example below is The Leaky Webinar&apos;s, for shape only; it never becomes your words.
+              </p>
+            ) : null}
             {(() => {
               const m = nameMismatch(section.script, presenterName);
               return m ? (
@@ -828,6 +846,10 @@ export default async function WebinarWizardPage({
                   placeholder="Talk it out loud first. Then type what you said."
                 />
               </Field>
+                <details className="mt-1" open={Boolean(sp.example)} data-testid="section-example">
+                  <summary className="cursor-pointer text-xs text-ink-3 underline">See this section in The Leaky Webinar (an example, not yours)</summary>
+                  <p className="mt-2 whitespace-pre-line rounded-lg bg-surface-2 p-3 text-xs text-ink-2">{tpl.exampleScript}</p>
+                </details>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Transition in">
                   <input
@@ -1134,7 +1156,7 @@ export default async function WebinarWizardPage({
                   <option value="">Choose an offer…</option>
                   {offers.map((o) => (
                     <option key={o.id} value={o.id}>
-                      {o.name} {o.price ? `· $${o.price.toLocaleString()}` : ""}
+                      {o.name} {o.price ? `· ${formatPrice(o.price, o.currency)}` : ""}
                     </option>
                   ))}
                 </select>
@@ -1395,6 +1417,7 @@ export default async function WebinarWizardPage({
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Status">
                   <select
+                    key={w.status}
                     className="field"
                     name="status"
                     defaultValue={w.status}
@@ -1408,7 +1431,7 @@ export default async function WebinarWizardPage({
                     )}
                   </select>
                 </Field>
-                <Field label="Date and time">
+                <Field label={`Date and time (${v.tz})`} hint="Entered in your own clock. A client in another country reads it as this time in this zone.">
                   <input
                     className="field"
                     name="scheduledAt"
@@ -1458,7 +1481,7 @@ export default async function WebinarWizardPage({
                       name={k}
                       type="number"
                       min={0}
-                      defaultValue={Number(w[k as "registered"])}
+                      defaultValue={w[k as "registered"] ?? ""}
                     />
                   </label>
                 ))}
@@ -1496,17 +1519,17 @@ export default async function WebinarWizardPage({
           </Card>
           <div className="space-y-4">
             <Card title="Funnel">
-              {w.registered ? (
+              {w.registered != null && w.registered > 0 ? (
                 <ul className="space-y-1.5 text-sm tabular">
                   <li className="flex justify-between">
                     <span>Show-up rate</span>
-                    <span>{Math.round((w.showed / w.registered) * 100)}%</span>
+                    <span>{Math.round(((w.showed ?? 0) / w.registered) * 100)}%</span>
                   </li>
                   <li className="flex justify-between">
                     <span>Calls per attendee</span>
                     <span>
-                      {w.showed
-                        ? Math.round((w.callsBooked / w.showed) * 100)
+                      {(w.showed ?? 0)
+                        ? Math.round(((w.callsBooked ?? 0) / (w.showed ?? 0)) * 100)
                         : 0}
                       %
                     </span>
@@ -1514,13 +1537,13 @@ export default async function WebinarWizardPage({
                   <li className="flex justify-between">
                     <span>Sales per attendee</span>
                     <span>
-                      {w.showed ? Math.round((w.sales / w.showed) * 100) : 0}%
+                      {(w.showed ?? 0) ? Math.round(((w.sales ?? 0) / (w.showed ?? 0)) * 100) : 0}%
                     </span>
                   </li>
                   <li className="flex justify-between">
                     <span>Revenue per registrant</span>
                     <span>
-                      ${Math.round(w.revenue / w.registered).toLocaleString()}
+                      ${Math.round((w.revenue ?? 0) / w.registered).toLocaleString()}
                     </span>
                   </li>
                 </ul>

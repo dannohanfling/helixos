@@ -50,7 +50,24 @@ async function main() {
   await page.fill('[data-testid="presenter"]', "Lindsey Brittain");
   await submit(page, 'button:has-text("Save and map beliefs")');
   await page.goto(page.url().split("?")[0] + "?step=script");
+  await page.waitForURL(/[?&]section=/);
   await expectText(page, "Leaky Webinar version", "script step");
+  if (!/[?&]section=/.test(page.url())) throw new Error(`the address names the section being edited, got ${page.url()}`);
+  const wizardBase = page.url().split("?")[0];
+  await page.goto(`${wizardBase}?step=readiness`);
+  await page.waitForURL((u) => /[?&]step=(foundation|beliefs|script|offer|deck|review|run)\b/.test(u.search) && !/step=readiness/.test(u.search));
+  console.log(`✓ an unknown step is sent to a real one, visibly: ${page.url().split("?")[1]}`);
+  await page.goto(`${wizardBase}?step=script`);
+  await page.waitForURL(/[?&]section=/);
+  // "Start from the example" writes nothing: the example is shown beside the field and the field stays empty
+  const exampleKey = await page.locator('form input[name="sectionKey"]').first().inputValue();
+  const scriptBefore = await page.locator('textarea[name="script"]').inputValue();
+  await submit(page, 'button:has-text("Start from the example")');
+  await page.locator('[data-testid="example-not-written"]').waitFor({ timeout: 10000 });
+  if ((await page.locator('textarea[name="script"]').inputValue()) !== scriptBefore) throw new Error("the example must never become the section's words");
+  if (!page.url().includes(`section=${exampleKey}`)) throw new Error("the example opens on the same section");
+  if (!(await page.locator('[data-testid="section-example"][open]').count())) throw new Error("the example is shown beside the field");
+  console.log("✓ the example is shown beside the field and never written into it");
   await shot(page, "w02-webinar-script");
   // A script that introduces someone else is caught on the section and in the build check, by name
   const firstKey = await page.locator('form input[name="sectionKey"]').first().inputValue();
@@ -130,6 +147,7 @@ async function main() {
   if (!page.url().includes("step=review")) throw new Error("an unready webinar stays on the review step rather than advancing to Run it");
   // The delivery note and the run sheet: the sheet is the whole webinar in running order with the clock, everything wired rendered in place
   await page.goto(page.url().split("?")[0] + "?step=script");
+  await page.waitForURL(/[?&]section=/);
   await page.fill('[data-testid="delivery-note"]', "Wait for the chat to fill before you go on.");
   await submit(page, 'button:has-text("Save and next")');
   const wizardUrl = page.url().split("?")[0];
@@ -162,6 +180,7 @@ async function main() {
   if ((await page.locator('input[name="registrationUrl"]').inputValue()) !== "https://example.com/register") throw new Error("the other fields saved");
   // A review saved before the record's next edit is marked stale
   await page.goto(page.url().split("?")[0] + "?step=script");
+  await page.waitForURL(/[?&]section=/);
   await page.fill('textarea[name="script"]', "Hi everyone. If you've ever lost 10 pounds and gained it back, this is for you. Here's the plan for the next hour, and the one swap that matters.");
   await submit(page, 'button:has-text("Save and next")');
   await page.goto(page.url().split("?")[0] + "?step=review");
@@ -173,6 +192,9 @@ async function main() {
   await expectText(page, "90-Day Reset", "offers");
   await page.click('a:has-text("90-Day Reset")');
   await page.waitForURL(/\/offers\//);
+  // The price carries its currency; the container is chosen, never assumed
+  await page.selectOption('[data-testid="offer-currency"]', "NZD");
+  if (!(await page.locator('[data-testid="offer-container"] option[value=""]').count())) throw new Error("the container select offers a blank choice, not a default");
   // Step 6 reads the bank: the older fixed answers still count and can move into it; a ticked bank objection with a reframe counts too
   const answeredBefore = Number((await page.locator('[data-testid="objections-answered"]').innerText()).split(" ")[0]);
   if (!(await page.locator('[data-testid="legacy-objections"]').count())) throw new Error("the example offer's older answers should be shown as still counted");

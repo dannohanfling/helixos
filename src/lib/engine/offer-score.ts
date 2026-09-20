@@ -2,6 +2,7 @@
 
 export type OfferInput = {
   name: string;
+  currency?: string | null;
   avatar?: string | null;
   coreProblem?: string | null;
   promise?: string | null;
@@ -31,7 +32,16 @@ export type Check = { key: string; label: string; weight: number; pass: boolean;
 
 const filled = (s?: string | null, min = 12) => Boolean(s && s.trim().length >= min);
 const hasNumber = (s?: string | null) => /\d/.test(s ?? "");
-const hasTimeframe = (s?: string | null) => /\b(\d+\s*(day|days|week|weeks|month|months|year|years)|90-day|30-day|12-week|6-week|quarter)\b/i.test(s ?? "");
+/** A clock of any length: 90 days, 12 weeks, a quarter, and the single sitting (one session, a 90-minute call, a VIP day). */
+export const hasTimeframe = (s?: string | null) => /\b(\d+\s*(minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years|session|sessions|call|calls|sitting)|90-day|30-day|12-week|6-week|\d+-(minute|hour|day|week)|quarter|(one|single|a)\s+(?:[\p{L}\d-]+\s+)?(session|sitting|call|day|afternoon|morning|weekend|intensive))\b/iu.test(s ?? "");
+
+/** The symbol a currency is written with beside its code; the code is always shown, so NZD $1,997 is never read as US dollars. */
+const SYMBOL: Record<string, string> = { USD: "$", NZD: "$", AUD: "$", CAD: "$", SGD: "$", GBP: "£", EUR: "€" };
+export const CURRENCIES = ["USD", "NZD", "AUD", "CAD", "GBP", "EUR", "SGD"] as const;
+export function formatPrice(price: number, currency: string | null | undefined): string {
+  const code = (currency ?? "USD").toUpperCase();
+  return `${code} ${SYMBOL[code] ?? ""}${price.toLocaleString()}`;
+}
 const hasWithout = (s?: string | null) => /\bwithout\b/i.test(s ?? "");
 
 export function scoreOffer(offer: OfferInput, components: ComponentInput[], objectionsFromBank = 0): { score: number; checks: Check[]; stackValue: number; multiple: number; verdict: "ready" | "needs_work" | "not_ready" } {
@@ -81,7 +91,7 @@ export function offerOnePager(offer: OfferInput, components: ComponentInput[]): 
     "**What you get:**",
     ...stack.map((c) => `- ${c.name}${c.perceivedValue ? ` (value $${c.perceivedValue.toLocaleString()})` : ""}`),
     "",
-    offer.price ? `**Investment:** $${offer.price.toLocaleString()}${offer.container ? ` · ${offer.container}` : ""}` : "",
+    offer.price ? `**Investment:** ${formatPrice(offer.price, offer.currency)}${offer.container ? ` · ${offer.container}` : ""}` : "",
     offer.guarantee ? `**Guarantee:** ${offer.guarantee}` : "",
     offer.whyNow ? `**Why now:** ${offer.whyNow}` : "",
     "",

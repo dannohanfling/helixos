@@ -15,7 +15,7 @@ const beliefs = [
   { type: "internal", fromBelief: "from", toBelief: "to", proofId: "p2", proof: "Priya N.: 2 to 9 calls", proofWho: "Priya N.", proofChangedAt: "2026-09-01T00:00:00.000Z", proofPermissionAt: "2026-09-02T00:00:00.000Z", storyAssetId: "essence:0", evidenceId: "shared:sh1" },
   { type: "external", fromBelief: "from", toBelief: "to", storyAssetId: "gone", evidenceId: "missing" },
 ];
-const offer = { offer: { name: "The 90-Minute Diagnostic", price: 1997, container: "1:1 coaching", guarantee: null, objectionAssetIds: ["o1", "nope"] }, components: [{ name: "Diagnostic", type: "core", oneLiner: "90 minutes, 1:1", perceivedValue: 0, beliefBreak: "vehicle" }] };
+const offer = { offer: { name: "The 90-Minute Diagnostic", price: 1997, currency: "NZD", container: "1:1 coaching", guarantee: null, objectionAssetIds: ["o1", "nope"] }, components: [{ name: "Diagnostic", type: "core", oneLiner: "90 minutes, 1:1", perceivedValue: 0, beliefBreak: "vehicle" }] };
 const ctx = () => resolveSections({ webinar: { title: "Your Edge, Uncovered" }, presenter: "Lindsey Brittain", sections, beliefs, proofs, assets, essenceStories: [{ name: "The Glue", summary: "She held it together.", when_to_use: "Act 2" }], citable, offer });
 
 describe("the resolver: everything wired to each section, in running order, with the clock", () => {
@@ -68,7 +68,7 @@ describe("the resolver: everything wired to each section, in running order, with
     expect(text).toContain("DELIVERY  Wait for the chat to fill.");
     expect(text).toContain("UNFILLED  [X]%");
     expect(text).toContain("OBJECTIONS\n    · I've tried this before — The right teacher.");
-    expect(text).toContain("OFFER     The 90-Minute Diagnostic · 1997 · Diagnostic");
+    expect(text).toContain("OFFER     The 90-Minute Diagnostic · NZD $1,997 · Diagnostic");
   });
 });
 

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
-import { addEvidenceAction, confirmEvidenceAction, hideSharedAction, proposeTermsAction, removeEvidenceAction, restoreSharedAction, searchEvidenceAction } from "@/lib/actions/evidence";
+import { addEvidenceAction, addSourceAction, confirmEvidenceAction, hideSharedAction, proposeTermsAction, removeEvidenceAction, restoreSharedAction, searchEvidenceAction } from "@/lib/actions/evidence";
 import { evidenceShelf } from "@/lib/queries/evidence";
 import { EVIDENCE_DAILY_LIMIT, allFlagged, byRelevance, flagsFor, insertText, isVerified, sharedAsEvidence } from "@/lib/engine/evidence";
 import { CopyButton } from "@/components/copy-button";
@@ -150,6 +150,35 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
         <div className="space-y-4">
           <Card title="My shelf" action={<Badge tone={verified ? "good" : "neutral"}>{verified} citable</Badge>}>
             <div id="shelf" />
+            <details className="mb-3 rounded-lg border p-3" data-testid="add-source">
+              <summary className="cursor-pointer text-sm font-medium">Add a source that has no DOI (Gallup, the WHO, a government statistic, an industry body)</summary>
+              <form action={addSourceAction} className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Field label="The claim it supports">
+                    <input className="field" name="sourceClaim" required />
+                  </Field>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Title">
+                    <input className="field" name="sourceTitle" required />
+                  </Field>
+                </div>
+                <Field label="Published by">
+                  <input className="field" name="sourcePublisher" required />
+                </Field>
+                <Field label="Year">
+                  <input className="field" name="sourceYear" inputMode="numeric" />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Web address" hint="Where you read it. Anyone checking the claim opens this.">
+                    <input className="field" name="sourceUrl" type="url" required placeholder="https://" />
+                  </Field>
+                </div>
+                <div className="sm:col-span-2">
+                  <button className="btn btn-soft btn-sm" type="submit">Add to my shelf, unconfirmed</button>
+                </div>
+              </form>
+            </details>
             {shelf.own.length ? (
               <ul className="space-y-3" data-testid="own-shelf">
                 {shelf.own.map((e) => (
@@ -213,9 +242,10 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                           <div key={f} className="mt-1 text-xs text-warn" data-testid="study-flag">⚑ {f}</div>
                         ))}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <form action={confirmEvidenceAction}>
+                          <form action={confirmEvidenceAction} className="flex flex-wrap items-center gap-2">
                             <input type="hidden" name="id" value={e.id} />
-                            <button className="btn btn-accent btn-xs" type="submit" data-testid="confirm-study">Confirm: this is the study I meant</button>
+                            <input className="field h-8 w-72 py-0 text-xs" name="claim" defaultValue={e.claim} title="Narrow the claim to what this source supports before you confirm it" data-testid="confirm-claim" />
+                            <button className="btn btn-accent btn-xs" type="submit" data-testid="confirm-study">Confirm: this is the {e.doi ? "study" : "source"} I meant</button>
                           </form>
                           <form action={removeEvidenceAction}>
                             <input type="hidden" name="id" value={e.id} />

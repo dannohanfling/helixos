@@ -3,6 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
+import { CURRENCIES } from "@/lib/engine/offer-score";
 import { OFFER_CONTAINERS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
@@ -37,7 +38,8 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       promise: opt(formData, "promise"),
       mechanismName: opt(formData, "mechanismName"),
       pathSteps: steps,
-      container: OFFER_CONTAINERS.find((c) => c === str(formData, "container")) ?? "Group program",
+      container: OFFER_CONTAINERS.find((c) => c === str(formData, "container")) ?? "",
+      currency: CURRENCIES.find((c) => c === str(formData, "currency").toUpperCase()) ?? "USD",
       length: opt(formData, "length"),
       price: num(formData, "price"),
       paymentPlan: opt(formData, "paymentPlan"),

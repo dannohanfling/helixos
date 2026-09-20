@@ -32,7 +32,7 @@ export default async function WebinarsPage() {
   // What each webinar's beliefs still point at, read once: a withdrawn approval or a deleted study is seen here too, not only on the Readiness step.
   const known = ids.length ? await knownFor(v.user.id, v.workspace.id) : { proofIds: [], storyIds: [], evidenceIds: [] };
   const delivered = list.filter((w) => w.status === "delivered");
-  const totals = delivered.reduce((a, w) => ({ registered: a.registered + w.registered, showed: a.showed + w.showed, sales: a.sales + w.sales, revenue: a.revenue + w.revenue }), { registered: 0, showed: 0, sales: 0, revenue: 0 });
+  const totals = delivered.reduce((a, w) => ({ registered: a.registered + (w.registered ?? 0), showed: a.showed + (w.showed ?? 0), sales: a.sales + (w.sales ?? 0), revenue: a.revenue + (w.revenue ?? 0) }), { registered: 0, showed: 0, sales: 0, revenue: 0 });
 
   return (
     <>
@@ -121,7 +121,7 @@ export default async function WebinarsPage() {
                     {p.scripted}/{secs.length} scripted · ~{p.totalMinutes} min · {p.summary}
                   </span>
                   <span>
-                    {w.status === "delivered" ? `${w.showed}/${w.registered} showed · $${w.revenue.toLocaleString()}` : `Next: ${next.icon} ${next.label}`}
+                    {w.status === "delivered" ? (w.registered == null ? "numbers not logged yet" : `${w.showed ?? 0}/${w.registered} showed · $${(w.revenue ?? 0).toLocaleString()}`) : `Next: ${next.icon} ${next.label}`}
                   </span>
                 </div>
               </Link>

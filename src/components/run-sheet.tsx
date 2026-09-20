@@ -1,4 +1,5 @@
 import { clock } from "@/lib/engine/webinar";
+import { formatPrice } from "@/lib/engine/offer-score";
 import { QA_SECTION_KEY, type SectionContext, type WebinarContext } from "@/lib/engine/webinar-context";
 
 function Row({ label, children, testId }: { label: string; children: React.ReactNode; testId?: string }) {
@@ -70,7 +71,7 @@ function Section({ s }: { s: SectionContext }) {
       ) : null}
       {s.offer && s.sectionKey !== QA_SECTION_KEY ? (
         <Row label="Offer" testId="runsheet-offer">
-          <span className="font-medium">{s.offer.name}</span> · {s.offer.container} · {s.offer.price}
+          <span className="font-medium">{s.offer.name}</span> · {s.offer.container || "container not chosen"} · {formatPrice(s.offer.price, s.offer.currency)}
           {s.offer.components.length ? (
             <ul className="mt-1 list-disc pl-5 text-sm">
               {s.offer.components.map((x, i) => (

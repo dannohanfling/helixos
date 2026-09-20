@@ -1,3 +1,4 @@
+import { formatPrice } from "@/lib/engine/offer-score";
 import Link from "next/link";
 import { desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -45,7 +46,7 @@ export default async function OffersPage() {
                   <div>
                     <div className="font-semibold">{o.name}</div>
                     <div className="text-xs text-ink-3">
-                      {o.container} · {o.price ? `$${o.price.toLocaleString()}` : "no price yet"}
+                      {o.container || "container not chosen"} · {o.price ? formatPrice(o.price, o.currency) : "no price yet"}
                     </div>
                   </div>
                   <Badge tone={o.status === "live" ? "good" : "neutral"}>{o.status}</Badge>

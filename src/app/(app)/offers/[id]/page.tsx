@@ -7,7 +7,7 @@ import { requireViewer } from "@/lib/auth";
 import { addComponentAction, deleteOfferAction, updateComponentAction, updateOfferAction } from "@/lib/actions/offers";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
-import { offerOnePager, scoreOffer } from "@/lib/engine/offer-score";
+import { CURRENCIES, offerOnePager, scoreOffer } from "@/lib/engine/offer-score";
 import { assetsFor } from "@/lib/queries/library";
 import { moveLegacyObjectionAction } from "@/lib/actions/objections";
 import { LEGACY_OFFER_OBJECTIONS, isSharedObjection, reframesOf } from "@/lib/engine/objections";
@@ -104,7 +104,8 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
                   <input className="field" name="mechanismName" defaultValue={offer.mechanismName ?? ""} placeholder="The 12-Minute Tuesday System" />
                 </Field>
                 <Field label="Container">
-                  <select className="field" name="container" defaultValue={offer.container}>
+                  <select className="field" name="container" defaultValue={offer.container} required data-testid="offer-container">
+                    <option value="">Choose one</option>
                     {OFFER_CONTAINERS.map((c) => (
                       <option key={c}>{c}</option>
                     ))}
@@ -126,9 +127,16 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
             </Card>
             <Card id="price" title="4 · Price and risk">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Price ($)">
-                  <input className="field tabular" name="price" type="number" min={0} defaultValue={offer.price} />
-                </Field>
+                <Field label="Price" hint="With its currency: a bare $ to a mixed room is a different number to each half of it.">
+                    <div className="flex gap-2">
+                      <select className="field w-28" name="currency" defaultValue={offer.currency} data-testid="offer-currency">
+                        {CURRENCIES.map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                      <input className="field tabular" name="price" type="number" min={0} defaultValue={offer.price} />
+                    </div>
+                  </Field>
                 <Field label="Payment plan">
                   <input className="field" name="paymentPlan" defaultValue={offer.paymentPlan ?? ""} placeholder="3 x $550" />
                 </Field>

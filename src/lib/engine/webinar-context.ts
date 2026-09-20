@@ -4,12 +4,13 @@
  * fact: a slot with nothing wired to it is null, and a bracketed placeholder is reported, never filled.
  */
 import { ACTS, ACT_NUMBER, clock, freeTextProofUsable, sectionPace, type ActKey } from "./webinar";
+import { formatPrice } from "./offer-score";
 
 export type ProofRow = { id: string; who: string | null; name: string; quote?: string | null; longVersion?: string | null; shortVersion?: string | null; resultAfter?: string | null; status: string };
 export type AssetRow = { id: string; type: string; name: string; body: string; summary?: string | null; useWhen?: string | null; reframe?: string | null; proof?: string | null; extra?: Record<string, string | null> };
 export type EssenceStory = { name: string; summary: string; when_to_use?: string };
 export type CitableRow = { id: string; source: "own" | "shared"; claim: string; authors: string; year: number | null; title: string; url?: string | null; doi?: string | null };
-export type OfferRow = { name: string; price: number; container: string; guarantee?: string | null; paymentPlan?: string | null; objectionAssetIds?: string[] };
+export type OfferRow = { name: string; price: number; currency?: string | null; container: string; guarantee?: string | null; paymentPlan?: string | null; objectionAssetIds?: string[] };
 export type ComponentRow = { name: string; type: string; description?: string | null; oneLiner?: string | null; perceivedValue: number; beliefBreak: string };
 export type BeliefRow = { type: string; fromBelief: string | null; toBelief: string | null; proofId?: string | null; proof?: string | null; proofWho?: string | null; proofPermissionAt?: string | null; proofChangedAt?: string | null; storyAssetId?: string | null; evidenceId?: string | null };
 export type SectionRow = { sectionKey: string; act: ActKey; order: number; name: string; status: string; keyPoints: string | null; script: string | null; transitionIn: string | null; transitionOut: string | null; deliveryNote?: string | null; assetId: string | null; durationMin: number };
@@ -18,7 +19,7 @@ export type ResolvedProof = { id: string; who: string; quote: string; source: "b
 export type ResolvedStory = { id: string; name: string; body: string; moral: string | null; useWhen: string | null; source: "bank" | "essence" };
 export type ResolvedEvidence = { id: string; claim: string; citation: string };
 export type ResolvedObjection = { id: string; name: string; body: string; reframe: string | null; proof: string | null };
-export type ResolvedOffer = { name: string; price: number; container: string; guarantee: string | null; paymentPlan: string | null; components: ComponentRow[]; objections: ResolvedObjection[] };
+export type ResolvedOffer = { name: string; price: number; currency: string; container: string; guarantee: string | null; paymentPlan: string | null; components: ComponentRow[]; objections: ResolvedObjection[] };
 
 export type SectionContext = {
   sectionKey: string;
@@ -103,6 +104,7 @@ export function resolveSections(input: { webinar: { title: string }; presenter: 
     ? {
         name: input.offer.offer.name,
         price: input.offer.offer.price,
+        currency: input.offer.offer.currency ?? "USD",
         container: input.offer.offer.container,
         guarantee: input.offer.offer.guarantee ?? null,
         paymentPlan: input.offer.offer.paymentPlan ?? null,
@@ -177,7 +179,7 @@ export function runSheetText(c: WebinarContext): string {
       if (s.evidence) out.push(`  EVIDENCE  ${s.evidence.claim} (${s.evidence.citation})`);
       if (s.story) out.push(`  STORY     ${s.story.name}`);
       if (s.asset) out.push(`  ${s.asset.type.toUpperCase().padEnd(9)} ${s.asset.name}`);
-      if (s.offer && s.sectionKey !== QA_SECTION_KEY) out.push(`  OFFER     ${s.offer.name} · ${s.offer.price}${s.offer.components.length ? ` · ${s.offer.components.map((x) => x.name).join(", ")}` : ""}`);
+      if (s.offer && s.sectionKey !== QA_SECTION_KEY) out.push(`  OFFER     ${s.offer.name} · ${formatPrice(s.offer.price, s.offer.currency)}${s.offer.components.length ? ` · ${s.offer.components.map((x) => x.name).join(", ")}` : ""}`);
       if (s.objections.length) out.push(`  OBJECTIONS`, ...s.objections.map((o) => `    · ${o.name}${o.reframe ? ` — ${o.reframe.split("\n")[0]}` : ""}`));
       if (s.placeholders.length) out.push(`  UNFILLED  ${s.placeholders.join(" ")}`);
       if (s.transitionOut) out.push(`  ── out: ${s.transitionOut}`);

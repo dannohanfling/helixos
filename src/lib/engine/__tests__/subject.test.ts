@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brandKitProblems, contrastRatio, fillRuntime, knownReferences, nameMismatch } from "../subject";
+import { brandKitProblems, brandKitWarnings, contrastRatio, fillRuntime, knownReferences, nameMismatch } from "../subject";
 
 describe("the subject: what still resolves, who presents, what the brand allows", () => {
   it("builds every known id in one place: approved proofs only, bank and Essence stories, own and shared studies, offers", () => {
@@ -18,6 +18,13 @@ describe("the subject: what still resolves, who presents, what the brand allows"
     expect(nameMismatch("I'm Lindsey, and I work with leaders.", "Lindsey Brittain")).toBeNull();
     expect(nameMismatch("I'm Not here to sell you. I'm Going to show you.", "Lindsey Brittain")).toBeNull();
     expect(nameMismatch("My name is Kate Amos.", "Lindsey Brittain")?.found).toBe("Kate Amos");
+    // The first name alone, and the way a script actually opens: "Danno here,"
+    expect(nameMismatch("I'm Danno. Let's get into it.", "Lindsey Brittain")?.found).toBe("Danno");
+    expect(nameMismatch("Danno here, and welcome.", "Lindsey Brittain")?.found).toBe("Danno");
+    expect(nameMismatch("Welcome everyone. Danno Hanfling here.", "Lindsey Brittain")?.found).toBe("Danno Hanfling");
+    expect(nameMismatch("Lindsey here, and welcome.", "Lindsey Brittain")).toBeNull();
+    expect(nameMismatch("Right here, right now. Welcome.", "Lindsey Brittain")).toBeNull();
+    expect(nameMismatch("Today we start here.", "Lindsey Brittain")).toBeNull();
     expect(nameMismatch(null, "Lindsey Brittain")).toBeNull();
     expect(nameMismatch("I'm Danno.", "")).toBeNull();
   });
@@ -34,5 +41,12 @@ describe("the subject: what still resolves, who presents, what the brand allows"
     expect(brandKitProblems({ ...turas, ink: "000000" })).toEqual(["ink is 000000, which this brand bans."]);
     expect(brandKitProblems({ ...turas, ground: "cream", fontFallback: "" })).toEqual(["ground needs a six-digit hex colour, like 6E6256.", "Name the fallback face: it is what the file names when a brand face is missing on the reader's machine."]);
     expect(brandKitProblems({ ...turas, inverseInk: "6E6256" })).toEqual(["inverseInk on inverseGround is 1:1; it needs 4.5:1."]);
+    // Muted is text too, so it is refused; the accent pairs warn with the ratio and are never refused; a banned colour in an inverse role is caught
+    expect(brandKitProblems({ ...turas, muted: "D6D3CE" })).toEqual(["muted on ground is 1.41:1; it needs 4.5:1 to read on a slide."]);
+    expect(brandKitProblems({ ...turas, inverseGround: "000000" })).toEqual(["inverseGround is 000000, which this brand bans."]);
+    // Heartfire Red reads on Clarity White; on Grounded Taupe it is the 1.24:1 eyebrow a human once caught on a render
+    expect(brandKitWarnings(turas)).toEqual(["accent on inverseGround is 1.24:1: not for text on a full-bleed slide."]);
+    expect(brandKitWarnings({ ground: "FAF8F5", accent: "F2A4A4", inverseGround: null })).toEqual(["accent on ground is 1.87:1: fine for a rule or a large word, under 4.5:1 for text."]);
+    expect(brandKitWarnings({ ground: "FFFFFF", accent: "000000", inverseGround: null })).toEqual([]);
   });
 });

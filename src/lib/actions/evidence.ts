@@ -136,10 +136,31 @@ export async function addEvidenceAction(formData: FormData): Promise<void> {
 }
 
 /** Only the client's confirmation makes a study citable. Nothing else moves citationQuality. */
+/**
+ * A source with no DOI: Gallup, the WHO, a government statistic, an industry body. Title, publisher, year and a web address, on
+ * the shelf as unconfirmed like a search result, citable only once the client confirms it is the source they read.
+ */
+export async function addSourceAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx();
+  const claim = str(formData, "sourceClaim");
+  const title = str(formData, "sourceTitle");
+  const publisher = str(formData, "sourcePublisher");
+  const url = str(formData, "sourceUrl");
+  const year = Number(str(formData, "sourceYear")) || null;
+  if (!claim || !title || !publisher) back({ error: "A source needs the claim it supports, its title and who published it." });
+  if (!/^https:\/\/\S+$/.test(url)) back({ error: "Give the source's web address, starting https://, so anyone can open what you read." });
+  const id = newId();
+  await db.insert(schema.evidence).values({ id, workspaceId, userId, claim, askedFor: { claim, terms: [] }, title, authors: publisher, year, doi: null, url, openalexId: null, citedByCount: 0, citationQuality: "unverified", flags: [] });
+  refresh();
+  redirect(`/evidence?added=${id}#shelf`);
+}
+
 export async function confirmEvidenceAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const id = str(formData, "id");
-  await db.update(schema.evidence).set({ citationQuality: "verified", verifiedAt: nowIso() }).where(and(eq(schema.evidence.id, id), eq(schema.evidence.userId, userId)));
+  // The claim may be narrowed to what the source actually supports before it is confirmed; never widened after.
+  const claim = str(formData, "claim");
+  await db.update(schema.evidence).set({ citationQuality: "verified", verifiedAt: nowIso(), ...(claim ? { claim } : {}) }).where(and(eq(schema.evidence.id, id), eq(schema.evidence.userId, userId)));
   refresh();
   redirect("/evidence#shelf");
 }
