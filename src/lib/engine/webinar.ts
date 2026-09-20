@@ -249,8 +249,34 @@ export function statusStale(status: string, build: BuildResult): { stale: boolea
 /** A review saved before the record's last content edit is stale: it graded something that has since changed. */
 export const reviewStale = (review: { createdAt: string } | null, updatedAt: string | null | undefined): boolean => Boolean(review && updatedAt && review.createdAt < updatedAt);
 
-/** The three readiness dimensions the record could grade itself but which are still the coach's own rating in this build. */
-export const SELF_RATED_FOR_NOW = ["proof", "stories", "offer"] as const;
+/** The three readiness dimensions the record grades itself: presence counted per act, the offer read from its record. */
+export const DERIVED_DIMENSIONS = ["proof", "stories", "offer"] as const;
+export type DerivedKey = (typeof DERIVED_DIMENSIONS)[number];
+export type DerivedGrade = { key: DerivedKey; value: number; working: string };
+const ofThree = (n: number): number => (n >= 3 ? 5 : n === 2 ? 3 : n === 1 ? 2 : 1);
+
+/**
+ * The grades the record can give itself, each with its working shown. Presence per act for proof and stories; the offer from
+ * whether one is linked, its stack is mapped, and a price is set. A count is a grade here; the quality of what is there is not.
+ */
+export function derivedGrades(input: { proofs: number; stories: number; offer: { linked: boolean; components: number; mapped: number; price: number } }): DerivedGrade[] {
+  const o = input.offer;
+  const offerValue = !o.linked ? 1 : !o.components ? 2 : o.mapped < o.components ? 3 : o.price <= 0 ? 3 : 5;
+  const offerWorking = !o.linked ? "No offer linked." : !o.components ? "Offer linked; its stack has no components." : o.mapped < o.components ? `Offer linked; ${o.components - o.mapped} of ${o.components} components not tied to a belief break.` : o.price <= 0 ? "Offer linked and mapped; no price set." : `Offer linked, ${o.components} components mapped, price set.`;
+  return [
+    { key: "proof", value: ofThree(input.proofs), working: `${input.proofs} of 3 acts have a proof.` },
+    { key: "stories", value: ofThree(input.stories), working: `${input.stories} of 3 acts have a story.` },
+    { key: "offer", value: offerValue, working: offerWorking },
+  ];
+}
+
+export type Override = { value: number; reason: string };
+/** A derived grade can be lowered with a reason, never raised: the record's count is the ceiling. Returns the grade that counts. */
+export function applyOverride(grade: DerivedGrade, override: Override | undefined): number {
+  if (!override || !override.reason.trim()) return grade.value;
+  const v = Math.max(1, Math.min(5, Math.round(override.value)));
+  return v < grade.value ? v : grade.value;
+}
 
 export function nextStep(progress: Record<StepKey, number>): StepKey {
   for (const s of STEPS) if (progress[s.key] < 1 && s.key !== "run") return s.key;

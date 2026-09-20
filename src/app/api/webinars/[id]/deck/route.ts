@@ -46,7 +46,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const lines = s.body.split("\n").filter(Boolean);
     if (lines.length) slide.addText(lines.map((t) => ({ text: t, options: { bullet: true, breakLine: true } })), { x: 0.7, y: 2.3, w: 8.6, h: 2.4, fontSize: 18, color: "333333", fontFace: "Arial", valign: "top" });
     slide.addText(`Visual: ${s.visual}`, { x: 0.5, y: 4.9, w: 9, h: 0.4, fontSize: 11, italic: true, color: "DDA338", fontFace: "Arial" });
-    slide.addNotes(`Section: ${s.section}\nVisual direction: ${s.visual}${lines.length ? `\n\nBody:\n${lines.join("\n")}` : ""}`);
+    const delivery = sections.find((x) => x.name === s.section)?.deliveryNote?.trim();
+    slide.addNotes(`Section: ${s.section}\nVisual direction: ${s.visual}${delivery ? `\nDelivery: ${delivery}` : ""}${lines.length ? `\n\nBody:\n${lines.join("\n")}` : ""}`);
   }
   const buffer = (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
   return new Response(new Uint8Array(buffer), {

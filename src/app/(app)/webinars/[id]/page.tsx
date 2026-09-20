@@ -39,7 +39,9 @@ import {
   reviewStale,
   sectionPace,
   statusStale,
-  SELF_RATED_FOR_NOW,
+  actPresence,
+  applyOverride,
+  derivedGrades,
   type StepKey,
 } from "@/lib/engine/webinar";
 import { essenceFor } from "@/lib/queries/essence";
@@ -148,6 +150,12 @@ export default async function WebinarWizardPage({
   };
   const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, review });
   const staleStatus = statusStale(w.status, build);
+  const presence = actPresence(beliefs, known);
+  const derived = derivedGrades({
+    proofs: 3 - (presence.find((p) => p.key === "proofs")?.missing.length ?? 3),
+    stories: 3 - (presence.find((p) => p.key === "stories")?.missing.length ?? 3),
+    offer: { linked: Boolean(offerRow), components: offerComponents.length, mapped: offerComponents.filter((c) => c.beliefBreak !== "none").length, price: offerRow?.price ?? 0 },
+  });
   const progress = build;
   const decision = readyDecision(review ? readinessScore(review.ratings) : null, build);
   const stale = reviewStale(review, w.updatedAt);
@@ -216,15 +224,20 @@ export default async function WebinarWizardPage({
           </span>
         }
         action={
-          <form action={deleteWebinarAction}>
-            <input type="hidden" name="id" value={w.id} />
-            <button
-              className="text-xs text-ink-3 hover:text-danger"
-              type="submit"
-            >
-              Delete
-            </button>
-          </form>
+          <span className="flex items-center gap-3">
+            <Link href={`/webinars/${w.id}/runsheet`} className="btn btn-soft btn-sm" data-testid="open-runsheet">
+              Run sheet
+            </Link>
+            <form action={deleteWebinarAction}>
+              <input type="hidden" name="id" value={w.id} />
+              <button
+                className="text-xs text-ink-3 hover:text-danger"
+                type="submit"
+              >
+                Delete
+              </button>
+            </form>
+          </span>
         }
       />
 
@@ -815,6 +828,17 @@ export default async function WebinarWizardPage({
                       .trim()}
                   />
                 </Field>
+                <Field
+                  label="Delivery note (for you, never on a slide)"
+                  hint="How to deliver it: wait for the chat to fill, count to five before advancing. Shows on the run sheet and in the speaker notes."
+                >
+                  <textarea
+                    className="field min-h-16"
+                    name="deliveryNote"
+                    defaultValue={section.deliveryNote ?? ""}
+                    data-testid="delivery-note"
+                  />
+                </Field>
                 <Field label="Minutes">
                   <input
                     className="field tabular"
@@ -1212,36 +1236,63 @@ export default async function WebinarWizardPage({
             ) : null}
             <form action={saveReadinessAction} className="space-y-3">
               <input type="hidden" name="id" value={w.id} />
-              {READINESS_DIMENSIONS.map((d) => (
-                <div
-                  key={d.key}
-                  className="flex flex-wrap items-center justify-between gap-2 border-b py-2"
-                >
-                  <div>
-                    <div className="text-sm font-medium">{d.label}</div>
-                    <div className="text-xs text-ink-3">{d.hint}</div>
-                    {(SELF_RATED_FOR_NOW as readonly string[]).includes(d.key) ? (
-                      <div className="text-[11px] text-ink-3" data-testid={`self-rated-${d.key}`}>Quality is your rating; whether each act has one is in the build check.</div>
-                    ) : null}
-                  </div>
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <label key={n} className="cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`r_${d.key}`}
-                          value={n}
-                          defaultChecked={(review?.ratings[d.key] ?? 3) === n}
-                          className="peer sr-only"
-                        />
-                        <span className="grid h-8 w-8 place-items-center rounded-lg border text-sm peer-checked:border-accent peer-checked:bg-accent-soft">
-                          {n}
+              {READINESS_DIMENSIONS.map((d) => {
+                const g = derived.find((x) => x.key === d.key);
+                const saved = review?.overrides?.[d.key];
+                return (
+                  <div
+                    key={d.key}
+                    className="flex flex-wrap items-center justify-between gap-2 border-b py-2"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">{d.label}</div>
+                      <div className="text-xs text-ink-3">{d.hint}</div>
+                      {g ? (
+                        <div className="text-[11px] text-ink-3" data-testid={`derived-${d.key}`}>
+                          Read off the record: {g.working} Grade {g.value}
+                          {saved && applyOverride(g, saved) < g.value ? ` · you lowered it to ${applyOverride(g, saved)}: ${saved.reason}` : ""}
+                        </div>
+                      ) : null}
+                    </div>
+                    {g ? (
+                      <div className="flex flex-wrap items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <span key={n} className={`grid h-8 w-8 place-items-center rounded-lg border text-sm ${n === g.value ? "border-accent bg-accent-soft" : "text-ink-3"}`}>
+                            {n}
+                          </span>
+                        ))}
+                        <span className="ml-2 flex items-center gap-1 text-xs">
+                          <span className="text-ink-3">Lower to</span>
+                          <select className="field h-8 w-16 py-0 text-xs" name={`o_${d.key}`} defaultValue={saved ? String(saved.value) : ""} data-testid={`override-${d.key}`}>
+                            <option value="">—</option>
+                            {[1, 2, 3, 4].filter((n) => n < g.value).map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                          <input className="field h-8 w-40 py-0 text-xs" name={`o_${d.key}_reason`} placeholder="because…" defaultValue={saved?.reason ?? ""} data-testid={`override-${d.key}-reason`} />
                         </span>
-                      </label>
-                    ))}
+                      </div>
+                    ) : (
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <label key={n} className="cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`r_${d.key}`}
+                              value={n}
+                              defaultChecked={(review?.ratings[d.key] ?? 3) === n}
+                              className="peer sr-only"
+                            />
+                            <span className="grid h-8 w-8 place-items-center rounded-lg border text-sm peer-checked:border-accent peer-checked:bg-accent-soft">
+                              {n}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <Field label="Biggest gaps">
                 <textarea
                   className="field"
@@ -1459,7 +1510,12 @@ export default async function WebinarWizardPage({
             </Card>
             <Card title="Before you go live">
               <ul className="space-y-1.5 text-sm">
-                <li>⬜ Tech rehearsal done</li>
+                <li>
+                  ⬜ Tech rehearsal done ·{" "}
+                  <Link href={`/webinars/${w.id}/runsheet`} className="underline">
+                    present from the run sheet
+                  </Link>
+                </li>
                 <li>⬜ Reminder sequence live (48h, 24h, 1h)</li>
                 <li>⬜ Offer page and payment link tested</li>
                 <li>⬜ Replay + follow-up emails scheduled</li>

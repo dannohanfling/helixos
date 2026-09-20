@@ -607,6 +607,8 @@ export const webinarSections = sqliteTable(
     script: text("script"),
     transitionIn: text("transition_in"),
     transitionOut: text("transition_out"),
+    /** Delivery direction for the presenter ("wait for the chat to fill", "count to five before advancing"): the run sheet and the speaker notes, never a slide face. */
+    deliveryNote: text("delivery_note"),
     assetId: text("asset_id"),
     durationMin: integer("duration_min").notNull().default(4),
     status: text("status", { enum: ["todo", "drafted", "final"] }).notNull().default("todo"),
@@ -620,6 +622,8 @@ export const readinessReviews = sqliteTable("readiness_reviews", {
     .notNull()
     .references(() => webinars.id, { onDelete: "cascade" }),
   ratings: text("ratings", { mode: "json" }).$type<Record<string, number>>().notNull().default({}),
+  /** A derived grade the coach lowered, and why: only downward, never up. Keyed by dimension. */
+  overrides: text("overrides", { mode: "json" }).$type<Record<string, { value: number; reason: string }>>().notNull().default({}),
   score: integer("score").notNull().default(0),
   verdict: text("verdict", { enum: ["ready", "needs_work", "not_ready"] }).notNull().default("not_ready"),
   biggestGaps: text("biggest_gaps"),

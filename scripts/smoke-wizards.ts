@@ -64,6 +64,8 @@ async function main() {
   await page.goto(beliefsUrl);
   if (!(await page.locator('[data-testid="belief-needs-tick-vehicle"]').count())) throw new Error("a typed proof without the tick must be marked unusable");
   await page.fill('[data-testid="belief-who-vehicle"]', "Priya N.");
+  // Pick a study from the shared shelf for Act 1: the run sheet renders it on that act later
+  await page.selectOption('[data-testid="belief-evidence-vehicle"]', { index: 1 });
   await page.check('[data-testid="belief-permission-vehicle"] input');
   await page.check('form:has([data-testid="belief-freetext-vehicle"]) input[name="vehicle_toBank"]');
   await submit(page, 'form:has([data-testid="belief-freetext-vehicle"]) button[type="submit"]');
@@ -92,14 +94,35 @@ async function main() {
   if (/% built/.test(summary)) throw new Error("the build percentage is gone");
   const openBefore = await page.locator('[data-testid="build-check"] li[data-ok="0"]').count();
   if (!openBefore) throw new Error("the demo webinar has open checks to test against");
-  for (const k of ["promise", "audience", "vehicle", "internal", "external", "proof", "stories", "offer", "cta", "objections", "convert"]) await page.click(`label:has(input[name="r_${k}"][value="5"])`);
+  for (const k of ["promise", "audience", "vehicle", "internal", "external", "cta", "objections", "convert"]) await page.click(`label:has(input[name="r_${k}"][value="5"])`);
+  // Proof, stories and offer are graded by the record, with the working shown; they can be lowered with a reason, never raised
+  for (const k of ["proof", "stories", "offer"]) {
+    if (await page.locator(`label:has(input[name="r_${k}"])`).count()) throw new Error(`${k} is no longer a slider`);
+    if (!/Read off the record: .* Grade [1-5]/.test(await page.locator(`[data-testid="derived-${k}"]`).innerText())) throw new Error(`${k} shows its working and its grade`);
+  }
   await submit(page, 'button:has-text("Save review")');
   await expectText(page, "Verdict", "review saved");
   const decision = await page.locator('[data-testid="ready-decision"]').innerText();
   if (!decision.startsWith("Not ready yet.") || !/checks? open:/.test(decision)) throw new Error(`eleven fives do not make it ready; the decision names the open checks, got "${decision}"`);
   if ((await page.locator('[data-testid="build-check"] li[data-ok="0"]').count()) !== openBefore) throw new Error("the rating moved a build check");
   if (!page.url().includes("step=review")) throw new Error("an unready webinar stays on the review step rather than advancing to Run it");
-  if (!(await page.locator('[data-testid="self-rated-proof"]').count())) throw new Error("proof sufficiency is marked as still self-rated");
+  // The delivery note and the run sheet: the sheet is the whole webinar in running order with the clock, everything wired rendered in place
+  await page.goto(page.url().split("?")[0] + "?step=script");
+  await page.fill('[data-testid="delivery-note"]', "Wait for the chat to fill before you go on.");
+  await submit(page, 'button:has-text("Save and next")');
+  const wizardUrl = page.url().split("?")[0];
+  await page.goto(`${wizardUrl}/runsheet`);
+  await page.locator('[data-testid="run-sheet"]').waitFor({ timeout: 20000 });
+  if ((await page.locator('[data-testid="runsheet-act"]').count()) !== 5) throw new Error("five acts on the run sheet");
+  const clocks = await page.locator('[data-testid="runsheet-clock"]').allInnerTexts();
+  if (clocks.length < 20 || !clocks[0].endsWith("0:00") || !/\d+ min · \d+:\d\d/.test(clocks[5])) throw new Error(`a cumulative clock per section, got ${JSON.stringify(clocks.slice(0, 6))}`);
+  await expectText(page, "Wait for the chat to fill before you go on.", "the delivery note is on the run sheet");
+  if (!(await page.locator('[data-testid="runsheet-proof"]').count())) throw new Error("the typed proof with its tick is rendered on its act");
+  if (!(await page.locator('[data-testid="runsheet-evidence"]').count())) throw new Error("the picked study is rendered on its act");
+  if (!(await page.locator('[data-testid="runsheet-offer"]').count())) throw new Error("the linked offer is rendered on the closing frame");
+  await shot(page, "w05b-webinar-runsheet");
+  await page.goto(`${wizardUrl}?step=review`);
+  console.log("✓ run sheet: five acts, a cumulative clock, the delivery note, the proof, the study and the offer rendered where they are wired");
   if (!(await page.locator('[data-testid="deck-unchecked"]').count())) throw new Error("the readiness step says the deck is not checked yet");
   for (const k of ["proofs", "stories", "citations"]) if (!(await page.locator(`[data-testid="build-check"] li[data-check="${k}"]`).count())) throw new Error(`the build check has a per-act ${k} presence line`);
   const citations = await page.locator('[data-testid="build-check"] li[data-check="citations"]').innerText();

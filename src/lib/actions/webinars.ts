@@ -7,7 +7,7 @@ import { WEBINAR_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, freeTextProofUsable, readinessScore, readyDecision } from "@/lib/engine/webinar";
+import { ACTS, DERIVED_DIMENSIONS, READINESS_DIMENSIONS, SECTION_TEMPLATES, applyOverride, derivedGrades, freeTextProofUsable, readinessScore, readyDecision, type Override } from "@/lib/engine/webinar";
 import { buildFor } from "@/lib/queries/webinar";
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
@@ -114,6 +114,7 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
       keyPoints: opt(formData, "keyPoints"),
       transitionIn: opt(formData, "transitionIn"),
       transitionOut: opt(formData, "transitionOut"),
+      deliveryNote: opt(formData, "deliveryNote"),
       assetId: asset?.id ?? null,
       durationMin: Math.max(1, num(formData, "durationMin") || 4),
       status: status ?? (script && script.length > 40 ? "drafted" : "todo"),
@@ -213,12 +214,25 @@ export async function saveReadinessAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const id = str(formData, "id");
   const w = await own(id, userId);
+  const { build, derived } = await buildFor(w);
+  // Three grades come from the record, shown with their working; the coach may lower one with a reason, never raise it.
   const ratings: Record<string, number> = {};
-  for (const d of READINESS_DIMENSIONS) ratings[d.key] = Math.max(0, Math.min(5, num(formData, `r_${d.key}`)));
+  const overrides: Record<string, Override> = {};
+  const graded = derivedGrades(derived);
+  for (const d of READINESS_DIMENSIONS) {
+    const g = (DERIVED_DIMENSIONS as readonly string[]).includes(d.key) ? graded.find((x) => x.key === d.key) : undefined;
+    if (!g) {
+      ratings[d.key] = Math.max(0, Math.min(5, num(formData, `r_${d.key}`)));
+      continue;
+    }
+    const value = num(formData, `o_${d.key}`);
+    const reason = str(formData, `o_${d.key}_reason`);
+    if (value && reason) overrides[d.key] = { value, reason };
+    ratings[d.key] = applyOverride(g, overrides[d.key]);
+  }
   const r = readinessScore(ratings);
-  await db.insert(schema.readinessReviews).values({ id: newId(), webinarId: id, ratings, score: r.score, verdict: r.verdict, biggestGaps: opt(formData, "biggestGaps"), nextActions: opt(formData, "nextActions") });
+  await db.insert(schema.readinessReviews).values({ id: newId(), webinarId: id, ratings, overrides, score: r.score, verdict: r.verdict, biggestGaps: opt(formData, "biggestGaps"), nextActions: opt(formData, "nextActions") });
   // The rating alone never sets the status: ready is the record's must-checks passing and the rating passing, together.
-  const { build } = await buildFor(w);
   const decision = readyDecision(r, build);
   if (decision.ready && (w.status === "draft" || w.status === "building")) await db.update(schema.webinars).set({ status: "ready" }).where(eq(schema.webinars.id, id));
   refresh();
