@@ -21,6 +21,10 @@ main() {
   step "unit tests"
   VITE_CONFIG_NATIVE_IGNORE_WARNING=1 npx vitest run
 
+  # A table rebuild that selects a column the old table lacks fails on every database: caught here, before any walk seeds one.
+  step "migrations"
+  npx tsx --tsconfig tsconfig.json scripts/check-migrations.ts
+
   if [[ "${1:-}" == "--build" ]]; then
     step "production build"
     # A build needs a session secret; the value is irrelevant because no request runs during the build.
