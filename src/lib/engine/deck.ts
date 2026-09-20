@@ -170,11 +170,14 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
 /* ───────────── The render plan ───────────── */
 
 export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "cover-title" | "cover-presenter"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean };
-export type SlidePlan = { n: number; background: string; boxes: TextBox[]; notes: string };
+/** A rule drawn in the accent: the one thing the accent draws besides a fill. Never under text. */
+export type Rule = { slide: number; color: string; y: number };
+export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string };
 
 /**
- * Every box the renderer will draw, with the kit's hex written verbatim: no tint, no derived shade. Text sits on ground only;
- * accent is a colour for an eyebrow, never a ground under text, so ink on accent cannot arrive without this changing.
+ * Every box the renderer will draw, with the kit's hex written verbatim: no tint, no derived shade. Text sits on ground only.
+ * Accent draws rules and fills, never letters: every text box is ink or muted (both refused under 4.5:1 by the kit rules), and
+ * the accent's one appearance is the rule under the eyebrow, so text in or on the accent cannot arrive without this changing.
  */
 export function renderPlan(d: DeckResult): SlidePlan[] {
   const k = d.kit;
@@ -187,18 +190,36 @@ export function renderPlan(d: DeckResult): SlidePlan[] {
       boxes.push({ slide: s.n, role: "cover-title", text: s.headline, size: s.headlineSize, color: hex(k.ink), fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
       boxes.push({ slide: s.n, role: "cover-presenter", text: s.body[0] ?? "", size: BODY_SIZE, color: hex(k.muted), fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
     } else {
-      boxes.push({ slide: s.n, role: "eyebrow", text: s.eyebrow, size: EYEBROW_SIZE, color: hex(k.accent), fill: null, face: k.displayFont, bold: false, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "eyebrow", text: s.eyebrow, size: EYEBROW_SIZE, color: hex(k.muted), fill: null, face: k.displayFont, bold: false, italic: false, bullet: false, placeholder: false });
       boxes.push({ slide: s.n, role: "headline", text: s.headline, size: s.headlineSize, color: mark(s.headline) ? hex(k.ink) : hex(k.ink), fill: mark(s.headline) ? placeholderColor : null, face: s.kind === "proof" && k.quoteFont ? k.quoteFont : k.displayFont, bold: s.kind !== "proof", italic: s.kind === "proof", bullet: false, placeholder: mark(s.headline) });
       for (const line of s.body) {
         const attribution = s.kind === "proof" && line.startsWith("— ");
         boxes.push({ slide: s.n, role: attribution ? "attribution" : "body", text: line, size: attribution ? EYEBROW_SIZE + 3 : BODY_SIZE, color: attribution ? hex(k.muted) : hex(k.ink), fill: mark(line) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: !attribution && s.kind !== "offer" ? true : false, placeholder: mark(line) });
       }
     }
-    return { n: s.n, background: hex(k.ground), boxes, notes: s.notes.join("\n") };
+    return { n: s.n, background: hex(k.ground), boxes, rules: s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }], notes: s.notes.join("\n") };
   });
 }
 
 /** The plain-text outline: what the .txt export and the Deck step's copy carry. Never the notes' art direction on a face. */
 export function outlineText(title: string, d: DeckResult): string {
-  return [title, `Deck outline · ${d.slides.length} slides${d.placeholderCount ? ` · ${d.placeholderCount} unfilled` : ""}`, "", ...d.slides.flatMap((s) => [`${s.n}. ${s.headline}`, s.eyebrow ? `   ${s.eyebrow}` : "", ...s.body.map((b) => `   - ${b}`), ""])].filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n");
+  return [title, `Deck outline · ${d.slides.length} slides${d.placeholderCount ? ` · ${d.placeholderCount} unfilled on slides` : ""}`, "", ...d.slides.flatMap((s) => [`${s.n}. ${s.headline}`, s.eyebrow ? `   ${s.eyebrow}` : "", ...s.body.map((b) => `   - ${b}`), ""])].filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n");
+}
+
+/**
+ * The deck refuses only on what it renders, and the run sheet counts the whole section because the presenter reads all of it
+ * aloud. This names the difference: per section, the placeholders the deck shows on a slide and the ones it does not.
+ */
+export function offSlidePlaceholders(c: WebinarContext, d: DeckResult): { total: number; offSlide: number; sections: { section: string; onSlide: string[]; offSlide: string[] }[] } {
+  const shown = new Map<string, Set<string>>();
+  for (const sl of d.slides) {
+    if (!sl.sectionKey) continue;
+    const set = shown.get(sl.sectionKey) ?? new Set<string>();
+    for (const p of sl.placeholders) set.add(p.text);
+    shown.set(sl.sectionKey, set);
+  }
+  const sections = c.sections
+    .filter((s) => s.placeholders.length)
+    .map((s) => ({ section: s.name, onSlide: s.placeholders.filter((t) => shown.get(s.sectionKey)?.has(t)), offSlide: s.placeholders.filter((t) => !shown.get(s.sectionKey)?.has(t)) }));
+  return { total: sections.reduce((a, s) => a + s.onSlide.length + s.offSlide.length, 0), offSlide: sections.reduce((a, s) => a + s.offSlide.length, 0), sections };
 }

@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { contextFor } from "@/lib/queries/webinar";
 import { runSheetText } from "@/lib/engine/webinar-context";
+import { deckSlides, offSlidePlaceholders } from "@/lib/engine/deck";
 import { RunSheetView } from "@/components/run-sheet";
 import { CopyButton } from "@/components/copy-button";
 import { PrintButton } from "@/components/print-button";
@@ -25,7 +26,7 @@ export default async function RunSheetPage({ params }: { params: Promise<{ id: s
         <CopyButton text={runSheetText(c)} label="Copy the run sheet" className="btn btn-soft btn-sm" />
         <PrintButton />
       </div>
-      <RunSheetView c={c} />
+      <RunSheetView c={c} unfilled={offSlidePlaceholders(c, deckSlides(c, null))} />
     </>
   );
 }

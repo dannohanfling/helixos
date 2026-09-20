@@ -106,6 +106,10 @@ async function main() {
   await fillField(page, 'textarea[name="script"]', "Hi everyone. If you've ever lost 10 pounds and gained it back, this is for you. Here's the plan for the next hour.");
   await submit(page, 'button:has-text("Save and next")');
   await expectText(page, "drafted", "section saved");
+  // Cleared means cleared: the section shows no mismatch and holds exactly the presenter's own script
+  await page.goto(page.url().split("?")[0] + `?step=script&section=${firstKey}`);
+  if (await page.locator('[data-testid="name-mismatch"]').count()) throw new Error(`the presenter's own script clears the guard, got "${await page.locator('[data-testid="name-mismatch"]').innerText()}"`);
+  if (!(await page.locator('textarea[name="script"]').inputValue()).startsWith("Hi everyone.") || /Danno|Turas/.test(await page.locator('textarea[name="script"]').inputValue())) throw new Error("the section holds the script the walk wrote, and nothing from an earlier fill");
   console.log("✓ presenter saved; a script introducing someone else is named on the section, and cleared; a permitted name passes");
   await page.goto(page.url().split("?")[0] + "?step=beliefs");
   await shot(page, "w03-webinar-beliefs");
@@ -115,7 +119,7 @@ async function main() {
   if ((await page.locator('[data-testid="belief-evidence-vehicle"] option').count()) < 2) throw new Error("the belief step must offer the shared starter shelf's studies");
   const findHref = await page.locator('[data-testid="find-research-vehicle"]').getAttribute("href");
   if (!findHref?.startsWith("/evidence?claim=")) throw new Error(`find research must open the search with the claim pre-filled, got ${findHref}`);
-  await page.fill('[data-testid="belief-freetext-vehicle"]', "Priya N. went from 2 to 9 discovery calls a week in her first month.");
+  await fillField(page, '[data-testid="belief-freetext-vehicle"]', "Priya N. went from 2 to 9 discovery calls a week in her first month.");
   await submit(page, 'button:has-text("Save beliefs"), button:has-text("Save and next"), form:has([data-testid="belief-freetext-vehicle"]) button[type="submit"]');
   await page.goto(beliefsUrl);
   if (!(await page.locator('[data-testid="belief-needs-tick-vehicle"]').count())) throw new Error("a typed proof without the tick must be marked unusable");
@@ -133,8 +137,8 @@ async function main() {
   await expectText(page, "Priya N.", "the contribution is in the bank");
   console.log("✓ belief breaks: evidence offered, search pre-filled, typed proof gated by tick two and routed to the bank as a draft");
   await page.goto(beliefsUrl);
-  // The deck: what refuses at the route refuses on the step, before the click. The seeded Opportunity Frame opens with "[X]% of
-  // conversions are former no's": a claim with a hole (the Hook's own [X]% sits past the points a slide carries, so it is not on one).
+  // The deck: what refuses at the route refuses on the step, before the click. The seed exports clean; the walk plants both
+  // clauses' refusals itself, on the Opportunity Frame (a) and the Proof Block (b).
   const wizardUrl0 = page.url().split("?")[0];
   const saveSection = async (key: string, fields: { keyPoints?: string; status?: "drafted" | "final" | "omitted" }) => {
     await page.goto(`${wizardUrl0}?step=script&section=${key}`);
@@ -143,6 +147,10 @@ async function main() {
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button[type="submit"]', { hasText: /^Save$/ }).first().click()]);
     await page.waitForLoadState("networkidle");
   };
+  await page.goto(`${wizardUrl0}?step=deck`);
+  if (await page.locator('[data-testid="deck-refused"]').count()) throw new Error(`the demo webinar exports clean as seeded, got "${await page.locator('[data-testid="deck-refused"]').innerText()}"`);
+  // Clause (a), planted: a numeric placeholder in a sentence carrying a percentage
+  await saveSection("opportunity_frame", { keyPoints: "[X]% of conversions are former no's\nThe no is data" });
   await page.goto(`${wizardUrl0}?step=deck`);
   await page.locator('[data-testid="deck-refused"]').waitFor({ timeout: 15000 });
   if (await page.locator('[data-testid="deck-pptx"]').count()) throw new Error("a refused deck has no download button");
@@ -173,7 +181,7 @@ async function main() {
   if (!pptx.ok() || !(pptx.headers()["content-type"] ?? "").includes("presentationml") || pptxBody.subarray(0, 2).toString() !== "PK" || pptxBody.length < 5000) throw new Error(`pptx export failed: ${pptx.status()} ${pptxBody.length} bytes`);
   const txt = await page.request.get(`${base}${deckHref.replace("pptx", "txt")}`);
   const txtText = await txt.text();
-  if (!txt.ok() || !/Deck outline · \d+ slides · 1 unfilled/.test(txtText)) throw new Error("txt export failed");
+  if (!txt.ok() || !/Deck outline · \d+ slides · 1 unfilled on slides/.test(txtText)) throw new Error("txt export failed");
   if (/Credibility/.test(txtText) || /Visual/.test(txtText) || !/discovery calls/.test(txtText)) throw new Error("the outline carries the proof, not the omitted section, and no art direction");
   // The file says whose it is: the presenter as author, the workspace as company, the webinar as subject, never the generator
   const { default: JSZip } = await import("jszip");
@@ -230,6 +238,11 @@ async function main() {
   if (await page.locator('[data-testid="run-sheet"]').getByText("Credibility / Origin").count()) throw new Error("a section left out on purpose is not on the run sheet");
   await expectText(page, "Wait for the chat to fill before you go on.", "the delivery note is on the run sheet");
   if (!(await page.locator('[data-testid="runsheet-proof"]').count())) throw new Error("the typed proof with its tick is rendered on its act");
+  const sheetProof = await page.locator('[data-testid="runsheet-proof"]').first().innerText();
+  if (!sheetProof.includes("Priya N. went from 2 to 9 discovery calls a week in her first month.") || /47 moms/.test(sheetProof)) throw new Error(`the sheet carries the proof the walk typed and nothing of the seed's, got "${sheetProof}"`);
+  // The sheet counts the whole section and says which slots the deck does not show: the drafted scripts' [Drafted] markers are off-slide
+  const sheetCount = await page.locator('[data-testid="runsheet-placeholders"]').innerText();
+  if (!/^\d+ unfilled, \d+ of them in points or scripts the deck does not show: /.test(sheetCount) || !/\[Drafted\]/.test(sheetCount)) throw new Error(`the run sheet names off-slide slots as off-slide, got "${sheetCount}"`);
   if (!(await page.locator('[data-testid="runsheet-evidence"]').count())) throw new Error("the picked study is rendered on its act");
   if (!(await page.locator('[data-testid="runsheet-offer"]').count())) throw new Error("the linked offer is rendered on the closing frame");
   await shot(page, "w05b-webinar-runsheet");

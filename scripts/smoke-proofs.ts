@@ -227,6 +227,7 @@ async function main() {
     if (!(await page.locator('[data-testid="media-alt-warning"]').count())) throw new Error("an image with no alt text warns");
     await page.fill(bodyBox, "Four clients in thirty days. Here is what Dana's month looked like. (Illustrative. Your numbers will differ.)");
     await page.waitForTimeout(300);
+    if ((await page.inputValue(bodyBox)) !== "Four clients in thirty days. Here is what Dana's month looked like. (Illustrative. Your numbers will differ.)") throw new Error("the body holds the marked sentence and nothing of the earlier fill");
     if (await page.locator('[data-testid="result-media-block"]').count()) throw new Error("the marker lifts the block");
     const altOption = await mediaSelect.locator("option", { hasText: "before-after.png" }).getAttribute("value");
     await mediaSelect.selectOption(altOption!);

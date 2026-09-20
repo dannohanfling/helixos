@@ -79,7 +79,9 @@ export function brandKitProblems(kit: BrandKitInput): string[] {
   if (!kit.fontFallback.trim()) out.push("Name the fallback face: it is what the file names when a brand face is missing on the reader's machine.");
   const banned = kit.bannedColors.map(normaliseHex).filter(isHex);
   if (out.length) return out;
-  // Text pairs are refused: ink and muted on ground, inverseInk on inverseGround. The accent pairs warn (see brandKitWarnings).
+  // The rule: accent draws rules and fills, never letters; anything with letters in it is ink or muted, and both are refused
+  // under 4.5:1. So the text pairs are refused here (ink and muted on ground, inverseInk on inverseGround) and the accent pairs
+  // only warn (brandKitWarnings). The deck's render plan keeps the same line: no text box is ever coloured accent.
   const ratio = contrastRatio(kit.ground, kit.ink);
   if (ratio < MIN_CONTRAST) out.push(`ink on ground is ${ratio}:1; it needs ${MIN_CONTRAST}:1 to read on a slide.`);
   const mutedRatio = contrastRatio(kit.ground, kit.muted);

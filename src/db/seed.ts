@@ -10,6 +10,7 @@ import { addDays, isWeekday, todayInTz } from "@/lib/dates";
 import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { POINTS, closeActivityPoints, contentPoints } from "@/lib/engine/points";
 import { SECTION_TEMPLATES } from "@/lib/engine/webinar";
+import { placeholdersIn } from "@/lib/engine/webinar-context";
 import { repurposeAll } from "@/lib/engine/repurpose";
 import { ADMIN_ONBOARDING_KEYS } from "@/lib/engine/pathway";
 import stories from "@/data/seed/webinar/stories.json";
@@ -279,7 +280,7 @@ async function seedBusinessAssets(workspaceId: string, userId: string, today: st
   await db.insert(schema.webinarSections).values(
     SECTION_TEMPLATES.map((t) => {
       const done = t.order <= 6;
-      return { id: newId(), webinarId: wipId, sectionKey: t.key, act: t.act, order: t.order, name: t.name, durationMin: t.durationMin, keyPoints: done ? t.exampleKeyPoints.replace(/pipeline|lead/gi, "meal plan") : null, script: done ? `[Drafted] ${t.exampleScript.split(". ").slice(0, 2).join(". ")}.` : null, status: done ? ("drafted" as const) : ("todo" as const) };
+      return { id: newId(), webinarId: wipId, sectionKey: t.key, act: t.act, order: t.order, name: t.name, durationMin: t.durationMin, keyPoints: done ? t.exampleKeyPoints.replace(/pipeline|lead/gi, "meal plan").split("\n").filter((p) => !placeholdersIn(p)).join("\n") : null, script: done ? `[Drafted] ${t.exampleScript.split(". ").slice(0, 2).join(". ")}.` : null, status: done ? ("drafted" as const) : ("todo" as const) };
     }),
   );
   await db.insert(schema.webinarBeliefs).values([

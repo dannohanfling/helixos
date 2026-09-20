@@ -1,6 +1,7 @@
 import { clock } from "@/lib/engine/webinar";
 import { formatPrice } from "@/lib/engine/offer-score";
 import { QA_SECTION_KEY, type SectionContext, type WebinarContext } from "@/lib/engine/webinar-context";
+import type { offSlidePlaceholders } from "@/lib/engine/deck";
 
 function Row({ label, children, testId }: { label: string; children: React.ReactNode; testId?: string }) {
   return (
@@ -113,7 +114,7 @@ function Section({ s }: { s: SectionContext }) {
 }
 
 /** One column, big type, the clock down the side, everything wired to each section rendered in place. Prints as it reads. */
-export function RunSheetView({ c }: { c: WebinarContext }) {
+export function RunSheetView({ c, unfilled }: { c: WebinarContext; unfilled: ReturnType<typeof offSlidePlaceholders> }) {
   return (
     <article className="space-y-6 text-ink" data-testid="run-sheet">
       <header>
@@ -126,9 +127,9 @@ export function RunSheetView({ c }: { c: WebinarContext }) {
         <p className="mt-1 text-xs text-ink-3" data-testid="runsheet-legend">
           Proof marked [approved] is from the bank with permission on record; [typed, permission ticked] was typed here with the same tick. Nothing else reaches this sheet.
         </p>
-        {c.placeholders.length ? (
+        {unfilled.total ? (
           <p className="mt-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="runsheet-placeholders">
-            {c.placeholders.length} {c.placeholders.length === 1 ? "section has" : "sections have"} unfilled slots: {c.placeholders.map((p) => `${p.section} (${p.tokens.join(" ")})`).join("; ")}.
+            {unfilled.total} unfilled, {unfilled.offSlide} of them in points or scripts the deck does not show: {unfilled.sections.map((p) => `${p.section} (${[...p.onSlide, ...p.offSlide].join(" ")})`).join("; ")}.
           </p>
         ) : null}
       </header>

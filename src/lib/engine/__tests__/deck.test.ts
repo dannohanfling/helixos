@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PLACEHOLDER_FALLBACK, deckSlides, headlineTier, outlineText, placeholderHits, renderPlan, type DeckKit } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PLACEHOLDER_FALLBACK, deckSlides, headlineTier, offSlidePlaceholders, outlineText, placeholderHits, renderPlan, type DeckKit } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -77,6 +77,7 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
     const d = deckSlides(ctx(base({ credibility_origin: { status: "omitted", keyPoints: "My origin\nThe week it changed" } })), kit);
     expect(bySection(d, "credibility_origin")).toEqual([]);
     expect(outlineText("t", d)).not.toContain("origin");
+    expect(outlineText("t", d)).toContain("Deck outline · ");
   });
   it("the cover carries the title and the presenter, and the art direction is in the notes and never on a face", () => {
     const d = deckSlides(ctx(base({ hook: { keyPoints: "Open the loop", deliveryNote: "Wait for the chat." } })), kit);
@@ -106,21 +107,33 @@ describe("placeholders: refused in a claim or on a proof or price slide, warned 
     expect(d.refused).toEqual(["Slide 2 (Hook): [X]% sits in a sentence that carries a number: a claim with a hole in it.", "Slide 4 (Proof Block): [CLIENT NAME] sits on a proof slide, which is a claim by its nature."]);
     expect(d.warnings).toEqual(["Slide 3 (Problem Frame): [SALES PAGE URL] is a gap to fill."]);
     expect(d.placeholderCount).toBe(3);
+    expect(outlineText("t", d)).toContain("Deck outline · 5 slides · 3 unfilled on slides");
+  });
+  it("the deck refuses only on what it renders; the run sheet names the rest as off-slide", () => {
+    // A fifth key point past the four a slide carries, and a placeholder in the script: neither is on a slide
+    const c = ctx(base({ hook: { keyPoints: "Open the loop\nTwo\nThree\nFour\nFive\nSix\nSeven\nEight\nPromise [X]% fewer no-shows", script: "Send them to [SALES PAGE URL]." }, problem_frame: { keyPoints: "Costs [$N] a month" } }));
+    const d = deckSlides(c, kit);
+    expect(d.refused).toEqual(["Slide 4 (Problem Frame): [$N] sits in a sentence that carries a number: a claim with a hole in it."]);
+    expect(offSlidePlaceholders(c, d)).toEqual({ total: 3, offSlide: 2, sections: [{ section: "Hook", onSlide: [], offSlide: ["[X]%", "[SALES PAGE URL]"] }, { section: "Problem Frame", onSlide: ["[$N]"], offSlide: [] }] });
   });
 });
 
 describe("the brand kit on the file", () => {
-  it("every colour is the kit's hex verbatim, no text ever sits on the accent, the proof headline takes the quote face, and a placeholder is drawn in the kit's colour", () => {
+  it("every colour is the kit's hex verbatim, accent draws rules and fills and never letters, the proof headline takes the quote face, and a placeholder is drawn in the kit's colour", () => {
     const d = deckSlides(ctx(base({ hook: { keyPoints: "Open the loop\nSend them to [SALES PAGE URL]" }, proof_block: {} }), [{ type: "vehicle", fromBelief: "a", toBelief: "b", proofId: "p1" }]), kit);
     const plan = renderPlan(d);
     for (const p of plan) {
       expect(p.background).toBe("FAF8F5");
       for (const b of p.boxes) {
-        expect(["6E6256", "4B5563", "DD2727"]).toContain(b.color);
+        // Letters are ink or muted, both refused under 4.5:1 by the kit rules; the accent never colours a text box or sits under one
+        expect(["6E6256", "4B5563"]).toContain(b.color);
         expect(b.fill).not.toBe("DD2727");
-        if (b.role === "eyebrow") expect(b.size).toBe(EYEBROW_SIZE);
+        if (b.role === "eyebrow") expect(b).toMatchObject({ size: EYEBROW_SIZE, color: "4B5563" });
       }
+      for (const r of p.rules) expect(r.color).toBe("DD2727");
     }
+    expect(plan[0].rules).toEqual([]);
+    expect(plan[1].rules).toHaveLength(1);
     const hook = plan[1];
     expect(hook.boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Open the loop", size: 40, color: "6E6256", fill: null, face: "Red Hat Display", bold: true });
     expect(hook.boxes.find((b) => b.role === "body")).toMatchObject({ text: "Send them to [SALES PAGE URL]", size: BODY_SIZE, fill: "FFF3A3", face: "Helvetica Now Display", placeholder: true });

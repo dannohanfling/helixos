@@ -73,5 +73,6 @@ function draw(pptx: PptxGenJS, plan: SlidePlan) {
       );
     }
   }
+  for (const r of plan.rules) slide.addShape(pptx.ShapeType.line, { x: 0.5, y: r.y, w: 9, h: 0, line: { color: r.color, width: 1.5 } });
   if (plan.notes) slide.addNotes(plan.notes);
 }
