@@ -537,6 +537,8 @@ export const webinars = sqliteTable(
     desiredResult: text("desired_result"),
     promise: text("promise"),
     mechanismName: text("mechanism_name"),
+    /** A session that deliberately names no mechanism says why here; the reason counts as the field filled in the build check. */
+    mechanismWaivedReason: text("mechanism_waived_reason"),
     offerId: text("offer_id"),
     ctaType: text("cta_type").notNull().default("Book a call"),
     scheduledAt: text("scheduled_at"),
@@ -553,6 +555,8 @@ export const webinars = sqliteTable(
     debriefFix: text("debrief_fix"),
     debriefWins: text("debrief_wins"),
     notes: text("notes"),
+    /** The last edit to the record's content (foundation, beliefs, sections, offer link); a readiness review older than this is stale. */
+    updatedAt: text("updated_at"),
     createdAt: createdAt(),
   },
   (t) => [index("webinars_user").on(t.userId, t.status)],

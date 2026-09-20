@@ -86,9 +86,41 @@ async function main() {
   console.log(`  deck export: pptx ${pptxBody.length} bytes, txt ok`);
   await shot(page, "w04-webinar-deck");
   await page.goto(page.url().split("?")[0] + "?step=review");
+  // The header is the build check, itemised, and no rating moves it: eleven fives leave an unscripted webinar "building"
+  const summary = await page.locator('[data-testid="build-summary"]').innerText();
+  if (!/\d+\/\d+ scripted · ~\d+ min · \d+ of \d+ checks/.test(summary)) throw new Error(`the header reads the build check, got "${summary}"`);
+  if (/% built/.test(summary)) throw new Error("the build percentage is gone");
+  const openBefore = await page.locator('[data-testid="build-check"] li[data-ok="0"]').count();
+  if (!openBefore) throw new Error("the demo webinar has open checks to test against");
+  for (const k of ["promise", "audience", "vehicle", "internal", "external", "proof", "stories", "offer", "cta", "objections", "convert"]) await page.click(`label:has(input[name="r_${k}"][value="5"])`);
   await submit(page, 'button:has-text("Save review")');
   await expectText(page, "Verdict", "review saved");
+  const decision = await page.locator('[data-testid="ready-decision"]').innerText();
+  if (!decision.startsWith("Not ready yet.") || !/checks? open:/.test(decision)) throw new Error(`eleven fives do not make it ready; the decision names the open checks, got "${decision}"`);
+  if ((await page.locator('[data-testid="build-check"] li[data-ok="0"]').count()) !== openBefore) throw new Error("the rating moved a build check");
+  if (!page.url().includes("step=review")) throw new Error("an unready webinar stays on the review step rather than advancing to Run it");
+  if (!(await page.locator('[data-testid="self-rated-proof"]').count())) throw new Error("proof sufficiency is marked as still self-rated");
+  for (const k of ["proofs", "stories", "citations"]) if (!(await page.locator(`[data-testid="build-check"] li[data-check="${k}"]`).count())) throw new Error(`the build check has a per-act ${k} presence line`);
+  const citations = await page.locator('[data-testid="build-check"] li[data-check="citations"]').innerText();
+  if (!/Every act has a citation/.test(citations) || !/(Act [123] has no citation|All three acts)/.test(citations)) throw new Error(`the citation check says which act lacks one, got "${citations}"`);
   await shot(page, "w05-webinar-review");
+  // Choosing ready on the Run step with checks open is refused where it is chosen; the other fields still save
+  await page.goto(page.url().split("?")[0] + "?step=run");
+  await page.selectOption('select[name="status"]', "ready");
+  await page.fill('input[name="registrationUrl"]', "https://example.com/register");
+  await submit(page, 'form:has(select[name="status"]) button[type="submit"]');
+  await page.locator('[data-testid="status-held"]').waitFor({ timeout: 15000 });
+  const held = await page.locator('[data-testid="status-held"]').innerText();
+  if (!held.startsWith("Not set to ready:")) throw new Error(`the run step says why the status was held, got "${held}"`);
+  if ((await page.locator('select[name="status"]').inputValue()) === "ready") throw new Error("the status did not change");
+  if ((await page.locator('input[name="registrationUrl"]').inputValue()) !== "https://example.com/register") throw new Error("the other fields saved");
+  // A review saved before the record's next edit is marked stale
+  await page.goto(page.url().split("?")[0] + "?step=script");
+  await page.fill('textarea[name="script"]', "Hi everyone. If you've ever lost 10 pounds and gained it back, this is for you. Here's the plan for the next hour, and the one swap that matters.");
+  await submit(page, 'button:has-text("Save and next")');
+  await page.goto(page.url().split("?")[0] + "?step=review");
+  if (!(await page.locator('[data-testid="review-stale"]').count())) throw new Error("a review older than the last edit is marked stale");
+  console.log("✓ build check itemised in the header; eleven fives never set ready; ready refused on the Run step with the checks named; a stale review says so");
 
   // Offers
   await page.goto(`${base}/offers`);

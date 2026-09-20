@@ -9,7 +9,7 @@ import { tierProgress } from "@/lib/engine/tiers";
 import { roadLine, simplePath } from "@/lib/engine/pathway";
 import { closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
 import { brokenStreak } from "@/lib/engine/streak";
-import { STEPS, nextStep, webinarProgress } from "@/lib/engine/webinar";
+import { STEPS, buildChecks, nextStep } from "@/lib/engine/webinar";
 import { totalPoints } from "./points";
 
 /** The one pathway task to show today: revisions first, then the next must-do on the simple path. */
@@ -127,7 +127,7 @@ export async function todayData(v: Viewer) {
       db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, building.id) }),
       db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, building.id) }),
     ]);
-    const p = webinarProgress(building, secs, bels, null);
+    const p = buildChecks({ webinar: building, sections: secs, beliefs: bels, review: null });
     const step = nextStep(p.steps);
     webinarInProgress = { id: building.id, title: building.title, step, stepLabel: STEPS.find((s) => s.key === step)?.label ?? step };
   }

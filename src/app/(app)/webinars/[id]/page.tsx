@@ -34,7 +34,11 @@ import {
   freeTextProofUsable,
   nextStep,
   readinessScore,
-  webinarProgress,
+  buildChecks,
+  readyDecision,
+  reviewStale,
+  sectionPace,
+  SELF_RATED_FOR_NOW,
   type StepKey,
 } from "@/lib/engine/webinar";
 import { essenceFor } from "@/lib/queries/essence";
@@ -67,6 +71,7 @@ export default async function WebinarWizardPage({
     act?: string;
     stripped?: string;
     toBank?: string;
+    held?: string;
   }>;
 }) {
   const v = await requireViewer();
@@ -127,7 +132,18 @@ export default async function WebinarWizardPage({
       showsAResult: a.showsAResult,
     }));
   const review = reviews[0] ?? null;
-  const progress = webinarProgress(w, sections, beliefs, review);
+  const offerRow = w.offerId ? offers.find((o) => o.id === w.offerId) : undefined;
+  const offerComponents = offerRow
+    ? await db.query.offerComponents.findMany({
+        where: eq(schema.offerComponents.offerId, offerRow.id),
+        orderBy: asc(schema.offerComponents.order),
+      })
+    : [];
+  // Every progress signal on the page is this one read of the record; no rating moves it.
+  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, approvedProofIds: proofs.map((pr) => pr.id), review });
+  const progress = build;
+  const decision = readyDecision(review ? readinessScore(review.ratings) : null, build);
+  const stale = reviewStale(review, w.updatedAt);
   const step = (STEPS.find((s) => s.key === sp.step)?.key ??
     nextStep(progress.steps)) as StepKey;
   const stories = assets.filter((a) => a.type === "story");
@@ -138,13 +154,8 @@ export default async function WebinarWizardPage({
         (a.extra.priority === "High" ? 0 : 1) -
           (b.extra.priority === "High" ? 0 : 1) || a.name.localeCompare(b.name),
     );
-  const offer = w.offerId ? offers.find((o) => o.id === w.offerId) : undefined;
-  const components = offer
-    ? await db.query.offerComponents.findMany({
-        where: eq(schema.offerComponents.offerId, offer.id),
-        orderBy: asc(schema.offerComponents.order),
-      })
-    : [];
+  const offer = offerRow;
+  const components = offerComponents;
 
   // Script step state
   const sectionKey =
@@ -183,9 +194,12 @@ export default async function WebinarWizardPage({
             >
               {w.status}
             </Badge>
-            <span>
-              {progress.drafted}/{sections.length} sections · ~
-              {progress.totalMinutes} min · {progress.overall}% built
+            <span
+              data-testid="build-summary"
+              title={build.must.length || build.warn.length ? `Open: ${[...build.must, ...build.warn].map((c) => c.label).join(" · ")}` : "Every check passes"}
+            >
+              {build.scripted}/{sections.length} scripted · ~
+              {progress.totalMinutes} min · {build.summary}
             </span>
           </span>
         }
@@ -327,6 +341,19 @@ export default async function WebinarWizardPage({
                     name="mechanismName"
                     defaultValue={w.mechanismName ?? ""}
                     placeholder="The 12-Minute Tuesday System"
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field
+                  label="No named mechanism? Say why"
+                  hint="Some sessions deliberately don't name one. A reason here counts as the field filled."
+                >
+                  <input
+                    className="field"
+                    name="mechanismWaivedReason"
+                    defaultValue={w.mechanismWaivedReason ?? ""}
+                    data-testid="mechanism-waived"
                   />
                 </Field>
               </div>
@@ -785,6 +812,15 @@ export default async function WebinarWizardPage({
                     max={30}
                     defaultValue={section.durationMin}
                   />
+                  {(() => {
+                    const pace = sectionPace(section);
+                    return pace.words ? (
+                      <p className={`mt-1 text-xs ${pace.flag ? "text-warn" : "text-ink-3"}`} data-testid="section-pace">
+                        {pace.words} words ≈ {pace.estimatedMin} min of a {section.durationMin}-min slot
+                        {pace.flag === "long" ? ". Written long: the end of the session is what overruns cut." : pace.flag === "thin" ? ". Thin for the slot: the gap gets improvised." : "."}
+                      </p>
+                    ) : null;
+                  })()}
                 </Field>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1147,15 +1183,21 @@ export default async function WebinarWizardPage({
                         : "danger"
                   }
                 >
-                  {review.score}% · {review.verdict.replace("_", " ")}
+                  your rating {review.score}% · {review.verdict.replace("_", " ")}
                 </Badge>
               ) : null
             }
           >
             <p className="mb-3 text-sm text-ink-2">
               Grade honestly. 1 = missing, 5 = I&apos;d bet money on it.
-              Anything at 2 or below blocks &ldquo;ready&rdquo;.
+              Anything at 2 or below blocks &ldquo;ready&rdquo;. Your rating never
+              moves the build check beside it; ready needs both.
             </p>
+            {stale ? (
+              <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="review-stale" role="status">
+                This review was saved before the webinar&apos;s last edit. Grade it again.
+              </p>
+            ) : null}
             <form action={saveReadinessAction} className="space-y-3">
               <input type="hidden" name="id" value={w.id} />
               {READINESS_DIMENSIONS.map((d) => (
@@ -1166,6 +1208,9 @@ export default async function WebinarWizardPage({
                   <div>
                     <div className="text-sm font-medium">{d.label}</div>
                     <div className="text-xs text-ink-3">{d.hint}</div>
+                    {(SELF_RATED_FOR_NOW as readonly string[]).includes(d.key) ? (
+                      <div className="text-[11px] text-ink-3" data-testid={`self-rated-${d.key}`}>Quality is your rating; whether each act has one is in the build check.</div>
+                    ) : null}
                   </div>
                   <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map((n) => (
@@ -1208,11 +1253,11 @@ export default async function WebinarWizardPage({
           </Card>
           <div className="space-y-4">
             {review ? (
-              <Card title="Verdict">
+              <Card title="Verdict · your rating">
                 <div className="text-4xl font-semibold">{review.score}%</div>
                 <div className="mt-1 text-sm">
                   {review.verdict === "ready"
-                    ? "Presentation-ready. Schedule it."
+                    ? "Your rating passes."
                     : review.verdict === "needs_work"
                       ? "Close. Fix the weak spots and re-review."
                       : "Not yet. Back to the script."}
@@ -1223,37 +1268,21 @@ export default async function WebinarWizardPage({
                     {readinessScore(review.ratings).weakest.join(", ")}
                   </p>
                 ) : null}
+                <p className={`mt-3 border-t pt-2 text-sm ${decision.ready ? "text-good" : "text-warn"}`} data-testid="ready-decision">
+                  {decision.ready ? "Ready: your rating passes and every must-check passes." : `Not ready yet. ${decision.reasons.join(" ")}`}
+                </p>
               </Card>
             ) : null}
-            <Card title="Build check">
-              <ul className="space-y-1.5 text-sm">
-                <li>
-                  {progress.steps.foundation >= 1 ? "✅" : "⬜"} Foundation
-                  filled
-                </li>
-                <li>
-                  {progress.steps.beliefs >= 1 ? "✅" : "⬜"} Three belief
-                  shifts written
-                </li>
-                <li>
-                  {progress.drafted >= sections.length ? "✅" : "⬜"} All{" "}
-                  {sections.length} sections drafted ({progress.drafted})
-                </li>
-                <li>{w.offerId ? "✅" : "⬜"} Offer linked</li>
-                <li>
-                  {components.length &&
-                  components.every((c) => c.beliefBreak !== "none")
-                    ? "✅"
-                    : "⬜"}{" "}
-                  Stack mapped to belief breaks
-                </li>
-                <li>
-                  {progress.totalMinutes >= 55 && progress.totalMinutes <= 95
-                    ? "✅"
-                    : "⬜"}{" "}
-                  Runtime between 55 and 95 min ({progress.totalMinutes})
-                </li>
+            <Card title={`Build check · ${build.summary}`}>
+              <ul className="space-y-1.5 text-sm" data-testid="build-check">
+                {build.checks.map((c) => (
+                  <li key={c.key} data-check={c.key} data-ok={c.ok ? "1" : "0"}>
+                    {c.ok ? "✅" : c.level === "warn" ? "⚠️" : "⬜"} {c.label}
+                    <div className="text-xs text-ink-3">{c.detail}</div>
+                  </li>
+                ))}
               </ul>
+              <p className="mt-2 text-xs text-ink-3">Read off the record every time the page opens. Warnings don&apos;t block; the rest do.</p>
             </Card>
           </div>
         </div>
@@ -1269,6 +1298,11 @@ export default async function WebinarWizardPage({
               </Badge>
             }
           >
+            {sp.held ? (
+              <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="status-held" role="alert">
+                Not set to {sp.held}: {build.must.length} {build.must.length === 1 ? "check is" : "checks are"} open ({build.must.map((c) => c.label).join("; ")}). The other fields saved.
+              </p>
+            ) : null}
             <form action={updateRunAction} className="space-y-4">
               <input type="hidden" name="id" value={w.id} />
               <div className="grid gap-3 sm:grid-cols-2">

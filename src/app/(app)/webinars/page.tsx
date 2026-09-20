@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { createWebinarAction, duplicateExampleAction } from "@/lib/actions/webinars";
 import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
-import { STEPS, nextStep, webinarProgress } from "@/lib/engine/webinar";
+import { STEPS, buildChecks, nextStep } from "@/lib/engine/webinar";
 import { formatDate } from "@/lib/dates";
 
 export const metadata = { title: "Webinars" };
@@ -92,7 +92,7 @@ export default async function WebinarsPage() {
             const secs = sections.filter((s) => s.webinarId === w.id);
             const bel = beliefs.filter((b) => b.webinarId === w.id);
             const rev = reviews.find((r) => r.webinarId === w.id) ?? null;
-            const p = webinarProgress(w, secs, bel, rev);
+            const p = buildChecks({ webinar: w, sections: secs, beliefs: bel, review: rev });
             const next = STEPS.find((s) => s.key === nextStep(p.steps))!;
             return (
               <Link key={w.id} href={`/webinars/${w.id}?step=${w.status === "delivered" ? "run" : next.key}`} className="card block p-4 transition hover:border-ink">
@@ -109,11 +109,11 @@ export default async function WebinarsPage() {
                 </div>
                 {w.promise ? <p className="mt-2 text-sm text-ink-2">{w.promise}</p> : null}
                 <div className="mt-3">
-                  <Progress value={p.overall} tone={p.overall >= 100 ? "good" : "accent"} height={6} />
+                  <Progress value={Math.round((p.passed / p.total) * 100)} tone={p.passed >= p.total ? "good" : "accent"} height={6} />
                 </div>
                 <div className="mt-1.5 flex items-center justify-between text-xs text-ink-3">
                   <span>
-                    {p.drafted}/{secs.length} sections · ~{p.totalMinutes} min
+                    {p.scripted}/{secs.length} scripted · ~{p.totalMinutes} min · {p.summary}
                   </span>
                   <span>
                     {w.status === "delivered" ? `${w.showed}/${w.registered} showed · $${w.revenue.toLocaleString()}` : `Next: ${next.icon} ${next.label}`}

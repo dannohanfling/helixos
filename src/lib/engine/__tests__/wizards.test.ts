@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { freeTextProofUsable } from "../webinar";
 import { offerOnePager, scoreOffer } from "../offer-score";
 import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll, toneClause } from "../repurpose";
-import { ACTS, SECTION_TEMPLATES, deckOutline, nextStep, readinessScore, webinarProgress } from "../webinar";
+import { ACTS, SECTION_TEMPLATES, buildChecks, deckOutline, nextStep, offerStart, readinessScore, readyDecision, reviewStale, sectionPace } from "../webinar";
 
 const strongOffer = {
   name: "90-Day Reset",
@@ -117,11 +117,106 @@ describe("webinar structure", () => {
     expect(readinessScore({ ...all5, proof: 2 }).weakest).toEqual(["Proof sufficiency"]);
   });
   it("tracks progress and the next step", () => {
-    const sections = SECTION_TEMPLATES.map((t) => ({ sectionKey: t.key, act: t.act, status: "todo", script: null, assetId: null, durationMin: t.durationMin }));
-    const p = webinarProgress({ audience: "Busy moms", promise: "Drop 15 lbs in 90 days", mechanismName: "12-Minute Tuesday", desiredResult: "A body they like" }, sections, [], null);
+    const sections = SECTION_TEMPLATES.map((t) => ({ sectionKey: t.key, act: t.act, order: t.order, name: t.name, status: "todo", script: null, assetId: null, durationMin: t.durationMin }));
+    const p = buildChecks({ webinar: { audience: "Busy moms", coreProblem: "Starting over", promise: "Drop 15 lbs in 90 days", mechanismName: "12-Minute Tuesday", desiredResult: "A body they like" }, sections, beliefs: [], review: null });
     expect(p.steps.foundation).toBe(1);
     expect(nextStep(p.steps)).toBe("beliefs");
     expect(p.totalMinutes).toBeGreaterThan(60);
+  });
+  describe("the build check is read off the record, itemised, and no rating moves it", () => {
+    const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(" ");
+    const sections = SECTION_TEMPLATES.map((t) => ({ sectionKey: t.key, act: t.act, order: t.order, name: t.name, status: "drafted", script: words(t.durationMin * 130), assetId: null, durationMin: t.durationMin }));
+    const bare = ["vehicle", "internal", "external"].map((type) => ({ type, fromBelief: "from", toBelief: "to" }));
+    const beliefs = bare.map((b) => ({ ...b, proofId: "p1", storyAssetId: "s1", evidenceId: "e1" }));
+    const full = { audience: "Busy moms", coreProblem: "Starting over", promise: "Drop 15 lbs in 90 days", mechanismName: "12-Minute Tuesday", desiredResult: "A body they like", offerId: "o1" };
+    const mapped = [{ beliefBreak: "vehicle" }, { beliefBreak: "internal" }];
+    it("every check passes on a complete record, and each names what it read", () => {
+      const b = buildChecks({ webinar: full, sections, beliefs, components: mapped, review: null });
+      expect(b.must).toEqual([]);
+      // The template's own durations start the offer with 24% left, which is the one warning on an otherwise complete record
+      expect(b.summary).toBe(`${b.total - 1} of ${b.total} checks`);
+      expect(b.checks.map((c) => c.key)).toEqual(["foundation", "beliefs", "proofs", "stories", "citations", "sections", "offer", "stack", "runtime", "offerStart", "pace"]);
+      expect(b.checks.find((c) => c.key === "sections")!.detail).toBe("Every section has a script.");
+    });
+    it("what is missing is said by name: a section with key points only is not scripted, an unmapped component is counted", () => {
+      const partial = sections.map((s, i) => (i < 2 ? { ...s, script: null, keyPoints: "• a point" } : s));
+      const b = buildChecks({ webinar: { ...full, mechanismName: null, audience: "" }, sections: partial, beliefs: beliefs.slice(0, 2), components: [{ beliefBreak: "vehicle" }, { beliefBreak: "none" }], review: null });
+      const by = Object.fromEntries(b.checks.map((c) => [c.key, c]));
+      expect(by.foundation.detail).toBe("Missing: audience, named mechanism (or say why there is none).");
+      expect(by.beliefs.detail).toBe("No from/to pair yet for: external.");
+      expect(by.sections.label).toBe("All 20 sections scripted (18)");
+      expect(by.sections.detail).toContain("2 with key points only (Hook, Credibility / Origin); 0 not started.");
+      expect(by.stack.detail).toBe("1 of 2 components not tied to a belief break.");
+      // The third act has no pair and nothing wired, so the three presence checks name it too
+      expect(b.must.map((c) => c.key)).toEqual(["foundation", "beliefs", "proofs", "stories", "citations", "sections", "stack"]);
+      expect(by.proofs.detail).toBe("Act 3 has no proof.");
+      expect(b.scripted).toBe(18);
+    });
+    it("a session that deliberately names no mechanism passes foundation with its reason", () => {
+      const b = buildChecks({ webinar: { ...full, mechanismName: null, mechanismWaivedReason: "No instrument may be named at this event." }, sections, beliefs, components: mapped, review: null });
+      expect(b.checks[0].ok).toBe(true);
+      expect(b.checks[0].detail).toBe("No named mechanism, by choice: No instrument may be named at this event.");
+    });
+    it("eleven fives never make an incomplete webinar ready, and the decision says which checks are open", () => {
+      const all5 = Object.fromEntries(["promise", "audience", "vehicle", "internal", "external", "proof", "stories", "offer", "cta", "objections", "convert"].map((k) => [k, 5]));
+      const incomplete = buildChecks({ webinar: { ...full, offerId: null }, sections, beliefs, components: [], review: { verdict: "ready" } });
+      const d = readyDecision(readinessScore(all5), incomplete);
+      expect(d.ready).toBe(false);
+      expect(d.reasons).toEqual(["2 checks open: Offer linked; Stack mapped to belief breaks."]);
+      // The rating did not move a single check
+      const unrated = buildChecks({ webinar: { ...full, offerId: null }, sections, beliefs, components: [], review: null });
+      expect(unrated.checks).toEqual(incomplete.checks);
+      // And the record alone is not enough either: a complete record with a rating under 80 is not ready
+      const complete = buildChecks({ webinar: full, sections, beliefs, components: mapped, review: { verdict: "needs_work" } });
+      expect(readyDecision(readinessScore({ ...all5, proof: 2 }), complete)).toEqual({ ready: false, reasons: ["Your rating has Proof sufficiency at 2 or below."] });
+      expect(readyDecision(readinessScore(all5), complete).ready).toBe(true);
+      expect(readyDecision(null, complete).reasons).toEqual(["No readiness review saved yet."]);
+    });
+    it("a webinar with nothing wired to its acts is not ready, whatever the sliders say, and each act says what it lacks", () => {
+      // Four foundation fields, three from/to pairs, twenty scripted sections, an offer linked and mapped, eleven fives
+      const all5 = Object.fromEntries(["promise", "audience", "vehicle", "internal", "external", "proof", "stories", "offer", "cta", "objections", "convert"].map((k) => [k, 5]));
+      const b = buildChecks({ webinar: full, sections, beliefs: bare, components: mapped, review: { verdict: "ready" } });
+      expect(b.must.map((c) => c.key)).toEqual(["proofs", "stories", "citations"]);
+      expect(b.checks.find((c) => c.key === "citations")!.detail).toBe("Act 1 has no citation; Act 2 has no citation; Act 3 has no citation.");
+      expect(readyDecision(readinessScore(all5), b)).toEqual({ ready: false, reasons: ["3 checks open: Every act has a proof; Every act has a story; Every act has a citation."] });
+      // One act wired, two not: the detail names the two
+      const one = bare.map((x, i) => (i === 1 ? { ...x, proofId: "p1", storyAssetId: "s1", evidenceId: "e1" } : x));
+      const partial = buildChecks({ webinar: full, sections, beliefs: one, components: mapped, review: null });
+      expect(partial.checks.find((c) => c.key === "proofs")!.detail).toBe("Act 1 has no proof; Act 3 has no proof.");
+      // A typed proof counts only with its permission tick (or written before the tick existed); a picked proof only while approved
+      const typed = bare.map((x) => ({ ...x, proof: "Priya N.: 2 to 9 calls a week", proofChangedAt: "2026-09-01T00:00:00.000Z", proofPermissionAt: null, storyAssetId: "s1", evidenceId: "e1" }));
+      expect(buildChecks({ webinar: full, sections, beliefs: typed, components: mapped, review: null }).must.map((c) => c.key)).toEqual(["proofs"]);
+      expect(buildChecks({ webinar: full, sections, beliefs: typed.map((x) => ({ ...x, proofPermissionAt: "2026-09-02T00:00:00.000Z" })), components: mapped, review: null }).must).toEqual([]);
+      expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, approvedProofIds: ["other"], review: null }).checks.find((c) => c.key === "proofs")!.detail).toBe("Act 1 has no proof; Act 2 has no proof; Act 3 has no proof.");
+    });
+    it("the stack check is left out, not guessed, when the components were not loaded", () => {
+      const b = buildChecks({ webinar: full, sections, beliefs, review: null });
+      expect(b.checks.some((c) => c.key === "stack")).toBe(false);
+    });
+    it("the offer start is a cumulative clock: a warning under 25% of the session left, never a block", () => {
+      expect(offerStart(sections)).toEqual({ startMin: 58, totalMin: 76, remainingShare: 18 / 76 });
+      const b = buildChecks({ webinar: full, sections, beliefs, components: mapped, review: null });
+      const start = b.checks.find((c) => c.key === "offerStart")!;
+      expect(start.label).toBe("Offer starts at 0:58 of 76 min");
+      expect(start.ok).toBe(false);
+      expect(start.level).toBe("warn");
+      expect(start.detail).toBe("24% of the session remains for the offer, under the 25% it needs.");
+      expect(b.must).toEqual([]);
+    });
+    it("a script is measured against its slot at 130 words a minute: long past 1.3x, thin under 0.4x", () => {
+      expect(sectionPace({ script: words(390), durationMin: 3 })).toEqual({ words: 390, estimatedMin: 3, flag: null });
+      expect(sectionPace({ script: words(650), durationMin: 3 })).toEqual({ words: 650, estimatedMin: 5, flag: "long" });
+      expect(sectionPace({ script: words(130), durationMin: 8 })).toEqual({ words: 130, estimatedMin: 1, flag: "thin" });
+      expect(sectionPace({ script: "too short to count", durationMin: 8 }).flag).toBeNull();
+      const b = buildChecks({ webinar: full, sections: sections.map((s, i) => (i === 0 ? { ...s, script: words(650) } : s)), beliefs, components: mapped, review: null });
+      expect(b.checks.find((c) => c.key === "pace")!.detail).toBe("Written long: Hook.");
+    });
+    it("a review older than the record's last edit is stale", () => {
+      expect(reviewStale({ createdAt: "2026-09-15T10:00:00.000Z" }, "2026-09-16T10:00:00.000Z")).toBe(true);
+      expect(reviewStale({ createdAt: "2026-09-16T10:00:00.000Z" }, "2026-09-15T10:00:00.000Z")).toBe(false);
+      expect(reviewStale({ createdAt: "2026-09-16T10:00:00.000Z" }, null)).toBe(false);
+      expect(reviewStale(null, "2026-09-16T10:00:00.000Z")).toBe(false);
+    });
   });
   it("derives a deck from sections", () => {
     const slides = deckOutline(SECTION_TEMPLATES.map((t) => ({ order: t.order, act: t.act, name: t.name, keyPoints: t.exampleKeyPoints, script: t.exampleScript })));

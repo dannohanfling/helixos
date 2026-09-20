@@ -7,7 +7,8 @@ import { WEBINAR_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, freeTextProofUsable, readinessScore } from "@/lib/engine/webinar";
+import { ACTS, READINESS_DIMENSIONS, SECTION_TEMPLATES, freeTextProofUsable, readinessScore, readyDecision } from "@/lib/engine/webinar";
+import { buildFor } from "@/lib/queries/webinar";
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
@@ -49,8 +50,10 @@ export async function updateWebinarFoundationAction(formData: FormData): Promise
       desiredResult: opt(formData, "desiredResult"),
       promise: opt(formData, "promise"),
       mechanismName: opt(formData, "mechanismName"),
+      mechanismWaivedReason: opt(formData, "mechanismWaivedReason"),
       ctaType: str(formData, "ctaType") || "Book a call",
       status: "building",
+      updatedAt: nowIso(),
     })
     .where(eq(schema.webinars.id, id));
   refresh();
@@ -91,6 +94,7 @@ export async function updateWebinarBeliefsAction(formData: FormData): Promise<vo
       saved++;
     }
   }
+  await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
   refresh();
   redirect(`/webinars/${id}?step=script${saved ? `&toBank=${saved}` : ""}`);
 }
@@ -115,6 +119,7 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
       status: status ?? (script && script.length > 40 ? "drafted" : "todo"),
     })
     .where(and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)));
+  await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
   refresh();
   const next = str(formData, "next");
   redirect(`/webinars/${id}?step=script&section=${next || sectionKey}`);
@@ -185,6 +190,7 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
     .update(schema.webinarSections)
     .set({ script: stripped.text, status: "drafted", keyPoints: section?.keyPoints ?? tpl.exampleKeyPoints })
     .where(and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)));
+  await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
   refresh();
   redirect(`/webinars/${id}?step=script&section=${sectionKey}${note ? `&stripped=${encodeURIComponent(note)}` : ""}`);
 }
@@ -198,7 +204,7 @@ export async function linkOfferAction(formData: FormData): Promise<void> {
     const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, offerId), eq(schema.offers.userId, userId)) });
     if (!offer) return;
   }
-  await db.update(schema.webinars).set({ offerId, ctaType: str(formData, "ctaType") || "Book a call" }).where(eq(schema.webinars.id, id));
+  await db.update(schema.webinars).set({ offerId, ctaType: str(formData, "ctaType") || "Book a call", updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
   refresh();
   redirect(`/webinars/${id}?step=deck`);
 }
@@ -206,22 +212,29 @@ export async function linkOfferAction(formData: FormData): Promise<void> {
 export async function saveReadinessAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const id = str(formData, "id");
-  await own(id, userId);
+  const w = await own(id, userId);
   const ratings: Record<string, number> = {};
   for (const d of READINESS_DIMENSIONS) ratings[d.key] = Math.max(0, Math.min(5, num(formData, `r_${d.key}`)));
   const r = readinessScore(ratings);
   await db.insert(schema.readinessReviews).values({ id: newId(), webinarId: id, ratings, score: r.score, verdict: r.verdict, biggestGaps: opt(formData, "biggestGaps"), nextActions: opt(formData, "nextActions") });
-  if (r.verdict === "ready") await db.update(schema.webinars).set({ status: "ready" }).where(eq(schema.webinars.id, id));
+  // The rating alone never sets the status: ready is the record's must-checks passing and the rating passing, together.
+  const { build } = await buildFor(w);
+  const decision = readyDecision(r, build);
+  if (decision.ready && (w.status === "draft" || w.status === "building")) await db.update(schema.webinars).set({ status: "ready" }).where(eq(schema.webinars.id, id));
   refresh();
-  redirect(`/webinars/${id}?step=${r.verdict === "ready" ? "run" : "review"}`);
+  redirect(`/webinars/${id}?step=${decision.ready ? "run" : "review"}`);
 }
 
 export async function updateRunAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const id = str(formData, "id");
   const w = await own(id, userId);
-  const status = WEBINAR_STATUSES.find((s) => s === str(formData, "status")) ?? w.status;
+  const chosen = WEBINAR_STATUSES.find((s) => s === str(formData, "status")) ?? w.status;
   const scheduled = opt(formData, "scheduledAt");
+  // Ready or scheduled is refused while a must-check is open, and the Run step says which; the other fields still save.
+  const { build } = await buildFor(w);
+  const held = (chosen === "ready" || chosen === "scheduled") && chosen !== w.status && build.must.length > 0;
+  const status = held ? w.status : chosen;
   await db
     .update(schema.webinars)
     .set({
@@ -245,6 +258,7 @@ export async function updateRunAction(formData: FormData): Promise<void> {
     await award({ workspaceId, userId }, "bonus", 200, `Delivered webinar: ${w.title}`, `webinar:${id}`);
   }
   refresh();
+  if (held) redirect(`/webinars/${id}?step=run&held=${chosen}`);
 }
 
 export async function deleteWebinarAction(formData: FormData): Promise<void> {

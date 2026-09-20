@@ -92,20 +92,152 @@ export function readinessScore(ratings: Record<string, number>): { score: number
   return { score, verdict: score >= 80 && weakest.length === 0 ? "ready" : score >= 55 ? "needs_work" : "not_ready", weakest };
 }
 
-export type SectionLike = { sectionKey: string; act: ActKey; status: string; script: string | null; assetId: string | null; durationMin: number };
+export type SectionLike = { sectionKey: string; act: ActKey; order?: number; name?: string; status: string; script: string | null; assetId?: string | null; durationMin: number; keyPoints?: string | null };
+export type BuildWebinar = { audience?: string | null; coreProblem?: string | null; promise?: string | null; mechanismName?: string | null; mechanismWaivedReason?: string | null; desiredResult?: string | null; offerId?: string | null; updatedAt?: string | null };
+export type BuildCheck = { key: string; label: string; ok: boolean; level: "must" | "warn"; detail: string };
+export type BuildResult = {
+  checks: BuildCheck[];
+  /** The must-checks still open: while any is, the webinar is not ready whatever anyone rates it. */
+  must: BuildCheck[];
+  warn: BuildCheck[];
+  passed: number;
+  total: number;
+  /** "5 of 8 checks", the header's words; the open ones are named beside it. */
+  summary: string;
+  steps: Record<StepKey, number>;
+  scripted: number;
+  drafted: number;
+  totalMinutes: number;
+};
 
-export function webinarProgress(webinar: { audience?: string | null; promise?: string | null; mechanismName?: string | null; desiredResult?: string | null; offerId?: string | null }, sections: SectionLike[], beliefs: { type: string; fromBelief: string | null; toBelief: string | null }[], review: { verdict: string } | null) {
-  const foundation = [webinar.audience, webinar.promise, webinar.mechanismName, webinar.desiredResult].filter((v) => v && v.trim().length > 3).length / 4;
-  const beliefsDone = ["vehicle", "internal", "external"].filter((t) => beliefs.some((b) => b.type === t && b.fromBelief && b.toBelief)).length / 3;
-  const drafted = sections.filter((s) => s.status !== "todo" || (s.script && s.script.trim().length > 40)).length;
-  const script = sections.length ? drafted / sections.length : 0;
-  const offer = webinar.offerId ? 1 : 0;
-  const review1 = review ? (review.verdict === "ready" ? 1 : 0.5) : 0;
-  const steps: Record<StepKey, number> = { foundation, beliefs: beliefsDone, script, offer, deck: script >= 0.8 ? 1 : script, review: review1, run: 0 };
-  const overall = Math.round(((foundation + beliefsDone + script * 3 + offer + review1) / 7) * 100);
-  const totalMinutes = sections.reduce((a, s) => a + s.durationMin, 0);
-  return { steps, overall, drafted, totalMinutes };
+/** The pace a presenter speaks at, for turning a script's length into minutes. */
+export const WORDS_PER_MINUTE = 130;
+/** Written long past this multiple of the slot; thin below the lower one. */
+export const PACE_LONG = 1.3;
+export const PACE_THIN = 0.4;
+/** The offer should start with at least this share of the session left. */
+export const OFFER_REMAINING_MIN = 0.25;
+const SCRIPT_MIN_CHARS = 40;
+const filled = (v: string | null | undefined): boolean => Boolean(v && v.trim().length > 3);
+export const hasScript = (s: { script: string | null }): boolean => Boolean(s.script && s.script.trim().length > SCRIPT_MIN_CHARS);
+export const wordCount = (text: string | null | undefined): number => (text ?? "").trim().split(/\s+/).filter(Boolean).length;
+
+/** A section's script against its slot: how many minutes the words take, and whether that is long or thin for the slot. */
+export function sectionPace(s: { script: string | null; durationMin: number }): { words: number; estimatedMin: number; flag: "long" | "thin" | null } {
+  const words = wordCount(s.script);
+  const estimatedMin = Math.round((words / WORDS_PER_MINUTE) * 10) / 10;
+  if (!hasScript(s)) return { words, estimatedMin, flag: null };
+  const flag = estimatedMin > s.durationMin * PACE_LONG ? "long" : estimatedMin < s.durationMin * PACE_THIN ? "thin" : null;
+  return { words, estimatedMin, flag };
 }
+
+/** Where the closing frame begins, as minutes into the session and the share of it left. Null with no closing section. */
+export function offerStart(sections: { act: ActKey; order?: number; durationMin: number }[]): { startMin: number; totalMin: number; remainingShare: number } | null {
+  const ordered = sections.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const totalMin = ordered.reduce((a, s) => a + s.durationMin, 0);
+  let startMin = 0;
+  for (const s of ordered) {
+    if (s.act === "closing") return { startMin, totalMin, remainingShare: totalMin ? (totalMin - startMin) / totalMin : 0 };
+    startMin += s.durationMin;
+  }
+  return null;
+}
+
+export const clock = (min: number): string => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")}`;
+
+/**
+ * The build check: every line is read off the record, named, and says what is missing. Nothing in it is a rating, and no
+ * rating moves it. The must-checks decide whether "ready" can be set; the warnings only say something worth a look.
+ * `components` undefined means the stack was not loaded (the list and Today), so that check is left out rather than guessed.
+ */
+export type BuildBelief = { type: string; fromBelief: string | null; toBelief: string | null; proofId?: string | null; proof?: string | null; proofPermissionAt?: string | null; proofChangedAt?: string | null; storyAssetId?: string | null; evidenceId?: string | null };
+/** The acts as the coach reads them on the page. */
+export const ACT_NUMBER: Record<string, string> = { vehicle: "Act 1", internal: "Act 2", external: "Act 3" };
+
+/**
+ * What is wired to each act: a proof (an approved bank row, or a typed one with its permission tick), a story and a citation.
+ * Presence is a check; the quality of each stays the coach's own rating. `approvedProofIds`, when given, means a picked proof
+ * that has since lost its approval no longer counts.
+ */
+export function actPresence(beliefs: BuildBelief[], approvedProofIds?: string[]): { key: "proofs" | "stories" | "citations"; label: string; missing: string[] }[] {
+  const acts = ["vehicle", "internal", "external"];
+  const has = {
+    proofs: (b: BuildBelief | undefined) => Boolean(b && ((b.proofId && (!approvedProofIds || approvedProofIds.includes(b.proofId))) || freeTextProofUsable({ proof: b.proof ?? null, proofPermissionAt: b.proofPermissionAt ?? null, proofChangedAt: b.proofChangedAt ?? null }))),
+    stories: (b: BuildBelief | undefined) => Boolean(b?.storyAssetId),
+    citations: (b: BuildBelief | undefined) => Boolean(b?.evidenceId),
+  };
+  const word = { proofs: "proof", stories: "story", citations: "citation" } as const;
+  return (["proofs", "stories", "citations"] as const).map((key) => ({
+    key,
+    label: `Every act has a ${word[key]}`,
+    missing: acts.filter((t) => !has[key](beliefs.find((b) => b.type === t))).map((t) => `${ACT_NUMBER[t]} has no ${word[key]}`),
+  }));
+}
+
+export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; approvedProofIds?: string[]; review: { verdict: string } | null }): BuildResult {
+  const { webinar: w, sections, beliefs, components, review } = input;
+  const checks: BuildCheck[] = [];
+  const missingFoundation = [
+    !filled(w.audience) ? "audience" : "",
+    !filled(w.coreProblem) ? "core problem" : "",
+    !filled(w.promise) ? "promise" : "",
+    !filled(w.desiredResult) ? "desired result" : "",
+    !filled(w.mechanismName) && !filled(w.mechanismWaivedReason) ? "named mechanism (or say why there is none)" : "",
+  ].filter(Boolean);
+  const foundationParts = 5 - missingFoundation.length;
+  checks.push({ key: "foundation", label: "Foundation filled", ok: !missingFoundation.length, level: "must", detail: missingFoundation.length ? `Missing: ${missingFoundation.join(", ")}.` : filled(w.mechanismName) ? "Audience, problem, promise, result and mechanism are all there." : `No named mechanism, by choice: ${w.mechanismWaivedReason?.trim()}` });
+  const missingBeliefs = ["vehicle", "internal", "external"].filter((t) => !beliefs.some((b) => b.type === t && b.fromBelief && b.toBelief));
+  checks.push({ key: "beliefs", label: "Three belief shifts written", ok: !missingBeliefs.length, level: "must", detail: missingBeliefs.length ? `No from/to pair yet for: ${missingBeliefs.join(", ")}.` : "From and to written for all three acts." });
+  // The three things a webinar most needs, per act, read off what is wired rather than asked of a slider.
+  for (const p of actPresence(beliefs, input.approvedProofIds)) checks.push({ key: p.key, label: p.label, ok: !p.missing.length, level: "must", detail: p.missing.length ? `${p.missing.join("; ")}.` : "All three acts." });
+  const scriptedRows = sections.filter(hasScript);
+  const pointsOnly = sections.filter((s) => !hasScript(s) && (s.status !== "todo" || (s.keyPoints ?? "").trim()));
+  const untouched = sections.length - scriptedRows.length - pointsOnly.length;
+  checks.push({ key: "sections", label: `All ${sections.length} sections scripted (${scriptedRows.length})`, ok: sections.length > 0 && scriptedRows.length === sections.length, level: "must", detail: scriptedRows.length === sections.length ? "Every section has a script." : `${pointsOnly.length} with key points only${pointsOnly.length ? ` (${pointsOnly.map((s) => s.name ?? s.sectionKey).slice(0, 4).join(", ")}${pointsOnly.length > 4 ? ", …" : ""})` : ""}; ${untouched} not started.` });
+  checks.push({ key: "offer", label: "Offer linked", ok: Boolean(w.offerId), level: "must", detail: w.offerId ? "The closing frame has an offer to present." : "Pick an offer on the Offer step; the stack and the price come from it." });
+  if (components !== undefined) {
+    const unmapped = components.filter((c) => c.beliefBreak === "none").length;
+    checks.push({ key: "stack", label: "Stack mapped to belief breaks", ok: components.length > 0 && unmapped === 0, level: "must", detail: !w.offerId ? "No offer linked yet." : !components.length ? "The offer has no stack components." : unmapped ? `${unmapped} of ${components.length} components not tied to a belief break.` : `All ${components.length} components tied to a belief break.` });
+  }
+  const totalMinutes = sections.reduce((a, s) => a + s.durationMin, 0);
+  checks.push({ key: "runtime", label: `Runtime between 55 and 95 min (${totalMinutes})`, ok: totalMinutes >= 55 && totalMinutes <= 95, level: "must", detail: totalMinutes < 55 ? "Short for a webinar that teaches and then offers." : totalMinutes > 95 ? "Long: the end is what gets cut when a session overruns." : "In range." });
+  const start = offerStart(sections);
+  checks.push({ key: "offerStart", label: start ? `Offer starts at ${clock(start.startMin)} of ${start.totalMin} min` : "Offer start time", ok: Boolean(start && start.remainingShare >= OFFER_REMAINING_MIN), level: "warn", detail: !start ? "No closing-frame section to start the offer from." : `${Math.round(start.remainingShare * 100)}% of the session remains for the offer${start.remainingShare < OFFER_REMAINING_MIN ? ", under the 25% it needs" : ""}.` });
+  const paced = sections.map((s) => ({ s, p: sectionPace(s) })).filter((x) => x.p.flag);
+  const long = paced.filter((x) => x.p.flag === "long").map((x) => x.s.name ?? x.s.sectionKey);
+  const thin = paced.filter((x) => x.p.flag === "thin").map((x) => x.s.name ?? x.s.sectionKey);
+  checks.push({ key: "pace", label: "Scripts fit their slots", ok: !paced.length, level: "warn", detail: !scriptedRows.length ? "Nothing scripted yet to measure." : !paced.length ? `Every script is within its slot at ${WORDS_PER_MINUTE} words a minute.` : [long.length ? `Written long: ${long.join(", ")}.` : "", thin.length ? `Thin for the slot: ${thin.join(", ")}.` : ""].filter(Boolean).join(" ") });
+  const must = checks.filter((c) => c.level === "must" && !c.ok);
+  const warn = checks.filter((c) => c.level === "warn" && !c.ok);
+  const passed = checks.filter((c) => c.ok).length;
+  const script = sections.length ? scriptedRows.length / sections.length : 0;
+  const drafted = sections.filter((s) => s.status !== "todo" || hasScript(s)).length;
+  const steps: Record<StepKey, number> = {
+    foundation: foundationParts / 5,
+    beliefs: (3 - missingBeliefs.length) / 3,
+    script,
+    offer: w.offerId ? 1 : 0,
+    deck: script >= 0.8 ? 1 : script,
+    review: review ? (review.verdict === "ready" && !must.length ? 1 : 0.5) : 0,
+    run: 0,
+  };
+  return { checks, must, warn, passed, total: checks.length, summary: `${passed} of ${checks.length} checks`, steps, scripted: scriptedRows.length, drafted, totalMinutes };
+}
+
+/** Ready is the record and the rating together: every must-check passing, and the coach's own rating passing too. Never one alone. */
+export function readyDecision(rating: { verdict: "ready" | "needs_work" | "not_ready"; weakest: string[] } | null, build: BuildResult): { ready: boolean; reasons: string[] } {
+  const reasons: string[] = [];
+  if (!rating) reasons.push("No readiness review saved yet.");
+  else if (rating.verdict !== "ready") reasons.push(rating.weakest.length ? `Your rating has ${rating.weakest.join(", ")} at 2 or below.` : "Your rating is under 80%.");
+  if (build.must.length) reasons.push(`${build.must.length} ${build.must.length === 1 ? "check" : "checks"} open: ${build.must.map((c) => c.label).join("; ")}.`);
+  return { ready: !reasons.length, reasons };
+}
+
+/** A review saved before the record's last content edit is stale: it graded something that has since changed. */
+export const reviewStale = (review: { createdAt: string } | null, updatedAt: string | null | undefined): boolean => Boolean(review && updatedAt && review.createdAt < updatedAt);
+
+/** The three readiness dimensions the record could grade itself but which are still the coach's own rating in this build. */
+export const SELF_RATED_FOR_NOW = ["proof", "stories", "offer"] as const;
 
 export function nextStep(progress: Record<StepKey, number>): StepKey {
   for (const s of STEPS) if (progress[s.key] < 1 && s.key !== "run") return s.key;
