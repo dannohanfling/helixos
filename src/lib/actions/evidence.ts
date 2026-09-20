@@ -69,7 +69,7 @@ export async function searchEvidenceAction(formData: FormData): Promise<void> {
   if (!terms.length) back({ ...carry, error: "Give it at least one search term." });
   const year = Number(yearRaw) || undefined;
   const fieldId = fieldIdFor(field) ?? undefined;
-  const askedFor = { claim, terms, author: author || undefined, year, field: field || undefined, fieldId };
+  const askedFor: schema.EvidenceAskedFor = { claim, terms, author: author || undefined, year, field: field || undefined, fieldId };
   // A search restricted to a field is a different search: it keys the cache with the field.
   const key = queryKey(fieldId ? [...terms, `field:${fieldId}`] : terms);
   const day = utcDay();
@@ -77,6 +77,11 @@ export async function searchEvidenceAction(formData: FormData): Promise<void> {
   const cached = await db.query.evidenceSearches.findFirst({ where: and(eq(schema.evidenceSearches.queryKey, key), eq(schema.evidenceSearches.fromCache, false), gte(schema.evidenceSearches.createdAt, since)), orderBy: desc(schema.evidenceSearches.createdAt) });
   let results = cached?.results ?? [];
   let fromCache = Boolean(cached);
+  // A cached search carries whether its field filter applied; a live one says so on the response.
+  if (cached && fieldId && !cached.askedFor.fieldId) {
+    askedFor.fieldId = undefined;
+    askedFor.fieldRefused = true;
+  }
   let credits: { limit: number | null; remaining: number | null } = { limit: null, remaining: null };
   if (!cached) {
     // Two counters that must agree: this client's day, and the whole pool's day (one key for every client), with what OpenAlex last reported.
@@ -90,6 +95,10 @@ export async function searchEvidenceAction(formData: FormData): Promise<void> {
     results = r.data;
     credits = r.quota;
     fromCache = false;
+    if (fieldId && !r.filtered) {
+      askedFor.fieldId = undefined;
+      askedFor.fieldRefused = true;
+    }
   }
   const id = newId();
   await db.insert(schema.evidenceSearches).values({ id, userId, day, queryKey: key, query: terms.join(", "), claim, askedFor, results, fromCache, creditsLimit: credits.limit, creditsRemaining: credits.remaining });

@@ -5,7 +5,9 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { inviteCode } from "@/lib/ids";
+import { redirect } from "next/navigation";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { brandKitProblems, normaliseHex } from "@/lib/engine/subject";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 
 /** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
@@ -80,3 +82,31 @@ export async function rotateInviteAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/** The workspace's brand kit: refused with each problem named when a pair cannot read on a slide or a colour is one the brand bans. */
+export async function saveBrandKitAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const kit = {
+    name: str(formData, "name"),
+    ground: normaliseHex(str(formData, "ground")),
+    ink: normaliseHex(str(formData, "ink")),
+    accent: normaliseHex(str(formData, "accent")),
+    muted: normaliseHex(str(formData, "muted")),
+    surface: normaliseHex(str(formData, "surface")),
+    inverseGround: normaliseHex(str(formData, "inverseGround")) || null,
+    inverseInk: normaliseHex(str(formData, "inverseInk")) || null,
+    displayFont: str(formData, "displayFont"),
+    bodyFont: str(formData, "bodyFont"),
+    quoteFont: opt(formData, "quoteFont"),
+    fontFallback: str(formData, "fontFallback") || "Arial",
+    bannedColors: str(formData, "bannedColors").split(/[,\s]+/).map(normaliseHex).filter(Boolean),
+    notes: opt(formData, "notes"),
+  };
+  const problems = brandKitProblems(kit);
+  // Refused with the problems named, and what was typed comes back with it: a refusal never empties the form.
+  if (problems.length) redirect(`/settings?brand=${encodeURIComponent(problems.join(" "))}&draft=${encodeURIComponent(JSON.stringify(kit))}#brand-kit`);
+  const existing = await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, coach.workspace.id) });
+  if (existing) await db.update(schema.brandKits).set(kit).where(eq(schema.brandKits.id, existing.id));
+  else await db.insert(schema.brandKits).values({ id: newId(), workspaceId: coach.workspace.id, ...kit });
+  refresh();
+  redirect("/settings?brand=saved#brand-kit");
+}

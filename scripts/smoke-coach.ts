@@ -60,6 +60,20 @@ async function main() {
 
     // Roster → detail
     await login(page, "coach");
+    // The brand kit: a pair that cannot read on a slide is refused here with the pair named; the Turas kit saves
+    await page.goto(`${base}/settings`);
+    await page.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
+    const kit: Record<string, string> = { name: "Turas — True North", ground: "FAF8F5", ink: "9CA3AF", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: "000000" };
+    for (const [k, v] of Object.entries(kit)) await page.fill(`[data-testid="brand-form"] input[name="${k}"]`, v);
+    await submit(page, '[data-testid="brand-form"] button[type="submit"]');
+    const refused = await page.locator('[data-testid="brand-refused"]').innerText();
+    if (!/ink on ground is 2\.4:1; it needs 4\.5:1/.test(refused)) throw new Error(`the kit is refused with the pair named, got "${refused}"`);
+    await page.fill('[data-testid="brand-form"] input[name="ink"]', "6E6256");
+    await submit(page, '[data-testid="brand-form"] button[type="submit"]');
+    await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
+    if ((await page.locator('[data-testid="brand-form"] input[name="ink"]').inputValue()) !== "6E6256") throw new Error("the saved kit is read back");
+    await expectText(page, "ink on ground", "the contrast is shown beside the kit");
+    console.log("✓ brand kit: ash grey on cream refused with the ratio named; the Turas kit saved and read back");
     await page.goto(`${base}/coach`);
     await page.locator('[data-testid="client-link"]', { hasText: "Maya" }).first().click();
     await page.waitForURL(new RegExp(`/coach/${mm.id}$`));

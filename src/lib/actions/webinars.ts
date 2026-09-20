@@ -8,7 +8,8 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { ACTS, DERIVED_DIMENSIONS, READINESS_DIMENSIONS, SECTION_TEMPLATES, applyOverride, derivedGrades, freeTextProofUsable, readinessScore, readyDecision, type Override } from "@/lib/engine/webinar";
-import { buildFor } from "@/lib/queries/webinar";
+import { buildFor, presenterOf } from "@/lib/queries/webinar";
+import { fillRuntime } from "@/lib/engine/subject";
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
@@ -51,6 +52,7 @@ export async function updateWebinarFoundationAction(formData: FormData): Promise
       promise: opt(formData, "promise"),
       mechanismName: opt(formData, "mechanismName"),
       mechanismWaivedReason: opt(formData, "mechanismWaivedReason"),
+      presenter: opt(formData, "presenter"),
       ctaType: str(formData, "ctaType") || "Book a call",
       status: "building",
       updatedAt: nowIso(),
@@ -134,8 +136,14 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   const w = await own(id, userId);
   const tpl = SECTION_TEMPLATES.find((t) => t.key === sectionKey);
   if (!tpl) return;
-  const section = await db.query.webinarSections.findFirst({ where: and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)) });
+  const allSections = await db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, id) });
+  const section = allSections.find((s) => s.sectionKey === sectionKey);
   const asset = await assetFor(workspaceId, userId, section?.assetId);
+  // Numbers the record knows are never left to the model: the session's runtime and this section's slot come from the sections.
+  const runtime = allSections.reduce((a, s) => a + s.durationMin, 0);
+  const openingMinutes = allSections.filter((s) => s.act === "opening").reduce((a, s) => a + s.durationMin, 0);
+  const owner = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { name: true } });
+  const presenter = presenterOf(w, owner?.name ?? "");
   const beliefs = await db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) });
   const act = ACTS.find((a) => a.key === tpl.act)!;
   const belief = beliefs.find((b) => b.type === tpl.act);
@@ -156,9 +164,11 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   let text: string | null = null;
   if (str(formData, "mode") !== "example") {
     text = await draft(
-      `You write webinar scripts for coaches using the Perfect Webinar structure (Opening Frame, Vehicle, Internal, External, Closing Frame). Output only the spoken script for one section, 120 to 260 words, no headings.`,
+      `You write webinar scripts using the Perfect Webinar structure (Opening Frame, Vehicle, Internal, External, Closing Frame). Output only the spoken script for one section, 120 to 260 words, no headings. The script is spoken by the presenter named below, in their first person; never introduce anyone else, and never state a credential, a number of years or a statistic that is not in the material given.`,
       [
         `Webinar: ${w.title}`,
+        `Presenter: ${presenter}. Write as ${presenter}.`,
+        `Session runtime: ${runtime} minutes in total; this section has ${section?.durationMin ?? tpl.durationMin} minutes.`,
         `Audience: ${w.audience ?? "(not set)"}`,
         `Core problem: ${w.coreProblem ?? "(not set)"}`,
         `Promise: ${w.promise ?? "(not set)"}`,
@@ -169,7 +179,7 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
         studyLine,
         storyLine,
         `Act: ${act.name}. Purpose: ${act.purpose}`,
-        `Section: ${tpl.name}. Coaching: ${tpl.prompt}`,
+        `Section: ${tpl.name}. Coaching: ${fillRuntime(tpl.prompt, { runtime, openingMinutes })}`,
         asset ? `Use this ${asset.type} from the library, adapted to the audience:\n${asset.body}` : "",
         section?.keyPoints ? `Key points the coach wants covered:\n${section.keyPoints}` : "",
         `Here is an example of this section from a different webinar, for structure only (do not copy its facts):\n${tpl.exampleScript}`,
@@ -181,7 +191,7 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
     );
   }
   if (!text) {
-    const swap = (s: string) => s.replace(/Synchronized Journey( Framework)?/g, w.mechanismName ?? "[your mechanism]").replace(/75 minutes/g, "60 minutes");
+    const swap = (s: string) => s.replace(/Synchronized Journey( Framework)?/g, w.mechanismName ?? "[your mechanism]").replace(/75 minutes/g, `${runtime} minutes`);
     text = `${swap(tpl.exampleScript)}\n\n[Example from The Leaky Webinar. Rewrite in your words: your audience is "${w.audience ?? "…"}", your promise is "${w.promise ?? "…"}".]`;
   }
   // A fabricated statistic the model wrote comes out, and the page says what went and why. The coach's own words are never edited here.

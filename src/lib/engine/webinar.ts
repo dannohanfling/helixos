@@ -1,5 +1,6 @@
 /** The Perfect Webinar structure as HelixOS teaches it: 5 acts, 20 sections, 3 belief breaks. */
 
+import { nameMismatch } from "./subject";
 import acts from "@/data/seed/webinar/acts.json";
 import example from "@/data/seed/webinar/sections_example.json";
 import stages from "@/data/seed/webinar/wizard_stages.json";
@@ -13,7 +14,7 @@ export const ACTS: Act[] = (acts as Act[]).slice().sort((a, b) => a.order - b.or
 export type SectionTemplate = { key: string; order: number; act: ActKey; name: string; type: string; prompt: string; assetType: "story" | "analogy" | "objection" | "belief" | null; durationMin: number; exampleScript: string; exampleKeyPoints: string; exampleTransition: string | null };
 
 const PROMPTS: Record<string, { prompt: string; asset: SectionTemplate["assetType"]; minutes: number }> = {
-  Hook: { prompt: "Open a loop they need to close. One sentence that names the real problem, then the promise for the next 60 minutes. No teaching yet.", asset: null, minutes: 3 },
+  Hook: { prompt: "Open a loop they need to close. One sentence that names the real problem, then the promise for the next {runtime} minutes. No teaching yet.", asset: null, minutes: 3 },
   "Credibility / Origin": { prompt: "One concrete reason to trust you, told as a moment, not a résumé. Pick an origin story from the bank or write your own.", asset: "story", minutes: 4 },
   "Problem Frame": { prompt: "Name the enemy. Why the old way is structurally broken. An analogy makes it land.", asset: "analogy", minutes: 5 },
   "Opportunity Frame": { prompt: "Reframe what becomes possible once the enemy is beaten. Data, a contrast, or a story.", asset: "story", minutes: 4 },
@@ -178,7 +179,7 @@ export function actPresence(beliefs: BuildBelief[], known?: KnownRefs): { key: "
   }));
 }
 
-export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; known?: KnownRefs; review: { verdict: string } | null }): BuildResult {
+export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLike[]; beliefs: BuildBelief[]; components?: { beliefBreak: string }[]; known?: KnownRefs; presenter?: string; review: { verdict: string } | null }): BuildResult {
   const { webinar: w, sections, beliefs, components, review } = input;
   const checks: BuildCheck[] = [];
   const missingFoundation = [
@@ -213,6 +214,11 @@ export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLik
   const long = paced.filter((x) => x.p.flag === "long").map((x) => x.s.name ?? x.s.sectionKey);
   const thin = paced.filter((x) => x.p.flag === "thin").map((x) => x.s.name ?? x.s.sectionKey);
   checks.push({ key: "pace", label: "Scripts fit their slots", ok: !paced.length, level: "warn", detail: !scriptedRows.length ? "Nothing scripted yet to measure." : !paced.length ? `Every script is within its slot at ${WORDS_PER_MINUTE} words a minute.` : [long.length ? `Written long: ${long.join(", ")}.` : "", thin.length ? `Thin for the slot: ${thin.join(", ")}.` : ""].filter(Boolean).join(" ") });
+  // A script that introduces someone other than the presenter: the wrong name survived a review, a build check and an export once.
+  if (input.presenter) {
+    const wrong = sections.map((s) => ({ s, m: nameMismatch(s.script, input.presenter!) })).filter((x) => x.m);
+    checks.push({ key: "presenterName", label: "Scripts speak as the presenter", ok: !wrong.length, level: "warn", detail: wrong.length ? wrong.map((x) => `${x.s.name ?? x.s.sectionKey} says "I'm ${x.m!.found}"; the presenter is ${x.m!.presenter}.`).join(" ") : `No script introduces anyone but ${input.presenter}.` });
+  }
   const must = checks.filter((c) => c.level === "must" && !c.ok);
   const warn = checks.filter((c) => c.level === "warn" && !c.ok);
   const passed = checks.filter((c) => c.ok).length;

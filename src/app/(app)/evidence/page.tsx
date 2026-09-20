@@ -91,7 +91,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
           {search ? (
             <Card title={`Results for “${search.askedFor.claim || search.query}”`} action={search.fromCache ? <Badge tone="neutral">from this week&apos;s cache</Badge> : null}>
               <p className="mb-2 text-xs text-ink-3">
-                Terms: {search.query}.{search.askedFor.fieldId ? ` Within ${search.askedFor.field}.` : ""} Most relevant to the terms first; the citation count is beside each. A flag means look closer, not no.
+                Terms: {search.query}.{search.askedFor.fieldId ? ` Within ${search.askedFor.field}.` : search.askedFor.fieldRefused ? <span data-testid="field-refused"> The catalogue refused the field filter ({search.askedFor.field}) this time, so these are from every field.</span> : ""} Most relevant to the terms first; the citation count is beside each. A flag means look closer, not no.
               </p>
               {search.results.length && allFlagged(search.askedFor, search.results) ? (
                 <p className="mb-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="no-match">

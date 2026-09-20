@@ -19,7 +19,7 @@ export type Snapshot = {
   clientsDueCheckin?: number;
   webinarInProgress?: { id: string; title: string; step: string; stepLabel: string } | null;
   /** A webinar marked ready or scheduled whose build checks have since broken; the note names them. */
-  webinarBroken?: { id: string; title: string; status: string; note: string } | null;
+  webinarBroken?: { id: string; title: string; status: string; note: string; daysAway?: number | null } | null;
 };
 
 export type Action = {
@@ -34,6 +34,18 @@ export type Action = {
 
 export function nextBestActions(s: Snapshot): Action[] {
   const out: Action[] = [];
+  // A stale event within seven days outranks the day's recurring items: the others come back tomorrow, the event does not.
+  const brokenAction: Action | null = s.webinarBroken
+    ? {
+        key: "webinar-broken",
+        title: `Webinar: ${s.webinarBroken.title} is marked ${s.webinarBroken.status}, and ${s.webinarBroken.note.replace(/ since it was marked \w+/, "")}`,
+        why: "The status stays where you set it; the checks underneath it don't.",
+        href: `/webinars/${s.webinarBroken.id}?step=review`,
+        cta: "See what broke",
+        tone: "primary",
+      }
+    : null;
+  const brokenSoon = Boolean(brokenAction) && s.webinarBroken?.daysAway != null && s.webinarBroken.daysAway >= 0 && s.webinarBroken.daysAway <= 7;
   if (!s.morningDone) {
     out.push({
       key: "checkin",
@@ -55,6 +67,7 @@ export function nextBestActions(s: Snapshot): Action[] {
       tone: "warning",
     });
   }
+  if (brokenAction && brokenSoon) out.push(brokenAction);
   if (s.pendingRevision > 0) {
     out.push({
       key: "revision",
@@ -117,16 +130,7 @@ export function nextBestActions(s: Snapshot): Action[] {
       tone: "primary",
     });
   }
-  if (s.webinarBroken) {
-    out.push({
-      key: "webinar-broken",
-      title: `Webinar: ${s.webinarBroken.title} is marked ${s.webinarBroken.status}, and ${s.webinarBroken.note.replace(/ since it was marked \w+/, "")}`,
-      why: "The status stays where you set it; the checks underneath it don't.",
-      href: `/webinars/${s.webinarBroken.id}?step=review`,
-      cta: "See what broke",
-      tone: "primary",
-    });
-  }
+  if (brokenAction && !brokenSoon) out.push(brokenAction);
   if (s.webinarInProgress) {
     out.push({
       key: "webinar",

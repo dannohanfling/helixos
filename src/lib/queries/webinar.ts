@@ -3,62 +3,43 @@ import { db, schema } from "@/db";
 import { actPresence, buildChecks, type BuildResult, type KnownRefs } from "@/lib/engine/webinar";
 import { resolveSections, type WebinarContext } from "@/lib/engine/webinar-context";
 import type { Viewer } from "@/lib/auth";
-import { assetsFor } from "@/lib/queries/library";
-import { citableEvidence } from "@/lib/queries/evidence";
-import { essenceFor } from "@/lib/queries/essence";
+import { subjectFor } from "@/lib/queries/subject";
 
-/**
- * The ids a belief may point at and still count: approved proofs, story assets in scope plus the Essence's own stories (the
- * picker's "essence:<n>" values, indexed the way the picker indexes them), and citable studies ("shared:<id>" for the shelf).
- */
+/** Every id that still resolves for the workspace owner: the subject's known set, for callers with no viewer in hand. */
 export async function knownFor(userId: string, workspaceId: string): Promise<KnownRefs> {
-  const [proofs, stories, citable, essence, offers] = await Promise.all([
-    db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")), columns: { id: true } }),
-    assetsFor(workspaceId, userId, "story"),
-    citableEvidence(userId),
-    essenceFor(workspaceId, userId),
-    db.query.offers.findMany({ where: eq(schema.offers.userId, userId), columns: { id: true } }),
-  ]);
-  const own = ((essence.representative_stories?.stories as { name?: string; summary?: string }[] | undefined) ?? []).filter((st) => st.name || st.summary);
-  return {
-    proofIds: proofs.map((p) => p.id),
-    storyIds: [...stories.map((s) => s.id), ...own.map((_, i) => `essence:${i}`)],
-    evidenceIds: citable.map((e) => (e.source === "shared" ? `shared:${e.id}` : e.id)),
-    offerIds: offers.map((o) => o.id),
-  };
+  return (await subjectFor({ userId, workspaceId, name: "" })).known;
 }
 
-/** The build check for one webinar, read off the record: sections, beliefs, the linked offer's stack, what is still wired, and the latest review. */
+/** Who presents this webinar: the presenter field, else the subject's own name. */
+export const presenterOf = (w: { presenter: string | null }, subjectName: string): string => w.presenter?.trim() || subjectName;
+
 export type DerivedInput = { proofs: number; stories: number; offer: { linked: boolean; components: number; mapped: number; price: number } };
 
 export async function buildFor(w: schema.Webinar): Promise<{ build: BuildResult; review: schema.ReadinessReview | null; derived: DerivedInput }> {
-  const [sections, beliefs, components, review, known, offer] = await Promise.all([
+  const [sections, beliefs, components, review, owner] = await Promise.all([
     db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, w.id), orderBy: asc(schema.webinarSections.order) }),
     db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, w.id) }),
     w.offerId ? db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, w.offerId) }) : Promise.resolve([]),
     db.query.readinessReviews.findFirst({ where: and(eq(schema.readinessReviews.webinarId, w.id)), orderBy: desc(schema.readinessReviews.createdAt) }),
-    knownFor(w.userId, w.workspaceId),
-    w.offerId ? db.query.offers.findFirst({ where: and(eq(schema.offers.id, w.offerId), eq(schema.offers.userId, w.userId)) }) : Promise.resolve(undefined),
+    db.query.users.findFirst({ where: eq(schema.users.id, w.userId), columns: { name: true } }),
   ]);
-  const presence = actPresence(beliefs, known);
+  const subject = await subjectFor({ userId: w.userId, workspaceId: w.workspaceId, name: owner?.name ?? "" });
+  const offer = w.offerId ? subject.offers.find((o) => o.id === w.offerId) : undefined;
+  const presence = actPresence(beliefs, subject.known);
   const count = (key: "proofs" | "stories") => 3 - (presence.find((p) => p.key === key)?.missing.length ?? 3);
   const derived: DerivedInput = { proofs: count("proofs"), stories: count("stories"), offer: { linked: Boolean(offer), components: components.length, mapped: components.filter((c) => c.beliefBreak !== "none").length, price: offer?.price ?? 0 } };
-  return { build: buildChecks({ webinar: w, sections, beliefs, components, known, review: review ?? null }), review: review ?? null, derived };
+  return { build: buildChecks({ webinar: w, sections, beliefs, components, known: subject.known, presenter: presenterOf(w, subject.name), review: review ?? null }), review: review ?? null, derived };
 }
 
 /** Everything wired to every section of one webinar, in running order: the run sheet, the deck and the grades read this. */
 export async function contextFor(v: Viewer, w: schema.Webinar): Promise<WebinarContext> {
-  const [sections, beliefs, proofs, assets, citable, essence, offer] = await Promise.all([
+  const [sections, beliefs, subject] = await Promise.all([
     db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, w.id), orderBy: asc(schema.webinarSections.order) }),
     db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, w.id) }),
-    db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
-    assetsFor(v.workspace.id, v.user.id),
-    citableEvidence(v.user.id),
-    essenceFor(v.workspace.id, v.user.id),
-    w.offerId ? db.query.offers.findFirst({ where: and(eq(schema.offers.id, w.offerId), eq(schema.offers.userId, v.user.id)) }) : Promise.resolve(undefined),
+    subjectFor({ userId: v.user.id, workspaceId: v.workspace.id, name: v.user.name }),
   ]);
+  const offer = w.offerId ? subject.offers.find((o) => o.id === w.offerId) : undefined;
   const components = offer ? await db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, offer.id), orderBy: asc(schema.offerComponents.order) }) : [];
-  const essenceStories = ((essence.representative_stories?.stories as { name: string; summary: string; when_to_use?: string }[] | undefined) ?? []).filter((st) => st.name || st.summary);
-  // The presenter is the workspace owner until the presenter field lands (C): the subject's default, never someone else's name.
-  return resolveSections({ webinar: w, presenter: v.user.name, sections, beliefs, proofs, assets, essenceStories, citable, offer: offer ? { offer, components } : null });
+  // The presenter field, else the subject's own name: never a name from outside the subject.
+  return resolveSections({ webinar: w, presenter: presenterOf(w, subject.name), sections, beliefs, proofs: subject.proofs, assets: subject.assets, essenceStories: subject.essenceStories, citable: subject.citable, offer: offer ? { offer, components } : null });
 }

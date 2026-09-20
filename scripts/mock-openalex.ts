@@ -52,6 +52,8 @@ createServer((req, res) => {
     if (/quota/i.test(q)) return json(429, { error: "daily quota exceeded" });
     if (/nothing-here/i.test(q)) return json(200, { results: [] });
     if (/leaderboard/i.test(q)) return json(200, { results: LEADERBOARD });
+    // A filter the API refuses: the client drops it, searches again and says so on the page
+    if (/badfilter/i.test(q) && url.searchParams.get("filter")) return json(400, { error: "Invalid query parameters error." });
     // Relevance order unless a citation sort was asked for, as the real API behaves
     const sorted = url.searchParams.get("sort") === "cited_by_count:desc" ? [...WORKS].sort((a, b) => b.cited_by_count - a.cited_by_count) : [...WORKS].sort((a, b) => b.relevance_score - a.relevance_score);
     return json(200, { results: sorted });

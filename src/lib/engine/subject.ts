@@ -1,0 +1,82 @@
+/**
+ * The subject: whose material generated content is built from. Today the only reachable subject is the workspace owner; the
+ * later toggle swaps it to a client record. Everything that resolves for a subject (what still exists, what the brand is,
+ * who presents) goes through here, so a new kind of reference is one line and cannot be forgotten. Pure.
+ */
+import type { KnownRefs } from "./webinar";
+
+export type SubjectKind = "workspace" | "client_record";
+
+/** Every id a webinar may point at and still count. One builder for every check that reads an id. */
+export function knownReferences(input: { proofs: { id: string; status: string }[]; stories: { id: string }[]; essenceStories: { name?: string; summary?: string }[]; citable: { id: string; source: "own" | "shared" }[]; offers: { id: string }[] }): KnownRefs {
+  return {
+    proofIds: input.proofs.filter((p) => p.status === "approved").map((p) => p.id),
+    storyIds: [...input.stories.map((s) => s.id), ...input.essenceStories.filter((st) => st.name || st.summary).map((_, i) => `essence:${i}`)],
+    evidenceIds: input.citable.map((e) => (e.source === "shared" ? `shared:${e.id}` : e.id)),
+    offerIds: input.offers.map((o) => o.id),
+  };
+}
+
+/** The name a script introduces, when it is not the presenter's: "I'm Danno Hanfling" in Lindsey's webinar. */
+export function nameMismatch(script: string | null | undefined, presenter: string): { found: string; presenter: string } | null {
+  const text = script ?? "";
+  const first = presenter.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (!first) return null;
+  const re = /\b(?:I'm|I’m|I am|My name is|My name's)\s+([A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+)?)/gu;
+  const skip = new Set(["not", "going", "here", "sure", "just", "also", "still", "very", "the", "so", "only", "now", "really", "about", "always", "never", "sorry", "glad", "happy", "done", "back"]);
+  for (const m of text.matchAll(re)) {
+    const found = m[1].replace(/[.,;:!?]$/, "");
+    const word = found.split(/\s+/)[0].toLowerCase();
+    if (skip.has(word)) continue;
+    if (word !== first) return { found, presenter: presenter.trim() };
+  }
+  return null;
+}
+
+/** Numbers the record knows, put into coaching copy where the copy carries a slot for them: {runtime}, {openingMinutes}. */
+export function fillRuntime(text: string, n: { runtime: number; openingMinutes: number }): string {
+  return text.replace(/\{runtime\}/g, String(n.runtime)).replace(/\{openingMinutes\}/g, String(n.openingMinutes));
+}
+
+/* ───────────── Brand kit ───────────── */
+
+export type BrandKitInput = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[] };
+export const BRAND_COLOR_ROLES = ["ground", "ink", "accent", "muted", "surface"] as const;
+/** The contrast a headline needs against its ground before the kit is accepted. */
+export const MIN_CONTRAST = 4.5;
+
+export const normaliseHex = (v: string | null | undefined): string => (v ?? "").trim().replace(/^#/, "").toUpperCase();
+export const isHex = (v: string): boolean => /^[0-9A-F]{6}$/.test(v);
+
+function luminance(hex: string): number {
+  const c = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+/** WCAG contrast ratio between two six-digit hex colours, 1 to 21. */
+export function contrastRatio(a: string, b: string): number {
+  const la = luminance(normaliseHex(a));
+  const lb = luminance(normaliseHex(b));
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la];
+  return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+}
+
+/** Why a kit cannot be saved as given: each a sentence naming the field. Empty means it can. */
+export function brandKitProblems(kit: BrandKitInput): string[] {
+  const out: string[] = [];
+  if (!kit.name.trim()) out.push("Give the kit a name.");
+  for (const role of BRAND_COLOR_ROLES) if (!isHex(normaliseHex(kit[role]))) out.push(`${role} needs a six-digit hex colour, like 6E6256.`);
+  for (const role of ["inverseGround", "inverseInk"] as const) {
+    const v = normaliseHex(kit[role]);
+    if (v && !isHex(v)) out.push(`${role} needs a six-digit hex colour, or leave it empty.`);
+  }
+  if (!kit.displayFont.trim() || !kit.bodyFont.trim()) out.push("Name the display face and the body face.");
+  if (!kit.fontFallback.trim()) out.push("Name the fallback face: it is what the file names when a brand face is missing on the reader's machine.");
+  const banned = kit.bannedColors.map(normaliseHex).filter(isHex);
+  if (out.length) return out;
+  const ratio = contrastRatio(kit.ground, kit.ink);
+  if (ratio < MIN_CONTRAST) out.push(`ink on ground is ${ratio}:1; it needs ${MIN_CONTRAST}:1 to read on a slide.`);
+  const inverse = normaliseHex(kit.inverseGround) && normaliseHex(kit.inverseInk) ? contrastRatio(kit.inverseGround!, kit.inverseInk!) : null;
+  if (inverse !== null && inverse < MIN_CONTRAST) out.push(`inverseInk on inverseGround is ${inverse}:1; it needs ${MIN_CONTRAST}:1.`);
+  for (const role of BRAND_COLOR_ROLES) if (banned.includes(normaliseHex(kit[role]))) out.push(`${role} is ${normaliseHex(kit[role])}, which this brand bans.`);
+  return out;
+}

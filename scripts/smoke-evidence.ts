@@ -153,6 +153,15 @@ async function main() {
     if ((await page.locator('[data-testid="results"] button:has-text("Add to my shelf")').count()) !== 0) throw new Error("no add button when nothing fits");
     console.log("✓ the citation leaderboard is not an answer: every row flagged, the search says it found nothing, no add buttons");
 
+    // A field filter the catalogue refuses: the search goes out again without it, and the page says so rather than "within"
+    await page.goto(`${base}/evidence?claim=${encodeURIComponent("A small yes makes a bigger yes easier later.")}&terms=${encodeURIComponent("badfilter, compliance, foot-in-the-door")}&field=Psychology`);
+    await submit(page, 'button:has-text("Find studies")');
+    await page.locator('[data-testid="results"]').waitFor({ timeout: 10000 });
+    await page.locator('[data-testid="field-refused"]').waitFor({ timeout: 5000 });
+    if (/Within Psychology/.test(await page.locator('[data-testid="results"]').locator("xpath=..").innerText())) throw new Error("an unfiltered retry must not say within");
+    if ((await lastRequest()).filter) throw new Error("the retry that succeeded carried no filter");
+    console.log("✓ a refused field filter is retried without and said as that, never as within");
+
     // The key never reaches the browser
     if (browserRequests.some((u) => u.includes(`:${openalexPort}`) || u.includes("openalex") || u.includes("api_key"))) throw new Error("the browser must never call OpenAlex or carry the key");
     if (/test-key/.test(await page.content())) throw new Error("the OpenAlex key must never appear in a page");
@@ -283,7 +292,7 @@ async function main() {
     await page.goto(`${base}/coach`);
     await expectText(page, "Evidence searches: the shared OpenAlex key", "quota card");
     const today = await page.locator('[data-testid="evidence-quota-today"]').innerText();
-    if (!/^3 of 10,000 today$/.test(today.trim())) throw new Error(`three real searches today (the results one, the leaderboard one and the empty one), the cache hit and the 429 not counted; got "${today}"`);
+    if (!/^4 of 10,000 today$/.test(today.trim())) throw new Error(`four real searches today (the results one, the leaderboard one, the refused-filter one and the empty one), the cache hit and the 429 not counted; got "${today}"`);
     const credits = await page.locator('[data-testid="evidence-credits"]').innerText();
     if (!/OpenAlex reports 99,9\d0 of 100,000 credits left/.test(credits)) throw new Error(`the card must show what OpenAlex reported: "${credits}"`);
     if ((await page.locator('[data-testid="evidence-quota"] tr[data-day]').count()) !== 7) throw new Error("seven days, zero-filled");

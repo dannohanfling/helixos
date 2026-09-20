@@ -95,16 +95,19 @@ async function call<T>(path: string, params: Record<string, string>): Promise<Op
  * API rejects (400) is dropped and the search repeated without it, and the log says so; the terms are never sent unfiltered
  * by silent fallback for any other reason.
  */
-export async function searchWorks(terms: string[], opts: { fieldId?: string | null } = {}): Promise<OpenAlexResult<EvidenceResult[]>> {
+export async function searchWorks(terms: string[], opts: { fieldId?: string | null } = {}): Promise<OpenAlexResult<EvidenceResult[]> & { filtered?: boolean }> {
   const base = { search: terms.join(" "), "per-page": "10", select: "id,doi,title,display_name,publication_year,cited_by_count,relevance_score,authorships" };
   const params = opts.fieldId ? { ...base, filter: `primary_topic.field.id:${opts.fieldId}` } : base;
+  let filtered = Boolean(opts.fieldId);
   let r = await call<{ results?: Work[] }>("/works", params);
   if (!r.ok && r.status === 400 && opts.fieldId) {
     logOpenAlex("the field filter was rejected; searching again without it", { fieldId: opts.fieldId });
+    filtered = false;
     r = await call<{ results?: Work[] }>("/works", base);
   }
   if (!r.ok) return r;
-  return { ok: true, data: (r.data.results ?? []).map(toResult), quota: r.quota };
+  // `filtered` says which request succeeded: the page reads it, so "within Psychology" is never said of an unfiltered search.
+  return { ok: true, data: (r.data.results ?? []).map(toResult), quota: r.quota, filtered };
 }
 
 /** One work by DOI, for the side-by-side when a client already has a study in mind. */

@@ -32,12 +32,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { default: PptxGenJS } = await import("pptxgenjs");
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_16x9";
+  // The file says whose it is: the presenter as author, the workspace as company, the webinar as subject. Never the generator.
+  const presenter = w.presenter?.trim() || v.user.name;
   pptx.title = w.title;
-  pptx.author = v.user.name;
+  pptx.subject = w.title;
+  pptx.author = presenter;
+  pptx.company = v.workspace.name;
   const cover = pptx.addSlide();
   cover.background = { color: "0D0D0D" };
   cover.addText(w.title, { x: 0.5, y: 1.6, w: 9, h: 1.4, fontSize: 40, bold: true, color: "FFFFFF", fontFace: "Arial", align: "center" });
-  cover.addText(v.user.name, { x: 0.5, y: 3.2, w: 9, h: 0.6, fontSize: 18, color: "DDA338", fontFace: "Arial", align: "center" });
+  cover.addText(presenter, { x: 0.5, y: 3.2, w: 9, h: 0.6, fontSize: 18, color: "DDA338", fontFace: "Arial", align: "center" });
   for (const s of slides) {
     const slide = pptx.addSlide();
     slide.background = { color: "FFFFFF" };

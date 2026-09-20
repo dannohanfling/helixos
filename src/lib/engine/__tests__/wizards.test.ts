@@ -208,6 +208,16 @@ describe("webinar structure", () => {
       // Without offer ids in the known set (older callers), the id alone still counts, as before
       expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, known: { proofIds: ["p1"], storyIds: ["s1"], evidenceIds: ["e1"] }, review: null }).must).toEqual([]);
     });
+    it("a script that introduces someone other than the presenter is a warning that names the section, the name and the presenter", () => {
+      const wrong = sections.map((s, i) => (i === 0 ? { ...s, script: `I'm Danno Hanfling, and I've spent fifteen years helping people. ${s.script}` } : s));
+      const b = buildChecks({ webinar: full, sections: wrong, beliefs, components: mapped, presenter: "Lindsey Brittain", review: null });
+      const c = b.checks.find((x) => x.key === "presenterName")!;
+      expect(c.level).toBe("warn");
+      expect(c.ok).toBe(false);
+      expect(c.detail).toBe('Hook says "I\'m Danno Hanfling"; the presenter is Lindsey Brittain.');
+      expect(buildChecks({ webinar: full, sections, beliefs, components: mapped, presenter: "Lindsey Brittain", review: null }).checks.find((x) => x.key === "presenterName")!.ok).toBe(true);
+      expect(buildChecks({ webinar: full, sections: wrong, beliefs, components: mapped, review: null }).checks.some((x) => x.key === "presenterName")).toBe(false);
+    });
     it("a status of ready or scheduled outlives its checks, so it is marked stale with the broken checks named; nothing demotes it", () => {
       const broken = buildChecks({ webinar: full, sections, beliefs, components: mapped, known: { proofIds: [], storyIds: ["s1"], evidenceIds: ["e1"] }, review: null });
       expect(statusStale("scheduled", broken)).toEqual({ stale: true, note: "1 check has broken since it was marked scheduled: Every act has a proof." });

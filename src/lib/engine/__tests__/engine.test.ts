@@ -102,6 +102,17 @@ describe("next best action", () => {
     const keys = nextBestActions({ ...base, unansweredInbound: 2, overdueTasks: 1 }).map((a) => a.key);
     expect(keys.indexOf("inbound")).toBeLessThan(keys.indexOf("overdue"));
   });
+  it("a stale scheduled webinar within seven days sits right after inbound replies; further out, after the day's recurring items", () => {
+    const broken = { id: "w1", title: "Your Edge", status: "scheduled", note: "1 check has broken since it was marked scheduled: Every act has a proof." };
+    const soon = nextBestActions({ ...base, unansweredInbound: 2, overdueTasks: 1, focusTasksOpen: 2, webinarBroken: { ...broken, daysAway: 3 } }).map((a) => a.key);
+    expect(soon.indexOf("webinar-broken")).toBe(soon.indexOf("inbound") + 1);
+    const later = nextBestActions({ ...base, unansweredInbound: 2, overdueTasks: 1, focusTasksOpen: 2, webinarBroken: { ...broken, daysAway: 20 } }).map((a) => a.key);
+    expect(later.indexOf("webinar-broken")).toBeGreaterThan(later.indexOf("focus"));
+    const undated = nextBestActions({ ...base, unansweredInbound: 2, overdueTasks: 1, webinarBroken: { ...broken, daysAway: null } }).map((a) => a.key);
+    expect(undated.indexOf("webinar-broken")).toBeGreaterThan(undated.indexOf("overdue"));
+    const action = nextBestActions({ ...base, webinarBroken: { ...broken, daysAway: 3 } }).find((a) => a.key === "webinar-broken")!;
+    expect(action.title).toBe("Webinar: Your Edge is marked scheduled, and 1 check has broken: Every act has a proof.");
+  });
   it("offers the close after 3pm and a fallback when clear", () => {
     expect(nextBestActions({ ...base, hour: 16 }).some((a) => a.key === "close")).toBe(true);
     expect(nextBestActions(base)[0].key).toBe("done");

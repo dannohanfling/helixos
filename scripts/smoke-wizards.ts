@@ -45,12 +45,24 @@ async function main() {
   await page.click('a:has-text("Eat Like a Grown-Up")');
   await page.waitForURL(/\/webinars\//);
   await expectText(page, "Foundation", "wizard");
+  // The presenter is a field: the title slide, the file's author and the script's "I" read it; empty means the subject's own name
+  await page.goto(page.url().split("?")[0] + "?step=foundation");
+  await page.fill('[data-testid="presenter"]', "Lindsey Brittain");
+  await submit(page, 'button:has-text("Save and map beliefs")');
   await page.goto(page.url().split("?")[0] + "?step=script");
   await expectText(page, "Leaky Webinar version", "script step");
   await shot(page, "w02-webinar-script");
+  // A script that introduces someone else is caught on the section and in the build check, by name
+  const firstKey = await page.locator('form input[name="sectionKey"]').first().inputValue();
+  await page.fill('textarea[name="script"]', "I'm Danno Hanfling, and I've spent years at this. If you've ever lost 10 pounds and gained it back, this is for you.");
+  await submit(page, 'button:has-text("Save and next")');
+  await page.goto(page.url().split("?")[0] + `?step=script&section=${firstKey}`);
+  const mismatch = await page.locator('[data-testid="name-mismatch"]').innerText();
+  if (!mismatch.includes("Danno Hanfling") || !mismatch.includes("Lindsey Brittain")) throw new Error(`the script step names the wrong name and the presenter, got "${mismatch}"`);
   await page.fill('textarea[name="script"]', "Hi everyone. If you've ever lost 10 pounds and gained it back, this is for you. Here's the plan for the next hour.");
   await submit(page, 'button:has-text("Save and next")');
   await expectText(page, "drafted", "section saved");
+  console.log("✓ presenter saved; a script introducing someone else is named on the section, and cleared");
   await page.goto(page.url().split("?")[0] + "?step=beliefs");
   await shot(page, "w03-webinar-beliefs");
   // Belief breaks: a confirmed study can be picked, the search opens with the belief's text as the claim, and a typed proof
@@ -85,7 +97,17 @@ async function main() {
   if (!pptx.ok() || !(pptx.headers()["content-type"] ?? "").includes("presentationml") || pptxBody.subarray(0, 2).toString() !== "PK" || pptxBody.length < 5000) throw new Error(`pptx export failed: ${pptx.status()} ${pptxBody.length} bytes`);
   const txt = await page.request.get(`${base}${deckHref!.replace("pptx", "txt")}`);
   if (!txt.ok() || !/Deck outline · \d+ slides/.test(await txt.text())) throw new Error("txt export failed");
-  console.log(`  deck export: pptx ${pptxBody.length} bytes, txt ok`);
+  // The file says whose it is: the presenter as author, the workspace as company, the webinar as subject, never the generator
+  const { default: JSZip } = await import("jszip");
+  const zip = await JSZip.loadAsync(pptxBody);
+  const core = await zip.file("docProps/core.xml")!.async("string");
+  const app = await zip.file("docProps/app.xml")!.async("string");
+  const slide1 = await zip.file("ppt/slides/slide1.xml")!.async("string");
+  if (!/<dc:creator>Lindsey Brittain<\/dc:creator>/.test(core)) throw new Error(`dc:creator is the presenter, got ${core.match(/<dc:creator>[^<]*/)?.[0]}`);
+  if (/PptxGenJS/.test(core) || /<Company>PptxGenJS/.test(app)) throw new Error("the generator's name is nowhere in the file's properties");
+  if (!/<dc:subject>[^<]+<\/dc:subject>/.test(core) || /<dc:subject>PptxGenJS/.test(core)) throw new Error("dc:subject is the webinar's title");
+  if (!/Lindsey Brittain/.test(slide1)) throw new Error("the title slide carries the presenter");
+  console.log(`  deck export: pptx ${pptxBody.length} bytes, txt ok; author, company and subject are the presenter's, the workspace's and the webinar's`);
   await shot(page, "w04-webinar-deck");
   await page.goto(page.url().split("?")[0] + "?step=review");
   // The header is the build check, itemised, and no rating moves it: eleven fives leave an unscripted webinar "building"

@@ -143,7 +143,8 @@ export async function todayData(v: Viewer) {
       knownFor(userId, workspaceId),
     ]);
     const stale = statusStale(live.status, buildChecks({ webinar: live, sections: secs, beliefs: bels, components: comps, known, review: null }));
-    if (stale.stale) webinarBroken = { id: live.id, title: live.title, status: live.status, note: stale.note };
+    const daysAway = live.scheduledAt ? Math.round((new Date(`${live.scheduledAt.slice(0, 10)}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000) : null;
+    if (stale.stale) webinarBroken = { id: live.id, title: live.title, status: live.status, note: stale.note, daysAway };
   }
 
   const snapshot: Snapshot = {

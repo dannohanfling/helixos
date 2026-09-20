@@ -539,6 +539,10 @@ export const webinars = sqliteTable(
     mechanismName: text("mechanism_name"),
     /** A session that deliberately names no mechanism says why here; the reason counts as the field filled in the build check. */
     mechanismWaivedReason: text("mechanism_waived_reason"),
+    /** Who presents: the title slide, the file's author and the script's first person. Empty means the subject's own name. */
+    presenter: text("presenter"),
+    /** Whose material this is built from. Null is the workspace owner, the only value today; later "client_records:<id>". */
+    subjectRef: text("subject_ref"),
     offerId: text("offer_id"),
     ctaType: text("cta_type").notNull().default("Book a call"),
     scheduledAt: text("scheduled_at"),
@@ -630,6 +634,31 @@ export const readinessReviews = sqliteTable("readiness_reviews", {
   nextActions: text("next_actions"),
   createdAt: createdAt(),
 });
+
+/**
+ * The workspace's brand, as a renderer reads it: six colours as bare six-digit hex, three faces and the fallback the file
+ * names when a face is missing, colours the brand bans outright. One per workspace; read only through the subject.
+ */
+export const brandKits = sqliteTable("brand_kits", {
+  id: id(),
+  workspaceId: text("workspace_id").notNull().unique(),
+  name: text("name").notNull(),
+  ground: text("ground").notNull(),
+  ink: text("ink").notNull(),
+  accent: text("accent").notNull(),
+  muted: text("muted").notNull(),
+  surface: text("surface").notNull(),
+  inverseGround: text("inverse_ground"),
+  inverseInk: text("inverse_ink"),
+  displayFont: text("display_font").notNull(),
+  bodyFont: text("body_font").notNull(),
+  quoteFont: text("quote_font"),
+  fontFallback: text("font_fallback").notNull().default("Arial"),
+  bannedColors: text("banned_colors", { mode: "json" }).$type<string[]>().notNull().default([]),
+  notes: text("notes"),
+  createdAt: createdAt(),
+});
+export type BrandKit = typeof brandKits.$inferSelect;
 
 /** Story / analogy / objection / belief bank. workspaceId null = ships with the template. */
 export const ASSET_TYPES = ["story", "analogy", "objection", "belief", "framework"] as const;
@@ -1325,7 +1354,7 @@ export const passwordResets = sqliteTable(
  * request beside the result so the two are always shown side by side.
  */
 export const EVIDENCE_QUALITY = ["unverified", "verified"] as const;
-export type EvidenceAskedFor = { claim: string; terms: string[]; author?: string; year?: number; field?: string; fieldId?: string };
+export type EvidenceAskedFor = { claim: string; terms: string[]; author?: string; year?: number; field?: string; fieldId?: string; fieldRefused?: boolean };
 export const evidence = sqliteTable(
   "evidence",
   {

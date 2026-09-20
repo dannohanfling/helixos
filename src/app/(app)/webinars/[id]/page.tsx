@@ -44,6 +44,8 @@ import {
   derivedGrades,
   type StepKey,
 } from "@/lib/engine/webinar";
+import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
+import { presenterOf } from "@/lib/queries/webinar";
 import { essenceFor } from "@/lib/queries/essence";
 import type { Story } from "@/lib/engine/essence";
 import { assetsFor } from "@/lib/queries/library";
@@ -143,13 +145,11 @@ export default async function WebinarWizardPage({
       })
     : [];
   // Every progress signal on the page is this one read of the record; no rating moves it.
-  const known = {
-    proofIds: proofs.map((pr) => pr.id),
-    storyIds: [...assets.filter((a) => a.type === "story").map((a) => a.id), ...essenceStories.map((_, i) => `essence:${i}`)],
-    evidenceIds: evidence.map((e) => (e.source === "shared" ? `shared:${e.id}` : e.id)),
-    offerIds: offers.map((o) => o.id),
-  };
-  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, review });
+  // One builder for every id a check reads: the same one the subject uses, so a new kind of reference is one line, once.
+  const known = knownReferences({ proofs, stories: assets.filter((a) => a.type === "story"), essenceStories, citable: evidence, offers });
+  const presenterName = presenterOf(w, v.user.name);
+  const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, presenter: presenterName, review });
+  const numbers = { runtime: build.totalMinutes, openingMinutes: sections.filter((s) => s.act === "opening").reduce((a, s) => a + s.durationMin, 0) };
   const staleStatus = statusStale(w.status, build);
   const presence = actPresence(beliefs, known);
   const derived = derivedGrades({
@@ -288,6 +288,20 @@ export default async function WebinarWizardPage({
                   />
                 </Field>
               </div>
+              <div className="sm:col-span-2">
+                <Field
+                  label="Presenter"
+                  hint={`Who stands up: the title slide, the file's author, the script's "I". Empty means you, ${v.user.name}.`}
+                >
+                  <input
+                    className="field"
+                    name="presenter"
+                    defaultValue={w.presenter ?? ""}
+                    placeholder={v.user.name}
+                    data-testid="presenter"
+                  />
+                </Field>
+              </div>
               <Field label="Type">
                 <select
                   className="field"
@@ -398,7 +412,7 @@ export default async function WebinarWizardPage({
                     <div className="font-semibold">
                       {ACT_ICON[a.key]} {a.name.replace(/^[^\w]+/, "")}
                     </div>
-                    <div className="text-xs text-ink-2">{a.tooltip}</div>
+                    <div className="text-xs text-ink-2">{fillRuntime(a.tooltip ?? "", numbers)}</div>
                   </li>
                 ))}
               </ol>
@@ -673,7 +687,7 @@ export default async function WebinarWizardPage({
               })}
             </div>
             <Card title={act.name.replace(/^[^\w]+/, "")}>
-              <p className="text-xs text-ink-2">{act.tooltip}</p>
+              <p className="text-xs text-ink-2">{fillRuntime(act.tooltip ?? "", numbers)}</p>
               {act.soundbite ? (
                 <p className="mt-2 text-xs italic text-ink-3">
                   “{act.soundbite}”
@@ -712,7 +726,7 @@ export default async function WebinarWizardPage({
                   Coaching for this act
                 </summary>
                 <p className="mt-2 whitespace-pre-line text-xs text-ink-2">
-                  {act.coachingPrompt}
+                  {fillRuntime(act.coachingPrompt, numbers)}
                 </p>
               </details>
             </Card>
@@ -734,7 +748,15 @@ export default async function WebinarWizardPage({
               </Badge>
             }
           >
-            <p className="text-sm text-ink-2">{tpl.prompt}</p>
+            <p className="text-sm text-ink-2">{fillRuntime(tpl.prompt, numbers)}</p>
+            {(() => {
+              const m = nameMismatch(section.script, presenterName);
+              return m ? (
+                <p className="mt-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="name-mismatch" role="status">
+                  This script says &ldquo;I&apos;m {m.found}&rdquo;; the presenter is {m.presenter}.
+                </p>
+              ) : null;
+            })()}
             <form action={updateSectionAction} className="mt-4 space-y-3">
               <input type="hidden" name="id" value={w.id} />
               <input

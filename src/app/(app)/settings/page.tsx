@@ -2,7 +2,8 @@ import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { rotateInviteAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
+import { rotateInviteAction, saveBrandKitAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
+import { contrastRatio } from "@/lib/engine/subject";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
@@ -18,14 +19,26 @@ export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string }> }) {
   const v = await requireViewer();
   // The storage figure counts rows; an object without a row (an upload that never finished recording) is reconciled away
   // here, the one place the workspace's holdings are looked at, so the figure and the store agree. After the response:
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft } = await searchParams;
+  const savedKit = v.role === "coach" ? await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) }) : null;
+  // A refused kit comes back as typed, so the person fixes the one pair named rather than typing thirteen fields again.
+  const parseDraft = (raw: string | undefined): Partial<schema.BrandKit> | undefined => {
+    if (!raw) return undefined;
+    try {
+      return JSON.parse(raw) as Partial<schema.BrandKit>;
+    } catch {
+      return undefined;
+    }
+  };
+  const attempted = parseDraft(draft);
+  const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
   const [goal, conn, ghlIntegration] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel")]);
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   return (
@@ -157,6 +170,50 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <button className="btn btn-primary" type="submit">
                   Save workspace
                 </button>
+              </form>
+            </Card>
+            <Card title="Brand kit" action={savedKit ? <span className="text-xs text-ink-3">ink on ground {contrastRatio(savedKit.ground, savedKit.ink)}:1</span> : null}>
+              <div id="brand-kit" />
+              <p className="mb-3 text-sm text-ink-2">The colours and faces a client-facing file is rendered in: the deck reads these. Six-digit hex, no #. A pair that cannot read on a slide is refused here, not discovered on screen.</p>
+              {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
+              <form action={saveBrandKitAction} className="grid gap-3 sm:grid-cols-2" data-testid="brand-form">
+                <div className="sm:col-span-2">
+                  <Field label="Name">
+                    <input className="field" name="name" defaultValue={brandKit?.name ?? ""} placeholder="Turas — True North" />
+                  </Field>
+                </div>
+                {(["ground", "ink", "accent", "muted", "surface"] as const).map((role) => (
+                  <Field key={role} label={role} hint={role === "ground" ? "page background" : role === "ink" ? "headline and body text" : role === "accent" ? "emphasis and calls to action only" : role === "muted" ? "secondary text" : "panels, the alternate ground"}>
+                    <input className="field font-mono" name={role} defaultValue={brandKit?.[role] ?? ""} maxLength={7} />
+                  </Field>
+                ))}
+                <Field label="inverseGround" hint="full-bleed slides, optional">
+                  <input className="field font-mono" name="inverseGround" defaultValue={brandKit?.inverseGround ?? ""} maxLength={7} />
+                </Field>
+                <Field label="inverseInk" hint="text on inverseGround, optional">
+                  <input className="field font-mono" name="inverseInk" defaultValue={brandKit?.inverseInk ?? ""} maxLength={7} />
+                </Field>
+                <Field label="Display face" hint="headlines">
+                  <input className="field" name="displayFont" defaultValue={brandKit?.displayFont ?? ""} />
+                </Field>
+                <Field label="Body face">
+                  <input className="field" name="bodyFont" defaultValue={brandKit?.bodyFont ?? ""} />
+                </Field>
+                <Field label="Quote face" hint="pull quotes, optional">
+                  <input className="field" name="quoteFont" defaultValue={brandKit?.quoteFont ?? ""} />
+                </Field>
+                <Field label="Fallback face" hint="what the file names when a brand face is missing on the reader's machine; a licensed face needs one">
+                  <input className="field" name="fontFallback" defaultValue={brandKit?.fontFallback ?? "Arial"} />
+                </Field>
+                <Field label="Banned colours" hint="hex, comma-separated: a kit using one is refused">
+                  <input className="field font-mono" name="bannedColors" defaultValue={brandKit?.bannedColors?.join(", ") ?? ""} />
+                </Field>
+                <Field label="Notes" hint="shown to you, never rendered">
+                  <input className="field" name="notes" defaultValue={brandKit?.notes ?? ""} />
+                </Field>
+                <div className="sm:col-span-2">
+                  <button className="btn btn-primary" type="submit">Save brand kit</button>
+                </div>
               </form>
             </Card>
             <Card title="Invite links">
