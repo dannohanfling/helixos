@@ -29,6 +29,10 @@ main() {
     step "production build"
     # A build needs a session secret; the value is irrelevant because no request runs during the build.
     SESSION_SECRET="${SESSION_SECRET:-verify-only-secret-verify-only-secret-1234}" npx next build
+
+    # No server secret reaches the browser: read the built client bundle and fail on any server env name or secret value.
+    step "client bundle has no server secret"
+    npx tsx --tsconfig tsconfig.json scripts/check-bundle-secrets.ts
   fi
 
   printf '\nverify: all steps passed\n'

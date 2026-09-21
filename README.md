@@ -153,6 +153,9 @@ npm run verify              # tsc + eslint + vitest            (scripts/verify.s
 npm run dev:server start    # dev server on :3000 with every setting the walks need (scripts/dev-server.sh)
 npm run smoke -- ladders ai # warm-up (login, sign-in, Today; five-minute timeout, fails loudly), then reseed + one or more Playwright walks (scripts/smoke.sh; "all" runs every walk)
 npm run release             # verify --build, restart the server, every walk. Commit only after: scripts/release.sh && git commit …
+# There is no CI service: the gate runs here, on the author's machine, not on push. A green commit means the author ran the gate.
+# The gate greps the built client bundle for any server secret (scripts/check-bundle-secrets.ts) and runs the two-client
+# tenancy leak walk (scripts/smoke-tenancy.ts) alongside src/lib/engine/__tests__/tenancy.test.ts.
 # Never edit a scripts/*.sh file while it is running: bash reads a script incrementally, so a mid-run edit corrupts the tail of the
 # run (it once turned the last line into "us,: command not found"). The scripts wrap their body in main() so the whole file is
 # parsed before anything executes, which protects against it; not editing them mid-run protects against everything else.
