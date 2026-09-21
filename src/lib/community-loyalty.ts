@@ -7,15 +7,17 @@
  *
  * Request shape from the published UChat OpenAPI document (code-addendum-uchat-spec.md): `{ "data": [{ name, value }] }` with
  * `Authorization: Bearer <token>`, a 200 of `{ "status": "ok" }` with no per-field result. So a 200 is not a match: after it,
- * GET /flow/bot-fields is read and compared, and the push is recorded only when every sent value reads back. The read-back
- * response's shape (`data: [{ name, value }]`) is the mock's and unconfirmed against the live API; the parser also accepts an
- * object map. Partial failure and the host are Danno's call to run. Tokens are sealed at rest and decrypted for the request.
+ * GET /flow/bot-fields is read, page by page at an explicit limit until a page comes back short, and compared; the push is
+ * recorded only when every sent value reads back. The read-back's shape is the spec's BotFieldResource (`{ data: [BotField] }`,
+ * each with name, var_type and a string value), parsed and nothing else. Comparison is exact: a typed field the bot normalises
+ * ("01" to "1") fails the match on the safe side until the live call says how it behaves. Partial failure and the host are
+ * Danno's call to run. Tokens are sealed at rest and decrypted for the request.
  */
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
-import { BOT_WRITTEN_FIELDS, STAGE1_FIELDS, assertStorable, botFieldsRequest, readBackMismatches, samePayload, stage1Payload, stage1Problems, type BotFieldPayload } from "@/lib/engine/bot-fields";
+import { BOT_WRITTEN_FIELDS, READ_BACK_LIMIT, STAGE1_FIELDS, assertStorable, botFieldsRequest, morePages, parseBotFields, readBackMismatches, samePayload, stage1Payload, stage1Problems, type BotFieldPayload } from "@/lib/engine/bot-fields";
 import { redactSecrets } from "@/lib/engine/redact";
 import { logSync } from "@/lib/integrations";
 
@@ -73,9 +75,14 @@ export async function pushBotFields(membershipId: string, opts: { force?: boolea
     const text = (await res.text()).slice(0, 200);
     if (!res.ok) return log("failed", `${res.status} ${text}`.trim(), names);
     // Read back: a 200 says the call was accepted, not that the fields were written. The record moves only on a match.
-    const back = await withTimeout(`${uchatBase()}/flow/bot-fields`, { method: "GET", headers });
-    if (!back.ok) return log("failed", `Pushed, but the read-back answered ${back.status}: not recorded as synced.`, names);
-    const held = heldFields(await back.json());
+    const held: Record<string, string | undefined> = {};
+    for (let page = 1; page <= 100; page++) {
+      const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers });
+      if (!back.ok) return log("failed", `Pushed, but the read-back answered ${back.status} on page ${page}: not recorded as synced.`, names);
+      const rows = parseBotFields(await back.json());
+      for (const r of rows) held[r.name] = r.value;
+      if (!morePages(rows.length, READ_BACK_LIMIT)) break;
+    }
     const mismatched = readBackMismatches(payload, held);
     if (mismatched.length) return log("failed", `Pushed, but the read-back differs on ${mismatched.join(", ")}: not recorded as synced.`, names);
     await db.update(schema.memberships).set({ clBotFields: payload, clBotFieldsPushedAt: nowIso() }).where(eq(schema.memberships.id, m.id));
@@ -83,16 +90,6 @@ export async function pushBotFields(membershipId: string, opts: { force?: boolea
   } catch (e) {
     return log("failed", e instanceof Error ? e.message : String(e), names);
   }
-}
-
-/** The read-back's fields by name: `{ data: [{ name, value }] }` as the mock answers, or an object map; anything else is nothing held. */
-function heldFields(body: unknown): Record<string, string | undefined> {
-  const out: Record<string, string | undefined> = {};
-  const b = body as { data?: unknown };
-  const rows = Array.isArray(b?.data) ? (b.data as { name?: unknown; value?: unknown }[]) : Array.isArray(body) ? (body as { name?: unknown; value?: unknown }[]) : null;
-  if (rows) for (const r of rows) if (typeof r?.name === "string") out[r.name] = typeof r.value === "string" ? r.value : r.value == null ? undefined : String(r.value);
-  else if (b?.data && typeof b.data === "object") for (const [k, v] of Object.entries(b.data as Record<string, unknown>)) out[k] = typeof v === "string" ? v : v == null ? undefined : String(v);
-  return out;
 }
 
 /** A Stage 1 source changed for one member: re-push if the payload differs. Quiet when the member has no token. */

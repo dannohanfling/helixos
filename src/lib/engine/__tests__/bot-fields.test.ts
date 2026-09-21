@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, botFieldsRequest, houseConstraints, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
+import { BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
 
 const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live" };
 const draft = { name: "Holiday Survival Sprint", promise: "Get through the holidays", container: "Workshop", price: 297, currency: "USD", length: null, status: "draft" };
@@ -91,11 +91,25 @@ describe("the request to set-bot-fields-by-name is the spec's shape, every value
     expect(readBackMismatches(sent, { a: "1", b: "2", c: "3", calendar_id: "cal" })).toEqual([]);
     expect(readBackMismatches(sent, { a: "1", b: "x" })).toEqual(["b", "c"]);
   });
+  it("the read-back parses the spec's BotFieldResource and nothing else, and pages until a page comes back short", () => {
+    const row = { name: "business_name_cbf", var_type: "text", value: "Torres", var_ns: "f1", description: "", is_template_field: false };
+    expect(parseBotFields({ data: [row] })).toEqual([{ name: "business_name_cbf", value: "Torres", varType: "text" }]);
+    // The shapes it must not accept: an object map, a bare array, a row missing var_type, a non-string value
+    expect(parseBotFields({ data: { business_name_cbf: "Torres" } })).toEqual([]);
+    expect(parseBotFields([row])).toEqual([]);
+    expect(parseBotFields({ data: [{ name: "a", value: "1" }] })).toEqual([]);
+    expect(parseBotFields({ data: [{ name: "a", var_type: "number", value: 1 }] })).toEqual([]);
+    expect(READ_BACK_LIMIT).toBe(100);
+    expect(morePages(100, 100)).toBe(true);
+    expect(morePages(99, 100)).toBe(false);
+    expect(morePages(0, 100)).toBe(false);
+  });
   it("the client sends that body and reads the fields back before it records a push", () => {
     const src = readFileSync(join(process.cwd(), "src/lib/community-loyalty.ts"), "utf8");
     expect(src).toContain("body: JSON.stringify(botFieldsRequest(payload))");
     expect(src).not.toMatch(/JSON\.stringify\(\{ fields/);
-    expect(src.indexOf("/flow/bot-fields`")).toBeGreaterThan(src.indexOf("/flow/set-bot-fields-by-name"));
+    expect(src.indexOf("/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}")).toBeGreaterThan(src.indexOf("/flow/set-bot-fields-by-name"));
+    expect(src).not.toMatch(/object map|heldFields/);
     expect(src.indexOf("readBackMismatches(payload, held)")).toBeLessThan(src.indexOf("clBotFieldsPushedAt: nowIso()"));
   });
 });

@@ -38,6 +38,10 @@ async function main() {
   // What the client and the agent wrote on the bot's side, before any push
   const botWritten = { calendar_id: "cal_chosen_at_onboarding", appointment_id: "appt_20261001_777", booked_time: "2026-10-01T17:00:00Z" };
   await fetch(`${mock}/__seed`, { method: "POST", body: JSON.stringify(botWritten) });
+  // The bot holds more fields than one read-back page: the client must page or it misses the ones it pushed
+  const { READ_BACK_LIMIT } = await import("@/lib/engine/bot-fields");
+  const filler = Object.fromEntries(Array.from({ length: READ_BACK_LIMIT }, (_, i) => [`other_field_${i + 1}`, `v${i + 1}`]));
+  await fetch(`${mock}/__seed`, { method: "POST", body: JSON.stringify(filler) });
   if (JSON.stringify(Object.keys(botWritten).sort()) !== JSON.stringify([...BOT_WRITTEN_FIELDS].sort())) throw new Error("the walk seeds exactly the fields the push must never touch");
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
@@ -83,7 +87,9 @@ async function main() {
     if (sent.qualifying_question_1 !== QUALIFYING_DEFAULTS[0] || sent.qualifying_question_3 !== QUALIFYING_DEFAULTS[2]) throw new Error("the questions are the house defaults until written");
     let after = await store();
     for (const [k, v] of Object.entries(botWritten)) if (after[k] !== v) throw new Error(`${k} was changed by the push: "${after[k]}"`);
-    if (Object.keys(after).length !== STAGE1_FIELDS.length + BOT_WRITTEN_FIELDS.length) throw new Error(`the store holds the pushed fields beside the bot-written ones, got ${Object.keys(after).length}`);
+    if (Object.keys(after).length !== STAGE1_FIELDS.length + BOT_WRITTEN_FIELDS.length + READ_BACK_LIMIT) throw new Error(`the store holds the pushed fields beside the bot-written ones and the filler, got ${Object.keys(after).length}`);
+    const reads = (await (await fetch(`${mock}/__reads`)).json()) as { limit: number; page: number; returned: number }[];
+    if (reads.length < 2 || reads.some((r) => r.limit !== READ_BACK_LIMIT) || reads[0].page !== 1 || reads[1].page !== 2 || reads[0].returned !== READ_BACK_LIMIT || reads[1].returned >= READ_BACK_LIMIT) throw new Error(`the read-back pages at an explicit limit until a page comes back short, got ${JSON.stringify(reads)}`);
     await page.reload();
     const pushed = await page.locator(`form:has(input[name="membershipId"][value="${membership.id}"]) [data-testid="bot-fields-pushed"]`).innerText();
     if (!new RegExp(`^${STAGE1_FIELDS.length} fields pushed `).test(pushed)) throw new Error(`the row says what was pushed and when, got "${pushed}"`);

@@ -13,6 +13,9 @@ const port = Number(process.argv[2] ?? 4060);
 let fields: Record<string, string> = {};
 const requests: { fields: { name: string; value: string }[]; token: string }[] = [];
 let skipped: string | null = null;
+/** Every read-back, with the page and limit asked, so a walk can prove the client paged. */
+const reads: { limit: number; page: number; returned: number }[] = [];
+const DEFAULT_LIMIT = 10;
 
 const json = (res: import("node:http").ServerResponse, code: number, body: unknown) => {
   res.writeHead(code, { "content-type": "application/json" });
@@ -26,15 +29,24 @@ const read = (req: import("node:http").IncomingMessage) => new Promise<string>((
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
-  if (url.pathname === "/__reset") { fields = {}; requests.length = 0; skipped = null; return json(res, 200, { ok: true }); }
+  if (url.pathname === "/__reset") { fields = {}; requests.length = 0; reads.length = 0; skipped = null; return json(res, 200, { ok: true }); }
   // A skipped field is one the bot never wrote: it drops out of the store too, as an unknown name would never be in it.
   if (url.pathname === "/__skip" && req.method === "POST") { skipped = (JSON.parse((await read(req)) || "{}") as { name?: string }).name ?? null; if (skipped) delete fields[skipped]; return json(res, 200, { ok: true, skipped }); }
   if (url.pathname === "/__seed" && req.method === "POST") { Object.assign(fields, JSON.parse(await read(req))); return json(res, 200, { ok: true, fields }); }
   if (url.pathname === "/__requests") return json(res, 200, requests);
+  if (url.pathname === "/__reads") return json(res, 200, reads);
   if (url.pathname === "/__fields") return json(res, 200, fields);
   const auth = req.headers.authorization ?? "";
   if (!auth.startsWith("Bearer ") || auth.length < 12) return json(res, 401, { status: "error", message: "Unauthenticated." });
-  if (url.pathname === "/flow/bot-fields" && req.method === "GET") return json(res, 200, { status: "ok", data: Object.entries(fields).map(([name, value]) => ({ name, value })) });
+  if (url.pathname === "/flow/bot-fields" && req.method === "GET") {
+    // BotFieldResource as the spec documents it: data[] of BotField (name, var_type, value, var_ns, description, is_template_field), paged by limit and page, no total.
+    const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? DEFAULT_LIMIT) || DEFAULT_LIMIT));
+    const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
+    const all = Object.entries(fields).map(([name, value], i) => ({ name, var_type: "text", value, var_ns: `f${i + 1}`, description: "", is_template_field: false }));
+    const data = all.slice((page - 1) * limit, page * limit);
+    reads.push({ limit, page, returned: data.length });
+    return json(res, 200, { data });
+  }
   if (url.pathname === "/flow/set-bot-fields-by-name" && req.method === "PUT") {
     const body = JSON.parse((await read(req)) || "{}") as { data?: { name: string; value: string }[] };
     if (!Array.isArray(body.data) || !body.data.length) return json(res, 400, { message: "The data field is required." });

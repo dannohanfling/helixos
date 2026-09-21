@@ -125,3 +125,24 @@ export function botFieldsRequest(payload: Record<string, string>): BotFieldsRequ
 export function readBackMismatches(sent: Record<string, string>, held: Record<string, string | undefined>): string[] {
   return Object.keys(sent).filter((k) => held[k] !== sent[k]);
 }
+
+/**
+ * GET /flow/bot-fields answers BotFieldResource, `{ "data": [ BotField ] }`, where BotField requires `name`, `var_type` and
+ * `value` (a string) and takes `limit` and `page` (1 to 100) with no total. One shape is parsed and nothing else: a body that
+ * is not that shape is nothing held, which fails the match on the safe side. Pages are read until one comes back shorter
+ * than the limit sent.
+ */
+export const READ_BACK_LIMIT = 100;
+export const BOT_FIELD_TYPES = ["text", "number", "boolean", "date", "datetime", "array", "longtext"] as const;
+export function parseBotFields(body: unknown): { name: string; value: string; varType: string }[] {
+  const b = body as { data?: unknown };
+  if (!b || typeof b !== "object" || !Array.isArray(b.data)) return [];
+  const out: { name: string; value: string; varType: string }[] = [];
+  for (const r of b.data as { name?: unknown; var_type?: unknown; value?: unknown }[]) {
+    if (typeof r?.name !== "string" || typeof r.var_type !== "string" || typeof r.value !== "string") continue;
+    out.push({ name: r.name, value: r.value, varType: r.var_type });
+  }
+  return out;
+}
+/** Another page follows only while a page came back full. */
+export const morePages = (received: number, limit: number): boolean => received >= limit;
