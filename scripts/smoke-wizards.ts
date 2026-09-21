@@ -193,7 +193,7 @@ async function main() {
   if (!(await page.locator('[data-testid="deck-slide"][data-kind="proof"]').count())) throw new Error("the Proof Block renders the typed proof as a slide");
   // The count against a rate: slides a minute over the minutes without Q&A, the arithmetic checked rather than the number assumed
   const paceText = await page.locator('[data-testid="deck-pace"]').innerText();
-  const paceMatch = paceText.match(/^(\d+) slides · ~(\d+) min without Q&A · ([\d.]+) slides a minute\. Reference pace is 1\.7; the band is 1\.2 to 1\.5\./);
+  const paceMatch = paceText.match(/^(\d+) slides · ~(\d+) min without Q&A · ([\d.]+) slides a minute\. Reference pace is 1\.7, measured from a live 90-minute deck with Q&A not counted; the band is 1\.2 to 1\.5\./);
   if (!paceMatch) throw new Error(`the deck step reads slides against the clock, got "${paceText}"`);
   const [, slideCount, minutes, rate] = paceMatch;
   if (Math.round((Number(slideCount) / Number(minutes)) * 10) / 10 !== Number(rate)) throw new Error(`the rate is the count over the minutes, got ${slideCount}/${minutes} = ${rate}`);

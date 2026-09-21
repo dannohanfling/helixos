@@ -264,7 +264,7 @@ describe("webinar structure", () => {
       expect(buildChecks({ ...input, deck: { refused: 2, rate: 1.3 } }).checks.find((c) => c.key === "deck")).toMatchObject({ ok: false, level: "must", label: "Deck exports", detail: "2 refusals on the Deck step: a claim with a hole in it never leaves as a slide." });
       expect(buildChecks({ ...input, deck: { refused: 0, rate: 0.4 } }).checks.find((c) => c.key === "deck")).toMatchObject({ ok: false, level: "warn", detail: "0.4 slides a minute; the band is 1.2 to 1.5. Under the band: the deck sits still while the presenter talks." });
       expect(buildChecks({ ...input, deck: { refused: 0, rate: 1.3 } }).checks.find((c) => c.key === "deck")).toMatchObject({ ok: true, level: "warn" });
-      expect(buildChecks({ ...input, deck: { refused: 0, rate: null } }).checks.find((c) => c.key === "deck")).toMatchObject({ ok: true, detail: "No minutes to pace the deck against." });
+      expect(buildChecks({ ...input, deck: { refused: 0, rate: null } }).checks.find((c) => c.key === "deck")).toMatchObject({ ok: true, detail: "No minutes to pace the deck against: give the sections their minutes and this check can run." });
       expect(buildChecks(input).checks.find((c) => c.key === "deck")).toBeUndefined();
     });
     it("a review older than the record's last edit is stale", () => {

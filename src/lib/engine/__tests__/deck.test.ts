@@ -156,8 +156,10 @@ describe("placeholders: refused in a claim or on a proof or price slide, warned 
     const d = deckSlides(ctx(base({ hook: { keyPoints: "Promise [X]% fewer no-shows" }, problem_frame: { keyPoints: "Send them to [SALES PAGE URL]" }, proof_block: { keyPoints: "[CLIENT NAME] doubled her list" } })), kit);
     // 1 cover · 2 Hook · 3 Act 1 divider · 4 Problem Frame · 5 Proof Block · 6 Act 1 recap · 7, 8 dividers · 9 item · 10 price
     expect(d.refused).toEqual(["Slide 2 (Hook): [X]% sits in a sentence that carries a number: a claim with a hole in it.", "Slide 5 (Proof Block): [CLIENT NAME] sits on a proof slide, which is a claim by its nature."]);
-    // The recap repeats the act's lines, so a gap on a line is a gap on the recap too; there it is a gap, not a claim
-    expect(d.warnings).toEqual(["Slide 4 (Problem Frame): [SALES PAGE URL] is a gap to fill.", "Slide 6 (Act 1 · Vehicle): [SALES PAGE URL] is a gap to fill.", "Slide 6 (Act 1 · Vehicle): [CLIENT NAME] is a gap to fill."]);
+    // The recap repeats the act's lines, so the slot is on two slides and counted twice, but named once, at its source
+    expect(d.warnings).toEqual(["Slide 4 (Problem Frame): [SALES PAGE URL] is a gap to fill."]);
+    expect(d.slides[5].kind).toBe("recap");
+    expect(d.slides[5].placeholders.map((p) => p.text)).toEqual(["[SALES PAGE URL]", "[CLIENT NAME]"]);
     expect(d.placeholderCount).toBe(5);
     expect(outlineText("t", d)).toContain("Deck outline · 10 slides · 5 unfilled on slides");
   });
@@ -165,7 +167,7 @@ describe("placeholders: refused in a claim or on a proof or price slide, warned 
     // Every key point is on a slide now, so the only slot the deck does not show is one in a script
     const c = ctx(base({ hook: { keyPoints: "Open the loop", script: "Send them to [SALES PAGE URL]." }, problem_frame: { keyPoints: "Costs [$N] a month" } }));
     const d = deckSlides(c, kit);
-    expect(d.refused[0]).toBe("Slide 4 (Problem Frame): [$N] sits in a sentence that carries a number: a claim with a hole in it.");
+    expect(d.refused).toEqual(["Slide 4 (Problem Frame): [$N] sits in a sentence that carries a number: a claim with a hole in it."]);
     expect(offSlidePlaceholders(c, d)).toEqual({ total: 2, offSlide: 1, sections: [{ section: "Hook", onSlide: [], offSlide: ["[SALES PAGE URL]"] }, { section: "Problem Frame", onSlide: ["[$N]"], offSlide: [] }] });
   });
 });
@@ -226,7 +228,7 @@ describe("the deck against the clock", () => {
     expect(vehicle.thin).toBe(vehicle.rate !== null && vehicle.rate < PACE_BAND[0]);
     const closing = p.acts.find((a) => a.key === "closing")!;
     expect(closing.minutes).toBe(c.acts.find((a) => a.key === "closing")!.durationMin - qa);
-    expect(paceLine(p)).toMatch(/^\d+ slides · ~\d+ min without Q&A · [\d.]+ slides a minute\. Reference pace is 1\.7; the band is 1\.2 to 1\.5\.( Thin: .+\.)? Offer segment is 2 of \d+ slides\.$/);
+    expect(paceLine(p)).toMatch(/^\d+ slides · ~\d+ min without Q&A · [\d.]+ slides a minute\. Reference pace is 1\.7, measured from a live 90-minute deck with Q&A not counted; the band is 1\.2 to 1\.5\.( Thin: .+, each over its own minutes without Q&A\.)? Offer segment is 2 of \d+ slides\.$/);
   });
 });
 

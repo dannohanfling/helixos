@@ -217,8 +217,13 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     if (BELIEF_ACTS.has(act.key) && lines.length) slides.push(slideOf({ n: n++, kind: "recap", s: null, headline: `${act.label} · recap`, body: lines.slice(0, 6), eyebrow: act.label, act: act.key }));
   }
   const refused: string[] = [];
+  // A recap only quotes its act's lines, so a hole on one is named once, at its source slide; the recap keeps the slot in its
+  // count (two slides carry it) but adds no second line to the list.
+  const named = new Set<string>();
   for (const sl of slides) {
     for (const p of sl.placeholders) {
+      if (sl.kind === "recap" && named.has(p.text)) continue;
+      named.add(p.text);
       if (p.refuse) refused.push(`Slide ${sl.n} (${sl.section || sl.eyebrow || "cover"}): ${p.why}`);
       else warnings.push(`Slide ${sl.n} (${sl.section || sl.eyebrow || "cover"}): ${p.why}`);
     }
@@ -251,7 +256,9 @@ export function deckPace(c: WebinarContext, d: DeckResult): DeckPace {
 /** The readout on the Deck step, one line. */
 export function paceLine(p: DeckPace): string {
   const thin = p.acts.filter((a) => a.thin).map((a) => `${a.label} is at ${a.rate}`);
-  return `${p.slides} slides · ~${p.minutes} min without Q&A · ${p.rate ?? "–"} slides a minute. Reference pace is ${REFERENCE_PACE}; the band is ${PACE_BAND[0]} to ${PACE_BAND[1]}.${thin.length ? ` Thin: ${thin.join("; ")}.` : ""} Offer segment is ${p.offerSlides} of ${p.slides} slides.`;
+  // The reference carries its source in the sentence: an unsourced number becomes folklore. Each act is paced over its own
+  // minutes with Q&A netted off, the way the reference was measured.
+  return `${p.slides} slides · ~${p.minutes} min without Q&A · ${p.rate ?? "–"} slides a minute. Reference pace is ${REFERENCE_PACE}, measured from a live 90-minute deck with Q&A not counted; the band is ${PACE_BAND[0]} to ${PACE_BAND[1]}.${thin.length ? ` Thin: ${thin.join("; ")}, each over its own minutes without Q&A.` : ""} Offer segment is ${p.offerSlides} of ${p.slides} slides.`;
 }
 
 /* ───────────── The render plan ───────────── */
