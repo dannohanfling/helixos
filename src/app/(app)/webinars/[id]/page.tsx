@@ -51,7 +51,10 @@ import {
 } from "@/lib/engine/webinar";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, presenterOf } from "@/lib/queries/webinar";
-import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, suggestedSlots, type DeckPace, type DeckResult } from "@/lib/engine/deck";
+import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult } from "@/lib/engine/deck";
+import { resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
+import { clearDeckSlotAction, setDeckSlotAction } from "@/lib/actions/deck-images";
+import type { DeckImage } from "@/db/schema";
 import { formatPrice } from "@/lib/engine/offer-score";
 import { essenceFor } from "@/lib/queries/essence";
 import type { Story } from "@/lib/engine/essence";
@@ -165,6 +168,12 @@ export default async function WebinarWizardPage({
   const context = await contextFor(v, w);
   const deck: DeckResult = deckSlides(context, brandKit ?? null);
   const pace: DeckPace = deckPace(context, deck);
+  // The suggested picture slots, each resolved to the coach's own image or to why it is empty, and the coach's whole library to
+  // fill them from. Read once here, so the Deck step and the export agree on which slots carry a picture.
+  const [deckSlotsResolved, deckLibrary] = await Promise.all([
+    resolveDeckSlots(w.id, deck, { workspaceId: v.workspace.id, userId: v.user.id }),
+    db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), orderBy: (t, { desc }) => [desc(t.createdAt)] }),
+  ]);
   // The export's provenance gate, from the same sections the route reads; a confirm counts only for the drafts as they stand now.
   const exportGate = sectionGate(sections);
   const exportConfirm = exportGate && sp.confirmed ? await confirmFor(sp.confirmed, v.user.id, "deck_export", w.id) : null;
@@ -1316,7 +1325,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep webinarId={w.id} deck={deck} pace={pace} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
+        <DeckStep webinarId={w.id} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
       ) : null}
 
       {step === "review" ? (
@@ -1648,8 +1657,10 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, deck, pace, gate, confirmed, reviewHref }: { webinarId: string; deck: DeckResult; pace: DeckPace; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string }) {
+function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref }: { webinarId: string; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
+  const fallbacks = slotFallbacks(resolvedSlots);
+  const bySlide = new Map(resolvedSlots.map((r) => [r.slide, r]));
   const refused = deck.refused.length > 0;
   // The gate on the export: with AI-drafted sections nobody reviewed, the files are offered only under a logged Continue anyway.
   const held = Boolean(gate) && !confirmed;
@@ -1698,10 +1709,17 @@ function DeckStep({ webinarId, deck, pace, gate, confirmed, reviewHref }: { webi
           {deck.openingOmitted.length} opening {deck.openingOmitted.length === 1 ? "slide is" : "slides are"} empty, so left out: {deck.openingOmitted.join(", ")}. Fill them on the Foundation step.
         </p>
       ) : null}
-      {suggestedSlots(deck).length ? (
+      {fallbacks.emptyCount ? (
         <p className="mb-3 text-sm text-ink-2" data-testid="deck-slots">
-          {suggestedSlots(deck).length} suggested {suggestedSlots(deck).length === 1 ? "picture" : "pictures"} not added: each of these slides exports as text until you attach an image.
+          {fallbacks.emptyCount} suggested {fallbacks.emptyCount === 1 ? "picture" : "pictures"} not added: each of these slides exports as text until you attach an image.
         </p>
+      ) : null}
+      {fallbacks.reasons.length ? (
+        <ul className="mb-3 list-disc rounded-lg bg-surface-2 p-3 pl-7 text-sm text-ink-2" data-testid="deck-slot-reasons">
+          {fallbacks.reasons.map((r) => (
+            <li key={r.slide}>Slide {r.slide} ({r.section}): {r.why}</li>
+          ))}
+        </ul>
       ) : null}
       {refused ? (
         <div className="mb-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="deck-refused" role="alert">
@@ -1742,6 +1760,7 @@ function DeckStep({ webinarId, deck, pace, gate, confirmed, reviewHref }: { webi
               </p>
             ) : null}
             {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-body">{s.body.join("\n")}</p> : null}
+            {bySlide.get(s.n) ? <SlotControl webinarId={webinarId} resolved={bySlide.get(s.n)!} library={library} /> : null}
             <div className="mt-2 flex items-center justify-end gap-2">
               <CopyButton text={`${s.headline}\n${s.body.join("\n")}`} label="Copy" className="btn btn-ghost btn-xs" />
             </div>
@@ -1754,5 +1773,48 @@ function DeckStep({ webinarId, deck, pace, gate, confirmed, reviewHref }: { webi
         </Link>
       </div>
     </Card>
+  );
+}
+
+/**
+ * One suggested picture slot on the Deck step: what the slide wants, and either the coach's chosen image with a way to clear it,
+ * or a picker over their library to fill it. A testimonial slot is not filled here — it draws from its approved proof — so it
+ * shows only what it wants and, when empty, why. An empty non-testimonial slot with an empty library points to the Images page.
+ */
+function SlotControl({ webinarId, resolved, library }: { webinarId: string; resolved: ResolvedSlot; library: DeckImage[] }) {
+  const { slot } = resolved;
+  if (slot.kind === "testimonial") {
+    return (
+      <div className="mt-2 rounded-lg bg-surface-2 p-2 text-[11px] text-ink-3" data-testid="deck-slot" data-slot-key={slot.key} data-kind={slot.kind}>
+        <span className="font-medium">Testimonial photo:</span> {resolved.image ? "from the approved proof." : resolved.why ?? "add an approved proof with a photo in the Proof Bank."}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 rounded-lg border border-line p-2 text-[11px]" data-testid="deck-slot" data-slot-key={slot.key} data-kind={slot.kind}>
+      <p className="text-ink-3">{slot.what}</p>
+      {resolved.image ? (
+        <form action={clearDeckSlotAction} className="mt-1 flex items-center justify-between gap-2">
+          <span className="text-good" data-testid="deck-slot-filled">Picture attached.</span>
+          <input type="hidden" name="webinarId" value={webinarId} />
+          <input type="hidden" name="slotKey" value={slot.key} />
+          <button className="btn btn-ghost btn-xs" type="submit" data-testid="deck-slot-clear">Remove</button>
+        </form>
+      ) : library.length ? (
+        <form action={setDeckSlotAction} className="mt-1 flex items-center gap-1">
+          <input type="hidden" name="webinarId" value={webinarId} />
+          <input type="hidden" name="slotKey" value={slot.key} />
+          <select className="field flex-1" name="imageId" defaultValue="" data-testid="deck-slot-picker" required>
+            <option value="" disabled>Pick an image…</option>
+            {library.map((img) => (
+              <option key={img.id} value={img.id}>{img.caption ? img.caption : img.kind} · {img.kind}</option>
+            ))}
+          </select>
+          <button className="btn btn-soft btn-xs" type="submit" data-testid="deck-slot-attach">Attach</button>
+        </form>
+      ) : (
+        <Link href="/images" className="mt-1 inline-block text-accent underline" data-testid="deck-slot-empty-library">Add images to your library first →</Link>
+      )}
+    </div>
   );
 }

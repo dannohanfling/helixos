@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, suggestedSlots, SLOT_WHAT, type DeckKit } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -346,5 +346,30 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
     expect(d.slides.filter((s) => s.kind === "offer").every((s) => s.slot === null)).toBe(true);
     // Every slot's instruction is the fixed one for its kind, never generated.
     for (const x of slots) expect(x.slot.what).toBe(SLOT_WHAT[x.slot.kind]);
+  });
+
+  it("a testimonial slot carries its bank proof's id, so its photo can only be that approved proof's own", () => {
+    const d = deckSlides(openCtx({ credibility_origin: undefined }), kit);
+    const testimonial = d.slides.find((s) => s.slot?.kind === "testimonial");
+    expect(testimonial?.slot?.proofId).toBe("p1"); // the approved bank proof wired to the belief
+  });
+
+  it("a picture frame stays inside the 10×5.625 slide, for the cover and for a content slide alike", () => {
+    for (const kind of ["cover", "section"] as const) {
+      const f = slotFrame(kind);
+      expect(f.x + f.w).toBeLessThanOrEqual(10);
+      expect(f.y + f.h).toBeLessThanOrEqual(5.625);
+      expect(f.x).toBeGreaterThan(TEXT_LEFT_ZONE.x + TEXT_LEFT_ZONE.w - 0.01); // the picture starts to the right of the text column
+    }
+  });
+
+  it("renderPlan draws no picture frame by default, and one only on the slides told to carry an image", () => {
+    const d = deckSlides(openCtx({ credibility_origin: undefined }), kit);
+    expect(renderPlan(d).every((p) => p.imageFrame === null)).toBe(true);
+    const plan = renderPlan(d, new Set([1])); // the cover
+    expect(plan[0].imageFrame).not.toBeNull();
+    expect(plan.slice(1).every((p) => p.imageFrame === null)).toBe(true);
+    // The cover's title still renders alongside the picture; nothing is dropped to make room.
+    expect(plan[0].boxes.some((b) => b.role === "cover-title")).toBe(true);
   });
 });

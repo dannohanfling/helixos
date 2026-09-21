@@ -52,8 +52,9 @@ describe("storage policy: two prefixes, two writers", () => {
       if (/from "@vercel\/blob/.test(text)) sdk.push(rel);
     }
     expect(hits).toEqual(["lib/storage.ts"]);
-    // Two stores, two thin modules, two browser doors and two token routes: nothing else touches the SDK.
-    expect(sdk.sort()).toEqual(["app/api/magnets/upload/route.ts", "app/api/proofs/upload/route.ts", "components/magnet-upload.tsx", "components/proof-upload.tsx", "lib/proof-storage.ts", "lib/storage.ts"]);
+    // Two stores, two thin modules, and the browser doors and token routes that mint client upload tokens: the lead magnet's,
+    // the proof's, and the deck image's (which reuses the proof store's token via proof-storage.ts, so it is a door, not a store).
+    expect(sdk.sort()).toEqual(["app/api/deck-images/upload/route.ts", "app/api/magnets/upload/route.ts", "app/api/proofs/upload/route.ts", "components/deck-image-upload.tsx", "components/magnet-upload.tsx", "components/proof-upload.tsx", "lib/proof-storage.ts", "lib/storage.ts"]);
     const storage = readFileSync(join(SRC, "lib", "storage.ts"), "utf8");
     const fnOf = (name: string) => {
       const start = storage.indexOf(`export async function ${name}`);

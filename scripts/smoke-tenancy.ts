@@ -63,6 +63,7 @@ const ROUTES: Record<string, Route> = {
   "/webinars/[id]/runsheet": { kind: "owned", table: "webinars" },
   "/join/[code]": { kind: "public", why: "the workspace invite code, entered before any session exists" },
   "/reset/[token]": { kind: "public", why: "a single-use password-reset token, its own secret" },
+  "/api/deck-images/[id]": { kind: "owned", table: "deckImages" },
   "/api/proofs/attachments/[id]": { kind: "owned", table: "proofAttachments" },
   "/api/webinars/[id]/deck": { kind: "owned", table: "webinars" },
   "/files/[...key]": { kind: "public", why: "the public object store; a private proof file is served by /api/proofs/attachments/[id]" },
@@ -138,7 +139,16 @@ async function main() {
     }
     return a;
   };
-  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment()]);
+  const ensureDeckImage = async () => {
+    let d = await db.query.deckImages.findFirst({ where: eq(schema.deckImages.userId, B.id) });
+    if (!d) {
+      const id = newId();
+      await db.insert(schema.deckImages).values({ id, workspaceId: ws, userId: B.id, kind: "photo", blobKey: `deck/${ws}/${B.id}/${id}.png`, blobUrl: "https://private.example/x", mime: "image/png", width: 1, height: 1 });
+      d = (await db.query.deckImages.findFirst({ where: eq(schema.deckImages.id, id) }))!;
+    }
+    return d;
+  };
+  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage()]);
 
   // One B-owned id per table the routes name, so the walk can substitute B's id into A's request.
   const first = async <T>(q: Promise<T | undefined>): Promise<T> => {
@@ -160,6 +170,7 @@ async function main() {
     socratesScripts: (await ensureScript()).id,
     webinars: (await first(db.query.webinars.findFirst({ where: eq(schema.webinars.userId, B.id) }))).id,
     proofAttachments: (await ensureAttachment()).id,
+    deckImages: (await ensureDeckImage()).id,
   };
   // B's private words, per table, that must never appear in a response to A.
   const bWord: Record<string, string> = {

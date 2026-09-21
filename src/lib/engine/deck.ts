@@ -33,7 +33,8 @@ export const EYEBROW_SIZE = 11;
 export type SlideKind = "cover" | "divider" | "recap" | "section" | "proof" | "evidence" | "story" | "offer" | "opening" | "reflection";
 /** A picture slot the deck suggests by rule from the slide's kind. The coach fills it from their image library; empty, it lists on the Deck step and the slide exports as text. Never on the price slide. */
 export type SlotKind = "photo" | "photo_pair" | "screenshot" | "screenshot_callout" | "proof_wall" | "testimonial" | "diagram";
-export type Slot = { key: string; kind: SlotKind; what: string };
+/** A testimonial slot carries the bank proof it belongs to, so its photo is that proof's own approved attachment and nothing else. */
+export type Slot = { key: string; kind: SlotKind; what: string; proofId?: string };
 /** The one-line instruction each suggested slot carries, from a fixed table, never generated. */
 export const SLOT_WHAT: Record<SlotKind, string> = {
   photo: "A photo of you or the person in this beat.",
@@ -225,7 +226,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
       if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer, slot: { key: `${s.sectionKey}:${b.key}:photo`, kind: "photo", what: SLOT_WHAT.photo } }));
       if (isProofBlock(s)) {
         // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
-        if (s.proof) slides.push(slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial } }));
+        if (s.proof) slides.push(slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial, proofId: s.proof.source === "bank" ? s.proof.id : undefined } }));
         else if (s.evidence) slides.push(slideOf({ n: n++, kind: "evidence", s, headline: s.evidence.claim, body: [s.evidence.citation], footer, slot: { key: `${s.sectionKey}:screenshot_callout`, kind: "screenshot_callout", what: SLOT_WHAT.screenshot_callout } }));
         pointSlides("proof");
         continue;
@@ -311,19 +312,33 @@ export function suggestedSlots(d: DeckResult): { slide: number; section: string;
 export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean };
 /** A rule drawn in the accent: the one thing the accent draws besides a fill. Never under text. */
 export type Rule = { slide: number; color: string; y: number };
-export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string };
+/** A picture's frame in inches on the 10×5.625 slide. The renderer crops the image to fill it (cover), never stretches it. */
+export type Frame = { x: number; y: number; w: number; h: number };
+export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; /** Where a filled picture sits, or null when the slide is text only. */ imageFrame: Frame | null };
+
+/**
+ * The frame a filled picture occupies, by the slide's kind. The cover's photo fills the right half; every content slide's
+ * picture sits in a right-hand column, and the text moves to a left column that never overlaps it. One frame per slot: a
+ * before/after is one image the coach composes, a proof wall is one image, so nothing here needs two boxes.
+ */
+export function slotFrame(kind: SlideKind): Frame {
+  return kind === "cover" ? { x: 5.2, y: 0.9, w: 4.3, h: 3.85 } : { x: 5.35, y: 1.05, w: 4.15, h: 3.5 };
+}
+/** With a picture on the right, the text lives in this left column; without one, boxes keep their full-width geometry. */
+export const TEXT_LEFT_ZONE = { x: 0.5, w: 4.5 };
 
 /**
  * Every box the renderer will draw, with the kit's hex written verbatim: no tint, no derived shade. Text sits on ground only.
  * Accent draws rules and fills, never letters: every text box is ink or muted (both refused under 4.5:1 by the kit rules), and
  * the accent's one appearance is the rule under the eyebrow, so text in or on the accent cannot arrive without this changing.
  */
-export function renderPlan(d: DeckResult): SlidePlan[] {
+export function renderPlan(d: DeckResult, withImage: Set<number> = new Set()): SlidePlan[] {
   const k = d.kit;
   const hex = (v: string) => normaliseHex(v);
   const placeholderColor = hex(k.placeholder ?? "") || PLACEHOLDER_FALLBACK;
   const hasInverse = Boolean(hex(k.inverseGround ?? "") && hex(k.inverseInk ?? ""));
   return d.slides.map((s) => {
+    const imageFrame = withImage.has(s.n) ? slotFrame(s.kind) : null;
     const boxes: TextBox[] = [];
     const mark = (text: string) => placeholdersIn(text).length > 0;
     // The dark surfaces take the inverse pair when the kit has one; on it every letter is inverseInk, the one pair the kit checked.
@@ -342,7 +357,7 @@ export function renderPlan(d: DeckResult): SlidePlan[] {
       }
       if (s.footer) boxes.push({ slide: s.n, role: "footer", text: s.footer, size: EYEBROW_SIZE, color: muted, fill: mark(s.footer) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: mark(s.footer) });
     }
-    return { n: s.n, background: dark ? hex(k.inverseGround!) : hex(k.ground), boxes, rules: s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }], notes: s.notes.join("\n") };
+    return { n: s.n, background: dark ? hex(k.inverseGround!) : hex(k.ground), boxes, rules: s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }], notes: s.notes.join("\n"), imageFrame };
   });
 }
 

@@ -73,10 +73,11 @@ describe("proof attachments: the private store's addresses never leave the serve
     }
     return out;
   };
-  // The only files that may name blob_url or display_url: the schema, the record and delete actions, the queries that delete,
-  // and the read route that streams. A page, a component, a query that feeds a component or an export never sees them.
-  const MAY_NAME = ["db/schema.ts", "lib/actions/proof-attachments.ts", "lib/queries/proof-attachments.ts", "app/api/proofs/attachments/[id]/route.ts"];
-  it("blob_url and display_url are read in four server files and nowhere else; no client component names them", () => {
+  // The only files that may name blob_url or display_url: the schema, the proof record/delete actions, the queries that delete,
+  // the read route that streams, and the deck-image files that hold the same kind of private address (a deck image's own blob
+  // url, and the proof photo a testimonial resolves to). All are server-only; a client component never names them.
+  const MAY_NAME = ["db/schema.ts", "lib/actions/proof-attachments.ts", "lib/queries/proof-attachments.ts", "app/api/proofs/attachments/[id]/route.ts", "lib/actions/deck-images.ts", "lib/queries/deck-slots.ts", "app/api/deck-images/[id]/route.ts", "app/api/webinars/[id]/deck/route.ts"];
+  it("blob_url and display_url are read only in the server files that may hold a private address, and no client component names them", () => {
     const naming = walk(SRC)
       .filter((f) => /\b(blobUrl|displayUrl|blob_url|display_url)\b/.test(readFileSync(f, "utf8")))
       .map((f) => f.slice(SRC.length + 1).replace(/\\/g, "/"))
