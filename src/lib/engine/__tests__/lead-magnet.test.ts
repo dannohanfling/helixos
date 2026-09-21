@@ -127,8 +127,11 @@ describe("lead magnet: the record and its outputs", () => {
   });
   it("the tracked link opens what the client nominated, and a format that is off is never the target", () => {
     const url = (k: string) => `/files/${k}`;
-    const base = { slug: "s", pdfKey: "public/magnets/ws/id-s.pdf", fileKey: null, formats: { page: true, pdf: true, copy: false, canva: false } } as const;
+    const base = { slug: "s", pdfKey: "public/magnets/ws/id-s.pdf", fileKey: null, formats: { page: true, pdf: true, copy: false, canva: false }, publishedAt: "2026-09-21T00:00:00.000Z" } as const;
     expect(primaryTarget({ ...base, primary: "page" }, url)).toBe("/m/s");
+    // The page is a target only once published: before that the link opens the PDF, and nothing when there is no PDF either.
+    expect(primaryTarget({ ...base, primary: "page", publishedAt: null }, url)).toBe("/files/public/magnets/ws/id-s.pdf");
+    expect(primaryTarget({ ...base, primary: "page", publishedAt: null, pdfKey: null }, url)).toBeNull();
     expect(primaryTarget({ ...base, primary: "pdf" }, url)).toBe("/files/public/magnets/ws/id-s.pdf");
     expect(primaryTarget({ ...base, primary: "pdf", formats: { ...base.formats, pdf: false } }, url)).toBe("/m/s");
     expect(primaryTarget({ ...base, primary: "page", formats: { ...base.formats, page: false } }, url)).toBe("/files/public/magnets/ws/id-s.pdf");

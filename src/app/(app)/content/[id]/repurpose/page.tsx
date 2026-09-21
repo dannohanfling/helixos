@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
-import { generateVariantsAction, updateVariantAction } from "@/lib/actions/variants";
+import { acceptVariantAction, generateVariantsAction, updateVariantAction } from "@/lib/actions/variants";
+import { gateLine, isUnreviewed, variantName } from "@/lib/engine/provenance";
+import { GateBlock, UnreviewedMark } from "@/components/provenance";
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
 import { distributeAllAction } from "@/lib/actions/compose";
 import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, PRIVATE_URL_REFUSAL } from "@/lib/engine/compose-media";
@@ -26,7 +28,9 @@ import { LIVE_POSTING_HOUR } from "@/lib/engine/ladder";
 
 function VariantForm({ var_, maxChars, email = false, outcome }: { var_: ContentVariant; maxChars: number; email?: boolean; outcome?: ChannelOutcome }) {
   return (
-    <form action={updateVariantAction} className="space-y-2">
+    <>
+    {isUnreviewed(var_.origin) ? <UnreviewedMark action={acceptVariantAction} fields={{ id: var_.id }} className="mb-2" /> : null}
+    <form action={updateVariantAction} className="space-y-2" id={`variant-${var_.id}`}>
       <input type="hidden" name="id" value={var_.id} />
       {email ? (
         <Field label="Subject">
@@ -67,6 +71,7 @@ function VariantForm({ var_, maxChars, email = false, outcome }: { var_: Content
         </div>
       ) : null}
     </form>
+    </>
   );
 }
 
@@ -103,10 +108,10 @@ function GroupCard({ g, var_, src, slot, outcome }: { g: Group; var_?: ContentVa
   );
 }
 
-export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string }> }) {
+export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string; gate?: string; variant?: string; status?: string; items?: string; startDate?: string; startTime?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
-  const { blocked, drip } = await searchParams;
+  const { blocked, drip, ...sp } = await searchParams;
   // The page's own sentences, chosen by a code: a block on the one-click send is never silent and never free text from the address bar.
   const blockedLine = blocked === "threads" ? THREADS_EXCLUSIVE : blocked === "media" ? `${ILLUSTRATIVE_LABEL}\nAn attached file shows a result. Add ${ILLUSTRATIVE_MARK} to the post, in every version that goes out. Nothing was scheduled.` : blocked === "url" ? `${PRIVATE_URL_REFUSAL} Nothing was scheduled.` : blocked === "fabricated" ? "A statistic in this post is on the blacklist, so nothing was scheduled. Open it in the composer to see which one and what to say instead." : null;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
@@ -136,6 +141,10 @@ export default async function RepurposePage({ params, searchParams }: { params: 
   const posted = variants.filter((x) => x.status === "posted").length;
   const reach = variants.reduce((a, x) => ({ reactions: a.reactions + x.reactions, comments: a.comments + x.comments, dms: a.dms + x.dms, leads: a.leads + x.leads }), { reactions: 0, comments: 0, dms: 0, leads: 0 });
   const ai = await hasAiKey();
+  // The gates, shown by the action that asked for them: one version's status moving to scheduled or posted, or the one-click send.
+  // The names come from the action that held (the one-click send names what it would have carried), never re-derived here.
+  const heldVariant = sp.gate === "variant" && (sp.status === "scheduled" || sp.status === "posted") ? variants.find((x) => x.id === sp.variant) : undefined;
+  const distributeItems = sp.gate === "distribute" && sp.items ? sp.items.split("\n").filter(Boolean) : [];
 
   return (
     <>
@@ -188,7 +197,17 @@ export default async function RepurposePage({ params, searchParams }: { params: 
       {blockedLine ? (
         <p className="mb-4 whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="distribute-blocked" role="alert">{blockedLine}</p>
       ) : null}
+      {heldVariant ? (
+        <div className="mb-4">
+          <GateBlock gate={{ line: gateLine(1), items: [variantName(heldVariant, groups.find((g) => g.id === heldVariant.groupId)?.name)] }} reviewHref={`/content/${item.id}/repurpose#variant-${heldVariant.id}`} action={updateVariantAction} fields={{ id: heldVariant.id, status: sp.status ?? "" }} />
+        </div>
+      ) : null}
       <Card className="mb-4" title="One click: everywhere" action={<Link href={`/content/${item.id}/compose`} className="text-xs underline">Open in composer</Link>}>
+        {distributeItems.length ? (
+          <div className="mb-3">
+            <GateBlock gate={{ line: gateLine(distributeItems.length), items: distributeItems }} reviewHref={`/content/${item.id}`} action={distributeAllAction} fields={{ contentItemId: item.id, startDate: sp.startDate ?? v.today, startTime: sp.startTime ?? "09:00" }} />
+          </div>
+        ) : null}
         <form action={distributeAllAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="contentItemId" value={item.id} />
           <p className="w-full text-sm text-ink-2">Drafts every channel plus your group and top 3 prospecting groups, then schedules them 45 minutes apart in the order that builds momentum: your group first, profile and Instagram next, long-form last. Channels publish through the Social Planner when GoHighLevel is connected; group posts wait for you to paste.</p>

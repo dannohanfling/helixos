@@ -123,6 +123,14 @@ export const tasks = sqliteTable(
 );
 
 export const CONTENT_STATUSES = ["idea", "creating", "ready", "scheduled", "posted"] as const;
+/**
+ * Where a record's text came from and whether a person has read it. ai_unreviewed is set when a model's text is stored;
+ * it becomes ai_accepted on an explicit Accept or edited on any coach edit (an edit counts as review). Coach-written text
+ * is coach. Rows from before the column, and text a rule composed rather than a model or the coach, stay null: never
+ * guessed, never flagged. Only ai_unreviewed is ever gated.
+ */
+export const ORIGINS = ["ai_unreviewed", "ai_accepted", "edited", "coach"] as const;
+export type Origin = (typeof ORIGINS)[number];
 export const CONTENT_TYPES = [
   "CTA Post",
   "Comment Ladder",
@@ -179,6 +187,7 @@ export const contentItems = sqliteTable(
     views: integer("views").notNull().default(0),
     leads: integer("leads").notNull().default(0),
     notes: text("notes"),
+    origin: text("origin", { enum: ORIGINS }),
     createdAt: createdAt(),
   },
   (t) => [index("content_user_status").on(t.userId, t.status), index("content_user_post_at").on(t.userId, t.postAt)],
@@ -638,6 +647,8 @@ export const webinarSections = sqliteTable(
     status: text("status", { enum: ["todo", "drafted", "final", "omitted"] }).notNull().default("todo"),
     /** reveal: the section's key points build up one slide at a time, the way a live presenter paces a reveal. */
     buildStyle: text("build_style", { enum: ["none", "reveal"] }).notNull().default("none"),
+    /** The script's provenance (ORIGINS); null for a section drafted before the mark existed or not yet written. */
+    origin: text("origin", { enum: ORIGINS }),
   },
   (t) => [uniqueIndex("webinar_sections_key").on(t.webinarId, t.sectionKey)],
 );
@@ -763,6 +774,8 @@ export const contentVariants = sqliteTable(
     externalStatus: text("external_status"),
     externalError: text("external_error"),
     externalSyncedAt: text("external_synced_at"),
+    /** The body's provenance (ORIGINS): generatedBy says which generator ran, origin says whether a person has read the result. */
+    origin: text("origin", { enum: ORIGINS }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("variants_item_channel_group").on(t.contentItemId, t.channel, t.groupId)],
@@ -1527,12 +1540,40 @@ export const leadMagnets = sqliteTable(
     chatbotQuestions: text("chatbot_questions", { mode: "json" }).$type<string[]>().notNull().default([]),
     generatedBy: text("generated_by").notNull().default("none"),
     notes: text("notes"),
+    /** The content's and hand-overs' provenance (ORIGINS). */
+    origin: text("origin", { enum: ORIGINS }),
+    /** When the client published the hosted page; the public route serves nothing before that. The publish action is where the provenance gate stands. */
+    publishedAt: text("published_at"),
     createdAt: createdAt(),
     updatedAt: text("updated_at"),
   },
   (t) => [uniqueIndex("lead_magnets_slug").on(t.slug), uniqueIndex("lead_magnets_ws_keyword").on(t.workspaceId, t.keyword), index("lead_magnets_user").on(t.userId)],
 );
 export type LeadMagnet = typeof leadMagnets.$inferSelect;
+
+/**
+ * "Continue anyway": a coach sent content out that carried AI drafts nobody had reviewed, and chose to. One row per confirm:
+ * who, when, which action, which record, and the names of the drafts it carried. The deck route accepts a confirm's id in
+ * place of a clean record, once it is this user's and this webinar's. Never a value of the drafts themselves.
+ */
+export const REVIEW_SURFACES = ["deck_export", "magnet_publish", "post_schedule", "post_now", "post_status", "variant_status"] as const;
+export type ReviewSurface = (typeof REVIEW_SURFACES)[number];
+export const reviewConfirms = sqliteTable(
+  "review_confirms",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** The name shown beside the confirm, as it was at the time. */
+    userName: text("user_name").notNull().default(""),
+    surface: text("surface", { enum: REVIEW_SURFACES }).notNull(),
+    subjectId: text("subject_id").notNull(),
+    items: text("items", { mode: "json" }).$type<string[]>().notNull().default([]),
+    createdAt: createdAt(),
+  },
+  (t) => [index("review_confirms_user").on(t.userId, t.createdAt)],
+);
+export type ReviewConfirm = typeof reviewConfirms.$inferSelect;
 
 /**
  * A proof's attachments: a third kind of evidence on the same row as the quote and the Fathom deep link. The bytes live in the

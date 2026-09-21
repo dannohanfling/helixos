@@ -6,6 +6,8 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import {
+  acceptSectionAction,
+  confirmDeckExportAction,
   deleteWebinarAction,
   draftSectionAction,
   linkOfferAction,
@@ -16,6 +18,9 @@ import {
   updateWebinarFoundationAction,
 } from "@/lib/actions/webinars";
 import { CopyButton } from "@/components/copy-button";
+import { GateBlock, UnreviewedMark } from "@/components/provenance";
+import { isUnreviewed, sameItems, sectionGate, type Gate } from "@/lib/engine/provenance";
+import { confirmFor } from "@/lib/provenance";
 import {
   Badge,
   Card,
@@ -80,6 +85,7 @@ export default async function WebinarWizardPage({
     toBank?: string;
     held?: string;
     example?: string;
+    confirmed?: string;
   }>;
 }) {
   const v = await requireViewer();
@@ -159,6 +165,10 @@ export default async function WebinarWizardPage({
   const context = await contextFor(v, w);
   const deck: DeckResult = deckSlides(context, brandKit ?? null);
   const pace: DeckPace = deckPace(context, deck);
+  // The export's provenance gate, from the same sections the route reads; a confirm counts only for the drafts as they stand now.
+  const exportGate = sectionGate(sections);
+  const exportConfirm = exportGate && sp.confirmed ? await confirmFor(sp.confirmed, v.user.id, "deck_export", w.id) : null;
+  const exportConfirmed = exportConfirm && sameItems(exportConfirm.items, exportGate?.items ?? []) ? exportConfirm : null;
   const build = buildChecks({ webinar: w, sections, beliefs, components: offerComponents, known, presenter: presenterName, presenterAliases, deck: { refused: deck.refused.length, rate: pace.rate }, review });
   const numbers = { runtime: build.totalMinutes, openingMinutes: sections.filter((s) => s.act === "opening").reduce((a, s) => a + s.durationMin, 0) };
   const staleStatus = statusStale(w.status, build);
@@ -802,6 +812,7 @@ export default async function WebinarWizardPage({
                 </p>
               ) : null;
             })()}
+            {isUnreviewed(section.origin) ? <UnreviewedMark action={acceptSectionAction} fields={{ id: w.id, sectionKey: section.sectionKey }} className="mt-3" /> : null}
             <form action={updateSectionAction} className="mt-4 space-y-3">
               <input type="hidden" name="id" value={w.id} />
               <input
@@ -1286,7 +1297,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep webinarId={w.id} deck={deck} pace={pace} />
+        <DeckStep webinarId={w.id} deck={deck} pace={pace} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
       ) : null}
 
       {step === "review" ? (
@@ -1618,19 +1629,22 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, deck, pace }: { webinarId: string; deck: DeckResult; pace: DeckPace }) {
+function DeckStep({ webinarId, deck, pace, gate, confirmed, reviewHref }: { webinarId: string; deck: DeckResult; pace: DeckPace; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
   const refused = deck.refused.length > 0;
+  // The gate on the export: with AI-drafted sections nobody reviewed, the files are offered only under a logged Continue anyway.
+  const held = Boolean(gate) && !confirmed;
+  const query = confirmed ? `&confirmed=${confirmed.id}` : "";
   return (
     <Card
       title={`9 · Deck · ${deck.slides.length} slides`}
       action={
-        refused ? null : (
+        refused || held ? null : (
           <span className="flex flex-wrap gap-2">
-            <a className="btn btn-primary btn-sm" href={`/api/webinars/${webinarId}/deck?format=pptx`} download data-testid="deck-pptx">
+            <a className="btn btn-primary btn-sm" href={`/api/webinars/${webinarId}/deck?format=pptx${query}`} download data-testid="deck-pptx">
               Download .pptx
             </a>
-            <a className="btn btn-ghost btn-sm" href={`/api/webinars/${webinarId}/deck?format=txt`} download data-testid="deck-txt">
+            <a className="btn btn-ghost btn-sm" href={`/api/webinars/${webinarId}/deck?format=txt${query}`} download data-testid="deck-txt">
               Outline (.txt)
             </a>
             <CopyButton text={md} label="Copy all" className="btn btn-ghost btn-sm" />
@@ -1638,6 +1652,16 @@ function DeckStep({ webinarId, deck, pace }: { webinarId: string; deck: DeckResu
         )
       }
     >
+      {!refused && gate && held ? (
+        <div className="mb-3">
+          <GateBlock gate={gate} reviewHref={reviewHref} action={confirmDeckExportAction} fields={{ id: webinarId }} />
+        </div>
+      ) : null}
+      {!refused && gate && confirmed ? (
+        <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="deck-confirmed" role="status">
+          {gate.line}: {gate.items.join(", ")}. Continue anyway: {confirmed.who}, {confirmed.when}.
+        </p>
+      ) : null}
       <p className="mb-2 text-sm font-medium" data-testid="deck-pace">
         {paceLine(pace)}
       </p>

@@ -13,6 +13,8 @@ import { fillRuntime } from "@/lib/engine/subject";
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
 import { ctx, num, opt, optNum, refresh, str } from "@/lib/action-helpers";
+import { originAfterAccept, originAfterSave, sectionGate } from "@/lib/engine/provenance";
+import { recordConfirm } from "@/lib/provenance";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { evidenceLines, insertText } from "@/lib/engine/evidence";
 import { essenceFor } from "@/lib/queries/essence";
@@ -111,10 +113,13 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
   const status = (["todo", "drafted", "final", "omitted"] as const).find((s) => s === str(formData, "status"));
   const script = opt(formData, "script");
   const asset = await assetFor(workspaceId, userId, opt(formData, "assetId"));
+  const before = await db.query.webinarSections.findFirst({ where: and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)) });
   await db
     .update(schema.webinarSections)
     .set({
       script,
+      // A changed script is the coach's review of it; an unchanged one keeps its mark, whatever else on the form moved.
+      origin: originAfterSave(before?.origin, before?.script, script),
       keyPoints: opt(formData, "keyPoints"),
       transitionIn: opt(formData, "transitionIn"),
       transitionOut: opt(formData, "transitionOut"),
@@ -202,11 +207,41 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   const note = stripNote(stripped.removed);
   await db
     .update(schema.webinarSections)
-    .set({ script: stripped.text, status: "drafted", keyPoints: section?.keyPoints ?? null })
+    .set({ script: stripped.text, status: "drafted", keyPoints: section?.keyPoints ?? null, origin: "ai_unreviewed" })
     .where(and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)));
   await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
   refresh();
   redirect(`/webinars/${id}?step=script&section=${sectionKey}${note ? `&stripped=${encodeURIComponent(note)}` : ""}`);
+}
+
+/** Accept: the coach has read this one AI-drafted script and keeps it as it is. One section per click; nothing accepts more than one. */
+export async function acceptSectionAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const id = str(formData, "id");
+  const sectionKey = str(formData, "sectionKey");
+  await own(id, userId);
+  const section = await db.query.webinarSections.findFirst({ where: and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)) });
+  if (!section) return;
+  await db.update(schema.webinarSections).set({ origin: originAfterAccept(section.origin) }).where(eq(schema.webinarSections.id, section.id));
+  refresh();
+  redirect(`/webinars/${id}?step=script&section=${sectionKey}`);
+}
+
+/**
+ * Continue anyway on the deck export: the coach saw which sections are AI drafts nobody reviewed and chose to export. The
+ * choice is logged with who and when and the sections named, and the Deck step then offers the files under that confirm's id,
+ * which the route checks before it serves. A clean webinar needs no confirm and gets none.
+ */
+export async function confirmDeckExportAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx();
+  const id = str(formData, "id");
+  await own(id, userId);
+  const sections = await db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, id) });
+  const gate = sectionGate(sections);
+  if (!gate) redirect(`/webinars/${id}?step=deck`);
+  const confirmed = await recordConfirm({ workspaceId, userId, userName: v.user.name }, "deck_export", id, gate.items);
+  refresh();
+  redirect(`/webinars/${id}?step=deck&confirmed=${confirmed}`);
 }
 
 export async function linkOfferAction(formData: FormData): Promise<void> {

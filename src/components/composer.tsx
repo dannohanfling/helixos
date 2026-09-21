@@ -62,6 +62,8 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const [pending, start] = useTransition();
   const [polishing, setPolishing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  /** The provenance gate the last send hit: the line, the drafts by name, and the mode to send again with the confirm. */
+  const [gate, setGate] = useState<{ line: string; items: string[]; mode: "schedule" | "now" } | null>(null);
   const [result, setResult] = useState<ComposeResult | null>(null);
 
   const src = useMemo(() => ({ title: title || hook.slice(0, 60), hook, body, hasCta, ctaText: cta, hashtag, firstName: persona.name.split(" ")[0] }), [title, hook, body, hasCta, cta, hashtag, persona.name]);
@@ -115,9 +117,10 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       return { ...o, [k]: { ...cur, ...patch } };
     });
 
-  const submit = (mode: "draft" | "schedule" | "now") =>
+  const submit = (mode: "draft" | "schedule" | "now", confirm = false) =>
     start(async () => {
       setNotice(null);
+      setGate(null);
       const payload = {
         id: initial?.id ?? null,
         title: src.title,
@@ -131,6 +134,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
         mediaAttachmentId: mediaAttachment?.id ?? null,
         contentType,
         mode,
+        confirm,
         targets: schedulable.map((t) => {
           const d = draftOf(t);
           const at = schedule.get(t.key);
@@ -140,6 +144,12 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       const r = await saveComposeAction(payload);
       if (r.blocked) {
         setNotice(r.blocked);
+        return;
+      }
+      // Nothing was saved: the post or a version is an AI draft nobody has read. The gate names it here, at the send, with
+      // Review (stay and read) or Continue anyway (the same send with the confirm, logged with who and when).
+      if (r.gate && mode !== "draft") {
+        setGate({ ...r.gate, mode });
         return;
       }
       setResult(r);
@@ -439,6 +449,24 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
               {pending ? "Working…" : `Schedule ${chosen.length} ${chosen.length === 1 ? "post" : "posts"}`}
             </button>
           </div>
+          {gate ? (
+            <div className="mt-3 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="review-gate" role="alert">
+              <p className="font-semibold" data-testid="review-gate-line">{gate.line}</p>
+              <ul className="mt-1 list-disc pl-5" data-testid="review-gate-items">
+                {gate.items.map((name, i) => (
+                  <li key={i}>{name}</li>
+                ))}
+              </ul>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setGate(null)} data-testid="review-gate-review">
+                  Review
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => submit(gate.mode, true)} data-testid="review-gate-continue">
+                  Continue anyway
+                </button>
+              </div>
+            </div>
+          ) : null}
           {notice ? (
             <p className="mt-3 rounded-lg bg-surface-2 p-3 text-sm whitespace-pre-line">
               {notice}

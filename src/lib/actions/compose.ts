@@ -18,7 +18,9 @@ import { ILLUSTRATIVE_LABEL, mediaBlock, mediaUrlProblem } from "@/lib/engine/co
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 import { background, pushSocialPost } from "@/lib/integrations";
-import { ctx } from "@/lib/action-helpers";
+import { ctx, str } from "@/lib/action-helpers";
+import { carriesUnreviewed, gateLine, originAfterSave, variantName, type Gate } from "@/lib/engine/provenance";
+import { recordConfirm } from "@/lib/provenance";
 
 export type ComposePayload = {
   id?: string | null;
@@ -35,11 +37,17 @@ export type ComposePayload = {
   mediaAttachmentId?: string | null;
   contentType: string;
   mode: "draft" | "schedule" | "now";
+  /** Continue anyway: the coach saw the gate's line naming the AI drafts nobody reviewed and chose to send. Logged with who and when. */
+  confirm?: boolean;
   targets: { key: string; channel: string; groupId: string; body: string; subject?: string; postAt?: string | null }[];
 };
 
-/** `blocked`: nothing was saved; the text says which fabricated statistic and what to say instead, or which rule the picked file carries. */
-export type ComposeResult = { id: string; scheduled: number; posted: number; pushed: number; blocked?: string };
+/**
+ * `blocked`: nothing was saved; the text says which fabricated statistic and what to say instead, or which rule the picked file
+ * carries. `gate`: nothing was saved either; the post or a version going out is an AI draft nobody has reviewed, named, and
+ * the composer offers Review or Continue anyway (the same call again with `confirm`).
+ */
+export type ComposeResult = { id: string; scheduled: number; posted: number; pushed: number; blocked?: string; gate?: Gate };
 
 const isChannel = (c: string): c is Channel => (CHANNELS as readonly string[]).includes(c);
 
@@ -82,7 +90,24 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
   const ladderPost = payload.id ? Boolean(await db.query.ladders.findFirst({ where: and(eq(schema.ladders.contentItemId, payload.id), eq(schema.ladders.userId, userId)), columns: { id: true } })) : false;
   const firstCommentProblem = firstCommentRefusal({ ladderPost, dripOn, firstComment: payload.firstComment });
   if (firstCommentProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: firstCommentProblem };
+  let id = payload.id ?? null;
+  const existing = id ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, userId)) }) : null;
+  if (!existing) id = null;
   const title = payload.title.trim() || payload.hook.trim().slice(0, 80) || "Untitled post";
+  // The provenance gate, on the action that sends the post out: the post itself and every version going as it was stored, if a
+  // model wrote it and nobody has read it, are named; nothing is saved until the coach reviews or continues anyway, and
+  // continuing is logged with who and when. A draft save is not sending, and a version rewritten on the way was reviewed by the rewrite.
+  if (payload.mode !== "draft") {
+    const names: string[] = [];
+    if (existing && carriesUnreviewed(existing.origin, existing.body, payload.body)) names.push(existing.title);
+    for (const t of targets) {
+      if (!isChannel(t.channel)) continue;
+      const was = id ? await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, id), eq(schema.contentVariants.channel, t.channel), eq(schema.contentVariants.groupId, t.groupId)) }) : null;
+      if (was && carriesUnreviewed(was.origin, was.body, t.body)) names.push(variantName(t, ownGroups.find((g) => g.id === t.groupId)?.name));
+    }
+    if (names.length && !payload.confirm) return { id: id ?? "", scheduled: 0, posted: 0, pushed: 0, gate: { line: gateLine(names.length), items: names } };
+    if (names.length) await recordConfirm({ workspaceId, userId, userName: v.user.name }, payload.mode === "now" ? "post_now" : "post_schedule", id ?? "", names);
+  }
   const firstAt = payload.targets.map((t) => t.postAt).filter(Boolean).sort()[0] ?? null;
   const status = payload.mode === "now" ? "posted" : payload.mode === "schedule" ? "scheduled" : "ready";
   const item = {
@@ -100,15 +125,11 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     postAt: payload.mode === "schedule" ? firstAt : payload.mode === "now" ? nowWallInTz(v.tz) : null,
     postedAt: payload.mode === "now" ? nowIso() : null,
   };
-  let id = payload.id ?? null;
-  if (id) {
-    const existing = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, userId)) });
-    if (!existing) id = null;
-  }
-  if (id) await db.update(schema.contentItems).set({ ...item, postedAt: item.postedAt ?? undefined }).where(eq(schema.contentItems.id, id));
+  // A changed body is the coach's review of an AI draft; a post first written here is the coach's own.
+  if (id && existing) await db.update(schema.contentItems).set({ ...item, origin: originAfterSave(existing.origin, existing.body, item.body), postedAt: item.postedAt ?? undefined }).where(eq(schema.contentItems.id, id));
   else {
     id = newId();
-    await db.insert(schema.contentItems).values({ id, workspaceId, userId, platform: "FB Group", ...item });
+    await db.insert(schema.contentItems).values({ id, workspaceId, userId, platform: "FB Group", ...item, origin: "coach" });
   }
 
   let scheduled = 0;
@@ -122,7 +143,9 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, id), eq(schema.contentVariants.channel, t.channel), eq(schema.contentVariants.groupId, groupId)) });
     if (existing?.status === "posted" && payload.mode !== "now") continue;
     const variantId = existing?.id ?? newId();
-    if (existing) await db.update(schema.contentVariants).set(row).where(eq(schema.contentVariants.id, existing.id));
+    // A version's text from the composer is the coach's choice at the moment of sending; a stored AI draft it rewrites becomes edited,
+    // an unchanged one keeps its mark, and a version first written here carries none (a rule or the coach composed it, in view).
+    if (existing) await db.update(schema.contentVariants).set({ ...row, origin: originAfterSave(existing.origin, existing.body, t.body) }).where(eq(schema.contentVariants.id, existing.id));
     else await db.insert(schema.contentVariants).values({ id: variantId, contentItemId: id, userId, channel: t.channel, groupId, ...row });
     if (vStatus === "scheduled") scheduled++;
     if (vStatus === "posted") {
@@ -203,11 +226,16 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
     mediaAttachmentId: item.mediaAttachmentId,
     contentType: item.contentType,
     mode: "schedule",
+    confirm: str(formData, "confirm") === "1",
     targets: targets.map((t) => {
       const d = draftFor(src, t);
       return { key: t.key, channel: t.channel, groupId: t.groupId, body: d.body, subject: d.subject, postAt: when.get(t.key) ? `${when.get(t.key)}:00` : null };
     }),
   });
+  // The gate is never silent either: the page that offered the button names the drafts and offers Review or Continue anyway.
+  if (result.gate) redirect(`/content/${item.id}/repurpose?gate=distribute&items=${encodeURIComponent(result.gate.items.join("\n"))}&startDate=${encodeURIComponent(startDate)}&startTime=${encodeURIComponent(startTime)}`);
   // A block is never silent: the page that offered the button names it.
   if (result.blocked) redirect(`/content/${item.id}/repurpose?blocked=${result.blocked.startsWith(ILLUSTRATIVE_LABEL) ? "media" : mediaUrlProblem(item.mediaUrl ?? "") ? "url" : result.blocked === THREADS_EXCLUSIVE ? "threads" : "fabricated"}`);
+  // Back to the page with a clean address: a gate or a block that was answered is not shown again on the next load.
+  redirect(`/content/${item.id}/repurpose`);
 }

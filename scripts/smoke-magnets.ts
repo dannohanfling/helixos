@@ -142,6 +142,20 @@ async function main() {
     if (!indexRow || !indexRow.isPublic || indexRow.url !== pdfHref || "bytes" in indexRow) throw new Error("the index row records where the object is, never the bytes");
     console.log(`✓ PDF: built into the bucket, ${pdfBytes.length} bytes, /files redirects to the CDN address, served anonymously`);
 
+    // The hosted page is public only once published. The DM edit above was the coach's review of the AI draft (origin edited),
+    // so the publish goes straight through with no gate; the provenance walk covers the gate itself.
+    const before = await anon(`${base}/m/the-12-minute-content-plan`);
+    if (before.status !== 404) throw new Error(`an unpublished hosted page is a 404, got ${before.status}`);
+    const unpublished = (await db.query.leadMagnets.findFirst({ where: eq(schema.leadMagnets.id, magnetId) }))!;
+    if (unpublished.publishedAt !== null || unpublished.origin !== "edited") throw new Error(`before publish: publishedAt ${unpublished.publishedAt}, origin ${unpublished.origin} (the DM edit reviews the draft)`);
+    await page.goto(`${base}/magnets/${magnetId}`);
+    await submit(page, '[data-testid="magnet-publish"]');
+    await page.waitForURL(/published=1/);
+    if (await page.locator('[data-testid="review-gate"]').count()) throw new Error("a reviewed draft publishes without the gate");
+    const published = (await db.query.leadMagnets.findFirst({ where: eq(schema.leadMagnets.id, magnetId) }))!;
+    if (!published.publishedAt) throw new Error("publish sets publishedAt");
+    console.log("✓ publish: 404 before, the reviewed draft publishes without a gate, publishedAt on the record");
+
     // Hosted page and tracked link with no session
     const pageRes = await anon(`${base}/m/the-12-minute-content-plan`);
     const pageHtml = await pageRes.text();

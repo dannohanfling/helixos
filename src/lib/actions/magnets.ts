@@ -8,6 +8,8 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
+import { gateFor, originAfterAccept, originAfterSave } from "@/lib/engine/provenance";
+import { recordConfirm } from "@/lib/provenance";
 import { MAGNET_TYPE_INFO, keywordOf, parseContent, parseGenerated, scaffoldContent, slugify } from "@/lib/engine/lead-magnet";
 import { publicFolderOf, safeName } from "@/lib/engine/storage-policy";
 import { evidenceLines } from "@/lib/engine/evidence";
@@ -73,6 +75,7 @@ export async function updateMagnetAction(formData: FormData): Promise<void> {
   if (clash) redirect(`/magnets/${m.id}?error=${encodeURIComponent(clashMessage(keyword, clash.title))}`);
   const formats = formatsOf(formData);
   const primary = MAGNET_PRIMARY.find((p) => p === str(formData, "primary")) ?? m.primary;
+  const words = { content: parseContent(str(formData, "content")), personalReply: opt(formData, "personalReply"), personalDm: opt(formData, "personalDm"), chatbotAnswer: opt(formData, "chatbotAnswer"), chatbotDelivery: opt(formData, "chatbotDelivery"), chatbotQuestions: questionsOf(formData) };
   await db
     .update(schema.leadMagnets)
     .set({
@@ -82,15 +85,12 @@ export async function updateMagnetAction(formData: FormData): Promise<void> {
       offerId: opt(formData, "offerId"),
       type: typeOf(str(formData, "type")),
       keyword,
-      content: parseContent(str(formData, "content")),
+      ...words,
       formats,
       primary,
-      personalReply: opt(formData, "personalReply"),
-      personalDm: opt(formData, "personalDm"),
-      chatbotAnswer: opt(formData, "chatbotAnswer"),
-      chatbotDelivery: opt(formData, "chatbotDelivery"),
-      chatbotQuestions: questionsOf(formData),
       notes: opt(formData, "notes"),
+      // The model wrote the content and the five hand-overs together; a change to any of them is the coach's review of the draft.
+      origin: originAfterSave(m.origin, magnetWords(m), magnetWords(words)),
       updatedAt: nowIso(),
     })
     .where(eq(schema.leadMagnets.id, m.id));
@@ -134,16 +134,54 @@ export async function generateMagnetAction(formData: FormData): Promise<void> {
   if (g) {
     await db
       .update(schema.leadMagnets)
-      .set({ content: g.content, personalReply: g.personalReply || m.personalReply, personalDm: g.personalDm || m.personalDm, chatbotAnswer: g.chatbotAnswer || m.chatbotAnswer, chatbotDelivery: g.chatbotDelivery || m.chatbotDelivery, chatbotQuestions: g.chatbotQuestions.length ? g.chatbotQuestions : m.chatbotQuestions, generatedBy: "claude", notes: [m.notes, g.note].filter(Boolean).join("\n") || null, updatedAt: nowIso() })
+      .set({ content: g.content, personalReply: g.personalReply || m.personalReply, personalDm: g.personalDm || m.personalDm, chatbotAnswer: g.chatbotAnswer || m.chatbotAnswer, chatbotDelivery: g.chatbotDelivery || m.chatbotDelivery, chatbotQuestions: g.chatbotQuestions.length ? g.chatbotQuestions : m.chatbotQuestions, generatedBy: "claude", origin: "ai_unreviewed", notes: [m.notes, g.note].filter(Boolean).join("\n") || null, updatedAt: nowIso() })
       .where(eq(schema.leadMagnets.id, m.id));
   } else {
     await db
       .update(schema.leadMagnets)
-      .set({ content: scaffoldContent(m.type, m.promise), generatedBy: text ? "claude-partial" : "scaffold", notes: [m.notes, text ? `Claude did not return the magnet's shape. Its answer:\n${text.slice(0, 2000)}` : null].filter(Boolean).join("\n") || null, updatedAt: nowIso() })
+      .set({ content: scaffoldContent(m.type, m.promise), generatedBy: text ? "claude-partial" : "scaffold", origin: null, notes: [m.notes, text ? `Claude did not return the magnet's shape. Its answer:\n${text.slice(0, 2000)}` : null].filter(Boolean).join("\n") || null, updatedAt: nowIso() })
       .where(eq(schema.leadMagnets.id, m.id));
   }
   refresh();
   redirect(`/magnets/${m.id}${g?.note ? "?stripped=1" : ""}`);
+}
+
+/** The text the model writes in one go, as one string, so a change to any part of it counts as the coach's review. */
+function magnetWords(m: { content: unknown; personalReply: string | null; personalDm: string | null; chatbotAnswer: string | null; chatbotDelivery: string | null; chatbotQuestions: string[] }): string {
+  return [JSON.stringify(m.content), m.personalReply ?? "", m.personalDm ?? "", m.chatbotAnswer ?? "", m.chatbotDelivery ?? "", JSON.stringify(m.chatbotQuestions)].join("\n");
+}
+
+/** Accept: the coach has read this magnet's AI draft and keeps it. One magnet per click. */
+export async function acceptMagnetAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const m = await own(str(formData, "id"), userId);
+  await db.update(schema.leadMagnets).set({ origin: originAfterAccept(m.origin), updatedAt: nowIso() }).where(eq(schema.leadMagnets.id, m.id));
+  refresh();
+  redirect(`/magnets/${m.id}`);
+}
+
+/**
+ * Publish the hosted page. This is the action that makes the magnet public, so the provenance gate stands here: a magnet whose
+ * AI draft nobody reviewed is not published on the first click; the page names it and offers Review or Continue anyway, and
+ * Continue anyway (confirm=1) is logged with who and when before it publishes. The public page itself shows nothing.
+ */
+export async function publishMagnetAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx();
+  const m = await own(str(formData, "id"), userId);
+  const gate = gateFor([{ name: m.title, origin: m.origin }]);
+  if (gate && str(formData, "confirm") !== "1") redirect(`/magnets/${m.id}?gate=publish`);
+  if (gate) await recordConfirm({ workspaceId, userId, userName: v.user.name }, "magnet_publish", m.id, gate.items);
+  await db.update(schema.leadMagnets).set({ publishedAt: nowIso(), formats: { ...m.formats, page: true }, updatedAt: nowIso() }).where(eq(schema.leadMagnets.id, m.id));
+  refresh();
+  redirect(`/magnets/${m.id}?published=1`);
+}
+
+export async function unpublishMagnetAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const m = await own(str(formData, "id"), userId);
+  await db.update(schema.leadMagnets).set({ publishedAt: null, updatedAt: nowIso() }).where(eq(schema.leadMagnets.id, m.id));
+  refresh();
+  redirect(`/magnets/${m.id}?unpublished=1`);
 }
 
 /** The typeset PDF, written to the public magnets prefix by the one writer that marks an object public. The old one is removed. */

@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 async function load(slug: string) {
   const m = await db.query.leadMagnets.findFirst({ where: eq(schema.leadMagnets.slug, slug) });
-  return m && m.formats.page ? m : null;
+  // Public only once the client published it: the provenance gate stood on that action, so this page shows no mark of its own.
+  return m && m.formats.page && m.publishedAt ? m : null;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 /**
  * The hosted page: the magnet itself, public, no session, nothing read about the reader. Only the content the client wrote
- * or approved; the PDF and the uploaded file link out when they exist. Off when the page format is off.
+ * or approved; the PDF and the uploaded file link out when they exist. Off when the page format is off or the page is not published.
  */
 export default async function MagnetPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

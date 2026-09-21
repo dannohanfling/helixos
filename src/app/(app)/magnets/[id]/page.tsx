@@ -5,7 +5,10 @@ import { MAGNET_TYPES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { appUrl } from "@/lib/branded-email";
-import { buildMagnetPdfAction, deleteMagnetAction, generateMagnetAction, removeMagnetFileAction, updateMagnetAction } from "@/lib/actions/magnets";
+import { acceptMagnetAction, buildMagnetPdfAction, deleteMagnetAction, generateMagnetAction, publishMagnetAction, removeMagnetFileAction, unpublishMagnetAction, updateMagnetAction } from "@/lib/actions/magnets";
+import { gateFor, isUnreviewed } from "@/lib/engine/provenance";
+import { GateBlock, UnreviewedMark } from "@/components/provenance";
+import { formatDateTime } from "@/lib/dates";
 import { HIT_SOURCES, MAGNET_TYPE_INFO, QUESTION_WARNING, canvaHandoff, contentToText, endsWithQuestion, magnetText, primaryTarget } from "@/lib/engine/lead-magnet";
 import { STORAGE_UNCONFIGURED, publicUrls, storageConfigured } from "@/lib/storage";
 import { MagnetUpload } from "@/components/magnet-upload";
@@ -52,6 +55,8 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
   const info = MAGNET_TYPE_INFO[m.type];
   // Craft, not truth: a DM or chatbot answer that ends without a question is warned on the field and on the summary, and the block opens so it is seen.
   const handoverWarnings = [m.personalDm, m.chatbotAnswer].filter((t) => t && !endsWithQuestion(t)).length;
+  // The publish gate: the magnet itself, when its AI draft has not been read. Shown only after the publish click asked for it.
+  const gate = gateFor([{ name: m.title, origin: m.origin }]);
   return (
     <>
       <PageHeader
@@ -74,13 +79,16 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" data-testid="magnet-error" role="alert">{sp.error}</p>
       ) : null}
       {sp.saved ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="magnet-saved">Saved.</p> : null}
+      {sp.published ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="magnet-published">Published. The hosted page is live at the link below.</p> : null}
+      {sp.unpublished ? <p className="mb-4 rounded-xl bg-surface-2 p-3 text-sm" data-testid="magnet-unpublished">Unpublished. The hosted page is off.</p> : null}
       {sp.pdf ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="magnet-pdf-built">PDF built. It is live at the link below.</p> : null}
       {sp.uploaded ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="magnet-uploaded">File uploaded. It is live at the link below.</p> : null}
       {sp.stripped && m.notes ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm whitespace-pre-wrap" data-testid="magnet-stripped">{m.notes}</p> : null}
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-4">
           <Card title="The magnet">
-            <form action={updateMagnetAction} className="space-y-3" data-testid="magnet-form">
+            {isUnreviewed(m.origin) ? <UnreviewedMark action={acceptMagnetAction} fields={{ id: m.id }} className="mb-3" /> : null}
+            <form action={updateMagnetAction} className="space-y-3" data-testid="magnet-form" id="magnet-form">
               <input type="hidden" name="id" value={m.id} />
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Title">
@@ -195,9 +203,25 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
               </tbody>
             </table>
             {m.formats.page ? (
-              <p className="mt-3 text-sm">
-                Hosted page: <a className="underline" href={`/m/${m.slug}`} target="_blank" rel="noreferrer" data-testid="magnet-page-link">{base}/m/{m.slug}</a>
-              </p>
+              <div className="mt-3 space-y-2 text-sm">
+                {m.publishedAt ? (
+                  <p>
+                    Hosted page: <a className="underline" href={`/m/${m.slug}`} target="_blank" rel="noreferrer" data-testid="magnet-page-link">{base}/m/{m.slug}</a>
+                    <span className="ml-2 text-xs text-ink-3" data-testid="magnet-published-at">published {formatDateTime(m.publishedAt, v.tz)}</span>
+                  </p>
+                ) : (
+                  <p className="text-ink-2" data-testid="magnet-not-published">Hosted page at {base}/m/{m.slug}: not published yet.</p>
+                )}
+                {sp.gate === "publish" && gate ? (
+                  <GateBlock gate={gate} reviewHref={`/magnets/${m.id}#magnet-form`} action={publishMagnetAction} fields={{ id: m.id }} />
+                ) : null}
+                <form action={m.publishedAt ? unpublishMagnetAction : publishMagnetAction}>
+                  <input type="hidden" name="id" value={m.id} />
+                  <button className={`btn btn-sm ${m.publishedAt ? "btn-ghost" : "btn-primary"}`} type="submit" data-testid={m.publishedAt ? "magnet-unpublish" : "magnet-publish"}>
+                    {m.publishedAt ? "Unpublish" : "Publish"}
+                  </button>
+                </form>
+              </div>
             ) : null}
           </Card>
           <Card title="PDF">

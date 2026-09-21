@@ -5,6 +5,8 @@ import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
 import { deckSlides, outlineText, renderPlan, type SlidePlan } from "@/lib/engine/deck";
 import { contextFor } from "@/lib/queries/webinar";
+import { sameItems, sectionGate } from "@/lib/engine/provenance";
+import { confirmFor } from "@/lib/provenance";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const [context, kit] = await Promise.all([contextFor(v, w), db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) })]);
   const deck = deckSlides(context, kit ?? null);
   if (deck.refused.length) return NextResponse.json({ error: "not exported", refused: deck.refused }, { status: 409 });
-  const format = new URL(request.url).searchParams.get("format") === "pptx" ? "pptx" : "txt";
+  // The provenance gate, on the export: a webinar carrying AI-drafted sections nobody reviewed leaves only under a confirm the
+  // Deck step logged for this user and this webinar (Continue anyway), naming exactly these drafts. The step shows the same line.
+  const url = new URL(request.url);
+  const gate = sectionGate(await db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, w.id) }));
+  const confirm = gate ? await confirmFor(url.searchParams.get("confirmed"), v.user.id, "deck_export", w.id) : null;
+  // A confirm covers the drafts it named and no others: one made before a later draft does not carry that draft out.
+  if (gate && !(confirm && sameItems(confirm.items, gate.items))) return NextResponse.json({ error: "not exported", unreviewed: gate.items, line: gate.line }, { status: 409 });
+  const format = url.searchParams.get("format") === "pptx" ? "pptx" : "txt";
   const slug = w.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "webinar";
 
   if (format === "txt") {
