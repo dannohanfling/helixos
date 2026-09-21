@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINT_LINES, QUALIFYING_DEFAULTS, houseConstraints, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, botFieldsRequest, houseConstraints, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
 
 const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live" };
 const draft = { name: "Holiday Survival Sprint", promise: "Get through the holidays", container: "Workshop", price: 297, currency: "USD", length: null, status: "draft" };
@@ -47,5 +49,53 @@ describe("the Stage 1 push is a named subset of the template's fields, never the
     expect(() => assertStorable({ ...p, business_name_cbf: "see uchat-token-x" }, ["uchat-token-x"])).toThrow(/credential/);
     expect(() => assertStorable({ ...p, ai_constraints_cbf: "http://x/api/iwh/abc" }, [])).toThrow(/credential/);
     expect(() => assertStorable(p, [""])).not.toThrow();
+  });
+});
+
+/**
+ * The request body schema for PUT /flow/set-bot-fields-by-name, as the published UChat API OpenAPI document (1.0.0) states it and
+ * code-addendum-uchat-spec.md quotes it: `{ "data": [ { "name": string, "value": string } ] }`, data required, up to 20.
+ */
+const SPEC_BODY = { type: "object", required: ["data"], properties: { data: { type: "array", maxItems: 20, items: { type: "object", required: ["name", "value"], properties: { name: { type: "string" }, value: { type: "string" } } } } } } as const;
+function conforms(v: unknown, s: { type: string; required?: readonly string[]; properties?: Record<string, unknown>; items?: unknown; maxItems?: number }): boolean {
+  if (s.type === "string") return typeof v === "string";
+  if (s.type === "array") return Array.isArray(v) && (s.maxItems === undefined || v.length <= s.maxItems) && v.every((x) => conforms(x, s.items as never));
+  if (s.type === "object") {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+    const o = v as Record<string, unknown>;
+    return (s.required ?? []).every((k) => k in o) && Object.entries(s.properties ?? {}).every(([k, sub]) => !(k in o) || conforms(o[k], sub as never));
+  }
+  return false;
+}
+
+describe("the request to set-bot-fields-by-name is the spec's shape, every value a string, never more than the API takes", () => {
+  it("wraps the fields under data, as {name, value} strings, and conforms to the schema quoted from the spec", () => {
+    const body = botFieldsRequest(stage1Payload({ businessName: "Torres Nutrition Coaching", workspaceName: "W", timezone: "America/New_York", offers: [live] }));
+    expect(conforms(body, SPEC_BODY)).toBe(true);
+    expect(Object.keys(body)).toEqual(["data"]);
+    expect(body.data.map((d) => d.name)).toEqual([...STAGE1_FIELDS]);
+    for (const d of body.data) expect(typeof d.value).toBe("string");
+    expect(conforms({ fields: body.data }, SPEC_BODY)).toBe(false);
+    expect(conforms({ data: [{ name: "x", value: 1 }] }, SPEC_BODY)).toBe(false);
+  });
+  it("refuses a non-string value, an empty push, and more fields than one call takes", () => {
+    expect(() => botFieldsRequest({ a: 1 as unknown as string })).toThrow(/not a string/);
+    expect(() => botFieldsRequest({})).toThrow(/nothing to push/);
+    expect(MAX_BOT_FIELDS_PER_CALL).toBe(20);
+    const many = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`f${i}`, "v"]));
+    expect(() => botFieldsRequest(many)).toThrow(/21 fields in one call; the API takes 20/);
+    expect(botFieldsRequest(Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`f${i}`, "v"]))).data).toHaveLength(20);
+  });
+  it("a 200 is not a match: the read-back names every field whose value differs or is missing", () => {
+    const sent = { a: "1", b: "2", c: "3" };
+    expect(readBackMismatches(sent, { a: "1", b: "2", c: "3", calendar_id: "cal" })).toEqual([]);
+    expect(readBackMismatches(sent, { a: "1", b: "x" })).toEqual(["b", "c"]);
+  });
+  it("the client sends that body and reads the fields back before it records a push", () => {
+    const src = readFileSync(join(process.cwd(), "src/lib/community-loyalty.ts"), "utf8");
+    expect(src).toContain("body: JSON.stringify(botFieldsRequest(payload))");
+    expect(src).not.toMatch(/JSON\.stringify\(\{ fields/);
+    expect(src.indexOf("/flow/bot-fields`")).toBeGreaterThan(src.indexOf("/flow/set-bot-fields-by-name"));
+    expect(src.indexOf("readBackMismatches(payload, held)")).toBeLessThan(src.indexOf("clBotFieldsPushedAt: nowIso()"));
   });
 });

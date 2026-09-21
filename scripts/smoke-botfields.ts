@@ -88,6 +88,18 @@ async function main() {
     const pushed = await page.locator(`form:has(input[name="membershipId"][value="${membership.id}"]) [data-testid="bot-fields-pushed"]`).innerText();
     if (!new RegExp(`^${STAGE1_FIELDS.length} fields pushed `).test(pushed)) throw new Error(`the row says what was pushed and when, got "${pushed}"`);
     console.log(`✓ re-sync: ${names.length} Stage 1 fields pushed by name; calendar_id, appointment_id and booked_time untouched; the token never on the page`);
+    // A 200 is not a match: the mock accepts the next push and silently drops one field; the read-back catches it, the record does not move
+    const pushedAtFirst = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.clBotFieldsPushedAt;
+    await fetch(`${mock}/__skip`, { method: "POST", body: JSON.stringify({ name: "qualifying_question_3" }) });
+    await submit(page, `form:has(input[name="membershipId"][value="${membership.id}"]) [data-testid="resync-bot"]`);
+    if ((await requests()).length !== 2) throw new Error("the second re-sync pushed once");
+    const dropped = (await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, membership.workspaceId), eq(schema.syncEvents.event, "botfields.push")) })).at(-1)!;
+    if (dropped.status !== "failed" || !/read-back differs on qualifying_question_3/.test(dropped.note ?? "")) throw new Error(`a field the bot did not write is a failed push with the field named, got ${JSON.stringify([dropped.status, dropped.note])}`);
+    if ((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.clBotFieldsPushedAt !== pushedAtFirst) throw new Error("a push that did not read back does not move the record");
+    await fetch(`${mock}/__skip`, { method: "POST", body: JSON.stringify({}) });
+    await submit(page, `form:has(input[name="membershipId"][value="${membership.id}"]) [data-testid="resync-bot"]`);
+    if ((await requests()).length !== 3) throw new Error("the third re-sync pushed once");
+    console.log("✓ a 200 with a field silently dropped is a failed push, named; the record moves only on a read-back that matches");
 
     // The record of the push: names and values, never the token, never a webhook address
     const row = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!;
@@ -95,7 +107,7 @@ async function main() {
     if (Object.keys(row.clBotFields).length !== STAGE1_FIELDS.length || !row.clBotFieldsPushedAt) throw new Error("the last push is on the record");
     if (recorded.includes(TOKEN) || recorded.includes("/api/iwh/") || recorded.includes("abcdef0123456789") || recorded.includes("/api/webhooks/")) throw new Error("the recorded payload carries a credential");
     const events = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, membership.workspaceId), eq(schema.syncEvents.event, "botfields.push")) });
-    if (events.length !== 1 || events[0].status !== "sent") throw new Error(`one sent event on the log, got ${JSON.stringify(events.map((e) => [e.status, e.note]))}`);
+    if (events.length !== 3 || events.map((e) => e.status).join() !== "sent,failed,sent") throw new Error(`sent, failed, sent on the log, got ${JSON.stringify(events.map((e) => [e.status, e.note]))}`);
     const logged = JSON.stringify(events);
     if (logged.includes(TOKEN) || logged.includes("/api/iwh/") || logged.includes("Torres Nutrition Coaching")) throw new Error("the sync log carries names and a reason, never a value or a credential");
     console.log("✓ the record and the log hold the names; the token and the webhook are in neither");
@@ -113,15 +125,15 @@ async function main() {
     await fillField(page, '[data-testid="qualifying-2"]', "Who else is part of this decision?");
     await submit(page, 'button:has-text("Save offer")');
     reqs = await requests();
-    if (reqs.length !== 2) throw new Error(`the price change re-pushed once, got ${reqs.length} pushes`);
-    const sent2 = Object.fromEntries(reqs[1].fields.map((f) => [f.name, f.value]));
+    if (reqs.length !== 4) throw new Error(`the price change re-pushed once, got ${reqs.length} pushes`);
+    const sent2 = Object.fromEntries(reqs[3].fields.map((f) => [f.name, f.value]));
     if (!/USD \$1,997/.test(sent2["ai_product_&_service_cbf"])) throw new Error(`the bot got the new price, got "${sent2["ai_product_&_service_cbf"]}"`);
     if (sent2.qualifying_question_2 !== "Who else is part of this decision?" || sent2.qualifying_question_1 !== QUALIFYING_DEFAULTS[0]) throw new Error("a written question replaces its default; the others keep theirs");
-    if (reqs[1].fields.map((f) => f.name).sort().join() !== [...STAGE1_FIELDS].sort().join()) throw new Error("the re-push is the same named subset");
+    if (reqs[3].fields.map((f) => f.name).sort().join() !== [...STAGE1_FIELDS].sort().join()) throw new Error("the re-push is the same named subset");
     after = await store();
     for (const [k, v] of Object.entries(botWritten)) if (after[k] !== v) throw new Error(`${k} was changed by the re-push: "${after[k]}"`);
     await submit(page, 'button:has-text("Save offer")');
-    if ((await requests()).length !== 2) throw new Error("an unchanged save pushes nothing");
+    if ((await requests()).length !== 4) throw new Error("an unchanged save pushes nothing");
     console.log("✓ an offer edit re-pushes the price and a written question by name, leaves the bot's own fields alone, and an unchanged save sends nothing");
   } finally {
     await browser.close();

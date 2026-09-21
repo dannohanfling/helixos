@@ -1,18 +1,21 @@
 /**
  * The Stage 1 push to a client's own Community Loyalty (uChat) workspace: HelixOS writes values into the template's existing
- * bot field names, one call per client, addressed by name (PUT /flow/set-bot-fields-by-name). One-way, never a read back.
- * The push is a named subset (STAGE1_FIELDS) and asserts it touches none of BOT_WRITTEN_FIELDS before it sends, so a re-push
- * after an unrelated edit leaves the calendar the client chose and the appointment the agent booked exactly as they were.
+ * bot field names, one call per client, addressed by name (PUT /flow/set-bot-fields-by-name). One-way: the only read is the
+ * read-back of what was just sent. The push is a named subset (STAGE1_FIELDS) and asserts it touches none of
+ * BOT_WRITTEN_FIELDS before it sends, so a re-push after an unrelated edit leaves the calendar the client chose and the
+ * appointment the agent booked exactly as they were.
  *
- * Request shape: `{ fields: [{ name, value }] }` with `Authorization: Bearer <token>`. The batch endpoint's exact body and
- * its partial-failure behaviour are unread from here (Part 3 item 4 is Danno's call to run); scripts/mock-uchat.ts holds
- * the same shape, so the shape is one edit if the live API differs. Tokens are sealed at rest and decrypted for the request.
+ * Request shape from the published UChat OpenAPI document (code-addendum-uchat-spec.md): `{ "data": [{ name, value }] }` with
+ * `Authorization: Bearer <token>`, a 200 of `{ "status": "ok" }` with no per-field result. So a 200 is not a match: after it,
+ * GET /flow/bot-fields is read and compared, and the push is recorded only when every sent value reads back. The read-back
+ * response's shape (`data: [{ name, value }]`) is the mock's and unconfirmed against the live API; the parser also accepts an
+ * object map. Partial failure and the host are Danno's call to run. Tokens are sealed at rest and decrypted for the request.
  */
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
-import { BOT_WRITTEN_FIELDS, STAGE1_FIELDS, assertStorable, samePayload, stage1Payload, stage1Problems, type BotFieldPayload } from "@/lib/engine/bot-fields";
+import { BOT_WRITTEN_FIELDS, STAGE1_FIELDS, assertStorable, botFieldsRequest, readBackMismatches, samePayload, stage1Payload, stage1Problems, type BotFieldPayload } from "@/lib/engine/bot-fields";
 import { redactSecrets } from "@/lib/engine/redact";
 import { logSync } from "@/lib/integrations";
 
@@ -56,22 +59,40 @@ export async function pushBotFields(membershipId: string, opts: { force?: boolea
   if (problems.length) return log("failed", problems.join(" "), names);
   if (!opts.force && samePayload(m.clBotFields, payload)) return log("skipped", "Nothing changed since the last push.", names);
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`${uchatBase()}/flow/set-bot-fields-by-name`, {
-      method: "PUT",
-      headers: { "content-type": "application/json", accept: "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ fields: names.map((name) => ({ name, value: payload[name as keyof BotFieldPayload] })) }),
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
+    const headers = { "content-type": "application/json", accept: "application/json", Authorization: `Bearer ${token}` };
+    const withTimeout = async (input: string, init: RequestInit) => {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        return await fetch(input, { ...init, signal: ctrl.signal });
+      } finally {
+        clearTimeout(t);
+      }
+    };
+    const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers, body: JSON.stringify(botFieldsRequest(payload)) });
     const text = (await res.text()).slice(0, 200);
     if (!res.ok) return log("failed", `${res.status} ${text}`.trim(), names);
+    // Read back: a 200 says the call was accepted, not that the fields were written. The record moves only on a match.
+    const back = await withTimeout(`${uchatBase()}/flow/bot-fields`, { method: "GET", headers });
+    if (!back.ok) return log("failed", `Pushed, but the read-back answered ${back.status}: not recorded as synced.`, names);
+    const held = heldFields(await back.json());
+    const mismatched = readBackMismatches(payload, held);
+    if (mismatched.length) return log("failed", `Pushed, but the read-back differs on ${mismatched.join(", ")}: not recorded as synced.`, names);
     await db.update(schema.memberships).set({ clBotFields: payload, clBotFieldsPushedAt: nowIso() }).where(eq(schema.memberships.id, m.id));
-    return log("sent", `${names.length} fields`, names);
+    return log("sent", `${names.length} fields pushed and read back`, names);
   } catch (e) {
     return log("failed", e instanceof Error ? e.message : String(e), names);
   }
+}
+
+/** The read-back's fields by name: `{ data: [{ name, value }] }` as the mock answers, or an object map; anything else is nothing held. */
+function heldFields(body: unknown): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = {};
+  const b = body as { data?: unknown };
+  const rows = Array.isArray(b?.data) ? (b.data as { name?: unknown; value?: unknown }[]) : Array.isArray(body) ? (body as { name?: unknown; value?: unknown }[]) : null;
+  if (rows) for (const r of rows) if (typeof r?.name === "string") out[r.name] = typeof r.value === "string" ? r.value : r.value == null ? undefined : String(r.value);
+  else if (b?.data && typeof b.data === "object") for (const [k, v] of Object.entries(b.data as Record<string, unknown>)) out[k] = typeof v === "string" ? v : v == null ? undefined : String(v);
+  return out;
 }
 
 /** A Stage 1 source changed for one member: re-push if the payload differs. Quiet when the member has no token. */

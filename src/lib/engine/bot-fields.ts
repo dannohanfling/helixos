@@ -99,3 +99,29 @@ export function assertStorable(payload: Record<string, string>, forbidden: strin
   const marks = [...forbidden.filter(Boolean), "/api/iwh/", "/api/webhooks/"];
   for (const [k, v] of Object.entries(payload)) for (const m of marks) if (v.includes(m)) throw new Error(`bot-fields: ${k} carries a credential and cannot be pushed or stored`);
 }
+
+/**
+ * The request body for PUT /flow/set-bot-fields-by-name, read off the published UChat API OpenAPI document (1.0.0), quoted in
+ * code-addendum-uchat-spec.md: `{ "data": [ { "name": string, "value": string } ] }`, `data` required, "up to 20 bot fields".
+ * Every value is a string, serialised deliberately here (a business name, an IANA zone name, newline-joined lines, three
+ * questions), and more than the spec's limit refuses loudly rather than truncating.
+ */
+export const MAX_BOT_FIELDS_PER_CALL = 20;
+export type BotFieldsRequest = { data: { name: string; value: string }[] };
+export function botFieldsRequest(payload: Record<string, string>): BotFieldsRequest {
+  const data = Object.entries(payload).map(([name, value]) => {
+    if (typeof value !== "string") throw new Error(`bot-fields: ${name} is not a string and cannot be pushed as one`);
+    return { name, value };
+  });
+  if (data.length > MAX_BOT_FIELDS_PER_CALL) throw new Error(`bot-fields: ${data.length} fields in one call; the API takes ${MAX_BOT_FIELDS_PER_CALL}`);
+  if (!data.length) throw new Error("bot-fields: nothing to push");
+  return { data };
+}
+
+/**
+ * A 200 from the push is `{ "status": "ok" }` and carries no per-field result, so it does not prove a field was written. The
+ * read-back compares what the bot now holds against what was sent: the names whose value differs or is missing.
+ */
+export function readBackMismatches(sent: Record<string, string>, held: Record<string, string | undefined>): string[] {
+  return Object.keys(sent).filter((k) => held[k] !== sent[k]);
+}
