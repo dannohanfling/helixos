@@ -287,6 +287,7 @@ async function main() {
   } finally {
     await browser.close();
   }
+  // Never vacuous: every walk asserts page content before this runs, so the responses this reads over are never an empty set.
   if (failures.length) throw new Error(`Errors:\n${failures.join("\n")}`);
   console.log("Socrates smoke passed");
 }

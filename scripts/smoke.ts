@@ -190,6 +190,7 @@ async function main() {
   console.log(`✓ cron ${cron.status()} ${(await cron.text()).slice(0, 120)}`);
 
   await browser.close();
+  // Never vacuous: every walk asserts page content before this runs, so the responses this reads over are never an empty set.
   if (failures.length) {
     console.error("FAILURES:\n" + failures.join("\n"));
     process.exit(1);

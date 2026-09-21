@@ -229,6 +229,7 @@ async function main() {
   console.log(`✓ export (coach: own + client with ${(clientDump.leads as unknown[]).length} leads; client: own only; anonymous refused)`);
 
   await browser.close();
+  // Never vacuous: every walk asserts page content before this runs, so the responses this reads over are never an empty set.
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);
   console.log("Wave 3 smoke passed");
 }

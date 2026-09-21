@@ -1,12 +1,28 @@
 /** Security headers walk: visits every main page as client and coach and fails on any Content-Security-Policy violation or page error the browser reports. Also prints the headers. */
+import { readdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "@playwright/test";
 
 const base = process.argv[2] ?? "http://localhost:3000";
-// Every page the app routes to, read off src/app/(app): a path here that answers anything but 200 fails the walk, so a renamed page is caught rather than "checked" as a 404.
-const PAGES_CLIENT = ["/today", "/tasks", "/content", "/content/compose", "/content/ladders", "/library", "/conversations", "/groups", "/webinars", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/evidence", "/essence", "/magnets", "/socrates", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings"];
-const PAGES_COACH = ["/coach", "/integrations", "/certification", "/settings"];
+/** Every static page under src/app/(app), read off the tree: a dynamic segment ([id]) needs a record and is walked elsewhere. */
+function routedPages(dir: string, prefix = ""): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith("[")) continue;
+    const path = `${prefix}/${entry.name}`;
+    if (existsSync(join(dir, entry.name, "page.tsx"))) out.push(path);
+    out.push(...routedPages(join(dir, entry.name), path));
+  }
+  return out.sort();
+}
+// The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
+const PAGES_CLIENT = ["/today", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/webinars", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings"];
+const PAGES_COACH = ["/coach", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {
+  const routed = routedPages("src/app/(app)");
+  const listed = [...new Set([...PAGES_CLIENT, ...PAGES_COACH])].sort();
+  if (JSON.stringify(listed) !== JSON.stringify(routed)) throw new Error(`the walk's page lists drifted from src/app/(app): listed ${listed.length}, routed ${routed.length}; missing ${routed.filter((p) => !listed.includes(p)).join(", ") || "none"}; stale ${listed.filter((p) => !routed.includes(p)).join(", ") || "none"}`);
   for (let i = 0; i < 40; i++) {
     const ok = await fetch(`${base}/login`).then((r) => r.ok).catch(() => false);
     if (ok) break;

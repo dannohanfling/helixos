@@ -1641,6 +1641,11 @@ function DeckStep({ webinarId, deck, pace }: { webinarId: string; deck: DeckResu
       <p className="mb-2 text-sm font-medium" data-testid="deck-pace">
         {paceLine(pace)}
       </p>
+      {pace.sectionsWithPoints < pace.sections ? (
+        <p className="mb-2 text-sm text-ink-2" data-testid="deck-partial">
+          {pace.sectionsWithPoints} of {pace.sections} sections have key points; the deck reads only those.
+        </p>
+      ) : null}
       <p className="mb-3 text-sm text-ink-2" data-testid="deck-honesty">
         A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in {deck.kit.name}
         {deck.kitApplied ? "" : " (no brand kit on this workspace yet)"}.

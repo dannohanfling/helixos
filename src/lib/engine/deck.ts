@@ -240,7 +240,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
  * The deck against the clock: slides a minute over the minutes a generator actually fills (Q&A netted off, as the reference
  * deck's 90 minutes were), per act too, and the offer's share. A count on its own says nothing; a count against a rate does.
  */
-export type DeckPace = { slides: number; minutes: number; rate: number | null; acts: { key: string; label: string; slides: number; minutes: number; rate: number | null; thin: boolean }[]; offerSlides: number };
+export type DeckPace = { slides: number; minutes: number; rate: number | null; acts: { key: string; label: string; slides: number; minutes: number; rate: number | null; thin: boolean }[]; offerSlides: number; /** Sections that carry key points, of those not left out: the deck reads only those. */ sectionsWithPoints: number; sections: number };
 export function deckPace(c: WebinarContext, d: DeckResult): DeckPace {
   const qa = c.sections.find((s) => s.sectionKey === QA_SECTION_KEY);
   const per = (slides: number, minutes: number) => (minutes > 0 ? Math.round((slides / minutes) * 10) / 10 : null);
@@ -251,7 +251,8 @@ export function deckPace(c: WebinarContext, d: DeckResult): DeckPace {
     const rate = per(count, mins);
     return { key: a.key, label: a.label, slides: count, minutes: mins, rate, thin: rate !== null && rate < PACE_BAND[0] };
   });
-  return { slides: d.slides.length, minutes, rate: per(d.slides.length, minutes), acts, offerSlides: d.slides.filter((s) => s.kind === "offer").length };
+  const live = c.sections.filter((s) => s.status !== "omitted");
+  return { slides: d.slides.length, minutes, rate: per(d.slides.length, minutes), acts, offerSlides: d.slides.filter((s) => s.kind === "offer").length, sectionsWithPoints: live.filter((s) => s.keyPoints.length).length, sections: live.length };
 }
 /** The readout on the Deck step, one line. */
 export function paceLine(p: DeckPace): string {

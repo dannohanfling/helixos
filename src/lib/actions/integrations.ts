@@ -10,6 +10,7 @@ import { INBOUND_SECRET_COOKIE, PASS_NOT_WIRED, PROVIDER_META, getIntegration, l
 import { cookies } from "next/headers";
 import { hashSecret, open, randomSecret, seal } from "@/lib/crypto";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
+import { pushBotFields } from "@/lib/community-loyalty";
 
 /** The inbound secret is stored only as a hash. The plaintext rides in a short-lived cookie so the Integrations page can show it once. */
 async function issueInboundSecret(provider: Provider): Promise<string> {
@@ -99,10 +100,23 @@ export async function setMemberPassAction(formData: FormData): Promise<void> {
   // The drip webhook URL is a credential: sealed at rest, kept when the field is left blank, cleared with "clear".
   const url = opt(formData, "clDripWebhookUrl");
   const drip = url === "clear" ? { clDripWebhookUrl: null } : url ? { clDripWebhookUrl: seal(url) } : {};
+  // The client's own uChat API token is a credential too: the same three states.
+  const tok = opt(formData, "clApiToken");
+  const token = tok === "clear" ? { clApiToken: null } : tok ? { clApiToken: seal(tok) } : {};
   await db
     .update(schema.memberships)
-    .set({ eoPassUrl: opt(formData, "eoPassUrl"), eoPassSerial: opt(formData, "eoPassSerial"), clUserNs: opt(formData, "clUserNs"), ...drip })
+    .set({ eoPassUrl: opt(formData, "eoPassUrl"), eoPassSerial: opt(formData, "eoPassSerial"), clUserNs: opt(formData, "clUserNs"), ...drip, ...token })
     .where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
+  refresh();
+}
+
+/** Re-sync to bot: the Stage 1 fields pushed now, whatever the last push held. Wins back what the bot's own SETUP wizard overwrote. */
+export async function resyncBotFieldsAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const membershipId = str(formData, "membershipId");
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)) });
+  if (!m) return;
+  await pushBotFields(m.id, { force: true, reason: "resync" });
   refresh();
 }
 

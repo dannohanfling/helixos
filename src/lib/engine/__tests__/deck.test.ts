@@ -222,6 +222,9 @@ describe("the deck against the clock", () => {
     expect(p.slides).toBe(d.slides.length);
     expect(p.rate).toBe(Math.round((d.slides.length / p.minutes) * 10) / 10);
     expect(p.offerSlides).toBe(2);
+    // Two of the twenty sections carry key points; the deck reads only those, and the readout says so
+    expect(p.sectionsWithPoints).toBe(2);
+    expect(p.sections).toBe(20);
     const vehicle = p.acts.find((a) => a.key === "vehicle")!;
     // divider, Problem Frame, recap: three slides over the act's minutes
     expect(vehicle.slides).toBe(3);

@@ -6,7 +6,7 @@ import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
 import { nudgeMemberAction, setClientPassAction } from "@/lib/actions/coach";
 import { clientFacing } from "@/lib/engine/pathway";
 import { setCertEnabledAction } from "@/lib/actions/courses";
-import { setMemberPassAction } from "@/lib/actions/integrations";
+import { resyncBotFieldsAction, setMemberPassAction } from "@/lib/actions/integrations";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
 import { money, rollup } from "@/lib/engine/ai-usage";
 import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
@@ -184,9 +184,17 @@ export default async function CoachPage() {
                     <input className="field w-28 py-1 text-xs" name="eoPassSerial" placeholder="serial" defaultValue={r.m.eoPassSerial ?? ""} />
                     <input className="field min-w-40 flex-1 py-1 text-xs" name="clDripWebhookUrl" type="password" autoComplete="off" placeholder={r.m.clDripWebhookUrl ? "Community Loyalty drip webhook: saved (blank keeps it, \"clear\" removes it)" : "Community Loyalty drip webhook URL"} title="The inbound webhook of the coach's Rung Dripper. It is a credential: stored sealed, never shown again." />
                     <input className="field w-36 py-1 text-xs" name="clUserNs" placeholder="CL contact (user_ns)" defaultValue={r.m.clUserNs ?? ""} title="The Community Loyalty contact that holds the drip state" />
+                    <input className="field min-w-40 flex-1 py-1 text-xs" name="clApiToken" type="password" autoComplete="off" data-testid="cl-api-token" placeholder={r.m.clApiToken ? "Community Loyalty API token: saved (blank keeps it, \"clear\" removes it)" : "Community Loyalty API token (this client's own workspace)"} title="The client's own uChat API token. It is a credential: stored sealed, never shown again. It lets HelixOS write the bot's business facts." />
                     <button className="btn btn-ghost btn-xs" type="submit">Save</button>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>
+                  {r.m.clApiToken ? (
+                    <form action={resyncBotFieldsAction} className="flex items-center gap-2">
+                      <input type="hidden" name="membershipId" value={r.m.id} />
+                      <button className="btn btn-ghost btn-xs" type="submit" data-testid="resync-bot" title="Writes the business facts into the bot again, whatever it holds now: the name, the zone, the live offers, the house constraints and the three questions. Never the calendar or a booking.">Re-sync to bot</button>
+                      <span className="text-[11px] text-ink-3" data-testid="bot-fields-pushed">{r.m.clBotFieldsPushedAt ? `${Object.keys(r.m.clBotFields).length} fields pushed ${formatDateTime(r.m.clBotFieldsPushedAt, v.workspace.timezone)}` : "not pushed yet"}</span>
+                    </form>
+                  ) : null}
                 </li>
               ))}
             </ul>

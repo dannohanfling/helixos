@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { brandKitProblems, normaliseHex } from "@/lib/engine/subject";
 import { syncFieldTasks } from "@/lib/queries/pathway";
+import { repushForMember, repushWorkspace } from "@/lib/community-loyalty";
 
 /** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
 function validTimezone(tz: string): string | null {
@@ -25,6 +26,8 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
   await updateProfile(formData);
   const { workspaceId, userId } = await ctx();
   await syncFieldTasks(workspaceId, userId);
+  // The business name and the member's zone are Stage 1 bot fields: re-pushed when they change.
+  await repushForMember(workspaceId, userId, "profile");
   refresh();
 }
 
@@ -72,6 +75,8 @@ export async function updateWorkspaceAction(formData: FormData): Promise<void> {
       airtableBaseId: opt(formData, "airtableBaseId"),
     })
     .where(eq(schema.workspaces.id, coach.workspace.id));
+  // The workspace's zone and name back every member's Stage 1 fields: every member with a token is re-pushed.
+  await repushWorkspace(coach.workspace.id, "workspace");
   refresh();
 }
 

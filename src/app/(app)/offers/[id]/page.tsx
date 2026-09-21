@@ -11,6 +11,7 @@ import { CURRENCIES, offerOnePager, scoreOffer } from "@/lib/engine/offer-score"
 import { assetsFor } from "@/lib/queries/library";
 import { moveLegacyObjectionAction } from "@/lib/actions/objections";
 import { LEGACY_OFFER_OBJECTIONS, isSharedObjection, reframesOf } from "@/lib/engine/objections";
+import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
   return (
@@ -156,6 +157,15 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
               <div className="grid gap-3 sm:grid-cols-2">
                 <T name="forYouIf" label="This is for you if…" value={offer.forYouIf} />
                 <T name="notForYouIf" label="This is not for you if…" value={offer.notForYouIf} />
+                <div className="sm:col-span-2">
+                  <p className="label">The three questions your bot asks before booking</p>
+                  <p className="mb-2 text-xs text-ink-3">Pushed to your Community Loyalty bot with this offer&apos;s facts. These are house defaults until you write your own; a blank one goes back to the default.</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {([offer.qualifyingQuestion1, offer.qualifyingQuestion2, offer.qualifyingQuestion3] as const).map((q, i) => (
+                      <input key={i} className="field" name={`qualifyingQuestion${i + 1}`} defaultValue={q ?? QUALIFYING_DEFAULTS[i]} data-testid={`qualifying-${i + 1}`} />
+                    ))}
+                  </div>
+                </div>
               </div>
             </Card>
             <Card id="objections" title="6 · Top 5 objections, answered" action={<span className="text-xs text-ink-3" data-testid="objections-answered">{answered + legacyFilled.length} answered</span>}>

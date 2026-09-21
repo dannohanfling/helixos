@@ -17,13 +17,16 @@
 # - Every assertion that quantifies over a collection ("every slide is clean", "no request carried the key", "no rung was posted")
 #   is paired with an assertion that the collection is non-empty, and where the count is knowable, that it is the expected count.
 #   "Exports clean" is never shipped without "exports N slides": an assertion over nothing passes for nothing.
+# - A check derives its list of subjects from the source of truth; it does not restate it. Pages come from src/app, fields from
+#   the schema, steps from the wizard's own definition. Where a list must be written by hand, the check asserts it against a count
+#   read from the source, so drift fails instead of passing (the headers walk once "checked" two pages that no longer existed).
 set -euo pipefail
 
 # Wrapped in a function so bash parses the whole file before executing: an edit while it runs can't corrupt the tail.
 main() {
   cd "$(dirname "$0")/.."
 
-  ALL=(base firstday loop rewards coach wave3 composer library wizards ladders socrates ghl ai essence fathom email headers auth evidence magnets proofs)
+  ALL=(base firstday loop rewards coach wave3 composer library wizards ladders socrates ghl ai essence fathom email headers auth evidence magnets proofs botfields)
   BASE_URL="${BASE_URL:-http://localhost:3000}"
 
   if [[ $# -eq 0 ]]; then

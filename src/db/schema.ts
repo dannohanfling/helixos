@@ -63,6 +63,11 @@ export const memberships = sqliteTable(
     clDripWebhookUrl: text("cl_drip_webhook_url"),
     /** The Community Loyalty contact that holds the drip state for this coach (user_ns). */
     clUserNs: text("cl_user_ns"),
+    /** The client's own Community Loyalty (uChat) API token: sealed at rest, never rendered, never logged. One per client workspace. */
+    clApiToken: text("cl_api_token"),
+    /** The bot fields last pushed, by name: the Stage 1 names and their values only, never the token and never a webhook URL. */
+    clBotFields: text("cl_bot_fields", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
+    clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
     /** Coach override of the workspace's daily AI cap for this member. */
     aiCapExempt: integer("ai_cap_exempt", { mode: "boolean" }).notNull().default(false),
     /** Highest tier level the member has seen the celebration for. Null until first seen: then stamped silently. */
@@ -488,6 +493,10 @@ export const offers = sqliteTable(
     howItWorks: text("how_it_works"),
     forYouIf: text("for_you_if"),
     notForYouIf: text("not_for_you_if"),
+    /** The three questions the bot asks before booking. Null means the house default (QUALIFYING_DEFAULTS) until the coach writes their own. */
+    qualifyingQuestion1: text("qualifying_question_1"),
+    qualifyingQuestion2: text("qualifying_question_2"),
+    qualifyingQuestion3: text("qualifying_question_3"),
     objTime: text("obj_time"),
     objMoney: text("obj_money"),
     objPartner: text("obj_partner"),

@@ -198,3 +198,27 @@ describe("the drip webhook URL is a credential", () => {
     expect(lib).not.toMatch(/console\.(log|warn|error)\([^)]*url/);
   });
 });
+
+describe("the client's Community Loyalty API token is a credential", () => {
+  const TOKEN = /\bclApiToken\b|cl_api_token/;
+  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/community-loyalty.ts", "src/app/(app)/coach/page.tsx"];
+  const LEAK = /console\.|\bnote:|\bthrow\b|new Error\(|redirect\(|defaultValue=|\bvalue=\{|JSON\.stringify\(|logSync\(/;
+  it("is named only where it is stored, sealed, opened or blanked, and never on a line that logs, notes, throws, redirects or renders a value", () => {
+    for (const f of walk(SRC)) {
+      const text = readFileSync(f, "utf8");
+      if (!TOKEN.test(text)) continue;
+      expect(ALLOWED, `${rel(f)} names the API token column`).toContain(rel(f));
+      for (const [i, line] of stripComments(text).split("\n").entries()) if (TOKEN.test(line)) expect(LEAK.test(line), `${rel(f)}:${i + 1} puts the API token where it could be seen: ${line.trim().slice(0, 120)}`).toBe(false);
+    }
+  });
+  it("is opened in one place, the push, whose notes go through the redactor and whose log carries names only", () => {
+    for (const f of walk(SRC)) {
+      const text = readFileSync(f, "utf8");
+      for (const m of text.matchAll(/open\((?:m|membership)\.clApiToken\)/g)) expect(rel(f), `${m[0]} in ${rel(f)}`).toBe("src/lib/community-loyalty.ts");
+    }
+    const lib = readFileSync(join(SRC, "lib/community-loyalty.ts"), "utf8");
+    expect(lib).toContain("redactSecrets(");
+    expect(lib).not.toMatch(/console\.(log|warn|error)/);
+    expect(lib).toMatch(/payload: \{ reason: opts\.reason, fields \}/);
+  });
+});
