@@ -140,6 +140,7 @@ async function main() {
     const more = await page.locator("main").innerText();
     if (/Community Pass/.test(more)) throw new Error("Community Pass shown in More for a non-Elite client");
     const side = await page.locator("aside, nav").allInnerTexts();
+    if (!side.length || !side.join(" ").includes("Today")) throw new Error("the navigation is on the page to read");
     if (side.join(" ").includes("Community Pass")) throw new Error("Community Pass shown in the sidebar for a non-Elite client");
     console.log("✓ nav: no Community Pass upsell without the pass");
 

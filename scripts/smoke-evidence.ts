@@ -149,7 +149,9 @@ async function main() {
     await submit(page, 'button:has-text("Find studies")');
     await page.locator('[data-testid="results"]').waitFor({ timeout: 10000 });
     await page.locator('[data-testid="no-match"]').waitFor({ timeout: 5000 });
-    if ((await page.locator('[data-testid="result"][data-flagged="0"]').count()) !== 0) throw new Error("every leaderboard paper is flagged: none shares a word with the terms");
+    const leaderboardRows = await page.locator('[data-testid="result"]').count();
+    if (!leaderboardRows) throw new Error("the leaderboard search returned rows to flag");
+    if ((await page.locator('[data-testid="result"][data-flagged="0"]').count()) !== 0) throw new Error(`every leaderboard paper is flagged (${leaderboardRows} rows): none shares a word with the terms`);
     if ((await page.locator('[data-testid="results"] button:has-text("Add to my shelf")').count()) !== 0) throw new Error("no add button when nothing fits");
     console.log("✓ the citation leaderboard is not an answer: every row flagged, the search says it found nothing, no add buttons");
 
@@ -163,6 +165,7 @@ async function main() {
     console.log("✓ a refused field filter is retried without and said as that, never as within");
 
     // The key never reaches the browser
+    if (browserRequests.length < 10) throw new Error(`the browser's requests were recorded, got ${browserRequests.length}`);
     if (browserRequests.some((u) => u.includes(`:${openalexPort}`) || u.includes("openalex") || u.includes("api_key"))) throw new Error("the browser must never call OpenAlex or carry the key");
     if (/test-key/.test(await page.content())) throw new Error("the OpenAlex key must never appear in a page");
     console.log("✓ OpenAlex is called server-side only; the key never reaches the browser");

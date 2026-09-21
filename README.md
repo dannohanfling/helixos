@@ -155,7 +155,8 @@ npm run release             # verify --build, restart the server, every walk. Co
 # run (it once turned the last line into "us,: command not found"). The scripts wrap their body in main() so the whole file is
 # parsed before anything executes, which protects against it; not editing them mid-run protects against everything else.
 
-# The walks, run one at a time by scripts/smoke.sh (each reseeds first):
+# The walks, run one at a time by scripts/smoke.sh (each reseeds first). Their conventions are in scripts/smoke.sh's header; the standing one:
+# every assertion over a collection is paired with an assertion that the collection is non-empty, and where the count is knowable, that it is the count.
 npx tsx scripts/smoke.ts          # Playwright walkthrough of the daily loop; writes ./screenshots
 npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, clients, community pass
 npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks (header + Ed25519 signature), data export

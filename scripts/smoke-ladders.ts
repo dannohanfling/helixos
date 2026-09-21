@@ -102,7 +102,8 @@ async function main() {
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), firstRung.click()]);
     await page.waitForTimeout(600);
     row = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, ladderId) });
-    if (row?.rungs.some((r) => r.postedAt)) throw new Error("a rung of a failing ladder was marked posted");
+    if (!row?.rungs.length) throw new Error("the ladder has rungs to mark");
+    if (row.rungs.some((r) => r.postedAt)) throw new Error("a rung of a failing ladder was marked posted");
     if (!(await page.locator('button:has-text("Copy for Airtable")').isDisabled())) throw new Error("copies must be held while the checklist fails");
     console.log("✓ publish gate: server refuses the composer send and a posted rung while checks fail; blockers named and linked; copies held");
     await page.goto(`${base}/content/ladders/${ladderId}`);
@@ -158,7 +159,8 @@ async function main() {
     if (demo?.rungs.filter((r) => r.postedAt).length !== 1) throw new Error("posting a rung of a failing live ladder was not refused");
     await submit(page, 'button:has-text("Reset")');
     demo = await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) });
-    if (demo?.status !== "draft" || demo.rungs.some((r) => r.postedAt)) throw new Error(`Reset on a failing ladder should land on draft with no rungs posted, got ${demo?.status}`);
+    if (!demo?.rungs.length) throw new Error("the demo ladder has rungs");
+    if (demo.status !== "draft" || demo.rungs.some((r) => r.postedAt)) throw new Error(`Reset on a failing ladder should land on draft with no rungs posted, got ${demo?.status}`);
     await fillExact(page, 'textarea[name="copy"]', cleanCopy);
     await submit(page, 'button:has-text("Save and re-check")');
     await submit(page, 'button:has-text("Mark ready")');

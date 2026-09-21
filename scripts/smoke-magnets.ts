@@ -158,6 +158,7 @@ async function main() {
     if ((await count("chatbot")) !== 1 || (await count("other")) !== 1) throw new Error("one hit under chatbot, the bad src counted as other");
     if ((await page.locator('[data-testid="magnet-hits-total"]').innerText()).trim() !== "2") throw new Error("two hits in all");
     const hits = await db.query.leadMagnetHits.findMany({ where: eq(schema.leadMagnetHits.magnetId, magnetId) });
+    if (hits.length !== 2) throw new Error(`two hit rows on the record, got ${hits.length}`);
     if (hits.some((h) => !["chatbot", "other"].includes(h.src)) || hits.some((h) => JSON.stringify(h).includes("script"))) throw new Error("the hit row carries only a source from the closed list");
     console.log("✓ public: hosted page and tracked link work with no session; counts per source; a bad src is 'other' and nothing else is kept");
 
@@ -181,6 +182,7 @@ async function main() {
     await page.click('[data-testid="magnet-upload"]');
     await page.waitForURL(/uploaded=1/, { timeout: 15000 });
     // The token request and the record call reach this app; the file's bytes (raw or base64) never do.
+    if (serverBodies.length < 2) throw new Error(`the token request and the record call reach this app, got ${serverBodies.length} POST bodies`);
     if (serverBodies.some((b) => b.includes(png.subarray(0, 8)) || b.includes(png.toString("base64").slice(0, 24)))) throw new Error("the bytes must go to the bucket, never through this app");
     const fileHref = await page.locator('[data-testid="magnet-file-url"]').getAttribute("href");
     if (!fileHref?.startsWith(`http://localhost:${blobPort}/public/magnets/the-12-minute-content-plan/`) || !fileHref.endsWith("-cover-art.png")) throw new Error(`uploaded file address: ${fileHref}`);

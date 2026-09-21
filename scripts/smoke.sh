@@ -9,6 +9,14 @@
 # `next build`; the ai walk needs the server started with AI_BASE_URL=http://localhost:4020; the wave3 walk covers the signed
 # GoHighLevel webhook only when the server has GHL_WEBHOOK_PUBLIC_KEY. dev-server.sh sets all of these. The email walk runs the
 # reminder code directly against scripts/mock-sendgrid.ts on a scratch database and does not use the server.
+#
+# Conventions every walk inherits:
+# - A walk reads the record and acts on what it finds; it never assumes state a previous step left.
+# - A fill into a field that may already hold text is checked after typing (fillField / fillExact): a fill that lands mid-hydration
+#   inserts at the caret instead of replacing.
+# - Every assertion that quantifies over a collection ("every slide is clean", "no request carried the key", "no rung was posted")
+#   is paired with an assertion that the collection is non-empty, and where the count is knowable, that it is the expected count.
+#   "Exports clean" is never shipped without "exports N slides": an assertion over nothing passes for nothing.
 set -euo pipefail
 
 # Wrapped in a function so bash parses the whole file before executing: an edit while it runs can't corrupt the tail.

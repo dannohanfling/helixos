@@ -2,7 +2,8 @@
 import { chromium } from "@playwright/test";
 
 const base = process.argv[2] ?? "http://localhost:3000";
-const PAGES_CLIENT = ["/today", "/tasks", "/content", "/content/compose", "/library", "/dms", "/groups", "/webinars", "/offers", "/pathway", "/courses", "/doctrine", "/proofs", "/clients", "/community", "/numbers", "/rewards", "/settings"];
+// Every page the app routes to, read off src/app/(app): a path here that answers anything but 200 fails the walk, so a renamed page is caught rather than "checked" as a 404.
+const PAGES_CLIENT = ["/today", "/tasks", "/content", "/content/compose", "/content/ladders", "/library", "/conversations", "/groups", "/webinars", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/evidence", "/essence", "/magnets", "/socrates", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings"];
 const PAGES_COACH = ["/coach", "/integrations", "/certification", "/settings"];
 
 async function main() {
@@ -18,9 +19,13 @@ async function main() {
     if (m.type() === "error" && /Content Security Policy|Refused to/.test(m.text())) problems.push(`${page.url()}: ${m.text().slice(0, 200)}`);
   });
   page.on("pageerror", (e) => problems.push(`${page.url()}: pageerror ${e.message.slice(0, 200)}`));
+  let visited = 0;
   const visit = async (paths: string[]) => {
     for (const p of paths) {
-      await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
+      const res = await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
+      // No violations on a page that did not load is no finding: every page must answer 200 before its console counts.
+      if (!res || res.status() !== 200) throw new Error(`${p} answered ${res?.status() ?? "nothing"}; a page that did not load cannot be checked`);
+      visited++;
       await page.waitForTimeout(300);
     }
   };
@@ -43,7 +48,8 @@ async function main() {
     console.error("CSP / page problems:\n" + problems.join("\n"));
     process.exit(1);
   }
-  console.log(`CSP check passed: ${PAGES_CLIENT.length + PAGES_COACH.length} pages, no violations, no page errors`);
+  if (visited !== PAGES_CLIENT.length + PAGES_COACH.length) throw new Error(`visited ${visited} of ${PAGES_CLIENT.length + PAGES_COACH.length} pages`);
+  console.log(`CSP check passed: ${visited} pages loaded, no violations, no page errors`);
 }
 main().catch((e) => {
   console.error(e);

@@ -267,6 +267,7 @@ async function main() {
     await plant(oldOrphanOtherProof, new Date(Date.now() - 45 * 60 * 1000).toISOString());
     await plant(youngOrphan, new Date().toISOString());
     const recordedBefore = (await listed()).filter((o) => o.pathname.startsWith("proofs/") && !o.pathname.includes("orphan-")).map((o) => o.pathname).sort();
+    if (recordedBefore.length !== 2) throw new Error(`two recorded objects are in the store before the visit, got ${recordedBefore.length}`);
     await page.goto(`${base}/settings`);
     await expectText(page, "of 2 GB used", "quota line");
     // The reconcile runs after the response is sent: give it a moment.

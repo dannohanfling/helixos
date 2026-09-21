@@ -125,6 +125,7 @@ async function main() {
     const ambiguous = await post({ id: "appt-1", appointment: { startTime: "2030-01-05T17:00:00.000Z" } });
     if (!/2 open claims/.test(ambiguous) || !/calendarIds/.test(ambiguous)) throw new Error(`two open claims must not be guessed between: "${ambiguous}"`);
     const untouched = await db.query.rewardClaims.findMany({ where: eq(schema.rewardClaims.userId, maya.id) });
+    if (untouched.length < 2) throw new Error(`the two open claims are on the record, got ${untouched.length}`);
     if (untouched.some((c) => c.bookedAt)) throw new Error("an ambiguous appointment marked a claim booked");
     writeFileSync(overridePath, JSON.stringify({ perMonth: "calendar", bookingLinks: { "VIP Laser Coaching Call": "https://booking.example.test/vip", "Offer + Messaging Alignment Session": "https://booking.example.test/alignment" }, calendarIds: { "VIP Laser Coaching Call": "cal_vip" } }, null, 2));
     const certain = await post({ id: "appt-2", calendarId: "cal_vip", appointment: { startTime: "2030-01-05T17:00:00.000Z" } });

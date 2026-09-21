@@ -57,6 +57,7 @@ async function main() {
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/integrations`);
     const ghlForm = page.locator('form:has(input[name="provider"][value="gohighlevel"])').first();
+    await ghlForm.waitFor({ timeout: 15000 });
     if ((await ghlForm.locator('input[name="apiKey"], input[name="companyId"]').count()) !== 0) throw new Error("agency token / company ID fields must be gone");
     await ghlForm.locator('input[name="enabled"]').check();
     await ghlForm.locator('input[name="apiUrl"]').fill(`http://localhost:${mockPort}`);
@@ -393,6 +394,7 @@ async function main() {
     if ((await dupRow.getAttribute("data-verdict")) !== "duplicate") throw new Error(`the leftover ${dupId} should be a duplicate, got ${await dupRow.getAttribute("data-verdict")}`);
     await expectText(page, "same text", "twin named");
     const tracked = (await plannerPosts()).filter((p) => p._id !== dupId).map((p) => p._id);
+    if (!tracked.length) throw new Error("the planner holds tracked posts beside the duplicate");
     for (const id of tracked) if (await page.locator(`[data-testid="audit-row"][data-post-id="${id}"]`).count()) throw new Error(`tracked planner post ${id} must not be listed as untracked`);
     if (await page.locator('button:has-text("Delete"), button:has-text("Remove")').count()) throw new Error("the audit must not offer a delete");
     const stillThere = (await plannerPosts()).some((p) => p._id === dupId);
