@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINT_LINES, QUALIFYING_DEFAULTS, houseConstraints, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
+import { BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINT_LINES, QUALIFYING_DEFAULTS, houseConstraints, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
 
 const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live" };
 const draft = { name: "Holiday Survival Sprint", promise: "Get through the holidays", container: "Workshop", price: 297, currency: "USD", length: null, status: "draft" };
@@ -21,13 +21,17 @@ describe("the Stage 1 push is a named subset of the template's fields, never the
     expect(HOUSE_CONSTRAINT_LINES).toHaveLength(6);
     expect(p.ai_constraints_cbf).toContain("Never claim to be Torres Nutrition Coaching.");
     expect(p.ai_constraints_cbf).not.toContain("{business_name_cbf}");
-    expect(houseConstraints("")).toContain("Never claim to be the business.");
+    expect(HOUSE_CONSTRAINT_LINES[5]).toBe("If someone asks whether you are a person, say you are an assistant and whose assistant you are. Never claim to be {business_name_cbf}.");
+    expect(p.ai_constraints_cbf.split("\n")[5]).toBe("If someone asks whether you are a person, say you are an assistant and whose assistant you are. Never claim to be Torres Nutrition Coaching.");
     expect([p.qualifying_question_1, p.qualifying_question_2, p.qualifying_question_3]).toEqual(QUALIFYING_DEFAULTS);
     expect(stage1Payload({ businessName: "  ", workspaceName: "Evolve Omega Academy", timezone: "UTC", offers: [] }).business_name_cbf).toBe("Evolve Omega Academy");
   });
   it("a source the client has not filled is sent empty, not skipped; a written question replaces only its own default", () => {
     const p = stage1Payload({ businessName: null, workspaceName: "", timezone: "UTC", offers: [{ ...live, qualifyingQuestion2: "Who else decides?" }] });
     expect(p.business_name_cbf).toBe("");
+    // No name, no push: the gap is named rather than a sentence about "the business" shipped
+    expect(stage1Problems(p)).toEqual(["No business name on the record: set it on the member's profile or the workspace."]);
+    expect(stage1Problems({ ...p, business_name_cbf: "T" })).toEqual([]);
     expect(p.qualifying_question_2).toBe("Who else decides?");
     expect(p.qualifying_question_1).toBe(QUALIFYING_DEFAULTS[0]);
     expect(stage1Payload({ businessName: null, workspaceName: "", timezone: "UTC", offers: [draft] })["ai_product_&_service_cbf"]).toBe("");

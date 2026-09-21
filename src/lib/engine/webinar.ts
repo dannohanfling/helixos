@@ -94,6 +94,20 @@ export function readinessScore(ratings: Record<string, number>): { score: number
 }
 
 export type SectionLike = { sectionKey: string; act: ActKey; order?: number; name?: string; status: string; script: string | null; assetId?: string | null; durationMin: number; keyPoints?: string | null };
+/**
+ * What the drafting model is told about a section: its shape and nothing of the example's words. The name, the act, the
+ * section's purpose, a target length from its minutes at the speaking pace, and the coach's own key points if any. The
+ * example script is never in the prompt, so it cannot be echoed into a record (the third standing rule, applied to the prompt).
+ */
+export function draftShape(tpl: Pick<SectionTemplate, "name" | "type" | "act">, minutes: number, act: { name: string; purpose: string }, coaching: string): string[] {
+  const words = Math.max(60, Math.round(minutes * WORDS_PER_MINUTE));
+  return [
+    `Act: ${act.name}. Purpose: ${act.purpose}`,
+    `Section: ${tpl.name} (${tpl.type}). Coaching: ${coaching}`,
+    `Shape: one spoken section of about ${words} words for ${minutes} minutes at ${WORDS_PER_MINUTE} words a minute; open on the section's purpose, land its one idea, hand over to the next section.`,
+  ];
+}
+
 /** The origin story's eight beats (code-deck-density-spec §2.1): one slide each when filled. Labels and help are provisional. */
 export const ORIGIN_BEATS: { key: string; label: string; help: string }[] = [
   { key: "wanted", label: "What you wanted", help: "The thing you were after before any of this: one sentence, in the past tense." },

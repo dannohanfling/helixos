@@ -12,7 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
-import { BOT_WRITTEN_FIELDS, STAGE1_FIELDS, assertStorable, samePayload, stage1Payload, type BotFieldPayload } from "@/lib/engine/bot-fields";
+import { BOT_WRITTEN_FIELDS, STAGE1_FIELDS, assertStorable, samePayload, stage1Payload, stage1Problems, type BotFieldPayload } from "@/lib/engine/bot-fields";
 import { redactSecrets } from "@/lib/engine/redact";
 import { logSync } from "@/lib/integrations";
 
@@ -52,6 +52,8 @@ export async function pushBotFields(membershipId: string, opts: { force?: boolea
   for (const n of names) if ((BOT_WRITTEN_FIELDS as readonly string[]).includes(n) || !(STAGE1_FIELDS as readonly string[]).includes(n)) return log("failed", `Refused: ${n} is not a Stage 1 field.`, names);
   // The drip webhook is never opened here: its shape (/api/iwh/) is refused by assertStorable without the value in hand.
   assertStorable(payload, [token]);
+  const problems = stage1Problems(payload);
+  if (problems.length) return log("failed", problems.join(" "), names);
   if (!opts.force && samePayload(m.clBotFields, payload)) return log("skipped", "Nothing changed since the last push.", names);
   try {
     const ctrl = new AbortController();

@@ -22,6 +22,9 @@
 #   read from the source, so drift fails instead of passing (the headers walk once "checked" two pages that no longer existed).
 # - Example content is never copied into a client record as a value. An example may be read and its shape copied (sections,
 #   their names, their order), never its words: a sentence a coach did not write and did not choose must never be theirs to ship.
+# - An assertion's expected value is read from the source that produced it, never typed from memory: a seed's line comes from the
+#   seed file, a rendered string from the element, a ratio from the engine. And a check that can pass on its own parsing is not a
+#   check: read the subject through the element, not through an accessor that returns something plausible when nothing rendered.
 set -euo pipefail
 
 # Wrapped in a function so bash parses the whole file before executing: an edit while it runs can't corrupt the tail.

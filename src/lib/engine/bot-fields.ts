@@ -36,8 +36,13 @@ export const HOUSE_CONSTRAINT_LINES = [
   "When you do not know, say so and offer the next step. Never guess a deadline, a policy or a medical, legal or financial answer.",
   "If someone asks whether you are a person, say you are an assistant and whose assistant you are. Never claim to be {business_name_cbf}.",
 ];
-/** The block with the business name written in: a bot field's value is plain text, so the name is filled here, not by the bot. */
-export const houseConstraints = (businessName: string): string => HOUSE_CONSTRAINT_LINES.map((l) => l.replace("{business_name_cbf}", businessName.trim() || "the business")).join("\n");
+/** The block with the business name written in: a bot field's value is plain text, so the name is filled here, not by the bot. No name, no block: the push refuses instead. */
+export const houseConstraints = (businessName: string): string => HOUSE_CONSTRAINT_LINES.map((l) => l.replace("{business_name_cbf}", businessName.trim())).join("\n");
+
+/** Why a Stage 1 payload cannot go: a fact with no value is a gap in the record, not a sentence to ship around. */
+export function stage1Problems(p: BotFieldPayload): string[] {
+  return p.business_name_cbf.trim() ? [] : ["No business name on the record: set it on the member's profile or the workspace."];
+}
 
 /** Provisional questions the bot asks before booking, until the coach writes their own on the Offer. On the sentence list. */
 export const QUALIFYING_DEFAULTS: [string, string, string] = [

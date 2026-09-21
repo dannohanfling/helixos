@@ -159,7 +159,8 @@ npm run release             # verify --build, restart the server, every walk. Co
 # The walks, run one at a time by scripts/smoke.sh (each reseeds first). Their conventions are in scripts/smoke.sh's header; the standing one:
 # every assertion over a collection is paired with an assertion that the collection is non-empty, and where the count is knowable, that it is the count;
 # and a check derives its subjects from the source of truth (pages from src/app, fields from the schema) or asserts its hand-written list against it;
-# and example content is never copied into a client record as a value: shape may be copied, words never.
+# and example content is never copied into a client record as a value: shape may be copied, words never;
+# and an assertion's expected value is read from the source that produced it, never typed from memory, through the element and never an accessor that passes on its own parsing.
 npx tsx scripts/smoke.ts          # Playwright walkthrough of the daily loop; writes ./screenshots
 npx tsx scripts/smoke-wizards.ts  # Webinar + offer wizards, repurposing, clients, community pass
 npx tsx scripts/smoke-wave3.ts    # Doctrine, proof, groups, distribution, simple pathway, targets, courses, certification, integrations, webhooks (header + Ed25519 signature), data export

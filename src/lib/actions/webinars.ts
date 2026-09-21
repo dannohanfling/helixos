@@ -7,7 +7,7 @@ import { WEBINAR_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { ACTS, DERIVED_DIMENSIONS, ORIGIN_BEATS, READINESS_DIMENSIONS, SECTION_TEMPLATES, applyOverride, derivedGrades, freeTextProofUsable, readinessScore, readyDecision, type Override } from "@/lib/engine/webinar";
+import { ACTS, applyOverride, DERIVED_DIMENSIONS, derivedGrades, draftShape, freeTextProofUsable, ORIGIN_BEATS, READINESS_DIMENSIONS, readinessScore, readyDecision, SECTION_TEMPLATES, type Override } from "@/lib/engine/webinar";
 import { buildFor, presenterOf } from "@/lib/queries/webinar";
 import { fillRuntime } from "@/lib/engine/subject";
 import { award } from "@/lib/queries/points";
@@ -181,11 +181,10 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
         evidenceLine,
         studyLine,
         storyLine,
-        `Act: ${act.name}. Purpose: ${act.purpose}`,
-        `Section: ${tpl.name}. Coaching: ${fillRuntime(tpl.prompt, { runtime, openingMinutes })}`,
+        // The example's shape, never its words: nothing of the Leaky Webinar's script is in the prompt to be echoed.
+        ...draftShape(tpl, section?.durationMin ?? tpl.durationMin, act, fillRuntime(tpl.prompt, { runtime, openingMinutes })),
         asset ? `Use this ${asset.type} from the library, adapted to the audience:\n${asset.body}` : "",
         section?.keyPoints ? `Key points the coach wants covered:\n${section.keyPoints}` : "",
-        `Here is an example of this section from a different webinar, for structure only (do not copy its facts):\n${tpl.exampleScript}`,
       ]
         .filter(Boolean)
         .join("\n\n"),

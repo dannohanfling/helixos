@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { freeTextProofUsable } from "../webinar";
 import { formatPrice, hasTimeframe, offerOnePager, scoreOffer } from "../offer-score";
 import { CHANNEL_SPECS, formatClause, repurpose, repurposeAll, toneClause } from "../repurpose";
-import { ACTS, SECTION_TEMPLATES, buildChecks, nextStep, offerStart, readinessScore, readyDecision, reviewStale, sectionPace, statusStale } from "../webinar";
+import { ACTS, SECTION_TEMPLATES, buildChecks, draftShape, nextStep, offerStart, readinessScore, readyDecision, reviewStale, sectionPace, statusStale } from "../webinar";
 
 const strongOffer = {
   name: "90-Day Reset",
@@ -282,5 +284,25 @@ describe("a typed webinar proof is gated by tick two", () => {
     expect(freeTextProofUsable({ proof: "Priya went from 2 to 9 calls.", proofPermissionAt: null, proofChangedAt: null })).toBe(true);
     expect(freeTextProofUsable({ proof: "Priya went from 2 to 9 calls.", proofPermissionAt: null, proofChangedAt: "2026-09-11T00:00:00Z" })).toBe(false);
     expect(freeTextProofUsable({ proof: "   ", proofPermissionAt: "2026-09-11T00:00:00Z", proofChangedAt: null })).toBe(false);
+  });
+});
+
+describe("the drafting prompt carries the example's shape and none of its words", () => {
+  it("names the act, the section, its purpose and a length from its minutes; no run of six words from any example script appears in it", () => {
+    const runs = (text: string) => { const w = text.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter(Boolean); const out = new Set<string>(); for (let i = 0; i + 6 <= w.length; i++) out.add(w.slice(i, i + 6).join(" ")); return out; };
+    expect(SECTION_TEMPLATES.length).toBe(20);
+    for (const tpl of SECTION_TEMPLATES) {
+      const act = ACTS.find((a) => a.key === tpl.act)!;
+      const lines = draftShape(tpl, tpl.durationMin, act, tpl.prompt).join("\n");
+      expect(lines).toContain(`Section: ${tpl.name}`);
+      expect(lines).toMatch(/about \d+ words for \d+ minutes at 130 words a minute/);
+      const exampleRuns = runs(tpl.exampleScript);
+      expect(exampleRuns.size).toBeGreaterThan(10);
+      for (const r of runs(lines)) expect(exampleRuns.has(r), `example words in the prompt for ${tpl.name}: "${r}"`).toBe(false);
+    }
+  });
+  it("the drafting action names no example script or key points at all", () => {
+    const src = readFileSync(join(process.cwd(), "src/lib/actions/webinars.ts"), "utf8");
+    expect(src).not.toMatch(/exampleScript|exampleKeyPoints/);
   });
 });
