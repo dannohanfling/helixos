@@ -1,4 +1,6 @@
 import { clock } from "@/lib/engine/webinar";
+import { UNREVIEWED_LABEL, unreviewedCountLine } from "@/lib/engine/provenance";
+import { unreviewedSections } from "@/lib/engine/webinar-context";
 import { formatPrice } from "@/lib/engine/offer-score";
 import { QA_SECTION_KEY, type SectionContext, type WebinarContext } from "@/lib/engine/webinar-context";
 import type { offSlidePlaceholders } from "@/lib/engine/deck";
@@ -18,6 +20,11 @@ function Section({ s }: { s: SectionContext }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-lg font-semibold">
           {s.order} · {s.name}
+          {s.unreviewed ? (
+            <span className="ml-2 rounded-md border border-warn bg-warn-soft px-1.5 py-0.5 align-middle text-xs font-medium" data-testid="runsheet-unreviewed">
+              [{UNREVIEWED_LABEL}]
+            </span>
+          ) : null}
         </h3>
         <span className="tabular text-sm text-ink-2" data-testid="runsheet-clock">
           {s.durationMin} min · {s.start}
@@ -127,6 +134,11 @@ export function RunSheetView({ c, unfilled }: { c: WebinarContext; unfilled: Ret
         <p className="mt-1 text-xs text-ink-3" data-testid="runsheet-legend">
           Proof marked [approved] is from the bank with permission on record; [typed, permission ticked] was typed here with the same tick. Nothing else reaches this sheet.
         </p>
+        {unreviewedSections(c).length ? (
+          <p className="mt-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="runsheet-unreviewed-count">
+            {unreviewedCountLine(unreviewedSections(c))}.
+          </p>
+        ) : null}
         {unfilled.total ? (
           <p className="mt-2 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="runsheet-placeholders">
             {unfilled.total} unfilled, {unfilled.offSlide} of them in scripts the deck does not show: {unfilled.sections.map((p) => `${p.section} (${[...p.onSlide, ...p.offSlide].join(" ")})`).join("; ")}.

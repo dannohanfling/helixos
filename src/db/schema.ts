@@ -126,10 +126,12 @@ export const CONTENT_STATUSES = ["idea", "creating", "ready", "scheduled", "post
 /**
  * Where a record's text came from and whether a person has read it. ai_unreviewed is set when a model's text is stored;
  * it becomes ai_accepted on an explicit Accept or edited on any coach edit (an edit counts as review). Coach-written text
- * is coach. Rows from before the column, and text a rule composed rather than a model or the coach, stay null: never
- * guessed, never flagged. Only ai_unreviewed is ever gated.
+ * is coach. rule is text a rule composed from what the coach chose (a principle's post, a rules variant, a ladder's rungs,
+ * a magnet's scaffold): never gated, since its words are Danno's doctrine the coach picked or a reshaping of the coach's
+ * own. Rows from before the column stay null, never guessed and never flagged; a section row made empty is null until
+ * someone writes its text. Only ai_unreviewed is ever gated.
  */
-export const ORIGINS = ["ai_unreviewed", "ai_accepted", "edited", "coach"] as const;
+export const ORIGINS = ["ai_unreviewed", "ai_accepted", "edited", "coach", "rule"] as const;
 export type Origin = (typeof ORIGINS)[number];
 export const CONTENT_TYPES = [
   "CTA Post",

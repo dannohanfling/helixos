@@ -20,8 +20,8 @@ export async function principleToContentAction(formData: FormData): Promise<void
   const firstName = v.user.name.split(" ")[0];
   let body = kind === "post" ? principlePost(p, firstName) : kind === "reel" ? principleReel(p) : principleTraining(p);
   let note: string | null = null;
-  // The rule-based post is the principle's own text reshaped, neither a model's nor the coach's: no mark. The model's text is marked unreviewed.
-  let origin: "ai_unreviewed" | null = null;
+  // The rule-based post is the principle's own text reshaped, chosen when the coach picked the principle: rule, never gated. The model's text is marked unreviewed.
+  let origin: "ai_unreviewed" | "rule" = "rule";
   if (useAi) {
     const ai = await draft(
       `You turn a business principle into ${kind === "post" ? "a Facebook post" : kind === "reel" ? "a 60-second reel script with timestamps" : "a 10-minute training outline"}. Return only the ${kind === "post" ? "post" : kind === "reel" ? "script" : "outline"}, no preamble.`,

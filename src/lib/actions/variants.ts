@@ -56,7 +56,7 @@ export async function generateVariantsAction(formData: FormData): Promise<void> 
     const subject = p?.subject ?? d.subject ?? null;
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, d.channel), eq(schema.contentVariants.groupId, "")) });
     if (existing && existing.status === "posted") continue;
-    const origin = p ? ("ai_unreviewed" as const) : null;
+    const origin = p ? ("ai_unreviewed" as const) : ("rule" as const);
     if (existing) await db.update(schema.contentVariants).set({ body, subject, notes, generatedBy: p ? "claude" : "rules", origin }).where(eq(schema.contentVariants.id, existing.id));
     else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId, userId, channel: d.channel, body, subject, notes, generatedBy: p ? "claude" : "rules", origin });
   }

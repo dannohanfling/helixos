@@ -85,7 +85,7 @@ async function main() {
     });
     const { db, schema } = await import("@/db");
     const { and, eq, desc } = await import("drizzle-orm");
-    const { UNREVIEWED_LABEL, gateLine, sectionGate } = await import("@/lib/engine/provenance");
+    const { UNREVIEWED_LABEL, gateLine, sectionGate, unreviewedCountLine } = await import("@/lib/engine/provenance");
     const { SECTION_TEMPLATES } = await import("@/lib/engine/webinar");
     const { ORIGINS } = await import("@/db/schema");
 
@@ -133,6 +133,16 @@ async function main() {
     if ((await page.locator('textarea[name="script"]').inputValue()) !== drafted.script) throw new Error("the editor shows the stored draft");
     await readMark(page, "section mark", UNREVIEWED_LABEL);
     console.log(`✓ webinar: "${drafted.name}" drafted by the model is ai_unreviewed on the record and labelled in the editor with one Accept`);
+    // The run sheet, read aloud to a live room, marks the section and counts at the top; a page, so it gates nothing and offers no confirm.
+    await page.goto(`${wizardBase}/runsheet`);
+    await page.locator('[data-testid="run-sheet"]').waitFor({ timeout: 20000 });
+    const sheetMarks = page.locator('[data-testid="runsheet-unreviewed"]');
+    if ((await sheetMarks.count()) !== 1 || !(await sheetMarks.first().innerText()).includes(UNREVIEWED_LABEL)) throw new Error(`the run sheet marks the one unread script, got ${await sheetMarks.count()}`);
+    if ((await page.locator(`[data-testid="runsheet-section"][data-key="${first.sectionKey}"] [data-testid="runsheet-unreviewed"]`).count()) !== 1) throw new Error("the mark sits on the drafted section");
+    const sheetCount = (await page.locator('[data-testid="runsheet-unreviewed-count"]').innerText()).trim();
+    if (sheetCount !== `${unreviewedCountLine([drafted.name])}.`) throw new Error(`the count at the top is the engine's line naming the section: "${sheetCount}"`);
+    if (await page.locator('[data-testid="review-gate"], [data-testid="review-gate-continue"]').count()) throw new Error("the run sheet is a page: no gate, no confirm");
+    console.log(`✓ run sheet: "${sheetCount}" at the top and the mark on ${drafted.name}; no gate`);
     // Export: the line names it, the files are not offered, the route refuses with the same names
     await page.goto(`${wizardBase}?step=deck`);
     const g1 = await readGate(page, "deck gate");
@@ -167,6 +177,9 @@ async function main() {
     if (edited.origin !== "edited" || !edited.script?.startsWith("Here is the plan")) throw new Error(`an edit reviews the draft: origin ${edited.origin}`);
     await page.goto(`${wizardBase}?step=script&section=${first.sectionKey}`);
     if (await page.locator('[data-testid="ai-unreviewed"]').count()) throw new Error("the label goes with the edit");
+    await page.goto(`${wizardBase}/runsheet`);
+    await page.locator('[data-testid="run-sheet"]').waitFor({ timeout: 20000 });
+    if (await page.locator('[data-testid="runsheet-unreviewed"], [data-testid="runsheet-unreviewed-count"]').count()) throw new Error("the run sheet's mark and count go with the edit");
     await page.goto(`${wizardBase}?step=deck`);
     await noGate(page, "deck after edit");
     if (!(await page.locator('[data-testid="deck-pptx"]').count()) || (await page.locator('[data-testid="deck-pptx"]').getAttribute("href"))?.includes("confirmed")) throw new Error("the files are offered plainly once every draft is reviewed");
@@ -201,7 +214,7 @@ async function main() {
     await page.waitForURL(/\/magnets\/[a-z0-9-]+$/i);
     const magnetId = page.url().split("/").pop()!;
     const magnet = async () => (await db.query.leadMagnets.findFirst({ where: eq(schema.leadMagnets.id, magnetId) }))!;
-    if ((await magnet()).origin !== null || (await magnet()).publishedAt !== null) throw new Error("a new magnet is a scaffold: no origin, not published");
+    if ((await magnet()).origin !== "rule" || (await magnet()).publishedAt !== null) throw new Error(`a new magnet is the type's scaffold, rule-composed and unpublished: origin ${(await magnet()).origin}`);
     if (await page.locator('[data-testid="ai-unreviewed"]').count()) throw new Error("a scaffold is not an AI draft");
     await submit(page, '[data-testid="magnet-generate"]');
     await page.waitForURL(/stripped=1/);
@@ -302,8 +315,16 @@ async function main() {
     if (marks !== unread.length) throw new Error(`one mark per unread variant: ${marks} marks for ${unread.length}`);
     if ((await page.locator('[data-testid="ai-accept"]').count()) !== unread.length) throw new Error("one Accept per variant, nothing that accepts them all");
     if (await page.getByText(/accept all/i).count()) throw new Error("no accept-all");
-    // The composer above scheduled the coach's own group; the AI regenerate then replaced that scheduled variant's text with an
-    // unread draft (no send happened, so no gate: reported, not ruled). The status gate is walked on drafts still to go out.
+    // The composer above scheduled the coach's own group; the AI regenerate replaced that scheduled version's text with an unread
+    // draft. No path publishes a group post automatically (compose.ts pushes only versions with no group id; the ladder's stale
+    // query takes groupId "" only), so the schedule stands and the label on the page the coach pastes from is the mark, as ruled.
+    const regenerated = unread.filter((x) => x.status === "scheduled");
+    if (!regenerated.length) throw new Error("the composer's send scheduled the coach's own group before the regenerate");
+    for (const x of regenerated) {
+      if ((await page.locator(`form:has(input[name="id"][value="${x.id}"]) [data-testid="ai-accept"]`).count()) !== 1) throw new Error("a regenerated scheduled version carries the mark and its own Accept");
+      if ((await page.locator(`form#variant-${x.id} select[name="status"]`).inputValue()) !== "scheduled") throw new Error("the schedule stands after a regenerate");
+    }
+    // The status gate is walked on the drafts still to go out.
     const unreadDrafts = unread.filter((x) => x.status === "draft");
     if (unreadDrafts.length < 2) throw new Error(`at least two unread group drafts still to go out, got ${unreadDrafts.length} of ${unread.length}`);
     const v1 = unreadDrafts[0];
@@ -333,7 +354,7 @@ async function main() {
     await page.waitForLoadState("networkidle");
     await noGate(page, "accepted variant scheduled");
     if ((await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, v2.id) }))!.status !== "scheduled") throw new Error("an accepted variant schedules plainly");
-    console.log(`✓ group variants: ${unread.length} drafts each labelled with its own Accept; scheduling one names "${name1}"; Continue anyway logged; an accepted one goes plainly`);
+    console.log(`✓ group variants: ${unread.length} drafts each labelled with its own Accept, ${regenerated.length} of them regenerated over a schedule that stands; scheduling one names "${name1}"; Continue anyway logged; an accepted one goes plainly`);
     // One click everywhere: the post itself is still unread, so the send names it; Continue anyway carries the date it was given
     await submit(page, 'button:has-text("Schedule everywhere")');
     await page.waitForURL(/gate=distribute/);

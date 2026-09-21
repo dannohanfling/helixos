@@ -267,7 +267,8 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
   await assertPublishable(l);
   let itemId = l.contentItemId;
   const existing = itemId ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) }) : null;
-  const item = { title: l.postName || l.topic, hook: l.hook || null, body: l.copy || null, hasCta: l.keyword !== "NONE", contentType: "Comment Ladder", notes: l.notes };
+  // The ladder composes the post and its channel bodies from what the coach built: rule, never gated.
+  const item = { title: l.postName || l.topic, hook: l.hook || null, body: l.copy || null, hasCta: l.keyword !== "NONE", contentType: "Comment Ladder", notes: l.notes, origin: "rule" as const };
   if (existing) await db.update(schema.contentItems).set(item).where(eq(schema.contentItems.id, existing.id));
   else {
     itemId = newId();
@@ -277,8 +278,8 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
   for (const c of channelBodies(l)) {
     const v = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId!), eq(schema.contentVariants.channel, c.channel), eq(schema.contentVariants.groupId, "")) });
     if (v?.status === "posted" || v?.status === "scheduled") continue;
-    if (v) await db.update(schema.contentVariants).set({ body: c.body, generatedBy: "ladder" }).where(eq(schema.contentVariants.id, v.id));
-    else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId!, userId, channel: c.channel, groupId: "", body: c.body, generatedBy: "ladder" });
+    if (v) await db.update(schema.contentVariants).set({ body: c.body, generatedBy: "ladder", origin: "rule" }).where(eq(schema.contentVariants.id, v.id));
+    else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId!, userId, channel: c.channel, groupId: "", body: c.body, generatedBy: "ladder", origin: "rule" });
   }
   refresh();
   redirect(`/content/${itemId}/compose`);
@@ -304,7 +305,7 @@ export async function pushLadderUpdateAction(formData: FormData): Promise<void> 
   // While the comment-ladder handoff is on, Threads is Community Loyalty's: its text is updated here, never re-pushed.
   const dripOn = dripSetup(v.membership).on;
   for (const s of stale) {
-    await db.update(schema.contentVariants).set({ body: s.body, generatedBy: "ladder" }).where(eq(schema.contentVariants.id, s.variantId));
+    await db.update(schema.contentVariants).set({ body: s.body, generatedBy: "ladder", origin: "rule" }).where(eq(schema.contentVariants.id, s.variantId));
     if (s.inGhl && !(dripOn && s.channel === "threads") && (await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: s.variantId, channel: s.channel, body: s.body, postAt: s.postAt, mediaUrl: item?.mediaUrl, title: item?.title }))) pushed++;
   }
   refresh();

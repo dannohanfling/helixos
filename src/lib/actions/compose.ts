@@ -143,10 +143,10 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, id), eq(schema.contentVariants.channel, t.channel), eq(schema.contentVariants.groupId, groupId)) });
     if (existing?.status === "posted" && payload.mode !== "now") continue;
     const variantId = existing?.id ?? newId();
-    // A version's text from the composer is the coach's choice at the moment of sending; a stored AI draft it rewrites becomes edited,
-    // an unchanged one keeps its mark, and a version first written here carries none (a rule or the coach composed it, in view).
+    // A version's text from the composer was in front of the coach at the moment of sending, so saving it is choosing it: a version
+    // first written here is coach; a stored AI draft it rewrites becomes edited, and an unchanged one keeps its mark.
     if (existing) await db.update(schema.contentVariants).set({ ...row, origin: originAfterSave(existing.origin, existing.body, t.body) }).where(eq(schema.contentVariants.id, existing.id));
-    else await db.insert(schema.contentVariants).values({ id: variantId, contentItemId: id, userId, channel: t.channel, groupId, ...row });
+    else await db.insert(schema.contentVariants).values({ id: variantId, contentItemId: id, userId, channel: t.channel, groupId, ...row, origin: "coach" });
     if (vStatus === "scheduled") scheduled++;
     if (vStatus === "posted") {
       posted++;

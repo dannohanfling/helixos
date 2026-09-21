@@ -3,6 +3,7 @@
  * for the three things that consume it: the run sheet, the deck, and the readiness grades. Pure. Nothing here invents a
  * fact: a slot with nothing wired to it is null, and a bracketed placeholder is reported, never filled.
  */
+import { isUnreviewed, unreviewedCountLine } from "@/lib/engine/provenance";
 import { ACTS, ACT_NUMBER, clock, freeTextProofUsable, sectionPace, type ActKey } from "./webinar";
 import { formatPrice } from "./offer-score";
 import { ORIGIN_BEATS } from "./webinar";
@@ -14,7 +15,7 @@ export type CitableRow = { id: string; source: "own" | "shared"; claim: string; 
 export type OfferRow = { name: string; price: number; currency?: string | null; container: string; guarantee?: string | null; paymentPlan?: string | null; scarcity?: string | null; urgency?: string | null; ctaFooter?: string | null; forYouIf?: string | null; notForYouIf?: string | null; objectionAssetIds?: string[] };
 export type ComponentRow = { name: string; type: string; description?: string | null; oneLiner?: string | null; perceivedValue: number; beliefBreak: string };
 export type BeliefRow = { type: string; fromBelief: string | null; toBelief: string | null; proofId?: string | null; proof?: string | null; proofWho?: string | null; proofPermissionAt?: string | null; proofChangedAt?: string | null; storyAssetId?: string | null; evidenceId?: string | null };
-export type SectionRow = { sectionKey: string; act: ActKey; order: number; name: string; status: string; buildStyle?: string | null; keyPoints: string | null; script: string | null; transitionIn: string | null; transitionOut: string | null; deliveryNote?: string | null; assetId: string | null; durationMin: number };
+export type SectionRow = { sectionKey: string; act: ActKey; order: number; name: string; status: string; buildStyle?: string | null; keyPoints: string | null; script: string | null; transitionIn: string | null; transitionOut: string | null; deliveryNote?: string | null; assetId: string | null; durationMin: number; origin?: string | null };
 
 export type ResolvedProof = { id: string; who: string; quote: string; source: "bank" | "typed" };
 export type ResolvedStory = { id: string; name: string; body: string; moral: string | null; useWhen: string | null; source: "bank" | "essence" };
@@ -51,6 +52,8 @@ export type SectionContext = {
   /** The objections the offer answers, on the Q&A section, where the presenter needs them to hand. */
   objections: ResolvedObjection[];
   placeholders: string[];
+  /** The script is a model's draft nobody has read: the run sheet marks it, since that sheet is read aloud to a live room. */
+  unreviewed: boolean;
   pace: ReturnType<typeof sectionPace>;
 };
 export type ActContext = { key: ActKey; label: string; startMin: number; endMin: number; durationMin: number; sections: SectionContext[] };
@@ -160,6 +163,7 @@ export function resolveSections(input: { webinar: { title: string; stayLine?: st
       offer: s.act === "closing" ? offer : null,
       objections: s.sectionKey === QA_SECTION_KEY && offer ? offer.objections : [],
       placeholders: [...new Set([...placeholdersIn(s.keyPoints), ...placeholdersIn(s.script)])],
+      unreviewed: isUnreviewed(s.origin),
       pace: sectionPace(s),
     };
   });
@@ -184,14 +188,21 @@ export function resolveSections(input: { webinar: { title: string; stayLine?: st
 }
 
 /** The run sheet as plain text, for copying into wherever the presenter reads from. */
+/** The sections whose script is a model's draft nobody has read, by name, in running order: the run sheet's count. */
+export const unreviewedSections = (c: WebinarContext): string[] => c.acts.flatMap((a) => a.sections.filter((s) => s.unreviewed).map((s) => s.name));
+
 export function runSheetText(c: WebinarContext): string {
-  const out: string[] = [`${c.title}`, `Presented by ${c.presenter} · ${c.totalMin} min · scripted ≈ ${c.scriptedMin} min`, ""];
+  const out: string[] = [`${c.title}`, `Presented by ${c.presenter} · ${c.totalMin} min · scripted ≈ ${c.scriptedMin} min`];
+  const unreviewed = unreviewedSections(c);
+  if (unreviewed.length) out.push(unreviewedCountLine(unreviewed));
+  out.push("");
   for (const a of c.acts) {
     out.push(`${a.label.toUpperCase()}  ${a.durationMin} min · ${clock(a.startMin)} → ${clock(a.endMin)}`, "");
     for (const s of a.sections) {
       out.push(`  ${s.order} · ${s.name.toUpperCase()}  ${s.durationMin} min · ${s.start}`);
       if (s.transitionIn) out.push(`  ── in: ${s.transitionIn}`);
       if (s.keyPoints.length) out.push(`  KEY POINTS`, ...s.keyPoints.map((p) => `    · ${p}`));
+      if (s.unreviewed) out.push(`  [AI draft, not reviewed]`);
       if (s.script) out.push(`  SCRIPT`, ...s.script.split("\n").map((l) => `    ${l}`));
       if (s.deliveryNote) out.push(`  DELIVERY  ${s.deliveryNote}`);
       if (s.proof) out.push(`  PROOF     ${s.proof.who}: "${s.proof.quote}"${s.proof.source === "bank" ? " [approved]" : " [typed, permission ticked]"}`);

@@ -1,8 +1,8 @@
 /**
  * The provenance mark on AI drafts, pure. A model's text is stored as `ai_unreviewed` the moment it returns; it becomes
  * `ai_accepted` on an explicit Accept (one item at a time, never all at once) or `edited` on any coach edit, since an edit
- * counts as review. Coach-written text is `coach`. A row from before the mark, or text a rule composed, is null: never
- * guessed, never flagged. Only `ai_unreviewed` is ever gated, and the gate stands on the action that sends content out,
+ * counts as review. Coach-written text is `coach`; text a rule composed from what the coach chose is `rule`, never gated. A
+ * row from before the mark is null: never guessed, never flagged. Only `ai_unreviewed` is ever gated, and the gate stands on the action that sends content out,
  * never on the page: the action names the drafts and offers Review or Continue anyway; Continue anyway is logged with who
  * and when. Nothing here reads the database; the actions and pages call in with what the record holds.
  */
@@ -33,6 +33,9 @@ export function originAfterSave(current: Origin | null | undefined, before: stri
 
 /** Accept moves one unreviewed draft to accepted and touches nothing else: an accept on an edited or coach row is a no-op. */
 export const originAfterAccept = (current: Origin | null | undefined): Origin | null => (current === "ai_unreviewed" ? "ai_accepted" : (current ?? null));
+
+/** The run sheet's count at the top: how many scripts are a model's draft nobody has read, and which. One reads in the singular. */
+export const unreviewedCountLine = (names: readonly string[]): string => `${names.length} ${names.length === 1 ? "AI draft" : "AI drafts"}, not reviewed: ${names.join(", ")}`;
 
 /** The gate's first line, from the ruling: "N items are AI drafts you haven't reviewed". One item reads in the singular. */
 export function gateLine(count: number): string {

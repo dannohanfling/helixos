@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES, applyOverride, derivedGrades } from "../webinar";
-import { QA_SECTION_KEY, placeholdersIn, resolveSections, runSheetText } from "../webinar-context";
+import { QA_SECTION_KEY, placeholdersIn, resolveSections, runSheetText, unreviewedSections } from "../webinar-context";
+import { UNREVIEWED_LABEL, unreviewedCountLine } from "../provenance";
 
 const sections = SECTION_TEMPLATES.map((t) => ({ sectionKey: t.key, act: t.act, order: t.order, name: t.name, status: "drafted", keyPoints: t.order === 1 ? "• Open the loop\n• Promise [X]% fewer no-shows" : null, script: t.order === 1 ? "Hi. If you've ever lost 10 pounds and gained it back, this is for you." : null, transitionIn: t.order === 3 ? "Let's name the enemy." : null, transitionOut: null, deliveryNote: t.order === 1 ? "Wait for the chat to fill." : null, assetId: t.order === 3 ? "a1" : null, durationMin: t.durationMin }));
 const proofs = [{ id: "p1", who: "Kate A.", name: "Kate A.: identity", longVersion: "I now see identity as the foundation.", status: "approved" }, { id: "p2", who: "Gary C.", name: "Gary", longVersion: "tools", status: "draft" }];
@@ -69,6 +70,23 @@ describe("the resolver: everything wired to each section, in running order, with
     expect(text).toContain("UNFILLED  [X]%");
     expect(text).toContain("OBJECTIONS\n    · I've tried this before — The right teacher.");
     expect(text).toContain("OFFER     The 90-Minute Diagnostic · NZD $1,997 · Diagnostic");
+  });
+});
+
+describe("the run sheet marks a script nobody has read, and counts them at the top", () => {
+  it("an unreviewed section is marked, the count names it in running order, and a reviewed one is not", () => {
+    const marked = sections.map((s) => ({ ...s, script: s.script ?? "A draft.", origin: s.order === 2 ? "ai_unreviewed" : s.order === 5 ? "ai_unreviewed" : s.order === 3 ? "edited" : "coach" }));
+    const c = resolveSections({ webinar: { title: "T" }, presenter: "P", sections: marked, beliefs, proofs, assets, essenceStories: [], citable, offer });
+    const all = c.acts.flatMap((a) => a.sections);
+    expect(all.filter((s) => s.unreviewed).map((s) => s.order)).toEqual([2, 5]);
+    expect(unreviewedSections(c)).toEqual([marked[1].name, marked[4].name]);
+    const text = runSheetText(c);
+    expect(text.split("\n")[2]).toBe(`2 AI drafts, not reviewed: ${marked[1].name}, ${marked[4].name}`);
+    expect(unreviewedCountLine([marked[1].name])).toBe(`1 AI draft, not reviewed: ${marked[1].name}`);
+    expect(text.match(/\[AI draft, not reviewed\]/g)).toHaveLength(2);
+    // Nothing marked: no count line, no marker.
+    const clean = runSheetText(ctx());
+    expect(clean).not.toContain(UNREVIEWED_LABEL);
   });
 });
 

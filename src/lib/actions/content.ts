@@ -33,6 +33,7 @@ export async function createContentAction(formData: FormData): Promise<void> {
     postAt: postDate ? `${postDate}T${str(formData, "postTime") || "09:00"}:00` : null,
     notes: opt(formData, "notes"),
     postedAt: status === "posted" ? nowIso() : null,
+    origin: "coach",
   });
   void v;
   refresh();

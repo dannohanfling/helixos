@@ -135,8 +135,8 @@ export async function generateGroupVariantsAction(formData: FormData): Promise<v
     const channel = spec.key;
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, channel), eq(schema.contentVariants.groupId, g.id)) });
     if (existing?.status === "posted") continue;
-    // The model's draft is stored unreviewed; a rule-based draft carries no mark (the coach's own post, reshaped by a rule).
-    const origin = by === "claude" ? ("ai_unreviewed" as const) : null;
+    // The model's draft is stored unreviewed; a rule-based draft is the coach's own post reshaped by a rule: rule, never gated.
+    const origin = by === "claude" ? ("ai_unreviewed" as const) : ("rule" as const);
     if (existing) await db.update(schema.contentVariants).set({ body, notes, generatedBy: by, origin }).where(eq(schema.contentVariants.id, existing.id));
     else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId, userId, channel, groupId: g.id, body, notes, generatedBy: by, origin });
   }

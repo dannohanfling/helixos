@@ -15,7 +15,7 @@ describe("the provenance mark", () => {
       expect(col.notNull).toBe(false);
       expect(col.enumValues).toEqual([...ORIGINS]);
     }
-    expect(ORIGINS).toEqual(["ai_unreviewed", "ai_accepted", "edited", "coach"]);
+    expect(ORIGINS).toEqual(["ai_unreviewed", "ai_accepted", "edited", "coach", "rule"]);
   });
 
   it("an edit is a review; an unchanged save is not; coach text is coach; a row with no origin is never guessed", () => {
@@ -50,6 +50,13 @@ describe("the provenance mark", () => {
     const gate = gateFor([{ name: "Hook", origin: "ai_unreviewed" }, { name: "Vehicle", origin: "edited" }, { name: "Proof", origin: null }, { name: "Close", origin: "ai_unreviewed" }]);
     expect(gate).toEqual({ line: "2 items are AI drafts you haven't reviewed", items: ["Hook", "Close"] });
     expect(gateFor([{ name: "Hook", origin: "ai_accepted" }, { name: "Close", origin: "coach" }])).toBeNull();
+    // Rule-composed text is never gated: its words are Danno's doctrine the coach picked, or a reshaping of the coach's own.
+    expect(gateFor([{ name: "Post", origin: "rule" }])).toBeNull();
+    expect(carriesUnreviewed("rule", "draft", "draft")).toBe(false);
+    // A coach's edit of rule text is the coach's; an accept on it is a no-op.
+    expect(originAfterSave("rule", "a", "b")).toBe("coach");
+    expect(originAfterSave("rule", "a", "a")).toBe("rule");
+    expect(originAfterAccept("rule")).toBe("rule");
     expect(gateFor([])).toBeNull();
     // A section left out on purpose goes nowhere, so it is not gated.
     expect(sectionGate([{ name: "Hook", status: "omitted", origin: "ai_unreviewed" }, { name: "Close", status: "drafted", origin: "ai_unreviewed" }])).toEqual({ line: "1 item is an AI draft you haven't reviewed", items: ["Close"] });
@@ -85,10 +92,29 @@ describe("where the mark is set and where the gate stands (read off the source)"
       ["src/lib/actions/webinars.ts", /status: "drafted", keyPoints: section\?\.keyPoints \?\? null, origin: "ai_unreviewed"/],
       ["src/lib/actions/magnets.ts", /generatedBy: "claude", origin: "ai_unreviewed"/],
       ["src/lib/actions/doctrine.ts", /origin = "ai_unreviewed"/],
-      ["src/lib/actions/groups.ts", /by === "claude" \? \("ai_unreviewed" as const\) : null/],
+      ["src/lib/actions/groups.ts", /by === "claude" \? \("ai_unreviewed" as const\) : \("rule" as const\)/],
     ] as const;
     expect(paths.length).toBe(4);
     for (const [file, re] of paths) expect(read(file), file).toMatch(re);
+  });
+
+  it("text a rule composed is stored as rule, so null means only a row from before the mark", () => {
+    const sites = [
+      ["src/lib/actions/doctrine.ts", /let origin: "ai_unreviewed" \| "rule" = "rule"/],
+      ["src/lib/actions/groups.ts", /by === "claude" \? \("ai_unreviewed" as const\) : \("rule" as const\)/],
+      ["src/lib/actions/variants.ts", /p \? \("ai_unreviewed" as const\) : \("rule" as const\)/],
+      ["src/lib/actions/magnets.ts", /generatedBy: "scaffold", origin: "rule"/],
+      ["src/lib/actions/magnets.ts", /generatedBy: text \? "claude-partial" : "scaffold", origin: "rule"/],
+      ["src/lib/actions/ladders.ts", /contentType: "Comment Ladder", notes: l\.notes, origin: "rule" as const/],
+      ["src/lib/actions/ladders.ts", /generatedBy: "ladder", origin: "rule"/],
+      ["src/lib/actions/proofs.ts", /body, origin: "rule", notes/],
+      ["src/lib/actions/content.ts", /origin: "coach",\n  \}\);/],
+      ["src/lib/actions/compose.ts", /\.\.\.row, origin: "coach" \}\)/],
+    ] as const;
+    expect(sites.length).toBe(10);
+    for (const [file, re] of sites) expect(read(file), `${file} ${re}`).toMatch(re);
+    // No write site on the four tables sets origin to null on purpose.
+    for (const file of ["doctrine", "groups", "variants", "magnets", "ladders", "proofs", "content", "compose", "webinars"]) expect(read(`src/lib/actions/${file}.ts`), file).not.toMatch(/origin: null/);
   });
 
   it("every action that sends content out checks the gate and logs Continue anyway with who and when", () => {

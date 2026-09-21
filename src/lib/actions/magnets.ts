@@ -62,7 +62,7 @@ export async function createMagnetAction(formData: FormData): Promise<void> {
   const clash = await keywordClash(workspaceId, keyword);
   if (clash) redirect(`/magnets?error=${encodeURIComponent(clashMessage(keyword, clash.title))}`);
   const id = newId();
-  await db.insert(schema.leadMagnets).values({ id, workspaceId, userId, title, promise, audience: str(formData, "audience"), offerId: opt(formData, "offerId"), type, keyword, slug: await freeSlug(title), content: scaffoldContent(type, promise), generatedBy: "scaffold" });
+  await db.insert(schema.leadMagnets).values({ id, workspaceId, userId, title, promise, audience: str(formData, "audience"), offerId: opt(formData, "offerId"), type, keyword, slug: await freeSlug(title), content: scaffoldContent(type, promise), generatedBy: "scaffold", origin: "rule" });
   refresh();
   redirect(`/magnets/${id}`);
 }
@@ -139,7 +139,7 @@ export async function generateMagnetAction(formData: FormData): Promise<void> {
   } else {
     await db
       .update(schema.leadMagnets)
-      .set({ content: scaffoldContent(m.type, m.promise), generatedBy: text ? "claude-partial" : "scaffold", origin: null, notes: [m.notes, text ? `Claude did not return the magnet's shape. Its answer:\n${text.slice(0, 2000)}` : null].filter(Boolean).join("\n") || null, updatedAt: nowIso() })
+      .set({ content: scaffoldContent(m.type, m.promise), generatedBy: text ? "claude-partial" : "scaffold", origin: "rule", notes: [m.notes, text ? `Claude did not return the magnet's shape. Its answer:\n${text.slice(0, 2000)}` : null].filter(Boolean).join("\n") || null, updatedAt: nowIso() })
       .where(eq(schema.leadMagnets.id, m.id));
   }
   refresh();

@@ -168,6 +168,6 @@ export async function proofToContentAction(formData: FormData): Promise<void> {
     .filter((l, i, a) => !(l === "" && a[i - 1] === ""))
     .join("\n")
     .trim();
-  await db.insert(schema.contentItems).values({ id, workspaceId, userId, title: `Win: ${p.name}`, status: "creating", contentType: "Client Win", platform: "FB Group", hasCta: true, hook: p.hook ?? p.shortVersion ?? p.name, body, notes: `From proof ${p.id}` });
+  await db.insert(schema.contentItems).values({ id, workspaceId, userId, title: `Win: ${p.name}`, status: "creating", contentType: "Client Win", platform: "FB Group", hasCta: true, hook: p.hook ?? p.shortVersion ?? p.name, body, origin: "rule", notes: `From proof ${p.id}` });
   redirect(`/content/${id}`);
 }
