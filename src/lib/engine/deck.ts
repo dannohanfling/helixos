@@ -30,7 +30,20 @@ export const HEADLINE_MAX_CHARS = 160;
 export const BODY_SIZE = 18;
 export const EYEBROW_SIZE = 11;
 
-export type SlideKind = "cover" | "divider" | "recap" | "section" | "proof" | "evidence" | "story" | "offer";
+export type SlideKind = "cover" | "divider" | "recap" | "section" | "proof" | "evidence" | "story" | "offer" | "opening" | "reflection";
+/** A picture slot the deck suggests by rule from the slide's kind. The coach fills it from their image library; empty, it lists on the Deck step and the slide exports as text. Never on the price slide. */
+export type SlotKind = "photo" | "photo_pair" | "screenshot" | "screenshot_callout" | "proof_wall" | "testimonial" | "diagram";
+export type Slot = { key: string; kind: SlotKind; what: string };
+/** The one-line instruction each suggested slot carries, from a fixed table, never generated. */
+export const SLOT_WHAT: Record<SlotKind, string> = {
+  photo: "A photo of you or the person in this beat.",
+  photo_pair: "Two photos side by side: before and after.",
+  screenshot: "A screenshot of the thing you are describing.",
+  screenshot_callout: "A screenshot with the number or line that matters circled.",
+  proof_wall: "A wall of your real screenshots: comments, DMs, results.",
+  testimonial: "The client's photo beside their approved quote.",
+  diagram: "Your own diagram of this mechanism or framework.",
+};
 export type PlaceholderHit = { text: string; refuse: boolean; why: string };
 export type Slide = {
   n: number;
@@ -51,6 +64,8 @@ export type Slide = {
   inverse: boolean;
   /** The offer's one line, on every slide from the offer onward. */
   footer: string | null;
+  /** The picture slot this slide suggests, or null. Filled by the coach from the image library; empty here, listed on the Deck step. */
+  slot: Slot | null;
 };
 export type DeckResult = {
   slides: Slide[];
@@ -61,6 +76,12 @@ export type DeckResult = {
   placeholderCount: number;
   kit: DeckKit;
   kitApplied: boolean;
+  /** Opening-contract lines the coach has not filled: not slides, listed on the Deck step, never a placeholder on a face. */
+  openingOmitted: string[];
+  /** Per-webinar chrome the renderer draws, carried so renderPlan stays pure over the result. */
+  footerBar: boolean;
+  ctaBar: boolean;
+  ctaFooter: string | null;
 };
 
 const ACT_LABEL: Record<string, string> = { opening: "Opening frame", vehicle: "Vehicle", internal: "Internal", external: "External", closing: "Closing frame" };
@@ -123,7 +144,7 @@ function direction(kind: SlideKind, body: string[]): string | null {
   return null;
 }
 
-type SlideInput = { n: number; kind: SlideKind; s: SectionContext | null; headline: string; body?: string[]; extraNotes?: string[]; eyebrow?: string; act?: string; inverse?: boolean; footer?: string | null };
+type SlideInput = { n: number; kind: SlideKind; s: SectionContext | null; headline: string; body?: string[]; extraNotes?: string[]; eyebrow?: string; act?: string; inverse?: boolean; footer?: string | null; slot?: Slot | null };
 function slideOf(i: SlideInput): Slide {
   const { n, kind, s } = i;
   const body = i.body ?? [];
@@ -134,7 +155,7 @@ function slideOf(i: SlideInput): Slide {
   const footer = i.footer ?? null;
   // The footer is the offer's line on a price slide: a hole in it refuses as clause (b) does, on every slide it sits on.
   const placeholders = [...placeholderHits(kind, [headline, ...finalBody]), ...(footer ? placeholderHits("offer", [footer]) : [])].filter((h, idx, all) => all.findIndex((x) => x.text === h.text) === idx);
-  return { n, kind, sectionKey: s?.sectionKey ?? null, section: s?.name ?? "", act: i.act ?? s?.act ?? "opening", eyebrow: i.eyebrow ?? (s ? `${s.name} · ${ACT_LABEL[s.act] ?? s.act}` : ""), headline, headlineSize: tier.overflow ? HEADLINE_FLOOR : tier.size, body: finalBody, notes, placeholders, overflow: tier.overflow, inverse: Boolean(i.inverse), footer };
+  return { slot: i.slot ?? null, n, kind, sectionKey: s?.sectionKey ?? null, section: s?.name ?? "", act: i.act ?? s?.act ?? "opening", eyebrow: i.eyebrow ?? (s ? `${s.name} · ${ACT_LABEL[s.act] ?? s.act}` : ""), headline, headlineSize: tier.overflow ? HEADLINE_FLOOR : tier.size, body: finalBody, notes, placeholders, overflow: tier.overflow, inverse: Boolean(i.inverse), footer };
 }
 
 /**
@@ -173,7 +194,21 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   const stackOrder = c.sections.find(isOfferStack)?.order ?? Infinity;
   // The footer runs from the offer onward: every slide of a section at or after the Offer Stack.
   const footerFor = (s: SectionContext) => (offer?.ctaFooter && s.order >= stackOrder ? offer.ctaFooter : null);
-  slides.push({ n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
+  slides.push({ slot: { key: "cover:photo", kind: "photo", what: SLOT_WHAT.photo }, n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
+  // The opening contract, before any content: each of the coach's own lines is one slide; a line the coach left empty is not a
+  // slide (omitted, listed on the Deck step), never a placeholder on a face. The order is the reference deck's.
+  const openingOmitted: string[] = [];
+  const openSlide = (label: string, text: string | null, headline?: string, body?: string[]) => {
+    if (!text) { openingOmitted.push(label); return; }
+    slides.push(slideOf({ n: n++, kind: "opening", s: null, act: "opening", eyebrow: `Opening · ${label}`, headline: headline ?? text, body: body ?? [] }));
+  };
+  openSlide("The promise", c.opening.promiseLine);
+  openSlide("Say hi in the chat", c.opening.chatPrompt);
+  openSlide("Ground rule", c.opening.groundRule);
+  if (c.opening.outcomes.length) slides.push(slideOf({ n: n++, kind: "opening", s: null, act: "opening", eyebrow: "Opening · What you'll leave with", headline: "By the end you'll have", body: c.opening.outcomes.slice(0, 3) }));
+  else openingOmitted.push("Three outcomes");
+  openSlide("My goal today", c.opening.sessionGoal);
+  openSlide("Permission to be direct", c.opening.permissionLine);
   for (const act of c.acts) {
     const belief = act.sections.find((s) => s.belief)?.belief ?? null;
     // A divider opens each belief act: the act's label the wizard already holds, and the shift it makes, from the record.
@@ -187,21 +222,23 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
       const pointSlides = (kind: SlideKind, extraOnFirst: string[] = []) =>
         points.forEach((p, i) => slides.push(slideOf(s.buildStyle === "reveal" ? { n: n++, kind, s, headline: points[0], body: points.slice(1, i + 1), extraNotes: i === 0 ? extraOnFirst : [], footer } : { n: n++, kind, s, headline: p, extraNotes: i === 0 ? extraOnFirst : [], footer })));
       // The origin story's beats are the Credibility / Origin section's own slides, one each, before its key points.
-      if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer }));
+      if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer, slot: { key: `${s.sectionKey}:${b.key}:photo`, kind: "photo", what: SLOT_WHAT.photo } }));
       if (isProofBlock(s)) {
         // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
-        if (s.proof) slides.push(slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer }));
-        else if (s.evidence) slides.push(slideOf({ n: n++, kind: "evidence", s, headline: s.evidence.claim, body: [s.evidence.citation], footer }));
+        if (s.proof) slides.push(slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial } }));
+        else if (s.evidence) slides.push(slideOf({ n: n++, kind: "evidence", s, headline: s.evidence.claim, body: [s.evidence.citation], footer, slot: { key: `${s.sectionKey}:screenshot_callout`, kind: "screenshot_callout", what: SLOT_WHAT.screenshot_callout } }));
         pointSlides("proof");
         continue;
       }
       if (isCaseStudy(s)) {
-        if (s.story) slides.push(slideOf({ n: n++, kind: "story", s, headline: s.story.name, body: sentencesOf(s.story.body).slice(0, 3), footer }));
+        if (s.story) slides.push(slideOf({ n: n++, kind: "story", s, headline: s.story.name, body: sentencesOf(s.story.body).slice(0, 3), footer, slot: { key: `${s.sectionKey}:photo`, kind: "photo", what: SLOT_WHAT.photo } }));
         else pointSlides("section");
         continue;
       }
       if (isOfferStack(s)) {
-        if (s.offer) for (const b of offerBuild(s.offer, kit.showPriceAnchor !== false)) slides.push(slideOf({ n: n++, kind: "offer", s, headline: b.headline, body: b.body, footer }));
+        // The reflection beat before the offer: the coach's own private question on a moment slide. Its words, or no beat.
+        if (s.offer && c.opening.reflectionPrompt) slides.push(slideOf({ n: n++, kind: "reflection", s: null, act: s.act, eyebrow: "A moment before we go on", headline: c.opening.reflectionPrompt, inverse: true }));
+        if (s.offer) for (const b of offerBuild(s.offer, kit.showPriceAnchor !== false)) slides.push(slideOf({ n: n++, kind: "offer", s, headline: b.headline, body: b.body, footer, inverse: b.headline === s.offer.name }));
         pointSlides("offer");
         continue;
       }
@@ -235,7 +272,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   for (const p of kitProblems) refused.push(`Brand kit: ${p}`);
   if (!kitIn) warnings.push("No brand kit on this workspace: rendered black on white with no brand applied. Add the kit on Settings.");
   if (kitIn && !normaliseHex(kitIn.placeholder)) warnings.push(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
-  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn) };
+  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
 }
 
 /**
@@ -262,6 +299,11 @@ export function paceLine(p: DeckPace): string {
   // The reference carries its source in the sentence: an unsourced number becomes folklore. Each act is paced over its own
   // minutes with Q&A netted off, the way the reference was measured.
   return `${p.slides} slides · ~${p.minutes} min without Q&A · ${p.rate ?? "–"} slides a minute. Reference pace is ${REFERENCE_PACE}, measured from a live 90-minute deck with Q&A not counted; the band is ${PACE_BAND[0]} to ${PACE_BAND[1]}.${thin.length ? ` Thin: ${thin.join("; ")}, each over its own minutes without Q&A.` : ""} Offer segment is ${p.offerSlides} of ${p.slides} slides.`;
+}
+
+/** The picture slots the deck suggests, in slide order, each with its kind and one-line instruction: what the Deck step lists as "not added" until the coach fills them. */
+export function suggestedSlots(d: DeckResult): { slide: number; section: string; slot: Slot }[] {
+  return d.slides.filter((s) => s.slot).map((s) => ({ slide: s.n, section: s.section || s.eyebrow || "cover", slot: s.slot! }));
 }
 
 /* ───────────── The render plan ───────────── */

@@ -372,6 +372,13 @@
       "when": 1790025959394,
       "tag": "0052_membership_removed",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1790028180492,
+      "tag": "0053_deck_v2",
+      "breakpoints": true
     }
   ]
 }

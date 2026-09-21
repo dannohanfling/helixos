@@ -571,6 +571,18 @@ export const webinars = sqliteTable(
     presenter: text("presenter"),
     /** The one line for staying to the end; empty means no slide. */
     stayLine: text("stay_line"),
+    /** The opening contract, the coach's own words: each is one slide, and a missing one is omitted and listed on the Deck step, never filled by a model. */
+    promiseLine: text("promise_line"),
+    chatPrompt: text("chat_prompt"),
+    groundRule: text("ground_rule"),
+    outcomes: text("outcomes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    sessionGoal: text("session_goal"),
+    permissionLine: text("permission_line"),
+    /** The private question of the reflection beat before the offer, the coach's own words; empty means no reflection beat. */
+    reflectionPrompt: text("reflection_prompt"),
+    /** Per-webinar chrome, both off by default: a logo footer bar on content slides, a CTA bar on the offer and Q&A slides. */
+    footerBar: integer("footer_bar", { mode: "boolean" }).notNull().default(false),
+    ctaBar: integer("cta_bar", { mode: "boolean" }).notNull().default(false),
     /** The origin story in eight beats, keyed by ORIGIN_BEATS; a beat left empty makes no slide. */
     originStory: text("origin_story", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     /** Whose material this is built from. Null is the workspace owner, the only value today; later "client_records:<id>". */
@@ -657,6 +669,49 @@ export const webinarSections = sqliteTable(
   },
   (t) => [uniqueIndex("webinar_sections_key").on(t.webinarId, t.sectionKey)],
 );
+
+/**
+ * The coach's own images for their decks: a private store (its own token, like the proof store), the database holding only
+ * metadata. A screenshot or a proof image needs a recorded consent tick and name before it can be used. Reused across webinars.
+ */
+export const DECK_IMAGE_KINDS = ["photo", "screenshot", "proof", "logo"] as const;
+export type DeckImageKind = (typeof DECK_IMAGE_KINDS)[number];
+export const deckImages = sqliteTable(
+  "deck_images",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    kind: text("kind", { enum: DECK_IMAGE_KINDS }).notNull(),
+    blobKey: text("blob_key").notNull(),
+    blobUrl: text("blob_url").notNull(),
+    mime: text("mime").notNull(),
+    width: integer("width").notNull().default(0),
+    height: integer("height").notNull().default(0),
+    caption: text("caption"),
+    /** A screenshot or proof image affirms nobody's details are shown without consent: the tick, who ticked it, when. */
+    consentTick: integer("consent_tick", { mode: "boolean" }).notNull().default(false),
+    consentName: text("consent_name"),
+    consentAt: text("consent_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("deck_images_user").on(t.userId, t.createdAt)],
+);
+export type DeckImage = typeof deckImages.$inferSelect;
+
+/** The coach's choice of which image fills a suggested slot on a webinar's slide, keyed by the slot's stable key. */
+export const deckSlots = sqliteTable(
+  "deck_slots",
+  {
+    id: id(),
+    webinarId: text("webinar_id").notNull().references(() => webinars.id, { onDelete: "cascade" }),
+    slotKey: text("slot_key").notNull(),
+    imageId: text("image_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("deck_slots_key").on(t.webinarId, t.slotKey)],
+);
+export type DeckSlot = typeof deckSlots.$inferSelect;
 
 export const readinessReviews = sqliteTable("readiness_reviews", {
   id: id(),

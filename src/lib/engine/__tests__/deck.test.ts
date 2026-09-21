@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, type DeckKit } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, suggestedSlots, SLOT_WHAT, type DeckKit } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -267,5 +267,84 @@ describe("the opening the record can fill, and a section that builds", () => {
     const d = deckSlides(ctx(base({ hook: { keyPoints: "One\nTwo\nThree", buildStyle: "reveal" }, problem_frame: { keyPoints: "A\nB" } })), kit);
     expect(bySection(d, "hook").map((s) => [s.headline, s.body])).toEqual([["One", []], ["One", ["Two"]], ["One", ["Two", "Three"]]]);
     expect(bySection(d, "problem_frame").map((s) => [s.headline, s.body])).toEqual([["A", []], ["B", []]]);
+  });
+});
+
+describe("deck v2: the opening contract, the reflection beat, the moment family, and picture slots (all from the record)", () => {
+  // A context with the opening contract filled, one line (permission) left blank, and a reflection question.
+  const openCtx = (over: Record<string, unknown> = {}) =>
+    resolveSections({
+      webinar: {
+        title: "Your Edge, Uncovered",
+        promiseLine: "Leave with a plan you'll actually run.",
+        chatPrompt: "Say hi and where you're tuning in from.",
+        groundRule: "Nothing here is a guarantee of income.",
+        outcomes: ["A clear next step", "A plan for the week", "One belief broken"],
+        sessionGoal: "Get you to your first booked call.",
+        permissionLine: null,
+        reflectionPrompt: "What is this costing you already?",
+        footerBar: true,
+        ctaBar: true,
+        ...over,
+      },
+      presenter: "Lindsey Brittain",
+      sections: base({ credibility_origin: { keyPoints: null }, case_study: { keyPoints: null } }),
+      beliefs: [{ type: "vehicle", fromBelief: "a", toBelief: "b", proofId: "p1", storyAssetId: "s1" }],
+      proofs,
+      assets,
+      essenceStories: [],
+      citable,
+      offer,
+    });
+
+  it("each filled opening line is its own slide, in order, and a blank one is omitted and listed", () => {
+    const d = deckSlides(openCtx(), kit);
+    const opening = d.slides.filter((s) => s.kind === "opening").map((s) => s.headline);
+    // Promise, chat, ground rule, the outcomes slide, then the goal. Permission is blank, so it is not here and is listed.
+    expect(opening).toEqual([
+      "Leave with a plan you'll actually run.",
+      "Say hi and where you're tuning in from.",
+      "Nothing here is a guarantee of income.",
+      "By the end you'll have",
+      "Get you to your first booked call.",
+    ]);
+    expect(d.slides.find((s) => s.headline === "By the end you'll have")!.body).toEqual(["A clear next step", "A plan for the week", "One belief broken"]);
+    expect(d.openingOmitted).toEqual(["Permission to be direct"]);
+    // Every opening slide is one of the coach's own lines: no invented copy.
+    for (const s of d.slides.filter((s) => s.kind === "opening")) expect(s.section).toBe("");
+  });
+
+  it("with no opening lines filled, there are no opening slides and every one is listed", () => {
+    const d = deckSlides(openCtx({ promiseLine: null, chatPrompt: null, groundRule: null, outcomes: [], sessionGoal: null, permissionLine: null }), kit);
+    expect(d.slides.filter((s) => s.kind === "opening")).toEqual([]);
+    expect(d.openingOmitted).toEqual(["The promise", "Say hi in the chat", "Ground rule", "Three outcomes", "My goal today", "Permission to be direct"]);
+  });
+
+  it("the reflection beat is the coach's own question, on a moment slide, and only when the field is set", () => {
+    const withIt = deckSlides(openCtx(), kit).slides.filter((s) => s.kind === "reflection");
+    expect(withIt.map((s) => s.headline)).toEqual(["What is this costing you already?"]);
+    expect(withIt[0].inverse).toBe(true);
+    expect(deckSlides(openCtx({ reflectionPrompt: null }), kit).slides.filter((s) => s.kind === "reflection")).toEqual([]);
+  });
+
+  it("the price slide joins the moment family; the item slides do not", () => {
+    const offerSlides = deckSlides(openCtx(), kit).slides.filter((s) => s.kind === "offer");
+    const price = offerSlides.find((s) => s.headline === offer.offer.name)!;
+    expect(price.inverse).toBe(true);
+    expect(offerSlides.filter((s) => s.headline !== offer.offer.name).every((s) => !s.inverse)).toBe(true);
+  });
+
+  it("picture slots are suggested by rule from the slide kind, each with its fixed instruction, and never on the price slide", () => {
+    const d = deckSlides(openCtx({ credibility_origin: undefined }), kit);
+    const slots = suggestedSlots(d);
+    const kinds = new Set(slots.map((x) => x.slot.kind));
+    expect(kinds.has("photo")).toBe(true); // cover and story
+    expect(kinds.has("testimonial")).toBe(true); // the proof slide
+    expect(kinds.has("screenshot_callout")).toBe(false); // no evidence wired in this ctx
+    // The cover carries a photo slot; the price slide carries none.
+    expect(d.slides.find((s) => s.kind === "cover")!.slot?.kind).toBe("photo");
+    expect(d.slides.filter((s) => s.kind === "offer").every((s) => s.slot === null)).toBe(true);
+    // Every slot's instruction is the fixed one for its kind, never generated.
+    for (const x of slots) expect(x.slot.what).toBe(SLOT_WHAT[x.slot.kind]);
   });
 });

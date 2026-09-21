@@ -66,6 +66,11 @@ export type WebinarContext = {
   originStory: { key: string; label: string; text: string }[];
   /** Who the offer is for and not for, read off the Offer record. */
   fit: { forYouIf: string | null; notForYouIf: string | null };
+  /** The opening contract, each the coach's own words: a null one is omitted from the deck and listed on the Deck step. */
+  opening: { promiseLine: string | null; chatPrompt: string | null; groundRule: string | null; outcomes: string[]; sessionGoal: string | null; permissionLine: string | null; reflectionPrompt: string | null };
+  /** Per-webinar chrome: the logo footer bar and the CTA bar, both off unless the coach turned them on. */
+  footerBar: boolean;
+  ctaBar: boolean;
   acts: ActContext[];
   sections: SectionContext[];
   totalMin: number;
@@ -110,7 +115,7 @@ export function resolveEvidence(b: BeliefRow | undefined, citable: CitableRow[])
 
 const objection = (a: AssetRow): ResolvedObjection => ({ id: a.id, name: a.name, body: a.body, reframe: a.reframe ?? null, proof: a.proof ?? null });
 
-export function resolveSections(input: { webinar: { title: string; stayLine?: string | null; originStory?: Record<string, string> | null }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null }): WebinarContext {
+export function resolveSections(input: { webinar: { title: string; stayLine?: string | null; originStory?: Record<string, string> | null; promiseLine?: string | null; chatPrompt?: string | null; groundRule?: string | null; outcomes?: string[] | null; sessionGoal?: string | null; permissionLine?: string | null; reflectionPrompt?: string | null; footerBar?: boolean; ctaBar?: boolean }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null }): WebinarContext {
   // Left out on purpose means left out: no clock, no slide, no row on the run sheet.
   const ordered = input.sections.filter((s) => s.status !== "omitted").slice().sort((a, b) => a.order - b.order);
   const offer: ResolvedOffer | null = input.offer
@@ -179,6 +184,17 @@ export function resolveSections(input: { webinar: { title: string; stayLine?: st
     stayLine: input.webinar.stayLine?.trim() || null,
     originStory: ORIGIN_BEATS.map((b) => ({ key: b.key, label: b.label, text: (input.webinar.originStory?.[b.key] ?? "").trim() })).filter((b) => b.text),
     fit: { forYouIf: offer?.forYouIf ?? null, notForYouIf: offer?.notForYouIf ?? null },
+    opening: {
+      promiseLine: input.webinar.promiseLine?.trim() || null,
+      chatPrompt: input.webinar.chatPrompt?.trim() || null,
+      groundRule: input.webinar.groundRule?.trim() || null,
+      outcomes: (input.webinar.outcomes ?? []).map((o) => o.trim()).filter(Boolean),
+      sessionGoal: input.webinar.sessionGoal?.trim() || null,
+      permissionLine: input.webinar.permissionLine?.trim() || null,
+      reflectionPrompt: input.webinar.reflectionPrompt?.trim() || null,
+    },
+    footerBar: Boolean(input.webinar.footerBar),
+    ctaBar: Boolean(input.webinar.ctaBar),
     acts,
     sections,
     totalMin: cursor,

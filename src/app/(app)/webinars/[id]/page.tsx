@@ -51,7 +51,7 @@ import {
 } from "@/lib/engine/webinar";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, presenterOf } from "@/lib/queries/webinar";
-import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult } from "@/lib/engine/deck";
+import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, suggestedSlots, type DeckPace, type DeckResult } from "@/lib/engine/deck";
 import { formatPrice } from "@/lib/engine/offer-score";
 import { essenceFor } from "@/lib/queries/essence";
 import type { Story } from "@/lib/engine/essence";
@@ -427,6 +427,25 @@ export default async function WebinarWizardPage({
                     data-testid="mechanism-waived"
                   />
                 </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="label">The opening contract</p>
+                <p className="mb-2 text-xs text-ink-3">Each line is its own slide at the top of the deck, in your own words. A line you leave empty is not a slide, and the Deck step lists it. Nothing here is written for you.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="The promise, in one line"><input className="field" name="promiseLine" defaultValue={w.promiseLine ?? ""} data-testid="promise-line" /></Field>
+                  <Field label="Say hi in the chat"><input className="field" name="chatPrompt" defaultValue={w.chatPrompt ?? ""} data-testid="chat-prompt" /></Field>
+                  <Field label="Ground rule / earnings disclaimer"><input className="field" name="groundRule" defaultValue={w.groundRule ?? ""} data-testid="ground-rule" /></Field>
+                  <Field label="My goal for today"><input className="field" name="sessionGoal" defaultValue={w.sessionGoal ?? ""} data-testid="session-goal" /></Field>
+                  <Field label="Outcome 1"><input className="field" name="outcome1" defaultValue={w.outcomes?.[0] ?? ""} data-testid="outcome-1" /></Field>
+                  <Field label="Outcome 2"><input className="field" name="outcome2" defaultValue={w.outcomes?.[1] ?? ""} data-testid="outcome-2" /></Field>
+                  <Field label="Outcome 3"><input className="field" name="outcome3" defaultValue={w.outcomes?.[2] ?? ""} data-testid="outcome-3" /></Field>
+                  <Field label="Permission to be direct"><input className="field" name="permissionLine" defaultValue={w.permissionLine ?? ""} data-testid="permission-line" /></Field>
+                  <Field label="Reflection question, before the offer"><input className="field" name="reflectionPrompt" defaultValue={w.reflectionPrompt ?? ""} data-testid="reflection-prompt" /></Field>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                  <label className="flex items-center gap-2"><input type="checkbox" name="footerBar" defaultChecked={w.footerBar} data-testid="footer-bar" /> Logo footer bar on content slides</label>
+                  <label className="flex items-center gap-2"><input type="checkbox" name="ctaBar" defaultChecked={w.ctaBar} data-testid="cta-bar" /> CTA bar on offer and Q&amp;A slides</label>
+                </div>
               </div>
               <div className="sm:col-span-2">
                 <Field label="Stay to the end" hint="one line, its own slide after the hook: what they get by staying. Empty means no slide.">
@@ -1674,6 +1693,16 @@ function DeckStep({ webinarId, deck, pace, gate, confirmed, reviewHref }: { webi
         A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in {deck.kit.name}
         {deck.kitApplied ? "" : " (no brand kit on this workspace yet)"}.
       </p>
+      {deck.openingOmitted.length ? (
+        <p className="mb-2 text-sm text-ink-2" data-testid="deck-opening-omitted">
+          {deck.openingOmitted.length} opening {deck.openingOmitted.length === 1 ? "slide is" : "slides are"} empty, so left out: {deck.openingOmitted.join(", ")}. Fill them on the Foundation step.
+        </p>
+      ) : null}
+      {suggestedSlots(deck).length ? (
+        <p className="mb-3 text-sm text-ink-2" data-testid="deck-slots">
+          {suggestedSlots(deck).length} suggested {suggestedSlots(deck).length === 1 ? "picture" : "pictures"} not added: each of these slides exports as text until you attach an image.
+        </p>
+      ) : null}
       {refused ? (
         <div className="mb-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="deck-refused" role="alert">
           <p className="font-semibold">Not exported yet. A claim with a hole in it never leaves as a slide:</p>
