@@ -63,7 +63,23 @@ async function main() {
   // Webinars
   await page.goto(`${base}/webinars`);
   await expectText(page, "Leaky Webinar", "webinars list");
+  // The labels are read off the record: the delivered example is a worked example, the seeded half-built one says so
+  if (!(await page.locator(".card", { hasText: "Leaky Webinar" }).getByText("worked example").count())) throw new Error("the delivered example is labelled a worked example");
+  if (!(await page.locator(".card", { hasText: "Eat Like a Grown-Up" }).getByText("example, half built").count())) throw new Error("a seeded example with sections still to script says so");
   await shot(page, "w01-webinars");
+  // Start from the example copies the shape and never the words: twenty sections, named and in order, every one empty
+  const { db: dbw, schema: sw } = await import("@/db");
+  const { eq: eqw, asc: ascw } = await import("drizzle-orm");
+  await submit(page, 'button:has-text("Start from the example")');
+  await page.waitForURL(/\/webinars\/[^/?]+\?step=foundation/);
+  const newId = page.url().split("/webinars/")[1].split("?")[0];
+  const copied = await dbw.query.webinarSections.findMany({ where: eqw(sw.webinarSections.webinarId, newId), orderBy: ascw(sw.webinarSections.order) });
+  if (copied.length !== 20 || copied[0].name !== "Hook" || copied[19].order !== 20) throw new Error(`the shape is copied: twenty named sections in order, got ${copied.length}`);
+  if (copied.some((s) => s.script || s.keyPoints || s.status !== "todo")) throw new Error("no word of the example is copied: every section is empty and to do");
+  const fresh = (await dbw.query.webinars.findFirst({ where: eqw(sw.webinars.id, newId) }))!;
+  if (fresh.promise || fresh.audience || fresh.mechanismName || fresh.isExample) throw new Error("the Foundation arrives empty and the copy is the coach's own, not an example");
+  console.log("✓ Start from the example: the shape, never the words");
+  await page.goto(`${base}/webinars`);
   await page.click('a:has-text("Eat Like a Grown-Up")');
   await page.waitForURL(/\/webinars\//);
   await expectText(page, "Foundation", "wizard");
@@ -181,10 +197,16 @@ async function main() {
   // The beats belong to the omitted section and go with it; the stay line stands after the Hook; the Hook builds up, three slides still
   if (await page.getByText("I wanted a practice that ran without me.").count()) throw new Error("the beats of a section left out are left out with it");
   if (!(await page.locator('[data-testid="deck-slide"]', { hasText: "Stay to the end for the one swap that matters." }).count())) throw new Error("the stay line is its own slide");
-  const hookCards = await page.locator('[data-testid="deck-slide"][data-section="hook"]').allInnerTexts();
-  // Card lines: the eyebrow row, the headline, then the body; the second card's body line is on the third card too
-  const secondBody = hookCards[1]?.split("\n")[2] ?? "";
-  if (hookCards.length !== 3 || !secondBody || secondBody === "Copy" || !hookCards[2].includes(secondBody) || hookCards[0].split("\n")[1] !== hookCards[2].split("\n")[1]) throw new Error(`a reveal keeps one slide per point and builds the body up under the same line, got ${JSON.stringify(hookCards)}`);
+  const hookCards = page.locator('[data-testid="deck-slide"][data-section="hook"]');
+  const hookCount = await hookCards.count();
+  const heads: string[] = [];
+  const bodies: string[] = [];
+  for (let i = 0; i < hookCount; i++) {
+    heads.push(await hookCards.nth(i).locator('[data-testid="deck-headline"]').innerText());
+    bodies.push((await hookCards.nth(i).locator('[data-testid="deck-body"]').count()) ? await hookCards.nth(i).locator('[data-testid="deck-body"]').innerText() : "");
+  }
+  // One slide per point under the same line: the first card bare, the second with one body line, the third carrying that line and one more
+  if (hookCount !== 3 || new Set(heads).size !== 1 || bodies[0] !== "" || !bodies[1] || !bodies[2].includes(bodies[1]) || bodies[2] === bodies[1]) throw new Error(`a reveal keeps one slide per point and builds the body up under the same line, got ${JSON.stringify({ heads, bodies })}`);
   await expectText(page, "A structured text deck, styled in your own template", "the deck step says what the file is");
   if (await page.locator('[data-testid="deck-refused"]').count()) throw new Error(`the filled deck is no longer refused, got "${await page.locator('[data-testid="deck-refused"]').innerText()}"`);
   if (!/\[SALES PAGE URL\] is a gap to fill/.test(await page.locator('[data-testid="deck-warnings"]').innerText())) throw new Error("a placeholder outside a claim warns rather than refuses");

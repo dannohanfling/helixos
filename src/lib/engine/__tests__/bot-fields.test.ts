@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINTS, QUALIFYING_DEFAULTS, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
+import { BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINT_LINES, QUALIFYING_DEFAULTS, houseConstraints, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
 
 const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live" };
 const draft = { name: "Holiday Survival Sprint", promise: "Get through the holidays", container: "Workshop", price: 297, currency: "USD", length: null, status: "draft" };
@@ -17,7 +17,11 @@ describe("the Stage 1 push is a named subset of the template's fields, never the
     expect(p.business_name_cbf).toBe("Torres Nutrition Coaching");
     expect(p.business_time_zone_cbf).toBe("America/New_York");
     expect(p["ai_product_&_service_cbf"]).toBe("90-Day Reset · Drop 15 lbs in 90 days · Group program · USD $1,500 · 90 days");
-    expect(p.ai_constraints_cbf).toBe(HOUSE_CONSTRAINTS);
+    expect(p.ai_constraints_cbf).toBe(houseConstraints("Torres Nutrition Coaching"));
+    expect(HOUSE_CONSTRAINT_LINES).toHaveLength(6);
+    expect(p.ai_constraints_cbf).toContain("Never claim to be Torres Nutrition Coaching.");
+    expect(p.ai_constraints_cbf).not.toContain("{business_name_cbf}");
+    expect(houseConstraints("")).toContain("Never claim to be the business.");
     expect([p.qualifying_question_1, p.qualifying_question_2, p.qualifying_question_3]).toEqual(QUALIFYING_DEFAULTS);
     expect(stage1Payload({ businessName: "  ", workspaceName: "Evolve Omega Academy", timezone: "UTC", offers: [] }).business_name_cbf).toBe("Evolve Omega Academy");
   });

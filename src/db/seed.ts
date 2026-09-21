@@ -268,6 +268,7 @@ async function seedBusinessAssets(workspaceId: string, userId: string, today: st
     userId,
     title: "Eat Like a Grown-Up: lose the first 5 lbs without giving up wine",
     status: "building",
+    isExample: true,
     audience: "Busy moms of school-age kids who've tried every diet and quit by week three.",
     coreProblem: "I lose 10 lbs and gain it back every time. I'm sick of starting over.",
     desiredResult: "To stop starting over. To trust themselves around food.",

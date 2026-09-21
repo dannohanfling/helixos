@@ -30,7 +30,7 @@ const store = async () => (await (await fetch(`${mock}/__fields`)).json()) as Re
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
-  const { STAGE1_FIELDS, BOT_WRITTEN_FIELDS, HOUSE_CONSTRAINTS, QUALIFYING_DEFAULTS } = await import("@/lib/engine/bot-fields");
+  const { STAGE1_FIELDS, BOT_WRITTEN_FIELDS, houseConstraints, QUALIFYING_DEFAULTS } = await import("@/lib/engine/bot-fields");
   const up = await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false);
   const proc = up ? null : spawn("npx", ["tsx", "scripts/mock-uchat.ts", String(mockPort)], { stdio: "ignore", detached: true });
   for (let i = 0; i < 40 && !(await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
@@ -79,7 +79,7 @@ async function main() {
     const ws = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, membership.workspaceId) }))!;
     if (sent.business_time_zone_cbf !== (membership.timezone ?? ws.timezone)) throw new Error(`the zone is the member's else the workspace's, got "${sent.business_time_zone_cbf}"`);
     if (!/^90-Day Reset · .* · Group program · USD \$1,500 · 90 days$/.test(sent["ai_product_&_service_cbf"]) || /Holiday Survival/.test(sent["ai_product_&_service_cbf"])) throw new Error(`the product line is the live offer's facts and not the draft's, got "${sent["ai_product_&_service_cbf"]}"`);
-    if (sent.ai_constraints_cbf !== HOUSE_CONSTRAINTS) throw new Error("the constraints are the house block");
+    if (sent.ai_constraints_cbf !== houseConstraints("Torres Nutrition Coaching") || !sent.ai_constraints_cbf.includes("Never claim to be Torres Nutrition Coaching.")) throw new Error("the constraints are the house block with the business name written in");
     if (sent.qualifying_question_1 !== QUALIFYING_DEFAULTS[0] || sent.qualifying_question_3 !== QUALIFYING_DEFAULTS[2]) throw new Error("the questions are the house defaults until written");
     let after = await store();
     for (const [k, v] of Object.entries(botWritten)) if (after[k] !== v) throw new Error(`${k} was changed by the push: "${after[k]}"`);

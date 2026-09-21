@@ -106,7 +106,7 @@ export default async function WebinarsPage() {
                     <div className="mt-0.5 text-xs text-ink-3">
                       {w.category}
                       {w.scheduledAt ? ` · ${formatDate(w.scheduledAt.slice(0, 10), { month: "short", day: "numeric" })}` : ""}
-                      {w.isExample ? " · worked example" : ""}
+                      {w.isExample ? (p.scripted < secs.length ? " · example, half built" : " · worked example") : ""}
                     </div>
                   </div>
                   <Badge tone={STATUS[w.status].tone}>{STATUS[w.status].label}</Badge>

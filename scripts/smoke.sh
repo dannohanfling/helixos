@@ -20,6 +20,8 @@
 # - A check derives its list of subjects from the source of truth; it does not restate it. Pages come from src/app, fields from
 #   the schema, steps from the wizard's own definition. Where a list must be written by hand, the check asserts it against a count
 #   read from the source, so drift fails instead of passing (the headers walk once "checked" two pages that no longer existed).
+# - Example content is never copied into a client record as a value. An example may be read and its shape copied (sections,
+#   their names, their order), never its words: a sentence a coach did not write and did not choose must never be theirs to ship.
 set -euo pipefail
 
 # Wrapped in a function so bash parses the whole file before executing: an edit while it runs can't corrupt the tail.

@@ -216,7 +216,7 @@ export default async function WebinarWizardPage({
   return (
     <>
       <PageHeader
-        title={w.title}
+        title={w.isExample ? `${w.title} · ${build.scripted < sections.length ? "example, half built" : "worked example"}` : w.title}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <Link href="/webinars" className="hover:underline">
@@ -1681,14 +1681,14 @@ function DeckStep({ webinarId, deck, pace }: { webinarId: string; deck: DeckResu
               </span>
               <span>{ACT_ICON[s.act]}</span>
             </div>
-            <div className={`mt-1 font-semibold ${s.kind === "proof" && s.headline.startsWith("“") ? "italic" : ""}`}>{s.headline}</div>
+            <div className={`mt-1 font-semibold ${s.kind === "proof" && s.headline.startsWith("“") ? "italic" : ""}`} data-testid="deck-headline">{s.headline}</div>
             {s.footer ? <p className="mt-1 text-[11px] text-ink-3" data-testid="deck-footer">{s.footer}</p> : null}
             {s.overflow ? (
               <p className="mt-1 text-[11px] text-warn" data-testid="deck-overflow">
                 The key point is over {HEADLINE_MAX_CHARS} characters, so it is the body and the section name stands as the headline.
               </p>
             ) : null}
-            {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2">{s.body.join("\n")}</p> : null}
+            {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-body">{s.body.join("\n")}</p> : null}
             <div className="mt-2 flex items-center justify-end gap-2">
               <CopyButton text={`${s.headline}\n${s.body.join("\n")}`} label="Copy" className="btn btn-ghost btn-xs" />
             </div>

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { WEBINAR_STATUSES } from "@/db/schema";
@@ -298,17 +298,17 @@ export async function deleteWebinarAction(formData: FormData): Promise<void> {
   redirect("/webinars");
 }
 
+/**
+ * Start from the example: the example's shape, never its words. The sections arrive named, in order and empty, and the
+ * Foundation is empty too; the worked example stays readable in place, which is where it does its work. Example content
+ * copied into a record as a value ships later as the coach's own claim, so none is.
+ */
 export async function duplicateExampleAction(): Promise<void> {
   const { workspaceId, userId } = await ctx();
-  const example = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), eq(schema.webinars.isExample, true)) });
   const id = newId();
-  await db.insert(schema.webinars).values({ id, workspaceId, userId, title: "My webinar (from the example)", status: "building", audience: example?.audience, promise: example?.promise, mechanismName: example?.mechanismName, coreProblem: example?.coreProblem, desiredResult: example?.desiredResult });
-  const sections = example ? await db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, example.id), orderBy: asc(schema.webinarSections.order) }) : [];
+  await db.insert(schema.webinars).values({ id, workspaceId, userId, title: "My webinar", status: "building" });
   await db.insert(schema.webinarSections).values(
-    SECTION_TEMPLATES.map((t) => {
-      const ex = sections.find((s) => s.sectionKey === t.key);
-      return { id: newId(), webinarId: id, sectionKey: t.key, act: t.act, order: t.order, name: t.name, durationMin: t.durationMin, keyPoints: ex?.keyPoints ?? t.exampleKeyPoints, script: ex?.script ?? t.exampleScript, status: "drafted" as const };
-    }),
+    SECTION_TEMPLATES.map((t) => ({ id: newId(), webinarId: id, sectionKey: t.key, act: t.act, order: t.order, name: t.name, durationMin: t.durationMin, keyPoints: null, script: null, status: "todo" as const })),
   );
   await db.insert(schema.webinarBeliefs).values((["vehicle", "internal", "external"] as const).map((type) => ({ id: newId(), webinarId: id, type })));
   refresh();

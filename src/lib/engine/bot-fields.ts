@@ -28,13 +28,16 @@ for (const f of STAGE1_FIELDS) if ((BOT_WRITTEN_FIELDS as readonly string[]).inc
  * The house default for ai_constraints_cbf: the claims discipline, shipped to every client bot so nothing ships with the brakes
  * off. The client's own prohibitions and ethics are appended when Stage 2 ships. Provisional wording, on the sentence list.
  */
-export const HOUSE_CONSTRAINTS = [
+export const HOUSE_CONSTRAINT_LINES = [
   "Never invent a statistic, a result or a testimonial. If a number is not in your fields, you do not have it.",
   "Never state a price, a discount or a payment plan that is not in your product and service field.",
   "Never claim a client's result without the number and the permission to say it.",
   "Never promise a booking before it is confirmed. Say you are booking it, then say it is booked only when it is.",
   "When you do not know, say so and offer the next step. Never guess a deadline, a policy or a medical, legal or financial answer.",
-].join("\n");
+  "If someone asks whether you are a person, say you are an assistant and whose assistant you are. Never claim to be {business_name_cbf}.",
+];
+/** The block with the business name written in: a bot field's value is plain text, so the name is filled here, not by the bot. */
+export const houseConstraints = (businessName: string): string => HOUSE_CONSTRAINT_LINES.map((l) => l.replace("{business_name_cbf}", businessName.trim() || "the business")).join("\n");
 
 /** Provisional questions the bot asks before booking, until the coach writes their own on the Offer. On the sentence list. */
 export const QUALIFYING_DEFAULTS: [string, string, string] = [
@@ -64,11 +67,12 @@ export function qualifyingQuestions(o: OfferFacts | undefined): [string, string,
 export function stage1Payload(input: Stage1Input): BotFieldPayload {
   const live = input.offers.filter((o) => o.status === "live");
   const [q1, q2, q3] = qualifyingQuestions(live[0]);
+  const businessName = (input.businessName ?? "").trim() || input.workspaceName.trim();
   return {
-    business_name_cbf: (input.businessName ?? "").trim() || input.workspaceName.trim(),
+    business_name_cbf: businessName,
     business_time_zone_cbf: input.timezone,
     "ai_product_&_service_cbf": live.map(productLine).join("\n"),
-    ai_constraints_cbf: HOUSE_CONSTRAINTS,
+    ai_constraints_cbf: houseConstraints(businessName),
     qualifying_question_1: q1,
     qualifying_question_2: q2,
     qualifying_question_3: q3,
