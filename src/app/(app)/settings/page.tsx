@@ -251,6 +251,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <code className="field truncate">{`${appUrl}/join/${v.workspace.coachInviteCode}`}</code>
                     <CopyButton text={`${appUrl}/join/${v.workspace.coachInviteCode}`} />
                   </div>
+                  <p className="mt-1 text-xs text-warn" data-testid="coach-code-warning">Anyone with this link becomes a coach. Share it only with your team, and rotate it after use.</p>
                 </div>
                 <div className="flex gap-2">
                   <form action={rotateInviteAction}>

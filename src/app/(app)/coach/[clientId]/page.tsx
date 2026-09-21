@@ -3,7 +3,11 @@ import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { addCoachNoteAction, nudgeMemberAction } from "@/lib/actions/coach";
+import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientResetAction } from "@/lib/actions/coach";
+import { COACH_RESET_COOKIE } from "@/lib/reset-link";
+import { ConfirmButton } from "@/components/confirm-button";
+import { CopyButton } from "@/components/copy-button";
+import { cookies } from "next/headers";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
@@ -27,13 +31,25 @@ export const metadata = { title: "Client" };
  * One client, before a call. The page answers "what do I say to this person today": where they are, what they wrote in
  * their own words, what's stuck, what they claimed, what they've built. Then the call's decisions go back in as tasks.
  */
-export default async function CoachClientPage({ params }: { params: Promise<{ clientId: string }> }) {
+export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string }> }) {
   const v = await requireCoach();
   const { clientId } = await params;
+  const sp = await searchParams;
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, clientId), eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client")) });
   if (!m) notFound();
   const u = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
   if (!u) notFound();
+  // The copy-link cookie the reset action leaves when there is no email: shown once, for this client only, then it expires on its own.
+  let copyLink: string | null = null;
+  if (sp.reset === "copy") {
+    try {
+      const raw = (await cookies()).get(COACH_RESET_COOKIE)?.value;
+      const parsed = raw ? (JSON.parse(raw) as { membershipId?: string; link?: string }) : null;
+      if (parsed?.membershipId === m.id && parsed.link) copyLink = parsed.link;
+    } catch {
+      copyLink = null;
+    }
+  }
   const ws = v.workspace.id;
   const tz = m.timezone || v.workspace.timezone;
   const today = todayInTz(tz);
@@ -98,12 +114,41 @@ export default async function CoachClientPage({ params }: { params: Promise<{ cl
                 </button>
               </form>
             )}
+            <form action={sendClientResetAction}>
+              <input type="hidden" name="membershipId" value={m.id} />
+              <button className="btn btn-soft btn-sm" type="submit" title="Issue a single-use password-reset link for this client" data-testid="send-reset">Send reset link</button>
+            </form>
+            {m.removedAt ? (
+              <form action={reinstateClientAction}>
+                <input type="hidden" name="membershipId" value={m.id} />
+                <button className="btn btn-soft btn-sm" type="submit" data-testid="reinstate">Reinstate</button>
+              </form>
+            ) : (
+              <form action={removeClientAction} data-testid="remove-client-form">
+                <input type="hidden" name="membershipId" value={m.id} />
+                <ConfirmButton className="btn btn-ghost btn-sm" message="Remove this client? Their access ends on their next request and their reminders stop. Their data is kept and you can reinstate them.">Remove client</ConfirmButton>
+              </form>
+            )}
             <Link href="/coach" className="btn btn-ghost btn-sm">
               All clients
             </Link>
           </span>
         }
       />
+      {sp.reset === "emailed" ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="reset-emailed">A reset link is on its way to {u.email}.</p> : null}
+      {sp.reset === "failed" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm" data-testid="reset-failed">The reset email could not be sent. Try again, or send the link with email off to copy it by hand.</p> : null}
+      {sp.reset === "rate" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm">Too many reset links just now. Wait a few minutes and try again.</p> : null}
+      {sp.reset === "copy" && copyLink ? (
+        <div className="mb-4 rounded-xl border border-line bg-surface-2 p-3 text-sm" data-testid="reset-copy">
+          <p className="mb-1">Email isn&apos;t set up, so send this link to {u.name.split(" ")[0]} yourself. It works once, for 60 minutes.</p>
+          <div className="flex items-center gap-2">
+            <code className="field truncate" data-testid="reset-copy-link">{copyLink}</code>
+            <CopyButton text={copyLink} />
+          </div>
+        </div>
+      ) : null}
+      {m.removedAt ? <p className="mb-4 rounded-xl border border-warn bg-warn-soft p-3 text-sm" data-testid="removed-banner" role="status">This client is removed. They have no access and get no reminders. Reinstate to restore everything.</p> : null}
+      {sp.reinstated ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="reinstated-banner">Reinstated. Their access and reminders are back.</p> : null}
 
       {/* Where they are, in one strip */}
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5" data-testid="client-strip">

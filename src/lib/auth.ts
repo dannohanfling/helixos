@@ -24,6 +24,8 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     where: and(eq(schema.memberships.userId, session.userId), eq(schema.memberships.workspaceId, session.workspaceId)),
   });
   if (!membership) return null;
+  // A removed member has no access: every guard denies uniformly. requireViewer turns this into the "access ended" page.
+  if (membership.removedAt) return null;
   const [user, workspace] = await Promise.all([
     db.query.users.findFirst({ where: eq(schema.users.id, session.userId) }),
     db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, session.workspaceId) }),
@@ -45,9 +47,14 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 export async function requireViewer(): Promise<Viewer> {
   const v = await getViewer();
   if (!v) {
-    // A cookie that no longer verifies (password changed elsewhere, user removed) must be cleared, or /login bounces straight back here.
-    const stale = await readSession();
-    redirect(stale ? "/api/session/clear" : "/login");
+    // A removed member holds a valid session but no membership access: send them to the plain "access ended" page, not /login.
+    const session = await readSession();
+    if (session) {
+      const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, session.userId), eq(schema.memberships.workspaceId, session.workspaceId)) });
+      if (m?.removedAt) redirect("/removed");
+    }
+    // A cookie that no longer verifies (password changed elsewhere, user gone) must be cleared, or /login bounces straight back here.
+    redirect(session ? "/api/session/clear" : "/login");
   }
   return v;
 }

@@ -3,6 +3,13 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { allow } from "@/lib/rate-limit";
+import { COACH_RESET_COOKIE, issueResetToken } from "@/lib/reset-link";
+import { appUrl, brandedEmail } from "@/lib/branded-email";
+import { emailConfigured } from "@/lib/email";
+import { logSync } from "@/lib/integrations";
 import { refresh, str } from "@/lib/action-helpers";
 import { sendEmail } from "@/lib/email";
 import { comebackEmail } from "@/lib/reminders";
@@ -91,4 +98,80 @@ export async function adjustPointsAction(_prev: AdjustState, formData: FormData)
   refresh();
   const clamped = points !== raw ? ` Clamped from ${raw.toLocaleString()} so the balance stops at 0.` : "";
   return { ok: `${points > 0 ? "+" : ""}${points.toLocaleString()} points recorded.${clamped}` };
+}
+
+/** The coach's own membership row for a client in their workspace, or nothing. Never trusts the request for the workspace. */
+async function clientOf(coachWorkspaceId: string, membershipId: string) {
+  return db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coachWorkspaceId), eq(schema.memberships.role, "client")) });
+}
+
+/**
+ * The coach issues a password-reset link for a client, on the same single-use 60-minute machinery as the client's own /forgot.
+ * With email configured it sends the branded reset email; without it, it hands the coach the link to copy (left in a cookie
+ * for the coach's own next load, never in the URL). The coach never sets or sees a password. Who sent it and when is logged,
+ * never the token. Rate-limited per coach.
+ */
+export async function sendClientResetAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const membershipId = str(formData, "membershipId");
+  const m = await clientOf(coach.workspace.id, membershipId);
+  if (!m) redirect("/coach");
+  if (!(await allow(`coachreset:${coach.user.id}`, 20, 15 * 60000))) redirect(`/coach/${membershipId}?reset=rate`);
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
+  if (!user) redirect("/coach");
+  const token = await issueResetToken(user.id);
+  const link = `${appUrl()}/reset/${token}`;
+  const sent = emailConfigured();
+  // The log holds who and when and a reason, never the token or the link.
+  await logSync({ workspaceId: coach.workspace.id, userId: user.id, provider: "account", direction: "out", event: "password_reset.sent", payload: { by: coach.user.name }, status: sent ? "sent" : "skipped", note: `Reset link issued by ${coach.user.name}` });
+  if (sent) {
+    const mail = brandedEmail(
+      {
+        subject: "Reset your HelixOS password",
+        preheader: "Your coach sent you a reset link. Good for 60 minutes.",
+        greeting: `Hi ${user.name.split(" ")[0]},`,
+        stateLine: null,
+        asks: [`${coach.user.name} sent you a link to reset your HelixOS password. Open it within 60 minutes:`],
+        buttonLabel: "Reset my password",
+        pointsLine: "Using this link signs you out of every other device.",
+        path: `/reset/${token}`,
+        footerText: "If you weren't expecting this, contact your coach.",
+      },
+      { settingsLink: false },
+    );
+    try {
+      await sendEmail(user.email, mail.subject, mail.text, mail.html);
+    } catch (e) {
+      console.error("[coach] reset email send failed", JSON.stringify({ message: e instanceof Error ? e.message : String(e) }));
+      redirect(`/coach/${membershipId}?reset=failed`);
+    }
+    redirect(`/coach/${membershipId}?reset=emailed`);
+  }
+  // No email configured: hand the coach the link to copy. In a cookie for their own next load, so the token never rides in a URL.
+  (await cookies()).set(COACH_RESET_COOKIE, JSON.stringify({ membershipId, link }), { httpOnly: false, sameSite: "lax", maxAge: 300, path: "/coach" });
+  redirect(`/coach/${membershipId}?reset=copy`);
+}
+
+/** Soft-remove a client: access ends on the next request, reminders stop, they drop out of the coach's counts. The data stays. */
+export async function removeClientAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const membershipId = str(formData, "membershipId");
+  const m = await clientOf(coach.workspace.id, membershipId);
+  if (!m || m.removedAt) redirect("/coach");
+  await db.update(schema.memberships).set({ removedAt: nowIso(), removedBy: coach.user.id }).where(eq(schema.memberships.id, m.id));
+  await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: "client.removed", payload: { by: coach.user.name }, status: "sent", note: `Client removed by ${coach.user.name}` });
+  refresh();
+  redirect("/coach?removed=1");
+}
+
+/** Undo a soft-remove: the client's access, reminders and counts all come back. */
+export async function reinstateClientAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const membershipId = str(formData, "membershipId");
+  const m = await clientOf(coach.workspace.id, membershipId);
+  if (!m || !m.removedAt) redirect("/coach");
+  await db.update(schema.memberships).set({ removedAt: null, removedBy: null }).where(eq(schema.memberships.id, m.id));
+  await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: "client.reinstated", payload: { by: coach.user.name }, status: "sent", note: `Client reinstated by ${coach.user.name}` });
+  refresh();
+  redirect(`/coach/${membershipId}?reinstated=1`);
 }

@@ -68,6 +68,9 @@ export const memberships = sqliteTable(
     /** The bot fields last pushed, by name: the Stage 1 names and their values only, never the token and never a webhook URL. */
     clBotFields: text("cl_bot_fields", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
+    /** A soft remove by the coach: access ends on the next request, reminders stop, the client drops out of the coach's counts. The data stays; reinstate clears both. */
+    removedAt: text("removed_at"),
+    removedBy: text("removed_by"),
     /** Coach override of the workspace's daily AI cap for this member. */
     aiCapExempt: integer("ai_cap_exempt", { mode: "boolean" }).notNull().default(false),
     /** Highest tier level the member has seen the celebration for. Null until first seen: then stamped silently. */

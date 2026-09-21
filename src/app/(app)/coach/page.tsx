@@ -3,7 +3,7 @@ import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
-import { nudgeMemberAction, setClientPassAction } from "@/lib/actions/coach";
+import { nudgeMemberAction, setClientPassAction, reinstateClientAction } from "@/lib/actions/coach";
 import { clientFacing } from "@/lib/engine/pathway";
 import { setCertEnabledAction } from "@/lib/actions/courses";
 import { resyncBotFieldsAction, setMemberPassAction } from "@/lib/actions/integrations";
@@ -27,7 +27,12 @@ export default async function CoachPage() {
   const v = await requireCoach();
   const now = new Date();
   const wsId = v.workspace.id;
-  const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, wsId), eq(schema.memberships.role, "client")) });
+  const allMembers = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, wsId), eq(schema.memberships.role, "client")) });
+  // A removed client keeps their data but drops out of every count and list here; the Removed card below reinstates them.
+  const members = allMembers.filter((m) => !m.removedAt);
+  const removedMembers = allMembers.filter((m) => m.removedAt);
+  const removedUsers = removedMembers.length ? await db.query.users.findMany({ where: inArray(schema.users.id, removedMembers.map((m) => m.userId)) }) : [];
+  const removedNameOf = new Map(removedUsers.map((u) => [u.id, u.name]));
   const userIds = members.map((m) => m.userId);
   const [users, logs, points, verified, submitted, library] = await Promise.all([
     userIds.length ? db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [],
@@ -163,6 +168,21 @@ export default async function CoachPage() {
             <Empty icon="👥" title="No clients yet" hint="Share your invite link from Settings." />
           )}
         </Card>
+        {removedMembers.length ? (
+          <Card title="Removed clients" action={<span className="text-xs text-ink-3">access ended · data kept</span>}>
+            <ul className="divide-y text-sm" data-testid="removed-clients">
+              {removedMembers.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="font-medium">{removedNameOf.get(m.userId) ?? m.businessName ?? "Client"}</span>
+                  <form action={reinstateClientAction}>
+                    <input type="hidden" name="membershipId" value={m.id} />
+                    <button className="btn btn-soft btn-xs" type="submit" data-testid="reinstate-client">Reinstate</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
         <Card title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
           {rows.length ? (
             <ul className="divide-y">

@@ -1,6 +1,5 @@
 "use server";
 
-import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -14,18 +13,13 @@ import { allow, clientIp } from "@/lib/rate-limit";
 import { writeSession } from "@/lib/session";
 import { cookies } from "next/headers";
 import { SETUP_RESULT_COOKIE, anyWorkspaceExists, createWorkspace } from "@/lib/setup";
+import { hashToken, issueResetToken } from "@/lib/reset-link";
 import { ctx } from "@/lib/action-helpers";
 
 export type SetupState = { error?: string } | undefined;
 export type ForgotState = { error?: string; message?: string; devLink?: string } | undefined;
 export type ResetState = { error?: string } | undefined;
 export type PasswordState = { error?: string; ok?: true } | undefined;
-
-const RESET_TTL_MS = 60 * 60 * 1000;
-
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
 
 function appUrl(): string {
   return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -72,8 +66,7 @@ export async function forgotAction(_prev: ForgotState, formData: FormData): Prom
   if (!ipOk || !emailOk) return { message };
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
   if (!user) return { message };
-  const token = randomBytes(32).toString("base64url");
-  await db.insert(schema.passwordResets).values({ id: newId(), userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + RESET_TTL_MS).toISOString() });
+  const token = await issueResetToken(user.id);
   const link = `${appUrl()}/reset/${token}`;
   // The same words as before, laid into the branded template: the link is the button, the "if it wasn't you" line is the footer.
   const reset = brandedEmail(

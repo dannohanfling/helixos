@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { addDays, hourInTz, nowIso, todayInTz } from "@/lib/dates";
 import { runningStreak, streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
@@ -41,7 +41,7 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
   const workspaces = await db.query.workspaces.findMany();
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   for (const ws of workspaces) {
-    const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, ws.id), eq(schema.memberships.role, "client")) });
+    const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, ws.id), eq(schema.memberships.role, "client"), isNull(schema.memberships.removedAt)) });
     for (const m of members) {
       const tz = m.timezone || ws.timezone;
       const today = todayInTz(tz, now);
