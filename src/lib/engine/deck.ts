@@ -9,7 +9,7 @@ import { brandKitProblems, normaliseHex } from "./subject";
 import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type SectionContext, type WebinarContext } from "./webinar-context";
 
 /** The brand as the renderer reads it. Null renders the neutral kit and says so. */
-export type DeckKit = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null };
+export type DeckKit = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
 /** With no kit on the workspace: black on white, the accent a plain grey, and the export note says no brand was applied. */
 export const NEUTRAL_KIT: DeckKit = { name: "No brand kit", ground: "FFFFFF", ink: "111111", accent: "555555", muted: "555555", surface: "F2F2F2", displayFont: "Arial", bodyFont: "Arial", fontFallback: "Arial", bannedColors: [] };
 /** The one colour an unfilled slot is ever drawn in when the kit reserves none: unmissable, and named in the export note. */
@@ -139,11 +139,12 @@ function slideOf(i: SlideInput): Slide {
 
 /**
  * The offer as a build, read off the Offer record: one slide per item, the running total re-shown after each, then the price
- * against the total (the anchor, the standard close; a coach who does not want it removes the slide), the payment plan, the
- * guarantee, and the scarcity and urgency lines only when the offer carries them. The total is a real sum or it is not shown:
- * any item without a value and no total renders anywhere, because a total that quietly leaves an item out is a wrong number.
+ * against the total (the anchor, the standard close and the control), the payment plan, the guarantee, and the scarcity and
+ * urgency lines only when the offer carries them. The total is a real sum or it is not shown: any item without a value and no
+ * total renders anywhere, because a total that quietly leaves an item out is a wrong number. With the kit's price anchor off
+ * (a house policy some brands hold), the comparison is not drawn and the price stands on its own; everything else still renders.
  */
-export function offerBuild(o: ResolvedOffer): { headline: string; body: string[] }[] {
+export function offerBuild(o: ResolvedOffer, showPriceAnchor = true): { headline: string; body: string[] }[] {
   const items = o.components.filter((x) => x.type !== "guarantee");
   const totals = items.length > 0 && items.every((x) => x.perceivedValue > 0);
   const out: { headline: string; body: string[] }[] = [];
@@ -154,7 +155,8 @@ export function offerBuild(o: ResolvedOffer): { headline: string; body: string[]
     out.push({ headline: x.name, body: [...(line ? [line] : []), ...(totals ? [`Total value so far: ${formatPrice(running, o.currency)}`] : [])] });
   }
   const saving = totals ? running - o.price : 0;
-  out.push({ headline: o.name, body: [...(totals ? [`Total value: ${formatPrice(running, o.currency)}`, `Your price: ${formatPrice(o.price, o.currency)}`, ...(saving > 0 ? [`You save ${formatPrice(saving, o.currency)}`] : [])] : [formatPrice(o.price, o.currency)]), ...(o.paymentPlan ? [`Payment plan: ${o.paymentPlan}`] : [])] });
+  const anchor = totals && showPriceAnchor;
+  out.push({ headline: o.name, body: [...(anchor ? [`Total value: ${formatPrice(running, o.currency)}`, `Your price: ${formatPrice(o.price, o.currency)}`, ...(saving > 0 ? [`You save ${formatPrice(saving, o.currency)}`] : [])] : [formatPrice(o.price, o.currency)]), ...(o.paymentPlan ? [`Payment plan: ${o.paymentPlan}`] : [])] });
   if (o.guarantee) out.push({ headline: o.guarantee, body: [] });
   if (o.scarcity) out.push({ headline: o.scarcity, body: [] });
   if (o.urgency) out.push({ headline: o.urgency, body: [] });
@@ -199,7 +201,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
         continue;
       }
       if (isOfferStack(s)) {
-        if (s.offer) for (const b of offerBuild(s.offer)) slides.push(slideOf({ n: n++, kind: "offer", s, headline: b.headline, body: b.body, footer }));
+        if (s.offer) for (const b of offerBuild(s.offer, kit.showPriceAnchor !== false)) slides.push(slideOf({ n: n++, kind: "offer", s, headline: b.headline, body: b.body, footer }));
         pointSlides("offer");
         continue;
       }

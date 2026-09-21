@@ -1,0 +1,1 @@
+ALTER TABLE `brand_kits` ADD `show_price_anchor` integer DEFAULT true NOT NULL;

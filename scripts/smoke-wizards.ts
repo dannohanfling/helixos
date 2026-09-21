@@ -249,6 +249,29 @@ async function main() {
   if (!/discovery calls/.test(faces) || !/Priya N\./.test(faces)) throw new Error("the proof slide's text is the typed proof with its tick, as the record stores it");
   if (/Credibility/.test(faces)) throw new Error("the omitted section is absent from the file");
   console.log(`  deck export: pptx ${pptxBody.length} bytes in the Turas kit, txt ok; author, company and subject are the presenter's, the workspace's and the webinar's`);
+  // The price anchor is the control: on by default, the stack's total and the saving are on the slides. A house policy turns it off on the kit,
+  // and the next export draws the price on its own with the running totals, the payment plan and the guarantee still there.
+  if (!/Total value: USD \$4,994/.test(faces) || !/You save USD \$3,494/.test(faces)) throw new Error("the anchor slide carries the total and the saving by default");
+  const coach2 = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  await coach2.goto(`${base}/login`);
+  await coach2.click('button:has-text("As the coach")');
+  await coach2.waitForURL(/\/today/);
+  await coach2.goto(`${base}/settings`);
+  await coach2.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
+  if (!(await coach2.locator('[data-testid="brand-price-anchor"]').isChecked())) throw new Error("the price anchor is on by default");
+  await coach2.uncheck('[data-testid="brand-price-anchor"]');
+  await submit(coach2, '[data-testid="brand-form"] button[type="submit"]');
+  await coach2.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
+  if (await coach2.locator('[data-testid="brand-price-anchor"]').isChecked()) throw new Error("the kit reads the anchor back as off");
+  await coach2.context().close();
+  const offRes = await page.request.get(`${base}${deckHref}`);
+  if (!offRes.ok()) throw new Error(`export with the anchor off failed: ${offRes.status()}`);
+  const zipOff = await JSZip.loadAsync(await offRes.body());
+  const facesOff = (await Promise.all(Object.keys(zipOff.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).map((f) => zipOff.file(f)!.async("string")))).join("\n");
+  if (/Total value:|You save/.test(facesOff)) throw new Error("with the anchor off no slide compares the price to the total");
+  // The guarantee slide is the offer's own guarantee line as seeded, with its apostrophe escaped in the XML
+  if (!/USD \$1,500/.test(facesOff) || !/Total value so far/.test(facesOff) || !/I coach you free until you do/.test(facesOff) || !/Payment plan: 3 x \$550/.test(facesOff)) throw new Error("the price, the running totals, the payment plan and the guarantee still render with the anchor off");
+  console.log("✓ price anchor: on by default with the total and the saving; off on the kit, the next export draws the price on its own");
   await shot(page, "w04-webinar-deck");
   await page.goto(page.url().split("?")[0] + "?step=review");
   // The header is the build check, itemised, and no rating moves it: eleven fives leave an unscripted webinar "building"

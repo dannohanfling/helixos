@@ -351,6 +351,13 @@
       "when": 1789952173099,
       "tag": "0049_bot_fields_push",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1789955426765,
+      "tag": "0050_brand_kit_price_anchor",
+      "breakpoints": true
     }
   ]
 }

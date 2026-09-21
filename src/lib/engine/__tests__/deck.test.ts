@@ -91,6 +91,12 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
       { headline: "Free until you lose 10.", body: [] },
       { headline: "Doors close Friday.", body: [] },
     ]);
+    // The anchor off: the running totals still build, the price stands on its own, and nothing else changes
+    const noAnchor = offerBuild(o, false);
+    expect(noAnchor.map((x) => x.body)).toEqual([["12 weeks", "Total value so far: NZD $3,000"], ["You pick.", "Total value so far: NZD $3,497"], ["NZD $1,997", "Payment plan: 3 x $700"], [], []]);
+    expect(JSON.stringify(noAnchor)).not.toMatch(/Total value:|save/);
+    const kitOff = deckSlides(ctx(base()), { ...kit, showPriceAnchor: false });
+    expect(bySection(kitOff, "offer_stack_cta").map((s) => s.headline)).toEqual(["Diagnostic", "The 90-Minute Diagnostic"]);
     const zero = offerBuild({ ...o, components: [o.components[0], { ...o.components[1], perceivedValue: 0 }, o.components[2]] });
     expect(zero.map((x) => x.body)).toEqual([["12 weeks"], ["You pick."], ["NZD $1,997", "Payment plan: 3 x $700"], [], []]);
     expect(JSON.stringify(zero)).not.toMatch(/Total|save/);

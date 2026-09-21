@@ -107,6 +107,7 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
     placeholder: normaliseHex(str(formData, "placeholder")) || null,
     // Permitted names: a script may introduce one with no warning; none is ever reported as the presenter.
     aliases: str(formData, "aliases").split(/[,\n]+/).map((a) => a.trim()).filter(Boolean),
+    showPriceAnchor: str(formData, "showPriceAnchor") === "1",
     notes: opt(formData, "notes"),
   };
   const problems = brandKitProblems(kit);

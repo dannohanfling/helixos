@@ -681,6 +681,8 @@ export const brandKits = sqliteTable("brand_kits", {
   placeholder: text("placeholder"),
   /** Names allowed to open a script without a warning ("Turas here"): permitted names, never a second presenter. */
   aliases: text("aliases", { mode: "json" }).$type<string[]>().notNull().default([]),
+  /** The slide that puts the price next to the total value of the stack. Off, the price stands on its own. A house policy, set once. */
+  showPriceAnchor: integer("show_price_anchor", { mode: "boolean" }).notNull().default(true),
   notes: text("notes"),
   createdAt: createdAt(),
 });

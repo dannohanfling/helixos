@@ -221,6 +221,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Field label="Permitted names" hint="names a script may introduce without a warning, comma-separated: a permitted name, never a second presenter">
                   <input className="field" name="aliases" defaultValue={brandKit?.aliases?.join(", ") ?? ""} data-testid="brand-aliases" />
                 </Field>
+                <label className="flex items-start gap-2 text-sm sm:col-span-2">
+                  <input type="checkbox" name="showPriceAnchor" value="1" defaultChecked={brandKit?.showPriceAnchor ?? true} className="mt-1" data-testid="brand-price-anchor" />
+                  <span>
+                    Price against total
+                    <span className="block text-xs text-ink-3">The slide that puts your price next to the total value of the stack. Turn it off and the price stands on its own. Some brands do not allow the comparison.</span>
+                  </span>
+                </label>
                 <Field label="Notes" hint="shown to you, never rendered">
                   <input className="field" name="notes" defaultValue={brandKit?.notes ?? ""} />
                 </Field>
