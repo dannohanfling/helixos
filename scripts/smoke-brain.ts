@@ -4,7 +4,8 @@
  * a price lands in "Needs your eyes" and is not bulk-accepted; approve three, send, read back (three present, the unapproved
  * fourth absent, both halves of the read-back on the record); edit one, send (the Brief shows exactly one change, the read-back
  * shows the new words); over the budget the lowest-ranked drop whole and are listed; and a push is refused, in plain words,
- * when the agent's prompt does not read the field. The dev server runs with UCHAT_BASE_URL at the mock (dev-server.sh sets it).
+ * when the agent's prompt does not read the field, when the field is not on the bot at all, when it holds text HelixOS did not
+ * write (until the coach waives it on the Coach page), and when the bot has more than one agent and none is chosen. The dev server runs with UCHAT_BASE_URL at the mock (dev-server.sh sets it).
  */
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -26,6 +27,11 @@ const store = async () => (await (await fetch(`${mock}/__fields`)).json()) as Re
 const seedAgents = (agents: unknown[]) => fetch(`${mock}/__agents`, { method: "POST", body: JSON.stringify({ agents }) });
 const READS_FIELD = (field: string) => [{ ai_agent_ns: "f1a2b3", name: "Booking Agent", description: "Books calls.", prompts: [{ section: "Persona & Role", text: "You are {ai_persona_role_cbf}." }, { section: "Product & Service Information", text: `What we offer: {${field}}` }] }];
 const READS_NOTHING = [{ ai_agent_ns: "f1a2b3", name: "Booking Agent", description: "Books calls.", prompts: [{ section: "Persona & Role", text: "You are {ai_persona_role_cbf}." }] }];
+/** Danno's bot's real shape: the agent that answers reads the FAQ field, and the Booking Agent beside it does not. */
+const TWO_AGENTS = (field: string) => [
+  { ai_agent_ns: "faq01", name: "Community FAQ Agent", description: "Answers questions.", prompts: [{ section: "Product & Service Information", text: `Answer from this first: {${field}}` }] },
+  { ai_agent_ns: "book1", name: "Booking Agent", description: "Books calls.", prompts: [{ section: "Product & Service Information", text: "Offers: {ai_product_&_service_information_cbf}" }] },
+];
 
 async function main() {
   const { db, schema } = await import("@/db");
@@ -38,7 +44,8 @@ async function main() {
   const proc = up ? null : spawn("npx", ["tsx", "scripts/mock-uchat.ts", String(mockPort)], { stdio: "ignore", detached: true });
   for (let i = 0; i < 40 && !(await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
   await fetch(`${mock}/__reset`, { method: "POST" });
-  await fetch(`${mock}/__types`, { method: "POST", body: JSON.stringify({ [field]: "longtext" }) });
+  // The bot's own field types; ai_faq_cbf is created on the bot by hand (text on Danno's, 22 Sep), never by this push.
+  await fetch(`${mock}/__types`, { method: "POST", body: JSON.stringify({ [field]: "text" }) });
   await seedAgents(READS_FIELD(field));
 
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
@@ -99,8 +106,19 @@ async function main() {
     if (!(await page.locator('[data-testid="needs-eyes"]').count())) throw new Error("the priced answer is still pinned after the bulk accept");
     console.log("✓ step 2: the priced answer sits in Needs your eyes; Accept all took the other three and left it");
 
+    // ── The field is not on the bot yet: the Brief says so plainly and offers no send. The API sets a field by name; it does not create one. ──
+    if (await page.locator('[data-testid="send-bot"]').count()) throw new Error("no send button while the FAQ field is not on the bot");
+    const missing = await page.locator('[data-testid="brief-blocked"]').innerText();
+    if (!/needs the FAQ field added once/.test(missing) || !missing.includes(field)) throw new Error(`the Brief names the field to create, got "${missing}"`);
+    console.log(`✓ the FAQ field is not on the bot: "${missing.slice(0, 60)}…" and nothing is sent`);
+    // The coach (or Claude) creates it once on the bot, empty. Here the mock stands in for that one manual step.
+    await fetch(`${mock}/__seed`, { method: "POST", body: JSON.stringify({ [field]: "" }) });
+    await page.goto(`${base}/brain`);
+
     // ── Step 3: approve three, send, read back: three present, the unapproved fourth absent, both halves on the record. ──
     await page.locator('[data-testid="send-bot"]').waitFor({ timeout: 10000 });
+    // A text field, not longtext: a warning beside the budget, never a block.
+    if (!/is a text field, not longtext/.test(await page.locator('[data-testid="brief-warning"]').innerText())) throw new Error("a short field type warns without blocking");
     await Promise.all([page.waitForURL(/sent=1|error=/), page.click('[data-testid="send-bot"]')]);
     if (!page.url().includes("sent=1")) throw new Error(`the send is accepted and read back, got ${decodeURIComponent(page.url())}`);
     const approved = rows.filter((r) => isApprovedOrigin(r.origin));
@@ -172,11 +190,55 @@ async function main() {
     await page.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
     console.log("✓ push only what the agent reads: an agent that does not read the field gets the warning and no send");
 
+    // ── The field holds text HelixOS did not write: refused until the coach waives it on the Coach page. ──
+    const foreign = "The coach typed this into the field by hand and it must not be erased.";
+    await fetch(`${mock}/__seed`, { method: "POST", body: JSON.stringify({ [field]: foreign }) });
+    await page.goto(`${base}/brain`);
+    const blockedForeign = await page.locator('[data-testid="brief-blocked"]').innerText();
+    if (!/already holds text HelixOS did not write/.test(blockedForeign)) throw new Error(`the Brief refuses a field holding someone else's text, got "${blockedForeign}"`);
+    if (await page.locator('[data-testid="send-bot"]').count()) throw new Error("no send button while the field holds foreign text");
+    if ((await store())[field] !== foreign) throw new Error("the coach's own text is still in the field, untouched");
+    console.log("✓ a field holding text HelixOS did not write refuses the send, and the text is left alone");
+    // The coach ticks the override on the Coach page, with the warning beside it, and the send goes.
+    const clientPage = page;
+    const coachPage = await (await browser.newContext({ viewport: { width: 1400, height: 950 } })).newPage();
+    await coachPage.goto(`${base}/login`);
+    await coachPage.click('button:has-text("As the coach")');
+    await coachPage.waitForURL(/\/today/);
+    await coachPage.goto(`${base}/coach`);
+    const mayaForm = 'form:has(input[name="eoPassUrl"][value*="maya-torres"])';
+    await coachPage.locator(`${mayaForm} [data-testid="faq-overwrite-ok"]`).check();
+    await submit(coachPage, `${mayaForm} button:has-text("Save")`);
+    if (!(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.faqOverwriteOk) throw new Error("the override is on the record");
+    await clientPage.goto(`${base}/brain`);
+    await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
+    if (!/override is on, so sending will replace it/.test(await clientPage.locator('[data-testid="brief-warning"]').innerText())) throw new Error("the override says plainly what it will do");
+    await Promise.all([clientPage.waitForURL(/sent=1|error=/), clientPage.click('[data-testid="send-bot"]')]);
+    if (!clientPage.url().includes("sent=1")) throw new Error(`with the override on, the send goes, got ${decodeURIComponent(clientPage.url())}`);
+    if ((await store())[field] === foreign) throw new Error("with the override on, the push replaced the field");
+    console.log("✓ the coach's override on the Coach page lets the send replace the field, and says so first");
+
+    // ── More than one agent and none chosen: the Brief asks, and sends nothing. ──
+    await seedAgents(TWO_AGENTS(field));
+    await clientPage.goto(`${base}/brain`);
+    const ask = await clientPage.locator('[data-testid="brief-blocked"]').innerText();
+    if (!/2 agents \(Community FAQ Agent, Booking Agent\)/.test(ask) || !/Choose the one that answers/.test(ask)) throw new Error(`the Brief asks which agent answers, got "${ask}"`);
+    if (await clientPage.locator('[data-testid="send-bot"]').count()) throw new Error("no send button while the agent is not chosen");
+    // The coach chooses the agent that answers; the Booking Agent beside it is never picked for the FAQ.
+    await coachPage.goto(`${base}/coach`);
+    await coachPage.locator(`${mayaForm} [data-testid="cl-agent-ns"]`).fill("faq01");
+    await submit(coachPage, `${mayaForm} button:has-text("Save")`);
+    await clientPage.goto(`${base}/brain`);
+    await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
+    if (!/Community FAQ Agent/.test(await clientPage.locator('[data-testid="brief-budget"]').innerText())) throw new Error("the Brief names the chosen agent");
+    console.log("✓ two agents and none chosen: the Brief asks and sends nothing; once chosen it is the agent that answers");
+    await coachPage.close();
+
     // ── The log: every approval and every send, with who and when. ──
     const events = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, maya.id)) });
     const accepts = events.filter((e) => e.event === "faq.accept").length;
     const pushes = events.filter((e) => e.event === "faq.push" && e.status === "sent").length;
-    if (accepts < N - 1 + 30 || pushes !== 3) throw new Error(`the log holds every approval and send, got ${accepts} accepts, ${pushes} sends`);
+    if (accepts < N - 1 + 30 || pushes !== 4) throw new Error(`the log holds every approval and send, got ${accepts} accepts, ${pushes} sends`);
     if (JSON.stringify(events).includes(TOKEN)) throw new Error("the token is never in the log");
     if (!(await page.locator('[data-testid="faq-log"] li[data-event="faq.accept"]').count()) || !(await page.locator('[data-testid="sync-log"] li[data-status="sent"]').count())) throw new Error("the Brief shows the approval log and the sync log");
     console.log(`✓ the log: ${accepts} approvals and ${pushes} sends, who and when, never the token`);

@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `faq_overwrite_ok` integer DEFAULT false NOT NULL;

@@ -9,8 +9,13 @@ import { FAQ_CATEGORIES } from "@/db/schema";
 
 /** The single configurable limit on the composed field, in characters. 20,000 until Danno confirms the platform's real maximum. Named on the Brief. */
 export const FAQ_FIELD_BUDGET = 20000;
-/** The one longtext bot field the approved answers go to: the Product & Service Information token the Booking Agent reads (rev-19 finding). Overridable per member. */
-export const FAQ_BOT_FIELD_DEFAULT = "ai_product_&_service_information_cbf";
+/**
+ * The one bot field the approved answers go to: a field dedicated to the FAQ and written only by HelixOS. Never the Booking
+ * Agent's Product & Service Information field, which already holds the coach's offer description — a push there would erase it,
+ * and that agent only books; the agent that answers questions is the one whose prompt must carry this token. Overridable per
+ * member on the Coach page, within the refusals below.
+ */
+export const FAQ_BOT_FIELD_DEFAULT = "ai_faq_cbf";
 
 export type ParsedEntry = { question: string; alsoAsked: string[]; keywords: string[]; answer: string; category: string };
 export type ParsedKnowledgeBase = { header: string; entries: ParsedEntry[] };
@@ -187,3 +192,44 @@ export function fromAirtable(r: AirtableFaqRecord): (ParsedEntry & { timesAsked:
     sourceRef: r.id,
   };
 }
+
+/**
+ * A field the FAQ is never written to, whatever the coach types: a Stage 1 field (that push owns it), a field the bot or its
+ * agent writes (a calendar, a booking), or any product-and-service field (it holds the coach's own offer description, which a
+ * FAQ push would erase). The refusal names the field and why, in the coach's words. Null means the field is allowed.
+ */
+export function faqFieldRefusal(field: string, stage1: readonly string[], botWritten: readonly string[]): string | null {
+  const f = field.trim();
+  if (!f) return "No FAQ field set.";
+  if (stage1.includes(f)) return `${f} is written by the business-facts sync, so the FAQ can't use it. Pick a field of its own.`;
+  if (botWritten.includes(f)) return `${f} is written by your bot itself, so the FAQ can't use it. Pick a field of its own.`;
+  if (/^ai_product_/i.test(f)) return `${f} holds your offer description, and sending the FAQ there would erase it. Pick a field of its own.`;
+  return null;
+}
+
+/**
+ * The field already holds text HelixOS did not write. What HelixOS wrote is exactly the last successful sync's value, so
+ * anything else in the field came from the coach or the platform and would be erased by a push.
+ */
+export const holdsForeignText = (held: string | null | undefined, lastSentValue: string | null | undefined): boolean => Boolean(held && held.trim() && held.trim() !== (lastSentValue ?? "").trim());
+
+/** The Brief's line when the field is not on the bot at all: the API sets a field by name, it does not create one. */
+export const fieldMissingLine = (field: string): string => `Your bot needs the FAQ field added once: create ${field} on it, and put its token in the prompt of the agent that answers questions. Nothing is sent until then.`;
+/** The Brief's line when the field is not the roomiest type the platform offers: a warning, never a refusal. */
+export const shortFieldWarning = (field: string, varType: string): string => `${field} is a ${varType} field, not longtext, so the platform may cut a long answer set short. Ask for it to be changed to longtext if answers go missing.`;
+
+/**
+ * Which agent the Brief reads and pushes to. The coach chooses it on the Coach page; blank never silently means "the first
+ * one", because the agent that answers questions is not always the first. Blank with exactly one agent is no choice at all, so
+ * it is taken; blank with more than one asks.
+ */
+export type AgentPick = { kind: "chosen"; ns: string } | { kind: "only"; ns: string } | { kind: "ask"; agents: { ns: string; name: string }[] } | { kind: "none" };
+export function pickAgent(chosen: string | null | undefined, agents: { ns: string; name: string }[]): AgentPick {
+  const ns = (chosen ?? "").trim();
+  if (ns) return { kind: "chosen", ns };
+  if (agents.length === 1) return { kind: "only", ns: agents[0].ns };
+  if (agents.length > 1) return { kind: "ask", agents };
+  return { kind: "none" };
+}
+/** The Brief's line when more than one agent exists and none is chosen. */
+export const chooseAgentLine = (agents: { name: string }[]): string => `Your bot has ${agents.length} agents (${agents.map((a) => a.name).join(", ")}). Choose the one that answers questions on the Coach page; nothing is sent until then.`;

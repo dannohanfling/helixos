@@ -70,8 +70,10 @@ export const memberships = sqliteTable(
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
     /** The Community Loyalty agent the Bot Brief reads and pushes to (ai_agent_ns). Empty means the workspace's first agent. */
     clAgentNs: text("cl_agent_ns"),
-    /** The one longtext bot field the approved FAQ answers are composed into. Empty means the default in src/lib/engine/faq.ts. */
+    /** The one bot field the approved FAQ answers are composed into. Empty means the default in src/lib/engine/faq.ts. */
     faqBotField: text("faq_bot_field"),
+    /** The coach has been warned and still wants the FAQ written to a field that already holds text HelixOS did not write. */
+    faqOverwriteOk: integer("faq_overwrite_ok", { mode: "boolean" }).notNull().default(false),
     /** A soft remove by the coach: access ends on the next request, reminders stop, the client drops out of the coach's counts. The data stays; reinstate clears both. */
     removedAt: text("removed_at"),
     removedBy: text("removed_by"),

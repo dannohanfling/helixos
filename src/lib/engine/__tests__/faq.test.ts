@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FAQ_FIELD_BUDGET, agentReadsFields, composeField, countEntries, diffSinceSync, entryBlock, fromAirtable, needsEyes, normaliseCategory, notReadWarning, parseAgentInfo, parseAgents, parseKnowledgeBase, rankEntries } from "../faq";
+import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, chooseAgentLine, composeField, countEntries, diffSinceSync, entryBlock, faqFieldRefusal, fieldMissingLine, fromAirtable, holdsForeignText, needsEyes, normaliseCategory, notReadWarning, parseAgentInfo, parseAgents, parseKnowledgeBase, pickAgent, rankEntries, shortFieldWarning } from "../faq";
+import { BOT_WRITTEN_FIELDS, STAGE1_FIELDS } from "../bot-fields";
 
 /** The Knowledge Base Builder's output as the template writes it, header block included: what a client pastes back from their own AI. */
 const FIXTURE = `# Knowledge Base — Torres Nutrition Coaching
@@ -151,5 +152,45 @@ describe("Danno's Airtable rows, mapped by the field names the report listed", (
     expect(draft.published).toBe(false);
     expect(draft.timesAsked).toBeNull();
     expect(fromAirtable({ id: "recC", fields: { Question: "no answer" } })).toBeNull();
+  });
+});
+
+describe("the FAQ's own field, and the agent that answers", () => {
+  const refuse = (f: string) => faqFieldRefusal(f, STAGE1_FIELDS, BOT_WRITTEN_FIELDS);
+
+  it("defaults to a field of its own, never the Booking Agent's product and service field", () => {
+    expect(FAQ_BOT_FIELD_DEFAULT).toBe("ai_faq_cbf");
+    expect(refuse(FAQ_BOT_FIELD_DEFAULT)).toBeNull();
+  });
+
+  it("refuses every Stage 1 field, every field the bot writes, and every product field, whatever the coach types", () => {
+    for (const f of STAGE1_FIELDS) expect(refuse(f), f).toMatch(/business-facts sync|offer description/);
+    for (const f of BOT_WRITTEN_FIELDS) expect(refuse(f), f).toMatch(/your bot itself/);
+    // The two product names that exist on the template and on Danno's installed bot: both refused, so a push can never erase his offer text.
+    expect(refuse("ai_product_&_service_cbf")).toBeTruthy();
+    expect(refuse("ai_product_&_service_information_cbf")).toMatch(/offer description/);
+    expect(refuse("")).toBeTruthy();
+  });
+
+  it("calls the field foreign only when it holds something other than what HelixOS last sent", () => {
+    expect(holdsForeignText("", null)).toBe(false);
+    expect(holdsForeignText("   ", null)).toBe(false);
+    expect(holdsForeignText("the coach's own words", null)).toBe(true);
+    expect(holdsForeignText("Q: a\nA: b", "Q: a\nA: b")).toBe(false); // exactly what the last sync sent
+    expect(holdsForeignText("Q: a\nA: b", "Q: a\nA: different")).toBe(true);
+  });
+
+  it("blank never silently means the first agent: one agent is no choice, more than one asks", () => {
+    const two = [{ ns: "a1", name: "Community FAQ Agent" }, { ns: "b2", name: "Booking Agent" }];
+    expect(pickAgent("b2", two)).toEqual({ kind: "chosen", ns: "b2" });
+    expect(pickAgent("", [{ ns: "only", name: "One" }])).toEqual({ kind: "only", ns: "only" });
+    expect(pickAgent(null, two)).toEqual({ kind: "ask", agents: two });
+    expect(pickAgent("", [])).toEqual({ kind: "none" });
+    expect(chooseAgentLine(two)).toMatch(/2 agents \(Community FAQ Agent, Booking Agent\)/);
+  });
+
+  it("says plainly what to do when the field is not on the bot, or is a short type", () => {
+    expect(fieldMissingLine("ai_faq_cbf")).toMatch(/needs the FAQ field added once: create ai_faq_cbf/);
+    expect(shortFieldWarning("ai_faq_cbf", "text")).toMatch(/is a text field, not longtext/);
   });
 });

@@ -13,7 +13,7 @@
  * ("01" to "1") fails the match on the safe side until the live call says how it behaves. Partial failure and the host are
  * Danno's call to run. Tokens are sealed at rest and decrypted for the request.
  */
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
@@ -106,7 +106,7 @@ export async function repushWorkspace(workspaceId: string, reason: string): Prom
 
 /* ───────────── The coach's brain: the approved FAQ composed into one longtext field, pushed only where the agent reads it ───────────── */
 
-import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, composeField, notReadWarning, parseAgentInfo, parseAgents, rankEntries, type AgentInfo } from "@/lib/engine/faq";
+import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, chooseAgentLine, composeField, faqFieldRefusal, fieldMissingLine, holdsForeignText, notReadWarning, parseAgentInfo, parseAgents, pickAgent, rankEntries, shortFieldWarning, type AgentInfo } from "@/lib/engine/faq";
 import { newId } from "@/lib/ids";
 
 const APPROVED = ["ai_accepted", "edited", "coach"] as const;
@@ -144,10 +144,29 @@ export async function readAgentInfo(token: string, ns: string): Promise<AgentInf
   }
 }
 
-/** The agent the Brief reads and pushes to: the one the coach chose on the member, else the workspace's first. */
-export async function agentFor(m: schema.Membership, token: string): Promise<AgentInfo | null> {
-  const ns = m.clAgentNs?.trim() || (await listAgents(token))[0]?.ns;
-  return ns ? readAgentInfo(token, ns) : null;
+/**
+ * The agent the Brief reads and pushes to. The coach chooses it on the Coach page; blank never silently means "the first one",
+ * because the agent that answers questions is not always the first (on the Book 'em Danno template the Booking Agent only
+ * books). Blank with exactly one agent is no choice at all, so it is taken; blank with more than one asks.
+ */
+export async function agentFor(m: schema.Membership, token: string): Promise<{ agent: AgentInfo | null; ask: string | null }> {
+  const pick = pickAgent(m.clAgentNs, await listAgents(token));
+  if (pick.kind === "ask") return { agent: null, ask: chooseAgentLine(pick.agents) };
+  if (pick.kind === "none") return { agent: null, ask: "No agent on your bot yet, so there is nothing for the FAQ to feed." };
+  return { agent: await readAgentInfo(token, pick.ns), ask: null };
+}
+
+/** Every bot field the client's workspace holds, by name, paged the way the Stage 1 read-back pages. */
+export async function listBotFields(token: string): Promise<{ name: string; value: string; varType: string }[]> {
+  const out: { name: string; value: string; varType: string }[] = [];
+  for (let page = 1; page <= 100; page++) {
+    const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers: authed(token) });
+    if (!back.ok) return out;
+    const rows = parseBotFields(await back.json());
+    out.push(...rows);
+    if (!morePages(rows.length, READ_BACK_LIMIT)) break;
+  }
+  return out;
 }
 
 /** The field name this member's FAQ composes into: their override, else the default the Booking Agent reads. */
@@ -179,7 +198,8 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
   const token = open(m.clApiToken);
   if (!token) return done("skipped", "No Community Loyalty API token on this client. Ask your coach to add it.");
   // Never the calendar or a booking, and never a Stage 1 field: the FAQ has its own field or it does not go.
-  if ((BOT_WRITTEN_FIELDS as readonly string[]).includes(field) || (STAGE1_FIELDS as readonly string[]).includes(field)) return done("failed", `Refused: ${field} is written by the bot or by the Stage 1 push; the FAQ needs its own field.`);
+  const fieldRefusal = faqFieldRefusal(field, STAGE1_FIELDS, BOT_WRITTEN_FIELDS);
+  if (fieldRefusal) return done("failed", fieldRefusal);
 
   const rows = await db.query.faqEntries.findMany({ where: and(eq(schema.faqEntries.workspaceId, m.workspaceId), eq(schema.faqEntries.userId, m.userId)) });
   const approved = rows.filter((r) => isApprovedOrigin(r.origin));
@@ -189,9 +209,13 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
   const dropped = composed.dropped.map((e) => e.question);
   const record = { chars: composed.chars, entryCount: composed.included.length, dropped, snapshot, valueReadBack: false, tokenReadBack: false };
 
-  // Push only what the agent reads: the target agent's prompt must carry the field's token, or the push is refused.
-  const agent = await agentFor(m, token);
+  // Everything that must be true first: the field is allowed, the agent is chosen, the field is on the bot, and it holds
+  // nothing HelixOS did not write (unless the coach waived it). Each is one sentence, the same one the Brief already showed.
+  const pre = await faqPreflight(m, token);
+  if (pre.blocked) return done("failed", pre.blocked, {}, record);
+  const agent = pre.agent;
   if (!agent) return done("failed", "Couldn't read your bot's agent from Community Loyalty. Check the token and the agent, then try again.", {}, record);
+  // Push only what the agent reads: the target agent's prompt must carry the field's token, or the push is refused.
   const { reads, notRead } = agentReadsFields(agent, [field]);
   if (!reads.length) return done("failed", `Not sent: ${notReadWarning(field)}. The agent "${agent.name}" reads none of it, so the answers would change nothing the bot does.`, { reads, notRead, dropped }, record);
 
@@ -211,7 +235,7 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
       if (!morePages(pageRows.length, READ_BACK_LIMIT)) break;
     }
     const valueReadBack = held === composed.text;
-    const again = await agentFor(m, token);
+    const again = (await agentFor(m, token)).agent;
     const tokenReadBack = Boolean(again && agentReadsFields(again, [field]).reads.length);
     const rec = { ...record, valueReadBack, tokenReadBack };
     if (!valueReadBack) return done("failed", `Pushed, but the read-back of ${field} differs: not recorded as synced.`, { reads, notRead, dropped }, rec);
@@ -226,8 +250,44 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
  * What the Bot Brief needs to know about a member's bot without ever holding the token itself: whether a token is on the
  * member, and the target agent read through it. The token is opened here and nowhere the page can reach.
  */
-export async function briefAccessFor(m: schema.Membership): Promise<{ hasToken: boolean; agent: AgentInfo | null }> {
+export type BriefAccess = {
+  hasToken: boolean;
+  agent: AgentInfo | null;
+  /** Why the Brief cannot send yet, in the coach's words: no agent chosen, the field refused, the field not on the bot, or foreign text in it. */
+  blocked: string | null;
+  /** Worth saying but never a block: the field is a short type, or the coach has waived the foreign-text refusal. */
+  warning: string | null;
+  fieldVarType: string | null;
+};
+export async function briefAccessFor(m: schema.Membership): Promise<BriefAccess> {
+  const none = { agent: null, blocked: null, warning: null, fieldVarType: null };
   const token = open(m.clApiToken);
-  if (!token) return { hasToken: false, agent: null };
-  return { hasToken: true, agent: await agentFor(m, token) };
+  if (!token) return { hasToken: false, ...none };
+  const check = await faqPreflight(m, token);
+  return { hasToken: true, agent: check.agent, blocked: check.blocked, warning: check.warning, fieldVarType: check.fieldVarType };
+}
+
+/**
+ * Everything that must be true before the FAQ can be sent, read from the platform and the record: the field is one the FAQ may
+ * use, the agent that answers is chosen, the field exists on the bot (the API sets a field by name; it does not create one), and
+ * the field holds nothing HelixOS did not write unless the coach has waived that on the Coach page. Each blocker is one sentence
+ * the coach can act on.
+ */
+async function faqPreflight(m: schema.Membership, token: string): Promise<{ agent: AgentInfo | null; blocked: string | null; warning: string | null; fieldVarType: string | null; lastSentValue: string | null }> {
+  const field = faqFieldFor(m);
+  const lastSync = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt)] });
+  const lastSentValue = lastSync ? composeField(lastSync.snapshot).text : null;
+  const refused = faqFieldRefusal(field, STAGE1_FIELDS, BOT_WRITTEN_FIELDS);
+  if (refused) return { agent: null, blocked: refused, warning: null, fieldVarType: null, lastSentValue };
+  const { agent, ask } = await agentFor(m, token);
+  if (ask) return { agent: null, blocked: ask, warning: null, fieldVarType: null, lastSentValue };
+  const fields = await listBotFields(token);
+  const held = fields.find((f) => f.name === field);
+  if (!held) return { agent, blocked: fieldMissingLine(field), warning: null, fieldVarType: null, lastSentValue };
+  const warning = held.varType && held.varType !== "longtext" ? shortFieldWarning(field, held.varType) : null;
+  if (holdsForeignText(held.value, lastSentValue)) {
+    if (!m.faqOverwriteOk) return { agent, blocked: `${field} already holds text HelixOS did not write, and sending would erase it. Use a field of its own, or tick the override on the Coach page.`, warning, fieldVarType: held.varType, lastSentValue };
+    return { agent, blocked: null, warning: [warning, `${field} holds text HelixOS did not write; the override is on, so sending will replace it.`].filter(Boolean).join(" "), fieldVarType: held.varType, lastSentValue };
+  }
+  return { agent, blocked: null, warning, fieldVarType: held.varType, lastSentValue };
 }

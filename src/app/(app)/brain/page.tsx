@@ -34,7 +34,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
     essenceFor(v.workspace.id, v.user.id),
     payloadFor(m),
   ]);
-  const { hasToken: token, agent } = await briefAccessFor(m);
+  const { hasToken: token, agent, blocked, warning, fieldVarType } = await briefAccessFor(m);
   // Push only what the agent reads: of the template's fields and the FAQ's own, the ones whose token is in the agent's prompt.
   const candidates = [...new Set([...TEMPLATE_BOT_FIELDS, field])];
   const reads = agent ? agentReadsFields(agent, candidates) : null;
@@ -113,7 +113,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
 
         <div className="space-y-4">
           <Card title="What your bot would know" action={
-            token && approved.length && fieldRead ? (
+            token && approved.length && fieldRead && !blocked ? (
               <form action={sendFaqAction}>
                 <button className="btn btn-primary btn-sm" type="submit" data-testid="send-bot">Approve and send to my bot</button>
               </form>
@@ -121,6 +121,12 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
           }>
             {!token ? (
               <p className="mb-3 rounded-lg bg-warn-soft p-2 text-sm" data-testid="no-token">No Community Loyalty token on your account yet. Ask your coach to add it on the Coach page; until then nothing can be sent.</p>
+            ) : null}
+            {blocked ? (
+              <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="brief-blocked" role="alert">{blocked}</p>
+            ) : null}
+            {warning ? (
+              <p className="mb-3 rounded-lg bg-warn-soft p-2 text-xs" data-testid="brief-warning">{warning}</p>
             ) : null}
             <dl className="space-y-3 text-sm">
               <div>
@@ -179,7 +185,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
               <div>
                 <dt className="font-semibold">Where it goes, and the budget</dt>
                 <dd className="text-ink-2" data-testid="brief-budget">
-                  Field <code>{field}</code>{agent ? <> on agent <span className="font-medium">{agent.name}</span></> : null}. Budget {FAQ_FIELD_BUDGET.toLocaleString()} characters; {composed.chars.toLocaleString()} used by {composed.included.length} {composed.included.length === 1 ? "answer" : "answers"}.
+                  Field <code>{field}</code>{fieldVarType ? <> ({fieldVarType})</> : null}{agent ? <> on agent <span className="font-medium">{agent.name}</span></> : null}. Budget {FAQ_FIELD_BUDGET.toLocaleString()} characters; {composed.chars.toLocaleString()} used by {composed.included.length} {composed.included.length === 1 ? "answer" : "answers"}.
                   {composed.dropped.length ? (
                     <span data-testid="brief-dropped"> {composed.dropped.length} over the budget, dropped whole, lowest-ranked first: {composed.dropped.map((e) => e.question).join("; ")}</span>
                   ) : null}
