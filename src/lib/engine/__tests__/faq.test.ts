@@ -55,6 +55,13 @@ describe("the Knowledge Base Builder format, parsed deterministically", () => {
     expect(kb.entries.map((e) => e.question)).toEqual(["Real"]);
   });
 
+  it("splits variants and keywords on every separator the template's output uses: comma, semicolon, newline, slash and pipe", () => {
+    // The live-test entry uses pipes; the fixture uses slashes and commas. Both are the template's own output.
+    const kb = parseKnowledgeBase("### Q: What is the HelixOS sync test phrase?\n**Also asked:** What's the sync test phrase? | Tell me the HelixOS test phrase\n**Keywords:** helixos, sync, test phrase\n**Answer:** The sync test phrase is blue lighthouse.\n**Category:** Process");
+    expect(kb.entries[0].alsoAsked).toEqual(["What's the sync test phrase?", "Tell me the HelixOS test phrase"]);
+    expect(kb.entries[0].keywords).toEqual(["helixos", "sync", "test phrase"]);
+  });
+
   it("a known category keeps the template's spelling; an unknown one keeps its own word", () => {
     expect(normaliseCategory("pricing")).toBe("Pricing");
     expect(normaliseCategory("what's included")).toBe("What's Included");

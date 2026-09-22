@@ -27,7 +27,8 @@ const LABELS: { key: keyof ParsedEntry; re: RegExp }[] = [
   { key: "answer", re: /^\**\s*answer\s*:?\s*\**\s*:?\s*/i },
   { key: "category", re: /^\**\s*category\s*:?\s*\**\s*:?\s*/i },
 ];
-const splitList = (s: string): string[] => s.split(/[,;\n]|\s\/\s/).map((x) => x.replace(/^\s*[-•*]\s*/, "").trim()).filter(Boolean);
+/** The separators the template's own output uses between variants and keywords: a comma, a semicolon, a newline, a slash or a pipe. */
+const splitList = (s: string): string[] => s.split(/[,;\n|]|\s\/\s/).map((x) => x.replace(/^\s*[-•*]\s*/, "").trim()).filter(Boolean);
 
 /**
  * The template's exact format, parsed line by line: an entry opens at `### Q:`, and inside it `Also asked:`, `Keywords:`,

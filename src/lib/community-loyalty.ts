@@ -203,7 +203,11 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
 
   const rows = await db.query.faqEntries.findMany({ where: and(eq(schema.faqEntries.workspaceId, m.workspaceId), eq(schema.faqEntries.userId, m.userId)) });
   const approved = rows.filter((r) => isApprovedOrigin(r.origin));
-  if (!approved.length) return done("skipped", "Nothing approved yet: accept at least one answer on the Brief first.");
+  // Nothing approved and nothing ever sent: there is nothing to do. Nothing approved but the bot still holds a previous send
+  // is not the same thing — the coach removed those answers, and leaving them on the bot would have it answering from words
+  // that are gone. That pushes an empty field, which is the removal.
+  const lastSent = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt)] });
+  if (!approved.length && !(lastSent && lastSent.entryCount > 0)) return done("skipped", "Nothing approved yet: accept at least one answer on the Brief first.");
   const composed = composeField(rankEntries(approved));
   const snapshot = composed.included.map((e) => ({ id: e.id, question: e.question, answer: e.answer }));
   const dropped = composed.dropped.map((e) => e.question);
@@ -240,6 +244,7 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
     const rec = { ...record, valueReadBack, tokenReadBack };
     if (!valueReadBack) return done("failed", `Pushed, but the read-back of ${field} differs: not recorded as synced.`, { reads, notRead, dropped }, rec);
     if (!tokenReadBack) return done("failed", `Pushed and the value reads back, but the token {${field}} is no longer in the agent's prompt: not recorded as synced.`, { reads, notRead, dropped }, rec);
+    if (!composed.included.length) return done("sent", "Every answer has been removed, so your bot's FAQ field is now empty. Read back and matched.", { reads, notRead, dropped }, rec);
     return done("sent", `${composed.included.length} answers sent (${composed.chars.toLocaleString()} of ${FAQ_FIELD_BUDGET.toLocaleString()} characters)${dropped.length ? `; ${dropped.length} dropped past the budget` : ""}, read back and matched.`, { reads, notRead, dropped }, rec);
   } catch (e) {
     return done("failed", e instanceof Error ? e.message : String(e), { reads, notRead, dropped }, record);

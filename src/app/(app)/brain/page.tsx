@@ -113,9 +113,9 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
 
         <div className="space-y-4">
           <Card title="What your bot would know" action={
-            token && approved.length && fieldRead && !blocked ? (
+            token && (approved.length || (lastSent && lastSent.entryCount > 0)) && fieldRead && !blocked ? (
               <form action={sendFaqAction}>
-                <button className="btn btn-primary btn-sm" type="submit" data-testid="send-bot">Approve and send to my bot</button>
+                <button className="btn btn-primary btn-sm" type="submit" data-testid="send-bot">{approved.length ? "Approve and send to my bot" : "Empty my bot's FAQ field"}</button>
               </form>
             ) : null
           }>
@@ -180,6 +180,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
                   {changes.edited.length ? <ul className="mt-1 list-disc pl-5 text-xs text-ink-3">{changes.edited.map((e) => <li key={e.id} data-testid="changed-edited">{e.question}</li>)}</ul> : null}
                   {changes.added.length && lastSent ? <ul className="mt-1 list-disc pl-5 text-xs text-ink-3">{changes.added.map((e) => <li key={e.id} data-testid="changed-added">{e.question}</li>)}</ul> : null}
                   {changes.removed.length ? <ul className="mt-1 list-disc pl-5 text-xs text-ink-3">{changes.removed.map((e) => <li key={e.id} data-testid="changed-removed">{e.question} (removed)</li>)}</ul> : null}
+                  {!approved.length && lastSent && lastSent.entryCount > 0 ? <p className="mt-1 text-xs text-warn" data-testid="brief-will-empty">You have removed every answer. Sending now empties the FAQ field on your bot, so it stops answering from them.</p> : null}
                 </dd>
               </div>
               <div>

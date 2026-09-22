@@ -35,7 +35,7 @@ const TWO_AGENTS = (field: string) => [
 
 async function main() {
   const { db, schema } = await import("@/db");
-  const { and, eq, desc } = await import("drizzle-orm");
+  const { and, eq, desc, ne } = await import("drizzle-orm");
   const { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, composeField, countEntries, needsEyes, rankEntries } = await import("@/lib/engine/faq");
   const { isApprovedOrigin } = await import("@/lib/community-loyalty");
   const field = FAQ_BOT_FIELD_DEFAULT;
@@ -234,11 +234,28 @@ async function main() {
     console.log("✓ two agents and none chosen: the Brief asks and sends nothing; once chosen it is the agent that answers");
     await coachPage.close();
 
+    // ── Removing every answer empties the field on the bot: an answer the coach took back must stop being answered from. ──
+    const keep = (await own()).find((r) => isApprovedOrigin(r.origin))!;
+    await db.delete(schema.faqEntries).where(and(eq(schema.faqEntries.userId, maya.id), ne(schema.faqEntries.id, keep.id)));
+    await clientPage.goto(`${base}/brain`);
+    await clientPage.locator(`#faq-${keep.id} [data-testid="faq-remove"]`).click();
+    await clientPage.waitForLoadState("networkidle");
+    await clientPage.goto(`${base}/brain`);
+    if ((await own()).length !== 0) throw new Error("the last answer is removed through the Brief");
+    if (!/removed every answer/.test(await clientPage.locator('[data-testid="brief-will-empty"]').innerText())) throw new Error("the Brief says that sending now empties the field");
+    await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
+    await Promise.all([clientPage.waitForURL(/sent=1|error=/), clientPage.click('[data-testid="send-bot"]')]);
+    if (!clientPage.url().includes("sent=1")) throw new Error(`emptying the field is a send, got ${decodeURIComponent(clientPage.url())}`);
+    if ((await store())[field] !== "") throw new Error(`the field reads back empty of every removed answer, got ${JSON.stringify((await store())[field]).slice(0, 80)}`);
+    const emptySync = (await syncs())[0];
+    if (emptySync.status !== "sent" || emptySync.entryCount !== 0 || !emptySync.valueReadBack) throw new Error("the emptying send is recorded, read back, with no entries");
+    console.log("✓ removing every answer empties the bot's FAQ field, read back empty, and the sync records it");
+
     // ── The log: every approval and every send, with who and when. ──
     const events = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, maya.id)) });
     const accepts = events.filter((e) => e.event === "faq.accept").length;
     const pushes = events.filter((e) => e.event === "faq.push" && e.status === "sent").length;
-    if (accepts < N - 1 + 30 || pushes !== 4) throw new Error(`the log holds every approval and send, got ${accepts} accepts, ${pushes} sends`);
+    if (accepts < N - 1 + 30 || pushes !== 5) throw new Error(`the log holds every approval and send, got ${accepts} accepts, ${pushes} sends`);
     if (JSON.stringify(events).includes(TOKEN)) throw new Error("the token is never in the log");
     if (!(await page.locator('[data-testid="faq-log"] li[data-event="faq.accept"]').count()) || !(await page.locator('[data-testid="sync-log"] li[data-status="sent"]').count())) throw new Error("the Brief shows the approval log and the sync log");
     console.log(`✓ the log: ${accepts} approvals and ${pushes} sends, who and when, never the token`);
