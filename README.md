@@ -183,8 +183,18 @@ npx tsx scripts/smoke-loop.ts        # The daily loop's edges: broken-streak not
 npx tsx scripts/smoke-rewards.ts     # Earn Your Way: whole catalogue visible, no link = "Opening soon", claim = points off + booking link, workspace caps with reopen date, server-side refusal, coach claims read-only (needs REWARDS_CONFIG_OVERRIDE; dev-server.sh sets it)
 npx tsx scripts/smoke-coach.ts       # Coach opens a client: roster link → /coach/[clientId] (their words, pathway, claims, built, pillars), nudge, call note → tasks tagged "From your call" on the client's Today/Tasks, inbound GoHighLevel appointment books an open claim only when certain
 npx tsx scripts/smoke-email.ts       # SendGrid adapter against scripts/mock-sendgrid.ts: 202 payload shape, 401 reason, reminder loop survives one failing recipient
+npx tsx scripts/smoke-deck.ts        # Deck v2: the opening contract is slides in the coach's order, a blank opening line is listed not shown, suggested pictures are counted
+npx tsx scripts/smoke-deck-images.ts # Deck v2 pictures: the image library + consent tick, a picture on a slot, the .pptx parsed for the picture in its frame, then rendered in LibreOffice (needs libreoffice-impress; see below)
 npx tsx scripts/snapshot-preview.ts out.html   # Crawls the running app into one read-only, clickable HTML file for sharing a preview
 ```
+
+The `deck-images` walk is the only check that needs LibreOffice: it opens the exported `.pptx` in headless LibreOffice to prove pictures render inside their frames. Install the Impress module before running the gate:
+
+```bash
+sudo apt-get update && sudo apt-get install -y libreoffice-impress
+```
+
+The gate checks for it first (`scripts/check-libreoffice.ts`) and stops with that one line if it is missing, rather than failing mid-walk. No production path needs LibreOffice: the `.pptx` export route (`/api/webinars/[id]/deck`) builds the file with pptxgenjs and never shells out, so nothing on Vercel depends on it.
 
 ## The Essence System: brand voice as config
 

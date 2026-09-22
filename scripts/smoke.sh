@@ -58,6 +58,13 @@ main() {
     exit 1
   fi
 
+  # The deck-images walk renders a .pptx in LibreOffice; prove the Impress module is present before any walk, so a missing
+  # package fails here with one plain line and the install command, not mid-walk.
+  if printf '%s\n' "${walks[@]}" | grep -qx deck-images; then
+    printf '\n== libreoffice check ==\n'
+    npx tsx scripts/check-libreoffice.ts || exit 1
+  fi
+
   for w in "${walks[@]}"; do
     script="scripts/smoke-$w.ts"
     [[ "$w" == "base" ]] && script="scripts/smoke.ts"

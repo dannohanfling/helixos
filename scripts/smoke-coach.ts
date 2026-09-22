@@ -60,6 +60,13 @@ async function main() {
 
     // Roster → detail
     await login(page, "coach");
+    // Log out is reachable without scrolling: it sits in the sidebar's pinned footer (and the mobile header), never below the fold.
+    await page.locator('[data-testid="logout-sidebar"]').waitFor({ state: "visible", timeout: 10000 });
+    const logoutBox = await page.locator('[data-testid="logout-sidebar"]').boundingBox();
+    const scrolledY = await page.evaluate(() => window.scrollY);
+    const vh = page.viewportSize()?.height ?? 900;
+    if (!logoutBox || logoutBox.y < 0 || logoutBox.y + logoutBox.height > vh || scrolledY > 0) throw new Error(`Log out must be reachable without scrolling: box=${JSON.stringify(logoutBox)} scrollY=${scrolledY} vh=${vh}`);
+    console.log("✓ the coach finds Log out without scrolling: it is in the sidebar's pinned footer");
     // The brand kit: a pair that cannot read on a slide is refused here with the pair named; the Turas kit saves
     await page.goto(`${base}/settings`);
     await page.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });

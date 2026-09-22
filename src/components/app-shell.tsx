@@ -12,16 +12,19 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
   const tier = tierProgress(points);
   return (
     <div className="min-h-screen md:flex">
-      <aside className="hidden w-60 shrink-0 flex-col overflow-y-auto border-r bg-surface px-3 py-4 md:flex md:sticky md:top-0 md:h-screen">
-        <Link href="/today" className="mb-5 flex items-center gap-2.5 px-2">
+      {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold. */}
+      <aside className="hidden w-60 shrink-0 flex-col border-r bg-surface py-4 md:flex md:sticky md:top-0 md:h-screen">
+        <Link href="/today" className="mb-5 flex items-center gap-2.5 px-5">
           <AppLogo size={40} />
           <div className="leading-tight">
             <div className="text-sm font-bold">HelixOS</div>
             <div className="text-[11px] text-ink-3">{viewer.workspace.name}</div>
           </div>
         </Link>
-        <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} />
-        <div className="mt-auto space-y-3 px-2">
+        <div className="min-h-0 flex-1 overflow-y-auto px-3">
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} />
+        </div>
+        <div className="mt-3 space-y-3 border-t px-5 pt-3">
           <div className="rounded-xl bg-surface-2 p-3 text-xs">
             <div className="flex items-center justify-between">
               <span className="font-semibold">
@@ -40,7 +43,7 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
               <span className="max-w-[9rem] truncate">{viewer.user.name}</span>
             </Link>
             <form action={logoutAction}>
-              <button className="text-xs text-ink-3 hover:text-ink" type="submit">
+              <button className="text-xs text-ink-3 hover:text-ink" type="submit" data-testid="logout-sidebar">
                 Log out
               </button>
             </form>
@@ -60,6 +63,11 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
             <Link href="/settings" className="text-lg" aria-label="Settings">
               {viewer.user.avatarEmoji}
             </Link>
+            <form action={logoutAction}>
+              <button className="text-ink-3 hover:text-ink" type="submit" aria-label="Log out" data-testid="logout-header">
+                Log out
+              </button>
+            </form>
           </div>
         </header>
         </PinToViewport>
