@@ -16,7 +16,7 @@ function routedPages(dir: string, prefix = ""): string[] {
   return out.sort();
 }
 // The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
-const PAGES_CLIENT = ["/today", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/webinars", "/images", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings"];
+const PAGES_CLIENT = ["/today", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/webinars", "/images", "/brain", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings"];
 const PAGES_COACH = ["/coach", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {

@@ -68,6 +68,10 @@ export const memberships = sqliteTable(
     /** The bot fields last pushed, by name: the Stage 1 names and their values only, never the token and never a webhook URL. */
     clBotFields: text("cl_bot_fields", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
+    /** The Community Loyalty agent the Bot Brief reads and pushes to (ai_agent_ns). Empty means the workspace's first agent. */
+    clAgentNs: text("cl_agent_ns"),
+    /** The one longtext bot field the approved FAQ answers are composed into. Empty means the default in src/lib/engine/faq.ts. */
+    faqBotField: text("faq_bot_field"),
     /** A soft remove by the coach: access ends on the next request, reminders stop, the client drops out of the coach's counts. The data stays; reinstate clears both. */
     removedAt: text("removed_at"),
     removedBy: text("removed_by"),
@@ -1735,3 +1739,70 @@ export type LadderProfile = typeof ladderProfiles.$inferSelect;
 export type Ladder = typeof ladders.$inferSelect;
 export type AiCredential = typeof aiCredentials.$inferSelect;
 export type AiUsage = typeof aiUsage.$inferSelect;
+
+/* ───────────── The coach's brain: the FAQ store the Bot Brief approves and pushes ───────────── */
+
+/** The categories the Knowledge Base Builder template writes; a parsed entry outside them keeps its own word. */
+export const FAQ_CATEGORIES = ["Pricing", "Getting Started", "What's Included", "Results", "Process", "Logistics", "Policies", "Contact"] as const;
+export const FAQ_SOURCES = ["upload", "paste", "template", "airtable"] as const;
+export type FaqSource = (typeof FAQ_SOURCES)[number];
+
+/**
+ * One FAQ entry in a client's store: the template's five fields, the provenance mark (every entry starts ai_unreviewed until
+ * the coach accepts it; an edit is a review), where it came from, and the rank inputs. The store is per client (workspace +
+ * user). Nothing here reaches the bot until the Bot Brief approves it and a push reads back.
+ */
+export const faqEntries = sqliteTable(
+  "faq_entries",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    question: text("question").notNull(),
+    alsoAsked: text("also_asked", { mode: "json" }).$type<string[]>().notNull().default([]),
+    keywords: text("keywords", { mode: "json" }).$type<string[]>().notNull().default([]),
+    answer: text("answer").notNull(),
+    category: text("category").notNull().default(""),
+    origin: text("origin", { enum: ORIGINS }).notNull().default("ai_unreviewed"),
+    source: text("source", { enum: FAQ_SOURCES }).notNull(),
+    /** The file name, or the Airtable record id, the entry came from. */
+    sourceRef: text("source_ref"),
+    /** Airtable's Times Asked when present; ranking falls back to recency when it is not. */
+    timesAsked: integer("times_asked"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [index("faq_entries_owner").on(t.workspaceId, t.userId, t.createdAt)],
+);
+export type FaqEntry = typeof faqEntries.$inferSelect;
+
+/**
+ * One push of the composed FAQ field to a client's bot: what was sent (the entries, as a snapshot the next Brief diffs
+ * against), what was dropped past the budget, and both halves of the read-back. Only a sync whose read-back matched moves
+ * the record; a failed one is kept for the log with its reason.
+ */
+export const faqSyncs = sqliteTable(
+  "faq_syncs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    fieldName: text("field_name").notNull(),
+    budget: integer("budget").notNull(),
+    chars: integer("chars").notNull(),
+    entryCount: integer("entry_count").notNull(),
+    /** The questions dropped whole past the budget, lowest-ranked first. */
+    dropped: text("dropped", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The entries sent: id, question and answer, for the next Brief's "what changed since the last sync". */
+    snapshot: text("snapshot", { mode: "json" }).$type<{ id: string; question: string; answer: string }[]>().notNull().default([]),
+    valueReadBack: integer("value_read_back", { mode: "boolean" }).notNull().default(false),
+    tokenReadBack: integer("token_read_back", { mode: "boolean" }).notNull().default(false),
+    status: text("status", { enum: ["sent", "failed"] }).notNull(),
+    note: text("note"),
+    sentBy: text("sent_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("faq_syncs_owner").on(t.workspaceId, t.userId, t.createdAt)],
+);
+export type FaqSync = typeof faqSyncs.$inferSelect;

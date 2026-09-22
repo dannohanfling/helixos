@@ -13,6 +13,15 @@ const port = Number(process.argv[2] ?? 4060);
 let fields: Record<string, string> = {};
 const requests: { fields: { name: string; value: string }[]; token: string }[] = [];
 let skipped: string | null = null;
+/** var_type per field name; anything unseeded reads as text. The FAQ push targets a longtext. */
+let types: Record<string, string> = {};
+/** The workspace's agents and what each one's prompt actually reads, seedable so a walk can prove "push only what the agent reads". */
+let agents: { ai_agent_ns: string; name: string; description: string; prompts: { section: string; text: string }[] }[] = [
+  { ai_agent_ns: "f1a2b3", name: "Booking Agent", description: "Books calls.", prompts: [
+    { section: "Persona & Role", text: "You are {ai_persona_role_cbf}." },
+    { section: "Product & Service Information", text: "What we offer: {ai_product_&_service_information_cbf}" },
+  ] },
+];
 /** Every read-back, with the page and limit asked, so a walk can prove the client paged. */
 const reads: { limit: number; page: number; returned: number }[] = [];
 const DEFAULT_LIMIT = 10;
@@ -29,7 +38,10 @@ const read = (req: import("node:http").IncomingMessage) => new Promise<string>((
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
-  if (url.pathname === "/__reset") { fields = {}; requests.length = 0; reads.length = 0; skipped = null; return json(res, 200, { ok: true }); }
+  if (url.pathname === "/__reset") { fields = {}; types = {}; requests.length = 0; reads.length = 0; skipped = null; return json(res, 200, { ok: true }); }
+  if (url.pathname === "/__types" && req.method === "POST") { Object.assign(types, JSON.parse(await read(req))); return json(res, 200, { ok: true, types }); }
+  // Replace the agent list: `{ agents: [...] }`, each with prompts whose text carries the tokens it reads.
+  if (url.pathname === "/__agents" && req.method === "POST") { agents = (JSON.parse(await read(req)) as { agents: typeof agents }).agents; return json(res, 200, { ok: true, agents }); }
   // A skipped field is one the bot never wrote: it drops out of the store too, as an unknown name would never be in it.
   if (url.pathname === "/__skip" && req.method === "POST") { skipped = (JSON.parse((await read(req)) || "{}") as { name?: string }).name ?? null; if (skipped) delete fields[skipped]; return json(res, 200, { ok: true, skipped }); }
   if (url.pathname === "/__seed" && req.method === "POST") { Object.assign(fields, JSON.parse(await read(req))); return json(res, 200, { ok: true, fields }); }
@@ -42,7 +54,7 @@ createServer(async (req, res) => {
     // BotFieldResource as the spec documents it: data[] of BotField (name, var_type, value, var_ns, description, is_template_field), paged by limit and page, no total.
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? DEFAULT_LIMIT) || DEFAULT_LIMIT));
     const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
-    const all = Object.entries(fields).map(([name, value], i) => ({ name, var_type: "text", value, var_ns: `f${i + 1}`, description: "", is_template_field: false }));
+    const all = Object.entries(fields).map(([name, value], i) => ({ name, var_type: types[name] ?? "text", value, var_ns: `f${i + 1}`, description: "", is_template_field: false }));
     const data = all.slice((page - 1) * limit, page * limit);
     reads.push({ limit, page, returned: data.length });
     return json(res, 200, { data });
@@ -55,6 +67,13 @@ createServer(async (req, res) => {
     requests.push({ fields: body.data, token: auth.slice(7) });
     for (const f of body.data) if (f.name !== skipped) fields[f.name] = f.value;
     return json(res, 200, { status: "ok" });
+  }
+  if (url.pathname === "/flow/ai-agents" && req.method === "GET") return json(res, 200, { data: agents.map((a) => ({ ai_agent_ns: a.ai_agent_ns, name: a.name })) });
+  if (url.pathname === "/flow/ai-agent-info" && req.method === "POST") {
+    const body = JSON.parse((await read(req)) || "{}") as { ai_agent_ns?: string };
+    const a = agents.find((x) => x.ai_agent_ns === body.ai_agent_ns);
+    if (!a) return json(res, 404, { status: "error", message: "No such agent." });
+    return json(res, 200, { data: a });
   }
   json(res, 404, { status: "error", message: `no route ${req.method} ${url.pathname}` });
 }).listen(port, () => console.log(`mock-uchat on :${port}`));

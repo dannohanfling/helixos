@@ -105,7 +105,7 @@ export async function setMemberPassAction(formData: FormData): Promise<void> {
   const token = tok === "clear" ? { clApiToken: null } : tok ? { clApiToken: seal(tok) } : {};
   await db
     .update(schema.memberships)
-    .set({ eoPassUrl: opt(formData, "eoPassUrl"), eoPassSerial: opt(formData, "eoPassSerial"), clUserNs: opt(formData, "clUserNs"), ...drip, ...token })
+    .set({ eoPassUrl: opt(formData, "eoPassUrl"), eoPassSerial: opt(formData, "eoPassSerial"), clUserNs: opt(formData, "clUserNs"), clAgentNs: opt(formData, "clAgentNs"), faqBotField: opt(formData, "faqBotField"), ...drip, ...token })
     .where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
   refresh();
 }

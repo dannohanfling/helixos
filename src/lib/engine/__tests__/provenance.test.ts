@@ -149,6 +149,14 @@ describe("where the mark is set and where the gate stands (read off the source)"
     const files = [...walk(path.join(process.cwd(), "src/app")), ...walk(path.join(process.cwd(), "src/components")), ...walk(path.join(process.cwd(), "src/lib/actions"))];
     expect(files.length).toBeGreaterThan(50);
     for (const f of files) expect(readFileSync(f, "utf8"), f).not.toMatch(/accept[ -]?all|acceptAll|accept every/i);
+    // The one bounded exception, from the coach's-brain brief: the FAQ store's "Needs your eyes" set (a price, a guarantee, a
+    // result or a number) is never bulk-accepted, and the rest may be accepted at once. That action exists once, in the FAQ
+    // actions, and is bounded in code by the needsEyes rule, not by wording.
+    const faq = read("src/lib/actions/faq.ts");
+    expect(faq).toMatch(/export async function acceptSafeFaqAction/);
+    expect(faq).toMatch(/filter\(\(r\) => !needsEyes\(r\)\)/);
+    // It is wired from exactly one page, the Bot Brief, and nowhere else.
+    for (const f of files) if (!/src\/lib\/actions\/faq\.ts$|src\/app\/\(app\)\/brain\/page\.tsx$/.test(f)) expect(readFileSync(f, "utf8"), f).not.toMatch(/acceptSafe/);
     // The one Accept form takes exactly one record's fields, never a list of ids.
     const mark = read("src/components/provenance.tsx");
     expect(mark).toMatch(/fields: Record<string, string>/);
