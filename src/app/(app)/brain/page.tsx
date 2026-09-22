@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { and, desc, eq, like } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
@@ -120,7 +121,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
             ) : null
           }>
             {!token ? (
-              <p className="mb-3 rounded-lg bg-warn-soft p-2 text-sm" data-testid="no-token">No Community Loyalty token on your account yet. Ask your coach to add it on the Coach page; until then nothing can be sent.</p>
+              <p className="mb-3 rounded-lg bg-warn-soft p-2 text-sm" data-testid="no-token">No Community Loyalty token on your account yet. {v.role === "coach" ? <>Add it yourself under <Link href="/coach" className="underline">My bot</Link> on the Coach page</> : "Ask your coach to add it on the Coach page"}; until then nothing can be sent.</p>
             ) : null}
             {blocked ? (
               <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" data-testid="brief-blocked" role="alert">{blocked}</p>

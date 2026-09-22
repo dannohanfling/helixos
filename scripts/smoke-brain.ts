@@ -5,7 +5,9 @@
  * fourth absent, both halves of the read-back on the record); edit one, send (the Brief shows exactly one change, the read-back
  * shows the new words); over the budget the lowest-ranked drop whole and are listed; and a push is refused, in plain words,
  * when the agent's prompt does not read the field, when the field is not on the bot at all, when it holds text HelixOS did not
- * write (until the coach waives it on the Coach page), and when the bot has more than one agent and none is chosen. The dev server runs with UCHAT_BASE_URL at the mock (dev-server.sh sets it).
+ * write (until the coach waives it on the Coach page), and when the bot has more than one agent and none is chosen. The agent is
+ * chosen by name and stored by ns, and the coach sets their own bot's token and agent under My bot on the Coach page. The dev
+ * server runs with UCHAT_BASE_URL at the mock (dev-server.sh sets it).
  */
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -16,6 +18,7 @@ const base = process.argv[2] ?? "http://localhost:3000";
 const mockPort = 4060;
 const mock = `http://localhost:${mockPort}`;
 const TOKEN = "uchat-test-token-for-maya-0123456789";
+const COACH_TOKEN = "uchat-test-token-for-the-coach-9876543210";
 const FIXTURE = join(__dirname, "fixtures", "knowledge-base.md");
 
 async function submit(page: Page, selector: string) {
@@ -224,14 +227,40 @@ async function main() {
     const ask = await clientPage.locator('[data-testid="brief-blocked"]').innerText();
     if (!/2 agents \(Community FAQ Agent, Booking Agent\)/.test(ask) || !/Choose the one that answers/.test(ask)) throw new Error(`the Brief asks which agent answers, got "${ask}"`);
     if (await clientPage.locator('[data-testid="send-bot"]').count()) throw new Error("no send button while the agent is not chosen");
-    // The coach chooses the agent that answers; the Booking Agent beside it is never picked for the FAQ.
+    // The coach chooses the agent that answers, by name: no coach knows an ai_agent_ns. The name is shown, the ns is stored.
     await coachPage.goto(`${base}/coach`);
-    await coachPage.locator(`${mayaForm} [data-testid="cl-agent-ns"]`).fill("faq01");
+    const named = await coachPage.locator(`${mayaForm} [data-testid="cl-agent-ns"] option`).allTextContents();
+    for (const a of TWO_AGENTS(field)) if (!named.some((o) => o.trim() === a.name)) throw new Error(`the chooser lists every agent on the bot by name, missing ${a.name}, got ${JSON.stringify(named)}`);
+    await coachPage.selectOption(`${mayaForm} [data-testid="cl-agent-ns"]`, { label: "Community FAQ Agent" });
     await submit(coachPage, `${mayaForm} button:has-text("Save")`);
+    const chosen = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.clAgentNs;
+    if (chosen !== TWO_AGENTS(field)[0].ai_agent_ns) throw new Error(`the name the coach picked stores that agent's ns, got ${chosen}`);
     await clientPage.goto(`${base}/brain`);
     await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
     if (!/Community FAQ Agent/.test(await clientPage.locator('[data-testid="brief-budget"]').innerText())) throw new Error("the Brief names the chosen agent");
     console.log("✓ two agents and none chosen: the Brief asks and sends nothing; once chosen it is the agent that answers");
+
+    // ── The coach's own bot: a coach is a member too, and sets their own token under My bot rather than asking their coach. ──
+    const coachMembership = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, membership.workspaceId), eq(schema.memberships.role, "coach")) }))!;
+    await db.update(schema.memberships).set({ clApiToken: null, clAgentNs: null }).where(eq(schema.memberships.id, coachMembership.id));
+    await coachPage.goto(`${base}/brain`);
+    const noToken = await coachPage.locator('[data-testid="no-token"]').innerText();
+    if (!/Add it yourself under My bot/.test(noToken)) throw new Error(`a coach's own Brief points at My bot, not at their coach, got "${noToken}"`);
+    await coachPage.goto(`${base}/coach`);
+    await coachPage.locator('[data-testid="my-cl-api-token"]').fill(COACH_TOKEN);
+    await submit(coachPage, '[data-testid="my-bot"] button:has-text("Save")');
+    const mineNow = () => db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachMembership.id) });
+    const sealed = (await mineNow())!.clApiToken;
+    if (!sealed || sealed.includes(COACH_TOKEN)) throw new Error("the coach's own token is stored, and stored sealed");
+    // With a token saved the agents are read with it, so the coach picks their own by name too.
+    await coachPage.goto(`${base}/coach`);
+    await coachPage.selectOption('[data-testid="my-cl-agent-ns"]', { label: "Community FAQ Agent" });
+    await submit(coachPage, '[data-testid="my-bot"] button:has-text("Save")');
+    if ((await mineNow())!.clAgentNs !== TWO_AGENTS(field)[0].ai_agent_ns) throw new Error("the coach's own agent is stored by ns from the name they picked");
+    await coachPage.goto(`${base}/brain`);
+    if (await coachPage.locator('[data-testid="no-token"]').count()) throw new Error("the coach's Brief has a token of its own now");
+    if (!/Community FAQ Agent/.test(await coachPage.locator('[data-testid="brief-budget"]').innerText())) throw new Error("the coach's own Brief names their own bot's agent");
+    console.log("✓ the coach sets their own token and agent under My bot, and their own Brief stops asking their coach for it");
     await coachPage.close();
 
     // ── Removing every answer empties the field on the bot: an answer the coach took back must stop being answered from. ──

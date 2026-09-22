@@ -110,6 +110,23 @@ export async function setMemberPassAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/**
+ * The coach's own bot, saved from the My bot block at the top of the Coach page. A coach is a member too — their Bot Brief reads
+ * their own membership row — but every integration field lived on a client's row only, so a coach could not set their own token.
+ * The same four fields, and only those: the pass and the drip webhook beside them on a client row are not in this form and are
+ * left as they are.
+ */
+export async function setMyBotAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const tok = opt(formData, "clApiToken");
+  const token = tok === "clear" ? { clApiToken: null } : tok ? { clApiToken: seal(tok) } : {};
+  await db
+    .update(schema.memberships)
+    .set({ clAgentNs: opt(formData, "clAgentNs"), faqBotField: opt(formData, "faqBotField"), faqOverwriteOk: formData.get("faqOverwriteOk") === "on", ...token })
+    .where(eq(schema.memberships.id, coach.membership.id));
+  refresh();
+}
+
 /** Re-sync to bot: the Stage 1 fields pushed now, whatever the last push held. Wins back what the bot's own SETUP wizard overwrote. */
 export async function resyncBotFieldsAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();

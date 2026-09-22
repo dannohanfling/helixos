@@ -156,6 +156,16 @@ export async function agentFor(m: schema.Membership, token: string): Promise<{ a
   return { agent: await readAgentInfo(token, pick.ns), ask: null };
 }
 
+/**
+ * The agents on this member's own bot, for the chooser on the Coach page: the name a coach recognises, the ns that is stored.
+ * No coach knows an ai_agent_ns by heart, so the list is read with the saved token and the names are shown. Empty when there is
+ * no token yet or the platform refuses, and the page falls back to typing the ns. The token is opened here, never on the page.
+ */
+export async function agentChoicesFor(m: schema.Membership): Promise<{ ns: string; name: string }[]> {
+  const token = open(m.clApiToken);
+  return token ? listAgents(token) : [];
+}
+
 /** Every bot field the client's workspace holds, by name, paged the way the Stage 1 read-back pages. */
 export async function listBotFields(token: string): Promise<{ name: string; value: string; varType: string }[]> {
   const out: { name: string; value: string; varType: string }[] = [];

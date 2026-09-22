@@ -6,7 +6,8 @@ import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
 import { nudgeMemberAction, setClientPassAction, reinstateClientAction } from "@/lib/actions/coach";
 import { clientFacing } from "@/lib/engine/pathway";
 import { setCertEnabledAction } from "@/lib/actions/courses";
-import { resyncBotFieldsAction, setMemberPassAction } from "@/lib/actions/integrations";
+import { resyncBotFieldsAction, setMemberPassAction, setMyBotAction } from "@/lib/actions/integrations";
+import { agentChoicesFor } from "@/lib/community-loyalty";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
 import { money, rollup } from "@/lib/engine/ai-usage";
 import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
@@ -92,10 +93,29 @@ export default async function CoachPage() {
     })
     .sort((a, b) => b.daysSilent - a.daysSilent);
   const atRisk = rows.filter((r) => r.daysSilent >= 3);
+  // Which agent answers is chosen by name, not by typing an ai_agent_ns: the agents on each bot are read with that bot's own
+  // saved token. A member with no token costs no call and gets the text box back.
+  const withBots = [v.membership, ...members];
+  const agentLists = await Promise.all(withBots.map((m) => agentChoicesFor(m)));
+  const agentsOf = new Map(withBots.map((m, i) => [m.id, agentLists[i]]));
+  const myBot = v.membership;
 
   return (
     <>
       <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link>} />
+      <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">My Bot Brief →</Link>}>
+        <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your Bot Brief can send nothing until the token is here.</p>
+        <form action={setMyBotAction} className="flex flex-wrap items-center gap-2" data-testid="my-bot">
+          <input className="field min-w-56 flex-1 py-1 text-xs" name="clApiToken" type="password" autoComplete="off" data-testid="my-cl-api-token" placeholder={myBot.clApiToken ? "Community Loyalty API token: saved (blank keeps it, \"clear\" removes it)" : "Community Loyalty API token (your own workspace)"} title="Your own uChat API token. It is a credential: stored sealed, never shown again. It lets HelixOS write your bot's fields." />
+          <AgentField choices={agentsOf.get(myBot.id) ?? []} value={myBot.clAgentNs ?? ""} testId="my-cl-agent-ns" />
+          <input className="field w-44 py-1 text-xs" name="faqBotField" placeholder="FAQ bot field (blank = ai_faq_cbf)" defaultValue={myBot.faqBotField ?? ""} data-testid="my-faq-bot-field" title="The one bot field your approved FAQ answers are composed into, written only by HelixOS. Blank means ai_faq_cbf." />
+          <label className="flex items-center gap-1 text-[11px] text-ink-3" title="The FAQ field already holds text HelixOS did not write. Ticking this sends anyway and replaces it.">
+            <input type="checkbox" name="faqOverwriteOk" defaultChecked={myBot.faqOverwriteOk} data-testid="my-faq-overwrite-ok" /> overwrite FAQ field
+          </label>
+          <button className="btn btn-ghost btn-xs" type="submit">Save</button>
+        </form>
+        <p className="mt-2 text-xs text-ink-3">Your business facts are not pushed to your own bot yet: that is the Stage 1 work, with the never-quote-prices rule, and it is next.</p>
+      </Card>
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <Card title="Clients">
           {rows.length ? (
@@ -205,7 +225,7 @@ export default async function CoachPage() {
                     <input className="field min-w-40 flex-1 py-1 text-xs" name="clDripWebhookUrl" type="password" autoComplete="off" placeholder={r.m.clDripWebhookUrl ? "Community Loyalty drip webhook: saved (blank keeps it, \"clear\" removes it)" : "Community Loyalty drip webhook URL"} title="The inbound webhook of the coach's Rung Dripper. It is a credential: stored sealed, never shown again." />
                     <input className="field w-36 py-1 text-xs" name="clUserNs" placeholder="CL contact (user_ns)" defaultValue={r.m.clUserNs ?? ""} title="The Community Loyalty contact that holds the drip state" />
                     <input className="field min-w-40 flex-1 py-1 text-xs" name="clApiToken" type="password" autoComplete="off" data-testid="cl-api-token" placeholder={r.m.clApiToken ? "Community Loyalty API token: saved (blank keeps it, \"clear\" removes it)" : "Community Loyalty API token (this client's own workspace)"} title="The client's own uChat API token. It is a credential: stored sealed, never shown again. It lets HelixOS write the bot's business facts." />
-                    <input className="field w-36 py-1 text-xs" name="clAgentNs" placeholder="CL agent (ai_agent_ns)" defaultValue={r.m.clAgentNs ?? ""} data-testid="cl-agent-ns" title="The Community Loyalty agent the Bot Brief reads and pushes to. Blank means the workspace's first agent." />
+                    <AgentField choices={agentsOf.get(r.m.id) ?? []} value={r.m.clAgentNs ?? ""} testId="cl-agent-ns" />
                     <input className="field w-44 py-1 text-xs" name="faqBotField" placeholder="FAQ bot field (blank = ai_faq_cbf)" defaultValue={r.m.faqBotField ?? ""} data-testid="faq-bot-field" title="The one bot field the approved FAQ answers are composed into, written only by HelixOS. Blank means ai_faq_cbf. Never a Stage 1 field, a field the bot writes, or a product-and-service field." />
                     <label className="flex items-center gap-1 text-[11px] text-ink-3" title="The FAQ field already holds text HelixOS did not write. Ticking this sends anyway and replaces it.">
                       <input type="checkbox" name="faqOverwriteOk" defaultChecked={r.m.faqOverwriteOk} data-testid="faq-overwrite-ok" /> overwrite FAQ field
@@ -401,3 +421,24 @@ export default async function CoachPage() {
 }
 
 /** Same window as nudgeMemberAction: a nudge in the last 20 hours counts as today, whatever the clock says in UTC. */
+
+/**
+ * Which agent on that bot answers. An `ai_agent_ns` is not a value any coach knows, so once a token is saved the agents are read
+ * and shown by name and the ns is what is stored. No token, or Community Loyalty will not list them: the ns stays typeable, so
+ * a bot the API cannot enumerate is never locked out. Blank is still "not chosen"; one agent and blank is no choice at all and
+ * is taken by the push. A stored ns that is not on the bot any more keeps its own option, named, rather than being dropped.
+ */
+function AgentField({ choices, value, testId }: { choices: { ns: string; name: string }[]; value: string; testId: string }) {
+  const title = "The Community Loyalty agent the Bot Brief reads and pushes to. On a bot with one agent, that one; on a bot with more, the one that answers questions.";
+  if (!choices.length) return <input className="field w-36 py-1 text-xs" name="clAgentNs" placeholder="CL agent (ai_agent_ns)" defaultValue={value} data-testid={testId} title={title} />;
+  const stale = value && !choices.some((c) => c.ns === value);
+  return (
+    <select className="field w-44 py-1 text-xs" name="clAgentNs" defaultValue={value} data-testid={testId} title={title}>
+      <option value="">{choices.length === 1 ? `Only agent: ${choices[0].name}` : "Which agent answers?"}</option>
+      {choices.map((a) => (
+        <option key={a.ns} value={a.ns}>{a.name}</option>
+      ))}
+      {stale ? <option value={value}>{value} (not on this bot now)</option> : null}
+    </select>
+  );
+}
