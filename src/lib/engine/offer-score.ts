@@ -36,11 +36,11 @@ const hasNumber = (s?: string | null) => /\d/.test(s ?? "");
 export const hasTimeframe = (s?: string | null) => /\b(\d+\s*(minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years|session|sessions|call|calls|sitting)|90-day|30-day|12-week|6-week|\d+-(minute|hour|day|week)|quarter|(one|single|a)\s+(?:[\p{L}\d-]+\s+)?(session|sitting|call|day|afternoon|morning|weekend|intensive))\b/iu.test(s ?? "");
 
 /** The symbol a currency is written with beside its code; the code is always shown, so NZD $1,997 is never read as US dollars. */
-const SYMBOL: Record<string, string> = { USD: "$", NZD: "$", AUD: "$", CAD: "$", SGD: "$", GBP: "£", EUR: "€" };
+export const CURRENCY_SYMBOL: Record<string, string> = { USD: "$", NZD: "$", AUD: "$", CAD: "$", SGD: "$", GBP: "£", EUR: "€" };
 export const CURRENCIES = ["USD", "NZD", "AUD", "CAD", "GBP", "EUR", "SGD"] as const;
 export function formatPrice(price: number, currency: string | null | undefined): string {
   const code = (currency ?? "USD").toUpperCase();
-  return `${code} ${SYMBOL[code] ?? ""}${price.toLocaleString()}`;
+  return `${code} ${CURRENCY_SYMBOL[code] ?? ""}${price.toLocaleString()}`;
 }
 const hasWithout = (s?: string | null) => /\bwithout\b/i.test(s ?? "");
 

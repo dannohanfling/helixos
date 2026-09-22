@@ -5,6 +5,7 @@
  * about colour and truncation can be tested here rather than caught on a screen).
  */
 import { formatPrice } from "./offer-score";
+import { FACE_CLASS_LABEL, cleanFace, currenciesIn, currencyConflicts, type FaceClass, type KeptOff } from "./deck-face";
 import { brandKitProblems, normaliseHex } from "./subject";
 import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type SectionContext, type WebinarContext } from "./webinar-context";
 
@@ -67,6 +68,8 @@ export type Slide = {
   footer: string | null;
   /** The picture slot this slide suggests, or null. Filled by the coach from the image library; empty here, listed on the Deck step. */
   slot: Slot | null;
+  /** What the record's text carried that no face may (deck-face.ts): kept off this slide, in its notes and on the Deck step. */
+  keptOff: KeptOff[];
 };
 export type DeckResult = {
   slides: Slide[];
@@ -79,6 +82,11 @@ export type DeckResult = {
   kitApplied: boolean;
   /** Opening-contract lines the coach has not filled: not slides, listed on the Deck step, never a placeholder on a face. */
   openingOmitted: string[];
+  /**
+   * Every piece of consent, verification, missing-item, rule or field-label text the record put on a face, kept off it: the slide
+   * it would have sat on (null when the whole slide was that text and so is not a slide), its section, and the words.
+   */
+  keptOff: { slide: number | null; section: string; cls: FaceClass; text: string }[];
   /** Per-webinar chrome the renderer draws, carried so renderPlan stays pure over the result. */
   footerBar: boolean;
   ctaBar: boolean;
@@ -145,18 +153,32 @@ function direction(kind: SlideKind, body: string[]): string | null {
   return null;
 }
 
+/** The note a kept-off line leaves: the presenter still has it, on the slide it came from, said as what it is. */
+const notOnFace = (k: KeptOff) => `Not on the slide (${FACE_CLASS_LABEL[k.cls]}): ${k.text}`;
+/** A slide whose face was nothing but kept-off text: no line to show, so it is not a slide. */
+const emptied = (sl: Slide) => !sl.headline && !sl.body.length && sl.keptOff.length > 0;
+
 type SlideInput = { n: number; kind: SlideKind; s: SectionContext | null; headline: string; body?: string[]; extraNotes?: string[]; eyebrow?: string; act?: string; inverse?: boolean; footer?: string | null; slot?: Slot | null };
 function slideOf(i: SlideInput): Slide {
   const { n, kind, s } = i;
-  const body = i.body ?? [];
-  const tier = headlineTier(i.headline);
-  const headline = tier.overflow ? (s?.name ?? "") : i.headline.trim();
-  const finalBody = tier.overflow ? [i.headline.trim(), ...body] : body;
-  const notes = [s ? `Section: ${s.name}` : "", direction(kind, finalBody) ? `Visual direction: ${direction(kind, finalBody)}` : "", s?.deliveryNote ? `Delivery: ${s.deliveryNote}` : "", ...(i.extraNotes ?? [])].filter(Boolean);
-  const footer = i.footer ?? null;
+  // The face first: every line the record hands a slide is read against deck-face.ts, and what may not stand on a face comes off
+  // here, at the one place every slide passes, whichever field it came from. A headline that was nothing but such text gives way
+  // to the first body line; a slide left with nothing is dropped by deckSlides, its words kept in the notes before it.
+  const head = cleanFace(i.headline);
+  const lines = (i.body ?? []).map(cleanFace);
+  const foot = i.footer ? cleanFace(i.footer) : null;
+  const keptOff = [...head.kept, ...lines.flatMap((l) => l.kept), ...(foot?.kept ?? [])];
+  let headlineIn = head.face.trim();
+  let body = lines.map((l) => l.face).filter(Boolean);
+  if (!headlineIn && body.length) [headlineIn, body] = [body[0], body.slice(1)];
+  const tier = headlineTier(headlineIn);
+  const headline = tier.overflow ? (s?.name ?? "") : headlineIn;
+  const finalBody = tier.overflow ? [headlineIn, ...body] : body;
+  const notes = [s ? `Section: ${s.name}` : "", direction(kind, finalBody) ? `Visual direction: ${direction(kind, finalBody)}` : "", s?.deliveryNote ? `Delivery: ${s.deliveryNote}` : "", ...(i.extraNotes ?? []), ...keptOff.map(notOnFace)].filter(Boolean);
+  const footer = foot?.face || null;
   // The footer is the offer's line on a price slide: a hole in it refuses as clause (b) does, on every slide it sits on.
   const placeholders = [...placeholderHits(kind, [headline, ...finalBody]), ...(footer ? placeholderHits("offer", [footer]) : [])].filter((h, idx, all) => all.findIndex((x) => x.text === h.text) === idx);
-  return { slot: i.slot ?? null, n, kind, sectionKey: s?.sectionKey ?? null, section: s?.name ?? "", act: i.act ?? s?.act ?? "opening", eyebrow: i.eyebrow ?? (s ? `${s.name} · ${ACT_LABEL[s.act] ?? s.act}` : ""), headline, headlineSize: tier.overflow ? HEADLINE_FLOOR : tier.size, body: finalBody, notes, placeholders, overflow: tier.overflow, inverse: Boolean(i.inverse), footer };
+  return { keptOff, slot: i.slot ?? null, n, kind, sectionKey: s?.sectionKey ?? null, section: s?.name ?? "", act: i.act ?? s?.act ?? "opening", eyebrow: i.eyebrow ?? (s ? `${s.name} · ${ACT_LABEL[s.act] ?? s.act}` : ""), headline, headlineSize: tier.overflow ? HEADLINE_FLOOR : tier.size, body: finalBody, notes, placeholders, overflow: tier.overflow, inverse: Boolean(i.inverse), footer };
 }
 
 /**
@@ -195,7 +217,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   const stackOrder = c.sections.find(isOfferStack)?.order ?? Infinity;
   // The footer runs from the offer onward: every slide of a section at or after the Offer Stack.
   const footerFor = (s: SectionContext) => (offer?.ctaFooter && s.order >= stackOrder ? offer.ctaFooter : null);
-  slides.push({ slot: { key: "cover:photo", kind: "photo", what: SLOT_WHAT.photo }, n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
+  slides.push({ keptOff: [], slot: { key: "cover:photo", kind: "photo", what: SLOT_WHAT.photo }, n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
   // The opening contract, before any content: each of the coach's own lines is one slide; a line the coach left empty is not a
   // slide (omitted, listed on the Deck step), never a placeholder on a face. The order is the reference deck's.
   const openingOmitted: string[] = [];
@@ -252,11 +274,42 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
         if (c.stayLine) slides.push(slideOf({ n: n++, kind: "section", s: null, act: "opening", headline: c.stayLine, eyebrow: `Stay to the end · ${ACT_LABEL.opening}` }));
       }
     }
-    // A recap closes each belief act: the first line of every section that has one. Nothing new on it.
-    const lines = act.sections.filter((s) => s.status !== "omitted" && s.keyPoints.length).map((s) => s.keyPoints[0]);
+    // A recap closes each belief act: the first line of every section that has one. Nothing new on it. "Has one" means a line that
+    // can stand on a face: a section whose first key point is kept off (deck-face.ts) is quoted by its next, or not at all.
+    const lines = act.sections.filter((s) => s.status !== "omitted").map((s) => s.keyPoints.map((p) => cleanFace(p).face).find(Boolean)).filter((l): l is string => Boolean(l));
     if (BELIEF_ACTS.has(act.key) && lines.length) slides.push(slideOf({ n: n++, kind: "recap", s: null, headline: `${act.label} · recap`, body: lines.slice(0, 6), eyebrow: act.label, act: act.key }));
   }
+  // A slide the record filled with nothing but kept-off text is not a slide: its words go to the notes of the slide before it,
+  // where the presenter meets them, and the deck is numbered again so every later line names the slide the coach will see.
+  const keptOff: DeckResult["keptOff"] = [];
+  const kept: Slide[] = [];
+  for (const sl of slides) {
+    if (!emptied(sl)) {
+      kept.push(sl);
+      continue;
+    }
+    const prev = kept.at(-1);
+    if (prev) prev.notes.push(...sl.keptOff.map(notOnFace));
+    for (const k of sl.keptOff) keptOff.push({ slide: null, section: sl.section || sl.eyebrow, cls: k.cls, text: k.text });
+  }
+  kept.forEach((sl, i) => {
+    sl.n = i + 1;
+    for (const k of sl.keptOff) keptOff.push({ slide: sl.n, section: sl.section || sl.eyebrow || "cover", cls: k.cls, text: k.text });
+  });
+  slides.splice(0, slides.length, ...kept);
+  keptOff.sort((a, b) => (a.slide ?? 0) - (b.slide ?? 0));
   const refused: string[] = [];
+  // One currency per deck. With an offer, it is the offer's own field, and every price the deck composes is formatPrice of it;
+  // a line the coach typed that names another currency refuses the export, naming the slide. Never rewritten: changing the
+  // currency a price is stated in changes the claim. With no offer, the first currency a face names is the deck's.
+  let deckCurrency: string | null = offer?.currency ?? null;
+  for (const sl of slides) {
+    const face = [sl.headline, ...sl.body, sl.footer ?? ""].join("\n");
+    const where = `Slide ${sl.n} (${sl.section || sl.eyebrow || "cover"})`;
+    if (!deckCurrency) deckCurrency = currenciesIn(face).find((c) => c !== "$") ?? null;
+    const bad = deckCurrency ? currencyConflicts(face, deckCurrency) : [];
+    if (bad.length) refused.push(`${where}: it names ${bad.map((c) => (c === "$" ? "dollars" : c)).join(" and ")}, but ${offer ? `the offer is priced in ${deckCurrency}` : `the deck is in ${deckCurrency}`}. One currency per deck: ${offer ? "set the currency on the Offer, or change the line" : "change the line"}.`);
+  }
   // A recap only quotes its act's lines, so a hole on one is named once, at its source slide; the recap keeps the slot in its
   // count (two slides carry it) but adds no second line to the list.
   const named = new Set<string>();
@@ -273,7 +326,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   for (const p of kitProblems) refused.push(`Brand kit: ${p}`);
   if (!kitIn) warnings.push("No brand kit on this workspace: rendered black on white with no brand applied. Add the kit on Settings.");
   if (kitIn && !normaliseHex(kitIn.placeholder)) warnings.push(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
-  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
+  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, keptOff, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
 }
 
 /**

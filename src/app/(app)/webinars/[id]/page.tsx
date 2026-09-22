@@ -52,6 +52,7 @@ import {
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, presenterOf } from "@/lib/queries/webinar";
 import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult } from "@/lib/engine/deck";
+import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
 import { resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
 import { clearDeckSlotAction, setDeckSlotAction } from "@/lib/actions/deck-images";
 import type { DeckImage } from "@/db/schema";
@@ -1708,6 +1709,20 @@ function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirm
         <p className="mb-2 text-sm text-ink-2" data-testid="deck-opening-omitted">
           {deck.openingOmitted.length} opening {deck.openingOmitted.length === 1 ? "slide is" : "slides are"} empty, so left out: {deck.openingOmitted.join(", ")}. Fill them on the Foundation step.
         </p>
+      ) : null}
+      {deck.keptOff.length ? (
+        <div className="mb-3 rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="deck-kept-off">
+          <p>
+            {deck.keptOff.length} {deck.keptOff.length === 1 ? "line is" : "lines are"} kept off the slides: {deck.keptOff.length === 1 ? "it says" : "they say"} how this deck was put together, not what you say to the room. Each is in the speaker notes. To change one, edit it where it came from.
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {deck.keptOff.map((k, i) => (
+              <li key={i} data-testid="deck-kept-off-line" data-class={k.cls}>
+                {k.slide ? `Slide ${k.slide}` : "No slide of its own"} ({k.section}), {FACE_CLASS_LABEL[k.cls]}: &ldquo;{k.text}&rdquo;
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {fallbacks.emptyCount ? (
         <p className="mb-3 text-sm text-ink-2" data-testid="deck-slots">
