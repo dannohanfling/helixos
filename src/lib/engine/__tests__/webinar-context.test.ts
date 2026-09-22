@@ -32,12 +32,12 @@ describe("the resolver: everything wired to each section, in running order, with
   it("resolves the proof, story and citation wired to an act, as the bank stores them; a draft proof, a removed story or a deleted study is null", () => {
     const c = ctx();
     const act1 = c.sections.find((s) => s.act === "vehicle")!;
-    expect(act1.proof).toEqual({ id: "p1", who: "Kate A.", quote: "I now see identity as the foundation.", source: "bank" });
+    expect(act1.proof).toEqual({ id: "p1", who: "Kate A.", quote: "I now see identity as the foundation.", source: "bank", texts: ["I now see identity as the foundation."] });
     expect(act1.story).toMatchObject({ name: "Chasing the symptom", moral: "Name the drift.", source: "bank" });
     expect(act1.evidence).toEqual({ id: "e1", claim: "Impostor phenomenon is common among high achievers.", citation: "Bravata et al. (2019). Prevalence of Impostor Syndrome. https://doi.org/10.1/x" });
     const act2 = c.sections.find((s) => s.act === "internal")!;
     // The picked proof is a draft, so the typed one with its tick stands in; the story is the Essence's own; the study is the shared shelf's
-    expect(act2.proof).toEqual({ id: "typed", who: "Priya N.", quote: "Priya N.: 2 to 9 calls", source: "typed" });
+    expect(act2.proof).toEqual({ id: "typed", who: "Priya N.", quote: "Priya N.: 2 to 9 calls", source: "typed", texts: ["Priya N.: 2 to 9 calls"] });
     expect(act2.story).toMatchObject({ name: "The Glue", source: "essence" });
     expect(act2.evidence?.claim).toBe("Shared claim.");
     const act3 = c.sections.find((s) => s.act === "external")!;

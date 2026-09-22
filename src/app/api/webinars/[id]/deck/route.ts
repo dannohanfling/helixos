@@ -37,7 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const [context, kit] = await Promise.all([contextFor(v, w), db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) })]);
+  const [context, kit] = await Promise.all([contextFor(w), db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, w.workspaceId) })]);
   const deck = deckSlides(context, kit ?? null);
   if (deck.refused.length) return NextResponse.json({ error: "not exported", refused: deck.refused }, { status: 409 });
   // The provenance gate, on the export: a webinar carrying AI-drafted sections nobody reviewed leaves only under a confirm the
@@ -55,7 +55,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   // The coach's pictures for the filled slots, fetched once each as data URLs; an empty slot has no entry and its slide stays text.
-  const resolved = await resolveDeckSlots(w.id, deck, { workspaceId: v.workspace.id, userId: v.user.id });
+  // The owner's pictures, the same owner the deck's words resolve against.
+  const resolved = await resolveDeckSlots(w.id, deck, { workspaceId: w.workspaceId, userId: w.userId });
   const filled = filledSlides(resolved);
   const bySlide = new Map<number, string>();
   await Promise.all(resolved.filter((r) => r.image).map(async (r) => {
@@ -66,7 +67,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // The footer bar's logo, if the coach turned the bar on and has a logo in their library: their newest one.
   let logoUrl: string | null = null;
   if (deck.footerBar) {
-    const logo = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] });
+    const logo = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] });
     if (logo) logoUrl = await dataUrl(logo.blobUrl, logo.mime);
   }
 

@@ -102,6 +102,7 @@ export async function updateWebinarBeliefsAction(formData: FormData): Promise<vo
         proofId: opt(formData, `${type}_proofId`),
         storyAssetId: opt(formData, `${type}_story`),
         evidenceId: opt(formData, `${type}_evidence`),
+        proofRepeat: formData.get(`${type}_proofRepeat`) === "on",
       })
       .where(and(eq(schema.webinarBeliefs.webinarId, id), eq(schema.webinarBeliefs.type, type)));
     // "Add this to my Proof Bank": a draft with the tick already recorded, approved on the proof page like every other proof, never here.

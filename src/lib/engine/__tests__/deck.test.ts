@@ -237,7 +237,7 @@ describe("the deck against the clock", () => {
     expect(vehicle.thin).toBe(vehicle.rate !== null && vehicle.rate < PACE_BAND[0]);
     const closing = p.acts.find((a) => a.key === "closing")!;
     expect(closing.minutes).toBe(c.acts.find((a) => a.key === "closing")!.durationMin - qa);
-    expect(paceLine(p)).toMatch(/^\d+ slides · ~\d+ min without Q&A · [\d.]+ slides a minute\. Reference pace is 1\.7, measured from a live 90-minute deck with Q&A not counted; the band is 1\.2 to 1\.5\.( Thin: .+, each over its own minutes without Q&A\.)? Offer segment is 2 of \d+ slides\.$/);
+    expect(paceLine(p)).toMatch(/^\d+ slides · ~\d+ min without Q&A · [\d.]+ slides? a minute\. A first draft lands between 1\.2 and 1\.5; the finished reference deck ran at 1\.7 \(a live 90-minute deck, Q&A not counted\)\.( Thin: .+, each over its own minutes without Q&A\.)? Offer segment is 2 of \d+ slides\.$/);
   });
 });
 

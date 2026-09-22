@@ -643,6 +643,11 @@ export const webinarBeliefs = sqliteTable(
     proofPermissionAt: text("proof_permission_at"),
     proofPermissionBy: text("proof_permission_by"),
     proofChangedAt: text("proof_changed_at"),
+    /**
+     * The coach's deliberate "show it again": in this act, a proof already shown elsewhere in the deck may appear again. Without
+     * it, each proof appears once in a deck (the Proof Block slide wins over a key point quoting it; the first slide over a later one).
+     */
+    proofRepeat: integer("proof_repeat", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [uniqueIndex("webinar_beliefs_type").on(t.webinarId, t.type)],
 );

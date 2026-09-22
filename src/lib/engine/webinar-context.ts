@@ -14,10 +14,11 @@ export type EssenceStory = { name: string; summary: string; when_to_use?: string
 export type CitableRow = { id: string; source: "own" | "shared"; claim: string; authors: string; year: number | null; title: string; url?: string | null; doi?: string | null };
 export type OfferRow = { name: string; price: number; currency?: string | null; container: string; guarantee?: string | null; paymentPlan?: string | null; scarcity?: string | null; urgency?: string | null; ctaFooter?: string | null; forYouIf?: string | null; notForYouIf?: string | null; objectionAssetIds?: string[] };
 export type ComponentRow = { name: string; type: string; description?: string | null; oneLiner?: string | null; perceivedValue: number; beliefBreak: string };
-export type BeliefRow = { type: string; fromBelief: string | null; toBelief: string | null; proofId?: string | null; proof?: string | null; proofWho?: string | null; proofPermissionAt?: string | null; proofChangedAt?: string | null; storyAssetId?: string | null; evidenceId?: string | null };
+export type BeliefRow = { type: string; fromBelief: string | null; toBelief: string | null; proofId?: string | null; proof?: string | null; proofWho?: string | null; proofPermissionAt?: string | null; proofChangedAt?: string | null; storyAssetId?: string | null; evidenceId?: string | null; proofRepeat?: boolean | null };
 export type SectionRow = { sectionKey: string; act: ActKey; order: number; name: string; status: string; buildStyle?: string | null; keyPoints: string | null; script: string | null; transitionIn: string | null; transitionOut: string | null; deliveryNote?: string | null; assetId: string | null; durationMin: number; origin?: string | null };
 
-export type ResolvedProof = { id: string; who: string; quote: string; source: "bank" | "typed" };
+/** `texts` is every version of the proof's words the record holds (long, short, quote, result), so a line quoting any of them is known to be this proof. */
+export type ResolvedProof = { id: string; who: string; quote: string; source: "bank" | "typed"; texts: string[] };
 export type ResolvedStory = { id: string; name: string; body: string; moral: string | null; useWhen: string | null; source: "bank" | "essence" };
 export type ResolvedEvidence = { id: string; claim: string; citation: string };
 export type ResolvedObjection = { id: string; name: string; body: string; reframe: string | null; proof: string | null };
@@ -44,6 +45,8 @@ export type SectionContext = {
   buildStyle: "none" | "reveal";
   belief: { from: string; to: string } | null;
   proof: ResolvedProof | null;
+  /** The coach ticked "show it again" for this act: a proof already shown elsewhere may appear here too. */
+  proofRepeat: boolean;
   story: ResolvedStory | null;
   evidence: ResolvedEvidence | null;
   asset: { type: string; name: string; body: string } | null;
@@ -88,8 +91,8 @@ const actLabel = (key: ActKey): string => `${ACT_NUMBER[key] ? `${ACT_NUMBER[key
 export function resolveProof(b: BeliefRow | undefined, proofs: ProofRow[]): ResolvedProof | null {
   if (!b) return null;
   const row = b.proofId ? proofs.find((p) => p.id === b.proofId && p.status === "approved") : undefined;
-  if (row) return { id: row.id, who: row.who ?? row.name, quote: row.longVersion ?? row.shortVersion ?? row.quote ?? row.resultAfter ?? "", source: "bank" };
-  if (freeTextProofUsable({ proof: b.proof ?? null, proofPermissionAt: b.proofPermissionAt ?? null, proofChangedAt: b.proofChangedAt ?? null })) return { id: "typed", who: b.proofWho ?? "", quote: (b.proof ?? "").trim(), source: "typed" };
+  if (row) return { id: row.id, who: row.who ?? row.name, quote: row.longVersion ?? row.shortVersion ?? row.quote ?? row.resultAfter ?? "", source: "bank", texts: [row.longVersion, row.shortVersion, row.quote, row.resultAfter].filter((t): t is string => Boolean(t && t.trim())) };
+  if (freeTextProofUsable({ proof: b.proof ?? null, proofPermissionAt: b.proofPermissionAt ?? null, proofChangedAt: b.proofChangedAt ?? null })) return { id: "typed", who: b.proofWho ?? "", quote: (b.proof ?? "").trim(), source: "typed", texts: [(b.proof ?? "").trim()] };
   return null;
 }
 
@@ -162,6 +165,7 @@ export function resolveSections(input: { webinar: { title: string; stayLine?: st
       buildStyle: s.buildStyle === "reveal" ? "reveal" : "none",
       belief: b && b.fromBelief && b.toBelief ? { from: b.fromBelief, to: b.toBelief } : null,
       proof: resolveProof(b, input.proofs),
+      proofRepeat: Boolean(b?.proofRepeat),
       story: resolveStory(b, input.assets, input.essenceStories),
       evidence: resolveEvidence(b, input.citable),
       asset: asset ? { type: asset.type, name: asset.name, body: asset.body } : null,

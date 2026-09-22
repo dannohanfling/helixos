@@ -7,7 +7,7 @@
 import { formatPrice } from "./offer-score";
 import { FACE_CLASS_LABEL, cleanFace, currenciesIn, currencyConflicts, type FaceClass, type KeptOff } from "./deck-face";
 import { brandKitProblems, normaliseHex } from "./subject";
-import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type SectionContext, type WebinarContext } from "./webinar-context";
+import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type ResolvedProof, type SectionContext, type WebinarContext } from "./webinar-context";
 
 /** The brand as the renderer reads it. Null renders the neutral kit and says so. */
 export type DeckKit = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
@@ -70,6 +70,8 @@ export type Slide = {
   slot: Slot | null;
   /** What the record's text carried that no face may (deck-face.ts): kept off this slide, in its notes and on the Deck step. */
   keptOff: KeptOff[];
+  /** On a Proof Block slide: the proof it shows (the bank id, or the typed words), so the deck shows each proof once. */
+  proofKey?: string;
 };
 export type DeckResult = {
   slides: Slide[];
@@ -87,6 +89,11 @@ export type DeckResult = {
    * it would have sat on (null when the whole slide was that text and so is not a slide), its section, and the words.
    */
   keptOff: { slide: number | null; section: string; cls: FaceClass; text: string }[];
+  /**
+   * Each proof appears once in a deck unless the coach ticked "show it again" for that act. A repeat that was a whole slide is not
+   * a slide (slide null); a repeat that was a line comes off that slide. Each names whose proof and the slide it is shown on.
+   */
+  repeats: { slide: number | null; section: string; who: string; shownOn: number; text: string }[];
   /** Per-webinar chrome the renderer draws, carried so renderPlan stays pure over the result. */
   footerBar: boolean;
   ctaBar: boolean;
@@ -150,6 +157,23 @@ function direction(kind: SlideKind, body: string[]): string | null {
   if (kind === "divider") return "Full-bleed on the dark ground. The act's name, then the shift.";
   if (kind === "recap") return "The act's lines, one under another. Nothing new on this slide.";
   if (!body.length) return "One line, lots of air.";
+  return null;
+}
+
+/** A proof's identity in a deck: its bank id, or its typed words. */
+const proofKeyOf = (p: ResolvedProof): string => (p.source === "bank" ? p.id : `typed:${normQuote(p.quote)}`);
+/** Words compared without their quotes, dashes, case or spacing: “I now see…” and "i now see…" are the same words. */
+const normQuote = (t: string): string => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+/** Shorter than this, a match is a common phrase, not a quotation. */
+const QUOTE_MIN = 30;
+/** The proof a line quotes, if any: what sits inside its quotation marks, or the whole line, found inside one of a proof's versions (or containing one). */
+function quotedProof(line: string, proofs: Map<string, { texts: string[] }>): string | null {
+  const inside = [...line.matchAll(/[“"]([^”"]+)[”"]/g)].map((m) => m[1]);
+  for (const seg of inside.length ? inside : [line]) {
+    const n = normQuote(seg);
+    if (n.length < QUOTE_MIN) continue;
+    for (const [key, p] of proofs) if (p.texts.some((t) => t.includes(n) || n.includes(t))) return key;
+  }
   return null;
 }
 
@@ -248,7 +272,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
       if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer, slot: { key: `${s.sectionKey}:${b.key}:photo`, kind: "photo", what: SLOT_WHAT.photo } }));
       if (isProofBlock(s)) {
         // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
-        if (s.proof) slides.push(slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial, proofId: s.proof.source === "bank" ? s.proof.id : undefined } }));
+        if (s.proof) slides.push({ ...slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial, proofId: s.proof.source === "bank" ? s.proof.id : undefined } }), proofKey: proofKeyOf(s.proof) });
         else if (s.evidence) slides.push(slideOf({ n: n++, kind: "evidence", s, headline: s.evidence.claim, body: [s.evidence.citation], footer, slot: { key: `${s.sectionKey}:screenshot_callout`, kind: "screenshot_callout", what: SLOT_WHAT.screenshot_callout } }));
         pointSlides("proof");
         continue;
@@ -279,6 +303,46 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     const lines = act.sections.filter((s) => s.status !== "omitted").map((s) => s.keyPoints.map((p) => cleanFace(p).face).find(Boolean)).filter((l): l is string => Boolean(l));
     if (BELIEF_ACTS.has(act.key) && lines.length) slides.push(slideOf({ n: n++, kind: "recap", s: null, headline: `${act.label} · recap`, body: lines.slice(0, 6), eyebrow: act.label, act: act.key }));
   }
+  // Each proof once (22 Sep: Kate A. on slides 20 and 22, Rachael C. on 21 and 36). A proof's home is its Proof Block slide, the
+  // first in deck order; with none, the first line that quotes it. Any later appearance, a second Proof Block slide or a key
+  // point quoting the same words (any of the proof's versions), comes off, unless the coach ticked "show it again" for that act.
+  const repeatOk = new Set<string>(c.sections.filter((s) => s.proofRepeat).map((s) => s.act));
+  const proofWords = new Map<string, { who: string; texts: string[] }>();
+  for (const s of c.sections) if (s.proof) proofWords.set(proofKeyOf(s.proof), { who: s.proof.who, texts: s.proof.texts.map(normQuote).filter((t) => t.length >= QUOTE_MIN) });
+  const home = new Map<string, Slide>();
+  const repeated: { sl: Slide; key: string; text: string; whole: boolean }[] = [];
+  for (const sl of slides) {
+    if (!sl.proofKey) continue;
+    if (!home.has(sl.proofKey)) home.set(sl.proofKey, sl);
+    else if (!repeatOk.has(sl.act)) repeated.push({ sl, key: sl.proofKey, text: sl.headline, whole: true });
+  }
+  const gone = new Set(repeated.map((r) => r.sl));
+  for (const sl of slides) {
+    if (gone.has(sl) || sl.kind === "cover") continue;
+    const lines = [sl.headline, ...sl.body];
+    const stay = lines.filter((line, i) => {
+      if (sl.proofKey && i === 0) return true; // the Proof Block slide's own quote
+      const key = quotedProof(line, proofWords);
+      if (!key || home.get(key) === sl) return true;
+      if (!home.has(key)) {
+        home.set(key, sl);
+        return true;
+      }
+      if (repeatOk.has(sl.act)) return true;
+      repeated.push({ sl, key, text: line, whole: false });
+      return false;
+    });
+    if (stay.length === lines.length) continue;
+    if (!stay.length) {
+      gone.add(sl);
+      continue;
+    }
+    const tier = headlineTier(stay[0]);
+    sl.headline = tier.overflow ? sl.section : stay[0];
+    sl.headlineSize = tier.overflow ? HEADLINE_FLOOR : tier.size;
+    sl.body = tier.overflow ? stay : stay.slice(1);
+  }
+  for (let i = slides.length - 1; i >= 0; i--) if (gone.has(slides[i])) slides.splice(i, 1);
   // A slide the record filled with nothing but kept-off text is not a slide: its words go to the notes of the slide before it,
   // where the presenter meets them, and the deck is numbered again so every later line names the slide the coach will see.
   const keptOff: DeckResult["keptOff"] = [];
@@ -298,6 +362,14 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   });
   slides.splice(0, slides.length, ...kept);
   keptOff.sort((a, b) => (a.slide ?? 0) - (b.slide ?? 0));
+  const repeats: DeckResult["repeats"] = [];
+  for (const r of repeated) {
+    const shownOn = home.get(r.key)!.n;
+    const stays = !r.whole && slides.includes(r.sl);
+    const who = proofWords.get(r.key)?.who || "This";
+    if (stays) r.sl.notes.push(`Not shown again (${who}'s proof is on slide ${shownOn}): ${r.text}`);
+    repeats.push({ slide: stays ? r.sl.n : null, section: r.sl.section || r.sl.eyebrow, who, shownOn, text: r.text });
+  }
   const refused: string[] = [];
   // One currency per deck. With an offer, it is the offer's own field, and every price the deck composes is formatPrice of it;
   // a line the coach typed that names another currency refuses the export, naming the slide. Never rewritten: changing the
@@ -326,7 +398,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   for (const p of kitProblems) refused.push(`Brand kit: ${p}`);
   if (!kitIn) warnings.push("No brand kit on this workspace: rendered black on white with no brand applied. Add the kit on Settings.");
   if (kitIn && !normaliseHex(kitIn.placeholder)) warnings.push(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
-  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, keptOff, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
+  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, keptOff, repeats, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
 }
 
 /**
@@ -347,12 +419,18 @@ export function deckPace(c: WebinarContext, d: DeckResult): DeckPace {
   const live = c.sections.filter((s) => s.status !== "omitted");
   return { slides: d.slides.length, minutes, rate: per(d.slides.length, minutes), acts, offerSlides: d.slides.filter((s) => s.kind === "offer").length, sectionsWithPoints: live.filter((s) => s.keyPoints.length).length, sections: live.length };
 }
+/** "1 slide", "2 slides": the count and its noun agree. */
+export const slidesWord = (n: number): string => `${n} ${n === 1 ? "slide" : "slides"}`;
+/** "1 slide a minute", "1.3 slides a minute", "– slides a minute" with no minutes to pace against. */
+export const perMinute = (rate: number | null): string => (rate === null ? "– slides a minute" : `${rate} ${rate === 1 ? "slide" : "slides"} a minute`);
 /** The readout on the Deck step, one line. */
 export function paceLine(p: DeckPace): string {
   const thin = p.acts.filter((a) => a.thin).map((a) => `${a.label} is at ${a.rate}`);
   // The reference carries its source in the sentence: an unsourced number becomes folklore. Each act is paced over its own
   // minutes with Q&A netted off, the way the reference was measured.
-  return `${p.slides} slides · ~${p.minutes} min without Q&A · ${p.rate ?? "–"} slides a minute. Reference pace is ${REFERENCE_PACE}, measured from a live 90-minute deck with Q&A not counted; the band is ${PACE_BAND[0]} to ${PACE_BAND[1]}.${thin.length ? ` Thin: ${thin.join("; ")}, each over its own minutes without Q&A.` : ""} Offer segment is ${p.offerSlides} of ${p.slides} slides.`;
+  // Two different numbers, said as what each is: the band is where a first draft should land; 1.7 is what the finished reference
+  // deck ran at when delivered, so a draft is expected to sit under it. Read as one line they looked like a target outside its band.
+  return `${slidesWord(p.slides)} · ~${p.minutes} min without Q&A · ${perMinute(p.rate)}. A first draft lands between ${PACE_BAND[0]} and ${PACE_BAND[1]}; the finished reference deck ran at ${REFERENCE_PACE} (a live 90-minute deck, Q&A not counted).${thin.length ? ` Thin: ${thin.join("; ")}, each over its own minutes without Q&A.` : ""} Offer segment is ${p.offerSlides} of ${slidesWord(p.slides)}.`;
 }
 
 /** The picture slots the deck suggests, in slide order, each with its kind and one-line instruction: what the Deck step lists as "not added" until the coach fills them. */

@@ -258,7 +258,7 @@ export function buildChecks(input: { webinar: BuildWebinar; sections: SectionLik
   if (input.deck) {
     const { refused, rate } = input.deck;
     const thin = rate !== null && rate < DECK_PACE_FLOOR;
-    checks.push({ key: "deck", label: refused ? "Deck exports" : "Deck moves at a live pace", ok: !refused && !thin, level: refused ? "must" : "warn", detail: refused ? `${refused} ${refused === 1 ? "refusal" : "refusals"} on the Deck step: a claim with a hole in it never leaves as a slide.` : rate === null ? "No minutes to pace the deck against: give the sections their minutes and this check can run." : `${rate} slides a minute; the band is ${DECK_PACE_FLOOR} to 1.5.${thin ? " Under the band: the deck sits still while the presenter talks." : ""}` });
+    checks.push({ key: "deck", label: refused ? "Deck exports" : "Deck moves at a live pace", ok: !refused && !thin, level: refused ? "must" : "warn", detail: refused ? `${refused} ${refused === 1 ? "refusal" : "refusals"} on the Deck step: a claim with a hole in it never leaves as a slide.` : rate === null ? "No minutes to pace the deck against: give the sections their minutes and this check can run." : `${rate} ${rate === 1 ? "slide" : "slides"} a minute; the band is ${DECK_PACE_FLOOR} to 1.5.${thin ? " Under the band: the deck sits still while the presenter talks." : ""}` });
   }
   const must = checks.filter((c) => c.level === "must" && !c.ok);
   const warn = checks.filter((c) => c.level === "warn" && !c.ok);

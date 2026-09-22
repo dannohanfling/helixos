@@ -167,14 +167,14 @@ export default async function WebinarWizardPage({
   const known = knownReferences({ proofs, stories: assets.filter((a) => a.type === "story"), essenceStories, citable: evidence, offers });
   const presenterName = presenterOf(w, v.user.name);
   // The deck as the export will make it, from the same function the route runs: what refuses there refuses here, before the click, and the twelfth check reads it.
-  const context = await contextFor(v, w);
+  const context = await contextFor(w);
   const deck: DeckResult = deckSlides(context, brandKit ?? null);
   const pace: DeckPace = deckPace(context, deck);
   // The suggested picture slots, each resolved to the coach's own image or to why it is empty, and the coach's whole library to
   // fill them from. Read once here, so the Deck step and the export agree on which slots carry a picture.
   const [deckSlotsResolved, deckLibrary] = await Promise.all([
-    resolveDeckSlots(w.id, deck, { workspaceId: v.workspace.id, userId: v.user.id }),
-    db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), orderBy: (t, { desc }) => [desc(t.createdAt)] }),
+    resolveDeckSlots(w.id, deck, { workspaceId: w.workspaceId, userId: w.userId }),
+    db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId)), orderBy: (t, { desc }) => [desc(t.createdAt)] }),
   ]);
   // The export's provenance gate, from the same sections the route reads; a confirm counts only for the drafts as they stand now.
   const exportGate = sectionGate(sections);
@@ -576,6 +576,10 @@ export default async function WebinarWizardPage({
                         data-testid={`belief-freetext-${type}`}
                       />
                     </Field>
+                    <label className="flex items-start gap-2 text-xs text-ink-2" title="Each proof appears once in a deck. Tick this to let a proof already shown in another act appear again in this one.">
+                      <input type="checkbox" name={`${type}_proofRepeat`} defaultChecked={Boolean(b?.proofRepeat)} data-testid={`belief-proof-repeat-${type}`} />
+                      <span>Show a proof here even if another act already shows it. Left unticked, each proof appears once in the deck.</span>
+                    </label>
                     {b &&
                     (b.proof ?? "").trim() &&
                     !b.proofPermissionAt &&
@@ -1322,7 +1326,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep webinarId={w.id} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
+        <DeckStep presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
       ) : null}
 
       {step === "review" ? (
@@ -1654,7 +1658,7 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref }: { webinarId: string; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string }) {
+function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter }: { webinarId: string; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
   const fallbacks = slotFallbacks(resolvedSlots);
   const bySlide = new Map(resolvedSlots.map((r) => [r.slide, r]));
@@ -1705,6 +1709,22 @@ function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirm
         <p className="mb-2 text-sm text-ink-2" data-testid="deck-opening-omitted">
           {deck.openingOmitted.length} opening {deck.openingOmitted.length === 1 ? "slide is" : "slides are"} empty, so left out: {deck.openingOmitted.join(", ")}. Fill them on the Foundation step.
         </p>
+      ) : null}
+      <p className="mb-2 text-sm text-ink-2" data-testid="deck-presenter">
+        Presenter on the cover: <span className="font-medium">{presenter.name || "nobody yet"}</span>
+        {presenter.defaulted ? <> (the webinar&apos;s owner, because the Presenter field on the Foundation step is empty; set it there if someone else presents)</> : null}.
+      </p>
+      {deck.repeats.length ? (
+        <div className="mb-3 rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="deck-repeats">
+          <p>Each proof appears once in a deck. {deck.repeats.length === 1 ? "This repeat is" : `These ${deck.repeats.length} repeats are`} not shown; tick &ldquo;show a proof here&rdquo; on that act&apos;s belief to show one twice on purpose.</p>
+          <ul className="mt-1 list-disc pl-5">
+            {deck.repeats.map((r, i) => (
+              <li key={i} data-testid="deck-repeat">
+                {r.slide ? `Slide ${r.slide}` : "No slide of its own"} ({r.section}): {r.who}&apos;s proof is already on slide {r.shownOn}.
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {deck.keptOff.length ? (
         <div className="mb-3 rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="deck-kept-off">

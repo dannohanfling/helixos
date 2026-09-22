@@ -18,7 +18,7 @@ export default async function RunSheetPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) notFound();
-  const c = await contextFor(v, w);
+  const c = await contextFor(w);
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">

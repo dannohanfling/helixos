@@ -150,6 +150,17 @@ async function main() {
     if (inNotes.length !== expectedKept.length) throw new Error(`every kept-off line is in the speaker notes: ${inNotes.length} of ${expectedKept.length}`);
     console.log(`✓ the .pptx: ${faceLines.length} lines on ${slideFiles.length} faces, none from any class in deck-face.ts; every currency named is ${other}; all ${expectedKept.length} kept-off lines are in the notes`);
 
+    // ── D. The presenter comes from the webinar: the field when set, else the webinar's owner, said so on the step. ──
+    await page.goto(`${wizardBase}?step=deck`);
+    const presenterLine = async () => (await page.locator('[data-testid="deck-presenter"]').innerText()).trim();
+    let pl = await presenterLine();
+    if (!pl.includes("Lindsey Brittain") || /the webinar's owner/.test(pl)) throw new Error(`the Presenter field is the cover's name, got "${pl}"`);
+    await db.update(schema.webinars).set({ presenter: null }).where(eq(schema.webinars.id, webinarId));
+    await page.goto(`${wizardBase}?step=deck`);
+    pl = await presenterLine();
+    if (!pl.includes(user.name) || !/the webinar's owner, because the Presenter field on the Foundation step is empty/.test(pl)) throw new Error(`an empty Presenter field shows the owner's name and says why, got "${pl}"`);
+    console.log(`✓ the presenter: the field's "Lindsey Brittain" when set; empty, the owner's "${user.name}" with the reason on the step`);
+
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("Deck v2 walk passed.");
   } finally {

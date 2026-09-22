@@ -1,0 +1,1 @@
+ALTER TABLE `webinar_beliefs` ADD `proof_repeat` integer DEFAULT false NOT NULL;

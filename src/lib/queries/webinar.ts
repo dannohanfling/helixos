@@ -3,7 +3,6 @@ import { db, schema } from "@/db";
 import { actPresence, buildChecks, type BuildResult, type KnownRefs } from "@/lib/engine/webinar";
 import { resolveSections, type WebinarContext } from "@/lib/engine/webinar-context";
 import { deckPace, deckSlides } from "@/lib/engine/deck";
-import type { Viewer } from "@/lib/auth";
 import { subjectFor } from "@/lib/queries/subject";
 
 /** Every id that still resolves for the workspace owner: the subject's known set, for callers with no viewer in hand. */
@@ -36,13 +35,18 @@ export async function buildFor(w: schema.Webinar): Promise<{ build: BuildResult;
   return { build: buildChecks({ webinar: w, sections, beliefs, components, known: subject.known, presenter, presenterAliases: subject.brandKit?.aliases ?? [], deck: { refused: deck.refused.length, rate: deckPace(context, deck).rate }, review: review ?? null }), review: review ?? null, derived };
 }
 
-/** Everything wired to every section of one webinar, in running order: the run sheet, the deck and the grades read this. */
-export async function contextFor(v: Viewer, w: schema.Webinar): Promise<WebinarContext> {
-  const [sections, beliefs, subject] = await Promise.all([
+/**
+ * Everything wired to every section of one webinar, in running order: the run sheet, the deck and the grades read this. Resolved
+ * against the webinar's **owner**, never whoever is signed in (22 Sep: the cover said "Danno" on Lindsey's webinar): its proofs,
+ * stories, citations and offer are the owner's, and with the Presenter field empty the presenter is the owner's name.
+ */
+export async function contextFor(w: schema.Webinar): Promise<WebinarContext> {
+  const [sections, beliefs, owner] = await Promise.all([
     db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, w.id), orderBy: asc(schema.webinarSections.order) }),
     db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, w.id) }),
-    subjectFor({ userId: v.user.id, workspaceId: v.workspace.id, name: v.user.name }),
+    db.query.users.findFirst({ where: eq(schema.users.id, w.userId), columns: { name: true } }),
   ]);
+  const subject = await subjectFor({ userId: w.userId, workspaceId: w.workspaceId, name: owner?.name ?? "" });
   const offer = w.offerId ? subject.offers.find((o) => o.id === w.offerId) : undefined;
   const components = offer ? await db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, offer.id), orderBy: asc(schema.offerComponents.order) }) : [];
   // The presenter field, else the subject's own name: never a name from outside the subject.
