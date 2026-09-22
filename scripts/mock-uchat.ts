@@ -13,7 +13,7 @@ const port = Number(process.argv[2] ?? 4060);
 let fields: Record<string, string> = {};
 const requests: { fields: { name: string; value: string }[]; token: string }[] = [];
 let skipped: string | null = null;
-/** var_type per field name; anything unseeded reads as text. The FAQ push targets a longtext. */
+/** var_type per field name; anything unseeded reads as text, the one type Community Loyalty offers for a bot field. */
 let types: Record<string, string> = {};
 /** The workspace's agents and what each one's prompt actually reads, seedable so a walk can prove "push only what the agent reads". */
 let agents: { ai_agent_ns: string; name: string; description: string; prompts: { section: string; text: string }[] }[] = [
@@ -30,6 +30,8 @@ const json = (res: import("node:http").ServerResponse, code: number, body: unkno
   res.writeHead(code, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
 };
+/** A field's variable id, stable per name, in the shape Danno's bot shows (f<bot>v<field>): what a chip in a prompt stores. */
+const varNs = (name: string): string => `f52594v${[...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)}`;
 const read = (req: import("node:http").IncomingMessage) => new Promise<string>((resolve) => {
   let b = "";
   req.on("data", (c) => (b += c));
@@ -54,7 +56,7 @@ createServer(async (req, res) => {
     // BotFieldResource as the spec documents it: data[] of BotField (name, var_type, value, var_ns, description, is_template_field), paged by limit and page, no total.
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? DEFAULT_LIMIT) || DEFAULT_LIMIT));
     const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
-    const all = Object.entries(fields).map(([name, value], i) => ({ name, var_type: types[name] ?? "text", value, var_ns: `f${i + 1}`, description: "", is_template_field: false }));
+    const all = Object.entries(fields).map(([name, value]) => ({ name, var_type: types[name] ?? "text", value, var_ns: varNs(name), description: "", is_template_field: false }));
     const data = all.slice((page - 1) * limit, page * limit);
     reads.push({ limit, page, returned: data.length });
     return json(res, 200, { data });
@@ -73,7 +75,12 @@ createServer(async (req, res) => {
     const body = JSON.parse((await read(req)) || "{}") as { ai_agent_ns?: string };
     const a = agents.find((x) => x.ai_agent_ns === body.ai_agent_ns);
     if (!a) return json(res, 404, { status: "error", message: "No such agent." });
-    return json(res, 200, { data: a });
+    // A field placed in a prompt through Community Loyalty's editor is a chip that stores the field's variable id, the name only
+    // its label (read from the editor on Danno's bot, 22 Sep). Seeded prompts write `{name}`; they are served as that chip, so a
+    // check that looks for the name in braces finds nothing here, exactly as on the real bot.
+    const chip = (name: string) => `<span contenteditable="false" data-var-id="${varNs(name)}" data-var-type="text" data-var-cat="bot" class="mention">${name}</span>`;
+    const served = { ...a, prompts: a.prompts.map((p) => ({ ...p, text: p.text.replace(/\{\{?\s*([A-Za-z0-9_&]+)\s*\}?\}/g, (_m, name: string) => chip(name)) })) };
+    return json(res, 200, { data: served });
   }
   json(res, 404, { status: "error", message: `no route ${req.method} ${url.pathname}` });
 }).listen(port, () => console.log(`mock-uchat on :${port}`));

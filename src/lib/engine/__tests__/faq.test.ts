@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, chooseAgentLine, composeField, countEntries, diffSinceSync, entryBlock, faqFieldRefusal, fieldMissingLine, fromAirtable, holdsForeignText, needsEyes, normaliseCategory, notReadWarning, parseAgentInfo, parseAgents, parseKnowledgeBase, pickAgent, rankEntries, shortFieldWarning } from "../faq";
+import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, chooseAgentLine, composeField, countEntries, diffSinceSync, entryBlock, faqFieldRefusal, fieldMissingLine, fromAirtable, holdsForeignText, needsEyes, normaliseCategory, notReadWarning, parseAgentInfo, parseAgents, parseKnowledgeBase, nsToken, pickAgent, rankEntries } from "../faq";
 import { BOT_WRITTEN_FIELDS, STAGE1_FIELDS } from "../bot-fields";
 
 /** The Knowledge Base Builder's output as the template writes it, header block included: what a client pastes back from their own AI. */
@@ -139,6 +139,30 @@ describe("push only what the agent reads: ai-agent-info parsed without assuming 
     expect(notReadWarning("ai_skills_cbf")).toBe("your bot does not use ai_skills_cbf yet");
   });
 
+  // The chip exactly as the editor stores it on Danno's Community FAQ Agent (read from its DOM, 22 Sep): the variable id in
+  // data-var-id, the field's name only as the visible label. His agent read "none of these fields" because the check asked for
+  // the name in braces, which no chip ever carries.
+  const CHIP = `<span contenteditable="false"\n      data-var-id="f52594v17424617"\n      data-var-type="text"\n      data-var-cat="bot"\n      class="mention">ai_faq_cbf</span>`;
+  const faqAgent = (text: string) => parseAgentInfo({ data: { ai_agent_ns: "faq01", name: "Community FAQ Agent", prompts: [{ section: "Product & Service Information", text }] } })!;
+  const ns = { ai_faq_cbf: "f52594v17424617" };
+
+  it("a field placed through the editor is read: the check looks for the field's variable id, resolved from the bot-fields list", () => {
+    const agent = faqAgent(`Approved answers from HelixOS are below. Two sentences max. ${CHIP}`);
+    expect(agentReadsFields(agent, ["ai_faq_cbf"], ns)).toEqual({ reads: ["ai_faq_cbf"], notRead: [] });
+    // The same prompt, asked the old question (the name only), is the false negative Danno's Brief printed.
+    expect(agentReadsFields(agent, ["ai_faq_cbf"])).toEqual({ reads: [], notRead: ["ai_faq_cbf"] });
+    // The id however the API happens to serialise it: in braces, bare, or in the chip's markup.
+    for (const t of ["{{f52594v17424617}}", "{f52594v17424617}", "see f52594v17424617 here", `data-var-id="f52594v17424617"`]) expect(agentReadsFields(faqAgent(t), ["ai_faq_cbf"], ns).reads, t).toEqual(["ai_faq_cbf"]);
+  });
+  it("the bare name in prose is not a read, and one id never matches inside a longer one", () => {
+    // What was tried by hand on the live agent: the name typed as prose beside the chip's place. Not a read, rightly.
+    expect(agentReadsFields(faqAgent("…two sentences max. (source field: ai_faq_cbf)"), ["ai_faq_cbf"], ns).reads).toEqual([]);
+    expect(agentReadsFields(faqAgent("{{f52594v174246170}} and xf52594v17424617"), ["ai_faq_cbf"], ns).reads).toEqual([]);
+    expect(nsToken("f52594v17424617").test("f52594v17424617.")).toBe(true);
+    // A field with no id on the list is asked only in the explicit forms.
+    expect(agentReadsFields(faqAgent(CHIP), ["ai_faq_cbf"], {}).reads).toEqual([]);
+  });
+
   it("a reply with no data is no agent; the agent list parses ns and name and nothing else", () => {
     expect(parseAgentInfo({})).toBeNull();
     expect(parseAgentInfo({ data: "x" })).toBeNull();
@@ -196,8 +220,7 @@ describe("the FAQ's own field, and the agent that answers", () => {
     expect(chooseAgentLine(two)).toMatch(/2 agents \(Community FAQ Agent, Booking Agent\)/);
   });
 
-  it("says plainly what to do when the field is not on the bot, or is a short type", () => {
+  it("says plainly what to do when the field is not on the bot", () => {
     expect(fieldMissingLine("ai_faq_cbf")).toMatch(/needs the FAQ field added once: create ai_faq_cbf/);
-    expect(shortFieldWarning("ai_faq_cbf", "text")).toMatch(/is a text field, not longtext/);
   });
 });

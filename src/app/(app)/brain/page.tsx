@@ -35,10 +35,10 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
     essenceFor(v.workspace.id, v.user.id),
     payloadFor(m),
   ]);
-  const { hasToken: token, agent, blocked, warning, fieldVarType } = await briefAccessFor(m);
+  const { hasToken: token, agent, blocked, warning, fieldVarType, nsByName } = await briefAccessFor(m);
   // Push only what the agent reads: of the template's fields and the FAQ's own, the ones whose token is in the agent's prompt.
   const candidates = [...new Set([...TEMPLATE_BOT_FIELDS, field])];
-  const reads = agent ? agentReadsFields(agent, candidates) : null;
+  const reads = agent ? agentReadsFields(agent, candidates, nsByName) : null;
   const fieldRead = Boolean(reads?.reads.includes(field));
 
   const approved = entries.filter((e) => isApprovedOrigin(e.origin));

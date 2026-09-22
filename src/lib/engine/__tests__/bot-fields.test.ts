@@ -93,7 +93,9 @@ describe("the request to set-bot-fields-by-name is the spec's shape, every value
   });
   it("the read-back parses the spec's BotFieldResource and nothing else, and pages until a page comes back short", () => {
     const row = { name: "business_name_cbf", var_type: "text", value: "Torres", var_ns: "f1", description: "", is_template_field: false };
-    expect(parseBotFields({ data: [row] })).toEqual([{ name: "business_name_cbf", value: "Torres", varType: "text" }]);
+    expect(parseBotFields({ data: [row] })).toEqual([{ name: "business_name_cbf", value: "Torres", varType: "text", ns: "f1" }]);
+    // var_ns is kept: it is what a prompt's chip stores in place of the name. A row without one still parses, with no id.
+    expect(parseBotFields({ data: [{ ...row, var_ns: undefined }] })).toEqual([{ name: "business_name_cbf", value: "Torres", varType: "text", ns: "" }]);
     // The shapes it must not accept: an object map, a bare array, a row missing var_type, a non-string value
     expect(parseBotFields({ data: { business_name_cbf: "Torres" } })).toEqual([]);
     expect(parseBotFields([row])).toEqual([]);

@@ -1,13 +1,17 @@
 /**
  * The coach's brain, the pure part: the Knowledge Base Builder format parsed deterministically (no model), the rule that
- * pins an answer to "Needs your eyes", the rank a push follows, the one longtext field the approved answers compose into under
+ * pins an answer to "Needs your eyes", the rank a push follows, the one text field the approved answers compose into under
  * a single budget (whole entries dropped past it and listed), the diff since the last sync, and which bot-field tokens the
  * target agent's prompt actually reads. Nothing here reads the database or calls the network; the actions and the client
  * call in with what the record and the platform hold.
  */
 import { FAQ_CATEGORIES } from "@/db/schema";
 
-/** The single configurable limit on the composed field, in characters. 20,000 until Danno confirms the platform's real maximum. Named on the Brief. */
+/**
+ * The single limit on the composed field, in characters, named on the Brief. 20,000 is the platform's own cap, confirmed on Danno's
+ * bot (its Error Logs: "Data size is over 20000 characters"; the prompt section counters read "/ 20000"). Community Loyalty
+ * offers bot fields in one type only, Text, and never lets a field's type change, so the budget is the whole of it: no type to ask for.
+ */
 export const FAQ_FIELD_BUDGET = 20000;
 /**
  * The one bot field the approved answers go to: a field dedicated to the FAQ and written only by HelixOS. Never the Booking
@@ -161,11 +165,22 @@ export function parseAgents(body: unknown): { ns: string; name: string }[] {
   return (b.data as Record<string, unknown>[]).map((a) => ({ ns: String(a?.ai_agent_ns ?? a?.ns ?? ""), name: String(a?.name ?? "") })).filter((a) => a.ns);
 }
 
-/** A bot field is read by an agent when its token — `{name}` or `{{name}}` — appears in any of the agent's prompt text. */
-export const fieldToken = (name: string): RegExp => new RegExp(`\\{\\{?\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}?\\}`);
-export function agentReadsFields(info: AgentInfo, fields: string[]): { reads: string[]; notRead: string[] } {
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** The explicit token forms, `{name}` and `{{name}}`: counted when a prompt carries one, though Community Loyalty's editor never writes them. */
+export const fieldToken = (name: string): RegExp => new RegExp(`\\{\\{?\\s*${escapeRe(name)}\\s*\\}?\\}`);
+/** A field's variable id standing on its own: never inside a longer id or a word, so f5259v17 does not match f5259v174. */
+export const nsToken = (ns: string): RegExp => new RegExp(`(?<![A-Za-z0-9_])${escapeRe(ns)}(?![A-Za-z0-9_])`);
+/**
+ * Whether an agent reads a bot field. Community Loyalty stores a field placed in a prompt as a chip that references the field by
+ * its **variable id** (`var_ns`, e.g. `f52594v17424617`), with the field's name only as the chip's visible label (read from the
+ * editor on Danno's bot, 22 Sep). So the question asked is "does the prompt carry this field's id", with the id resolved from
+ * the bot-fields list (`nsByName`). The explicit `{name}` forms still count. The bare name in prose never does: the platform
+ * substitutes a chip, not a word, and a check that passed on a mention would let a push land in a prompt that never reads it.
+ * Every reader goes through here: the Brief's "Your bot reads", the check before a push and the read-back after it, and Stage 1's.
+ */
+export function agentReadsFields(info: AgentInfo, fields: string[], nsByName: Record<string, string> = {}): { reads: string[]; notRead: string[] } {
   const all = info.prompts.map((p) => p.text).join("\n");
-  const reads = fields.filter((f) => fieldToken(f).test(all));
+  const reads = fields.filter((f) => fieldToken(f).test(all) || (nsByName[f] ? nsToken(nsByName[f]).test(all) : false));
   return { reads, notRead: fields.filter((f) => !reads.includes(f)) };
 }
 /** The plain warning beside a field the agent does not read, from the ruling. */
@@ -217,7 +232,6 @@ export const holdsForeignText = (held: string | null | undefined, lastSentValue:
 /** The Brief's line when the field is not on the bot at all: the API sets a field by name, it does not create one. */
 export const fieldMissingLine = (field: string): string => `Your bot needs the FAQ field added once: create ${field} on it, and put its token in the prompt of the agent that answers questions. Nothing is sent until then.`;
 /** The Brief's line when the field is not the roomiest type the platform offers: a warning, never a refusal. */
-export const shortFieldWarning = (field: string, varType: string): string => `${field} is a ${varType} field, not longtext, so the platform may cut a long answer set short. Ask for it to be changed to longtext if answers go missing.`;
 
 /**
  * Which agent the Brief reads and pushes to. The coach chooses it on the Coach page; blank never silently means "the first

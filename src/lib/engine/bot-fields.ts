@@ -134,13 +134,14 @@ export function readBackMismatches(sent: Record<string, string>, held: Record<st
  */
 export const READ_BACK_LIMIT = 100;
 export const BOT_FIELD_TYPES = ["text", "number", "boolean", "date", "datetime", "array", "longtext"] as const;
-export function parseBotFields(body: unknown): { name: string; value: string; varType: string }[] {
+export function parseBotFields(body: unknown): { name: string; value: string; varType: string; ns: string }[] {
   const b = body as { data?: unknown };
   if (!b || typeof b !== "object" || !Array.isArray(b.data)) return [];
-  const out: { name: string; value: string; varType: string }[] = [];
-  for (const r of b.data as { name?: unknown; var_type?: unknown; value?: unknown }[]) {
+  const out: { name: string; value: string; varType: string; ns: string }[] = [];
+  for (const r of b.data as { name?: unknown; var_type?: unknown; value?: unknown; var_ns?: unknown }[]) {
     if (typeof r?.name !== "string" || typeof r.var_type !== "string" || typeof r.value !== "string") continue;
-    out.push({ name: r.name, value: r.value, varType: r.var_type });
+    // var_ns is the field's variable id: what a prompt's chip stores in place of the name, so the agent-reads check looks for it.
+    out.push({ name: r.name, value: r.value, varType: r.var_type, ns: typeof r.var_ns === "string" ? r.var_ns : "" });
   }
   return out;
 }

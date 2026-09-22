@@ -104,9 +104,9 @@ export async function repushWorkspace(workspaceId: string, reason: string): Prom
   for (const m of members) if (m.clApiToken) await pushBotFields(m.id, { reason });
 }
 
-/* ───────────── The coach's brain: the approved FAQ composed into one longtext field, pushed only where the agent reads it ───────────── */
+/* ───────────── The coach's brain: the approved FAQ composed into one text field, pushed only where the agent reads it ───────────── */
 
-import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, chooseAgentLine, composeField, faqFieldRefusal, fieldMissingLine, holdsForeignText, notReadWarning, parseAgentInfo, parseAgents, pickAgent, rankEntries, shortFieldWarning, type AgentInfo } from "@/lib/engine/faq";
+import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, chooseAgentLine, composeField, faqFieldRefusal, fieldMissingLine, holdsForeignText, notReadWarning, parseAgentInfo, parseAgents, pickAgent, rankEntries, type AgentInfo } from "@/lib/engine/faq";
 import { newId } from "@/lib/ids";
 
 const APPROVED = ["ai_accepted", "edited", "coach"] as const;
@@ -167,8 +167,8 @@ export async function agentChoicesFor(m: schema.Membership): Promise<{ ns: strin
 }
 
 /** Every bot field the client's workspace holds, by name, paged the way the Stage 1 read-back pages. */
-export async function listBotFields(token: string): Promise<{ name: string; value: string; varType: string }[]> {
-  const out: { name: string; value: string; varType: string }[] = [];
+export async function listBotFields(token: string): Promise<{ name: string; value: string; varType: string; ns: string }[]> {
+  const out: { name: string; value: string; varType: string; ns: string }[] = [];
   for (let page = 1; page <= 100; page++) {
     const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers: authed(token) });
     if (!back.ok) return out;
@@ -185,7 +185,7 @@ export const faqFieldFor = (m: schema.Membership): string => m.faqBotField?.trim
 export type FaqPushOutcome = { status: "sent" | "skipped" | "failed"; note: string; syncId: string | null; dropped: string[]; reads: string[]; notRead: string[] };
 
 /**
- * Push one member's approved FAQ into the one longtext field, on the Bot Brief's "Approve and send to my bot". Before the
+ * Push one member's approved FAQ into the one text field, on the Bot Brief's "Approve and send to my bot". Before the
  * push the target agent is read and the push goes only if its prompt reads the field; otherwise it is refused with the plain
  * warning. After the push both halves are read back — the field's value matches, and the token is still in the agent's prompt —
  * and only then is the sync recorded as sent; a failed one is kept with its reason. The composed text is whole entries under the
@@ -230,7 +230,7 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
   const agent = pre.agent;
   if (!agent) return done("failed", "Couldn't read your bot's agent from Community Loyalty. Check the token and the agent, then try again.", {}, record);
   // Push only what the agent reads: the target agent's prompt must carry the field's token, or the push is refused.
-  const { reads, notRead } = agentReadsFields(agent, [field]);
+  const { reads, notRead } = agentReadsFields(agent, [field], pre.nsByName);
   if (!reads.length) return done("failed", `Not sent: ${notReadWarning(field)}. The agent "${agent.name}" reads none of it, so the answers would change nothing the bot does.`, { reads, notRead, dropped }, record);
 
   assertStorable({ [field]: composed.text }, [token]);
@@ -250,7 +250,7 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
     }
     const valueReadBack = held === composed.text;
     const again = (await agentFor(m, token)).agent;
-    const tokenReadBack = Boolean(again && agentReadsFields(again, [field]).reads.length);
+    const tokenReadBack = Boolean(again && agentReadsFields(again, [field], pre.nsByName).reads.length);
     const rec = { ...record, valueReadBack, tokenReadBack };
     if (!valueReadBack) return done("failed", `Pushed, but the read-back of ${field} differs: not recorded as synced.`, { reads, notRead, dropped }, rec);
     if (!tokenReadBack) return done("failed", `Pushed and the value reads back, but the token {${field}} is no longer in the agent's prompt: not recorded as synced.`, { reads, notRead, dropped }, rec);
@@ -273,13 +273,29 @@ export type BriefAccess = {
   /** Worth saying but never a block: the field is a short type, or the coach has waived the foreign-text refusal. */
   warning: string | null;
   fieldVarType: string | null;
+  /** Each bot field's variable id by name: what a prompt's chip stores, so the Brief's "Your bot reads" asks the same question the push does. */
+  nsByName: Record<string, string>;
 };
 export async function briefAccessFor(m: schema.Membership): Promise<BriefAccess> {
-  const none = { agent: null, blocked: null, warning: null, fieldVarType: null };
+  const none = { agent: null, blocked: null, warning: null, fieldVarType: null, nsByName: {} };
   const token = open(m.clApiToken);
   if (!token) return { hasToken: false, ...none };
   const check = await faqPreflight(m, token);
-  return { hasToken: true, agent: check.agent, blocked: check.blocked, warning: check.warning, fieldVarType: check.fieldVarType };
+  return { hasToken: true, agent: check.agent, blocked: check.blocked, warning: check.warning, fieldVarType: check.fieldVarType, nsByName: check.nsByName };
+}
+
+/**
+ * One log line of what the agent's prompt actually holds, as the API returned it: every string in the agent-info response with
+ * its path, so the serialisation a chip takes is on the record rather than inferred from the editor. Once per member, agent and
+ * outcome every ten minutes, since the Brief reads it on every render. The prompts carry the coach's own words; never the token.
+ */
+const promptLogged = new Map<string, number>();
+function logAgentPrompt(m: schema.Membership, agent: AgentInfo, field: string, ns: string | undefined, read: boolean): void {
+  const key = `${m.id}:${agent.ns}:${read}`;
+  const now = Date.now();
+  if ((promptLogged.get(key) ?? 0) > now - 600_000) return;
+  promptLogged.set(key, now);
+  console.info(`[faq.agent-reads] ${redactSecrets(JSON.stringify({ member: m.id, agent: agent.name, agentNs: agent.ns, field, fieldNs: ns ?? null, read, prompts: agent.prompts.map((p) => ({ path: p.section, text: p.text.slice(0, 4000) })) }))}`);
 }
 
 /**
@@ -288,21 +304,25 @@ export async function briefAccessFor(m: schema.Membership): Promise<BriefAccess>
  * the field holds nothing HelixOS did not write unless the coach has waived that on the Coach page. Each blocker is one sentence
  * the coach can act on.
  */
-async function faqPreflight(m: schema.Membership, token: string): Promise<{ agent: AgentInfo | null; blocked: string | null; warning: string | null; fieldVarType: string | null; lastSentValue: string | null }> {
+async function faqPreflight(m: schema.Membership, token: string): Promise<{ agent: AgentInfo | null; blocked: string | null; warning: string | null; fieldVarType: string | null; lastSentValue: string | null; nsByName: Record<string, string> }> {
   const field = faqFieldFor(m);
   const lastSync = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt)] });
   const lastSentValue = lastSync ? composeField(lastSync.snapshot).text : null;
+  const none = { nsByName: {} as Record<string, string> };
   const refused = faqFieldRefusal(field, STAGE1_FIELDS, BOT_WRITTEN_FIELDS);
-  if (refused) return { agent: null, blocked: refused, warning: null, fieldVarType: null, lastSentValue };
+  if (refused) return { agent: null, blocked: refused, warning: null, fieldVarType: null, lastSentValue, ...none };
   const { agent, ask } = await agentFor(m, token);
-  if (ask) return { agent: null, blocked: ask, warning: null, fieldVarType: null, lastSentValue };
+  if (ask) return { agent: null, blocked: ask, warning: null, fieldVarType: null, lastSentValue, ...none };
   const fields = await listBotFields(token);
+  const nsByName = Object.fromEntries(fields.filter((f) => f.ns).map((f) => [f.name, f.ns]));
+  if (agent) logAgentPrompt(m, agent, field, nsByName[field], agentReadsFields(agent, [field], nsByName).reads.length > 0);
   const held = fields.find((f) => f.name === field);
-  if (!held) return { agent, blocked: fieldMissingLine(field), warning: null, fieldVarType: null, lastSentValue };
-  const warning = held.varType && held.varType !== "longtext" ? shortFieldWarning(field, held.varType) : null;
+  if (!held) return { agent, blocked: fieldMissingLine(field), warning: null, fieldVarType: null, lastSentValue, nsByName };
+  // No type warning: Community Loyalty's bot fields come in one type, Text, and a type can never be changed, so a warning asking
+  // for longtext asks for something that cannot be done (and nearly cost a working chip). The 20,000 budget is the real cap.
   if (holdsForeignText(held.value, lastSentValue)) {
-    if (!m.faqOverwriteOk) return { agent, blocked: `${field} already holds text HelixOS did not write, and sending would erase it. Use a field of its own, or tick the override on the Coach page.`, warning, fieldVarType: held.varType, lastSentValue };
-    return { agent, blocked: null, warning: [warning, `${field} holds text HelixOS did not write; the override is on, so sending will replace it.`].filter(Boolean).join(" "), fieldVarType: held.varType, lastSentValue };
+    if (!m.faqOverwriteOk) return { agent, blocked: `${field} already holds text HelixOS did not write, and sending would erase it. Use a field of its own, or tick the override on the Coach page.`, warning: null, fieldVarType: held.varType, lastSentValue, nsByName };
+    return { agent, blocked: null, warning: `${field} holds text HelixOS did not write; the override is on, so sending will replace it.`, fieldVarType: held.varType, lastSentValue, nsByName };
   }
-  return { agent, blocked: null, warning, fieldVarType: held.varType, lastSentValue };
+  return { agent, blocked: null, warning: null, fieldVarType: held.varType, lastSentValue, nsByName };
 }

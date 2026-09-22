@@ -120,8 +120,16 @@ async function main() {
 
     // ── Step 3: approve three, send, read back: three present, the unapproved fourth absent, both halves on the record. ──
     await page.locator('[data-testid="send-bot"]').waitFor({ timeout: 10000 });
-    // A text field, not longtext: a warning beside the budget, never a block.
-    if (!/is a text field, not longtext/.test(await page.locator('[data-testid="brief-warning"]').innerText())) throw new Error("a short field type warns without blocking");
+    // The agent's prompt carries the field the way Community Loyalty's editor stores it: a chip holding the field's variable id,
+    // the name only as its label. No brace form anywhere, so the send below goes only because the check reads the id.
+    const served = JSON.stringify(await (await fetch(`${mock}/flow/ai-agent-info`, { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ ai_agent_ns: READS_FIELD(field)[0].ai_agent_ns }) })).json());
+    const fieldNs = ((await (await fetch(`${mock}/flow/bot-fields?limit=100&page=1`, { headers: { Authorization: `Bearer ${TOKEN}` } })).json()) as { data: { name: string; var_ns: string }[] }).data.find((f) => f.name === field)?.var_ns;
+    if (!fieldNs || !served.includes(`data-var-id=\\"${fieldNs}\\"`) || served.includes(`{${field}}`)) throw new Error(`the mock serves the field as a chip by its id, never in braces: ns ${fieldNs}, ${served.slice(0, 300)}`);
+    if (!(await page.locator('[data-testid="agent-reads"]').innerText()).includes(field)) throw new Error("the Brief reads the chip: Your bot reads names the FAQ field");
+    // A text field is the only type Community Loyalty offers: no warning asking for another; the budget line carries the cap.
+    if (await page.locator('[data-testid="brief-warning"]').count()) throw new Error(`no warning about the field's type, got "${await page.locator('[data-testid="brief-warning"]').innerText()}"`);
+    if (!/Budget 20,000 characters/.test(await page.locator('[data-testid="brief-budget"]').innerText())) throw new Error("the budget line names the platform's 20,000 cap");
+    console.log(`✓ the agent reads ${field} through its chip (id ${fieldNs}, no brace form in the prompt); no type warning, the 20,000 budget stated`);
     await Promise.all([page.waitForURL(/sent=1|error=/), page.click('[data-testid="send-bot"]')]);
     if (!page.url().includes("sent=1")) throw new Error(`the send is accepted and read back, got ${decodeURIComponent(page.url())}`);
     const approved = rows.filter((r) => isApprovedOrigin(r.origin));
@@ -261,6 +269,11 @@ async function main() {
     if (await coachPage.locator('[data-testid="no-token"]').count()) throw new Error("the coach's Brief has a token of its own now");
     if (!/Community FAQ Agent/.test(await coachPage.locator('[data-testid="brief-budget"]').innerText())) throw new Error("the coach's own Brief names their own bot's agent");
     console.log("✓ the coach sets their own token and agent under My bot, and their own Brief stops asking their coach for it");
+    // The raw prompt, one log line, so the serialisation a chip takes is on the record rather than inferred.
+    const devLog = readFileSync(join(__dirname, "..", "screenshots", "logs", "dev.log"), "utf8");
+    const logLine = devLog.split("\n").reverse().find((l) => l.includes("[faq.agent-reads]") && l.includes(`"fieldNs":"${fieldNs}"`));
+    if (!logLine || !logLine.includes("data-var-id") || logLine.includes(TOKEN) || logLine.includes(COACH_TOKEN)) throw new Error(`the raw prompt is logged in one line, with the field's id and never a token: ${logLine?.slice(0, 200)}`);
+    console.log("✓ one log line carries the agent's raw prompt as the API returned it, with the field's id, and no token");
     await coachPage.close();
 
     // ── Removing every answer empties the field on the bot: an answer the coach took back must stop being answered from. ──
