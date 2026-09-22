@@ -133,6 +133,9 @@ async function main() {
     await Promise.all([page.waitForURL(/sent=1|error=/), page.click('[data-testid="send-bot"]')]);
     if (!page.url().includes("sent=1")) throw new Error(`the send is accepted and read back, got ${decodeURIComponent(page.url())}`);
     const approved = rows.filter((r) => isApprovedOrigin(r.origin));
+    // The banner: the count agrees with its noun, and the sentence ends once (22 Sep: "1 answers … matched..").
+    const banner = (await page.locator('[data-testid="brain-sent"]').innerText()).trim();
+    if (!banner.startsWith(`Sent to your bot and read back: ${approved.length} ${approved.length === 1 ? "answer" : "answers"} sent (`) || /\.\.$/.test(banner) || !banner.endsWith("read back and matched.")) throw new Error(`the send banner reads cleanly, got "${banner}"`);
     const expected = composeField(rankEntries(approved)).text;
     let held = (await store())[field];
     if (held !== expected) throw new Error(`the bot holds exactly the composed approved answers:\n${held}\n---\n${expected}`);

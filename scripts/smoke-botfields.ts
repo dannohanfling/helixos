@@ -62,7 +62,7 @@ async function main() {
     await mayaRow.locator('[data-testid="cl-api-token"]').fill(TOKEN);
     await submit(page, 'form:has(input[name="eoPassUrl"][value*="maya-torres"]) button:has-text("Save")');
     if ((await page.content()).includes(TOKEN)) throw new Error("the API token is rendered back on the page");
-    if (!/saved \(blank keeps it/.test((await page.locator('form:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="cl-api-token"]').getAttribute("placeholder")) ?? "")) throw new Error("the coach cannot tell the token is set");
+    if (!/Saved ✓ — leave blank to keep it/.test((await page.locator('form:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="cl-api-token"]').getAttribute("placeholder")) ?? "")) throw new Error("the coach cannot tell the token is set");
     const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
     const membership = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
     if (!membership.clApiToken || membership.clApiToken === TOKEN) throw new Error("the token is stored sealed, not in clear");

@@ -64,7 +64,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
         <p className="mb-4 rounded-xl border border-good bg-good-soft p-3 text-sm" data-testid="brain-imported" role="status">{sp.imported} {sp.imported === "1" ? "entry" : "entries"} imported. Each one is a draft until you accept it.</p>
       ) : null}
       {sp.sent ? (
-        <p className="mb-4 rounded-xl border border-good bg-good-soft p-3 text-sm" data-testid="brain-sent" role="status">Sent to your bot and read back: {lastSent?.note ?? "done"}.</p>
+        <p className="mb-4 rounded-xl border border-good bg-good-soft p-3 text-sm" data-testid="brain-sent" role="status">Sent to your bot and read back: {(lastSent?.note ?? "done").replace(/\.+$/, "")}.</p>
       ) : null}
 
       {eyes.length ? (

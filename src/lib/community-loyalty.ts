@@ -279,7 +279,7 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
     if (!valueReadBack) return done("failed", `Pushed, but the read-back of ${field} differs: not recorded as synced.`, { reads, notRead, dropped }, rec);
     if (!tokenReadBack) return done("failed", `Pushed and the value reads back, but the token {${field}} is no longer in the agent's prompt: not recorded as synced.`, { reads, notRead, dropped }, rec);
     if (!composed.included.length) return done("sent", "Every answer has been removed, so your bot's FAQ field is now empty. Read back and matched.", { reads, notRead, dropped }, rec);
-    return done("sent", `${composed.included.length} answers sent (${composed.chars.toLocaleString()} of ${FAQ_FIELD_BUDGET.toLocaleString()} characters)${dropped.length ? `; ${dropped.length} dropped past the budget` : ""}, read back and matched.`, { reads, notRead, dropped }, rec);
+    return done("sent", `${composed.included.length} ${composed.included.length === 1 ? "answer" : "answers"} sent (${composed.chars.toLocaleString()} of ${FAQ_FIELD_BUDGET.toLocaleString()} characters)${dropped.length ? `; ${dropped.length} dropped past the budget` : ""}, read back and matched.`, { reads, notRead, dropped }, rec);
   } catch (e) {
     return done("failed", e instanceof Error ? e.message : String(e), { reads, notRead, dropped }, record);
   }
