@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { requireViewer } from "@/lib/auth";
 import { deleteDeckImageAction, updateDeckImageCaptionAction } from "@/lib/actions/deck-images";
 import { DeckImageUpload } from "@/components/deck-image-upload";
@@ -52,7 +53,7 @@ export default async function ImagesPage() {
                   ) : null}
                   <form action={deleteDeckImageAction} className="mt-2 text-right">
                     <input type="hidden" name="id" value={img.id} />
-                    <button className="btn btn-ghost btn-xs text-danger" type="submit" data-testid="library-image-delete">Delete</button>
+                    <ConfirmDelete what="this image" undo="It comes off every slide that uses it. This can't be undone." label="Delete" className="btn btn-ghost btn-xs text-danger" testId="library-image-delete" />
                   </form>
                 </div>
               ))}

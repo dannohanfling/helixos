@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq, or, isNull, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -65,7 +66,7 @@ export async function deleteLibraryPostAction(formData: FormData): Promise<void>
   if (!row) return;
   await db.delete(schema.libraryPosts).where(eq(schema.libraryPosts.id, row.id));
   refresh();
-  redirect("/library");
+  redirect(deletedTo("/library", "library"));
 }
 
 /** Coach shares one of their own entries with every member (or takes it back). */

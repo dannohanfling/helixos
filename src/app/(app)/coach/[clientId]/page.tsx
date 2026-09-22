@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientResetAction } from "@/lib/actions/coach";
 import { COACH_RESET_COOKIE } from "@/lib/reset-link";
-import { ConfirmButton } from "@/components/confirm-button";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { CopyButton } from "@/components/copy-button";
 import { cookies } from "next/headers";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
@@ -126,7 +126,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
             ) : (
               <form action={removeClientAction} data-testid="remove-client-form">
                 <input type="hidden" name="membershipId" value={m.id} />
-                <ConfirmButton className="btn btn-ghost btn-sm" message="Remove this client? Their access ends on their next request and their reminders stop. Their data is kept and you can reinstate them.">Remove client</ConfirmButton>
+                <ConfirmDelete verb="Remove" what="this client" undo="Their access ends on their next request and their reminders stop. Their data is kept, and you can reinstate them from the Coach page." label="Remove client" className="btn btn-ghost btn-sm" testId="remove-client" />
               </form>
             )}
             <Link href="/coach" className="btn btn-ghost btn-sm">

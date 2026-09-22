@@ -76,8 +76,10 @@ async function main() {
     if (!/\/today/.test(client.url())) throw new Error("the client can sign in before removal");
 
     await coach.goto(`${base}/coach/${bMem.id}`);
-    coach.on("dialog", (d) => d.accept());
-    await Promise.all([coach.waitForResponse((r) => r.request().method() === "POST"), coach.locator('[data-testid="remove-client-form"] button[type="submit"]').click()]);
+    // Remove asks first, in the app's own confirm: what happens, and that it can be undone.
+    await coach.locator('[data-testid="remove-client"]').click();
+    if (!/reinstate/.test(await coach.locator("dialog[open]").innerText())) throw new Error("the remove confirm says the client can be reinstated");
+    await Promise.all([coach.waitForResponse((r) => r.request().method() === "POST"), coach.locator('dialog[open] [data-testid="confirm-delete-yes"]').click()]);
     await coach.waitForURL(/\/coach/);
     const removed = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, bMem.id) }))!;
     if (!removed.removedAt || !removed.removedBy) throw new Error("removedAt and removedBy are set on the membership");

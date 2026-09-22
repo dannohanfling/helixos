@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import Link from "next/link";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
@@ -44,9 +45,7 @@ export default async function ContentDetailPage({ params, searchParams }: { para
             </form>
             <form action={deleteContentAction}>
               <input type="hidden" name="id" value={item.id} />
-              <button className="btn btn-ghost btn-sm" type="submit">
-                Delete
-              </button>
+              <ConfirmDelete what="this post" label="Delete" className="btn btn-ghost btn-sm" />
             </form>
           </div>
         }

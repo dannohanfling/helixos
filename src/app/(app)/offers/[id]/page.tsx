@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, asc, eq } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { OFFER_CONTAINERS } from "@/db/schema";
@@ -59,9 +60,7 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
             <CopyButton text={onePager} label="Copy one-pager" />
             <form action={deleteOfferAction}>
               <input type="hidden" name="id" value={offer.id} />
-              <button className="btn btn-ghost btn-sm" type="submit">
-                Delete
-              </button>
+              <ConfirmDelete what="this offer" label="Delete" className="btn btn-ghost btn-sm" />
             </form>
           </div>
         }

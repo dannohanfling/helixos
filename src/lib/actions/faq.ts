@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -115,6 +116,7 @@ export async function deleteFaqAction(formData: FormData): Promise<void> {
   await db.delete(schema.faqEntries).where(eq(schema.faqEntries.id, e.id));
   await logSync({ workspaceId, userId, provider: "community_loyalty", direction: "out", event: "faq.remove", payload: { entryId: e.id, question: e.question.slice(0, 120), by: v.user.name }, status: "sent", note: `removed by ${v.user.name}` });
   refresh();
+  redirect(deletedTo("/brain", "answer"));
 }
 
 /** Approve and send to my bot: the approved answers composed and pushed, read back both ways, and the outcome said plainly. */

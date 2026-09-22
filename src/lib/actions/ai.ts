@@ -1,5 +1,7 @@
 "use server";
 
+import { redirect } from "next/navigation";
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { AI_PROVIDERS } from "@/db/schema";
@@ -63,6 +65,7 @@ export async function removeAiKeyAction(): Promise<void> {
   const { workspaceId, userId } = await ctx();
   await db.delete(schema.aiCredentials).where(and(eq(schema.aiCredentials.workspaceId, workspaceId), eq(schema.aiCredentials.userId, userId)));
   refresh();
+  redirect(deletedTo("/settings", "key"));
 }
 
 /** Coach: the workspace-wide daily cap on AI calls per member. */

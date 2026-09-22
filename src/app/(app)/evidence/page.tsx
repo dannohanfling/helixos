@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, eq } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
@@ -204,7 +205,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                           <CopyButton text={insertText(e)} label="Copy claim + citation" className="btn btn-soft btn-xs" />
                           <form action={removeEvidenceAction}>
                             <input type="hidden" name="id" value={e.id} />
-                            <button className="btn btn-ghost btn-xs" type="submit">Remove</button>
+                            <ConfirmDelete verb="Remove" what="this study from your shelf" label="Remove" className="btn btn-ghost btn-xs" />
                           </form>
                         </div>
                       </>
@@ -249,7 +250,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                           </form>
                           <form action={removeEvidenceAction}>
                             <input type="hidden" name="id" value={e.id} />
-                            <button className="btn btn-ghost btn-xs" type="submit">Not it, remove</button>
+                            <ConfirmDelete verb="Remove" what="this study from your shelf" label="Not it, remove" className="btn btn-ghost btn-xs" />
                           </form>
                         </div>
                       </>

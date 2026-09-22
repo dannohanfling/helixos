@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDateTime } from "@/lib/dates";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -272,12 +273,7 @@ export default async function WebinarWizardPage({
             </Link>
             <form action={deleteWebinarAction}>
               <input type="hidden" name="id" value={w.id} />
-              <button
-                className="text-xs text-ink-3 hover:text-danger"
-                type="submit"
-              >
-                Delete
-              </button>
+              <ConfirmDelete what="this webinar" undo="Its sections, deck and run sheet go with it. This can't be undone." label="Delete" className="text-xs text-ink-3 hover:text-danger" />
             </form>
           </span>
         }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, eq, sql } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
 import { MAGNET_TYPES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
@@ -96,9 +97,7 @@ export default async function MagnetsPage({ searchParams }: { searchParams: Prom
                 </div>
                 <form action={deleteMagnetAction}>
                   <input type="hidden" name="id" value={m.id} />
-                  <button className="btn btn-ghost btn-xs" type="submit">
-                    Delete
-                  </button>
+                  <ConfirmDelete what="this lead magnet" undo="Its page and its file go with it. This can't be undone." label="Delete" className="btn btn-ghost btn-xs" />
                 </form>
               </div>
             </Card>

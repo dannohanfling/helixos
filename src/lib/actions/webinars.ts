@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -338,7 +339,7 @@ export async function deleteWebinarAction(formData: FormData): Promise<void> {
   await own(id, userId);
   await db.delete(schema.webinars).where(eq(schema.webinars.id, id));
   refresh();
-  redirect("/webinars");
+  redirect(deletedTo("/webinars", "webinar"));
 }
 
 /**

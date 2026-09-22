@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq, like } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { formatDateTime } from "@/lib/dates";
@@ -267,7 +268,7 @@ function EntryRow({ e, pinned = false }: { e: FaqEntry; pinned?: boolean }) {
           )}
           <form action={deleteFaqAction}>
             <input type="hidden" name="id" value={e.id} />
-            <button className="btn btn-ghost btn-xs text-danger" type="submit" data-testid="faq-remove">Remove</button>
+            <ConfirmDelete verb="Remove" what="this answer" undo="It stays on your bot until you next send, then it is gone from there too." label="Remove" className="btn btn-ghost btn-xs text-danger" testId="faq-remove" />
           </form>
         </div>
       </div>

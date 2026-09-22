@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -37,7 +38,7 @@ async function assertPublishable(l: schema.Ladder): Promise<void> {
 
 async function own(id: string, userId: string) {
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, userId)) });
-  if (!l) redirect("/content/ladders");
+  if (!l) redirect(deletedTo("/content/ladders", "ladder"));
   return l;
 }
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { requireViewer } from "@/lib/auth";
 import { deleteScriptAction, saveBeatAction, saveFillsAction, updateScriptAction } from "@/lib/actions/socrates";
 import { BRANCH_CONDITIONS, BRANCH_DEFAULT_BEATS, CLARITY_BEATS, PLACEHOLDER_PROMPTS, REFRAME_BEAT, SCRIPT_TYPES, assemble, beatByKey, beatDone, beatOf, callSheet, callSheetHtml, callSheetText, copyBlockText, defaultBranchIds, placeholdersOf, progress, questionsFor, reframesByGroup, unfilledIn } from "@/lib/engine/socrates";
@@ -118,7 +119,7 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
           </ol>
           <form action={deleteScriptAction} className="mt-3">
             <input type="hidden" name="id" value={s.id} />
-            <button className="text-xs text-ink-3 underline" type="submit">Delete this script</button>
+            <ConfirmDelete what="this script" label="Delete this script" className="text-xs text-ink-3 underline" />
           </form>
         </Card>
         {fillStep ? (

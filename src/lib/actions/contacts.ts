@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -122,5 +123,5 @@ export async function deleteContactAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   await db.delete(schema.contacts).where(and(eq(schema.contacts.id, str(formData, "id")), eq(schema.contacts.userId, userId)));
   refresh();
-  redirect("/conversations");
+  redirect(deletedTo("/conversations", "contact"));
 }

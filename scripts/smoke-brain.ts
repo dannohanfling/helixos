@@ -274,6 +274,14 @@ async function main() {
     const logLine = devLog.split("\n").reverse().find((l) => l.includes("[faq.agent-reads]") && l.includes(`"fieldNs":"${fieldNs}"`));
     if (!logLine || !logLine.includes("data-var-id") || logLine.includes(TOKEN) || logLine.includes(COACH_TOKEN)) throw new Error(`the raw prompt is logged in one line, with the field's id and never a token: ${logLine?.slice(0, 200)}`);
     console.log("✓ one log line carries the agent's raw prompt as the API returned it, with the field's id, and no token");
+    // The agent list is cached a minute per bot: two more renders of the Coach page (Maya's bot and the coach's own) read it
+    // no more times. The first render refills anything the walk's pace let expire.
+    const listReads = async () => ((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads;
+    await coachPage.goto(`${base}/coach`);
+    const before = await listReads();
+    for (let i = 0; i < 2; i++) await coachPage.goto(`${base}/coach`);
+    if ((await listReads()) !== before) throw new Error(`the agent list is cached for a minute per bot: ${before} reads before two renders, ${await listReads()} after`);
+    console.log("✓ the agent list is cached a minute per bot: two Coach page renders read it no more times");
     await coachPage.close();
 
     // ── Removing every answer empties the field on the bot: an answer the coach took back must stop being answered from. ──
@@ -281,13 +289,18 @@ async function main() {
     await db.delete(schema.faqEntries).where(and(eq(schema.faqEntries.userId, maya.id), ne(schema.faqEntries.id, keep.id)));
     await clientPage.goto(`${base}/brain`);
     await clientPage.locator(`#faq-${keep.id} [data-testid="faq-remove"]`).click();
+    if (!/Remove this answer\?/.test(await clientPage.locator('dialog[open] [data-testid="confirm-delete-question"]').innerText())) throw new Error("removing an answer asks first");
+    await clientPage.locator('dialog[open] [data-testid="confirm-delete-yes"]').click();
     await clientPage.waitForLoadState("networkidle");
     await clientPage.goto(`${base}/brain`);
     if ((await own()).length !== 0) throw new Error("the last answer is removed through the Brief");
     if (!/removed every answer/.test(await clientPage.locator('[data-testid="brief-will-empty"]').innerText())) throw new Error("the Brief says that sending now empties the field");
     await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
+    const readsBeforeSend = ((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads;
     await Promise.all([clientPage.waitForURL(/sent=1|error=/), clientPage.click('[data-testid="send-bot"]')]);
     if (!clientPage.url().includes("sent=1")) throw new Error(`emptying the field is a send, got ${decodeURIComponent(clientPage.url())}`);
+    // The check before a push and the read-back after it read live, never the cached list.
+    if (((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads < readsBeforeSend + 2) throw new Error("the pre-push check and the read-back each read the agent list live");
     if ((await store())[field] !== "") throw new Error(`the field reads back empty of every removed answer, got ${JSON.stringify((await store())[field]).slice(0, 80)}`);
     const emptySync = (await syncs())[0];
     if (emptySync.status !== "sent" || emptySync.entryCount !== 0 || !emptySync.valueReadBack) throw new Error("the emptying send is recorded, read back, with no entries");

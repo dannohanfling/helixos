@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq, ne } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -21,7 +22,7 @@ const typeOf = (raw: string): MagnetType => (MAGNET_TYPES as readonly string[]).
 
 async function own(id: string, userId: string) {
   const m = await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, id), eq(schema.leadMagnets.userId, userId)) });
-  if (!m) redirect("/magnets");
+  if (!m) redirect(deletedTo("/magnets", "magnet"));
   return m;
 }
 
@@ -220,6 +221,7 @@ export async function removeMagnetFileAction(formData: FormData): Promise<void> 
   if (m.fileKey) await deleteObject(m.fileKey);
   await db.update(schema.leadMagnets).set({ fileKey: null, fileName: null, primary: m.primary === "file" ? "page" : m.primary, updatedAt: nowIso() }).where(eq(schema.leadMagnets.id, m.id));
   refresh();
+  redirect(deletedTo(`/magnets/${m.id}`, "file"));
 }
 
 export async function deleteMagnetAction(formData: FormData): Promise<void> {

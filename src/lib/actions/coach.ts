@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -161,7 +162,7 @@ export async function removeClientAction(formData: FormData): Promise<void> {
   await db.update(schema.memberships).set({ removedAt: nowIso(), removedBy: coach.user.id }).where(eq(schema.memberships.id, m.id));
   await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: "client.removed", payload: { by: coach.user.name }, status: "sent", note: `Client removed by ${coach.user.name}` });
   refresh();
-  redirect("/coach?removed=1");
+  redirect(deletedTo("/coach", "client"));
 }
 
 /** Undo a soft-remove: the client's access, reminders and counts all come back. */

@@ -1,5 +1,7 @@
 "use server";
 
+import { redirect } from "next/navigation";
+import { deletedTo } from "@/lib/deleted";
 import { and, eq, gte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
@@ -99,4 +101,7 @@ export async function deleteTaskAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   await db.delete(schema.tasks).where(and(eq(schema.tasks.id, str(formData, "id")), eq(schema.tasks.userId, userId)));
   refresh();
+  // A task is deleted from Today or Tasks; the person stays on whichever it was, with the line saying it went.
+  const from = str(formData, "from");
+  redirect(deletedTo(from === "/today" ? "/today" : "/tasks", "task"));
 }

@@ -1,5 +1,7 @@
 "use server";
 
+import { redirect } from "next/navigation";
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { DECK_IMAGE_KINDS, type DeckImageKind } from "@/db/schema";
@@ -139,6 +141,7 @@ export async function deleteDeckImageAction(formData: FormData): Promise<void> {
   await db.update(schema.deckSlots).set({ imageId: null }).where(eq(schema.deckSlots.imageId, img.id));
   await db.delete(schema.deckImages).where(eq(schema.deckImages.id, img.id));
   refresh();
+  redirect(deletedTo("/images", "image"));
 }
 
 /** The coach's own webinar, or nowhere. */

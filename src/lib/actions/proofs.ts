@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -119,7 +120,7 @@ export async function deleteProofAction(formData: FormData): Promise<void> {
   }
   await db.delete(schema.proofs).where(eq(schema.proofs.id, p.id));
   refresh();
-  redirect("/proof");
+  redirect(deletedTo("/proof", "proof"));
 }
 
 /** A client's win from a check-in becomes a proof draft in one click. */

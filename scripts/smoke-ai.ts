@@ -155,7 +155,9 @@ async function main() {
 
     // Remove key
     await page.goto(`${base}/settings`);
-    await submit(page, 'button:has-text("Remove key")');
+    // A delete asks first: the trigger opens the confirm, its own Remove sends.
+    await page.click('button:has-text("Remove key")');
+    await submit(page, 'dialog[open] [data-testid="confirm-delete-yes"]');
     await expectText(page, "not connected", "removed");
     console.log("✓ key removed");
   } finally {

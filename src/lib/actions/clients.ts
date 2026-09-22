@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -116,7 +117,7 @@ export async function deleteClientRecordAction(formData: FormData): Promise<void
   await own(id, userId);
   await db.delete(schema.clientRecords).where(eq(schema.clientRecords.id, id));
   refresh();
-  redirect("/clients");
+  redirect(deletedTo("/clients", "record"));
 }
 
 /** Awards points to one of the client's own members and pushes to their Community Loyalty webhook if configured. */

@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { CONTENT_STATUSES } from "@/db/schema";
@@ -116,4 +117,6 @@ export async function deleteContentAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   await db.delete(schema.contentItems).where(and(eq(schema.contentItems.id, str(formData, "id")), eq(schema.contentItems.userId, userId)));
   refresh();
+  // Back to the list, never left on the deleted post's own address (that was a 404, 22 Sep).
+  redirect(deletedTo("/content", "post"));
 }

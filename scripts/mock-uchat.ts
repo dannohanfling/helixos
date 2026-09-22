@@ -16,6 +16,7 @@ let skipped: string | null = null;
 /** var_type per field name; anything unseeded reads as text, the one type Community Loyalty offers for a bot field. */
 let types: Record<string, string> = {};
 /** The workspace's agents and what each one's prompt actually reads, seedable so a walk can prove "push only what the agent reads". */
+let agentListReads = 0;
 let agents: { ai_agent_ns: string; name: string; description: string; prompts: { section: string; text: string }[] }[] = [
   { ai_agent_ns: "f1a2b3", name: "Booking Agent", description: "Books calls.", prompts: [
     { section: "Persona & Role", text: "You are {ai_persona_role_cbf}." },
@@ -49,6 +50,8 @@ createServer(async (req, res) => {
   if (url.pathname === "/__seed" && req.method === "POST") { Object.assign(fields, JSON.parse(await read(req))); return json(res, 200, { ok: true, fields }); }
   if (url.pathname === "/__requests") return json(res, 200, requests);
   if (url.pathname === "/__reads") return json(res, 200, reads);
+  // How many times the agent list was read: the walk proves the one-minute cache with it.
+  if (url.pathname === "/__agent-list-reads") return json(res, 200, { reads: agentListReads });
   if (url.pathname === "/__fields") return json(res, 200, fields);
   const auth = req.headers.authorization ?? "";
   if (!auth.startsWith("Bearer ") || auth.length < 12) return json(res, 401, { status: "error", message: "Unauthenticated." });
@@ -70,7 +73,10 @@ createServer(async (req, res) => {
     for (const f of body.data) if (f.name !== skipped) fields[f.name] = f.value;
     return json(res, 200, { status: "ok" });
   }
-  if (url.pathname === "/flow/ai-agents" && req.method === "GET") return json(res, 200, { data: agents.map((a) => ({ ai_agent_ns: a.ai_agent_ns, name: a.name })) });
+  if (url.pathname === "/flow/ai-agents" && req.method === "GET") {
+    agentListReads++;
+    return json(res, 200, { data: agents.map((a) => ({ ai_agent_ns: a.ai_agent_ns, name: a.name })) });
+  }
   if (url.pathname === "/flow/ai-agent-info" && req.method === "POST") {
     const body = JSON.parse((await read(req)) || "{}") as { ai_agent_ns?: string };
     const a = agents.find((x) => x.ai_agent_ns === body.ai_agent_ns);

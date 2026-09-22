@@ -210,7 +210,8 @@ async function main() {
     if (!/You asked for/.test(side) || !/Freedman, 1966/.test(side) || !/Found/.test(side) || !/2014/.test(side) || !/cited 1,187 times/.test(side)) throw new Error(`side by side should show the ask beside the result:\n${side}`);
     await expectText(page, "Year differs: you asked for 1966, this is 2014.", "flag on the shelf row");
     if (await page.locator('[data-testid="own-study"] button:has-text("Copy claim + citation")').count()) throw new Error("an unverified study must not be copyable as a citation");
-    await submit(page, '[data-testid="own-study"][data-quality="unverified"] button:has-text("Not it, remove")');
+    await page.click('[data-testid="own-study"][data-quality="unverified"] button:has-text("Not it, remove")');
+    await submit(page, 'dialog[open] [data-testid="confirm-delete-yes"]');
     if (await page.locator('[data-testid="own-study"]').count()) throw new Error("removing the wrong paper should empty the shelf");
     console.log("✓ the wrong paper: unverified, shown beside the ask, flagged, not citable, removed");
 

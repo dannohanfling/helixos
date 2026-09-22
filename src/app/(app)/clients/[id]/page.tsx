@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { CLIENT_STATUSES } from "@/db/schema";
@@ -268,9 +269,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           ) : null}
           <form action={deleteClientRecordAction}>
             <input type="hidden" name="id" value={c.id} />
-            <button className="text-xs text-ink-3 hover:text-danger" type="submit">
-              Remove client
-            </button>
+            <ConfirmDelete verb="Remove" what="this client from your records" label="Remove client" className="text-xs text-ink-3 hover:text-danger" />
           </form>
         </div>
       </div>

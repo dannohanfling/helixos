@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
@@ -109,7 +110,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
           </form>
           <form action={deleteGroupAction} className="mt-3">
             <input type="hidden" name="id" value={g.id} />
-            <button className="text-xs text-danger underline" type="submit">Remove this group</button>
+            <ConfirmDelete verb="Remove" what="this group" label="Remove this group" className="text-xs text-danger underline" />
           </form>
         </Card>
         <div className="space-y-4">

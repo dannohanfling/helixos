@@ -211,10 +211,11 @@ async function main() {
     if (await page.getByText("Call notes").count()) throw new Error("coach content reached a client");
     await login(page, "coach");
     await page.goto(`${base}/coach/not-a-membership`);
-    await page.getByText(/could not be found|404/i).first().waitFor({ timeout: 5000 }).catch(() => null);
+    // Not the bare 404 any more: the plain line inside the app, with the way back (addendum 3).
+    await page.locator('[data-testid="item-gone"]').waitFor({ timeout: 10000 }).catch(() => null);
     const body = await page.locator("main").innerText();
-    if (!/could not be found|404/i.test(body) || /Call notes/.test(body)) throw new Error(`unknown membership should show not-found, got:\n${body.slice(0, 200)}`);
-    console.log("✓ access: client redirected, unknown membership 404");
+    if (!/This client isn't here anymore\./.test(body) || /Call notes/.test(body)) throw new Error(`unknown membership should show the plain not-found line, got:\n${body.slice(0, 200)}`);
+    console.log("✓ access: client redirected, unknown membership answers \"This client isn't here anymore.\"");
   } finally {
     await browser.close();
     rmSync(overridePath, { force: true });

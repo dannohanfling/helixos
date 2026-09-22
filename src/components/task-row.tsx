@@ -1,6 +1,7 @@
 "use client";
 
 import { useOptimistic, useTransition } from "react";
+import { ConfirmDelete } from "./confirm-delete";
 import type { Task } from "@/db/schema";
 import { deleteTaskAction, rescheduleTaskAction, setFocusAction, toggleTaskAction } from "@/lib/actions/tasks";
 import { addDays, formatDate, relativeDay } from "@/lib/dates";
@@ -73,19 +74,14 @@ export function TaskRow({ task, today, compact = false, origin }: { task: Task; 
           <button className="btn btn-ghost btn-xs task-control" type="button" disabled={pending} aria-busy={pending} title="Move to tomorrow" aria-label="Move to tomorrow" onClick={() => run({}, () => rescheduleTaskAction(fd({ dueDate: addDays(today, 1) })))}>
             ↷<span className="task-control-label">Tomorrow</span>
           </button>
-          <button
+          <ConfirmDelete
             className="btn btn-ghost btn-xs task-control"
-            type="button"
             disabled={pending}
-            aria-busy={pending}
             title="Delete"
-            aria-label="Delete"
-            onClick={() => {
-              if (window.confirm(`Delete "${task.title}"? This can't be undone.`)) run({}, () => deleteTaskAction(fd()));
-            }}
-          >
-            ✕<span className="task-control-label">Delete</span>
-          </button>
+            what={`"${task.title}"`}
+            label={<>✕<span className="task-control-label">Delete</span></>}
+            onConfirm={() => run({}, () => deleteTaskAction(fd({ from: window.location.pathname })))}
+          />
         </div>
       ) : null}
     </div>

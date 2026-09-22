@@ -444,3 +444,25 @@ details > summary::-webkit-details-marker {
     display: none;
   }
 }
+
+/* The delete confirm: a small card over a dimmed page, Cancel first and focused, Delete in the danger colour. */
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-danger:hover {
+  filter: brightness(0.95);
+}
+dialog.confirm-delete {
+  margin: auto;
+  width: min(26rem, calc(100vw - 2rem));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 1.1rem 1.2rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+dialog.confirm-delete::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}

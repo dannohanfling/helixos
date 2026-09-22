@@ -255,8 +255,9 @@ async function main() {
 
     // Delete: the objects go with the record and the ladder keeps its keyword without the link
     await page.goto(`${base}/magnets/${magnetId}`);
-    await submit(page, 'button:has-text("Delete")');
-    await page.waitForURL(/\/magnets$/);
+    await page.click('button:has-text("Delete")');
+    await submit(page, 'dialog[open] [data-testid="confirm-delete-yes"]');
+    await page.waitForURL(/\/magnets(\?deleted=magnet)?$/);
     if ((await anon(`${base}/files/${pdfKey}`)).status !== 404 || (await anon(pdfHref)).status !== 404) throw new Error("the PDF outlived its magnet, in the index or in the bucket");
     if ((await db.query.ladders.findFirst({ where: eq(schema.ladders.id, ladderId) }))?.leadMagnetId !== null) throw new Error("the ladder still points at a deleted magnet");
     console.log("✓ delete: objects removed, ladder unlinked");

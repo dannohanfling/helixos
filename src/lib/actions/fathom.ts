@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -47,6 +48,7 @@ export async function removeFathomKeyAction(): Promise<void> {
   const { workspaceId, userId } = await ctx();
   await db.delete(schema.fathomConnections).where(and(eq(schema.fathomConnections.workspaceId, workspaceId), eq(schema.fathomConnections.userId, userId)));
   refresh();
+  redirect(deletedTo("/settings", "key"));
 }
 
 /** The transcript as the model sees it is capped; a call longer than this is read up to the cap and the client is told. */

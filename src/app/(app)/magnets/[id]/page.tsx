@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { and, eq, sql } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
 import { MAGNET_TYPES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
@@ -28,13 +30,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
   const { id } = await params;
   const sp = await searchParams;
   const m = await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, id), eq(schema.leadMagnets.userId, v.user.id)) });
-  if (!m) {
-    return (
-      <p className="text-sm">
-        Not found. <Link href="/magnets" className="underline">Back to lead magnets</Link>
-      </p>
-    );
-  }
+  if (!m) notFound();
   const [ai, offers, membership, hits, urlOf] = await Promise.all([
     hasAiKey(),
     db.query.offers.findMany({ where: eq(schema.offers.userId, v.user.id) }),
@@ -71,7 +67,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
         action={
           <form action={deleteMagnetAction}>
             <input type="hidden" name="id" value={m.id} />
-            <button className="btn btn-ghost btn-sm" type="submit">Delete</button>
+            <ConfirmDelete what="this lead magnet" undo="Its page and its file go with it. This can't be undone." label="Delete" className="btn btn-ghost btn-sm" />
           </form>
         }
       />
@@ -240,7 +236,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
                 <a className="underline" href={fileUrl} target="_blank" rel="noreferrer" data-testid="magnet-file-url">{m.fileName}</a>
                 <form action={removeMagnetFileAction}>
                   <input type="hidden" name="id" value={m.id} />
-                  <button className="btn btn-ghost btn-xs" type="submit">Remove</button>
+                  <ConfirmDelete verb="Remove" what="this file" undo="The file is deleted; the lead magnet's page stays. This can't be undone." label="Remove" className="btn btn-ghost btn-xs" />
                 </form>
               </div>
             ) : null}

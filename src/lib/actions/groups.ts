@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -88,7 +89,7 @@ export async function deleteGroupAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   await db.delete(schema.groups).where(and(eq(schema.groups.id, str(formData, "id")), eq(schema.groups.userId, userId)));
   refresh();
-  redirect("/groups");
+  redirect(deletedTo("/groups", "group"));
 }
 
 export async function markPostedInGroupAction(formData: FormData): Promise<void> {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { eq, inArray } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
 import { BELIEF_KEYS } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
@@ -108,7 +109,7 @@ export default async function ObjectionsPage() {
                         </form>
                         <form action={deleteObjectionAction} className="mt-2">
                           <input type="hidden" name="id" value={o.id} />
-                          <button className="text-xs text-ink-3 underline" type="submit">Delete</button>
+                          <ConfirmDelete what="this objection" label="Delete" className="text-xs text-ink-3 underline" />
                         </form>
                       </Disclosure>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, eq } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { PROOF_TYPES } from "@/db/schema";
@@ -174,7 +175,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
             </form>
             <form action={deleteProofAction} className="mt-3">
               <input type="hidden" name="id" value={p.id} />
-              <button className="text-xs text-danger underline" type="submit">Delete this proof</button>
+              <ConfirmDelete what="this proof" undo="Its files go with it. This can't be undone." label="Delete this proof" className="text-xs text-danger underline" />
             </form>
           </Card>
         </div>
@@ -256,7 +257,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                             ) : null}
                             <form action={deleteProofAttachmentAction}>
                               <input type="hidden" name="id" value={a.id} />
-                              <button className="btn btn-ghost btn-xs text-danger" type="submit" data-testid="attachment-delete">{a.showsAPerson ? "Withdraw permission and delete" : "Delete"}</button>
+                              <ConfirmDelete what="this file" undo={a.showsAPerson ? "It shows a person, so their permission is withdrawn with it. This can't be undone." : "This can't be undone."} label={<>{a.showsAPerson ? "Withdraw permission and delete" : "Delete"}</>} className="btn btn-ghost btn-xs text-danger" testId="attachment-delete" />
                             </form>
                           </div>
                         </div>

@@ -13,6 +13,7 @@
  * ("01" to "1") fails the match on the safe side until the live call says how it behaves. Partial failure and the host are
  * Danno's call to run. Tokens are sealed at rest and decrypted for the request.
  */
+import { createHash } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
@@ -124,12 +125,32 @@ async function withTimeout(input: string, init: RequestInit): Promise<Response> 
 }
 const authed = (token: string) => ({ "content-type": "application/json", accept: "application/json", Authorization: `Bearer ${token}` });
 
-/** GET /flow/ai-agents: the agents in the client's workspace, ns and name. Empty on any refusal. */
-export async function listAgents(token: string): Promise<{ ns: string; name: string }[]> {
+/**
+ * GET /flow/ai-agents: the agents in the client's workspace, ns and name. Empty on any refusal.
+ *
+ * Cached for a minute per bot (keyed by a hash of its token, never the token), because the Coach page and the Bot Brief read it
+ * on every render, prefetches included, and an agent list does not move minute to minute. A refusal is never cached. `fresh`
+ * skips the cache: the check before a push and the read-back after it always read live (ruling, 22 Sep), since a minute-old
+ * answer there is a correctness bug, not a performance trade.
+ */
+export const AGENT_LIST_TTL_MS = 60_000;
+const agentLists = new Map<string, { at: number; agents: { ns: string; name: string }[] }>();
+const botKey = (token: string) => createHash("sha256").update(token).digest("hex").slice(0, 24);
+export async function listAgents(token: string, opts: { fresh?: boolean } = {}): Promise<{ ns: string; name: string }[]> {
+  const key = botKey(token);
+  const hit = agentLists.get(key);
+  if (!opts.fresh && hit && Date.now() - hit.at < AGENT_LIST_TTL_MS) return hit.agents;
   try {
     const res = await withTimeout(`${uchatBase()}/flow/ai-agents`, { method: "GET", headers: authed(token) });
-    return res.ok ? parseAgents(await res.json()) : [];
+    if (!res.ok) {
+      agentLists.delete(key);
+      return [];
+    }
+    const agents = parseAgents(await res.json());
+    agentLists.set(key, { at: Date.now(), agents });
+    return agents;
   } catch {
+    agentLists.delete(key);
     return [];
   }
 }
@@ -149,11 +170,14 @@ export async function readAgentInfo(token: string, ns: string): Promise<AgentInf
  * because the agent that answers questions is not always the first (on the Book 'em Danno template the Booking Agent only
  * books). Blank with exactly one agent is no choice at all, so it is taken; blank with more than one asks.
  */
-export async function agentFor(m: schema.Membership, token: string): Promise<{ agent: AgentInfo | null; ask: string | null }> {
-  const pick = pickAgent(m.clAgentNs, await listAgents(token));
+export async function agentFor(m: schema.Membership, token: string, opts: { fresh?: boolean } = {}): Promise<{ agent: AgentInfo | null; ask: string | null }> {
+  const pick = pickAgent(m.clAgentNs, await listAgents(token, opts));
   if (pick.kind === "ask") return { agent: null, ask: chooseAgentLine(pick.agents) };
   if (pick.kind === "none") return { agent: null, ask: "No agent on your bot yet, so there is nothing for the FAQ to feed." };
-  return { agent: await readAgentInfo(token, pick.ns), ask: null };
+  const agent = await readAgentInfo(token, pick.ns);
+  // A cached list that names an agent the bot no longer answers for is stale: read the list again, once, rather than wait it out.
+  if (!agent && !opts.fresh && !m.clAgentNs) return agentFor(m, token, { fresh: true });
+  return { agent, ask: null };
 }
 
 /**
@@ -225,7 +249,7 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
 
   // Everything that must be true first: the field is allowed, the agent is chosen, the field is on the bot, and it holds
   // nothing HelixOS did not write (unless the coach waived it). Each is one sentence, the same one the Brief already showed.
-  const pre = await faqPreflight(m, token);
+  const pre = await faqPreflight(m, token, { fresh: true });
   if (pre.blocked) return done("failed", pre.blocked, {}, record);
   const agent = pre.agent;
   if (!agent) return done("failed", "Couldn't read your bot's agent from Community Loyalty. Check the token and the agent, then try again.", {}, record);
@@ -249,7 +273,7 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
       if (!morePages(pageRows.length, READ_BACK_LIMIT)) break;
     }
     const valueReadBack = held === composed.text;
-    const again = (await agentFor(m, token)).agent;
+    const again = (await agentFor(m, token, { fresh: true })).agent;
     const tokenReadBack = Boolean(again && agentReadsFields(again, [field], pre.nsByName).reads.length);
     const rec = { ...record, valueReadBack, tokenReadBack };
     if (!valueReadBack) return done("failed", `Pushed, but the read-back of ${field} differs: not recorded as synced.`, { reads, notRead, dropped }, rec);
@@ -304,14 +328,14 @@ function logAgentPrompt(m: schema.Membership, agent: AgentInfo, field: string, n
  * the field holds nothing HelixOS did not write unless the coach has waived that on the Coach page. Each blocker is one sentence
  * the coach can act on.
  */
-async function faqPreflight(m: schema.Membership, token: string): Promise<{ agent: AgentInfo | null; blocked: string | null; warning: string | null; fieldVarType: string | null; lastSentValue: string | null; nsByName: Record<string, string> }> {
+async function faqPreflight(m: schema.Membership, token: string, opts: { fresh?: boolean } = {}): Promise<{ agent: AgentInfo | null; blocked: string | null; warning: string | null; fieldVarType: string | null; lastSentValue: string | null; nsByName: Record<string, string> }> {
   const field = faqFieldFor(m);
   const lastSync = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt)] });
   const lastSentValue = lastSync ? composeField(lastSync.snapshot).text : null;
   const none = { nsByName: {} as Record<string, string> };
   const refused = faqFieldRefusal(field, STAGE1_FIELDS, BOT_WRITTEN_FIELDS);
   if (refused) return { agent: null, blocked: refused, warning: null, fieldVarType: null, lastSentValue, ...none };
-  const { agent, ask } = await agentFor(m, token);
+  const { agent, ask } = await agentFor(m, token, opts);
   if (ask) return { agent: null, blocked: ask, warning: null, fieldVarType: null, lastSentValue, ...none };
   const fields = await listBotFields(token);
   const nsByName = Object.fromEntries(fields.filter((f) => f.ns).map((f) => [f.name, f.ns]));

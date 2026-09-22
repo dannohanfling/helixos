@@ -1,5 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
 import { identityOf, stageNeedsIdentity } from "@/lib/engine/contact-sync";
 import { db, schema } from "@/db";
@@ -166,9 +167,7 @@ export default async function ContactPage({ params, searchParams }: { params: Pr
           </Card>
           <form action={deleteContactAction}>
             <input type="hidden" name="id" value={contact.id} />
-            <button className="text-xs text-ink-3 hover:text-danger" type="submit">
-              Delete contact
-            </button>
+            <ConfirmDelete what="this contact and their conversation" label="Delete contact" className="text-xs text-ink-3 hover:text-danger" />
           </form>
         </div>
       </div>

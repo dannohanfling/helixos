@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { heicToJpeg, imageDimensions } from "@/lib/proof-renditions";
@@ -233,6 +234,6 @@ export async function deleteProofAttachmentAction(formData: FormData): Promise<v
   await forgetAttachmentOnPosts([att.id]);
   await db.delete(schema.proofAttachments).where(eq(schema.proofAttachments.id, att.id));
   refresh();
-  redirect(`/proof/${att.proofId}`);
+  redirect(deletedTo(`/proof/${att.proofId}`, "attachment"));
 }
 

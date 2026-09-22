@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -162,7 +163,7 @@ export async function confirmEvidenceAction(formData: FormData): Promise<void> {
   const claim = str(formData, "claim");
   await db.update(schema.evidence).set({ citationQuality: "verified", verifiedAt: nowIso(), ...(claim ? { claim } : {}) }).where(and(eq(schema.evidence.id, id), eq(schema.evidence.userId, userId)));
   refresh();
-  redirect("/evidence#shelf");
+  redirect(deletedTo("/evidence#shelf", "study"));
 }
 
 export async function removeEvidenceAction(formData: FormData): Promise<void> {

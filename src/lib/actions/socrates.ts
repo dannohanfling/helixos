@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -31,6 +32,7 @@ export async function deleteQuestionAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   await db.delete(schema.socratesQuestions).where(and(eq(schema.socratesQuestions.id, str(formData, "id")), eq(schema.socratesQuestions.userId, userId)));
   refresh();
+  redirect(deletedTo("/socrates/questions", "question"));
 }
 
 export async function createScriptAction(formData: FormData): Promise<void> {
@@ -100,6 +102,6 @@ export async function deleteScriptAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   await db.delete(schema.socratesScripts).where(and(eq(schema.socratesScripts.id, str(formData, "id")), eq(schema.socratesScripts.userId, userId)));
   refresh();
-  redirect("/socrates/scripts");
+  redirect(deletedTo("/socrates/scripts", "script"));
 }
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
@@ -145,7 +146,7 @@ export default async function LaddersPage() {
                       {l.launchedAt ? <span className="text-xs text-ink-3">· {formatDateTime(l.launchedAt, v.workspace.timezone)}</span> : null}
                       <form action={deleteLadderAction}>
                         <input type="hidden" name="id" value={l.id} />
-                        <button className="text-xs text-ink-3 underline" type="submit">Delete</button>
+                        <ConfirmDelete what="this comment ladder" label="Delete" className="text-xs text-ink-3 underline" />
                       </form>
                     </li>
                   );

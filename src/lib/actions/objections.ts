@@ -1,5 +1,6 @@
 "use server";
 
+import { deletedTo } from "@/lib/deleted";
 import { and, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -19,7 +20,7 @@ export async function createObjectionAction(formData: FormData): Promise<void> {
   const [reframe, ...rest] = reframesOf(formData);
   await db.insert(schema.libraryAssets).values({ id: newId(), workspaceId, userId, type: "objection", name, body: str(formData, "body") || name, reframe: reframe ?? null, reframes: rest, underneath: opt(formData, "underneath"), belief: beliefOf(str(formData, "belief")), proof: opt(formData, "proof"), useWhen: opt(formData, "useWhen"), tag: opt(formData, "tag") });
   refresh();
-  redirect("/socrates/objections");
+  redirect(deletedTo("/socrates/objections", "objection"));
 }
 
 export async function updateObjectionAction(formData: FormData): Promise<void> {

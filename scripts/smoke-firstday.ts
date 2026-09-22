@@ -191,12 +191,15 @@ async function main() {
     const box = await del.boundingBox();
     if (!box || box.height < 38 || box.width < 38) throw new Error(`delete target too small on touch: ${JSON.stringify(box)}`);
     const before = await page.locator('[data-testid="task-controls"]').count();
-    page.once("dialog", (d) => d.dismiss());
+    // The app's own confirm: Cancel is focused, so Enter cancels; nothing is sent.
     await del.click();
+    await page.locator("dialog[open]").waitFor({ timeout: 5000 });
+    if ((await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset?.testid)) !== "confirm-delete-cancel") throw new Error("Cancel is the default in the delete confirm");
+    await page.keyboard.press("Enter");
     await page.waitForTimeout(600);
-    if ((await page.locator('[data-testid="task-controls"]').count()) !== before) throw new Error("cancelling the confirm still deleted the task");
-    page.once("dialog", (d) => d.accept());
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), del.click()]);
+    if ((await page.locator("dialog[open]").count()) || (await page.locator('[data-testid="task-controls"]').count()) !== before) throw new Error("cancelling the confirm still deleted the task");
+    await del.click();
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('dialog[open] [data-testid="confirm-delete-yes"]').click()]);
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(500);
     const after = await page.locator('[data-testid="task-controls"]').count();

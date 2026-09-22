@@ -1,5 +1,6 @@
 import { requireViewer } from "@/lib/auth";
 import { addQuestionAction, deleteQuestionAction } from "@/lib/actions/socrates";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { CLARITY_BEATS, NEPQ_CATEGORIES, SCRIPT_TYPES, beatByStage, questionsFor } from "@/lib/engine/socrates";
 import { visibleQuestions } from "@/lib/queries/socrates";
 import { Badge, Card, Disclosure, Field, PageHeader, Tabs } from "@/components/ui";
@@ -52,7 +53,7 @@ export default async function QuestionsPage({ searchParams }: { searchParams: Pr
                 {x.own ? (
                   <form action={deleteQuestionAction}>
                     <input type="hidden" name="id" value={x.id} />
-                    <button className="text-xs text-ink-3 underline" type="submit">Delete</button>
+                    <ConfirmDelete what="this question" label="Delete" className="text-xs text-ink-3 underline" />
                   </form>
                 ) : null}
               </li>

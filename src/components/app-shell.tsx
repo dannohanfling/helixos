@@ -2,7 +2,8 @@ import { NavProgress } from "@/components/nav-progress";
 import { PinToViewport } from "@/components/pin-to-viewport";
 import { AppLogo } from "@/components/brand-logo";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
+import { DeletedNotice } from "./deleted-notice";
 import type { Viewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
@@ -72,7 +73,13 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
         </header>
         </PinToViewport>
         <NavProgress />
-        <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6 md:pb-10 md:pt-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6 md:pb-10 md:pt-8">
+          {/* After a delete: the one line saying what went, on the list the person was sent back to. */}
+          <Suspense fallback={null}>
+            <DeletedNotice />
+          </Suspense>
+          {children}
+        </main>
       </div>
       <BottomNav role={viewer.role} />
     </div>

@@ -1,3 +1,4 @@
+import { ConfirmDelete } from "./confirm-delete";
 import type { Viewer } from "@/lib/auth";
 import { fathomConnectionFor } from "@/lib/fathom";
 import { recheckFathomKeyAction, removeFathomKeyAction, saveFathomKeyAction } from "@/lib/actions/fathom";
@@ -48,7 +49,7 @@ export async function FathomKeyCard({ v, notice }: { v: Viewer; notice?: string 
             <button className="underline" type="submit">Check again</button>
           </form>
           <form action={removeFathomKeyAction}>
-            <button className="underline" type="submit">Remove key</button>
+            <ConfirmDelete verb="Remove" what="your Fathom key" undo="To use it again you would paste it in again." label="Remove key" className="underline" />
           </form>
         </div>
       ) : null}

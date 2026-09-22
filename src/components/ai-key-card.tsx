@@ -1,3 +1,4 @@
+import { ConfirmDelete } from "./confirm-delete";
 import Link from "next/link";
 import { and, eq, gte } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -79,7 +80,7 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
                 <button className="underline" type="submit">Check again</button>
               </form>
               <form action={removeAiKeyAction}>
-                <button className="underline" type="submit">Remove key</button>
+                <ConfirmDelete verb="Remove" what="your AI key" undo="To use it again you would paste it in again." label="Remove key" className="underline" />
               </form>
             </div>
           ) : null}

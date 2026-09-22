@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { CONTENT_TYPES, LIBRARY_KINDS } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { deleteLibraryPostAction, shareLibraryPostAction, updateLibraryPostAction, useLibraryPostAction } from "@/lib/actions/library";
@@ -166,9 +167,7 @@ export default async function LibraryEntryPage({ params }: { params: Promise<{ i
               </form>
               <form action={deleteLibraryPostAction} className="mt-3">
                 <input type="hidden" name="id" value={p.id} />
-                <button className="text-xs text-danger underline" type="submit">
-                  Delete
-                </button>
+                <ConfirmDelete what="this library post" label="Delete" className="text-xs text-danger underline" />
               </form>
             </Card>
           ) : null}

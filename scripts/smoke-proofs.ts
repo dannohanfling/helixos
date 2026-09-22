@@ -198,7 +198,8 @@ async function main() {
     const original = await page.request.get(`${base}/api/proofs/attachments/${heicRow.id}?download=1`);
     if (original.headers()["content-type"] !== "image/heic" || Buffer.compare(await original.body(), HEIC) !== 0 || !/IMG_0412\.heic/.test(original.headers()["content-disposition"] ?? "")) throw new Error("the download is the original HEIC under its own name");
     if (!(await page.locator(`[data-testid="attachment"][data-kind="image"] img[src*="${heicRow.id}?display=1"]`).count())) throw new Error("the proof page shows the rendition, not the HEIC");
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(`#att-${heicRow.id} [data-testid="attachment-delete"]`).click()]);
+    await page.locator(`#att-${heicRow.id} [data-testid="attachment-delete"]`).click();
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('dialog[open] [data-testid="confirm-delete-yes"]').click()]);
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(400);
     const after = await listed();
@@ -285,12 +286,14 @@ async function main() {
 
     // Deletion deletes the object first, then the row; deleting the proof takes every object with it
     await page.goto(`${base}/proof/${proofId}`);
-    await submit(page, '[data-testid="attachment-delete"]');
-    await page.waitForURL(new RegExp(`/proof/${proofId}$`));
+    await page.locator('[data-testid="attachment-delete"]').first().click();
+    await submit(page, 'dialog[open] [data-testid="confirm-delete-yes"]');
+    await page.waitForURL(new RegExp(`/proof/${proofId}(\\?deleted=attachment)?$`));
     if ((await page.locator('[data-testid="attachment"]').count()) !== 1) throw new Error("one attachment left");
     if ((await listed()).filter((o) => o.pathname.startsWith("proofs/")).length !== 1) throw new Error("the deleted attachment's object left the store");
-    await submit(page, 'button:has-text("Delete this proof")');
-    await page.waitForURL(/\/proof$/);
+    await page.click('button:has-text("Delete this proof")');
+    await submit(page, 'dialog[open] [data-testid="confirm-delete-yes"]');
+    await page.waitForURL(/\/proof(\?deleted=proof)?$/);
     if ((await listed()).some((o) => o.pathname.startsWith("proofs/"))) throw new Error("deleting the proof must take its objects with it");
     if ((await db.query.proofAttachments.findMany({ where: eq(schema.proofAttachments.proofId, proofId) })).length) throw new Error("rows outlived the proof");
     console.log("✓ deletion actually deletes: the object, then the row; the proof takes its files with it");
