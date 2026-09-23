@@ -5,7 +5,8 @@
  * exactly which names arrived, and refuses anything without a Bearer token. The request and response shapes are the published
  * UChat OpenAPI document's (code-addendum-uchat-spec.md): body `{ data: [{ name, value }] }`, 200 `{ status: "ok" }`, 400
  * `{ message }`. `POST /__skip {name}` makes the mock accept a push and silently not write that one field, so a walk can prove
- * a 200 is not a match.
+ * a 200 is not a match. Every set call, the FAQ's and Stage 1's alike, refuses an empty or whitespace-only value with production's
+ * 422 body; `POST /__delay {ms}` holds the next set call open so a walk can press a send twice while it is out.
  */
 import { createServer } from "node:http";
 
@@ -18,6 +19,8 @@ let types: Record<string, string> = {};
 /** The workspace's agents and what each one's prompt actually reads, seedable so a walk can prove "push only what the agent reads". */
 let agentListReads = 0;
 let refuseNext = false;
+/** A one-shot delay on the next set call, so a walk can see a send's pending state and press it twice while it is out. */
+let delayNext = 0;
 let agents: { ai_agent_ns: string; name: string; description: string; prompts: { section: string; text: string }[] }[] = [
   { ai_agent_ns: "f1a2b3", name: "Booking Agent", description: "Books calls.", prompts: [
     { section: "Persona & Role", text: "You are {ai_persona_role_cbf}." },
@@ -42,8 +45,9 @@ const read = (req: import("node:http").IncomingMessage) => new Promise<string>((
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
-  if (url.pathname === "/__reset") { fields = {}; types = {}; requests.length = 0; reads.length = 0; skipped = null; refuseNext = false; return json(res, 200, { ok: true }); }
+  if (url.pathname === "/__reset") { fields = {}; types = {}; requests.length = 0; reads.length = 0; skipped = null; refuseNext = false; delayNext = 0; return json(res, 200, { ok: true }); }
   if (url.pathname === "/__refuse-next" && req.method === "POST") { refuseNext = true; return json(res, 200, { ok: true }); }
+  if (url.pathname === "/__delay" && req.method === "POST") { delayNext = Number((JSON.parse((await read(req)) || "{}") as { ms?: number }).ms ?? 0); return json(res, 200, { ok: true, delayNext }); }
   if (url.pathname === "/__types" && req.method === "POST") { Object.assign(types, JSON.parse(await read(req))); return json(res, 200, { ok: true, types }); }
   // Replace the agent list: `{ agents: [...] }`, each with prompts whose text carries the tokens it reads.
   if (url.pathname === "/__agents" && req.method === "POST") { agents = (JSON.parse(await read(req)) as { agents: typeof agents }).agents; return json(res, 200, { ok: true, agents }); }
@@ -68,6 +72,11 @@ createServer(async (req, res) => {
   }
   if (url.pathname === "/flow/set-bot-fields-by-name" && req.method === "PUT") {
     const body = JSON.parse((await read(req)) || "{}") as { data?: { name: string; value: string }[] };
+    if (delayNext) {
+      const ms = delayNext;
+      delayNext = 0;
+      await new Promise((r) => setTimeout(r, ms));
+    }
     if (!Array.isArray(body.data) || !body.data.length) return json(res, 400, { message: "The data field is required." });
     if (body.data.length > 20) return json(res, 400, { message: "The data may not have more than 20 items." });
     if (body.data.some((f) => typeof f.value !== "string" || typeof f.name !== "string")) return json(res, 400, { message: "The data.*.value must be a string." });

@@ -400,6 +400,13 @@
       "when": 1790109973344,
       "tag": "0056_proof_repeat",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1790197149428,
+      "tag": "0057_never_quote_price",
+      "breakpoints": true
     }
   ]
 }

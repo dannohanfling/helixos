@@ -1,0 +1,1 @@
+ALTER TABLE `offers` ADD `never_quote_price` integer DEFAULT false NOT NULL;

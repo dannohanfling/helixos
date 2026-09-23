@@ -517,6 +517,8 @@ export const offers = sqliteTable(
     qualifyingQuestion1: text("qualifying_question_1"),
     qualifyingQuestion2: text("qualifying_question_2"),
     qualifyingQuestion3: text("qualifying_question_3"),
+    /** "Never quote prices": the price is left out of what the bot is sent (Stage 1), and the Brief says so. */
+    neverQuotePrice: integer("never_quote_price", { mode: "boolean" }).notNull().default(false),
     objTime: text("obj_time"),
     objMoney: text("obj_money"),
     objPartner: text("obj_partner"),

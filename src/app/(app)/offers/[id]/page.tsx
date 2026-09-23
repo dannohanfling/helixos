@@ -141,6 +141,13 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                       <input className="field tabular" name="price" type="number" min={0} defaultValue={offer.price} />
                     </div>
                   </Field>
+                <label className="flex items-start gap-2 text-sm sm:col-span-2" title="Your bot is sent this offer without its price, and its constraints forbid stating a price that is not in its fields.">
+                  <input type="checkbox" name="neverQuotePrice" defaultChecked={offer.neverQuotePrice} className="mt-1" data-testid="never-quote-price" />
+                  <span>
+                    Never quote prices
+                    <span className="block text-xs text-ink-3">Your bot is sent this offer without its price, so it has no price to state. Your Bot Brief says so.</span>
+                  </span>
+                </label>
                 <Field label="Payment plan">
                   <input className="field" name="paymentPlan" defaultValue={offer.paymentPlan ?? ""} placeholder="3 x $550" />
                 </Field>

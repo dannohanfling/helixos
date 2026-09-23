@@ -1,9 +1,10 @@
 /**
  * The Stage 1 push to a client's own Community Loyalty (uChat) workspace: HelixOS writes values into the template's existing
- * bot field names, one call per client, addressed by name (PUT /flow/set-bot-fields-by-name). One-way: the only read is the
- * read-back of what was just sent. The push is a named subset (STAGE1_FIELDS) and asserts it touches none of
- * BOT_WRITTEN_FIELDS before it sends, so a re-push after an unrelated edit leaves the calendar the client chose and the
- * appointment the agent booked exactly as they were.
+ * bot field names, one call per client, addressed by name (PUT /flow/set-bot-fields-by-name). One-way: the reads are the
+ * preview of what the bot holds now, shown to the coach field by field before anything is sent, and the read-back of what was
+ * just sent. Nothing pushes on its own: every push is the coach's press on that preview. The push is a named subset
+ * (STAGE1_FIELDS), only the fields the target agent reads and that change, and it asserts it touches none of
+ * BOT_WRITTEN_FIELDS before it sends, so the calendar the client chose and the appointment the agent booked stay as they were.
  *
  * Request shape from the published UChat OpenAPI document (code-addendum-uchat-spec.md): `{ "data": [{ name, value }] }` with
  * `Authorization: Bearer <token>`, a 200 of `{ "status": "ok" }` with no per-field result. So a 200 is not a match: after it,
@@ -18,7 +19,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
-import { BOT_WRITTEN_FIELDS, READ_BACK_LIMIT, STAGE1_FIELDS, assertStorable, botFieldsRequest, morePages, parseBotFields, readBackMismatches, samePayload, stage1Payload, stage1Problems, type BotFieldPayload } from "@/lib/engine/bot-fields";
+import { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, STAGE1_FIELDS, assertStorable, botFieldsRequest, morePages, parseBotFields, planPayload, pricesLeftOut, readBackMismatches, stage1Payload, stage1Plan, stage1Problems, type BotFieldPayload, type PlanRow } from "@/lib/engine/bot-fields";
 import { redactSecrets } from "@/lib/engine/redact";
 import { logSync } from "@/lib/integrations";
 
@@ -47,88 +48,152 @@ export function platformReason(status: number, body: string): string {
   return message ? `Community Loyalty said: "${redactSecrets(message)}" (${status})` : `Community Loyalty answered ${status}`;
 }
 
-export type PushOutcome = { status: "sent" | "skipped" | "failed"; note: string; fields: string[] };
+export type PushOutcome = { status: "sent" | "skipped" | "failed" | "changed"; note: string; fields: string[] };
 
-/** The Stage 1 payload for one member, read off the record: the membership, the workspace, the member's zone and their live offers. */
-export async function payloadFor(membership: schema.Membership): Promise<BotFieldPayload> {
+/** The Stage 1 payload for one member, read off the record, with the live offers whose price is left out (never quote prices). */
+export async function payloadFor(membership: schema.Membership): Promise<{ payload: BotFieldPayload; pricesLeftOut: string[] }> {
   const [workspace, offers] = await Promise.all([
     db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, membership.workspaceId) }),
     db.query.offers.findMany({ where: and(eq(schema.offers.workspaceId, membership.workspaceId), eq(schema.offers.userId, membership.userId)) }),
   ]);
   // The member's own zone, else the workspace's: the same rule Today and the reminders follow.
-  return stage1Payload({ businessName: membership.businessName, workspaceName: workspace?.name ?? "", timezone: membership.timezone ?? workspace?.timezone ?? "UTC", offers });
+  return { payload: stage1Payload({ businessName: membership.businessName, workspaceName: workspace?.name ?? "", timezone: membership.timezone ?? workspace?.timezone ?? "UTC", offers }), pricesLeftOut: pricesLeftOut(offers) };
 }
 
 /**
- * Push one member's Stage 1 fields. `force` re-sends even when nothing changed (the coach's Re-sync, which wins back fields the
- * bot's own SETUP wizard overwrote); otherwise an unchanged payload is not sent. Never throws.
+ * What a Stage 1 push would change on one member's bot, read live: the bot's fields, the target agent's prompt, and the plan
+ * per field (stage1Plan). `key` fingerprints exactly what would be sent against what the bot holds now; the push carries the key
+ * the coach saw and refuses when it no longer matches, so what is sent is what was shown.
  */
-export async function pushBotFields(membershipId: string, opts: { force?: boolean; reason: string }): Promise<PushOutcome> {
+export type Stage1Preview = { blocked: string | null; rows: PlanRow[]; key: string; pricesLeftOut: string[]; agentName: string | null };
+export async function stage1Preview(m: schema.Membership): Promise<Stage1Preview> {
+  const { payload, pricesLeftOut: leftOut } = await payloadFor(m);
+  const none = { rows: [], key: "", pricesLeftOut: leftOut, agentName: null };
+  const token = open(m.clApiToken);
+  if (!token) return { blocked: "No Community Loyalty API token on this member yet: add it on the Coach page first.", ...none };
+  // The drip webhook is never opened here: its shape (/api/iwh/) is refused by assertStorable without the value in hand.
+  assertStorable(payload, [token]);
+  const problems = stage1Problems(payload);
+  if (problems.length) return { blocked: problems.join(" "), ...none };
+  const { agent, ask } = await agentFor(m, token, { fresh: true });
+  if (ask) return { blocked: ask, ...none };
+  if (!agent) return { blocked: "Couldn't read the bot's agent from Community Loyalty. Check the token and the agent on the Coach page, then try again.", ...none };
+  const held = await readBotFields(token);
+  if ("refused" in held) return { blocked: `Couldn't read the bot's fields from Community Loyalty. ${held.refused}`, ...none, agentName: agent.name };
+  const rows = stage1Plan(payload, held.rows, agent);
+  for (const r of rows) if (r.name && (BOT_WRITTEN_FIELDS as readonly string[]).includes(r.name)) throw new Error(`bot-fields: ${r.name} is written by the bot and cannot be pushed`);
+  const key = createHash("sha256").update(JSON.stringify(rows.filter((r) => r.status === "change").map((r) => [r.name, r.current, r.next]))).digest("hex").slice(0, 32);
+  return { blocked: null, rows, key, pricesLeftOut: leftOut, agentName: agent.name };
+}
+
+/** One push per member at a time: a second press that reaches the server while the first is still out is dropped, not sent. */
+const pushing = new Set<string>();
+
+/**
+ * Push one member's Stage 1 fields, as the coach saw them on the preview: only the fields that change, by the name the bot has,
+ * read back over only those. Nothing is sent when the plan no longer matches the key the coach pressed on (the bot or the record
+ * moved since the page was read), when nothing would change, or while a push for this member is already out; none of those is
+ * a push, so none is logged. Never throws.
+ */
+export async function pushBotFields(membershipId: string, opts: { key: string; reason: string }): Promise<PushOutcome> {
   const m = await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membershipId) });
   if (!m) return { status: "skipped", note: "No such member.", fields: [] };
-  const log = async (status: PushOutcome["status"], note: string, fields: string[]) => {
+  if (pushing.has(m.id)) return { status: "skipped", note: "A push to this bot is already on its way.", fields: [] };
+  pushing.add(m.id);
+  try {
+    return await pushPlanned(m, opts);
+  } finally {
+    pushing.delete(m.id);
+  }
+}
+async function pushPlanned(m: schema.Membership, opts: { key: string; reason: string }): Promise<PushOutcome> {
+  const log = async (status: "sent" | "failed", note: string, fields: string[]) => {
     // The sync log carries the names and the reason, never a value: values are on the membership row, the token nowhere.
     await logSync({ workspaceId: m.workspaceId, userId: m.userId, provider: "community_loyalty", direction: "out", event: "botfields.push", payload: { reason: opts.reason, fields }, status, note: redactSecrets(note) });
     return { status, note, fields };
   };
   const token = open(m.clApiToken);
-  if (!token) return log("skipped", "No Community Loyalty API token on this client.", []);
-  const payload = await payloadFor(m);
-  const names = Object.keys(payload);
-  for (const n of names) if ((BOT_WRITTEN_FIELDS as readonly string[]).includes(n) || !(STAGE1_FIELDS as readonly string[]).includes(n)) return log("failed", `Refused: ${n} is not a Stage 1 field.`, names);
-  // The drip webhook is never opened here: its shape (/api/iwh/) is refused by assertStorable without the value in hand.
-  assertStorable(payload, [token]);
-  const problems = stage1Problems(payload);
-  if (problems.length) return log("failed", problems.join(" "), names);
-  if (!opts.force && samePayload(m.clBotFields, payload)) return log("skipped", "Nothing changed since the last push.", names);
+  if (!token) return { status: "skipped", note: "No Community Loyalty API token on this member yet.", fields: [] };
+  let preview: Stage1Preview;
   try {
-    const headers = { "content-type": "application/json", accept: "application/json", Authorization: `Bearer ${token}` };
-    const withTimeout = async (input: string, init: RequestInit) => {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 8000);
-      try {
-        return await fetch(input, { ...init, signal: ctrl.signal });
-      } finally {
-        clearTimeout(t);
-      }
-    };
-    const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers, body: JSON.stringify(botFieldsRequest(payload)) });
+    preview = await stage1Preview(m);
+  } catch (e) {
+    return log("failed", e instanceof Error ? e.message : String(e), []);
+  }
+  if (preview.blocked) return log("failed", preview.blocked, []);
+  if (preview.key !== opts.key) return { status: "changed", note: "The bot or the record changed since this page was read. Here is the new before-and-after; nothing was sent.", fields: [] };
+  const payload = planPayload(preview.rows);
+  const names = Object.keys(payload);
+  if (!names.length) return { status: "skipped", note: "Nothing to change: the bot already holds everything HelixOS would send.", fields: [] };
+  for (const n of names) if ((BOT_WRITTEN_FIELDS as readonly string[]).includes(n) || !preview.rows.some((r) => r.name === n)) return log("failed", `Refused: ${n} is not a Stage 1 field.`, names);
+  try {
+    const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers: authed(token), body: JSON.stringify(botFieldsRequest(payload)) });
     const body = await res.text();
     if (!res.ok) {
       logPlatformRefusal("PUT /flow/set-bot-fields-by-name (stage 1)", res.status, body);
       return log("failed", `Not sent: ${platformReason(res.status, body)}.`, names);
     }
-    // Read back: a 200 says the call was accepted, not that the fields were written. The record moves only on a match.
-    const held: Record<string, string | undefined> = {};
-    for (let page = 1; page <= 100; page++) {
-      const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers });
-      if (!back.ok) {
-        logPlatformRefusal("GET /flow/bot-fields (stage 1 read-back)", back.status, await back.text());
-        return log("failed", `Pushed, but the read-back answered ${back.status} on page ${page}: not recorded as synced.`, names);
-      }
-      const rows = parseBotFields(await back.json());
-      for (const r of rows) held[r.name] = r.value;
-      if (!morePages(rows.length, READ_BACK_LIMIT)) break;
-    }
+    // Read back: a 200 says the call was accepted, not that the fields were written. Only the fields sent are compared, and
+    // the record moves only on a match.
+    const back = await readBotFields(token);
+    if ("refused" in back) return log("failed", `Pushed, but the read-back failed: ${back.refused} Not recorded as synced.`, names);
+    const held: Record<string, string | undefined> = Object.fromEntries(back.rows.map((r) => [r.name, r.value]));
     const mismatched = readBackMismatches(payload, held);
     if (mismatched.length) return log("failed", `Pushed, but the read-back differs on ${mismatched.join(", ")}: not recorded as synced.`, names);
-    await db.update(schema.memberships).set({ clBotFields: payload, clBotFieldsPushedAt: nowIso() }).where(eq(schema.memberships.id, m.id));
-    return log("sent", `${names.length} fields pushed and read back`, names);
+    // What the bot now holds from HelixOS: the fields just sent, and the ones it already held unchanged.
+    const holds = Object.fromEntries(preview.rows.filter((r) => (r.status === "change" || r.status === "same") && r.name).map((r) => [r.name as string, r.next]));
+    await db.update(schema.memberships).set({ clBotFields: holds, clBotFieldsPushedAt: nowIso() }).where(eq(schema.memberships.id, m.id));
+    return log("sent", `${names.length} ${names.length === 1 ? "field" : "fields"} changed on the bot and read back`, names);
   } catch (e) {
     return log("failed", e instanceof Error ? e.message : String(e), names);
   }
 }
 
-/** A Stage 1 source changed for one member: re-push if the payload differs. Quiet when the member has no token. */
-export async function repushForMember(workspaceId: string, userId: string, reason: string): Promise<void> {
-  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)) });
-  if (m?.clApiToken) await pushBotFields(m.id, { reason });
+/**
+ * The bot's fields, every page, or the platform's reason it refused. The Stage 1 preview needs to know a failed read from an
+ * empty bot, so this one does not swallow the refusal.
+ */
+async function readBotFields(token: string): Promise<{ rows: { name: string; value: string; varType: string; ns: string }[] } | { refused: string }> {
+  const rows: { name: string; value: string; varType: string; ns: string }[] = [];
+  try {
+    for (let page = 1; page <= 100; page++) {
+      const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers: authed(token) });
+      if (!back.ok) {
+        const body = await back.text();
+        logPlatformRefusal("GET /flow/bot-fields (stage 1)", back.status, body);
+        return { refused: `${platformReason(back.status, body)} on page ${page}.` };
+      }
+      const pageRows = parseBotFields(await back.json());
+      rows.push(...pageRows);
+      if (!morePages(pageRows.length, READ_BACK_LIMIT)) break;
+    }
+  } catch (e) {
+    return { refused: e instanceof Error ? e.message : String(e) };
+  }
+  return { rows };
 }
 
-/** A workspace-wide source changed (its timezone): every member with a token is re-pushed. */
-export async function repushWorkspace(workspaceId: string, reason: string): Promise<void> {
-  const members = await db.query.memberships.findMany({ where: eq(schema.memberships.workspaceId, workspaceId) });
-  for (const m of members) if (m.clApiToken) await pushBotFields(m.id, { reason });
+/**
+ * Which name this member's bot carries the offers under, for the Coach page to name the fallback: the current name, the older
+ * one, or neither. Read with the bot's own token and cached a minute per bot, the same as the agent list, since the Coach page
+ * reads it on every render. Null with no token or when the platform will not list the fields.
+ */
+const fieldNameLists = new Map<string, { at: number; names: string[] }>();
+export async function productFieldFor(m: schema.Membership): Promise<{ name: string | null; fallback: boolean } | null> {
+  const token = open(m.clApiToken);
+  if (!token) return null;
+  const key = botKey(token);
+  const hit = fieldNameLists.get(key);
+  let names = hit && hit.at > Date.now() - AGENT_LIST_TTL_MS ? hit.names : undefined;
+  if (!names) {
+    const back = await readBotFields(token);
+    if ("refused" in back) return null;
+    names = back.rows.map((r) => r.name);
+    fieldNameLists.set(key, { at: Date.now(), names });
+  }
+  if (names.includes(PRODUCT_FIELD)) return { name: PRODUCT_FIELD, fallback: false };
+  if (names.includes(PRODUCT_FIELD_OLD)) return { name: PRODUCT_FIELD_OLD, fallback: true };
+  return { name: null, fallback: false };
 }
 
 /* ───────────── The coach's brain: the approved FAQ composed into one text field, pushed only where the agent reads it ───────────── */

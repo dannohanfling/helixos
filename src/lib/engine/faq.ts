@@ -233,9 +233,9 @@ export function fromAirtable(r: AirtableFaqRecord): (ParsedEntry & { timesAsked:
 export function faqFieldRefusal(field: string, stage1: readonly string[], botWritten: readonly string[]): string | null {
   const f = field.trim();
   if (!f) return "No FAQ field set.";
+  if (/^ai_product_/i.test(f)) return `${f} holds your offer description, and sending the FAQ there would erase it. Pick a field of its own.`;
   if (stage1.includes(f)) return `${f} is written by the business-facts sync, so the FAQ can't use it. Pick a field of its own.`;
   if (botWritten.includes(f)) return `${f} is written by your bot itself, so the FAQ can't use it. Pick a field of its own.`;
-  if (/^ai_product_/i.test(f)) return `${f} holds your offer description, and sending the FAQ there would erase it. Pick a field of its own.`;
   return null;
 }
 

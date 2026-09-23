@@ -45,6 +45,7 @@ type Route = Owned | { kind: "public"; why: string } | { kind: "coach" };
 const ROUTES: Record<string, Route> = {
   "/clients/[id]": { kind: "owned", table: "clientRecords" },
   "/coach/[clientId]": { kind: "coach" },
+  "/coach/[clientId]/bot": { kind: "coach" },
   "/content/[id]": { kind: "owned", table: "contentItems" },
   "/content/[id]/compose": { kind: "owned", table: "contentItems" },
   "/content/[id]/repurpose": { kind: "owned", table: "contentItems" },

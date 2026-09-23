@@ -8,7 +8,6 @@ import { CURRENCIES } from "@/lib/engine/offer-score";
 import { OFFER_CONTAINERS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
-import { repushForMember } from "@/lib/community-loyalty";
 
 async function own(id: string, userId: string) {
   const o = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, userId)) });
@@ -25,7 +24,7 @@ export async function createOfferAction(formData: FormData): Promise<void> {
 }
 
 export async function updateOfferAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { userId } = await ctx();
   const id = str(formData, "id");
   await own(id, userId);
   const steps = [1, 2, 3, 4, 5].map((i) => str(formData, `step${i}`)).filter(Boolean);
@@ -44,6 +43,8 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       currency: CURRENCIES.find((c) => c === str(formData, "currency").toUpperCase()) ?? "USD",
       length: opt(formData, "length"),
       price: num(formData, "price"),
+      // The tick sits in the same form as the price, so an unticked box is a deliberate "quote it".
+      neverQuotePrice: formData.get("neverQuotePrice") === "on",
       paymentPlan: opt(formData, "paymentPlan"),
       guarantee: opt(formData, "guarantee"),
       scarcity: opt(formData, "scarcity"),
@@ -70,8 +71,6 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       notes: opt(formData, "notes"),
     })
     .where(eq(schema.offers.id, id));
-  // An offer's facts are Stage 1 bot fields: a changed price is a wrong number told to a prospect until it is re-pushed.
-  await repushForMember(workspaceId, userId, "offer");
   refresh();
   const anchor = str(formData, "anchor");
   redirect(`/offers/${id}${anchor ? `#${anchor}` : ""}`);

@@ -6,8 +6,9 @@ import { reviewPathwayTaskAction } from "@/lib/actions/pathway";
 import { nudgeMemberAction, setClientPassAction, reinstateClientAction } from "@/lib/actions/coach";
 import { clientFacing } from "@/lib/engine/pathway";
 import { setCertEnabledAction } from "@/lib/actions/courses";
-import { resyncBotFieldsAction, setMemberPassAction, setMyBotAction } from "@/lib/actions/integrations";
-import { agentChoicesFor } from "@/lib/community-loyalty";
+import { setMemberPassAction, setMyBotAction } from "@/lib/actions/integrations";
+import { agentChoicesFor, productFieldFor } from "@/lib/community-loyalty";
+import { PRODUCT_FIELD, PRODUCT_FIELD_OLD } from "@/lib/engine/bot-fields";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
 import { money, rollup } from "@/lib/engine/ai-usage";
 import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
@@ -98,6 +99,9 @@ export default async function CoachPage() {
   const withBots = [v.membership, ...members];
   const agentLists = await Promise.all(withBots.map((m) => agentChoicesFor(m)));
   const agentsOf = new Map(withBots.map((m, i) => [m.id, agentLists[i]]));
+  // Which name each bot carries its offers under, so a bot still on the older field name says so here.
+  const productFields = await Promise.all(withBots.map((m) => productFieldFor(m)));
+  const productFieldOf = new Map(withBots.map((m, i) => [m.id, productFields[i]]));
   const myBot = v.membership;
 
   return (
@@ -114,7 +118,7 @@ export default async function CoachPage() {
           </label>
           <button className="btn btn-ghost btn-xs" type="submit">Save</button>
         </form>
-        <p className="mt-2 text-xs text-ink-3">Your business facts are not pushed to your own bot yet: that is the Stage 1 work, with the never-quote-prices rule, and it is next.</p>
+        {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} tz={v.workspace.timezone} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
       </Card>
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <Card title="Clients">
@@ -233,13 +237,7 @@ export default async function CoachPage() {
                     <button className="btn btn-ghost btn-xs" type="submit">Save</button>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>
-                  {r.m.clApiToken ? (
-                    <form action={resyncBotFieldsAction} className="flex items-center gap-2">
-                      <input type="hidden" name="membershipId" value={r.m.id} />
-                      <button className="btn btn-ghost btn-xs" type="submit" data-testid="resync-bot" title="Writes the business facts into the bot again, whatever it holds now: the name, the zone, the live offers, the house constraints and the three questions. Never the calendar or a booking.">Re-sync to bot</button>
-                      <span className="text-[11px] text-ink-3" data-testid="bot-fields-pushed">{r.m.clBotFieldsPushedAt ? `${Object.keys(r.m.clBotFields).length} fields pushed ${formatDateTime(r.m.clBotFieldsPushedAt, v.workspace.timezone)}` : "not pushed yet"}</span>
-                    </form>
-                  ) : null}
+                  {r.m.clApiToken ? <BotPushLine m={r.m} productField={productFieldOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
                 </li>
               ))}
             </ul>
@@ -440,5 +438,29 @@ function AgentField({ choices, value, testId }: { choices: { ns: string; name: s
       ))}
       {stale ? <option value={value}>{value} (not on this bot now)</option> : null}
     </select>
+  );
+}
+
+/**
+ * A bot's Stage 1 line on the Coach page: when it was last pushed, the way to the before-and-after (nothing is pushed from here),
+ * and, when the bot still carries the offers under the older field name, that name.
+ */
+function BotPushLine({ m, productField, tz }: { m: { id: string; clBotFields: Record<string, string>; clBotFieldsPushedAt: string | null }; productField: { name: string | null; fallback: boolean } | null; tz: string }) {
+  return (
+    <div className="mt-2 flex w-full flex-wrap items-center gap-2 text-[11px] text-ink-3">
+      <Link href={`/coach/${m.id}/bot`} className="btn btn-ghost btn-xs" data-testid="review-bot" title="Reads the bot and shows, field by field, what a push would change. Nothing is sent from here.">
+        Review bot push →
+      </Link>
+      <span data-testid="bot-fields-pushed">{m.clBotFieldsPushedAt ? `${Object.keys(m.clBotFields).length} fields held from HelixOS, last pushed ${formatDateTime(m.clBotFieldsPushedAt, tz)}` : "not pushed yet"}</span>
+      {productField?.fallback ? (
+        <span className="rounded bg-warn-soft px-1.5 py-0.5 text-ink-2" data-testid="bot-product-field">
+          Offers go to {productField.name}: this bot has the older name, not {PRODUCT_FIELD}.
+        </span>
+      ) : productField && !productField.name ? (
+        <span className="rounded bg-warn-soft px-1.5 py-0.5 text-ink-2" data-testid="bot-product-field">
+          This bot has no {PRODUCT_FIELD} field (nor the older {PRODUCT_FIELD_OLD}), so its offers are not sent.
+        </span>
+      ) : null}
+    </div>
   );
 }

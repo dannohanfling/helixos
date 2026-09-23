@@ -6,7 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { formatDateTime } from "@/lib/dates";
 import { acceptFaqAction, acceptSafeFaqAction, deleteFaqAction, importFaqAction, sendFaqAction, updateFaqAction } from "@/lib/actions/faq";
 import { briefAccessFor, faqFieldFor, isApprovedOrigin, payloadFor } from "@/lib/community-loyalty";
-import { TEMPLATE_BOT_FIELDS } from "@/lib/engine/bot-fields";
+import { PRODUCT_FIELD, PRODUCT_FIELD_OLD, TEMPLATE_BOT_FIELDS } from "@/lib/engine/bot-fields";
 import { FAQ_EMPTY_SENT, FAQ_FIELD_BUDGET, agentReadsFields, composeField, diffSinceSync, needsEyes, notReadWarning, rankEntries } from "@/lib/engine/faq";
 import { ACCEPT_LABEL, UNREVIEWED_LABEL, isUnreviewed } from "@/lib/engine/provenance";
 import { essenceFor } from "@/lib/queries/essence";
@@ -29,7 +29,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const m = v.membership;
   const field = faqFieldFor(m);
-  const [entries, syncs, log, essence, stage1] = await Promise.all([
+  const [entries, syncs, log, essence, { payload: stage1, pricesLeftOut }] = await Promise.all([
     db.query.faqEntries.findMany({ where: and(eq(schema.faqEntries.workspaceId, v.workspace.id), eq(schema.faqEntries.userId, v.user.id)), orderBy: [desc(schema.faqEntries.createdAt)] }),
     db.query.faqSyncs.findMany({ where: and(eq(schema.faqSyncs.workspaceId, v.workspace.id), eq(schema.faqSyncs.userId, v.user.id)), orderBy: [desc(schema.faqSyncs.createdAt), desc(sql`rowid`)], limit: 10 }),
     db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, v.workspace.id), eq(schema.syncEvents.userId, v.user.id), like(schema.syncEvents.event, "faq.%")), orderBy: [desc(schema.syncEvents.createdAt)], limit: 50 }),
@@ -38,7 +38,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
   ]);
   const { hasToken: token, agent, blocked, warning, fieldVarType, nsByName } = await briefAccessFor(m);
   // Push only what the agent reads: of the template's fields and the FAQ's own, the ones whose token is in the agent's prompt.
-  const candidates = [...new Set([...TEMPLATE_BOT_FIELDS, field])];
+  const candidates = [...new Set([...TEMPLATE_BOT_FIELDS, PRODUCT_FIELD_OLD, field])];
   const reads = agent ? agentReadsFields(agent, candidates, nsByName) : null;
   const fieldRead = Boolean(reads?.reads.includes(field));
 
@@ -140,8 +140,11 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
               </div>
               <div>
                 <dt className="font-semibold">What it offers</dt>
-                <dd className="whitespace-pre-line text-ink-2" data-testid="brief-offers">{stage1["ai_product_&_service_cbf"] || "No live offer yet."}</dd>
-                <dd className="text-xs text-ink-3">How it handles price: it states only a price that is in its product field, never one it is unsure of.</dd>
+                <dd className="whitespace-pre-line text-ink-2" data-testid="brief-offers">{stage1[PRODUCT_FIELD] || "No live offer yet."}</dd>
+                <dd className="text-xs text-ink-3" data-testid="brief-price">
+                  How it handles price: it states only a price that is in its product field, never one it is unsure of.
+                  {pricesLeftOut.length ? ` Never quote prices is ticked on ${pricesLeftOut.join(", ")}, so ${pricesLeftOut.length === 1 ? "that price is" : "those prices are"} left out of what your bot is sent and it has none to state.` : ""}
+                </dd>
               </div>
               <div>
                 <dt className="font-semibold">What it knows · {approved.length} approved {approved.length === 1 ? "answer" : "answers"}</dt>
