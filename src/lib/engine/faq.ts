@@ -14,6 +14,22 @@ import { FAQ_CATEGORIES } from "@/db/schema";
  */
 export const FAQ_FIELD_BUDGET = 20000;
 /**
+ * What the FAQ field holds when no answer is approved. Community Loyalty will not hold an empty bot field through
+ * set-bot-fields-by-name, by any spelling of empty (Danno's bot, 22 Sep 18:11 PDT):
+ *   [cl.http] PUT /flow/set-bot-fields-by-name (faq, empty) 422 {"message":"The data.0.value field is required."}
+ *   [cl.http] PUT /flow/set-bot-fields-by-name (faq, a single space) 422 {"message":"The data.0.value field is required."}
+ * The field is read by a model mid-prompt ("Approved answers from HelixOS are below…"), so it gets a sentence that keeps the
+ * prompt true and lets the agent fall through to the knowledge base, not a sentinel it might try to interpret. The published
+ * spec as far as it has been read (set-bot-fields-by-name) offers no call that clears a bot field. This is the design.
+ */
+export const FAQ_EMPTY_VALUE = "There are no approved answers yet.";
+/** What the Brief says after that send, so the next coach who finds a sentence in the field in Community Loyalty knows why. */
+export const FAQ_EMPTY_SENT = "Your bot's FAQ field now says there are no approved answers yet. Community Loyalty doesn't allow an empty field.";
+/** A field holding exactly the empty value is HelixOS's own, holding nothing. */
+export const isFaqEmptyValue = (held: string | null | undefined): boolean => (held ?? "").trim() === FAQ_EMPTY_VALUE;
+/** The value a composed field is written as: the answers, or the empty value when there are none. */
+export const faqFieldValue = (composedText: string): string => composedText || FAQ_EMPTY_VALUE;
+/**
  * The one bot field the approved answers go to: a field dedicated to the FAQ and written only by HelixOS. Never the Booking
  * Agent's Product & Service Information field, which already holds the coach's offer description — a push there would erase it,
  * and that agent only books; the agent that answers questions is the one whose prompt must carry this token. Overridable per
@@ -227,7 +243,7 @@ export function faqFieldRefusal(field: string, stage1: readonly string[], botWri
  * The field already holds text HelixOS did not write. What HelixOS wrote is exactly the last successful sync's value, so
  * anything else in the field came from the coach or the platform and would be erased by a push.
  */
-export const holdsForeignText = (held: string | null | undefined, lastSentValue: string | null | undefined): boolean => Boolean(held && held.trim() && held.trim() !== (lastSentValue ?? "").trim());
+export const holdsForeignText = (held: string | null | undefined, lastSentValue: string | null | undefined): boolean => Boolean(held && held.trim() && !isFaqEmptyValue(held) && held.trim() !== (lastSentValue ?? "").trim());
 
 /** The Brief's line when the field is not on the bot at all: the API sets a field by name, it does not create one. */
 export const fieldMissingLine = (field: string): string => `Your bot needs the FAQ field added once: create ${field} on it, and put its token in the prompt of the agent that answers questions. Nothing is sent until then.`;

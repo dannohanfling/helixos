@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, like } from "drizzle-orm";
+import { and, desc, eq, like, sql } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/dates";
 import { acceptFaqAction, acceptSafeFaqAction, deleteFaqAction, importFaqAction, sendFaqAction, updateFaqAction } from "@/lib/actions/faq";
 import { briefAccessFor, faqFieldFor, isApprovedOrigin, payloadFor } from "@/lib/community-loyalty";
 import { TEMPLATE_BOT_FIELDS } from "@/lib/engine/bot-fields";
-import { FAQ_FIELD_BUDGET, agentReadsFields, composeField, diffSinceSync, needsEyes, notReadWarning, rankEntries } from "@/lib/engine/faq";
+import { FAQ_EMPTY_SENT, FAQ_FIELD_BUDGET, agentReadsFields, composeField, diffSinceSync, needsEyes, notReadWarning, rankEntries } from "@/lib/engine/faq";
 import { ACCEPT_LABEL, UNREVIEWED_LABEL, isUnreviewed } from "@/lib/engine/provenance";
 import { essenceFor } from "@/lib/queries/essence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
@@ -31,7 +31,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
   const field = faqFieldFor(m);
   const [entries, syncs, log, essence, stage1] = await Promise.all([
     db.query.faqEntries.findMany({ where: and(eq(schema.faqEntries.workspaceId, v.workspace.id), eq(schema.faqEntries.userId, v.user.id)), orderBy: [desc(schema.faqEntries.createdAt)] }),
-    db.query.faqSyncs.findMany({ where: and(eq(schema.faqSyncs.workspaceId, v.workspace.id), eq(schema.faqSyncs.userId, v.user.id)), orderBy: [desc(schema.faqSyncs.createdAt)], limit: 10 }),
+    db.query.faqSyncs.findMany({ where: and(eq(schema.faqSyncs.workspaceId, v.workspace.id), eq(schema.faqSyncs.userId, v.user.id)), orderBy: [desc(schema.faqSyncs.createdAt), desc(sql`rowid`)], limit: 10 }),
     db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, v.workspace.id), eq(schema.syncEvents.userId, v.user.id), like(schema.syncEvents.event, "faq.%")), orderBy: [desc(schema.syncEvents.createdAt)], limit: 50 }),
     essenceFor(v.workspace.id, v.user.id),
     payloadFor(m),
@@ -64,7 +64,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
         <p className="mb-4 rounded-xl border border-good bg-good-soft p-3 text-sm" data-testid="brain-imported" role="status">{sp.imported} {sp.imported === "1" ? "entry" : "entries"} imported. Each one is a draft until you accept it.</p>
       ) : null}
       {sp.sent ? (
-        <p className="mb-4 rounded-xl border border-good bg-good-soft p-3 text-sm" data-testid="brain-sent" role="status">Sent to your bot and read back: {(lastSent?.note ?? "done").replace(/\.+$/, "")}.</p>
+        <p className="mb-4 rounded-xl border border-good bg-good-soft p-3 text-sm" data-testid="brain-sent" role="status">{lastSent && lastSent.entryCount === 0 ? FAQ_EMPTY_SENT : <>Sent to your bot and read back: {(lastSent?.note ?? "done").replace(/\.+$/, "")}.</>}</p>
       ) : null}
 
       {eyes.length ? (
@@ -117,7 +117,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
           <Card title="What your bot would know" action={
             token && (approved.length || (lastSent && lastSent.entryCount > 0)) && fieldRead && !blocked ? (
               <form action={sendFaqAction}>
-                <button className="btn btn-primary btn-sm" type="submit" data-testid="send-bot">{approved.length ? "Approve and send to my bot" : "Empty my bot's FAQ field"}</button>
+                <button className="btn btn-primary btn-sm" type="submit" data-testid="send-bot">{approved.length ? "Approve and send to my bot" : "Clear my bot's FAQ answers"}</button>
               </form>
             ) : null
           }>
@@ -177,6 +177,9 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
               <div>
                 <dt className="font-semibold">What changed since the last sync</dt>
                 <dd data-testid="brief-changes">
+                  {lastSent && lastSent.entryCount === 0 ? (
+                    <p className="text-ink-2" data-testid="brief-holds-none">Your bot holds no approved answers (sent {formatDateTime(lastSent.createdAt, v.workspace.timezone)}).</p>
+                  ) : null}
                   {lastSent ? (
                     <span className="text-ink-2">{changes.added.length} added, {changes.edited.length} edited, {changes.removed.length} removed since {formatDateTime(lastSent.createdAt, v.workspace.timezone)}.</span>
                   ) : (
@@ -185,7 +188,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
                   {changes.edited.length ? <ul className="mt-1 list-disc pl-5 text-xs text-ink-3">{changes.edited.map((e) => <li key={e.id} data-testid="changed-edited">{e.question}</li>)}</ul> : null}
                   {changes.added.length && lastSent ? <ul className="mt-1 list-disc pl-5 text-xs text-ink-3">{changes.added.map((e) => <li key={e.id} data-testid="changed-added">{e.question}</li>)}</ul> : null}
                   {changes.removed.length ? <ul className="mt-1 list-disc pl-5 text-xs text-ink-3">{changes.removed.map((e) => <li key={e.id} data-testid="changed-removed">{e.question} (removed)</li>)}</ul> : null}
-                  {!approved.length && lastSent && lastSent.entryCount > 0 ? <p className="mt-1 text-xs text-warn" data-testid="brief-will-empty">You have removed every answer. Sending now empties the FAQ field on your bot, so it stops answering from them.</p> : null}
+                  {!approved.length && lastSent && lastSent.entryCount > 0 ? <p className="mt-1 text-xs text-warn" data-testid="brief-will-empty">You have removed every answer. Sending now tells your bot there are no approved answers yet, so it stops answering from them. (Community Loyalty doesn&apos;t allow an empty field, so that sentence is what it holds.)</p> : null}
                 </dd>
               </div>
               <div>

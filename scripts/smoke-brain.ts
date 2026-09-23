@@ -42,7 +42,7 @@ const TWO_AGENTS = (field: string) => [
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq, desc, ne } = await import("drizzle-orm");
-  const { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, composeField, countEntries, needsEyes, rankEntries } = await import("@/lib/engine/faq");
+  const { FAQ_BOT_FIELD_DEFAULT, FAQ_EMPTY_SENT, FAQ_EMPTY_VALUE, FAQ_FIELD_BUDGET, composeField, countEntries, needsEyes, rankEntries } = await import("@/lib/engine/faq");
   const { isApprovedOrigin } = await import("@/lib/community-loyalty");
   const field = FAQ_BOT_FIELD_DEFAULT;
 
@@ -305,43 +305,52 @@ async function main() {
     const heldBefore = (await store())[field];
     if (!heldBefore?.trim()) throw new Error("the bot holds answers before the emptying send");
 
-    // The real platform refuses an empty value (422, 22 Sep). First, a platform that refuses a blank value of any kind: the send
-    // fails, says so beside the button in words with the platform's own reason, changes nothing on the bot, and is logged.
-    await fetch(`${mock}/__reject-blank`, { method: "POST", body: JSON.stringify({ on: true }) });
+    // A send the platform refuses: the red line beside the button with the platform's own words, the bot unchanged, logged.
+    await fetch(`${mock}/__refuse-next`, { method: "POST" });
     await Promise.all([clientPage.waitForURL(/sent=1|failed=/), clientPage.click('[data-testid="send-bot"]')]);
     const failedLine = (await clientPage.locator('[data-testid="brain-send-failed"]').innerText()).trim();
-    if (!failedLine.startsWith("Couldn't update your bot. Nothing changed there. Community Loyalty said: \"The data.0.value field is required.\" (422)")) throw new Error(`a refused send says so beside the button, with the platform's reason, got "${failedLine}"`);
+    if (!failedLine.startsWith("Couldn't update your bot. Nothing changed there. Community Loyalty said: \"The data.0.value may not be greater than 20000 characters.\" (422)")) throw new Error(`a refused send says so beside the button, with the platform's reason, got "${failedLine}"`);
     if (!(await clientPage.locator('[data-testid="send-bot"]').count())) throw new Error("the button stays as it was after a refused send");
     if ((await store())[field] !== heldBefore) throw new Error("a refused send changes nothing on the bot");
     if ((await syncs())[0].status !== "failed") throw new Error("a refused send is recorded as failed");
-    const refusedLog = readFileSync(join(__dirname, "..", "screenshots", "logs", "dev.log"), "utf8").split("\n").filter((l) => l.includes("[cl.http] PUT /flow/set-bot-fields-by-name (faq"));
-    if (!refusedLog.some((l) => /\(faq, empty\) 422 .*field is required/.test(l)) || !refusedLog.some((l) => /\(faq, a single space\) 422/.test(l)) || refusedLog.some((l) => l.includes(TOKEN))) throw new Error(`each refusal is logged with the platform's words and never the token: ${refusedLog.join(" | ").slice(0, 300)}`);
-    console.log(`✓ a refused send: "${failedLine.slice(0, 90)}…" beside the button, the bot unchanged, both refusals logged`);
+    const refusedLog = readFileSync(join(__dirname, "..", "screenshots", "logs", "dev.log"), "utf8").split("\n").filter((l) => l.includes("[cl.http] PUT /flow/set-bot-fields-by-name (faq, no approved answers) 422"));
+    if (!refusedLog.length || refusedLog.some((l) => l.includes(TOKEN))) throw new Error("the refusal is logged with the platform's words and never the token");
+    console.log(`✓ a refused send: "${failedLine.slice(0, 80)}…" beside the button, the bot unchanged, the refusal logged`);
 
-    // Then a platform that refuses only the empty value: the single space is tried, and the field reads back as nothing.
-    await fetch(`${mock}/__reject-blank`, { method: "POST", body: JSON.stringify({ on: false }) });
+    // Community Loyalty will not hold an empty bot field (22 Sep, 422 on empty and on a space; the mock answers the same). With
+    // no approved answer, one write of the sentence that says so, one read-back, and the Brief says it in its own words.
     await clientPage.goto(`${base}/brain`);
     await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
     const readsBeforeSend = ((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads;
     await Promise.all([clientPage.waitForURL(/sent=1|failed=/), clientPage.click('[data-testid="send-bot"]')]);
-    if (!clientPage.url().includes("sent=1")) throw new Error(`emptying the field is a send, got ${decodeURIComponent(clientPage.url())}`);
+    if (!clientPage.url().includes("sent=1")) throw new Error(`clearing the answers is a send, got ${decodeURIComponent(clientPage.url())}`);
     // The check before a push and the read-back after it read live, never the cached list.
     if (((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads < readsBeforeSend + 2) throw new Error("the pre-push check and the read-back each read the agent list live");
-    const cleared = (await store())[field];
-    if (cleared === undefined || cleared.trim() !== "") throw new Error(`the field reads back as nothing, got ${JSON.stringify(cleared).slice(0, 80)}`);
-    const emptySync = (await syncs())[0];
-    if (emptySync.status !== "sent" || emptySync.entryCount !== 0 || !emptySync.valueReadBack) throw new Error("the emptying send is recorded, read back, with no entries");
-    if (!/holds a single space/.test(await clientPage.locator('[data-testid="brain-sent"]').innerText())) throw new Error("the banner says the field holds a single space");
-    // A later Brief does not mistake the space for someone else's text.
+    if ((await store())[field] !== FAQ_EMPTY_VALUE) throw new Error(`the field holds the no-answers sentence, got ${JSON.stringify((await store())[field]).slice(0, 80)}`);
+    // Timestamps are to the second, so the refused send just before can share this one's: take the newest recorded as sent.
+    const emptySync = (await syncs()).find((x) => x.status === "sent")!;
+    if (emptySync.entryCount !== 0 || !emptySync.valueReadBack) throw new Error("the clearing send is recorded, read back, with no entries");
+    if ((await clientPage.locator('[data-testid="brain-sent"]').innerText()).trim() !== FAQ_EMPTY_SENT) throw new Error("the banner says what the send did, in its own words");
     await clientPage.goto(`${base}/brain`);
-    if (await clientPage.locator('[data-testid="brief-blocked"]').count()) throw new Error(`the cleared field is not foreign text: "${await clientPage.locator('[data-testid="brief-blocked"]').innerText()}"`);
-    console.log("✓ removing every answer clears the bot's FAQ field: the empty value refused, the single space read back as nothing, the sync recorded");
+    if (!/Your bot holds no approved answers/.test(await clientPage.locator('[data-testid="brief-holds-none"]').innerText())) throw new Error("the Brief says the bot holds no approved answers, not the sentence quoted back");
+    console.log(`✓ removing every answer writes "${FAQ_EMPTY_VALUE}", reads it back, and the Brief says the bot holds no approved answers`);
+
+    // A real answer then goes straight over it: the sentence is HelixOS's own, holding nothing, never someone else's text.
+    await clientPage.fill('[data-testid="faq-text"]', "### Q: When do the calls happen?\n**Answer:** Every Monday morning, together, for an hour.\n**Category:** Process");
+    await Promise.all([clientPage.waitForURL(/imported=1/), clientPage.click('[data-testid="faq-import-send"]')]);
+    await submit(clientPage, '[data-testid="accept-safe"]');
+    await clientPage.goto(`${base}/brain`);
+    if (await clientPage.locator('[data-testid="brief-blocked"]').count()) throw new Error(`the no-answers sentence is not foreign text: "${await clientPage.locator('[data-testid="brief-blocked"]').innerText()}"`);
+    await Promise.all([clientPage.waitForURL(/sent=1|failed=/), clientPage.click('[data-testid="send-bot"]')]);
+    if (!clientPage.url().includes("sent=1")) throw new Error(`an answer sends over the no-answers sentence, got ${decodeURIComponent(clientPage.url())}`);
+    if (!(await store())[field].includes("When do the calls happen?")) throw new Error("the bot holds the new answer");
+    console.log("✓ a real answer sends straight over the no-answers sentence, with no overwrite refusal");
 
     // ── The log: every approval and every send, with who and when. ──
     const events = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, maya.id)) });
     const accepts = events.filter((e) => e.event === "faq.accept").length;
     const pushes = events.filter((e) => e.event === "faq.push" && e.status === "sent").length;
-    if (accepts < N - 1 + 30 || pushes !== 5) throw new Error(`the log holds every approval and send, got ${accepts} accepts, ${pushes} sends`);
+    if (accepts < N - 1 + 30 + 1 || pushes !== 6) throw new Error(`the log holds every approval and send, got ${accepts} accepts, ${pushes} sends`);
     if (JSON.stringify(events).includes(TOKEN)) throw new Error("the token is never in the log");
     if (!(await page.locator('[data-testid="faq-log"] li[data-event="faq.accept"]').count()) || !(await page.locator('[data-testid="sync-log"] li[data-status="sent"]').count())) throw new Error("the Brief shows the approval log and the sync log");
     console.log(`✓ the log: ${accepts} approvals and ${pushes} sends, who and when, never the token`);

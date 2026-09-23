@@ -224,3 +224,17 @@ describe("the FAQ's own field, and the agent that answers", () => {
     expect(fieldMissingLine("ai_faq_cbf")).toMatch(/needs the FAQ field added once: create ai_faq_cbf/);
   });
 });
+
+describe("the empty value: Community Loyalty never holds an empty bot field, so the FAQ says there are no answers", () => {
+  it("one sentence, written when no answer is approved, and the answers otherwise", async () => {
+    const { FAQ_EMPTY_VALUE, faqFieldValue, isFaqEmptyValue, holdsForeignText } = await import("../faq");
+    expect(FAQ_EMPTY_VALUE).toBe("There are no approved answers yet.");
+    expect(faqFieldValue("")).toBe(FAQ_EMPTY_VALUE);
+    expect(faqFieldValue("Q: a\nA: b")).toBe("Q: a\nA: b");
+    expect(isFaqEmptyValue(" There are no approved answers yet. ")).toBe(true);
+    // The sentence is HelixOS's own, holding nothing: never someone else's text, whatever was sent last.
+    expect(holdsForeignText(FAQ_EMPTY_VALUE, "")).toBe(false);
+    expect(holdsForeignText(FAQ_EMPTY_VALUE, "Q: old\nA: answer")).toBe(false);
+    expect(holdsForeignText("Typed by hand in Community Loyalty.", "")).toBe(true);
+  });
+});

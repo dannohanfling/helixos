@@ -14,7 +14,7 @@
  * Danno's call to run. Tokens are sealed at rest and decrypted for the request.
  */
 import { createHash } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
@@ -133,11 +133,9 @@ export async function repushWorkspace(workspaceId: string, reason: string): Prom
 
 /* ───────────── The coach's brain: the approved FAQ composed into one text field, pushed only where the agent reads it ───────────── */
 
-import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, chooseAgentLine, composeField, faqFieldRefusal, fieldMissingLine, holdsForeignText, notReadWarning, parseAgentInfo, parseAgents, pickAgent, rankEntries, type AgentInfo } from "@/lib/engine/faq";
+import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, FAQ_EMPTY_SENT, faqFieldValue, chooseAgentLine, composeField, faqFieldRefusal, fieldMissingLine, holdsForeignText, notReadWarning, parseAgentInfo, parseAgents, pickAgent, rankEntries, type AgentInfo } from "@/lib/engine/faq";
 import { newId } from "@/lib/ids";
 
-/** What a cleared FAQ field holds when the platform refuses an empty value: one space, nothing in the prompt. */
-export const FAQ_CLEARED = " ";
 const APPROVED = ["ai_accepted", "edited", "coach"] as const;
 /** An entry the Bot Brief has approved: accepted, edited (an edit is a review) or the coach's own words. Never ai_unreviewed. */
 export const isApprovedOrigin = (origin: string | null | undefined): boolean => (APPROVED as readonly string[]).includes(origin ?? "");
@@ -276,7 +274,7 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
   // Nothing approved and nothing ever sent: there is nothing to do. Nothing approved but the bot still holds a previous send
   // is not the same thing — the coach removed those answers, and leaving them on the bot would have it answering from words
   // that are gone. That pushes an empty field, which is the removal.
-  const lastSent = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt)] });
+  const lastSent = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt), desc(sql`rowid`)] });
   if (!approved.length && !(lastSent && lastSent.entryCount > 0)) return done("skipped", "Nothing approved yet: accept at least one answer on the Brief first.");
   const composed = composeField(rankEntries(approved));
   const snapshot = composed.included.map((e) => ({ id: e.id, question: e.question, answer: e.answer }));
@@ -295,24 +293,14 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
 
   assertStorable({ [field]: composed.text }, [token]);
   try {
-    // Clearing the field: Community Loyalty refuses an empty value (422, 22 Sep). A single space reads as nothing in the prompt,
-    // so it is tried once when the empty value is refused, and the read-back decides whether it held. Every refusal is logged
-    // with the platform's own words, so one press shows what it wants.
-    const tries = composed.text === "" ? ["", FAQ_CLEARED] : [composed.text];
-    let sent: string | null = null;
-    let refusal = "";
-    for (const value of tries) {
-      const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers: authed(token), body: JSON.stringify({ data: [{ name: field, value }] }) });
-      const body = await res.text();
-      if (res.ok) {
-        sent = value;
-        break;
-      }
-      logPlatformRefusal(`PUT /flow/set-bot-fields-by-name (faq, ${value === "" ? "empty" : value.trim() ? "answers" : "a single space"})`, res.status, body);
-      refusal = platformReason(res.status, body);
-      if (res.status >= 500) break;
+    // One write: the answers, or, with none approved, the sentence that says so (FAQ_EMPTY_VALUE; the platform refuses empty).
+    const sent = faqFieldValue(composed.text);
+    const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers: authed(token), body: JSON.stringify({ data: [{ name: field, value: sent }] }) });
+    const body = await res.text();
+    if (!res.ok) {
+      logPlatformRefusal(`PUT /flow/set-bot-fields-by-name (faq, ${composed.text ? "answers" : "no approved answers"})`, res.status, body);
+      return done("failed", `Not sent: ${platformReason(res.status, body)}.`, { reads, notRead, dropped }, record);
     }
-    if (sent === null) return done("failed", `Not sent: ${refusal}.`, { reads, notRead, dropped }, record);
     // Read back, both halves: the value the bot holds, and the token still in the agent's prompt.
     let held: string | undefined;
     for (let page = 1; page <= 100; page++) {
@@ -326,14 +314,14 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
       if (hit) held = hit.value;
       if (!morePages(pageRows.length, READ_BACK_LIMIT)) break;
     }
-    // Answers read back exactly; a cleared field reads back as nothing but whitespace, however the platform stores the space.
-    const valueReadBack = composed.text === "" ? held !== undefined && held.trim() === "" : held === sent;
+    // One read-back: the field holds exactly what was written.
+    const valueReadBack = held === sent;
     const again = (await agentFor(m, token, { fresh: true })).agent;
     const tokenReadBack = Boolean(again && agentReadsFields(again, [field], pre.nsByName).reads.length);
     const rec = { ...record, valueReadBack, tokenReadBack };
     if (!valueReadBack) return done("failed", `Pushed, but the read-back of ${field} differs: not recorded as synced.`, { reads, notRead, dropped }, rec);
     if (!tokenReadBack) return done("failed", `Pushed and the value reads back, but the token {${field}} is no longer in the agent's prompt: not recorded as synced.`, { reads, notRead, dropped }, rec);
-    if (!composed.included.length) return done("sent", `Every answer has been removed, so your bot's FAQ field is now empty${sent === "" ? "" : " (Community Loyalty refused an empty value, so it holds a single space)"}. Read back and matched.`, { reads, notRead, dropped }, rec);
+    if (!composed.included.length) return done("sent", `${FAQ_EMPTY_SENT} Read back and matched.`, { reads, notRead, dropped }, rec);
     return done("sent", `${composed.included.length} ${composed.included.length === 1 ? "answer" : "answers"} sent (${composed.chars.toLocaleString()} of ${FAQ_FIELD_BUDGET.toLocaleString()} characters)${dropped.length ? `; ${dropped.length} dropped past the budget` : ""}, read back and matched.`, { reads, notRead, dropped }, rec);
   } catch (e) {
     return done("failed", e instanceof Error ? e.message : String(e), { reads, notRead, dropped }, record);
@@ -385,7 +373,7 @@ function logAgentPrompt(m: schema.Membership, agent: AgentInfo, field: string, n
  */
 async function faqPreflight(m: schema.Membership, token: string, opts: { fresh?: boolean } = {}): Promise<{ agent: AgentInfo | null; blocked: string | null; warning: string | null; fieldVarType: string | null; lastSentValue: string | null; nsByName: Record<string, string> }> {
   const field = faqFieldFor(m);
-  const lastSync = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt)] });
+  const lastSync = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt), desc(sql`rowid`)] });
   const lastSentValue = lastSync ? composeField(lastSync.snapshot).text : null;
   const none = { nsByName: {} as Record<string, string> };
   const refused = faqFieldRefusal(field, STAGE1_FIELDS, BOT_WRITTEN_FIELDS);
