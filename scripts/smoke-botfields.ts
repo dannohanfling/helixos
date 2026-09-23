@@ -33,7 +33,7 @@ const store = async () => (await (await fetch(`${mock}/__fields`)).json()) as Re
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
-  const { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, QUALIFYING_DEFAULTS, houseConstraints } = await import("@/lib/engine/bot-fields");
+  const { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, STAGE1_NOTHING_CURRENT, QUALIFYING_DEFAULTS, houseConstraints } = await import("@/lib/engine/bot-fields");
   const up = await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false);
   const proc = up ? null : spawn("npx", ["tsx", "scripts/mock-uchat.ts", String(mockPort)], { stdio: "ignore", detached: true });
   for (let i = 0; i < 40 && !(await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
@@ -58,9 +58,14 @@ async function main() {
   await post("/__seed", botWritten);
   await post("/__seed", Object.fromEntries(Array.from({ length: READ_BACK_LIMIT }, (_, i) => [`other_field_${i + 1}`, `v${i + 1}`])));
   await post("/__seed", byHand);
-  // One agent, reading every Stage 1 field but the third question, and the offers by their older name.
+  // Two agents, as a Book 'em Danno bot is set up (Danno's, 23 Sep): the FAQ agent, chosen for the Brief, reads only the FAQ field;
+  // the Appointment Setter reads every Stage 1 field but the third question, the offers by their older name. Bot fields belong to
+  // the whole bot, so Stage 1 asks both, whichever one the FAQ chose.
   const reads = ["business_name_cbf", "business_time_zone_cbf", PRODUCT_FIELD_OLD, "ai_constraints_cbf", "qualifying_question_1", "qualifying_question_2"];
-  await post("/__agents", { agents: [{ ai_agent_ns: `maya-agent-${RUN}`, name: "Booking Agent", description: "Books calls.", prompts: [{ section: "Main", text: reads.map((r) => `{${r}}`).join("\n") }] }] });
+  const faqAgent = { ai_agent_ns: `maya-faq-${RUN}`, name: "Community FAQ Agent", description: "Answers questions.", prompts: [{ section: "Main", text: "{ai_faq_cbf}" }] };
+  const setter = (fields: string[]) => ({ ai_agent_ns: `maya-setter-${RUN}`, name: "Appointment Setter", description: "Books calls.", prompts: [{ section: "Main", text: fields.map((r) => `{${r}}`).join("\n") }] });
+  await post("/__agents", { agents: [faqAgent, setter(reads)] });
+  await db.update(schema.memberships).set({ clAgentNs: faqAgent.ai_agent_ns }).where(eq(schema.memberships.id, membership.id));
 
   const pushEvents = async () => db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, maya.id), eq(schema.syncEvents.event, "botfields.push")) });
   const eventsBefore = (await pushEvents()).length;
@@ -101,6 +106,8 @@ async function main() {
     const status = async (field: string) => row(field).getAttribute("data-status");
     const before = async (field: string) => (await row(field).locator('[data-testid="bot-field-before"]').innerText()).trim();
     const after = async (field: string) => (await row(field).locator('[data-testid="bot-field-after"]').innerText()).trim();
+    if ((await page.locator('[data-testid="bot-agents"]').innerText()).trim() !== "Agents on this bot: Community FAQ Agent, Appointment Setter") throw new Error("the preview names every agent on the bot");
+    if ((await row("business_name_cbf").locator('[data-testid="bot-field-readby"]').innerText()).trim() !== "read by Appointment Setter") throw new Error("each field names the agent that reads it, not the FAQ's chosen agent");
     if (!(await page.locator('[data-testid="bot-fallback"]').innerText()).includes(`the offers go into ${PRODUCT_FIELD_OLD}, the older name`)) throw new Error("the preview names the older field it writes the offers into");
     if ((await status("business_name_cbf")) !== "change" || (await before("business_name_cbf")) !== "Torres Nutrition" || (await after("business_name_cbf")) !== "Torres Nutrition Coaching") throw new Error("the business name shows what the bot holds against what HelixOS would write");
     if ((await status("business_time_zone_cbf")) !== "same") throw new Error("a field the bot already holds is shown unchanged");
@@ -136,7 +143,8 @@ async function main() {
     if (held[PRODUCT_FIELD]) throw new Error("the push never writes a field the bot does not have");
     const pagedReads = (await (await fetch(`${mock}/__reads`)).json()) as { limit: number; page: number }[];
     if (pagedReads.some((r) => r.limit !== READ_BACK_LIMIT) || !pagedReads.some((r) => r.page === 2)) throw new Error(`the bot is read page by page at an explicit limit, got ${JSON.stringify(pagedReads.slice(0, 4))}`);
-    if (!(await page.locator('[data-testid="bot-nothing-to-push"]').count())) throw new Error("after the push, the page shows the bot holding it all");
+    const closing = (await page.locator('[data-testid="bot-nothing-to-push"]').innerText()).trim();
+    if (closing !== "Nothing to push: 6 unchanged, 1 not read by any agent.") throw new Error(`after the push, the closing line counts what happened, got "${closing}"`);
     console.log(`✓ pressed twice: "Sending to your bot…" while out, one push of ${names.length} fields, one sync record; question 3, the calendar and the booking untouched`);
 
     // ── A 200 is not a match, and the read-back covers only what was sent. ──
@@ -155,19 +163,29 @@ async function main() {
     await Promise.all([page.waitForURL(/\?pushed=1/), pushButton.click()]);
     console.log(`✓ a 200 with a field silently dropped: "${refused.slice(0, 70)}"; the record moves only on a read-back that matches`);
 
-    // ── Nothing for a field: it is left out, never sent as "", and the bot keeps what it holds. ──
+    // ── The offer retired: HelixOS last wrote the offers field and now has nothing for it, so the bot is told there is none; ──
+    // ── edited by hand since, it is left out and the bot keeps what it holds. Never "" either way. ──
     await db.update(schema.offers).set({ status: "draft" }).where(eq(schema.offers.id, reset.id));
-    await post("/__seed", { qualifying_question_1: "Changed on the bot" });
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
-    if ((await status(PRODUCT_FIELD)) !== "empty" || !(await row(PRODUCT_FIELD).innerText()).includes("HelixOS has nothing for this yet, so nothing is sent; your bot keeps what it holds.")) throw new Error("with no live offer the offers field is left out and says so");
+    const sentence = STAGE1_NOTHING_CURRENT[PRODUCT_FIELD];
+    if ((await status(PRODUCT_FIELD)) !== "change" || !(await row(PRODUCT_FIELD).innerText()).includes("HelixOS wrote this and now has nothing for it, so your bot is told: no current offer.") || !(await before(PRODUCT_FIELD)).startsWith("90-Day Reset") || (await after(PRODUCT_FIELD)) !== "No current offer") throw new Error(`a retired offer HelixOS wrote is a change to "No current offer", got "${await row(PRODUCT_FIELD).innerText()}"`);
+    if ((await page.content()).includes(sentence)) throw new Error("the preview says no current offer and never quotes the sentence back");
     await Promise.all([page.waitForURL(/\?pushed=1/), pushButton.click()]);
     reqs = await requests();
-    const last = reqs.at(-1)!;
-    if (last.fields.map((f) => f.name).join() !== "qualifying_question_1" || last.fields.some((f) => !f.value.trim())) throw new Error(`the empty field is not in the request, got ${JSON.stringify(last.fields.map((f) => f.name))}`);
-    if (!(await store())[PRODUCT_FIELD_OLD].startsWith("90-Day Reset")) throw new Error("the bot keeps the offers it held");
+    const retired = reqs.at(-1)!;
+    if (JSON.stringify(retired.fields) !== JSON.stringify([{ name: PRODUCT_FIELD_OLD, value: sentence }])) throw new Error(`the retired offer is replaced by its sentence, by the bot's name, got ${JSON.stringify(retired.fields)}`);
+    if ((await store())[PRODUCT_FIELD_OLD] !== sentence) throw new Error("the read-back matches the sentence");
+    if ((await status(PRODUCT_FIELD)) !== "same") throw new Error("once told, the field reads as unchanged");
+    await post("/__seed", { [PRODUCT_FIELD_OLD]: "Edited by hand on the bot" });
+    await page.goto(`${base}/coach/${membership.id}/bot`);
+    await preview.waitFor({ timeout: 20000 });
+    if ((await status(PRODUCT_FIELD)) !== "empty" || !(await row(PRODUCT_FIELD).innerText()).includes("your bot holds text HelixOS did not send, so nothing is sent; your bot keeps what it holds.")) throw new Error("text HelixOS did not send is left out");
+    const leftOut = (await page.locator('[data-testid="bot-nothing-to-push"]').innerText()).trim();
+    if (leftOut !== "Nothing to push: 5 unchanged, 1 not read by any agent, 1 with nothing in HelixOS.") throw new Error(`the closing line counts the field left out, got "${leftOut}"`);
+    if ((await requests()).length !== reqs.length || reqs.some((r) => r.fields.some((f) => !f.value.trim()))) throw new Error("nothing sent, and never an empty value");
     await db.update(schema.offers).set({ status: "live" }).where(eq(schema.offers.id, reset.id));
-    console.log("✓ no live offer: the offers field is left out of the request, not sent empty, and the bot keeps what it held");
+    console.log(`✓ offer retired: "No current offer" pushed over what HelixOS wrote and read back; edited by hand, it is left out ("${leftOut}")`);
 
     // ── Never quote prices: ticked on the Offer by the client, nothing sent on save; the Brief says so; the push leaves it out. ──
     const countBefore = reqs.length;
@@ -188,6 +206,11 @@ async function main() {
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
     await signIn("coach");
+    // Nothing pushes on its own, so the Coach page says the record moved since the last push, from HelixOS's data alone.
+    await page.goto(`${base}/coach`);
+    const changedLine = page.locator(`li:has(${mayaForm}) [data-testid="bot-changed-since"]`);
+    await changedLine.waitFor({ timeout: 15000 });
+    if ((await changedLine.innerText()).trim() !== "changed since the last push") throw new Error("the row says changed since the last push");
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
     if (!(await page.locator('[data-testid="bot-prices-left-out"]').innerText()).includes("90-Day Reset")) throw new Error("the preview says the price is left out");
@@ -195,7 +218,10 @@ async function main() {
     await Promise.all([page.waitForURL(/\?pushed=1/), pushButton.click()]);
     const quiet = (await requests()).at(-1)!.fields.find((f) => f.name === PRODUCT_FIELD_OLD)?.value ?? "";
     if (!quiet.startsWith("90-Day Reset") || /\$|1,500/.test(quiet)) throw new Error(`the push leaves the price out, got "${quiet}"`);
-    console.log(`✓ never quote prices: the Brief says so, the offer line goes as "${quiet}"`);
+    await page.goto(`${base}/coach`);
+    await page.locator(`li:has(${mayaForm}) [data-testid="review-bot"]`).waitFor({ timeout: 15000 });
+    if (await page.locator(`li:has(${mayaForm}) [data-testid="bot-changed-since"]`).count()) throw new Error("after the push, the row no longer says changed");
+    console.log(`✓ never quote prices: the Brief says so, the offer line goes as "${quiet}"; the Coach row said "changed since the last push" until it went`);
 
     // ── What is sent is what was shown: a plan that moved since the page was read sends nothing. ──
     await post("/__seed", { business_time_zone_cbf: "Pacific/Chatham" });
@@ -213,11 +239,19 @@ async function main() {
 
     // ── The bot gets the current name: the offers follow it, no fallback. ──
     await post("/__seed", { [PRODUCT_FIELD]: "Written on the renamed field" });
-    await post("/__agents", { agents: [{ ai_agent_ns: `maya-agent-${RUN}`, name: "Booking Agent", description: "Books calls.", prompts: [{ section: "Main", text: [...reads, PRODUCT_FIELD].map((r) => `{${r}}`).join("\n") }] }] });
+    await post("/__agents", { agents: [faqAgent, setter([...reads, PRODUCT_FIELD])] });
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
     if ((await page.locator('[data-testid="bot-fallback"]').count()) || (await status(PRODUCT_FIELD)) !== "change" || (await before(PRODUCT_FIELD)) !== "Written on the renamed field") throw new Error("with the current name on the bot, the offers go there and no fallback is named");
     console.log(`✓ with ${PRODUCT_FIELD} on the bot, the offers go there and the fallback line is gone`);
+
+    // ── A bot whose only agent reads none of these: the closing line says so, not "already holds everything". ──
+    await post("/__agents", { agents: [faqAgent] });
+    await page.goto(`${base}/coach/${membership.id}/bot`);
+    await preview.waitFor({ timeout: 20000 });
+    const unreadLine = (await page.locator('[data-testid="bot-nothing-to-push"]').innerText()).trim();
+    if (unreadLine !== "Nothing to push: no agent on this bot reads these fields yet.") throw new Error(`with no agent reading the fields, the closing line says so, got "${unreadLine}"`);
+    console.log(`✓ only the FAQ agent on the bot: "${unreadLine}"`);
 
     // ── The record and the log: names and values on the membership, names and a reason on the log, never a credential. ──
     const rec = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!;

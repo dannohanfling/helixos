@@ -68,6 +68,8 @@ export const memberships = sqliteTable(
     /** The bot fields last pushed, by name: the Stage 1 names and their values only, never the token and never a webhook URL. */
     clBotFields: text("cl_bot_fields", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
+    /** A fingerprint of HelixOS's Stage 1 record at the last push, so the Coach page can say "changed since the last push" without reading the bot. */
+    clBotSourceKey: text("cl_bot_source_key"),
     /** The Community Loyalty agent the Bot Brief reads and pushes to (ai_agent_ns). Empty means the workspace's first agent. */
     clAgentNs: text("cl_agent_ns"),
     /** The one bot field the approved FAQ answers are composed into. Empty means the default in src/lib/engine/faq.ts. */

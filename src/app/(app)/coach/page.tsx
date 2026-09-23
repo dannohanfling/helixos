@@ -7,7 +7,7 @@ import { nudgeMemberAction, setClientPassAction, reinstateClientAction } from "@
 import { clientFacing } from "@/lib/engine/pathway";
 import { setCertEnabledAction } from "@/lib/actions/courses";
 import { setMemberPassAction, setMyBotAction } from "@/lib/actions/integrations";
-import { agentChoicesFor, productFieldFor } from "@/lib/community-loyalty";
+import { agentChoicesFor, changedSinceLastPush, productFieldFor } from "@/lib/community-loyalty";
 import { PRODUCT_FIELD, PRODUCT_FIELD_OLD } from "@/lib/engine/bot-fields";
 import { setAiCapAction, toggleAiCapExemptAction } from "@/lib/actions/ai";
 import { money, rollup } from "@/lib/engine/ai-usage";
@@ -103,6 +103,10 @@ export default async function CoachPage() {
   // Which name each bot carries its offers under, so a bot still on the older field name says so here.
   const productFields = await Promise.all(withBots.map((m) => productFieldFor(m)));
   const productFieldOf = new Map(withBots.map((m, i) => [m.id, productFields[i]]));
+  // Nothing pushes on its own, so a changed offer or name is flagged here until the coach pushes it: HelixOS's own record against
+  // its fingerprint at the last push, no read of the bot.
+  const changedSince = await Promise.all(withBots.map((m) => (m.clApiToken ? changedSinceLastPush(m) : null)));
+  const changedOf = new Map(withBots.map((m, i) => [m.id, changedSince[i]]));
   const myBot = v.membership;
 
   return (
@@ -119,7 +123,7 @@ export default async function CoachPage() {
           </label>
           <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
         </form>
-        {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} tz={v.workspace.timezone} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
+        {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} changed={changedOf.get(myBot.id) ?? null} tz={v.workspace.timezone} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
       </Card>
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <Card title="Clients">
@@ -238,7 +242,7 @@ export default async function CoachPage() {
                     <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>
-                  {r.m.clApiToken ? <BotPushLine m={r.m} productField={productFieldOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
+                  {r.m.clApiToken ? <BotPushLine m={r.m} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
                 </li>
               ))}
             </ul>
@@ -446,13 +450,18 @@ function AgentField({ choices, value, testId }: { choices: { ns: string; name: s
  * A bot's Stage 1 line on the Coach page: when it was last pushed, the way to the before-and-after (nothing is pushed from here),
  * and, when the bot still carries the offers under the older field name, that name.
  */
-function BotPushLine({ m, productField, tz }: { m: { id: string; clBotFields: Record<string, string>; clBotFieldsPushedAt: string | null }; productField: { name: string | null; fallback: boolean } | null; tz: string }) {
+function BotPushLine({ m, productField, changed, tz }: { m: { id: string; clBotFields: Record<string, string>; clBotFieldsPushedAt: string | null }; productField: { name: string | null; fallback: boolean } | null; changed: boolean | null; tz: string }) {
   return (
     <div className="mt-2 flex w-full flex-wrap items-center gap-2 text-[11px] text-ink-3">
       <Link href={`/coach/${m.id}/bot`} className="btn btn-ghost btn-xs" data-testid="review-bot" title="Reads the bot and shows, field by field, what a push would change. Nothing is sent from here.">
         Review bot push →
       </Link>
       <span data-testid="bot-fields-pushed">{m.clBotFieldsPushedAt ? `${Object.keys(m.clBotFields).length} fields held from HelixOS, last pushed ${formatDateTime(m.clBotFieldsPushedAt, tz)}` : "not pushed yet"}</span>
+      {changed ? (
+        <span className="rounded bg-warn-soft px-1.5 py-0.5 font-medium text-ink-2" data-testid="bot-changed-since">
+          changed since the last push
+        </span>
+      ) : null}
       {productField?.fallback ? (
         <span className="rounded bg-warn-soft px-1.5 py-0.5 text-ink-2" data-testid="bot-product-field">
           Offers go to {productField.name}: this bot has the older name, not {PRODUCT_FIELD}.

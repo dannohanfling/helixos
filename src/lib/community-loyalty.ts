@@ -61,29 +61,54 @@ export async function payloadFor(membership: schema.Membership): Promise<{ paylo
 }
 
 /**
- * What a Stage 1 push would change on one member's bot, read live: the bot's fields, the target agent's prompt, and the plan
- * per field (stage1Plan). `key` fingerprints exactly what would be sent against what the bot holds now; the push carries the key
- * the coach saw and refuses when it no longer matches, so what is sent is what was shown.
+ * What a Stage 1 push would change on one member's bot, read live: the bot's fields, every agent's prompt, and the plan per field
+ * (stage1Plan). Bot fields belong to the whole bot, so every agent on it is read, not the one chosen for the FAQ (23 Sep: Danno's
+ * FAQ agent reads only the FAQ field; his business facts are read by another agent). The list is the one cached a minute per bot;
+ * a list that names an agent the bot no longer answers for is read again once. `key` fingerprints exactly what would be sent
+ * against what the bot holds now; the push carries the key the coach saw and refuses when it no longer matches, so what is sent
+ * is what was shown.
  */
-export type Stage1Preview = { blocked: string | null; rows: PlanRow[]; key: string; pricesLeftOut: string[]; agentName: string | null };
+export type Stage1Preview = { blocked: string | null; rows: PlanRow[]; key: string; pricesLeftOut: string[]; agentNames: string[] };
 export async function stage1Preview(m: schema.Membership): Promise<Stage1Preview> {
   const { payload, pricesLeftOut: leftOut } = await payloadFor(m);
-  const none = { rows: [], key: "", pricesLeftOut: leftOut, agentName: null };
+  const none = { rows: [], key: "", pricesLeftOut: leftOut, agentNames: [] };
   const token = open(m.clApiToken);
   if (!token) return { blocked: "No Community Loyalty API token on this member yet: add it on the Coach page first.", ...none };
   // The drip webhook is never opened here: its shape (/api/iwh/) is refused by assertStorable without the value in hand.
   assertStorable(payload, [token]);
   const problems = stage1Problems(payload);
   if (problems.length) return { blocked: problems.join(" "), ...none };
-  const { agent, ask } = await agentFor(m, token, { fresh: true });
-  if (ask) return { blocked: ask, ...none };
-  if (!agent) return { blocked: "Couldn't read the bot's agent from Community Loyalty. Check the token and the agent on the Coach page, then try again.", ...none };
+  const agents = await allAgents(token);
+  if ("blocked" in agents) return { ...none, blocked: agents.blocked };
+  const agentNames = agents.infos.map((a) => a.name);
   const held = await readBotFields(token);
-  if ("refused" in held) return { blocked: `Couldn't read the bot's fields from Community Loyalty. ${held.refused}`, ...none, agentName: agent.name };
-  const rows = stage1Plan(payload, held.rows, agent);
+  if ("refused" in held) return { ...none, agentNames, blocked: `Couldn't read the bot's fields from Community Loyalty. ${held.refused}` };
+  const rows = stage1Plan(payload, held.rows, agents.infos, m.clBotFields);
   for (const r of rows) if (r.name && (BOT_WRITTEN_FIELDS as readonly string[]).includes(r.name)) throw new Error(`bot-fields: ${r.name} is written by the bot and cannot be pushed`);
   const key = createHash("sha256").update(JSON.stringify(rows.filter((r) => r.status === "change").map((r) => [r.name, r.current, r.next]))).digest("hex").slice(0, 32);
-  return { blocked: null, rows, key, pricesLeftOut: leftOut, agentName: agent.name };
+  return { blocked: null, rows, key, pricesLeftOut: leftOut, agentNames };
+}
+
+/** Every agent on the bot with its prompts: the cached list, read again once if it names an agent the bot no longer answers for. */
+async function allAgents(token: string, fresh = false): Promise<{ infos: AgentInfo[] } | { blocked: string }> {
+  const list = await listAgents(token, { fresh });
+  if (!list.length) return fresh ? { blocked: "No agent on this bot yet, so nothing it holds is read. Add one in Community Loyalty first." } : allAgents(token, true);
+  const infos = await Promise.all(list.map((a) => readAgentInfo(token, a.ns)));
+  if (infos.every(Boolean)) return { infos: infos as AgentInfo[] };
+  if (!fresh) return allAgents(token, true);
+  return { blocked: `Couldn't read ${list.filter((_, i) => !infos[i]).map((a) => a.name).join(", ")} from Community Loyalty. Check the token, then try again.` };
+}
+
+/**
+ * HelixOS's own record behind a Stage 1 push, as one fingerprint: the payload composed from the membership, the workspace and the
+ * offers. Stored at each push, so the Coach page can say "changed since the last push" from HelixOS's data alone, with no read of
+ * the bot per row.
+ */
+export const stage1SourceKey = (payload: BotFieldPayload): string => createHash("sha256").update(JSON.stringify(STAGE1_FIELDS.map((f) => [f, payload[f]]))).digest("hex").slice(0, 32);
+/** Whether HelixOS's record for any Stage 1 field has changed since the last push; null before any push. */
+export async function changedSinceLastPush(m: schema.Membership): Promise<boolean | null> {
+  if (!m.clBotFieldsPushedAt || !m.clBotSourceKey) return null;
+  return stage1SourceKey((await payloadFor(m)).payload) !== m.clBotSourceKey;
 }
 
 /** One push per member at a time: a second press that reaches the server while the first is still out is dropped, not sent. */
@@ -140,9 +165,10 @@ async function pushPlanned(m: schema.Membership, opts: { key: string; reason: st
     const held: Record<string, string | undefined> = Object.fromEntries(back.rows.map((r) => [r.name, r.value]));
     const mismatched = readBackMismatches(payload, held);
     if (mismatched.length) return log("failed", `Pushed, but the read-back differs on ${mismatched.join(", ")}: not recorded as synced.`, names);
-    // What the bot now holds from HelixOS: the fields just sent, and the ones it already held unchanged.
-    const holds = Object.fromEntries(preview.rows.filter((r) => (r.status === "change" || r.status === "same") && r.name).map((r) => [r.name as string, r.next]));
-    await db.update(schema.memberships).set({ clBotFields: holds, clBotFieldsPushedAt: nowIso() }).where(eq(schema.memberships.id, m.id));
+    // What the bot now holds from HelixOS: the fields just sent and the ones it already held unchanged, over what earlier pushes
+    // confirmed, so a field left out this time keeps its last sent value on the record (the nothing-current rule compares to it).
+    const holds = { ...m.clBotFields, ...Object.fromEntries(preview.rows.filter((r) => (r.status === "change" || r.status === "same") && r.name).map((r) => [r.name as string, r.next])) };
+    await db.update(schema.memberships).set({ clBotFields: holds, clBotFieldsPushedAt: nowIso(), clBotSourceKey: stage1SourceKey((await payloadFor(m)).payload) }).where(eq(schema.memberships.id, m.id));
     return log("sent", `${names.length} ${names.length === 1 ? "field" : "fields"} changed on the bot and read back`, names);
   } catch (e) {
     return log("failed", e instanceof Error ? e.message : String(e), names);

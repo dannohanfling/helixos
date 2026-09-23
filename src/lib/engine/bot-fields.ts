@@ -110,36 +110,93 @@ export function samePayload(last: Record<string, string> | null | undefined, nex
 }
 
 /**
+ * What a field says when HelixOS wrote it and now has nothing for it: the offer retired, the question removed. Leaving the field
+ * out would leave the bot selling the retired offer, so the field is told there is none, in words an agent reading it mid-prompt
+ * acts on safely. Only a value HelixOS itself last sent is replaced this way; text anyone else wrote is left out, as before.
+ * Proposed wording, on the sentence list: Danno or Claude may reword any of these here, and nothing else needs to change,
+ * because every check compares against this table.
+ */
+export const STAGE1_NOTHING_CURRENT: Record<Stage1Field, string> = {
+  business_name_cbf: "No business name is set. Do not name a business; say you are an assistant and offer a call with the coach.",
+  business_time_zone_cbf: "No time zone is set. Do not state a time without saying which time zone it is in.",
+  [PRODUCT_FIELD]: "There is no offer open right now. Do not describe or price any product; offer a call with the coach instead.",
+  ai_constraints_cbf: "No extra rules are set. Never invent a statistic, a result, a price or a testimonial.",
+  qualifying_question_1: "No question set.",
+  qualifying_question_2: "No question set.",
+  qualifying_question_3: "No question set.",
+} as Record<Stage1Field, string>;
+/** A field holding exactly its nothing-current sentence is HelixOS's own empty: never foreign text, and the next real value goes straight over it. */
+export const isNothingCurrent = (field: Stage1Field, held: string | null | undefined): boolean => (held ?? "").trim() === STAGE1_NOTHING_CURRENT[field];
+/** How the Brief and the preview say it, never quoting the sentence back. */
+export const NOTHING_CURRENT_LABEL: Record<Stage1Field, string> = {
+  business_name_cbf: "No business name",
+  business_time_zone_cbf: "No time zone",
+  [PRODUCT_FIELD]: "No current offer",
+  ai_constraints_cbf: "No extra rules",
+  qualifying_question_1: "No question set",
+  qualifying_question_2: "No question set",
+  qualifying_question_3: "No question set",
+} as Record<Stage1Field, string>;
+
+/**
  * What a Stage 1 push would do on one bot, field by field, before anything is sent (the ruling of 21 Sep: "Before any Stage 1
  * push, show the coach what will change on the bot: current value against new value, per field"). Each field resolves to the
- * name the bot actually has (the current one, else its older name), then:
+ * name the bot actually has (the current one, else its older name). Bot fields belong to the whole bot, so a field is read when
+ * any agent on the bot reads it (23 Sep: the FAQ agent reads only the FAQ field; the business facts are read by another agent on
+ * the same bot), through the same id-aware check the FAQ uses, and each row names the agents that read it. Then:
  * - missing: the bot has no field by either name, so there is nothing to write into;
- * - unread: the target agent's prompt does not read it (the same id-aware check the FAQ uses), so it gets the plain line and
- *   is not sent, and its values are not shown;
- * - empty: HelixOS has nothing for it yet, so it is left out rather than sent as "" and the bot keeps what it holds;
- * - same: the bot already holds exactly this;
- * - change: sent, with the bot's current value beside the new one.
- * Only "change" rows are sent, and the read-back covers only those.
+ * - unread: no agent on the bot reads it, so it gets the plain line and is not sent, and its values are not shown;
+ * - empty: HelixOS has nothing for it and the bot holds text HelixOS did not last send, so it is left out rather than sent as ""
+ *   and the bot keeps what it holds;
+ * - same: the bot already holds exactly this (or already says there is none);
+ * - change: sent, with the bot's current value beside the new one. That includes a field HelixOS last wrote and now has nothing
+ *   for: it is sent its nothing-current sentence (`nothing` is set), so a retired offer stops being sold.
+ * Only "change" rows are sent, and the read-back covers only those. `lastSent` is what HelixOS last confirmed on this bot, by name.
  */
 export type PlanStatus = "change" | "same" | "empty" | "missing" | "unread";
-export type PlanRow = { field: Stage1Field; name: string | null; fallback: boolean; current: string | null; next: string; status: PlanStatus; line: string };
-export function stage1Plan(payload: BotFieldPayload, held: { name: string; value: string; ns: string }[], agent: AgentInfo): PlanRow[] {
+export type PlanRow = { field: Stage1Field; name: string | null; fallback: boolean; current: string | null; next: string; status: PlanStatus; line: string; readBy: string[]; nothing: boolean };
+export function stage1Plan(payload: BotFieldPayload, held: { name: string; value: string; ns: string }[], agents: AgentInfo[], lastSent: Record<string, string> = {}): PlanRow[] {
   const byName = new Map(held.map((h) => [h.name, h]));
   const nsByName = Object.fromEntries(held.filter((h) => h.ns).map((h) => [h.name, h.ns]));
   return STAGE1_FIELDS.map((field) => {
     const older = FIELD_FALLBACKS[field];
     const name = byName.has(field) ? field : older && byName.has(older) ? older : null;
     const fallback = Boolean(name && name !== field);
-    const next = payload[field];
+    const readBy = name ? agents.filter((a) => agentReadsFields(a, [name], nsByName).reads.length).map((a) => a.name) : [];
     const current = name ? (byName.get(name)?.value ?? null) : null;
-    const row = { field, name, fallback, current, next };
+    const row = { field, name, fallback, current, next: payload[field], readBy, nothing: false };
+    const written = fallback ? `Written to ${name}, this bot's older name for ${field}.` : "";
     if (!name) return { ...row, status: "missing" as const, line: `Your bot has no ${field} field${older ? ` (nor the older ${older})` : ""}, so nothing is sent to it.` };
-    if (!agentReadsFields(agent, [name], nsByName).reads.length) return { ...row, current: null, next: "", status: "unread" as const, line: `${notReadWarning(name)[0].toUpperCase()}${notReadWarning(name).slice(1)}, so nothing is sent to it.` };
-    if (!next.trim()) return { ...row, status: "empty" as const, line: "HelixOS has nothing for this yet, so nothing is sent; your bot keeps what it holds." };
-    if (current === next) return { ...row, status: "same" as const, line: "Your bot already holds this." };
-    return { ...row, status: "change" as const, line: fallback ? `Written to ${name}, this bot's older name for ${field}.` : "" };
+    if (!readBy.length) return { ...row, current: null, next: "", status: "unread" as const, line: `${notReadWarning(name)[0].toUpperCase()}${notReadWarning(name).slice(1)}, so nothing is sent to it.` };
+    if (!row.next.trim()) {
+      const sentence = STAGE1_NOTHING_CURRENT[field];
+      if (isNothingCurrent(field, current)) return { ...row, next: sentence, nothing: true, status: "same" as const, line: `Your bot already says: ${NOTHING_CURRENT_LABEL[field].toLowerCase()}.` };
+      const ours = Boolean(current?.trim()) && current === lastSent[name];
+      if (ours) return { ...row, next: sentence, nothing: true, status: "change" as const, line: `HelixOS wrote this and now has nothing for it, so your bot is told: ${NOTHING_CURRENT_LABEL[field].toLowerCase()}.${written ? ` ${written}` : ""}` };
+      return { ...row, status: "empty" as const, line: "HelixOS has nothing for this yet, and your bot holds text HelixOS did not send, so nothing is sent; your bot keeps what it holds." };
+    }
+    if (current === row.next) return { ...row, status: "same" as const, line: "Your bot already holds this." };
+    return { ...row, status: "change" as const, line: written };
   });
 }
+
+/**
+ * The line under a plan with nothing to send, counted from the five states rather than one blanket sentence (23 Sep: "the bot
+ * already holds everything" was shown when no agent read any field).
+ */
+export function nothingToPushLine(rows: PlanRow[]): string {
+  const n = (s: PlanStatus) => rows.filter((r) => r.status === s).length;
+  if (rows.length && n("unread") === rows.length) return "Nothing to push: no agent on this bot reads these fields yet.";
+  if (rows.length && n("same") === rows.length) return "Nothing to push: the bot already holds everything HelixOS would send.";
+  const parts = [
+    [n("same"), "unchanged"],
+    [n("unread"), "not read by any agent"],
+    [n("empty"), "with nothing in HelixOS"],
+    [n("missing"), "not on the bot"],
+  ] as const;
+  return `Nothing to push: ${parts.filter(([c]) => c).map(([c, w]) => `${c} ${w}`).join(", ")}.`;
+}
+
 /** The fields a plan sends, by the name on the bot, with the new value: only the ones that change. */
 export const planPayload = (rows: PlanRow[]): Record<string, string> => Object.fromEntries(rows.filter((r) => r.status === "change" && r.name && r.next.trim()).map((r) => [r.name as string, r.next]));
 

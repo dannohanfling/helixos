@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `cl_bot_source_key` text;

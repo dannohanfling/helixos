@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { pushStage1Action } from "@/lib/actions/integrations";
 import { stage1Preview } from "@/lib/community-loyalty";
-import { FIELD_FALLBACKS } from "@/lib/engine/bot-fields";
+import { FIELD_FALLBACKS, NOTHING_CURRENT_LABEL, nothingToPushLine } from "@/lib/engine/bot-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, PageHeader } from "@/components/ui";
 
@@ -56,7 +56,7 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
           {sp.note}
         </p>
       ) : null}
-      <Card title="Business facts" action={preview.agentName ? <span className="text-xs text-ink-3">Agent: {preview.agentName}</span> : null}>
+      <Card title="Business facts" action={preview.agentNames.length ? <span className="text-xs text-ink-3" data-testid="bot-agents">Agents on this bot: {preview.agentNames.join(", ")}</span> : null}>
         <div data-testid="bot-preview">
           {preview.blocked ? (
             <p className="rounded-lg bg-warn-soft p-2 text-sm" data-testid="bot-preview-blocked">
@@ -80,6 +80,7 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
                     <div className="flex flex-wrap items-center gap-2">
                       <code className="text-xs font-semibold">{r.name ?? r.field}</code>
                       <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+                      {r.readBy.length ? <span className="text-[11px] text-ink-3" data-testid="bot-field-readby">read by {r.readBy.join(", ")}</span> : null}
                     </div>
                     {r.line ? <p className="mt-1 text-xs text-ink-3" data-testid="bot-field-line">{r.line}</p> : null}
                     {r.status === "change" ? (
@@ -90,11 +91,11 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
                         </div>
                         <div>
                           <div className="text-[11px] uppercase tracking-wide text-ink-3">After the push</div>
-                          <p className="whitespace-pre-line rounded bg-accent-soft p-2 text-xs" data-testid="bot-field-after">{r.next}</p>
+                          <p className="whitespace-pre-line rounded bg-accent-soft p-2 text-xs" data-testid="bot-field-after">{r.nothing ? NOTHING_CURRENT_LABEL[r.field] : r.next}</p>
                         </div>
                       </div>
                     ) : null}
-                    {r.status === "same" ? <p className="mt-1 whitespace-pre-line rounded bg-surface-2 p-2 text-xs text-ink-2" data-testid="bot-field-same">{r.next}</p> : null}
+                    {r.status === "same" && !r.nothing ? <p className="mt-1 whitespace-pre-line rounded bg-surface-2 p-2 text-xs text-ink-2" data-testid="bot-field-same">{r.next}</p> : null}
                   </li>
                 ))}
               </ul>
@@ -108,7 +109,7 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
                   <span className="text-xs text-ink-3">Only the fields marked &ldquo;will change&rdquo; are sent, and each is read back.</span>
                 </form>
               ) : (
-                <p className="mt-3 text-sm text-ink-2" data-testid="bot-nothing-to-push">Nothing to push: the bot already holds everything HelixOS would send.</p>
+                <p className="mt-3 text-sm text-ink-2" data-testid="bot-nothing-to-push">{nothingToPushLine(preview.rows)}</p>
               )}
             </>
           )}

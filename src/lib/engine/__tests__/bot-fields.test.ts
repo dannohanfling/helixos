@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, planPayload, pricesLeftOut, stage1Plan, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
+import { BOT_WRITTEN_FIELDS, NOTHING_CURRENT_LABEL, STAGE1_NOTHING_CURRENT, isNothingCurrent, nothingToPushLine, PRODUCT_FIELD, PRODUCT_FIELD_OLD, planPayload, pricesLeftOut, stage1Plan, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
 
 const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live" };
 const draft = { name: "Holiday Survival Sprint", promise: "Get through the holidays", container: "Workshop", price: 297, currency: "USD", length: null, status: "draft" };
@@ -55,7 +55,7 @@ describe("the Stage 1 push is a named subset of the template's fields, never the
 describe("Stage 1 as the coach sees it before a push: per field, by the name the bot has, only what the agent reads", () => {
   const payload = stage1Payload({ businessName: "Torres Nutrition Coaching", workspaceName: "W", timezone: "America/New_York", offers: [live] });
   // The chip a prompt stores is the field's variable id (22 Sep): the plan must find it by id, the same way the FAQ does.
-  const ns = (name: string) => `f52594v${name.length}${name.charCodeAt(0)}`;
+  const ns = (name: string) => `f52594v${[...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)}`;
   const chip = (name: string) => `<span data-var-id="${ns(name)}" class="mention">${name}</span>`;
   const agent = (reads: string[]) => ({ ns: "a1", name: "Booking Agent", prompts: [{ section: "Main", text: reads.map(chip).join(" ") }] });
   const bot = (vals: Record<string, string>) => Object.entries(vals).map(([name, value]) => ({ name, value, ns: ns(name) }));
@@ -64,42 +64,84 @@ describe("Stage 1 as the coach sees it before a push: per field, by the name the
   it("the offers field is written under its current name, and under the older one only when the bot has no field by the current one", () => {
     expect(PRODUCT_FIELD).toBe("ai_product_&_service_information_cbf");
     expect(PRODUCT_FIELD_OLD).toBe("ai_product_&_service_cbf");
-    const old = byField(stage1Plan(payload, bot({ [PRODUCT_FIELD_OLD]: "hand-written" }), agent([PRODUCT_FIELD_OLD])))[PRODUCT_FIELD];
+    const old = byField(stage1Plan(payload, bot({ [PRODUCT_FIELD_OLD]: "hand-written" }), [agent([PRODUCT_FIELD_OLD])]))[PRODUCT_FIELD];
     expect(old).toMatchObject({ name: PRODUCT_FIELD_OLD, fallback: true, status: "change", current: "hand-written" });
     expect(old.line).toBe(`Written to ${PRODUCT_FIELD_OLD}, this bot's older name for ${PRODUCT_FIELD}.`);
-    const both = byField(stage1Plan(payload, bot({ [PRODUCT_FIELD_OLD]: "a", [PRODUCT_FIELD]: "b" }), agent([PRODUCT_FIELD, PRODUCT_FIELD_OLD])))[PRODUCT_FIELD];
+    const both = byField(stage1Plan(payload, bot({ [PRODUCT_FIELD_OLD]: "a", [PRODUCT_FIELD]: "b" }), [agent([PRODUCT_FIELD, PRODUCT_FIELD_OLD])]))[PRODUCT_FIELD];
     expect(both).toMatchObject({ name: PRODUCT_FIELD, fallback: false, current: "b" });
-    const none = byField(stage1Plan(payload, bot({}), agent([PRODUCT_FIELD])))[PRODUCT_FIELD];
+    const none = byField(stage1Plan(payload, bot({}), [agent([PRODUCT_FIELD])]))[PRODUCT_FIELD];
     expect(none).toMatchObject({ name: null, status: "missing" });
     expect(none.line).toBe(`Your bot has no ${PRODUCT_FIELD} field (nor the older ${PRODUCT_FIELD_OLD}), so nothing is sent to it.`);
   });
   it("a field the agent does not read gets the plain line, no values, and is not sent; the check is by chip id, never the bare name", () => {
     const held = bot({ business_name_cbf: "Old name", qualifying_question_3: "Hand-written on 21 Sep" });
-    const rows = byField(stage1Plan(payload, held, agent(["business_name_cbf"])));
+    const rows = byField(stage1Plan(payload, held, [agent(["business_name_cbf"])]));
     expect(rows.qualifying_question_3).toMatchObject({ status: "unread", current: null, next: "" });
     expect(rows.qualifying_question_3.line).toBe("Your bot does not use qualifying_question_3 yet, so nothing is sent to it.");
     expect(rows.business_name_cbf.status).toBe("change");
     // The name written in prose is not a read.
     const prose = { ns: "a1", name: "A", prompts: [{ section: "Main", text: "mention business_name_cbf in passing" }] };
-    expect(byField(stage1Plan(payload, held, prose)).business_name_cbf.status).toBe("unread");
-    expect(Object.keys(planPayload(stage1Plan(payload, held, agent(["business_name_cbf"]))))).toEqual(["business_name_cbf"]);
+    expect(byField(stage1Plan(payload, held, [prose])).business_name_cbf.status).toBe("unread");
+    expect(Object.keys(planPayload(stage1Plan(payload, held, [agent(["business_name_cbf"])])))).toEqual(["business_name_cbf"]);
   });
   it("an empty value is never sent: the field is left out and the bot keeps what it holds", () => {
     const empty = stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [draft] });
     expect(empty[PRODUCT_FIELD]).toBe("");
-    const rows = stage1Plan(empty, bot({ [PRODUCT_FIELD]: "What the coach wrote by hand" }), agent([PRODUCT_FIELD]));
+    const rows = stage1Plan(empty, bot({ [PRODUCT_FIELD]: "What the coach wrote by hand" }), [agent([PRODUCT_FIELD])]);
     const row = byField(rows)[PRODUCT_FIELD];
     expect(row).toMatchObject({ status: "empty", current: "What the coach wrote by hand" });
-    expect(row.line).toBe("HelixOS has nothing for this yet, so nothing is sent; your bot keeps what it holds.");
+    expect(row.line).toBe("HelixOS has nothing for this yet, and your bot holds text HelixOS did not send, so nothing is sent; your bot keeps what it holds.");
     expect(planPayload(rows)).not.toHaveProperty(PRODUCT_FIELD);
-    for (const v of Object.values(planPayload(stage1Plan({ ...payload, qualifying_question_1: "   " }, bot({ qualifying_question_1: "x" }), agent(["qualifying_question_1"]))))) expect(v.trim()).not.toBe("");
+    for (const v of Object.values(planPayload(stage1Plan({ ...payload, qualifying_question_1: "   " }, bot({ qualifying_question_1: "x" }), [agent(["qualifying_question_1"])])))) expect(v.trim()).not.toBe("");
   });
   it("only what changes is sent: a field the bot already holds is shown as unchanged and left alone", () => {
     const held = bot({ business_name_cbf: "Torres Nutrition Coaching", business_time_zone_cbf: "UTC" });
-    const rows = byField(stage1Plan(payload, held, agent(["business_name_cbf", "business_time_zone_cbf"])));
+    const rows = byField(stage1Plan(payload, held, [agent(["business_name_cbf", "business_time_zone_cbf"])]));
     expect(rows.business_name_cbf).toMatchObject({ status: "same", line: "Your bot already holds this." });
     expect(rows.business_time_zone_cbf).toMatchObject({ status: "change", current: "UTC", next: "America/New_York" });
     expect(planPayload(Object.values(rows))).toEqual({ business_time_zone_cbf: "America/New_York" });
+  });
+  it("bot fields belong to the whole bot: a field is read when any agent reads it, and the row names who", () => {
+    const faqAgent = { ns: "a0", name: "Community FAQ Agent", prompts: [{ section: "Main", text: chip("ai_faq_cbf") }] };
+    const setter = { ...agent(["business_name_cbf", "qualifying_question_1"]), ns: "a2", name: "Appointment Setter" };
+    const held = bot({ business_name_cbf: "Old", qualifying_question_1: "x", qualifying_question_3: "y", ai_faq_cbf: "faq" });
+    // Danno's bot, 23 Sep: the FAQ agent alone reads none of the Stage 1 fields.
+    expect(stage1Plan(payload, held, [faqAgent]).filter((r) => r.name).map((r) => r.status)).toEqual(["unread", "unread", "unread"]);
+    const rows = byField(stage1Plan(payload, held, [faqAgent, setter]));
+    expect(rows.business_name_cbf).toMatchObject({ status: "change", readBy: ["Appointment Setter"] });
+    expect(rows.qualifying_question_3).toMatchObject({ status: "unread", readBy: [] });
+    const both = byField(stage1Plan(payload, held, [{ ...setter, name: "Booking Agent", ns: "a3" }, setter]));
+    expect(both.business_name_cbf.readBy).toEqual(["Booking Agent", "Appointment Setter"]);
+  });
+  it("the closing line counts what happened, never one blanket sentence", () => {
+    const row = (status: string) => ({ status }) as unknown as ReturnType<typeof stage1Plan>[number];
+    expect(nothingToPushLine(Array(7).fill(row("unread")))).toBe("Nothing to push: no agent on this bot reads these fields yet.");
+    expect(nothingToPushLine(Array(7).fill(row("same")))).toBe("Nothing to push: the bot already holds everything HelixOS would send.");
+    expect(nothingToPushLine([...Array(4).fill(row("same")), ...Array(3).fill(row("unread"))])).toBe("Nothing to push: 4 unchanged, 3 not read by any agent.");
+    expect(nothingToPushLine([row("same"), row("empty"), row("missing")])).toBe("Nothing to push: 1 unchanged, 1 with nothing in HelixOS, 1 not on the bot.");
+  });
+  it("a field HelixOS wrote and now has nothing for is told there is none; text anyone else wrote is left out", () => {
+    const empty = stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [draft] });
+    const ours = "90-Day Reset · Drop 15 lbs in 90 days · Group program · USD $1,500 · 90 days";
+    const retired = byField(stage1Plan(empty, bot({ [PRODUCT_FIELD]: ours }), [agent([PRODUCT_FIELD])], { [PRODUCT_FIELD]: ours }))[PRODUCT_FIELD];
+    expect(retired).toMatchObject({ status: "change", nothing: true, current: ours, next: STAGE1_NOTHING_CURRENT[PRODUCT_FIELD] });
+    expect(retired.line).toBe("HelixOS wrote this and now has nothing for it, so your bot is told: no current offer.");
+    expect(planPayload([retired])).toEqual({ [PRODUCT_FIELD]: "There is no offer open right now. Do not describe or price any product; offer a call with the coach instead." });
+    // Under the older name the same rule holds, by the name the bot has.
+    expect(byField(stage1Plan(empty, bot({ [PRODUCT_FIELD_OLD]: ours }), [agent([PRODUCT_FIELD_OLD])], { [PRODUCT_FIELD_OLD]: ours }))[PRODUCT_FIELD]).toMatchObject({ status: "change", nothing: true, name: PRODUCT_FIELD_OLD });
+    // Hand-edited since: left out, as before.
+    expect(byField(stage1Plan(empty, bot({ [PRODUCT_FIELD]: "edited by hand" }), [agent([PRODUCT_FIELD])], { [PRODUCT_FIELD]: ours }))[PRODUCT_FIELD].status).toBe("empty");
+    // Already saying there is none: unchanged, and it is HelixOS's own empty.
+    const said = byField(stage1Plan(empty, bot({ [PRODUCT_FIELD]: STAGE1_NOTHING_CURRENT[PRODUCT_FIELD] }), [agent([PRODUCT_FIELD])], {}))[PRODUCT_FIELD];
+    expect(said).toMatchObject({ status: "same", nothing: true });
+    expect(isNothingCurrent(PRODUCT_FIELD, ` ${STAGE1_NOTHING_CURRENT[PRODUCT_FIELD]} `)).toBe(true);
+    // The next real value goes straight over it.
+    expect(byField(stage1Plan(payload, bot({ [PRODUCT_FIELD]: STAGE1_NOTHING_CURRENT[PRODUCT_FIELD] }), [agent([PRODUCT_FIELD])]))[PRODUCT_FIELD]).toMatchObject({ status: "change", nothing: false });
+    // One sentence and one label per field, never empty.
+    for (const f of STAGE1_FIELDS) {
+      expect(STAGE1_NOTHING_CURRENT[f].trim().length, f).toBeGreaterThan(0);
+      expect(NOTHING_CURRENT_LABEL[f].trim().length, f).toBeGreaterThan(0);
+    }
   });
   it("never quote prices: the offer goes without its price, and the offer is named so the Brief can say so", () => {
     const quiet = { ...live, neverQuotePrice: true };
