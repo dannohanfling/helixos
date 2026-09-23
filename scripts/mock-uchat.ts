@@ -17,6 +17,7 @@ let skipped: string | null = null;
 let types: Record<string, string> = {};
 /** The workspace's agents and what each one's prompt actually reads, seedable so a walk can prove "push only what the agent reads". */
 let agentListReads = 0;
+let rejectBlank = false;
 let agents: { ai_agent_ns: string; name: string; description: string; prompts: { section: string; text: string }[] }[] = [
   { ai_agent_ns: "f1a2b3", name: "Booking Agent", description: "Books calls.", prompts: [
     { section: "Persona & Role", text: "You are {ai_persona_role_cbf}." },
@@ -41,7 +42,8 @@ const read = (req: import("node:http").IncomingMessage) => new Promise<string>((
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
-  if (url.pathname === "/__reset") { fields = {}; types = {}; requests.length = 0; reads.length = 0; skipped = null; return json(res, 200, { ok: true }); }
+  if (url.pathname === "/__reset") { fields = {}; types = {}; requests.length = 0; reads.length = 0; skipped = null; rejectBlank = false; return json(res, 200, { ok: true }); }
+  if (url.pathname === "/__reject-blank" && req.method === "POST") { rejectBlank = (JSON.parse((await read(req)) || "{}") as { on?: boolean }).on === true; return json(res, 200, { ok: true, rejectBlank }); }
   if (url.pathname === "/__types" && req.method === "POST") { Object.assign(types, JSON.parse(await read(req))); return json(res, 200, { ok: true, types }); }
   // Replace the agent list: `{ agents: [...] }`, each with prompts whose text carries the tokens it reads.
   if (url.pathname === "/__agents" && req.method === "POST") { agents = (JSON.parse(await read(req)) as { agents: typeof agents }).agents; return json(res, 200, { ok: true, agents }); }
@@ -69,6 +71,10 @@ createServer(async (req, res) => {
     if (!Array.isArray(body.data) || !body.data.length) return json(res, 400, { message: "The data field is required." });
     if (body.data.length > 20) return json(res, 400, { message: "The data may not have more than 20 items." });
     if (body.data.some((f) => typeof f.value !== "string" || typeof f.name !== "string")) return json(res, 400, { message: "The data.*.value must be a string." });
+    // The real platform refuses an empty value with a 422 (22 Sep, the FAQ "empty my field" send). Whether it also refuses a
+    // value that is only whitespace is not known yet: `__rejectBlank` makes the mock do so, so the walk covers both answers.
+    const blank = body.data.findIndex((f) => (rejectBlank ? f.value.trim() === "" : f.value === ""));
+    if (blank >= 0) return json(res, 422, { message: `The data.${blank}.value field is required.`, errors: { [`data.${blank}.value`]: [`The data.${blank}.value field is required.`] } });
     requests.push({ fields: body.data, token: auth.slice(7) });
     for (const f of body.data) if (f.name !== skipped) fields[f.name] = f.value;
     return json(res, 200, { status: "ok" });

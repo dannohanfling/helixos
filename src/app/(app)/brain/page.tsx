@@ -121,6 +121,9 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
               </form>
             ) : null
           }>
+            {sp.failed ? (
+              <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm font-medium" data-testid="brain-send-failed" role="alert">{sp.failed}</p>
+            ) : null}
             {!token ? (
               <p className="mb-3 rounded-lg bg-warn-soft p-2 text-sm" data-testid="no-token">No Community Loyalty token on your account yet. {v.role === "coach" ? <>Add it yourself under <Link href="/coach" className="underline">My bot</Link> on the Coach page</> : "Ask your coach to add it on the Coach page"}; until then nothing can be sent.</p>
             ) : null}

@@ -124,5 +124,10 @@ export async function sendFaqAction(): Promise<void> {
   const { v } = await ctx();
   const out = await pushFaq(v.membership.id, { reason: "brief", sentBy: v.user.name });
   refresh();
-  redirect(`${BRAIN}?${out.status === "sent" ? "sent=1" : `error=${encodeURIComponent(out.note)}`}`);
+  if (out.status === "sent") redirect(`${BRAIN}?sent=1`);
+  // A send that did not land says so beside the button, in words (22 Sep: two failed presses showed nothing). Refused before
+  // or by the platform, nothing changed on the bot; refused at the read-back, the write may have landed, so it says that.
+  const why = out.note.replace(/^Not sent: /, "");
+  const line = /^Pushed/.test(out.note) ? `Couldn't confirm the update on your bot. ${why}` : `Couldn't update your bot. Nothing changed there. ${why}`;
+  redirect(`${BRAIN}?failed=${encodeURIComponent(line)}`);
 }

@@ -27,6 +27,26 @@ export function uchatBase(): string {
   return (process.env.NODE_ENV !== "production" && process.env.UCHAT_BASE_URL ? process.env.UCHAT_BASE_URL : DEFAULT_BASE).replace(/\/$/, "");
 }
 
+/**
+ * One log line for every answer from Community Loyalty that is not a 2xx: the call, the status, and the platform's own words
+ * (its error body, which is its message, not a secret), redacted and never the token. 22 Sep: an empty FAQ send came back 422
+ * and nobody could see why, because the body was thrown away.
+ */
+export function logPlatformRefusal(call: string, status: number, body: string): void {
+  console.error(`[cl.http] ${call} ${status} ${redactSecrets(body.slice(0, 2000))}`);
+}
+/** The platform's reason in a sentence a coach can read: its own message when it gave one, else the status. */
+export function platformReason(status: number, body: string): string {
+  let message = "";
+  try {
+    const j = JSON.parse(body) as { message?: unknown; errors?: Record<string, unknown> };
+    message = typeof j.message === "string" ? j.message : "";
+  } catch {
+    message = body.trim().slice(0, 160);
+  }
+  return message ? `Community Loyalty said: "${redactSecrets(message)}" (${status})` : `Community Loyalty answered ${status}`;
+}
+
 export type PushOutcome = { status: "sent" | "skipped" | "failed"; note: string; fields: string[] };
 
 /** The Stage 1 payload for one member, read off the record: the membership, the workspace, the member's zone and their live offers. */
@@ -73,13 +93,19 @@ export async function pushBotFields(membershipId: string, opts: { force?: boolea
       }
     };
     const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers, body: JSON.stringify(botFieldsRequest(payload)) });
-    const text = (await res.text()).slice(0, 200);
-    if (!res.ok) return log("failed", `${res.status} ${text}`.trim(), names);
+    const body = await res.text();
+    if (!res.ok) {
+      logPlatformRefusal("PUT /flow/set-bot-fields-by-name (stage 1)", res.status, body);
+      return log("failed", `Not sent: ${platformReason(res.status, body)}.`, names);
+    }
     // Read back: a 200 says the call was accepted, not that the fields were written. The record moves only on a match.
     const held: Record<string, string | undefined> = {};
     for (let page = 1; page <= 100; page++) {
       const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers });
-      if (!back.ok) return log("failed", `Pushed, but the read-back answered ${back.status} on page ${page}: not recorded as synced.`, names);
+      if (!back.ok) {
+        logPlatformRefusal("GET /flow/bot-fields (stage 1 read-back)", back.status, await back.text());
+        return log("failed", `Pushed, but the read-back answered ${back.status} on page ${page}: not recorded as synced.`, names);
+      }
       const rows = parseBotFields(await back.json());
       for (const r of rows) held[r.name] = r.value;
       if (!morePages(rows.length, READ_BACK_LIMIT)) break;
@@ -110,6 +136,8 @@ export async function repushWorkspace(workspaceId: string, reason: string): Prom
 import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, chooseAgentLine, composeField, faqFieldRefusal, fieldMissingLine, holdsForeignText, notReadWarning, parseAgentInfo, parseAgents, pickAgent, rankEntries, type AgentInfo } from "@/lib/engine/faq";
 import { newId } from "@/lib/ids";
 
+/** What a cleared FAQ field holds when the platform refuses an empty value: one space, nothing in the prompt. */
+export const FAQ_CLEARED = " ";
 const APPROVED = ["ai_accepted", "edited", "coach"] as const;
 /** An entry the Bot Brief has approved: accepted, edited (an edit is a review) or the coach's own words. Never ai_unreviewed. */
 export const isApprovedOrigin = (origin: string | null | undefined): boolean => (APPROVED as readonly string[]).includes(origin ?? "");
@@ -143,6 +171,7 @@ export async function listAgents(token: string, opts: { fresh?: boolean } = {}):
   try {
     const res = await withTimeout(`${uchatBase()}/flow/ai-agents`, { method: "GET", headers: authed(token) });
     if (!res.ok) {
+      logPlatformRefusal("GET /flow/ai-agents", res.status, await res.text());
       agentLists.delete(key);
       return [];
     }
@@ -159,7 +188,11 @@ export async function listAgents(token: string, opts: { fresh?: boolean } = {}):
 export async function readAgentInfo(token: string, ns: string): Promise<AgentInfo | null> {
   try {
     const res = await withTimeout(`${uchatBase()}/flow/ai-agent-info`, { method: "POST", headers: authed(token), body: JSON.stringify({ ai_agent_ns: ns }) });
-    return res.ok ? parseAgentInfo(await res.json()) : null;
+    if (!res.ok) {
+      logPlatformRefusal("POST /flow/ai-agent-info", res.status, await res.text());
+      return null;
+    }
+    return parseAgentInfo(await res.json());
   } catch {
     return null;
   }
@@ -195,7 +228,10 @@ export async function listBotFields(token: string): Promise<{ name: string; valu
   const out: { name: string; value: string; varType: string; ns: string }[] = [];
   for (let page = 1; page <= 100; page++) {
     const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers: authed(token) });
-    if (!back.ok) return out;
+    if (!back.ok) {
+      logPlatformRefusal("GET /flow/bot-fields", back.status, await back.text());
+      return out;
+    }
     const rows = parseBotFields(await back.json());
     out.push(...rows);
     if (!morePages(rows.length, READ_BACK_LIMIT)) break;
@@ -259,26 +295,45 @@ export async function pushFaq(membershipId: string, opts: { reason: string; sent
 
   assertStorable({ [field]: composed.text }, [token]);
   try {
-    const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers: authed(token), body: JSON.stringify({ data: [{ name: field, value: composed.text }] }) });
-    const text = (await res.text()).slice(0, 200);
-    if (!res.ok) return done("failed", `${res.status} ${text}`.trim(), { reads, notRead, dropped }, record);
+    // Clearing the field: Community Loyalty refuses an empty value (422, 22 Sep). A single space reads as nothing in the prompt,
+    // so it is tried once when the empty value is refused, and the read-back decides whether it held. Every refusal is logged
+    // with the platform's own words, so one press shows what it wants.
+    const tries = composed.text === "" ? ["", FAQ_CLEARED] : [composed.text];
+    let sent: string | null = null;
+    let refusal = "";
+    for (const value of tries) {
+      const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers: authed(token), body: JSON.stringify({ data: [{ name: field, value }] }) });
+      const body = await res.text();
+      if (res.ok) {
+        sent = value;
+        break;
+      }
+      logPlatformRefusal(`PUT /flow/set-bot-fields-by-name (faq, ${value === "" ? "empty" : value.trim() ? "answers" : "a single space"})`, res.status, body);
+      refusal = platformReason(res.status, body);
+      if (res.status >= 500) break;
+    }
+    if (sent === null) return done("failed", `Not sent: ${refusal}.`, { reads, notRead, dropped }, record);
     // Read back, both halves: the value the bot holds, and the token still in the agent's prompt.
     let held: string | undefined;
     for (let page = 1; page <= 100; page++) {
       const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers: authed(token) });
-      if (!back.ok) return done("failed", `Pushed, but the read-back answered ${back.status} on page ${page}: not recorded as synced.`, { reads, notRead, dropped }, record);
+      if (!back.ok) {
+        logPlatformRefusal("GET /flow/bot-fields (faq read-back)", back.status, await back.text());
+        return done("failed", `Pushed, but the read-back answered ${back.status} on page ${page}: not recorded as synced.`, { reads, notRead, dropped }, record);
+      }
       const pageRows = parseBotFields(await back.json());
       const hit = pageRows.find((r) => r.name === field);
       if (hit) held = hit.value;
       if (!morePages(pageRows.length, READ_BACK_LIMIT)) break;
     }
-    const valueReadBack = held === composed.text;
+    // Answers read back exactly; a cleared field reads back as nothing but whitespace, however the platform stores the space.
+    const valueReadBack = composed.text === "" ? held !== undefined && held.trim() === "" : held === sent;
     const again = (await agentFor(m, token, { fresh: true })).agent;
     const tokenReadBack = Boolean(again && agentReadsFields(again, [field], pre.nsByName).reads.length);
     const rec = { ...record, valueReadBack, tokenReadBack };
     if (!valueReadBack) return done("failed", `Pushed, but the read-back of ${field} differs: not recorded as synced.`, { reads, notRead, dropped }, rec);
     if (!tokenReadBack) return done("failed", `Pushed and the value reads back, but the token {${field}} is no longer in the agent's prompt: not recorded as synced.`, { reads, notRead, dropped }, rec);
-    if (!composed.included.length) return done("sent", "Every answer has been removed, so your bot's FAQ field is now empty. Read back and matched.", { reads, notRead, dropped }, rec);
+    if (!composed.included.length) return done("sent", `Every answer has been removed, so your bot's FAQ field is now empty${sent === "" ? "" : " (Community Loyalty refused an empty value, so it holds a single space)"}. Read back and matched.`, { reads, notRead, dropped }, rec);
     return done("sent", `${composed.included.length} ${composed.included.length === 1 ? "answer" : "answers"} sent (${composed.chars.toLocaleString()} of ${FAQ_FIELD_BUDGET.toLocaleString()} characters)${dropped.length ? `; ${dropped.length} dropped past the budget` : ""}, read back and matched.`, { reads, notRead, dropped }, rec);
   } catch (e) {
     return done("failed", e instanceof Error ? e.message : String(e), { reads, notRead, dropped }, record);

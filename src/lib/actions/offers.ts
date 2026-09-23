@@ -127,6 +127,13 @@ export async function deleteOfferAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const id = str(formData, "id");
   await own(id, userId);
+  // Client records name their program by this offer's id with no foreign key, so a delete would leave them pointing at nothing
+  // and reading "No program". Refused while any do, the same rule a move would follow for an offer with sales on record.
+  const named = await db.query.clientRecords.findMany({ where: and(eq(schema.clientRecords.offerId, id), eq(schema.clientRecords.userId, userId)), columns: { id: true } });
+  if (named.length) {
+    const n = named.length;
+    redirect(`/offers/${id}?error=${encodeURIComponent(`Not deleted: ${n} client ${n === 1 ? "record names" : "records name"} this offer as ${n === 1 ? "its" : "their"} program. Give ${n === 1 ? "it" : "them"} another program, or clear it, on the Clients page, then delete.`)}`);
+  }
   await db.delete(schema.offers).where(eq(schema.offers.id, id));
   refresh();
   redirect(deletedTo("/offers", "offer"));

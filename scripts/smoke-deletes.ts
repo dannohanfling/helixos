@@ -106,6 +106,25 @@ async function main() {
     if (!(await page.locator('[data-testid="logout-sidebar"]').count())) throw new Error("the layout stays: the app's own sidebar is there");
     console.log("✓ the old address: \"This post isn't here anymore.\" inside the app, with Back to your posts");
 
+    // ── An offer that client records name as their program is not deleted while they do: it would leave them pointing at nothing. ──
+    const offerId = randomUUID();
+    const recordId = randomUUID();
+    await db.insert(schema.offers).values({ id: offerId, workspaceId: ws, userId: maya.id, name: `An offer to delete ${offerId.slice(0, 8)}`, price: 100 });
+    await db.insert(schema.clientRecords).values({ id: recordId, workspaceId: ws, userId: maya.id, name: "A client of Maya's", offerId });
+    const offerExists = async () => Boolean(await db.query.offers.findFirst({ where: eq(schema.offers.id, offerId) }));
+    await page.goto(`${base}/offers/${offerId}`);
+    await page.locator(`form:has(input[name="id"][value="${offerId}"]) button:has-text("Delete")`).first().click();
+    await Promise.all([page.waitForURL(new RegExp(`/offers/${offerId}\\?error=`)), page.locator('dialog[open] [data-testid="confirm-delete-yes"]').click()]);
+    const refusal = (await page.locator('[data-testid="offer-error"]').innerText()).trim();
+    if (!/^Not deleted: 1 client record names this offer as its program\./.test(refusal) || !(await offerExists())) throw new Error(`an offer named by a client record is not deleted, and says why: "${refusal}"`);
+    await db.update(schema.clientRecords).set({ offerId: null }).where(eq(schema.clientRecords.id, recordId));
+    await page.goto(`${base}/offers/${offerId}`);
+    await page.locator(`form:has(input[name="id"][value="${offerId}"]) button:has-text("Delete")`).first().click();
+    await Promise.all([page.waitForURL(/\/offers(\?|$)/), page.locator('dialog[open] [data-testid="confirm-delete-yes"]').click()]);
+    if (await offerExists()) throw new Error("with no client record naming it, the offer deletes");
+    await db.delete(schema.clientRecords).where(eq(schema.clientRecords.id, recordId));
+    console.log(`✓ an offer named by a client record is kept, with "${refusal.slice(0, 70)}…"; once cleared, it deletes`);
+
     // ── Every detail route: its own not-found page, and a missing id answers with the plain line and its list. ──
     const routes = detailRoutes();
     if (routes.length < 12) throw new Error(`the detail routes are read from src/app: found ${routes.length}`);

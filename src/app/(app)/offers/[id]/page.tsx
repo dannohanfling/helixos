@@ -24,7 +24,8 @@ function T({ name, label, value, hint, placeholder }: { name: string; label: str
 
 const BREAK_LABEL: Record<string, string> = { vehicle: "🎯 Vehicle: proves the method works", internal: "💪 Internal: carries the load for them", external: "🌍 External: wins the outside game", none: "Untagged" };
 
-export default async function OfferWizardPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function OfferWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
+  const sp = await searchParams;
   const v = await requireViewer();
   const { id } = await params;
   const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, v.user.id)) });
@@ -43,6 +44,9 @@ export default async function OfferWizardPage({ params }: { params: Promise<{ id
 
   return (
     <>
+      {sp.error ? (
+        <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" data-testid="offer-error" role="alert">{sp.error}</p>
+      ) : null}
       <PageHeader
         title={offer.name}
         subtitle={

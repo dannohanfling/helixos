@@ -10,6 +10,7 @@
  * server runs with UCHAT_BASE_URL at the mock (dev-server.sh sets it).
  */
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, type Page } from "@playwright/test";
@@ -17,8 +18,10 @@ import { chromium, type Page } from "@playwright/test";
 const base = process.argv[2] ?? "http://localhost:3000";
 const mockPort = 4060;
 const mock = `http://localhost:${mockPort}`;
-const TOKEN = "uchat-test-token-for-maya-0123456789";
-const COACH_TOKEN = "uchat-test-token-for-the-coach-9876543210";
+// Fresh tokens each run: the agent list is cached a minute per bot (by token), so a run straight after another must not read the last run's list.
+const RUN = randomUUID().slice(0, 8);
+const TOKEN = `uchat-test-token-for-maya-${RUN}-0123456789`;
+const COACH_TOKEN = `uchat-test-token-for-the-coach-${RUN}-9876543210`;
 const FIXTURE = join(__dirname, "fixtures", "knowledge-base.md");
 
 async function submit(page: Page, selector: string) {
@@ -299,15 +302,40 @@ async function main() {
     if ((await own()).length !== 0) throw new Error("the last answer is removed through the Brief");
     if (!/removed every answer/.test(await clientPage.locator('[data-testid="brief-will-empty"]').innerText())) throw new Error("the Brief says that sending now empties the field");
     await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
+    const heldBefore = (await store())[field];
+    if (!heldBefore?.trim()) throw new Error("the bot holds answers before the emptying send");
+
+    // The real platform refuses an empty value (422, 22 Sep). First, a platform that refuses a blank value of any kind: the send
+    // fails, says so beside the button in words with the platform's own reason, changes nothing on the bot, and is logged.
+    await fetch(`${mock}/__reject-blank`, { method: "POST", body: JSON.stringify({ on: true }) });
+    await Promise.all([clientPage.waitForURL(/sent=1|failed=/), clientPage.click('[data-testid="send-bot"]')]);
+    const failedLine = (await clientPage.locator('[data-testid="brain-send-failed"]').innerText()).trim();
+    if (!failedLine.startsWith("Couldn't update your bot. Nothing changed there. Community Loyalty said: \"The data.0.value field is required.\" (422)")) throw new Error(`a refused send says so beside the button, with the platform's reason, got "${failedLine}"`);
+    if (!(await clientPage.locator('[data-testid="send-bot"]').count())) throw new Error("the button stays as it was after a refused send");
+    if ((await store())[field] !== heldBefore) throw new Error("a refused send changes nothing on the bot");
+    if ((await syncs())[0].status !== "failed") throw new Error("a refused send is recorded as failed");
+    const refusedLog = readFileSync(join(__dirname, "..", "screenshots", "logs", "dev.log"), "utf8").split("\n").filter((l) => l.includes("[cl.http] PUT /flow/set-bot-fields-by-name (faq"));
+    if (!refusedLog.some((l) => /\(faq, empty\) 422 .*field is required/.test(l)) || !refusedLog.some((l) => /\(faq, a single space\) 422/.test(l)) || refusedLog.some((l) => l.includes(TOKEN))) throw new Error(`each refusal is logged with the platform's words and never the token: ${refusedLog.join(" | ").slice(0, 300)}`);
+    console.log(`✓ a refused send: "${failedLine.slice(0, 90)}…" beside the button, the bot unchanged, both refusals logged`);
+
+    // Then a platform that refuses only the empty value: the single space is tried, and the field reads back as nothing.
+    await fetch(`${mock}/__reject-blank`, { method: "POST", body: JSON.stringify({ on: false }) });
+    await clientPage.goto(`${base}/brain`);
+    await clientPage.locator('[data-testid="send-bot"]').waitFor({ timeout: 15000 });
     const readsBeforeSend = ((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads;
-    await Promise.all([clientPage.waitForURL(/sent=1|error=/), clientPage.click('[data-testid="send-bot"]')]);
+    await Promise.all([clientPage.waitForURL(/sent=1|failed=/), clientPage.click('[data-testid="send-bot"]')]);
     if (!clientPage.url().includes("sent=1")) throw new Error(`emptying the field is a send, got ${decodeURIComponent(clientPage.url())}`);
     // The check before a push and the read-back after it read live, never the cached list.
     if (((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads < readsBeforeSend + 2) throw new Error("the pre-push check and the read-back each read the agent list live");
-    if ((await store())[field] !== "") throw new Error(`the field reads back empty of every removed answer, got ${JSON.stringify((await store())[field]).slice(0, 80)}`);
+    const cleared = (await store())[field];
+    if (cleared === undefined || cleared.trim() !== "") throw new Error(`the field reads back as nothing, got ${JSON.stringify(cleared).slice(0, 80)}`);
     const emptySync = (await syncs())[0];
     if (emptySync.status !== "sent" || emptySync.entryCount !== 0 || !emptySync.valueReadBack) throw new Error("the emptying send is recorded, read back, with no entries");
-    console.log("✓ removing every answer empties the bot's FAQ field, read back empty, and the sync records it");
+    if (!/holds a single space/.test(await clientPage.locator('[data-testid="brain-sent"]').innerText())) throw new Error("the banner says the field holds a single space");
+    // A later Brief does not mistake the space for someone else's text.
+    await clientPage.goto(`${base}/brain`);
+    if (await clientPage.locator('[data-testid="brief-blocked"]').count()) throw new Error(`the cleared field is not foreign text: "${await clientPage.locator('[data-testid="brief-blocked"]').innerText()}"`);
+    console.log("✓ removing every answer clears the bot's FAQ field: the empty value refused, the single space read back as nothing, the sync recorded");
 
     // ── The log: every approval and every send, with who and when. ──
     const events = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, maya.id)) });
