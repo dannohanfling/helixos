@@ -57,7 +57,7 @@ export async function payloadFor(membership: schema.Membership): Promise<{ paylo
     db.query.offers.findMany({ where: and(eq(schema.offers.workspaceId, membership.workspaceId), eq(schema.offers.userId, membership.userId)) }),
   ]);
   // The member's own zone, else the workspace's: the same rule Today and the reminders follow.
-  return { payload: stage1Payload({ businessName: membership.businessName, workspaceName: workspace?.name ?? "", timezone: membership.timezone ?? workspace?.timezone ?? "UTC", offers }), pricesLeftOut: pricesLeftOut(offers) };
+  return { payload: stage1Payload({ businessName: membership.businessName, workspaceName: workspace?.name ?? "", timezone: membership.timezone ?? workspace?.timezone ?? "UTC", offers, priceAnswer: membership.priceAnswer }), pricesLeftOut: pricesLeftOut(offers) };
 }
 
 /**
@@ -460,13 +460,15 @@ export type BriefAccess = {
   fieldVarType: string | null;
   /** Each bot field's variable id by name: what a prompt's chip stores, so the Brief's "Your bot reads" asks the same question the push does. */
   nsByName: Record<string, string>;
+  /** What the FAQ field holds on the bot now, read live; null when there is no token or no such field. The Brief says this, not the last sync record. */
+  heldValue: string | null;
 };
 export async function briefAccessFor(m: schema.Membership): Promise<BriefAccess> {
-  const none = { agent: null, blocked: null, warning: null, fieldVarType: null, nsByName: {} };
+  const none = { agent: null, blocked: null, warning: null, fieldVarType: null, nsByName: {}, heldValue: null };
   const token = open(m.clApiToken);
   if (!token) return { hasToken: false, ...none };
   const check = await faqPreflight(m, token);
-  return { hasToken: true, agent: check.agent, blocked: check.blocked, warning: check.warning, fieldVarType: check.fieldVarType, nsByName: check.nsByName };
+  return { hasToken: true, agent: check.agent, blocked: check.blocked, warning: check.warning, fieldVarType: check.fieldVarType, nsByName: check.nsByName, heldValue: check.heldValue ?? null };
 }
 
 /**
@@ -475,12 +477,12 @@ export async function briefAccessFor(m: schema.Membership): Promise<BriefAccess>
  * outcome every ten minutes, since the Brief reads it on every render. The prompts carry the coach's own words; never the token.
  */
 const promptLogged = new Map<string, number>();
-function logAgentPrompt(m: schema.Membership, agent: AgentInfo, field: string, ns: string | undefined, read: boolean): void {
+function logAgentPrompt(m: schema.Membership, agent: AgentInfo, field: string, ns: string | undefined, read: boolean, ms: number): void {
   const key = `${m.id}:${agent.ns}:${read}`;
   const now = Date.now();
   if ((promptLogged.get(key) ?? 0) > now - 600_000) return;
   promptLogged.set(key, now);
-  console.info(`[faq.agent-reads] ${redactSecrets(JSON.stringify({ member: m.id, agent: agent.name, agentNs: agent.ns, field, fieldNs: ns ?? null, read, prompts: agent.prompts.map((p) => ({ path: p.section, text: p.text.slice(0, 4000) })) }))}`);
+  console.info(`[faq.agent-reads] ${redactSecrets(JSON.stringify({ member: m.id, agent: agent.name, agentNs: agent.ns, field, fieldNs: ns ?? null, read, readMs: ms, prompts: agent.prompts.map((p) => ({ path: p.section, text: p.text.slice(0, 4000) })) }))}`);
 }
 
 /**
@@ -489,7 +491,8 @@ function logAgentPrompt(m: schema.Membership, agent: AgentInfo, field: string, n
  * the field holds nothing HelixOS did not write unless the coach has waived that on the Coach page. Each blocker is one sentence
  * the coach can act on.
  */
-async function faqPreflight(m: schema.Membership, token: string, opts: { fresh?: boolean } = {}): Promise<{ agent: AgentInfo | null; blocked: string | null; warning: string | null; fieldVarType: string | null; lastSentValue: string | null; nsByName: Record<string, string> }> {
+async function faqPreflight(m: schema.Membership, token: string, opts: { fresh?: boolean } = {}): Promise<{ agent: AgentInfo | null; blocked: string | null; warning: string | null; fieldVarType: string | null; lastSentValue: string | null; nsByName: Record<string, string>; heldValue?: string | null }> {
+  const started = Date.now();
   const field = faqFieldFor(m);
   const lastSync = await db.query.faqSyncs.findFirst({ where: and(eq(schema.faqSyncs.membershipId, m.id), eq(schema.faqSyncs.status, "sent")), orderBy: [desc(schema.faqSyncs.createdAt), desc(sql`rowid`)] });
   const lastSentValue = lastSync ? composeField(lastSync.snapshot).text : null;
@@ -500,14 +503,15 @@ async function faqPreflight(m: schema.Membership, token: string, opts: { fresh?:
   if (ask) return { agent: null, blocked: ask, warning: null, fieldVarType: null, lastSentValue, ...none };
   const fields = await listBotFields(token);
   const nsByName = Object.fromEntries(fields.filter((f) => f.ns).map((f) => [f.name, f.ns]));
-  if (agent) logAgentPrompt(m, agent, field, nsByName[field], agentReadsFields(agent, [field], nsByName).reads.length > 0);
+  if (agent) logAgentPrompt(m, agent, field, nsByName[field], agentReadsFields(agent, [field], nsByName).reads.length > 0, Date.now() - started);
   const held = fields.find((f) => f.name === field);
+  const heldValue = held ? held.value : null;
   if (!held) return { agent, blocked: fieldMissingLine(field), warning: null, fieldVarType: null, lastSentValue, nsByName };
   // No type warning: Community Loyalty's bot fields come in one type, Text, and a type can never be changed, so a warning asking
   // for longtext asks for something that cannot be done (and nearly cost a working chip). The 20,000 budget is the real cap.
   if (holdsForeignText(held.value, lastSentValue)) {
-    if (!m.faqOverwriteOk) return { agent, blocked: `${field} already holds text HelixOS did not write, and sending would erase it. Use a field of its own, or tick the override on the Coach page.`, warning: null, fieldVarType: held.varType, lastSentValue, nsByName };
-    return { agent, blocked: null, warning: `${field} holds text HelixOS did not write; the override is on, so sending will replace it.`, fieldVarType: held.varType, lastSentValue, nsByName };
+    if (!m.faqOverwriteOk) return { agent, blocked: `${field} already holds text HelixOS did not write, and sending would erase it. Use a field of its own, or tick the override on the Coach page.`, warning: null, fieldVarType: held.varType, lastSentValue, nsByName, heldValue };
+    return { agent, blocked: null, warning: `${field} holds text HelixOS did not write; the override is on, so sending will replace it.`, fieldVarType: held.varType, lastSentValue, nsByName, heldValue };
   }
-  return { agent, blocked: null, warning: null, fieldVarType: held.varType, lastSentValue, nsByName };
+  return { agent, blocked: null, warning: null, fieldVarType: held.varType, lastSentValue, nsByName, heldValue };
 }

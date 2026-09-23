@@ -5,7 +5,7 @@
  * the client chose and the appointment the agent booked exactly as they were. (code-essence-to-botfields.md §2.3, §3a.)
  */
 import { formatPrice } from "./offer-score";
-import { agentReadsFields, notReadWarning, type AgentInfo } from "./faq";
+import { agentReadsFields, type AgentInfo } from "./faq";
 
 /**
  * The offers field, by the template's current name, and the name bots made before the rename still carry. The push writes the
@@ -63,7 +63,20 @@ export const QUALIFYING_DEFAULTS: [string, string, string] = [
 ];
 
 export type OfferFacts = { name: string; promise: string | null; container: string; price: number; currency: string; length: string | null; status: string; neverQuotePrice?: boolean | null; qualifyingQuestion1?: string | null; qualifyingQuestion2?: string | null; qualifyingQuestion3?: string | null };
-export type Stage1Input = { businessName: string | null | undefined; workspaceName: string; timezone: string; offers: OfferFacts[] };
+export type Stage1Input = { businessName: string | null | undefined; workspaceName: string; timezone: string; offers: OfferFacts[]; priceAnswer?: string | null };
+
+/**
+ * The coach's answer when someone asks about price, one line for the coach, not per offer (Danno, 23 Sep: price is discussed on
+ * the sales call only). Empty means this default, which is also Danno's own. On the sentence list.
+ */
+export const PRICE_ANSWER_DEFAULT = "We have multiple services for different business needs, and I'd be happy to go over all of that on a call. But first, it might make more sense to find out what you're needing support with exactly.";
+export const priceAnswerFor = (line: string | null | undefined): string => line?.trim() || PRICE_ANSWER_DEFAULT;
+/**
+ * Appended once to the offers field, after the last offer line, when any live offer is ticked Never quote prices: the price is
+ * already left out of that offer's line, and this tells the agent what to say instead of guessing. Nothing is appended when no
+ * offer is ticked.
+ */
+export const priceDeflection = (line: string | null | undefined): string => `If someone asks about price, cost or payment plans, never state a price, a payment plan or a discount. Say something like: "${priceAnswerFor(line)}" Then ask your next qualifying question.`;
 export type BotFieldPayload = Record<Stage1Field, string>;
 
 /**
@@ -94,7 +107,7 @@ export function stage1Payload(input: Stage1Input): BotFieldPayload {
   return {
     business_name_cbf: businessName,
     business_time_zone_cbf: input.timezone,
-    [PRODUCT_FIELD]: live.map(productLine).join("\n"),
+    [PRODUCT_FIELD]: live.length ? [...live.map(productLine), ...(live.some((o) => o.neverQuotePrice) ? [priceDeflection(input.priceAnswer)] : [])].join("\n") : "",
     ai_constraints_cbf: houseConstraints(businessName),
     qualifying_question_1: q1,
     qualifying_question_2: q2,
@@ -167,7 +180,7 @@ export function stage1Plan(payload: BotFieldPayload, held: { name: string; value
     const row = { field, name, fallback, current, next: payload[field], readBy, nothing: false };
     const written = fallback ? `Written to ${name}, this bot's older name for ${field}.` : "";
     if (!name) return { ...row, status: "missing" as const, line: `Your bot has no ${field} field${older ? ` (nor the older ${older})` : ""}, so nothing is sent to it.` };
-    if (!readBy.length) return { ...row, current: null, next: "", status: "unread" as const, line: `${notReadWarning(name)[0].toUpperCase()}${notReadWarning(name).slice(1)}, so nothing is sent to it.` };
+    if (!readBy.length) return { ...row, current: null, next: "", status: "unread" as const, line: `No agent on this bot reads ${name} yet, so nothing is sent to it.` };
     if (!row.next.trim()) {
       const sentence = STAGE1_NOTHING_CURRENT[field];
       if (isNothingCurrent(field, current)) return { ...row, next: sentence, nothing: true, status: "same" as const, line: `Your bot already says: ${NOTHING_CURRENT_LABEL[field].toLowerCase()}.` };

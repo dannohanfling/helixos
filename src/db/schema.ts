@@ -70,6 +70,8 @@ export const memberships = sqliteTable(
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
     /** A fingerprint of HelixOS's Stage 1 record at the last push, so the Coach page can say "changed since the last push" without reading the bot. */
     clBotSourceKey: text("cl_bot_source_key"),
+    /** What the bot says when asked about price, for this coach, not per offer. Null means PRICE_ANSWER_DEFAULT. Sent only when an offer is ticked Never quote prices. */
+    priceAnswer: text("price_answer"),
     /** The Community Loyalty agent the Bot Brief reads and pushes to (ai_agent_ns). Empty means the workspace's first agent. */
     clAgentNs: text("cl_agent_ns"),
     /** The one bot field the approved FAQ answers are composed into. Empty means the default in src/lib/engine/faq.ts. */

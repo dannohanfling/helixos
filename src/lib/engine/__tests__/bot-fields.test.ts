@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { BOT_WRITTEN_FIELDS, NOTHING_CURRENT_LABEL, STAGE1_NOTHING_CURRENT, isNothingCurrent, nothingToPushLine, PRODUCT_FIELD, PRODUCT_FIELD_OLD, planPayload, pricesLeftOut, stage1Plan, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
+import { BOT_WRITTEN_FIELDS, PRICE_ANSWER_DEFAULT, priceDeflection, NOTHING_CURRENT_LABEL, STAGE1_NOTHING_CURRENT, isNothingCurrent, nothingToPushLine, PRODUCT_FIELD, PRODUCT_FIELD_OLD, planPayload, pricesLeftOut, stage1Plan, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
 
 const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live" };
 const draft = { name: "Holiday Survival Sprint", promise: "Get through the holidays", container: "Workshop", price: 297, currency: "USD", length: null, status: "draft" };
@@ -77,7 +77,7 @@ describe("Stage 1 as the coach sees it before a push: per field, by the name the
     const held = bot({ business_name_cbf: "Old name", qualifying_question_3: "Hand-written on 21 Sep" });
     const rows = byField(stage1Plan(payload, held, [agent(["business_name_cbf"])]));
     expect(rows.qualifying_question_3).toMatchObject({ status: "unread", current: null, next: "" });
-    expect(rows.qualifying_question_3.line).toBe("Your bot does not use qualifying_question_3 yet, so nothing is sent to it.");
+    expect(rows.qualifying_question_3.line).toBe("No agent on this bot reads qualifying_question_3 yet, so nothing is sent to it.");
     expect(rows.business_name_cbf.status).toBe("change");
     // The name written in prose is not a read.
     const prose = { ns: "a1", name: "A", prompts: [{ section: "Main", text: "mention business_name_cbf in passing" }] };
@@ -150,6 +150,22 @@ describe("Stage 1 as the coach sees it before a push: per field, by the name the
     expect(stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [quiet] })[PRODUCT_FIELD]).not.toMatch(/1,500/);
     expect(pricesLeftOut([quiet, { ...draft, neverQuotePrice: true }, live])).toEqual(["90-Day Reset"]);
     expect(pricesLeftOut([live])).toEqual([]);
+  });
+  it("never quote prices carries the coach's price line: appended once after the last offer, the default when empty, nothing when no offer is ticked", () => {
+    const quiet = { ...live, neverQuotePrice: true };
+    const second = { ...live, name: "Academy", neverQuotePrice: true };
+    const line = "Happy to walk you through the options on a call.";
+    const field = stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [quiet, second], priceAnswer: line })[PRODUCT_FIELD];
+    expect(field.split("\n")).toEqual([productLine(quiet), productLine(second), `If someone asks about price, cost or payment plans, never state a price, a payment plan or a discount. Say something like: "${line}" Then ask your next qualifying question.`]);
+    expect(field).not.toMatch(/\$|1,500/);
+    expect(stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [quiet], priceAnswer: "   " })[PRODUCT_FIELD]).toContain(`"${PRICE_ANSWER_DEFAULT}"`);
+    expect(priceDeflection(null)).not.toContain('""');
+    const quoted = stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [live], priceAnswer: line })[PRODUCT_FIELD];
+    expect(quoted).toBe(productLine(live));
+    expect(quoted).toMatch(/USD \$1,500/);
+    // Danno's live offer as HelixOS holds it (23 Sep), ticked, with no line of his own: exactly what Stage 1 would send.
+    const academy = { name: "Evolve Omega Academy", promise: null, container: "Group program", price: 12000, currency: "USD", length: null, status: "live", neverQuotePrice: true };
+    expect(stage1Payload({ businessName: "Evolve Omega", workspaceName: "W", timezone: "UTC", offers: [academy] })[PRODUCT_FIELD]).toBe(`Evolve Omega Academy · Group program\nIf someone asks about price, cost or payment plans, never state a price, a payment plan or a discount. Say something like: "${PRICE_ANSWER_DEFAULT}" Then ask your next qualifying question.`);
   });
   it("nothing pushes on its own: the only caller of the Stage 1 push is the coach's press on the preview", () => {
     const dir = join(process.cwd(), "src/lib/actions");

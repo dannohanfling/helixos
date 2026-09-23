@@ -414,6 +414,13 @@
       "when": 1790203310916,
       "tag": "0058_bot_source_key",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1790204857155,
+      "tag": "0059_price_answer",
+      "breakpoints": true
     }
   ]
 }

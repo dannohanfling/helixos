@@ -37,6 +37,7 @@ async function updateProfile(formData: FormData): Promise<void> {
     .update(schema.memberships)
     .set({
       businessName: opt(formData, "businessName"),
+      priceAnswer: opt(formData, "priceAnswer"),
       bigPromise: opt(formData, "bigPromise"),
       audience: opt(formData, "audience"),
       reminderHour: Math.min(23, Math.max(0, num(formData, "reminderHour") || 8)),

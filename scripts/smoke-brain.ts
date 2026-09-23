@@ -345,6 +345,15 @@ async function main() {
     if (!/Your bot holds no approved answers/.test(await clientPage.locator('[data-testid="brief-holds-none"]').innerText())) throw new Error("the Brief says the bot holds no approved answers, not the sentence quoted back");
     console.log(`✓ removing every answer writes "${FAQ_EMPTY_VALUE}", reads it back, and the Brief says the bot holds no approved answers`);
 
+    // The field emptied outside HelixOS after that send (23 Sep, Danno's bot): the Brief says what the bot holds now, read live,
+    // not what the sync record says. Then the sentence goes back, as someone restoring it would.
+    await fetch(`${mock}/__seed`, { method: "POST", body: JSON.stringify({ [field]: "" }) });
+    await clientPage.goto(`${base}/brain`);
+    const emptied = (await clientPage.locator('[data-testid="brief-holds-empty"]').innerText()).trim();
+    if (emptied !== "Your bot's FAQ field is empty (changed outside HelixOS)." || (await clientPage.locator('[data-testid="brief-holds-none"]').count())) throw new Error(`the Brief reads the field live: empty on the bot is not the sentence, got "${emptied}"`);
+    await fetch(`${mock}/__seed`, { method: "POST", body: JSON.stringify({ [field]: FAQ_EMPTY_VALUE }) });
+    console.log(`✓ emptied outside HelixOS: the Brief says "${emptied}", read live`);
+
     // A real answer then goes straight over it: the sentence is HelixOS's own, holding nothing, never someone else's text.
     await clientPage.fill('[data-testid="faq-text"]', "### Q: When do the calls happen?\n**Answer:** Every Monday morning, together, for an hour.\n**Category:** Process");
     await Promise.all([clientPage.waitForURL(/imported=1/), clientPage.click('[data-testid="faq-import-send"]')]);

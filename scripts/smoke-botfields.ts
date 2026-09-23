@@ -114,7 +114,7 @@ async function main() {
     if ((await status(PRODUCT_FIELD)) !== "change" || !(await row(PRODUCT_FIELD).innerText()).includes(PRODUCT_FIELD_OLD) || !/^Hand-written on 21 Sep/.test(await before(PRODUCT_FIELD)) || !/^90-Day Reset · .* · Group program · USD \$1,500 · 90 days$/.test(await after(PRODUCT_FIELD))) throw new Error(`the offers row writes the live offer's facts into the older name, got "${await row(PRODUCT_FIELD).innerText()}"`);
     if ((await status("qualifying_question_2")) !== "same" || (await status("qualifying_question_1")) !== "change") throw new Error("the questions: the one the bot holds is unchanged, the one it does not is a change");
     const unread = row("qualifying_question_3");
-    if ((await status("qualifying_question_3")) !== "unread" || (await unread.locator('[data-testid="bot-field-line"]').innerText()).trim() !== "Your bot does not use qualifying_question_3 yet, so nothing is sent to it.") throw new Error("a field the agent does not read gets the plain line");
+    if ((await status("qualifying_question_3")) !== "unread" || (await unread.locator('[data-testid="bot-field-line"]').innerText()).trim() !== "No agent on this bot reads qualifying_question_3 yet, so nothing is sent to it.") throw new Error("a field no agent reads gets the plain line");
     if ((await unread.locator('[data-testid="bot-field-before"], [data-testid="bot-field-after"], [data-testid="bot-field-same"]').count()) || (await page.content()).includes(byHand.qualifying_question_3)) throw new Error("a field the agent does not read shows no values");
     if ((await requests()).length !== 0) throw new Error("the preview sends nothing");
     const pushButton = page.locator('[data-testid="push-stage1"]');
@@ -193,6 +193,12 @@ async function main() {
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
     await signIn("client");
+    // The coach's own line for price questions, one for the coach, not per offer.
+    const PRICE_LINE = "Happy to walk you through the options on a call, once I know what you need.";
+    await page.goto(`${base}/settings`);
+    await page.fill('[data-testid="price-answer"]', PRICE_LINE);
+    await submit(page, 'form:has([data-testid="price-answer"]) button[type="submit"]');
+    if ((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.priceAnswer !== PRICE_LINE) throw new Error("the price line is saved on the member");
     await page.goto(`${base}/offers/${reset.id}`);
     await page.locator('[data-testid="never-quote-price"]').check();
     await submit(page, 'button:has-text("Save offer")');
@@ -200,7 +206,7 @@ async function main() {
     if ((await requests()).length !== countBefore) throw new Error("saving an offer pushes nothing on its own");
     await page.goto(`${base}/brain`);
     const brief = (await page.locator('[data-testid="brief-price"]').innerText()).trim();
-    if (!brief.includes("Never quote prices is ticked on 90-Day Reset, so that price is left out of what your bot is sent")) throw new Error(`the Brief says the price is left out, got "${brief}"`);
+    if (!brief.startsWith("How it handles price: it never states a price.") || !brief.includes("Never quote prices is ticked on 90-Day Reset, so that price is left out of what your bot is sent") || !brief.includes(`it answers with your line: “${PRICE_LINE}”`)) throw new Error(`the Brief says it never states a price and quotes the coach's line, got "${brief}"`);
     if (/1,500/.test(await page.locator('[data-testid="brief-offers"]').innerText())) throw new Error("the Brief's offer line carries no price");
     await page.goto(`${base}/settings`);
     await page.click('button:has-text("Log out")');
@@ -214,10 +220,24 @@ async function main() {
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
     if (!(await page.locator('[data-testid="bot-prices-left-out"]').innerText()).includes("90-Day Reset")) throw new Error("the preview says the price is left out");
-    if (/\$|1,500|USD/.test(await after(PRODUCT_FIELD))) throw new Error(`the offers line goes without its price, got "${await after(PRODUCT_FIELD)}"`);
+    const { priceDeflection, PRICE_ANSWER_DEFAULT } = await import("@/lib/engine/bot-fields");
+    const offerLine = (await after(PRODUCT_FIELD)).split("\n");
+    if (offerLine.length !== 2 || !offerLine[0].startsWith("90-Day Reset") || offerLine[1] !== priceDeflection(PRICE_LINE) || /\$|1,500|USD/.test(offerLine.join("\n"))) throw new Error(`the offers field goes without its price, with the coach's line appended once, got "${offerLine.join(" / ")}"`);
     await Promise.all([page.waitForURL(/\?pushed=1/), pushButton.click()]);
     const quiet = (await requests()).at(-1)!.fields.find((f) => f.name === PRODUCT_FIELD_OLD)?.value ?? "";
-    if (!quiet.startsWith("90-Day Reset") || /\$|1,500/.test(quiet)) throw new Error(`the push leaves the price out, got "${quiet}"`);
+    if (quiet !== offerLine.join("\n") || /\$|1,500/.test(quiet)) throw new Error(`the push sends what the preview showed, with no price, got "${quiet}"`);
+    // Unticked: no appended sentence, and the price back. An empty line with a ticked offer: the default, never an empty quote.
+    await db.update(schema.offers).set({ neverQuotePrice: false }).where(eq(schema.offers.id, reset.id));
+    await page.goto(`${base}/coach/${membership.id}/bot`);
+    await preview.waitFor({ timeout: 20000 });
+    const quoted = await after(PRODUCT_FIELD);
+    if (!/USD \$1,500/.test(quoted) || /asks about price/.test(quoted)) throw new Error(`unticked, the price is back and nothing is appended, got "${quoted}"`);
+    await db.update(schema.offers).set({ neverQuotePrice: true }).where(eq(schema.offers.id, reset.id));
+    await db.update(schema.memberships).set({ priceAnswer: null }).where(eq(schema.memberships.id, membership.id));
+    await page.goto(`${base}/coach/${membership.id}/bot`);
+    await preview.waitFor({ timeout: 20000 });
+    if (!(await after(PRODUCT_FIELD)).endsWith(priceDeflection(null)) || !(await after(PRODUCT_FIELD)).includes(`"${PRICE_ANSWER_DEFAULT}"`) || (await after(PRODUCT_FIELD)).includes('""')) throw new Error("an empty line uses the default, never an empty quote");
+    await db.update(schema.memberships).set({ priceAnswer: PRICE_LINE }).where(eq(schema.memberships.id, membership.id));
     await page.goto(`${base}/coach`);
     await page.locator(`li:has(${mayaForm}) [data-testid="review-bot"]`).waitFor({ timeout: 15000 });
     if (await page.locator(`li:has(${mayaForm}) [data-testid="bot-changed-since"]`).count()) throw new Error("after the push, the row no longer says changed");
@@ -243,7 +263,15 @@ async function main() {
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
     if ((await page.locator('[data-testid="bot-fallback"]').count()) || (await status(PRODUCT_FIELD)) !== "change" || (await before(PRODUCT_FIELD)) !== "Written on the renamed field") throw new Error("with the current name on the bot, the offers go there and no fallback is named");
-    console.log(`✓ with ${PRODUCT_FIELD} on the bot, the offers go there and the fallback line is gone`);
+    // Only the new name on the bot, as on Danno's: no fallback named anywhere on the page.
+    await post("/__skip", { name: PRODUCT_FIELD_OLD });
+    await post("/__skip", {});
+    if (PRODUCT_FIELD_OLD in (await store())) throw new Error("the walk's bot now carries only the new name");
+    await page.goto(`${base}/coach/${membership.id}/bot`);
+    await preview.waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="bot-fallback"]').count()) || (await page.content()).includes(PRODUCT_FIELD_OLD.replace("&", "&amp;")) || (await page.content()).includes("Older names")) throw new Error("with only the new name on the bot, the page names no older name");
+    if ((await row(PRODUCT_FIELD).locator("code").innerText()).trim() !== PRODUCT_FIELD) throw new Error("the offers row is the new name, matched with its & as spelled");
+    console.log(`✓ with ${PRODUCT_FIELD} on the bot, the offers go there; with only that name, no older name appears anywhere`);
 
     // ── A bot whose only agent reads none of these: the closing line says so, not "already holds everything". ──
     await post("/__agents", { agents: [faqAgent] });

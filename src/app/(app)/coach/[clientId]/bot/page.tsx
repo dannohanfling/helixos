@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { pushStage1Action } from "@/lib/actions/integrations";
 import { stage1Preview } from "@/lib/community-loyalty";
-import { FIELD_FALLBACKS, NOTHING_CURRENT_LABEL, nothingToPushLine } from "@/lib/engine/bot-fields";
+import { NOTHING_CURRENT_LABEL, nothingToPushLine } from "@/lib/engine/bot-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, PageHeader } from "@/components/ui";
 
@@ -115,9 +115,7 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
           )}
         </div>
       </Card>
-      <p className="mt-3 text-xs text-ink-3">
-        Never touched: the calendar the client chose, and what the agent writes when it books. Older names followed: {Object.entries(FIELD_FALLBACKS).map(([now, old]) => `${old} for ${now}`).join("; ")}.
-      </p>
+      <p className="mt-3 text-xs text-ink-3">Never touched: the calendar the client chose, and what the agent writes when it books.</p>
     </>
   );
 }

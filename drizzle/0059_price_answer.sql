@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `price_answer` text;

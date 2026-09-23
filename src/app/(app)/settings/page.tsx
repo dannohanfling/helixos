@@ -15,6 +15,7 @@ import { getIntegration, onboardingOpen } from "@/lib/integrations";
 import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 import { SubmitButton } from "@/components/submit-button";
+import { PRICE_ANSWER_DEFAULT } from "@/lib/engine/bot-fields";
 
 export const metadata = { title: "Settings" };
 
@@ -71,6 +72,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </div>
             <Field label="Business">
               <input className="field" name="businessName" defaultValue={v.membership.businessName ?? ""} />
+            </Field>
+            <Field label="When someone asks about price" hint="What your bot says instead of a price, when an offer is ticked Never quote prices. Empty uses the line shown.">
+              <textarea className="field" name="priceAnswer" rows={3} defaultValue={v.membership.priceAnswer ?? ""} placeholder={PRICE_ANSWER_DEFAULT} data-testid="price-answer" />
             </Field>
             <Field label="Big promise" hint="I help [who] go from [pain] to [outcome] in [time] without [thing they hate].">
               <textarea className="field" name="bigPromise" defaultValue={v.membership.bigPromise ?? ""} />

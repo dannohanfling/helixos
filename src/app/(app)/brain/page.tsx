@@ -6,8 +6,8 @@ import { requireViewer } from "@/lib/auth";
 import { formatDateTime } from "@/lib/dates";
 import { acceptFaqAction, acceptSafeFaqAction, deleteFaqAction, importFaqAction, sendFaqAction, updateFaqAction } from "@/lib/actions/faq";
 import { briefAccessFor, faqFieldFor, isApprovedOrigin, payloadFor } from "@/lib/community-loyalty";
-import { NOTHING_CURRENT_LABEL, PRODUCT_FIELD, PRODUCT_FIELD_OLD, TEMPLATE_BOT_FIELDS } from "@/lib/engine/bot-fields";
-import { FAQ_EMPTY_SENT, FAQ_FIELD_BUDGET, agentReadsFields, composeField, diffSinceSync, needsEyes, notReadWarning, rankEntries } from "@/lib/engine/faq";
+import { NOTHING_CURRENT_LABEL, PRODUCT_FIELD, PRODUCT_FIELD_OLD, TEMPLATE_BOT_FIELDS, priceAnswerFor } from "@/lib/engine/bot-fields";
+import { FAQ_EMPTY_SENT, FAQ_FIELD_BUDGET, agentReadsFields, isFaqEmptyValue, composeField, diffSinceSync, needsEyes, notReadWarning, rankEntries } from "@/lib/engine/faq";
 import { ACCEPT_LABEL, UNREVIEWED_LABEL, isUnreviewed } from "@/lib/engine/provenance";
 import { essenceFor } from "@/lib/queries/essence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
@@ -37,7 +37,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
     essenceFor(v.workspace.id, v.user.id),
     payloadFor(m),
   ]);
-  const { hasToken: token, agent, blocked, warning, fieldVarType, nsByName } = await briefAccessFor(m);
+  const { hasToken: token, agent, blocked, warning, fieldVarType, nsByName, heldValue } = await briefAccessFor(m);
   // Push only what the agent reads: of the template's fields and the FAQ's own, the ones whose token is in the agent's prompt.
   const candidates = [...new Set([...TEMPLATE_BOT_FIELDS, PRODUCT_FIELD_OLD, field])];
   const reads = agent ? agentReadsFields(agent, candidates, nsByName) : null;
@@ -143,8 +143,13 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
                 <dt className="font-semibold">What it offers</dt>
                 <dd className="whitespace-pre-line text-ink-2" data-testid="brief-offers">{stage1[PRODUCT_FIELD] || `${NOTHING_CURRENT_LABEL[PRODUCT_FIELD]}.`}</dd>
                 <dd className="text-xs text-ink-3" data-testid="brief-price">
-                  How it handles price: it states only a price that is in its product field, never one it is unsure of.
-                  {pricesLeftOut.length ? ` Never quote prices is ticked on ${pricesLeftOut.join(", ")}, so ${pricesLeftOut.length === 1 ? "that price is" : "those prices are"} left out of what your bot is sent and it has none to state.` : ""}
+                  {pricesLeftOut.length ? (
+                    <>
+                      How it handles price: it never states a price. Never quote prices is ticked on {pricesLeftOut.join(", ")}, so {pricesLeftOut.length === 1 ? "that price is" : "those prices are"} left out of what your bot is sent, and asked about price it answers with your line: &ldquo;{priceAnswerFor(m.priceAnswer)}&rdquo; Change the line under Settings.
+                    </>
+                  ) : (
+                    "How it handles price: it states the prices in its product field, and never one it is unsure of."
+                  )}
                 </dd>
               </div>
               <div>
@@ -181,8 +186,12 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
               <div>
                 <dt className="font-semibold">What changed since the last sync</dt>
                 <dd data-testid="brief-changes">
-                  {lastSent && lastSent.entryCount === 0 ? (
-                    <p className="text-ink-2" data-testid="brief-holds-none">Your bot holds no approved answers (sent {formatDateTime(lastSent.createdAt, v.workspace.timezone)}).</p>
+                  {/* What the bot holds now, read live, never what the last sync record says (23 Sep: the record said the sentence; the bot was empty). */}
+                  {heldValue !== null && isFaqEmptyValue(heldValue) ? (
+                    <p className="text-ink-2" data-testid="brief-holds-none">Your bot holds no approved answers{lastSent ? ` (sent ${formatDateTime(lastSent.createdAt, v.workspace.timezone)})` : ""}.</p>
+                  ) : null}
+                  {heldValue !== null && !heldValue.trim() ? (
+                    <p className="text-warn" data-testid="brief-holds-empty">Your bot&apos;s FAQ field is empty{lastSent ? " (changed outside HelixOS)" : ""}.</p>
                   ) : null}
                   {lastSent ? (
                     <span className="text-ink-2">{changes.added.length} added, {changes.edited.length} edited, {changes.removed.length} removed since {formatDateTime(lastSent.createdAt, v.workspace.timezone)}.</span>
