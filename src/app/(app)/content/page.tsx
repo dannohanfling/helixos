@@ -11,6 +11,7 @@ import { nowFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
 import { refreshStale } from "@/lib/planner-status";
 import { outcomesForItem } from "@/lib/queries/outcomes";
 import { addDays, formatDate, rangeDays, startOfWeek } from "@/lib/dates";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Content" };
 
@@ -52,9 +53,9 @@ function ContentCard({ item, today, outcomes = [] }: { item: ContentItem; today:
         <form action={setContentStatusAction} className="mt-2">
           <input type="hidden" name="id" value={item.id} />
           <input type="hidden" name="status" value={meta.next} />
-          <button className="btn btn-soft btn-xs" type="submit">
+          <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…">
             {meta.nextLabel}
-          </button>
+          </SubmitButton>
         </form>
       ) : null}
     </div>

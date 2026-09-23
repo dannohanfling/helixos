@@ -6,6 +6,7 @@ import { deleteDeckImageAction, updateDeckImageCaptionAction } from "@/lib/actio
 import { DeckImageUpload } from "@/components/deck-image-upload";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Images" };
 
@@ -44,7 +45,7 @@ export default async function ImagesPage() {
                   <form action={updateDeckImageCaptionAction} className="mt-2 flex gap-1">
                     <input type="hidden" name="id" value={img.id} />
                     <input className="field flex-1" name="caption" defaultValue={img.caption ?? ""} placeholder="Caption" data-testid="library-image-caption" />
-                    <button className="btn btn-ghost btn-xs" type="submit">Save</button>
+                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
                   </form>
                   {img.consentTick ? (
                     <p className="mt-1 text-[11px] text-ink-3" data-testid="library-image-consent">

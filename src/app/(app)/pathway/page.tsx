@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/dates";
 import { FIELD_TASKS, OPEN_LIMIT, SECTION_TASKS, sectionCountLine, simplePath, roadLine, stageRelation } from "@/lib/engine/pathway";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import type { LibraryTask, PathwayProgress } from "@/db/schema";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Pathway" };
 
@@ -284,9 +285,9 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                   ) : (
                     <p className="text-sm text-ink-2">This one is on your honor. Tick it when it&apos;s truly done.</p>
                   )}
-                  <button className="btn btn-accent" type="submit">
+                  <SubmitButton className="btn btn-accent" pendingText="Saving…">
                     {selected.submissionType === "checkbox" ? `Mark done · +${selected.points}` : statusOf(selected.key) === "revision" ? "Resubmit" : "Submit for review"}
-                  </button>
+                  </SubmitButton>
                 </form>
               )}
             </Card>
@@ -310,9 +311,9 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                 {nextDay.why ? <p className="mt-2 text-xs text-ink-3">{nextDay.why}</p> : null}
                 <form action={completeCurriculumDayAction} className="mt-3">
                   <input type="hidden" name="day" value={nextDay.day} />
-                  <button className="btn btn-accent btn-sm" type="submit">
+                  <SubmitButton className="btn btn-accent btn-sm" pendingText="Saving…">
                     Done, log it
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             ) : (

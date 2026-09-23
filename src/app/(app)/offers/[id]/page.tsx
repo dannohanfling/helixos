@@ -13,6 +13,7 @@ import { assetsFor } from "@/lib/queries/library";
 import { moveLegacyObjectionAction } from "@/lib/actions/objections";
 import { LEGACY_OFFER_OBJECTIONS, isSharedObjection, reframesOf } from "@/lib/engine/objections";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
+import { SubmitButton } from "@/components/submit-button";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
   return (
@@ -73,7 +74,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
         <div className="space-y-4">
           <form action={updateOfferAction} className="space-y-4">
             <input type="hidden" name="id" value={offer.id} />
-            <Card id="who" title="1 · Who and what" action={<button className="btn btn-accent btn-sm" type="submit">Save offer</button>}>
+            <Card id="who" title="1 · Who and what" action={<SubmitButton className="btn btn-accent btn-sm" pendingText="Saving…">Save offer</SubmitButton>}>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Offer name">
                   <input className="field" name="name" defaultValue={offer.name} required />
@@ -210,9 +211,9 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                           <span className="block text-ink-2">{offer[l.field]}</span>
                         </span>
                         {/* Same form as the offer (a nested form would be dropped by the browser); this button posts to the move action instead. */}
-                        <button className="btn btn-soft btn-xs" type="submit" formAction={moveLegacyObjectionAction.bind(null, l.field)} formNoValidate data-testid={`move-${l.field}`}>
+                        <SubmitButton className="btn btn-soft btn-xs" formAction={moveLegacyObjectionAction.bind(null, l.field)} formNoValidate data-testid={`move-${l.field}`} pendingText="Moving…">
                           Move to my objections
-                        </button>
+                        </SubmitButton>
                       </li>
                     ))}
                   </ul>
@@ -246,9 +247,9 @@ export default async function OfferWizardPage({ params, searchParams }: { params
               </div>
             </Card>
             <div className="flex justify-end">
-              <button className="btn btn-accent" type="submit">
+              <SubmitButton className="btn btn-accent" pendingText="Saving…">
                 Save offer
-              </button>
+              </SubmitButton>
             </div>
           </form>
 
@@ -273,12 +274,12 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                           </option>
                         ))}
                       </select>
-                      <button className="btn btn-ghost btn-sm" type="submit">
+                      <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…">
                         Save
-                      </button>
-                      <button className="btn btn-ghost btn-sm" type="submit" name="delete" value="1" title="Remove">
+                      </SubmitButton>
+                      <SubmitButton className="btn btn-ghost btn-sm" name="delete" value="1" title="Remove" pendingText="Saving…">
                         ✕
-                      </button>
+                      </SubmitButton>
                       {c.description ? <p className="text-xs text-ink-3 sm:col-span-6">{c.description}</p> : null}
                     </form>
                   </li>
@@ -311,9 +312,9 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                   ))}
                 </select>
               </Field>
-              <button className="btn btn-primary btn-sm" type="submit">
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Adding…">
                 Add
-              </button>
+              </SubmitButton>
             </form>
           </Card>
         </div>

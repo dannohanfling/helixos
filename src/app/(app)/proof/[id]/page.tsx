@@ -16,6 +16,7 @@ import { MAX_PER_PROOF, attachmentsBlockApproval, consentAnswered, likenessSente
 import { AttachmentConsentForm } from "@/components/attachment-consent-form";
 import { attachmentsFor, storageQuota } from "@/lib/queries/proof-attachments";
 import { PROOF_STORAGE_UNCONFIGURED, proofStorageConfigured } from "@/lib/proof-storage";
+import { SubmitButton } from "@/components/submit-button";
 
 const TYPE_LABEL: Record<string, string> = { result: "Result", testimonial: "Testimonial", screenshot: "Screenshot", case_study: "Case study", stat: "Stat", story: "Story" };
 const SHAPE_LABEL: Record<string, string> = { shortVersion: "short version", longVersion: "long version" };
@@ -62,7 +63,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
             {p.status === "approved" ? (
               <form action={proofToContentAction}>
                 <input type="hidden" name="id" value={p.id} />
-                <button className="btn btn-accent btn-sm" type="submit">✍️ Draft a win post</button>
+                <SubmitButton className="btn btn-accent btn-sm" pendingText="Drafting…">✍️ Draft a win post</SubmitButton>
               </form>
             ) : null}
           </div>
@@ -170,7 +171,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                 <input className="field" name="link" type="url" defaultValue={p.link ?? ""} />
               </Field>
               <div className="flex items-center gap-2">
-                <button className="btn btn-primary" type="submit">Save</button>
+                <SubmitButton className="btn btn-primary" pendingText="Saving…">Save</SubmitButton>
               </div>
             </form>
             <form action={deleteProofAction} className="mt-3">
@@ -193,7 +194,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                   )}
                   <form action={unapproveProofAction} className="mt-3">
                     <input type="hidden" name="id" value={p.id} />
-                    <button className="text-xs underline" type="submit">Back to draft</button>
+                    <SubmitButton className="text-xs underline" pendingText="Drafting…">Back to draft</SubmitButton>
                   </form>
                 </>
               ) : (
@@ -203,7 +204,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                     <input type="checkbox" name="permission" className="mt-1" />
                     <span>{speakerName} has given me permission to use what they said here in my marketing.</span>
                   </label>
-                  <button className="btn btn-primary btn-sm" type="submit" data-testid="approve">Approve</button>
+                  <SubmitButton className="btn btn-primary btn-sm" data-testid="approve" pendingText="Approving…">Approve</SubmitButton>
                   <p className="text-xs text-ink-3">A draft is invisible to every AI feature and every picker until it is approved here.</p>
                 </form>
               )}
@@ -244,7 +245,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                             <form action={updateAttachmentAltAction} className="mt-2 flex gap-1">
                               <input type="hidden" name="id" value={a.id} />
                               <input className="field text-xs" name="altText" defaultValue={a.altText ?? ""} placeholder="Alt text (a screen reader's line)" data-testid="attachment-alt" />
-                              <button className="btn btn-ghost btn-xs" type="submit">Save</button>
+                              <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
                             </form>
                           ) : null}
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -252,7 +253,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                             {i > 0 ? (
                               <form action={moveAttachmentFirstAction}>
                                 <input type="hidden" name="id" value={a.id} />
-                                <button className="btn btn-ghost btn-xs" type="submit" data-testid="attachment-first">Make it the thumbnail</button>
+                                <SubmitButton className="btn btn-ghost btn-xs" data-testid="attachment-first" pendingText="Saving…">Make it the thumbnail</SubmitButton>
                               </form>
                             ) : null}
                             <form action={deleteProofAttachmentAction}>

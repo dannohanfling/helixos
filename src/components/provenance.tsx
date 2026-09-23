@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ACCEPT_LABEL, CONTINUE_LABEL, REVIEW_LABEL, UNREVIEWED_LABEL, type Gate } from "@/lib/engine/provenance";
+import { SubmitButton } from "@/components/submit-button";
 
 /**
  * The provenance mark where the draft is chosen: a small "AI draft, not reviewed" beside an Accept for this one item. The
@@ -15,9 +16,9 @@ export function UnreviewedMark({ action, fields, className = "" }: { action: (fo
         {Object.entries(fields).map(([k, val]) => (
           <input key={k} type="hidden" name={k} value={val} />
         ))}
-        <button className="btn btn-ghost btn-xs" type="submit" data-testid="ai-accept">
+        <SubmitButton className="btn btn-ghost btn-xs" data-testid="ai-accept" pendingText="Accepting…">
           {ACCEPT_LABEL}
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );
@@ -47,9 +48,9 @@ export function GateBlock({ gate, reviewHref, action, fields, children }: { gate
           {Object.entries({ ...fields, confirm: "1" }).map(([k, val]) => (
             <input key={k} type="hidden" name={k} value={val} />
           ))}
-          <button className="btn btn-ghost btn-sm" type="submit" data-testid="review-gate-continue">
+          <SubmitButton className="btn btn-ghost btn-sm" data-testid="review-gate-continue" pendingText="Saving…">
             {CONTINUE_LABEL}
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </div>

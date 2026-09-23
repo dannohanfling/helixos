@@ -12,6 +12,7 @@ import { ACCEPT_LABEL, UNREVIEWED_LABEL, isUnreviewed } from "@/lib/engine/prove
 import { essenceFor } from "@/lib/queries/essence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import type { FaqEntry } from "@/db/schema";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Bot Brief" };
 
@@ -90,7 +91,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
                 <span className="label">Or paste the Knowledge Base Builder output</span>
                 <textarea className="field min-h-32" name="text" placeholder={"### Q: How much does it cost?\n**Also asked:** …\n**Keywords:** …\n**Answer:** …\n**Category:** Pricing"} data-testid="faq-text" />
               </label>
-              <button className="btn btn-primary btn-sm" type="submit" data-testid="faq-import-send">Import</button>
+              <SubmitButton className="btn btn-primary btn-sm" data-testid="faq-import-send" pendingText="Importing…">Import</SubmitButton>
             </form>
             <p className="mt-2 text-xs text-ink-3">Read exactly as written, no AI: each entry starts with <code>### Q:</code>. Every entry lands as a draft.</p>
           </Card>
@@ -99,7 +100,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
             {safe.length ? (
               <>
                 <form action={acceptSafeFaqAction} className="mb-3">
-                  <button className="btn btn-soft btn-sm" type="submit" data-testid="accept-safe">Accept the {safe.length} that need no eyes</button>
+                  <SubmitButton className="btn btn-soft btn-sm" data-testid="accept-safe" pendingText="Accepting…">Accept the {safe.length} that need no eyes</SubmitButton>
                 </form>
                 <ul className="space-y-3" data-testid="drafts">
                   {safe.map((e) => (
@@ -117,7 +118,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
           <Card title="What your bot would know" action={
             token && (approved.length || (lastSent && lastSent.entryCount > 0)) && fieldRead && !blocked ? (
               <form action={sendFaqAction}>
-                <button className="btn btn-primary btn-sm" type="submit" data-testid="send-bot">{approved.length ? "Approve and send to my bot" : "Clear my bot's FAQ answers"}</button>
+                <SubmitButton className="btn btn-primary btn-sm" data-testid="send-bot" pendingText={approved.length ? "Sending to your bot…" : "Clearing your bot's answers…"}>{approved.length ? "Approve and send to my bot" : "Clear my bot's FAQ answers"}</SubmitButton>
               </form>
             ) : null
           }>
@@ -269,7 +270,7 @@ function EntryRow({ e, pinned = false }: { e: FaqEntry; pinned?: boolean }) {
               <span className="rounded-md border border-warn bg-warn-soft px-2 py-0.5 text-xs font-medium">{UNREVIEWED_LABEL}</span>
               <form action={acceptFaqAction}>
                 <input type="hidden" name="id" value={e.id} />
-                <button className="btn btn-ghost btn-xs" type="submit" data-testid="faq-accept">{ACCEPT_LABEL}</button>
+                <SubmitButton className="btn btn-ghost btn-xs" data-testid="faq-accept" pendingText="Accepting…">{ACCEPT_LABEL}</SubmitButton>
               </form>
             </div>
           ) : (
@@ -292,7 +293,7 @@ function EntryRow({ e, pinned = false }: { e: FaqEntry; pinned?: boolean }) {
             <input className="field flex-1" name="alsoAsked" defaultValue={e.alsoAsked.join(", ")} placeholder="Also asked, comma-separated" />
             <input className="field flex-1" name="keywords" defaultValue={e.keywords.join(", ")} placeholder="Keywords" />
           </div>
-          <button className="btn btn-soft btn-xs" type="submit" data-testid="faq-edit-save">Save</button>
+          <SubmitButton className="btn btn-soft btn-xs" data-testid="faq-edit-save" pendingText="Saving…">Save</SubmitButton>
         </form>
       </details>
     </li>

@@ -4,6 +4,7 @@ import { ConfirmDelete } from "@/components/confirm-delete";
 import { CLARITY_BEATS, NEPQ_CATEGORIES, SCRIPT_TYPES, beatByStage, questionsFor } from "@/lib/engine/socrates";
 import { visibleQuestions } from "@/lib/queries/socrates";
 import { Badge, Card, Disclosure, Field, PageHeader, Tabs } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Question library" };
 
@@ -96,7 +97,7 @@ export default async function QuestionsPage({ searchParams }: { searchParams: Pr
             </div>
           </fieldset>
           <div className="sm:col-span-2">
-            <button className="btn btn-primary btn-sm" type="submit">Add question</button>
+            <SubmitButton className="btn btn-primary btn-sm" pendingText="Adding…">Add question</SubmitButton>
           </div>
         </form>
       </Disclosure>

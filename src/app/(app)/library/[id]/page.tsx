@@ -7,6 +7,7 @@ import { deleteLibraryPostAction, shareLibraryPostAction, updateLibraryPostActio
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { libraryPostFor } from "@/lib/queries/library-posts";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function LibraryEntryPage({ params }: { params: Promise<{ id: string }> }) {
   const v = await requireViewer();
@@ -38,18 +39,18 @@ export default async function LibraryEntryPage({ params }: { params: Promise<{ i
           <div className="flex flex-wrap gap-2">
             <form action={useLibraryPostAction}>
               <input type="hidden" name="id" value={p.id} />
-              <button className="btn btn-accent btn-sm" type="submit">
+              <SubmitButton className="btn btn-accent btn-sm" pendingText="Starting…">
                 ✍️ Use this
-              </button>
+              </SubmitButton>
             </form>
             <CopyButton text={full} label="Copy" className="btn btn-ghost btn-sm" />
             {v.role === "coach" && (mine || coachOwned) ? (
               <form action={shareLibraryPostAction}>
                 <input type="hidden" name="id" value={p.id} />
                 <input type="hidden" name="shared" value={p.shared ? "0" : "1"} />
-                <button className="btn btn-soft btn-sm" type="submit">
+                <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…">
                   {p.shared ? "Stop sharing" : "Share with every member"}
-                </button>
+                </SubmitButton>
               </form>
             ) : null}
           </div>
@@ -161,9 +162,9 @@ export default async function LibraryEntryPage({ params }: { params: Promise<{ i
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" name="hasCta" defaultChecked={p.hasCta} /> Has a call to action
                 </label>
-                <button className="btn btn-primary btn-sm" type="submit">
+                <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
                   Save
-                </button>
+                </SubmitButton>
               </form>
               <form action={deleteLibraryPostAction} className="mt-3">
                 <input type="hidden" name="id" value={p.id} />

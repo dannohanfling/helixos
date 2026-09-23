@@ -3,6 +3,7 @@ import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { NAV_GROUPS } from "@/components/nav-groups";
 import { PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "More" };
 
@@ -31,9 +32,9 @@ export default async function MorePage() {
             <span className="w-6 text-center text-lg">⚙️</span> Settings
           </Link>
           <form action={logoutAction}>
-            <button className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-surface-2" type="submit">
+            <SubmitButton className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-surface-2" pendingText="Logging out…">
               <span className="w-6 text-center text-lg">🚪</span> Log out
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>

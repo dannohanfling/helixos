@@ -10,6 +10,7 @@ import { BELIEF_LABEL, LOOP_FROM, LOOP_TO, OBJECTION_METHOD, REFRAME_STEP_KEY, h
 import { CopyButton } from "@/components/copy-button";
 import { LoopLine } from "@/components/loop-line";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 /** A sample line inside straight quotes is shown as the speech it is. The words are unchanged. */
 function quoted(line: string) {
@@ -104,7 +105,7 @@ export default async function ObjectionsPage() {
                             </Field>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <button className="btn btn-accent btn-sm" type="submit">Save</button>
+                            <SubmitButton className="btn btn-accent btn-sm" pendingText="Saving…">Save</SubmitButton>
                           </div>
                         </form>
                         <form action={deleteObjectionAction} className="mt-2">
@@ -199,7 +200,7 @@ export default async function ObjectionsPage() {
                 <input className="field" name="useWhen" />
               </Field>
             </div>
-            <button className="btn btn-accent btn-sm" type="submit">Save to my objections</button>
+            <SubmitButton className="btn btn-accent btn-sm" pendingText="Saving…">Save to my objections</SubmitButton>
           </form>
         </Card>
       </div>

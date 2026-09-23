@@ -9,7 +9,7 @@ import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { needsEyes, normaliseCategory, parseKnowledgeBase, type ParsedEntry } from "@/lib/engine/faq";
 import { originAfterAccept, originAfterSave, sameText } from "@/lib/engine/provenance";
-import { pushFaq } from "@/lib/community-loyalty";
+import { FAQ_SEND_IN_FLIGHT, pushFaq } from "@/lib/community-loyalty";
 import { logSync } from "@/lib/integrations";
 
 const BRAIN = "/brain";
@@ -125,6 +125,8 @@ export async function sendFaqAction(): Promise<void> {
   const out = await pushFaq(v.membership.id, { reason: "brief", sentBy: v.user.name });
   refresh();
   if (out.status === "sent") redirect(`${BRAIN}?sent=1`);
+  // A second press that reached the server while the first send was out: that send answers for both.
+  if (out.status === "skipped" && out.note === FAQ_SEND_IN_FLIGHT) redirect(BRAIN);
   // A send that did not land says so beside the button, in words (22 Sep: two failed presses showed nothing). Refused before
   // or by the platform, nothing changed on the bot; refused at the read-back, the write may have landed, so it says that.
   const why = out.note.replace(/^Not sent: /, "");

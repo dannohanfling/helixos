@@ -117,9 +117,9 @@ export default async function TodayPage() {
             {d.broken.repairable && d.repairsLeft > 0 ? (
               <form action={repairStreakAction}>
                 <input type="hidden" name="date" value={d.broken.missed[0]} />
-                <button className="btn btn-primary btn-sm" type="submit">
+                <SubmitButton className="btn btn-primary btn-sm" pendingText="Repairing…">
                   Repair the streak
-                </button>
+                </SubmitButton>
               </form>
             ) : (
               <a href="#close" className="btn btn-soft btn-sm">
@@ -252,9 +252,9 @@ export default async function TodayPage() {
                         <form action={setContentStatusAction}>
                           <input type="hidden" name="id" value={c.id} />
                           <input type="hidden" name="status" value="posted" />
-                          <button className="btn btn-soft btn-xs" type="submit">
+                          <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…">
                             Mark as posted
-                          </button>
+                          </SubmitButton>
                         </form>
                       </li>
                     );

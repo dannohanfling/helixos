@@ -7,6 +7,7 @@ import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/compone
 import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
 import { knownFor } from "@/lib/queries/webinar";
 import { formatDate } from "@/lib/dates";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Webinars" };
 
@@ -42,9 +43,9 @@ export default async function WebinarsPage() {
         action={
           <div className="flex gap-2">
             <form action={duplicateExampleAction}>
-              <button className="btn btn-ghost btn-sm" type="submit">
+              <SubmitButton className="btn btn-ghost btn-sm" pendingText="Starting…">
                 Start from the example
-              </button>
+              </SubmitButton>
             </form>
             <Disclosure summary={<span className="btn btn-primary btn-sm">+ New webinar</span>}>
               <form action={createWebinarAction} className="card grid gap-3 p-4 sm:grid-cols-2">
@@ -65,9 +66,9 @@ export default async function WebinarsPage() {
                   <input className="field" name="promise" placeholder="Leave with a plan you can run this week" />
                 </Field>
                 <div className="sm:col-span-2">
-                  <button className="btn btn-primary" type="submit">
+                  <SubmitButton className="btn btn-primary" pendingText="Opening…">
                     Open the wizard
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
             </Disclosure>

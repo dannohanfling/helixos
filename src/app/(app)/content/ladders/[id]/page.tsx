@@ -16,6 +16,7 @@ import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
 import { LIVE_POSTING_HOUR, checkScore, checklist, formatFor, headlineParts, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, threadsText } from "@/lib/engine/ladder";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
+import { SubmitButton } from "@/components/submit-button";
 
 function HeadlinePreview({ headline, handle }: { headline: string; handle?: string | null }) {
   const h = headlineParts(headline);
@@ -84,14 +85,14 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           <div className="flex flex-wrap gap-2">
             <form action={sendLadderToComposerAction}>
               <input type="hidden" name="id" value={l.id} />
-              <button className="btn btn-primary btn-sm" type="submit" disabled={blocked} title={hold} data-testid="send-to-composer">{l.contentItemId ? "Open in composer" : "Send to composer"}</button>
+              <SubmitButton className="btn btn-primary btn-sm" disabled={blocked} title={hold} data-testid="send-to-composer" pendingText="Opening…">{l.contentItemId ? "Open in composer" : "Send to composer"}</SubmitButton>
             </form>
             <form action={setLadderStatusAction}>
               <input type="hidden" name="id" value={l.id} />
               <input type="hidden" name="status" value={l.status === "draft" ? "ready" : "draft"} />
-              <button className="btn btn-ghost btn-sm" type="submit" disabled={l.status === "draft" && blocked} title={l.status === "draft" ? hold : undefined}>
+              <SubmitButton className="btn btn-ghost btn-sm" disabled={l.status === "draft" && blocked} title={l.status === "draft" ? hold : undefined} pendingText="Drafting…">
                 {l.status === "draft" ? "Mark ready" : "Back to draft"}
-              </button>
+              </SubmitButton>
             </form>
           </div>
         }
@@ -133,9 +134,9 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           <form action={pushLadderUpdateAction} className="mt-2">
             <input type="hidden" name="id" value={l.id} />
             <input type="hidden" name="back" value={`/content/ladders/${l.id}`} />
-            <button className="btn btn-soft btn-sm" type="submit" disabled={blocked} title={hold} data-testid="push-update">
+            <SubmitButton className="btn btn-soft btn-sm" disabled={blocked} title={hold} data-testid="push-update" pendingText="Sending to GoHighLevel…">
               Push the update to GoHighLevel
-            </button>
+            </SubmitButton>
           </form>
         </div>
       ) : null}
@@ -212,9 +213,9 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                   <textarea className="field text-sm" name="notes" rows={4} defaultValue={l.notes ?? ""} />
                 </Field>
               </div>
-              <button className="btn btn-primary mt-3" type="submit">
+              <SubmitButton className="btn btn-primary mt-3" pendingText="Saving…">
                 Save and re-check
-              </button>
+              </SubmitButton>
             </Card>
           </form>
         </div>
@@ -263,7 +264,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                     <form action={markRungAction} className="ml-auto">
                       <input type="hidden" name="id" value={l.id} />
                       <input type="hidden" name="clearAll" value="1" />
-                      <button className="text-xs text-ink-3 underline" type="submit">Reset</button>
+                      <SubmitButton className="text-xs text-ink-3 underline" pendingText="Resetting…">Reset</SubmitButton>
                     </form>
                   </div>
                   <ol className="divide-y rounded-lg border">
@@ -275,9 +276,9 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                         <form action={markRungAction}>
                           <input type="hidden" name="id" value={l.id} />
                           <input type="hidden" name="n" value={r.n} />
-                          <button className={`btn btn-xs ${r.postedAt ? "btn-ghost" : next?.n === r.n ? "btn-primary" : "btn-soft"}`} type="submit" disabled={blocked && !r.postedAt} title={!r.postedAt ? hold : undefined} data-testid="mark-rung">
+                          <SubmitButton className={`btn btn-xs ${r.postedAt ? "btn-ghost" : next?.n === r.n ? "btn-primary" : "btn-soft"}`} disabled={blocked && !r.postedAt} title={!r.postedAt ? hold : undefined} data-testid="mark-rung" pendingText="Undoing…">
                             {r.postedAt ? "Undo" : "Posted ✓"}
-                          </button>
+                          </SubmitButton>
                         </form>
                       </li>
                     ))}
@@ -314,9 +315,9 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                 <Field label="Real numbers">
                   <textarea className="field text-sm" name="realNumbers" rows={2} defaultValue={l.realNumbers ?? ""} />
                 </Field>
-                <button className="btn btn-soft btn-sm" type="submit">
+                <SubmitButton className="btn btn-soft btn-sm" pendingText="Regenerating…">
                   Regenerate (replaces every field)
-                </button>
+                </SubmitButton>
                 <AiFormStatus feature="ladder" enabled={ai} />
                 <AiPromise enabled={ai}>Replaces every field with a new full post, 9–11 rungs, headline, carousel, Instagram caption and Threads chain from the brief above.</AiPromise>
               </form>

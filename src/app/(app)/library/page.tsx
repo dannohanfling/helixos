@@ -6,6 +6,7 @@ import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
 import { matches, visibleLibrary } from "@/lib/queries/library-posts";
 import type { LibraryPost } from "@/db/schema";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Library" };
 
@@ -49,9 +50,9 @@ function Entry({ p, userId }: { p: LibraryPost; userId: string }) {
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
         <form action={useLibraryPostAction}>
           <input type="hidden" name="id" value={p.id} />
-          <button className="btn btn-accent btn-xs" type="submit">
+          <SubmitButton className="btn btn-accent btn-xs" pendingText="Starting…">
             {short ? "Start a post with it" : "Use this"}
-          </button>
+          </SubmitButton>
         </form>
         <CopyButton text={text} label="Copy" className="btn btn-ghost btn-xs" />
         <Link href={`/library/${p.id}`} className="ml-auto text-xs text-ink-3 underline">
@@ -166,9 +167,9 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
               </label>
             ) : null}
             <div className="sm:col-span-2">
-              <button className="btn btn-primary btn-sm" type="submit">
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
                 Save to library
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </Disclosure>

@@ -5,6 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { reviewCertAction, submitCertAction } from "@/lib/actions/courses";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Certification" };
 
@@ -66,7 +67,7 @@ export default async function CertificationPage() {
                       <span className="label">Feedback</span>
                       <input className="field py-1" name="feedback" placeholder="What was strong, what to fix." />
                     </label>
-                    <button className="btn btn-primary btn-sm" type="submit">Score it</button>
+                    <SubmitButton className="btn btn-primary btn-sm" pendingText="Scoring…">Score it</SubmitButton>
                   </form>
                 </li>
               );
@@ -104,7 +105,7 @@ export default async function CertificationPage() {
                             <Field label="Notes">
                               <textarea className="field" name="notes" defaultValue={s?.notes ?? ""} />
                             </Field>
-                            <button className="btn btn-accent btn-sm" type="submit">Submit for scoring</button>
+                            <SubmitButton className="btn btn-accent btn-sm" pendingText="Sending…">Submit for scoring</SubmitButton>
                           </form>
                         </Disclosure>
                       ) : null}

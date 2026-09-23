@@ -5,6 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { createScriptAction } from "@/lib/actions/socrates";
 import { SCRIPT_TYPES, progress } from "@/lib/engine/socrates";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Scripts" };
 
@@ -27,7 +28,7 @@ export default async function ScriptsPage() {
                 ))}
               </select>
             </Field>
-            <button className="btn btn-primary" type="submit">Start</button>
+            <SubmitButton className="btn btn-primary" pendingText="Starting…">Start</SubmitButton>
           </form>
         </Card>
         <Card title="Your scripts">

@@ -1,5 +1,6 @@
 import { createAssetAction } from "@/lib/actions/webinars";
 import { Field } from "./ui";
+import { SubmitButton } from "@/components/submit-button";
 
 const LABELS: Record<string, { name: string; body: string; extra?: { key: "reframe" | "proof" | "summary"; label: string } }> = {
   story: { name: "Story title", body: "The story, as you'd tell it", extra: { key: "summary", label: "Moral / lesson" } },
@@ -28,9 +29,9 @@ export function AssetForm({ type, back }: { type: "story" | "analogy" | "objecti
       <Field label="When to use it">
         <input className="field" name="useWhen" placeholder="Opportunity frame, when they say 'I've tried this before'…" />
       </Field>
-      <button className="btn btn-primary btn-sm" type="submit">
+      <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
         Save to bank
-      </button>
+      </SubmitButton>
     </form>
   );
 }

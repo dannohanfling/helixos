@@ -6,6 +6,7 @@ import { completeLessonAction, uncompleteLessonAction } from "@/lib/actions/cour
 import { Badge, Card, Disclosure, Empty, PageHeader, Tabs } from "@/components/ui";
 
 import lessonLinks from "@/data/lesson-links.json";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Courses" };
 
@@ -91,7 +92,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
                             ) : null}
                             <form action={isDone ? uncompleteLessonAction : completeLessonAction}>
                               <input type="hidden" name="lessonId" value={l.id} />
-                              <button className={`btn btn-xs ${isDone ? "btn-ghost" : "btn-accent"}`} type="submit">{isDone ? "Undo" : "Done"}</button>
+                              <SubmitButton className={`btn btn-xs ${isDone ? "btn-ghost" : "btn-accent"}`} pendingText="Undoing…">{isDone ? "Undo" : "Done"}</SubmitButton>
                             </form>
                           </span>
                         ) : (

@@ -8,6 +8,7 @@ import { harvestRecordingAction } from "@/lib/actions/fathom";
 import { AiFormStatus } from "@/components/ai-status";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { formatDateTime } from "@/lib/dates";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Harvest from Fathom" };
 
@@ -81,9 +82,9 @@ export default async function HarvestPage({ searchParams }: { searchParams: Prom
                       <input type="hidden" name="url" value={r.url} />
                       <input type="hidden" name="recordedAt" value={r.recordedAt ?? ""} />
                       <input type="hidden" name="invitees" value={JSON.stringify(r.invitees)} />
-                      <button className="btn btn-soft btn-sm" type="submit" disabled={!ai} title={ai ? undefined : "Connect your AI key in Settings"} data-testid="read-recording">
+                      <SubmitButton className="btn btn-soft btn-sm" disabled={!ai} title={ai ? undefined : "Connect your AI key in Settings"} data-testid="read-recording" pendingText="Reading…">
                         Read this recording
-                      </button>
+                      </SubmitButton>
                       <AiFormStatus feature="harvest" enabled={ai} />
                     </form>
                   </li>

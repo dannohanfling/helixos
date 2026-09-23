@@ -18,6 +18,7 @@ import {
 import { formatDate } from "@/lib/dates";
 import { fathomKeyFor } from "@/lib/fathom";
 import { attachmentsForProofs } from "@/lib/queries/proof-attachments";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Proof Bank" };
 
@@ -176,9 +177,9 @@ export default async function ProofPage() {
                     </div>
                     <form action={proofFromCheckinAction}>
                       <input type="hidden" name="checkinId" value={k.id} />
-                      <button className="btn btn-soft btn-xs" type="submit">
+                      <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…">
                         Capture
-                      </button>
+                      </SubmitButton>
                     </form>
                   </li>
                 ))}
@@ -323,9 +324,9 @@ export default async function ProofPage() {
                 <input type="checkbox" name="permission" className="mt-1" />
                 <span>This person has given me permission to use what they said here in my marketing. The same tick as on the Beliefs step; approval still happens on the proof&apos;s page.</span>
               </label>
-              <button className="btn btn-primary" type="submit">
+              <SubmitButton className="btn btn-primary" pendingText="Saving…">
                 Save proof
-              </button>
+              </SubmitButton>
             </form>
           </Card>
         </div>

@@ -1,4 +1,5 @@
 import { logoutAction } from "@/lib/actions/auth";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Access ended" };
@@ -10,7 +11,7 @@ export default function RemovedPage() {
       <h1 className="text-2xl font-semibold">Your access has ended</h1>
       <p className="mt-3 text-ink-2">Your coach has closed your HelixOS access. If you think this is a mistake, contact your coach.</p>
       <form action={logoutAction} className="mt-6">
-        <button className="btn btn-soft" type="submit">Log out</button>
+        <SubmitButton className="btn btn-soft" pendingText="Logging out…">Log out</SubmitButton>
       </form>
     </main>
   );

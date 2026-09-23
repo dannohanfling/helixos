@@ -19,8 +19,15 @@ export const FAQ_FIELD_BUDGET = 20000;
  *   [cl.http] PUT /flow/set-bot-fields-by-name (faq, empty) 422 {"message":"The data.0.value field is required."}
  *   [cl.http] PUT /flow/set-bot-fields-by-name (faq, a single space) 422 {"message":"The data.0.value field is required."}
  * The field is read by a model mid-prompt ("Approved answers from HelixOS are below…"), so it gets a sentence that keeps the
- * prompt true and lets the agent fall through to the knowledge base, not a sentinel it might try to interpret. The published
- * spec as far as it has been read (set-bot-fields-by-name) offers no call that clears a bot field. This is the design.
+ * prompt true and lets the agent fall through to the knowledge base, not a sentinel it might try to interpret.
+ * This is the design, and it is final. The whole published spec (/default-api-docs/api-docs.json, 231 paths, read from Danno's
+ * browser on 23 Sep) has these bot-field calls and no others:
+ *   GET    /flow/bot-fields
+ *   POST   /flow/create-bot-field
+ *   PUT    /flow/set-bot-field, /flow/set-bot-field-by-name, /flow/set-bot-fields, /flow/set-bot-fields-by-name
+ *   DELETE /flow/delete-bot-field, /flow/delete-bot-field-by-name
+ * There is no clear call for a bot field (clear-user-field and its siblings exist only under /subscriber/, for user fields), and
+ * the two deletes remove the field itself, chip and all, so they are on the client's never-called list (NEVER_CALLED).
  */
 export const FAQ_EMPTY_VALUE = "There are no approved answers yet.";
 /** What the Brief says after that send, so the next coach who finds a sentence in the field in Community Loyalty knows why. */

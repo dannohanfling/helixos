@@ -8,6 +8,7 @@ import { Badge, Card, Empty, Field, PageHeader } from "@/components/ui";
 import { STREAK_BONUS } from "@/lib/engine/streak";
 import { TIERS, TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import curriculum from "@/data/seed/curriculum.json";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Community Pass" };
 
@@ -88,9 +89,9 @@ export default async function CommunityPage() {
               <Field label="Reason">
                 <input className="field" name="reason" placeholder={`Posted with ${hashtag}`} />
               </Field>
-              <button className="btn btn-accent" type="submit">
+              <SubmitButton className="btn btn-accent" pendingText="Awarding…">
                 Award
-              </button>
+              </SubmitButton>
             </form>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               {[
@@ -131,9 +132,9 @@ export default async function CommunityPage() {
               <Field label="Community link">
                 <input className="field" name="passCommunityUrl" type="url" defaultValue={m.passCommunityUrl ?? ""} />
               </Field>
-              <button className="btn btn-primary w-full" type="submit">
+              <SubmitButton className="btn btn-primary w-full" pendingText="Saving…">
                 Save
-              </button>
+              </SubmitButton>
             </form>
           </Card>
           <Card title="The ladder your members climb">

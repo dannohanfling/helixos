@@ -10,6 +10,7 @@ import { essenceChars, roughTokens } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
 import { formatDateTime } from "@/lib/dates";
 import { Badge, Card, Field } from "./ui";
+import { SubmitButton } from "@/components/submit-button";
 
 /** Settings: connect your own Anthropic or OpenAI key, see what it's being spent on. */
 export async function AiKeyCard({ v }: { v: Viewer }) {
@@ -62,9 +63,9 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
               <input className="field" name="key" type="password" autoComplete="off" placeholder={status.provider ? "•••••••• saved" : "sk-…"} />
             </Field>
             <div className="flex items-end">
-              <button className="btn btn-primary btn-sm" type="submit">
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Checking…">
                 {status.provider ? "Replace and check" : "Connect and check"}
-              </button>
+              </SubmitButton>
             </div>
           </form>
           {status.lastError ? (
@@ -77,7 +78,7 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
               {cred?.lastValidatedAt ? <span>Checked {formatDateTime(cred.lastValidatedAt, v.workspace.timezone)}</span> : null}
               <span>Models: {MODELS[status.provider].strong} for long drafts, {MODELS[status.provider].light} for polish.</span>
               <form action={recheckAiKeyAction}>
-                <button className="underline" type="submit">Check again</button>
+                <SubmitButton className="underline" pendingText="Checking…">Check again</SubmitButton>
               </form>
               <form action={removeAiKeyAction}>
                 <ConfirmDelete verb="Remove" what="your AI key" undo="To use it again you would paste it in again." label="Remove key" className="underline" />

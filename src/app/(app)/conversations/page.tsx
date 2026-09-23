@@ -9,6 +9,7 @@ import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/compo
 import { templatesFor } from "@/lib/queries/templates";
 import { addDays, relativeDay } from "@/lib/dates";
 import { STAGE_META } from "@/lib/stage-meta";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Conversations" };
 
@@ -50,9 +51,9 @@ function ContactRow({ c, today }: { c: Contact; today: string }) {
         <form action={snoozeContactAction} className="hidden sm:block">
           <input type="hidden" name="id" value={c.id} />
           <input type="hidden" name="days" value="1" />
-          <button className="btn btn-ghost btn-xs" type="submit" title="Snooze to tomorrow">
+          <SubmitButton className="btn btn-ghost btn-xs" title="Snooze to tomorrow" pendingText="Saving…">
             ↷
-          </button>
+          </SubmitButton>
         </form>
       ) : null}
     </div>
@@ -131,12 +132,12 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                   <TemplatePicker templates={templates} values={{ Name: "" }} name="firstMessage" placeholder="Paste the first DM you sent…" />
                 </div>
                 <div className="flex gap-2 sm:col-span-2">
-                  <button className="btn btn-primary" type="submit">
+                  <SubmitButton className="btn btn-primary" pendingText="Saving…">
                     Save
-                  </button>
-                  <button className="btn btn-ghost" type="submit" name="open" value="1">
+                  </SubmitButton>
+                  <SubmitButton className="btn btn-ghost" name="open" value="1" pendingText="Saving…">
                     Save and open
-                  </button>
+                  </SubmitButton>
                 </div>
               </form>
             </Disclosure>

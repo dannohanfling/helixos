@@ -13,6 +13,7 @@ import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { addDays, formatDateTime } from "@/lib/dates";
 import { templatesFor } from "@/lib/queries/templates";
 import { STAGE_META } from "@/lib/stage-meta";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function ContactPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ needsIdentity?: string }> }) {
   const { needsIdentity } = await searchParams;
@@ -88,9 +89,9 @@ export default async function ContactPage({ params, searchParams }: { params: Pr
                   <input className="field" name="nextFollowUpAt" type="date" defaultValue={addDays(v.today, 3)} />
                 </Field>
                 <div className="flex items-end">
-                  <button className="btn btn-primary" type="submit">
+                  <SubmitButton className="btn btn-primary" pendingText="Saving…">
                     Log it
-                  </button>
+                  </SubmitButton>
                 </div>
               </div>
             </form>
@@ -147,9 +148,9 @@ export default async function ContactPage({ params, searchParams }: { params: Pr
               <Field label="Notes">
                 <textarea className="field min-h-20" name="notes" defaultValue={contact.notes ?? ""} placeholder="Pains, goals, what they've tried…" />
               </Field>
-              <button className="btn btn-primary w-full" type="submit">
+              <SubmitButton className="btn btn-primary w-full" pendingText="Saving…">
                 Save
-              </button>
+              </SubmitButton>
             </form>
           </Card>
           <Card title="Quick copy">

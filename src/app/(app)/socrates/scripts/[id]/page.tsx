@@ -9,6 +9,7 @@ import { CallSheetView } from "@/components/call-sheet";
 import { QuestionPicker } from "@/components/question-picker";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Script" };
 
@@ -58,7 +59,7 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
-              <button className="btn btn-soft btn-sm" type="submit">Save</button>
+              <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…">Save</SubmitButton>
             </form>
           </Disclosure>
         }
@@ -138,7 +139,7 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
                   );
                 })}
                 <div className="flex flex-wrap items-center gap-2">
-                  <button className="btn btn-accent" type="submit">Save</button>
+                  <SubmitButton className="btn btn-accent" pendingText="Saving…">Save</SubmitButton>
                   {p.complete ? <Link href={`/socrates/scripts/${s.id}`} className="btn btn-ghost">To the outputs</Link> : null}
                 </div>
               </form>
@@ -206,15 +207,15 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
                 <textarea className="field min-h-28" name="override" defaultValue={draft.override ?? ""} data-testid="override" />
               </Field>
               <div className="flex flex-wrap items-center gap-2">
-                <button className="btn btn-ghost" type="submit">Save</button>
+                <SubmitButton className="btn btn-ghost" pendingText="Saving…">Save</SubmitButton>
                 {next ? (
-                  <button className="btn btn-accent" type="submit" name="next" value={next.key}>
+                  <SubmitButton className="btn btn-accent" name="next" value={next.key} pendingText="Saving…">
                     Save and next →
-                  </button>
+                  </SubmitButton>
                 ) : (
-                  <button className="btn btn-accent" type="submit" name="next" value="fill">
+                  <SubmitButton className="btn btn-accent" name="next" value="fill" pendingText="Saving…">
                     Save and fill in the blanks →
-                  </button>
+                  </SubmitButton>
                 )}
               </div>
             </form>

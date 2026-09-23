@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ProofAttachmentKind } from "@/db/schema";
 import { recordAttachmentConsentAction } from "@/lib/actions/proof-attachments";
 import { likenessSentence } from "@/lib/engine/proof-attachments";
+import { SubmitButton } from "@/components/submit-button";
 
 /** The likeness permission, recorded later: the sentence carries the name as it is typed, so what is ticked is what is recorded. */
 export function AttachmentConsentForm({ id, kind, initialName }: { id: string; kind: ProofAttachmentKind; initialName: string }) {
@@ -16,7 +17,7 @@ export function AttachmentConsentForm({ id, kind, initialName }: { id: string; k
         <input type="checkbox" name="consentTick" className="mt-0.5" required data-testid="attachment-consent-tick" />
         <span>{likenessSentence(name, kind)}</span>
       </label>
-      <button className="btn btn-soft btn-xs" type="submit" data-testid="attachment-consent-save">Record permission</button>
+      <SubmitButton className="btn btn-soft btn-xs" data-testid="attachment-consent-save" pendingText="Saving…">Record permission</SubmitButton>
     </form>
   );
 }

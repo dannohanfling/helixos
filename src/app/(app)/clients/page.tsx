@@ -6,6 +6,7 @@ import { createClientRecordAction } from "@/lib/actions/clients";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
 import { addDays, relativeDay } from "@/lib/dates";
 import { tierFor } from "@/lib/engine/tiers";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Clients" };
 
@@ -94,9 +95,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                 <input className="field" name="nextCallAt" type="datetime-local" />
               </Field>
               <div className="sm:col-span-2">
-                <button className="btn btn-primary" type="submit">
+                <SubmitButton className="btn btn-primary" pendingText="Adding…">
                   Add client
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </Disclosure>
@@ -154,9 +155,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                       <input type="hidden" name="name" value={c.name} />
                       <input type="hidden" name="contactId" value={c.id} />
                       <input type="hidden" name="goal90" value={c.whatTheyreBuilding ?? ""} />
-                      <button className="btn btn-soft btn-xs" type="submit">
+                      <SubmitButton className="btn btn-soft btn-xs" pendingText="Adding…">
                         Add as client
-                      </button>
+                      </SubmitButton>
                     </form>
                   </li>
                 ))}

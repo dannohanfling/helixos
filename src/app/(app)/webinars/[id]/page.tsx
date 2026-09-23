@@ -68,6 +68,7 @@ import { AssetForm } from "@/components/asset-form";
 import { ProofPicker, type ProofImage } from "@/components/proof-picker";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
+import { SubmitButton } from "@/components/submit-button";
 
 const ACT_ICON: Record<string, string> = {
   opening: "🎬",
@@ -470,9 +471,9 @@ export default async function WebinarWizardPage({
                 </div>
               </div>
               <div className="sm:col-span-2">
-                <button className="btn btn-accent" type="submit">
+                <SubmitButton className="btn btn-accent" pendingText="Saving…">
                   Save and map beliefs →
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </Card>
@@ -718,9 +719,9 @@ export default async function WebinarWizardPage({
             })}
           </div>
           <div className="flex items-center gap-3">
-            <button className="btn btn-accent" type="submit">
+            <SubmitButton className="btn btn-accent" pendingText="Saving…">
               Save and write the script →
-            </button>
+            </SubmitButton>
           </div>
         </form>
       ) : null}
@@ -1004,18 +1005,19 @@ export default async function WebinarWizardPage({
                   Left out
                 </label>
                 <span className="flex-1" />
-                <button className="btn btn-ghost" type="submit">
+                <SubmitButton className="btn btn-ghost" pendingText="Saving…">
                   Save
-                </button>
+                </SubmitButton>
                 {nextSection ? (
-                  <button
+                  <SubmitButton
                     className="btn btn-accent"
-                    type="submit"
+                   
                     name="next"
                     value={nextSection.sectionKey}
+                    pendingText="Saving…"
                   >
                     Save and next →
-                  </button>
+                  </SubmitButton>
                 ) : (
                   <Link
                     href={`/webinars/${w.id}?step=offer`}
@@ -1039,11 +1041,11 @@ export default async function WebinarWizardPage({
                   name="mode"
                   value={ai ? "ai" : "example"}
                 />
-                <button className="btn btn-soft btn-sm" type="submit">
+                <SubmitButton className="btn btn-soft btn-sm" pendingText="Drafting…">
                   {ai
                     ? "✨ Draft this section for me"
                     : "Start from the example"}
-                </button>
+                </SubmitButton>
                 <AiFormStatus
                   feature="webinar_section"
                   enabled={ai}
@@ -1259,9 +1261,9 @@ export default async function WebinarWizardPage({
                 </select>
               </Field>
               <div className="flex gap-2">
-                <button className="btn btn-accent" type="submit">
+                <SubmitButton className="btn btn-accent" pendingText="Saving…">
                   Save and build the deck →
-                </button>
+                </SubmitButton>
                 <Link href="/offers" className="btn btn-ghost">
                   Open the Offer Wizard
                 </Link>
@@ -1434,9 +1436,9 @@ export default async function WebinarWizardPage({
                   placeholder="Three fixes before the next run."
                 />
               </Field>
-              <button className="btn btn-accent" type="submit">
+              <SubmitButton className="btn btn-accent" pendingText="Saving…">
                 Save review
-              </button>
+              </SubmitButton>
             </form>
           </Card>
           <div className="space-y-4">
@@ -1591,9 +1593,9 @@ export default async function WebinarWizardPage({
                   />
                 </Field>
               </div>
-              <button className="btn btn-accent" type="submit">
+              <SubmitButton className="btn btn-accent" pendingText="Saving…">
                 Save
-              </button>
+              </SubmitButton>
             </form>
           </Card>
           <div className="space-y-4">
@@ -1829,7 +1831,7 @@ function SlotControl({ webinarId, resolved, library }: { webinarId: string; reso
           <span className="text-good" data-testid="deck-slot-filled">Picture attached.</span>
           <input type="hidden" name="webinarId" value={webinarId} />
           <input type="hidden" name="slotKey" value={slot.key} />
-          <button className="btn btn-ghost btn-xs" type="submit" data-testid="deck-slot-clear">Remove</button>
+          <SubmitButton className="btn btn-ghost btn-xs" data-testid="deck-slot-clear" pendingText="Removing…">Remove</SubmitButton>
         </form>
       ) : library.length ? (
         <form action={setDeckSlotAction} className="mt-1 flex items-center gap-1">
@@ -1841,7 +1843,7 @@ function SlotControl({ webinarId, resolved, library }: { webinarId: string; reso
               <option key={img.id} value={img.id}>{img.caption ? img.caption : img.kind} · {img.kind}</option>
             ))}
           </select>
-          <button className="btn btn-soft btn-xs" type="submit" data-testid="deck-slot-attach">Attach</button>
+          <SubmitButton className="btn btn-soft btn-xs" data-testid="deck-slot-attach" pendingText="Attaching…">Attach</SubmitButton>
         </form>
       ) : (
         <Link href="/images" className="mt-1 inline-block text-accent underline" data-testid="deck-slot-empty-library">Add images to your library first →</Link>

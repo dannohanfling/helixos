@@ -6,6 +6,7 @@ import { saveEssenceSectionAction } from "@/lib/actions/essence";
 import { ESSENCE_CAP, ESSENCE_HELP, ESSENCE_SECTIONS, placeholderFor, completion, essenceChars, roughTokens, sectionByKey, sectionFilled, type Story } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Essence" };
 
@@ -118,11 +119,11 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
               ),
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <button className={next ? "btn btn-ghost" : "btn btn-accent"} type="submit">Save</button>
+              <SubmitButton className={next ? "btn btn-ghost" : "btn btn-accent"} pendingText="Saving…">Save</SubmitButton>
               {next ? (
-                <button className="btn btn-accent" type="submit" name="next" value={next.key}>
+                <SubmitButton className="btn btn-accent" name="next" value={next.key} pendingText="Saving…">
                   Save and next →
-                </button>
+                </SubmitButton>
               ) : null}
               <span className="ml-auto text-xs text-ink-3">Come back any time. Nothing waits on this being finished.</span>
             </div>

@@ -11,6 +11,7 @@ import { CopyButton } from "@/components/copy-button";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Evidence" };
 
@@ -65,7 +66,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
               </div>
               <AiPromise enabled={ai} needs="the search terms">Turns your claim into the terms a researcher would search, and names the effect and the field. Without a key, the claim&apos;s own words are used.</AiPromise>
               <div className="flex items-center gap-2">
-                <button className="btn btn-accent" type="submit">{ai ? "✨ Propose search terms" : "Propose search terms"}</button>
+                <SubmitButton className="btn btn-accent" pendingText="Proposing…">{ai ? "✨ Propose search terms" : "Propose search terms"}</SubmitButton>
                 <AiFormStatus feature="evidence_terms" />
               </div>
             </form>
@@ -85,7 +86,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                   <input className="field" name="terms" defaultValue={terms} data-testid="terms-input" />
                 </Field>
                 <p className="text-xs text-ink-3">{EVIDENCE_DAILY_LIMIT} searches a day per person; the key is shared by everyone here. The same terms searched again this week come from the cache.</p>
-                <button className="btn btn-accent" type="submit">Find studies</button>
+                <SubmitButton className="btn btn-accent" pendingText="Searching…">Find studies</SubmitButton>
               </form>
             </Card>
           ) : null}
@@ -128,7 +129,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                           <form action={addEvidenceAction}>
                             <input type="hidden" name="searchId" value={search.id} />
                             <input type="hidden" name="openalexId" value={r.openalexId} />
-                            <button className="btn btn-soft btn-sm" type="submit">Add to my shelf</button>
+                            <SubmitButton className="btn btn-soft btn-sm" pendingText="Adding…">Add to my shelf</SubmitButton>
                           </form>
                         )}
                       </li>
@@ -176,7 +177,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                   </Field>
                 </div>
                 <div className="sm:col-span-2">
-                  <button className="btn btn-soft btn-sm" type="submit">Add to my shelf, unconfirmed</button>
+                  <SubmitButton className="btn btn-soft btn-sm" pendingText="Adding…">Add to my shelf, unconfirmed</SubmitButton>
                 </div>
               </form>
             </details>
@@ -246,7 +247,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                           <form action={confirmEvidenceAction} className="flex flex-wrap items-center gap-2">
                             <input type="hidden" name="id" value={e.id} />
                             <input className="field h-8 w-72 py-0 text-xs" name="claim" defaultValue={e.claim} title="Narrow the claim to what this source supports before you confirm it" data-testid="confirm-claim" />
-                            <button className="btn btn-accent btn-xs" type="submit" data-testid="confirm-study">Confirm: this is the {e.doi ? "study" : "source"} I meant</button>
+                            <SubmitButton className="btn btn-accent btn-xs" data-testid="confirm-study" pendingText="Confirming…">Confirm: this is the {e.doi ? "study" : "source"} I meant</SubmitButton>
                           </form>
                           <form action={removeEvidenceAction}>
                             <input type="hidden" name="id" value={e.id} />
@@ -288,7 +289,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                       <CopyButton text={insertText(e)} label="Copy claim + citation" className="btn btn-soft btn-xs" />
                       <form action={hideSharedAction}>
                         <input type="hidden" name="sharedId" value={s.id} />
-                        <button className="btn btn-ghost btn-xs" type="submit" data-testid="hide-shared">Remove from my shelf</button>
+                        <SubmitButton className="btn btn-ghost btn-xs" data-testid="hide-shared" pendingText="Removing…">Remove from my shelf</SubmitButton>
                       </form>
                     </div>
                   </li>
@@ -304,7 +305,7 @@ export default async function EvidencePage({ searchParams }: { searchParams: Pro
                       <span>{s.name}</span>
                       <form action={restoreSharedAction}>
                         <input type="hidden" name="sharedId" value={s.id} />
-                        <button className="btn btn-ghost btn-xs" type="submit">Put back</button>
+                        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Put back</SubmitButton>
                       </form>
                     </li>
                   ))}

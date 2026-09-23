@@ -8,6 +8,7 @@ import type { Viewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { BottomNav, SideNav } from "./nav";
+import { SubmitButton } from "@/components/submit-button";
 
 export function AppShell({ viewer, points, streak, children }: { viewer: Viewer; points: number; streak: number; children: ReactNode }) {
   const tier = tierProgress(points);
@@ -44,9 +45,9 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
               <span className="max-w-[9rem] truncate">{viewer.user.name}</span>
             </Link>
             <form action={logoutAction}>
-              <button className="text-xs text-ink-3 hover:text-ink" type="submit" data-testid="logout-sidebar">
+              <SubmitButton className="text-xs text-ink-3 hover:text-ink" data-testid="logout-sidebar" pendingText="Logging out…">
                 Log out
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </div>
@@ -65,9 +66,9 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
               {viewer.user.avatarEmoji}
             </Link>
             <form action={logoutAction}>
-              <button className="text-ink-3 hover:text-ink" type="submit" aria-label="Log out" data-testid="logout-header">
+              <SubmitButton className="text-ink-3 hover:text-ink" aria-label="Log out" data-testid="logout-header" pendingText="Logging out…">
                 Log out
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </header>

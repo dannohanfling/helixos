@@ -6,6 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { createOfferAction } from "@/lib/actions/offers";
 import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { scoreOffer } from "@/lib/engine/offer-score";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Offers" };
 
@@ -28,9 +29,9 @@ export default async function OffersPage() {
                 <input className="field tabular" name="price" type="number" min={0} placeholder="1500" />
               </Field>
               <div className="flex items-end">
-                <button className="btn btn-primary" type="submit">
+                <SubmitButton className="btn btn-primary" pendingText="Opening…">
                   Open the wizard
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </Disclosure>

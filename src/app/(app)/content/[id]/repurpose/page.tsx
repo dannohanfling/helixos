@@ -25,6 +25,7 @@ import type { ContentVariant, Group } from "@/db/schema";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { LIVE_POSTING_HOUR } from "@/lib/engine/ladder";
+import { SubmitButton } from "@/components/submit-button";
 
 function VariantForm({ var_, maxChars, email = false, outcome }: { var_: ContentVariant; maxChars: number; email?: boolean; outcome?: ChannelOutcome }) {
   return (
@@ -55,9 +56,9 @@ function VariantForm({ var_, maxChars, email = false, outcome }: { var_: Content
           <option value="skipped">Skip</option>
         </select>
         <input className="field w-40 py-1 text-xs" name="postUrl" placeholder="Post URL" defaultValue={var_.postUrl ?? ""} />
-        <button className="btn btn-primary btn-xs" type="submit">
+        <SubmitButton className="btn btn-primary btn-xs" pendingText="Saving…">
           Save
-        </button>
+        </SubmitButton>
       </div>
       {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} compact inForm /> : null}
       {var_.status === "posted" ? (
@@ -166,7 +167,7 @@ export default async function RepurposePage({ params, searchParams }: { params: 
           canCheck ? (
             <form action={checkAllPostStatusAction}>
               <input type="hidden" name="contentId" value={item.id} />
-              <button className="btn btn-ghost btn-xs" type="submit">Check every version with GoHighLevel</button>
+              <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…">Check every version with GoHighLevel</SubmitButton>
             </form>
           ) : undefined
         }
@@ -189,7 +190,7 @@ export default async function RepurposePage({ params, searchParams }: { params: 
               <Field label="Threads time (optional, at least 15 minutes out; blank asks Community Loyalty for it now)">
                 <input className="field" name="threadsAt" type="datetime-local" />
               </Field>
-              <button className="btn btn-primary btn-sm" type="submit">Send comments to Community Loyalty</button>
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Sending…">Send comments to Community Loyalty</SubmitButton>
             </form>
           ) : null}
         </Card>
@@ -219,7 +220,7 @@ export default async function RepurposePage({ params, searchParams }: { params: 
             <span className="label">Time</span>
             <input className="field" name="startTime" type="time" defaultValue="09:00" />
           </label>
-          <button className="btn btn-accent" type="submit">🚀 Schedule everywhere</button>
+          <SubmitButton className="btn btn-accent" pendingText="Scheduling…">🚀 Schedule everywhere</SubmitButton>
         </form>
       </Card>
 
@@ -238,8 +239,8 @@ export default async function RepurposePage({ params, searchParams }: { params: 
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button className="btn btn-accent" type="submit">Generate group drafts</button>
-              {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With AI</button> : null}
+              <SubmitButton className="btn btn-accent" pendingText="Generating…">Generate group drafts</SubmitButton>
+              {ai ? <SubmitButton className="btn btn-soft" name="ai" value="1" pendingText="Drafting…">✨ With AI</SubmitButton> : null}
             </div>
             <AiFormStatus feature="group_variant" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
             <AiPromise enabled={ai}>With AI returns one draft per group you tick, shaped to that group&apos;s mission and rules: your own group keeps the call to action, other people&apos;s groups get value first and no links.</AiPromise>
@@ -284,8 +285,8 @@ export default async function RepurposePage({ params, searchParams }: { params: 
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button className="btn btn-accent" type="submit">Generate drafts</button>
-            {ai ? <button className="btn btn-soft" type="submit" name="ai" value="1">✨ With AI</button> : <span className="text-xs text-ink-3"><Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have each draft polished in your voice.</span>}
+            <SubmitButton className="btn btn-accent" pendingText="Generating…">Generate drafts</SubmitButton>
+            {ai ? <SubmitButton className="btn btn-soft" name="ai" value="1" pendingText="Drafting…">✨ With AI</SubmitButton> : <span className="text-xs text-ink-3"><Link href="/settings#ai" className="underline">Connect your AI key in Settings</Link> to have each draft polished in your voice.</span>}
           </div>
           <AiFormStatus feature="repurpose" enabled={ai} onlyWhen={{ field: "ai", value: "1" }} />
           <AiPromise enabled={ai}>With AI returns one draft per channel you tick, rewritten for that format inside its length and link rules.</AiPromise>

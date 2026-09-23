@@ -9,6 +9,7 @@ import { addDays, formatDate, isWeekday, rangeDays, startOfWeek } from "@/lib/da
 import { logsBetween } from "@/lib/queries/daily";
 import { TARGET_METRICS, daysInMonth, monthOf, monthProgress } from "@/lib/engine/targets";
 import { PILLARS, lastMonths, pillarSummary } from "@/lib/engine/pillars";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Numbers" };
 
@@ -135,7 +136,7 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
                 </label>
               ))}
             </div>
-            <button className="btn btn-primary btn-sm" type="submit">Save targets</button>
+            <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">Save targets</SubmitButton>
           </form>
         </Disclosure>
         {funnel.regs || funnel.shows || mix.proof || mix.cta || mix.belief || revTotal ? (

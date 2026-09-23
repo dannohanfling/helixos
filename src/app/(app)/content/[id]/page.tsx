@@ -11,6 +11,7 @@ import { saveContentToLibraryAction } from "@/lib/actions/library";
 import { ContentForm } from "@/components/content-form";
 import { CopyButton } from "@/components/copy-button";
 import { Card, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function ContentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gate?: string; status?: string }> }) {
   const v = await requireViewer();
@@ -41,7 +42,7 @@ export default async function ContentDetailPage({ params, searchParams }: { para
             {fullText ? <CopyButton text={fullText} label="Copy post" /> : null}
             <form action={saveContentToLibraryAction}>
               <input type="hidden" name="contentItemId" value={item.id} />
-              <button className="btn btn-ghost btn-sm" type="submit" title="Keep this post as a template in your library">🗂️ Save to library</button>
+              <SubmitButton className="btn btn-ghost btn-sm" title="Keep this post as a template in your library" pendingText="Saving…">🗂️ Save to library</SubmitButton>
             </form>
             <form action={deleteContentAction}>
               <input type="hidden" name="id" value={item.id} />

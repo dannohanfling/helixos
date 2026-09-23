@@ -15,6 +15,7 @@ import { coachDisconnectGhlAction, replayContactSyncAction } from "@/lib/actions
 import { replayCandidates } from "@/lib/queries/contact-sync";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DISCONNECT_MESSAGE } from "@/lib/engine/ghl-scopes";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Integrations" };
 
@@ -77,7 +78,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                   </Field>
                 ))}
                 <div className="flex flex-wrap items-center gap-2">
-                  <button className="btn btn-primary btn-sm" type="submit">Save</button>
+                  <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">Save</SubmitButton>
                   {row?.lastSyncAt ? <span className="text-xs text-ink-3">Last sync {formatDateTime(row.lastSyncAt, v.workspace.timezone)}</span> : null}
                   {row?.lastError ? <span className="text-xs text-danger">Last error: {row.lastError}</span> : null}
                 </div>
@@ -85,12 +86,12 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
               <div className="mt-2 flex flex-wrap gap-2">
                 <form action={testIntegrationAction}>
                   <input type="hidden" name="provider" value={p} />
-                  <button className="btn btn-ghost btn-xs" type="submit">Send test ping</button>
+                  <SubmitButton className="btn btn-ghost btn-xs" pendingText="Sending…">Send test ping</SubmitButton>
                 </form>
                 {hook ? (
                   <form action={rotateInboundSecretAction}>
                     <input type="hidden" name="provider" value={p} />
-                    <button className="btn btn-ghost btn-xs" type="submit">{row?.inboundSecretHash ? "Rotate inbound secret" : "Create inbound secret"}</button>
+                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Rotating…">{row?.inboundSecretHash ? "Rotate inbound secret" : "Create inbound secret"}</SubmitButton>
                   </form>
                 ) : null}
               </div>
@@ -111,7 +112,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                       <div className="flex items-center justify-between gap-2">
                         <span>Copy it now. It is shown once and only its fingerprint is stored.</span>
                         <form action={hideInboundSecretAction}>
-                          <button className="underline" type="submit">I&apos;ve copied it</button>
+                          <SubmitButton className="underline" pendingText="Saving…">I&apos;ve copied it</SubmitButton>
                         </form>
                       </div>
                     </div>
@@ -144,7 +145,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                 {c ? (
                   <form action={coachDisconnectGhlAction} className="ml-auto">
                     <input type="hidden" name="userId" value={m.userId} />
-                    <ConfirmButton className="text-xs text-ink-3 underline" message={`Remove ${userName.get(m.userId) ?? "this client"}'s GoHighLevel connection? ${DISCONNECT_MESSAGE}`} title="Remove this client's connection">
+                    <ConfirmButton className="text-xs text-ink-3 underline" message={`Remove ${userName.get(m.userId) ?? "this client"}'s GoHighLevel connection? ${DISCONNECT_MESSAGE}`} title="Remove this client's connection" pendingText="Removing…">
                       Disconnect
                     </ConfirmButton>
                   </form>
@@ -174,12 +175,12 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                     <form action={replayContactSyncAction}>
                       <input type="hidden" name="userId" value={m.userId} />
                       <input type="hidden" name="mode" value="one" />
-                      <button className="btn btn-ghost btn-xs" type="submit" data-testid="replay-one">Run on one record</button>
+                      <SubmitButton className="btn btn-ghost btn-xs" data-testid="replay-one" pendingText="Running…">Run on one record</SubmitButton>
                     </form>
                     <form action={replayContactSyncAction}>
                       <input type="hidden" name="userId" value={m.userId} />
                       <input type="hidden" name="mode" value="all" />
-                      <ConfirmButton className="btn btn-soft btn-xs" message={`Push ${r.ready.length} record(s) for ${userName.get(m.userId) ?? "this client"} to their GoHighLevel now?`}>
+                      <ConfirmButton className="btn btn-soft btn-xs" message={`Push ${r.ready.length} record(s) for ${userName.get(m.userId) ?? "this client"} to their GoHighLevel now?`} pendingText="Sending to GoHighLevel…">
                         Run on all {r.ready.length}
                       </ConfirmButton>
                     </form>
@@ -209,14 +210,14 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                 {members.map((m) => <option key={m.id} value={m.userId}>{userName.get(m.userId) ?? m.userId}</option>)}
               </select>
             </Field>
-            <button className="btn btn-accent btn-sm" type="submit">Push to passes</button>
+            <SubmitButton className="btn btn-accent btn-sm" pendingText="Sending to passes…">Push to passes</SubmitButton>
           </form>
           </>
           ) : (
             <p className="text-sm text-ink-2" data-testid="pass-push-off">{PASS_NOT_WIRED} Evolve Omega passes on the new pass platform don&apos;t exist yet; points are tracked in HelixOS meanwhile. Pass links per client are on the Coach page.</p>
           )}
         </Card>
-        <Card title="Sync log" action={events.length ? <form action={clearSyncLogAction}><button className="text-xs text-ink-3 underline" type="submit">Clear</button></form> : null}>
+        <Card title="Sync log" action={events.length ? <form action={clearSyncLogAction}><SubmitButton className="text-xs text-ink-3 underline" pendingText="Clearing…">Clear</SubmitButton></form> : null}>
           {events.length ? (
             <ul className="divide-y text-xs">
               {events.map((e) => (

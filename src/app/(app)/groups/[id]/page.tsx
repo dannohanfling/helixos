@@ -8,6 +8,7 @@ import { deleteGroupAction, markPostedInGroupAction, updateGroupAction } from "@
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { alignPost, groupReadiness, readRules } from "@/lib/engine/groups";
 import { formatDate } from "@/lib/dates";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const v = await requireViewer();
@@ -40,7 +41,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
         action={
           <form action={markPostedInGroupAction}>
             <input type="hidden" name="id" value={g.id} />
-            <button className="btn btn-soft btn-sm" type="submit">I posted here today</button>
+            <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…">I posted here today</SubmitButton>
           </form>
         }
       />
@@ -106,7 +107,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
             <Field label="Notes">
               <textarea className="field" name="notes" defaultValue={g.notes ?? ""} />
             </Field>
-            <button className="btn btn-primary" type="submit">Save</button>
+            <SubmitButton className="btn btn-primary" pendingText="Saving…">Save</SubmitButton>
           </form>
           <form action={deleteGroupAction} className="mt-3">
             <input type="hidden" name="id" value={g.id} />

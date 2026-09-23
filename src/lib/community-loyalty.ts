@@ -205,7 +205,22 @@ const APPROVED = ["ai_accepted", "edited", "coach"] as const;
 /** An entry the Bot Brief has approved: accepted, edited (an edit is a review) or the coach's own words. Never ai_unreviewed. */
 export const isApprovedOrigin = (origin: string | null | undefined): boolean => (APPROVED as readonly string[]).includes(origin ?? "");
 
-async function withTimeout(input: string, init: RequestInit): Promise<Response> {
+/**
+ * Calls HelixOS never makes. `delete-bot-field` and `delete-bot-field-by-name` remove the field itself, not its value: on
+ * ai_faq_cbf that would destroy the field and break the chip in the agent's prompt, which points at the field's id. HelixOS
+ * writes values and never deletes anything on a bot, so a DELETE of any kind is refused too. Every request to Community
+ * Loyalty goes through withTimeout, the one fetch in this client, and that checks here before anything leaves.
+ */
+export const NEVER_CALLED = ["/flow/delete-bot-field", "/flow/delete-bot-field-by-name"] as const;
+export function assertCallable(url: string, method: string = "GET"): void {
+  const path = new URL(url).pathname.replace(/\/+$/, "");
+  const hit = NEVER_CALLED.find((p) => path.endsWith(p));
+  if (hit) throw new Error(`community-loyalty: ${hit} removes the field itself and is never called`);
+  if (method.toUpperCase() === "DELETE") throw new Error(`community-loyalty: HelixOS never deletes on a bot (${path})`);
+}
+
+export async function withTimeout(input: string, init: RequestInit): Promise<Response> {
+  assertCallable(input, init.method);
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 8000);
   try {
@@ -315,6 +330,18 @@ export type FaqPushOutcome = { status: "sent" | "skipped" | "failed"; note: stri
  * single budget; the lowest-ranked past it are dropped whole and listed. Never throws.
  */
 export async function pushFaq(membershipId: string, opts: { reason: string; sentBy: string }): Promise<FaqPushOutcome> {
+  // One send per member at a time, as the Stage 1 push: a second press that reaches the server while the first is out is dropped.
+  if (sendingFaq.has(membershipId)) return { status: "skipped", note: FAQ_SEND_IN_FLIGHT, syncId: null, dropped: [], reads: [], notRead: [] };
+  sendingFaq.add(membershipId);
+  try {
+    return await sendFaq(membershipId, opts);
+  } finally {
+    sendingFaq.delete(membershipId);
+  }
+}
+const sendingFaq = new Set<string>();
+export const FAQ_SEND_IN_FLIGHT = "A send to this bot is already on its way.";
+async function sendFaq(membershipId: string, opts: { reason: string; sentBy: string }): Promise<FaqPushOutcome> {
   const m = await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membershipId) });
   if (!m) return { status: "skipped", note: "No such member.", syncId: null, dropped: [], reads: [], notRead: [] };
   const field = faqFieldFor(m);

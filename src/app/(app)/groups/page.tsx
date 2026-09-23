@@ -7,6 +7,7 @@ import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/c
 import { groupReadiness } from "@/lib/engine/groups";
 import { formatDate } from "@/lib/dates";
 import type { Group } from "@/db/schema";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Groups" };
 
@@ -40,7 +41,7 @@ function GroupRow({ g, slot }: { g: Group; slot?: string }) {
             <option value="prospect:3">Prospect #3</option>
             <option value="prospect:0">Prospect (bench)</option>
           </select>
-          <button className="btn btn-ghost btn-xs" type="submit">Move</button>
+          <SubmitButton className="btn btn-ghost btn-xs" pendingText="Moving…">Move</SubmitButton>
         </form>
       ) : null}
     </li>
@@ -114,7 +115,7 @@ export default async function GroupsPage() {
             <Field label="Rules (paste them)">
               <textarea className="field" name="rules" placeholder="No links. No promo. Value first…" />
             </Field>
-            <button className="btn btn-primary" type="submit">Add group</button>
+            <SubmitButton className="btn btn-primary" pendingText="Adding…">Add group</SubmitButton>
           </form>
         </Card>
       </div>

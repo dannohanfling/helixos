@@ -11,6 +11,7 @@ import { Sparkline } from "@/components/charts";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const v = await requireViewer();
@@ -105,9 +106,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                   <input className="field" name="nextCallAt" type="datetime-local" />
                 </label>
               </div>
-              <button className="btn btn-accent" type="submit">
+              <SubmitButton className="btn btn-accent" pendingText="Saving…">
                 Save check-in
-              </button>
+              </SubmitButton>
             </form>
           </Card>
           <Card title="Timeline">
@@ -130,7 +131,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                         </span>
                         <form action={proofFromCheckinAction} className="shrink-0">
                           <input type="hidden" name="checkinId" value={x.id} />
-                          <button className="btn btn-ghost btn-xs" type="submit" title="Save this win to your Proof Bank">🏆 Proof</button>
+                          <SubmitButton className="btn btn-ghost btn-xs" title="Save this win to your Proof Bank" pendingText="Saving…">🏆 Proof</SubmitButton>
                         </form>
                       </p>
                     ) : null}
@@ -235,9 +236,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
               <Field label="Notes">
                 <textarea className="field" name="notes" defaultValue={c.notes ?? ""} />
               </Field>
-              <button className="btn btn-primary w-full" type="submit">
+              <SubmitButton className="btn btn-primary w-full" pendingText="Saving…">
                 Save profile
-              </button>
+              </SubmitButton>
             </form>
           </Card>
           {v.membership.passEnabled ? (
@@ -248,9 +249,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                   <input className="field tabular" name="points" type="number" defaultValue={10} />
                   <input className="field" name="reason" placeholder="Posted with the hashtag" />
                 </div>
-                <button className="btn btn-accent btn-sm" type="submit">
+                <SubmitButton className="btn btn-accent btn-sm" pendingText="Awarding…">
                   Award
-                </button>
+                </SubmitButton>
               </form>
               {points.length ? (
                 <ul className="mt-3 divide-y text-xs">

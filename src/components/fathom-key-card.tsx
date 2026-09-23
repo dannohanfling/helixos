@@ -4,6 +4,7 @@ import { fathomConnectionFor } from "@/lib/fathom";
 import { recheckFathomKeyAction, removeFathomKeyAction, saveFathomKeyAction } from "@/lib/actions/fathom";
 import { formatDateTime } from "@/lib/dates";
 import { Badge, Card, Field } from "./ui";
+import { SubmitButton } from "@/components/submit-button";
 
 /** Settings: the member's own Fathom API key, and tick one, the acknowledgement that the recordings hold other people's words. */
 export async function FathomKeyCard({ v, notice }: { v: Viewer; notice?: string }) {
@@ -23,9 +24,9 @@ export async function FathomKeyCard({ v, notice }: { v: Viewer; notice?: string 
             <input className="field" name="fathomKey" type="password" autoComplete="off" placeholder={conn ? "•••••••• saved" : ""} data-testid="fathom-key" />
           </Field>
           <div className="flex items-end">
-            <button className="btn btn-primary btn-sm" type="submit" data-testid="fathom-connect">
+            <SubmitButton className="btn btn-primary btn-sm" data-testid="fathom-connect" pendingText="Checking…">
               {conn ? "Replace and check" : "Connect and check"}
-            </button>
+            </SubmitButton>
           </div>
         </div>
         {consentAt ? (
@@ -46,7 +47,7 @@ export async function FathomKeyCard({ v, notice }: { v: Viewer; notice?: string 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-ink-3">
           {conn.lastValidatedAt ? <span>Checked {formatDateTime(conn.lastValidatedAt, v.tz)}</span> : null}
           <form action={recheckFathomKeyAction}>
-            <button className="underline" type="submit">Check again</button>
+            <SubmitButton className="underline" pendingText="Checking…">Check again</SubmitButton>
           </form>
           <form action={removeFathomKeyAction}>
             <ConfirmDelete verb="Remove" what="your Fathom key" undo="To use it again you would paste it in again." label="Remove key" className="underline" />

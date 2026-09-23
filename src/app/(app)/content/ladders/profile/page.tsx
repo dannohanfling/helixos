@@ -6,6 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { saveLadderProfileAction } from "@/lib/actions/ladders";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { DEFAULT_BANNED } from "@/lib/engine/ladder";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Ladder facts" };
 
@@ -83,9 +84,9 @@ export default async function LadderProfilePage() {
             <li>Unverifiable quote: the post is refused. No real data for a numbers post: it can&apos;t go live.</li>
             <li>A reader who never buys still leaves with a usable system.</li>
           </ul>
-          <button className="btn btn-primary mt-4" type="submit">
+          <SubmitButton className="btn btn-primary mt-4" pendingText="Saving…">
             Save facts
-          </button>
+          </SubmitButton>
         </Card>
       </form>
     </>

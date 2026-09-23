@@ -14,6 +14,7 @@ import { connectionFor } from "@/lib/ghl";
 import { getIntegration, onboardingOpen } from "@/lib/integrations";
 import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Settings" };
 
@@ -96,9 +97,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="leaderboardOptIn" defaultChecked={v.membership.leaderboardOptIn} /> Show me on the weekly leaderboard
             </label>
-            <button className="btn btn-primary" type="submit">
+            <SubmitButton className="btn btn-primary" pendingText="Saving…">
               Save
-            </button>
+            </SubmitButton>
           </form>
         </Card>
         <Card title="Your data">
@@ -145,9 +146,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <input className="field" name="period" defaultValue={goal?.period ?? "This month"} />
             </Field>
             <p className="text-xs text-ink-3">Cash you log in the evening close adds to a $ goal automatically.</p>
-            <button className="btn btn-primary" type="submit">
+            <SubmitButton className="btn btn-primary" pendingText="Saving…">
               Save goal
-            </button>
+            </SubmitButton>
           </form>
         </Card>
         {v.role === "coach" ? (
@@ -167,9 +168,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Field label="HelixOS Airtable base ID" hint="Run `npm run import:airtable` to refresh pathway, curriculum, and DM templates from your base.">
                   <input className="field" name="airtableBaseId" defaultValue={v.workspace.airtableBaseId ?? ""} placeholder="appXXXXXXXXXXXXXX" />
                 </Field>
-                <button className="btn btn-primary" type="submit">
+                <SubmitButton className="btn btn-primary" pendingText="Saving…">
                   Save workspace
-                </button>
+                </SubmitButton>
               </form>
             </Card>
             <Card title="Brand kit" action={savedKit ? <span className="text-xs text-ink-3">ink on ground {contrastRatio(savedKit.ground, savedKit.ink)}:1</span> : null}>
@@ -232,7 +233,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <input className="field" name="notes" defaultValue={brandKit?.notes ?? ""} />
                 </Field>
                 <div className="sm:col-span-2">
-                  <button className="btn btn-primary" type="submit">Save brand kit</button>
+                  <SubmitButton className="btn btn-primary" pendingText="Saving…">Save brand kit</SubmitButton>
                 </div>
               </form>
             </Card>
@@ -256,15 +257,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <div className="flex gap-2">
                   <form action={rotateInviteAction}>
                     <input type="hidden" name="which" value="client" />
-                    <button className="btn btn-ghost btn-xs" type="submit">
+                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Rotating…">
                       Rotate client code
-                    </button>
+                    </SubmitButton>
                   </form>
                   <form action={rotateInviteAction}>
                     <input type="hidden" name="which" value="coach" />
-                    <button className="btn btn-ghost btn-xs" type="submit">
+                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Rotating…">
                       Rotate coach code
-                    </button>
+                    </SubmitButton>
                   </form>
                 </div>
               </div>

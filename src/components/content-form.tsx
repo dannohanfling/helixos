@@ -1,6 +1,7 @@
 import { CONTENT_TYPES, PLATFORMS, type ContentItem } from "@/db/schema";
 import { createContentAction, updateContentAction } from "@/lib/actions/content";
 import { Field } from "./ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export function ContentForm({ item, today }: { item?: ContentItem; today: string }) {
   const postDate = item?.postAt?.slice(0, 10) ?? today;
@@ -84,9 +85,9 @@ export function ContentForm({ item, today }: { item?: ContentItem; today: string
         </>
       ) : null}
       <div className="sm:col-span-2">
-        <button className="btn btn-primary" type="submit">
+        <SubmitButton className="btn btn-primary" pendingText="Saving…">
           {item ? "Save changes" : "Add to pipeline"}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

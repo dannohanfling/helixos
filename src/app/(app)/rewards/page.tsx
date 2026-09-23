@@ -13,6 +13,7 @@ import { claimDatesByName } from "@/lib/queries/rewards";
 import { formatDateTime, startOfWeek } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Rewards" };
 
@@ -99,12 +100,12 @@ export default async function RewardsPage() {
             )}
             {v.membership.eoPassUrl && !v.membership.eoPassInstalledAt ? (
               <form action={markPassInstalledAction}>
-                <button className="btn btn-ghost btn-sm" type="submit">I added it</button>
+                <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…">I added it</SubmitButton>
               </form>
             ) : null}
             {v.membership.eoPassSerial && passWired("walletpush") ? (
               <form action={sendTestPushAction}>
-                <button className="btn btn-ghost btn-sm" type="submit">Send me a test push</button>
+                <SubmitButton className="btn btn-ghost btn-sm" pendingText="Sending…">Send me a test push</SubmitButton>
               </form>
             ) : v.membership.eoPassSerial ? (
               <span className="text-xs text-ink-3" data-testid="test-push-off">Test push: wallet passes aren&apos;t switched on yet.</span>

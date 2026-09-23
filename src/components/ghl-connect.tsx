@@ -7,6 +7,7 @@ import { formatDateTime } from "@/lib/dates";
 import { Badge, Field } from "./ui";
 import { ConfirmButton } from "./confirm-button";
 import { DISCONNECT_MESSAGE } from "@/lib/engine/ghl-scopes";
+import { SubmitButton } from "@/components/submit-button";
 
 /** A member connects their own GoHighLevel sub-account with a location-level Private Integration token. Used on Settings. */
 export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | null; tz: string; role: string; open: boolean }) {
@@ -62,9 +63,9 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
           </Field>
         </div>
         <div className="flex items-center gap-2 sm:col-span-2">
-          <button className="btn btn-primary btn-sm" type="submit">
+          <SubmitButton className="btn btn-primary btn-sm" pendingText="Checking…">
             {conn ? "Save and check" : "Connect and check"}
-          </button>
+          </SubmitButton>
           <span className="text-xs text-ink-3">Saving asks GoHighLevel for your connected pages, so you&apos;ll know right away if the token or location is wrong.</span>
         </div>
       </form>
@@ -78,12 +79,12 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
             {connected ? <span className="text-ink-3">{ready.mapped}/{ready.total} channels will auto-publish</span> : null}
             {conn.lastSyncAt && !conn.lastError ? <span className="text-ink-3">· checked {formatDateTime(conn.lastSyncAt, tz)}</span> : null}
             <form action={refreshGhlAccountsAction} className="ml-auto">
-              <button className="btn btn-ghost btn-xs" type="submit">
+              <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…">
                 Check again
-              </button>
+              </SubmitButton>
             </form>
             <form action={disconnectGhlAction}>
-              <ConfirmButton className="text-ink-3 underline" message={DISCONNECT_MESSAGE}>
+              <ConfirmButton className="text-ink-3 underline" message={DISCONNECT_MESSAGE} pendingText="Disconnecting…">
                 Disconnect
               </ConfirmButton>
             </form>
@@ -138,9 +139,9 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
                   })}
               </div>
               <div className="flex items-center gap-3">
-                <button className="btn btn-soft btn-xs" type="submit">
+                <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…">
                   Save channel map
-                </button>
+                </SubmitButton>
                 <span className="text-[11px] text-ink-3">{manualChannelsSentence()}</span>
               </div>
             </form>

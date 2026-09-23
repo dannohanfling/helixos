@@ -133,8 +133,18 @@ async function main() {
     if (await page.locator('[data-testid="brief-warning"]').count()) throw new Error(`no warning about the field's type, got "${await page.locator('[data-testid="brief-warning"]').innerText()}"`);
     if (!/Budget 20,000 characters/.test(await page.locator('[data-testid="brief-budget"]').innerText())) throw new Error("the budget line names the platform's 20,000 cap");
     console.log(`✓ the agent reads ${field} through its chip (id ${fieldNs}, no brace form in the prompt); no type warning, the 20,000 budget stated`);
-    await Promise.all([page.waitForURL(/sent=1|error=/), page.click('[data-testid="send-bot"]')]);
+    // Pressed twice in the same instant while the bot is slow (a send takes about 5 s live; Danno tapped twice on a phone): the
+    // button goes disabled and says it is sending, and one send goes out, recorded once.
+    const syncsBefore = (await syncs()).length;
+    await fetch(`${mock}/__delay`, { method: "POST", body: JSON.stringify({ ms: 1500 }) });
+    const sendButton = page.locator('[data-testid="send-bot"]');
+    await sendButton.dblclick();
+    await page.locator('[data-testid="send-bot"][data-pending="true"]').waitFor({ timeout: 1000 });
+    if (!(await sendButton.isDisabled()) || (await sendButton.innerText()).trim() !== "Sending to your bot…") throw new Error(`while the send is out the button is disabled and says so, got "${await sendButton.innerText()}"`);
+    await page.waitForURL(/sent=1|error=|failed=/, { timeout: 20000 });
     if (!page.url().includes("sent=1")) throw new Error(`the send is accepted and read back, got ${decodeURIComponent(page.url())}`);
+    if ((await syncs()).length - syncsBefore !== 1) throw new Error(`a double press records one sync, got ${(await syncs()).length - syncsBefore}`);
+    console.log('✓ pressed twice while the bot is slow: "Sending to your bot…", disabled, one sync record');
     const approved = rows.filter((r) => isApprovedOrigin(r.origin));
     // The banner: the count agrees with its noun, and the sentence ends once (22 Sep: "1 answers … matched..").
     const banner = (await page.locator('[data-testid="brain-sent"]').innerText()).trim();

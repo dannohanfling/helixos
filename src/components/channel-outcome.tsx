@@ -1,4 +1,5 @@
 import { summarize, type ChannelOutcome, type OutcomeState } from "@/lib/engine/channel-outcome";
+import { SubmitButton } from "@/components/submit-button";
 
 /**
  * The one component that says what happened per channel: a light for the glance, the word for the state, the time, and on a
@@ -43,12 +44,12 @@ export function OutcomeRows({ outcomes, checkAction, compact = false, inForm = f
           {checkAction && o.canCheck && inForm ? (
             <span className="ml-auto">
               <input type="hidden" name="variantId" value={o.id} />
-              <button className="btn btn-ghost btn-xs" type="submit" formAction={checkAction}>Check status</button>
+              <SubmitButton className="btn btn-ghost btn-xs" formAction={checkAction} pendingText="Checking…">Check status</SubmitButton>
             </span>
           ) : checkAction && o.canCheck ? (
             <form action={checkAction} className="ml-auto">
               <input type="hidden" name="variantId" value={o.id} />
-              <button className="btn btn-ghost btn-xs" type="submit">Check status</button>
+              <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…">Check status</SubmitButton>
             </form>
           ) : null}
         </li>

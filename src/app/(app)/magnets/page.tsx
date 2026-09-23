@@ -8,6 +8,7 @@ import { appUrl } from "@/lib/branded-email";
 import { createMagnetAction, deleteMagnetAction } from "@/lib/actions/magnets";
 import { MAGNET_TYPE_INFO } from "@/lib/engine/lead-magnet";
 import { Badge, Card, Empty, Field, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Lead magnets" };
 
@@ -69,9 +70,9 @@ export default async function MagnetsPage({ searchParams }: { searchParams: Prom
                 </select>
               </Field>
             </div>
-            <button className="btn btn-primary" type="submit">
+            <SubmitButton className="btn btn-primary" pendingText="Creating…">
               Create
-            </button>
+            </SubmitButton>
           </form>
         </Card>
         <div className="space-y-3">

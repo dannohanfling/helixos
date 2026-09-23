@@ -2,6 +2,7 @@ import Link from "next/link";
 import { demoLoginAction } from "@/lib/actions/auth";
 import { LoginForm } from "./login-form";
 import { demoLoginEnabled } from "@/lib/demo";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Sign in" };
 
@@ -33,15 +34,15 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <div className="mt-2 grid grid-cols-2 gap-2">
           <form action={demoLoginAction}>
             <input type="hidden" name="who" value="client" />
-            <button className="btn btn-soft w-full" type="submit">
+            <SubmitButton className="btn btn-soft w-full" pendingText="Signing in…">
               🌊 As a client
-            </button>
+            </SubmitButton>
           </form>
           <form action={demoLoginAction}>
             <input type="hidden" name="who" value="coach" />
-            <button className="btn btn-soft w-full" type="submit">
+            <SubmitButton className="btn btn-soft w-full" pendingText="Signing in…">
               🔱 As the coach
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>

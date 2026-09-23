@@ -10,6 +10,7 @@ import { LADDER_FORMATS, cadenceNotes, checkScore, checklist } from "@/lib/engin
 import { addDays, formatDate, formatDateTime, weekday } from "@/lib/dates";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Ladders" };
 
@@ -114,9 +115,9 @@ export default async function LaddersPage() {
                 </Field>
               </div>
               <div className="flex items-center gap-3 sm:col-span-2">
-                <button className="btn btn-primary" type="submit">
+                <SubmitButton className="btn btn-primary" pendingText="Building…">
                   {ai ? "Write the ladder" : "Build the skeleton"}
-                </button>
+                </SubmitButton>
                 <AiFormStatus feature="ladder" enabled={ai} />
                 {ai ? (
                   <AiPromise enabled>Returns a full post, 9–11 comment rungs, a headline with alternates, a carousel, an Instagram caption and a Threads chain, written from your product facts. Testimonials come only from approved proof; otherwise it carries a [PROOF PLACEHOLDER].</AiPromise>

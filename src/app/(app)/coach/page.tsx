@@ -22,6 +22,7 @@ import { catalogue } from "@/lib/engine/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Coach" };
 
@@ -116,7 +117,7 @@ export default async function CoachPage() {
           <label className="flex items-center gap-1 text-[11px] text-ink-3" title="The FAQ field already holds text HelixOS did not write. Ticking this sends anyway and replaces it.">
             <input type="checkbox" name="faqOverwriteOk" defaultChecked={myBot.faqOverwriteOk} data-testid="my-faq-overwrite-ok" /> overwrite FAQ field
           </label>
-          <button className="btn btn-ghost btn-xs" type="submit">Save</button>
+          <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
         </form>
         {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} tz={v.workspace.timezone} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
       </Card>
@@ -178,9 +179,9 @@ export default async function CoachPage() {
                               <option key={t}>{t}</option>
                             ))}
                           </select>
-                          <button className={`btn btn-xs ${r.m.passEnabled ? "btn-accent" : "btn-ghost"}`} type="submit" name="enabled" value={r.m.passEnabled ? "0" : "1"} title="Community Pass">
+                          <SubmitButton className={`btn btn-xs ${r.m.passEnabled ? "btn-accent" : "btn-ghost"}`} name="enabled" value={r.m.passEnabled ? "0" : "1"} title="Community Pass" pendingText="Saving…">
                             🎟️ {r.m.passEnabled ? "on" : "off"}
-                          </button>
+                          </SubmitButton>
                         </form>
                       </td>
                     </tr>
@@ -200,7 +201,7 @@ export default async function CoachPage() {
                   <span className="font-medium">{removedNameOf.get(m.userId) ?? m.businessName ?? "Client"}</span>
                   <form action={reinstateClientAction}>
                     <input type="hidden" name="membershipId" value={m.id} />
-                    <button className="btn btn-soft btn-xs" type="submit" data-testid="reinstate-client">Reinstate</button>
+                    <SubmitButton className="btn btn-soft btn-xs" data-testid="reinstate-client" pendingText="Restoring…">Reinstate</SubmitButton>
                   </form>
                 </li>
               ))}
@@ -215,9 +216,9 @@ export default async function CoachPage() {
                   <span className="w-36 truncate font-medium">{r.u?.avatarEmoji} {r.u?.name}</span>
                   <form action={setCertEnabledAction}>
                     <input type="hidden" name="membershipId" value={r.m.id} />
-                    <button className={`btn btn-xs ${r.m.certEnabled ? "btn-accent" : "btn-ghost"}`} type="submit" name="enabled" value={r.m.certEnabled ? "0" : "1"} title="Certification track">
+                    <SubmitButton className={`btn btn-xs ${r.m.certEnabled ? "btn-accent" : "btn-ghost"}`} name="enabled" value={r.m.certEnabled ? "0" : "1"} title="Certification track" pendingText="Saving…">
                       🎓 {r.m.certEnabled ? "cert on" : "cert off"}
-                    </button>
+                    </SubmitButton>
                   </form>
                   <a className="btn btn-ghost btn-xs" href={`/api/export?format=json&user=${r.m.userId}`} download title="Everything this client has put in, as one JSON file (for offboarding)">
                     ⬇ export
@@ -234,7 +235,7 @@ export default async function CoachPage() {
                     <label className="flex items-center gap-1 text-[11px] text-ink-3" title="The FAQ field already holds text HelixOS did not write. Ticking this sends anyway and replaces it.">
                       <input type="checkbox" name="faqOverwriteOk" defaultChecked={r.m.faqOverwriteOk} data-testid="faq-overwrite-ok" /> overwrite FAQ field
                     </label>
-                    <button className="btn btn-ghost btn-xs" type="submit">Save</button>
+                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>
                   {r.m.clApiToken ? <BotPushLine m={r.m} productField={productFieldOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
@@ -269,12 +270,12 @@ export default async function CoachPage() {
                         <input type="hidden" name="id" value={s.id} />
                         <input className="field" name="feedback" placeholder="One line of feedback (optional for verify, needed for a tweak)" />
                         <div className="flex gap-2">
-                          <button className="btn btn-accent btn-sm" type="submit" name="decision" value="verify">
+                          <SubmitButton className="btn btn-accent btn-sm" name="decision" value="verify" pendingText="Verifying…">
                             Verify · award points
-                          </button>
-                          <button className="btn btn-ghost btn-sm" type="submit" name="decision" value="revision">
+                          </SubmitButton>
+                          <SubmitButton className="btn btn-ghost btn-sm" name="decision" value="revision" pendingText="Sending…">
                             Ask for a tweak
-                          </button>
+                          </SubmitButton>
                         </div>
                       </form>
                     </li>
@@ -298,9 +299,9 @@ export default async function CoachPage() {
                     <span className="tabular text-xs text-ink-3">{u.calls} calls · {money(u.costUsd)}</span>
                     <form action={toggleAiCapExemptAction} className="ml-auto">
                       <input type="hidden" name="membershipId" value={r.m.id} />
-                      <button className={`btn btn-xs ${r.m.aiCapExempt ? "btn-accent" : "btn-ghost"}`} type="submit" title="Lift the daily cap for this client">
+                      <SubmitButton className={`btn btn-xs ${r.m.aiCapExempt ? "btn-accent" : "btn-ghost"}`} title="Lift the daily cap for this client" pendingText="Saving…">
                         {r.m.aiCapExempt ? "cap lifted" : "cap on"}
-                      </button>
+                      </SubmitButton>
                     </form>
                   </li>
                 );
@@ -309,7 +310,7 @@ export default async function CoachPage() {
             <form action={setAiCapAction} className="mt-3 flex items-center gap-2 text-xs">
               <label className="label">Daily cap per client</label>
               <input className="field w-20 py-1 text-sm" name="cap" type="number" min={1} max={1000} defaultValue={v.workspace.aiDailyCap} />
-              <button className="btn btn-soft btn-xs" type="submit">Save</button>
+              <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…">Save</SubmitButton>
               <span className="text-ink-3">calls per day, on their own key. Stops a runaway loop from spending a client&apos;s money.</span>
             </form>
           </Card>
@@ -397,9 +398,9 @@ export default async function CoachPage() {
                         ) : (
                           <form action={nudgeMemberAction}>
                             <input type="hidden" name="membershipId" value={r.m.id} />
-                            <button className="btn btn-soft btn-xs" type="submit" title="Send the comeback email now">
+                            <SubmitButton className="btn btn-soft btn-xs" title="Send the comeback email now" pendingText="Nudging…">
                               Nudge{nudgedAgo !== null ? ` · last ${nudgedAgo}d ago` : ""}
-                            </button>
+                            </SubmitButton>
                           </form>
                         )}
                       </span>

@@ -18,6 +18,7 @@ import { CopyButton } from "@/components/copy-button";
 import { ChannelOutcomePanel } from "@/components/channel-outcome-panel";
 import { PUBLISHABLE, manualChannelsSentence, publishedChannelsSentence } from "@/lib/engine/ghl-map";
 import { THREADS_EXCLUSIVE } from "@/lib/engine/rung-drip";
+import { SubmitButton } from "@/components/submit-button";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; firstComment?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
@@ -190,9 +191,9 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
             <form action={pushLadderUpdateAction} className="mt-2">
               <input type="hidden" name="id" value={stale.ladderId} />
               <input type="hidden" name="back" value={stale.back} />
-              <button type="submit" className="btn btn-soft btn-sm" data-testid="push-update">
+              <SubmitButton className="btn btn-soft btn-sm" data-testid="push-update" pendingText="Sending to GoHighLevel…">
                 Push the update to GoHighLevel
-              </button>
+              </SubmitButton>
             </form>
           </div>
         ) : null}

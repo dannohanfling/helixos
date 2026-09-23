@@ -24,6 +24,7 @@ import { daysSinceNudge } from "@/lib/nudge";
 import { addDays, daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Client" };
 
@@ -109,19 +110,19 @@ export default async function CoachClientPage({ params, searchParams }: { params
             ) : (
               <form action={nudgeMemberAction}>
                 <input type="hidden" name="membershipId" value={m.id} />
-                <button className="btn btn-soft btn-sm" type="submit" title="Send the comeback email now">
+                <SubmitButton className="btn btn-soft btn-sm" title="Send the comeback email now" pendingText="Nudging…">
                   Nudge{nudgedAgo !== null ? ` · last ${nudgedAgo}d ago` : ""}
-                </button>
+                </SubmitButton>
               </form>
             )}
             <form action={sendClientResetAction}>
               <input type="hidden" name="membershipId" value={m.id} />
-              <button className="btn btn-soft btn-sm" type="submit" title="Issue a single-use password-reset link for this client" data-testid="send-reset">Send reset link</button>
+              <SubmitButton className="btn btn-soft btn-sm" title="Issue a single-use password-reset link for this client" data-testid="send-reset" pendingText="Sending…">Send reset link</SubmitButton>
             </form>
             {m.removedAt ? (
               <form action={reinstateClientAction}>
                 <input type="hidden" name="membershipId" value={m.id} />
-                <button className="btn btn-soft btn-sm" type="submit" data-testid="reinstate">Reinstate</button>
+                <SubmitButton className="btn btn-soft btn-sm" data-testid="reinstate" pendingText="Restoring…">Reinstate</SubmitButton>
               </form>
             ) : (
               <form action={removeClientAction} data-testid="remove-client-form">
@@ -199,9 +200,9 @@ export default async function CoachClientPage({ params, searchParams }: { params
               <Field label="Tasks for them" hint="One per line. Each becomes a task in their Today and Tasks, marked as from this call.">
                 <textarea className="field" name="tasks" rows={3} />
               </Field>
-              <button className="btn btn-primary btn-sm" type="submit">
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
                 Save note and assign tasks
-              </button>
+              </SubmitButton>
             </form>
             {notes.length ? (
               <ul className="mt-4 divide-y" data-testid="note-list">

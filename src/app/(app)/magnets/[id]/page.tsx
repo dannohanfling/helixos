@@ -18,6 +18,7 @@ import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Lead magnet" };
 
@@ -160,14 +161,14 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
               <Field label="Notes">
                 <textarea className="field text-sm" name="notes" rows={2} defaultValue={m.notes ?? ""} />
               </Field>
-              <button className="btn btn-primary" type="submit" data-testid="magnet-save">Save</button>
+              <SubmitButton className="btn btn-primary" data-testid="magnet-save" pendingText="Saving…">Save</SubmitButton>
             </form>
           </Card>
           <Card title="Write it with AI">
             <form action={generateMagnetAction} className="space-y-2">
               <input type="hidden" name="id" value={m.id} />
               <AiPromise enabled={ai}>Writes the sections in the {info.label.toLowerCase()} shape plus the hand-over messages, from your Big Promise, your audience, the offer, approved proof and confirmed evidence. Replaces the content; your other fields stay.</AiPromise>
-              <button className="btn btn-accent btn-sm" type="submit" disabled={!ai} data-testid="magnet-generate">✨ Write it</button>
+              <SubmitButton className="btn btn-accent btn-sm" disabled={!ai} data-testid="magnet-generate" pendingText="Writing…">✨ Write it</SubmitButton>
               <AiFormStatus feature="lead_magnet" enabled={ai} />
             </form>
           </Card>
@@ -213,9 +214,9 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
                 ) : null}
                 <form action={m.publishedAt ? unpublishMagnetAction : publishMagnetAction}>
                   <input type="hidden" name="id" value={m.id} />
-                  <button className={`btn btn-sm ${m.publishedAt ? "btn-ghost" : "btn-primary"}`} type="submit" data-testid={m.publishedAt ? "magnet-unpublish" : "magnet-publish"}>
+                  <SubmitButton className={`btn btn-sm ${m.publishedAt ? "btn-ghost" : "btn-primary"}`} data-testid={m.publishedAt ? "magnet-unpublish" : "magnet-publish"} pendingText="Publishing…">
                     {m.publishedAt ? "Unpublish" : "Publish"}
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             ) : null}
@@ -225,7 +226,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
             {!storage ? <p className="mt-2 text-xs text-warn" data-testid="magnet-storage-off">{STORAGE_UNCONFIGURED}</p> : null}
             <form action={buildMagnetPdfAction} className="mt-2 flex flex-wrap items-center gap-2">
               <input type="hidden" name="id" value={m.id} />
-              <button className="btn btn-soft btn-sm" type="submit" disabled={!storage} data-testid="magnet-build-pdf">{pdfUrl ? "Rebuild the PDF" : "Build the PDF"}</button>
+              <SubmitButton className="btn btn-soft btn-sm" disabled={!storage} data-testid="magnet-build-pdf" pendingText="Building…">{pdfUrl ? "Rebuild the PDF" : "Build the PDF"}</SubmitButton>
               {pdfUrl ? <a className="text-sm underline" href={pdfUrl} target="_blank" rel="noreferrer" data-testid="magnet-pdf-url">Open the PDF</a> : null}
             </form>
           </Card>
