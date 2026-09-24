@@ -1819,3 +1819,21 @@ export const faqSyncs = sqliteTable(
   (t) => [index("faq_syncs_owner").on(t.workspaceId, t.userId, t.createdAt)],
 );
 export type FaqSync = typeof faqSyncs.$inferSelect;
+
+/**
+ * One row per run of a deletion on request, kept by design: who ran it, whose account (the email, the only identifier kept),
+ * when, and how many rows and stored objects that run removed, per table. A run the store stopped says where (stopped_at, an
+ * object key) and counts what it had removed by then; the run that finishes counts the rest. No content, nothing recoverable.
+ */
+export const deletionAudits = sqliteTable("deletion_audits", {
+  id: id(),
+  workspaceId: text("workspace_id").notNull(),
+  ranByUserId: text("ran_by_user_id").notNull(),
+  deletedEmail: text("deleted_email").notNull(),
+  counts: text("counts", { mode: "json" }).$type<Record<string, number>>().notNull().default({}),
+  objects: integer("objects").notNull().default(0),
+  userRemoved: integer("user_removed", { mode: "boolean" }).notNull().default(false),
+  workspaceRemoved: integer("workspace_removed", { mode: "boolean" }).notNull().default(false),
+  stoppedAt: text("stopped_at"),
+  createdAt: createdAt(),
+});

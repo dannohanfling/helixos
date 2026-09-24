@@ -79,3 +79,16 @@ export async function deleteObject(key: string): Promise<void> {
   }
   await db.delete(schema.files).where(eq(schema.files.key, key));
 }
+
+/**
+ * Deletion on request's delete: unlike deleteObject, a refusal throws and the index row stays, so the run stops and names the
+ * object rather than leaving a file nobody can find again. The row goes only once the bucket has let the object go.
+ */
+export async function deletePublicObjectStrict(key: string): Promise<void> {
+  const row = await db.query.files.findFirst({ where: eq(schema.files.key, key) });
+  if (row?.url) {
+    requireStorage();
+    await del(row.url);
+  }
+  await db.delete(schema.files).where(eq(schema.files.key, key));
+}

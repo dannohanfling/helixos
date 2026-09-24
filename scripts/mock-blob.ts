@@ -5,7 +5,7 @@
  * told apart by the token's store id (vercel_blob_rw_<STORE>_…): as in Vercel, access is a property of the store, not of the
  * object. A store whose id contains PROOF is private: every object in it answers 403 at its URL without the token, and a PUT
  * asking for public access there is refused. Any other store is public. /__list names each object's store and access. Objects
- * live in memory. /__reset clears.
+ * live in memory. /__reset clears. POST /__refuse-delete?pathname= makes every delete of that pathname fail until cleared.
  *
  *   npx tsx scripts/mock-blob.ts 4050
  */
@@ -16,6 +16,7 @@ const port = Number(process.argv[2] ?? 4050);
 type Obj = { bytes: Buffer; contentType: string; access: "public" | "private"; store: string; uploadedAt: string };
 /** Keyed by store and pathname: two stores may hold the same pathname, as two real stores would. */
 const objects = new Map<string, Obj>();
+let refuseDelete: string | null = null;
 const keyOf = (store: string, pathname: string) => `${store}\u0000${pathname}`;
 const urlOf = (pathname: string, access: "public" | "private") => `http://localhost:${port}/${access === "private" ? "private/" : ""}${pathname}`;
 const cors = { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, PUT, POST, OPTIONS", "access-control-allow-headers": "*", "access-control-expose-headers": "*" };
@@ -42,7 +43,13 @@ createServer((req, res) => {
     res.writeHead(204, cors);
     return res.end();
   }
+  // Refuse every delete of one pathname until cleared (no pathname clears): a walk proves a refused delete stops the run.
+  if (url.pathname === "/__refuse-delete") {
+    refuseDelete = url.searchParams.get("pathname");
+    return json(res, 200, { ok: true, refuseDelete });
+  }
   if (url.pathname === "/__reset") {
+    refuseDelete = null;
     objects.clear();
     return json(res, 200, { ok: true });
   }
@@ -90,6 +97,7 @@ createServer((req, res) => {
     if (req.method === "POST" && url.pathname === "/delete") {
       if (!authed) return json(res, 403, { error: { code: "forbidden", message: "no token" } });
       const { urls } = JSON.parse(body.toString() || "{}") as { urls?: string[] };
+      if (refuseDelete && (urls ?? []).some((u) => pathnameOf(u) === refuseDelete)) return json(res, 403, { error: { code: "forbidden", message: "the store refused this delete" } });
       for (const u of urls ?? []) objects.delete(keyOf(store!, pathnameOf(u)));
       return json(res, 200, null);
     }

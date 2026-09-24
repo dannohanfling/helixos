@@ -175,7 +175,7 @@ describe("client-facing errors: what happened and what to do next, never our int
 describe("the drip webhook URL is a credential", () => {
   // Both Community Loyalty inbound webhook URLs: the coach's Rung Dripper one and the client's own community one.
   const TOKEN = /\bclDripWebhookUrl\b|cl_drip_webhook_url|\bpassWebhookUrl\b|pass_webhook_url/;
-  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/rung-drip.ts", "src/app/(app)/coach/page.tsx", "src/lib/queries/compose.ts", "src/lib/actions/compose.ts", "src/lib/actions/clients.ts", "src/app/(app)/community/page.tsx", "src/lib/export.ts"];
+  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/rung-drip.ts", "src/app/(app)/coach/page.tsx", "src/lib/queries/compose.ts", "src/lib/actions/compose.ts", "src/lib/actions/clients.ts", "src/app/(app)/community/page.tsx", "src/lib/export.ts", "src/lib/member-data.ts"];
   const LEAK = /console\.|\bnote:|\bthrow\b|new Error\(|redirect\(|defaultValue=|\bvalue=\{|JSON\.stringify\(|logSync\(/;
   it("is named only where it is stored, sealed, opened or blanked, and never on a line that logs, notes, throws, redirects or renders a value", () => {
     for (const f of walk(SRC)) {
@@ -201,7 +201,8 @@ describe("the drip webhook URL is a credential", () => {
 
 describe("the client's Community Loyalty API token is a credential", () => {
   const TOKEN = /\bclApiToken\b|cl_api_token/;
-  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/community-loyalty.ts", "src/app/(app)/coach/page.tsx"];
+  // member-data.ts names it only in the export's strip list: the one place it is named so that it is never sent.
+  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/community-loyalty.ts", "src/app/(app)/coach/page.tsx", "src/lib/member-data.ts"];
   const LEAK = /console\.|\bnote:|\bthrow\b|new Error\(|redirect\(|defaultValue=|\bvalue=\{|JSON\.stringify\(|logSync\(/;
   it("is named only where it is stored, sealed, opened or blanked, and never on a line that logs, notes, throws, redirects or renders a value", () => {
     for (const f of walk(SRC)) {

@@ -57,21 +57,35 @@ const ORPHAN_AGE_MS = 30 * 60 * 1000;
 const RECONCILE_BUDGET_MS = 20 * 1000;
 
 /**
- * Reconciles the workspace's whole tree in the store against its rows: an object with no row that is older than half an hour
- * was uploaded and never recorded (the tab closed, the record call failed, the request crashed) and is deleted. An orphan is
- * a file nobody consented to and bytes no quota counts, so the reconcile is workspace-wide and runs where the workspace's
- * storage figure is computed (Settings), not per proof at upload time: a proof that is never uploaded to again would keep
- * its orphan forever. One list per visit. Never touches an object a row points at, and never an object younger than the
- * floor, which may be an upload still being recorded. Called from after(), so the page is sent first, and bounded in time.
+ * Reconciles the workspace's trees in the private store against their rows: an object with no row that is older than half an
+ * hour was uploaded and never recorded (the tab closed, the record call failed, the request crashed) and is deleted. An orphan
+ * is a file nobody consented to and bytes no quota counts, so the reconcile is workspace-wide and runs where the workspace's
+ * storage figure is computed (Settings), not at upload time: a proof or deck that is never uploaded to again would keep its
+ * orphan forever. Two trees, the same rules for each: proofs/<workspace>/ against the proof attachments, and (24 Sep)
+ * deck/<workspace>/ against the deck images. One list per tree per visit, each with its own time budget and its own log line.
+ * Never touches an object a row points at, and never an object younger than the floor, which may be an upload still being
+ * recorded. Called from after(), so the page is sent first, and bounded in time.
  */
 export async function reapOrphans(workspaceId: string, now = new Date()): Promise<number> {
+  const proofs = await reapTree(workspaceId, "proof-storage", `proofs/${workspaceId}/`, async () => {
+    const rows = await db.query.proofAttachments.findMany({ where: eq(schema.proofAttachments.workspaceId, workspaceId), columns: { blobKey: true, displayKey: true } });
+    return rows.flatMap((r) => [r.blobKey, r.displayKey].filter((k): k is string => Boolean(k)));
+  }, now);
+  const decks = await reapTree(workspaceId, "deck-storage", `deck/${workspaceId}/`, async () => {
+    const rows = await db.query.deckImages.findMany({ where: eq(schema.deckImages.workspaceId, workspaceId), columns: { blobKey: true } });
+    return rows.map((r) => r.blobKey);
+  }, now);
+  return proofs + decks;
+}
+
+async function reapTree(workspaceId: string, tree: "proof-storage" | "deck-storage", prefix: string, knownKeys: () => Promise<string[]>, now: Date): Promise<number> {
   // One line per run, including the empty ones: an empty run is what says the reconcile is running at all, and a run that
   // hit its budget or could not list is an operational fact that is invisible from inside after() unless it is written down.
   const started = Date.now();
   const report = { workspaceId, outcome: "ok" as "ok" | "skipped" | "list-failed" | "budget-hit", objects: 0, rows: 0, deleted: 0, bytes: 0, deleteFailures: 0, ms: 0 };
   const line = () => {
     report.ms = Date.now() - started;
-    (report.outcome === "ok" || report.outcome === "skipped" ? console.log : console.error)(`[proof-storage] reconcile ${report.outcome}`, JSON.stringify(report));
+    (report.outcome === "ok" || report.outcome === "skipped" ? console.log : console.error)(`[${tree}] reconcile ${report.outcome}`, JSON.stringify(report));
     return report.deleted;
   };
   if (!proofStorageConfigured()) {
@@ -81,16 +95,15 @@ export async function reapOrphans(workspaceId: string, now = new Date()): Promis
   const budget = AbortSignal.timeout(RECONCILE_BUDGET_MS);
   let objects: Awaited<ReturnType<typeof listProofObjects>>;
   try {
-    objects = await listProofObjects(`proofs/${workspaceId}/`, budget);
+    objects = await listProofObjects(prefix, budget);
   } catch (e) {
     report.outcome = budget.aborted ? "budget-hit" : "list-failed";
-    console.error("[proof-storage] could not list a workspace's tree to reconcile it", redactUrls(JSON.stringify({ workspaceId, message: e instanceof Error ? e.message : String(e) })));
+    console.error(`[${tree}] could not list a workspace's tree to reconcile it`, redactUrls(JSON.stringify({ workspaceId, message: e instanceof Error ? e.message : String(e) })));
     return line();
   }
   report.objects = objects.length;
-  const rows = await db.query.proofAttachments.findMany({ where: eq(schema.proofAttachments.workspaceId, workspaceId), columns: { blobKey: true, displayKey: true } });
-  report.rows = rows.length;
-  const known = new Set(rows.flatMap((r) => [r.blobKey, r.displayKey].filter((k): k is string => Boolean(k))));
+  const known = new Set(await knownKeys());
+  report.rows = known.size;
   for (const o of objects) {
     if (known.has(o.key) || now.getTime() - o.uploadedAt.getTime() < ORPHAN_AGE_MS) continue;
     if (budget.aborted) {
@@ -104,7 +117,7 @@ export async function reapOrphans(workspaceId: string, now = new Date()): Promis
     } catch (e) {
       if (budget.aborted) report.outcome = "budget-hit";
       report.deleteFailures++;
-      console.error("[proof-storage] could not delete an orphaned object", redactUrls(JSON.stringify({ key: o.key, message: e instanceof Error ? e.message : String(e) })));
+      console.error(`[${tree}] could not delete an orphaned object`, redactUrls(JSON.stringify({ key: o.key, message: e instanceof Error ? e.message : String(e) })));
     }
   }
   return line();

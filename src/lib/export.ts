@@ -2,79 +2,79 @@
  * A member's own data, whole, for offboarding and for the terms: every row they created in this workspace, with secrets removed.
  * JSON gives everything in one file; CSV gives one table at a time.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
+import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { db, schema } from "@/db";
+import { CHILD_TABLES, MEMBER_TABLES, STRIP_COLUMNS, USER_TABLES, type MemberLabel } from "@/lib/member-data";
 
 type Row = Record<string, unknown>;
+type AnyTable = SQLiteTable & Record<string, SQLiteColumn>;
+const col = (t: SQLiteTable, name: string): SQLiteColumn => (t as AnyTable)[name];
 
-/** Tables keyed by (workspace, user). The label is the file / section name a client sees. */
-const OWN = {
-  leads: schema.contacts,
-  messages: schema.messages,
-  content: schema.contentItems,
-  content_versions: schema.contentVariants,
-  library_posts: schema.libraryPosts,
-  library_entries: schema.libraryAssets,
-  tasks: schema.tasks,
-  goals: schema.goals,
-  daily_logs: schema.dailyLogs,
-  points: schema.pointsLedger,
-  reward_claims: schema.rewardClaims,
-  pathway_progress: schema.pathwayProgress,
-  curriculum_progress: schema.curriculumProgress,
-  lesson_progress: schema.lessonProgress,
-  certification_submissions: schema.certSubmissions,
-  offers: schema.offers,
-  webinars: schema.webinars,
-  client_records: schema.clientRecords,
-  client_checkins: schema.clientCheckins,
-  community_pass_points: schema.memberPoints,
-  proofs: schema.proofs,
-  groups: schema.groups,
-  targets: schema.targets,
-  sync_events: schema.syncEvents,
-} as const;
+/**
+ * The export reads the one list in src/lib/member-data.ts, the same list deletion on request removes, so the two cover the same
+ * tables. Left out on purpose: coach_notes, the coach's own working notes about the member, which are the coach's, not theirs
+ * (deletion still removes them with the member).
+ */
+const EXPORT_CHILDREN = CHILD_TABLES.filter((c) => c.label !== "coach_notes");
+type ChildExport = (typeof EXPORT_CHILDREN)[number]["label"];
+type UserLabel = keyof typeof USER_TABLES;
+export type ExportTable = "profile" | MemberLabel | ChildExport | UserLabel | "stored_files";
+export const EXPORT_TABLES: ExportTable[] = ["profile", ...(Object.keys(MEMBER_TABLES) as MemberLabel[]), ...EXPORT_CHILDREN.map((c) => c.label), ...(Object.keys(USER_TABLES) as UserLabel[]), "stored_files"];
 
-export type ExportTable = keyof typeof OWN | "offer_components" | "webinar_beliefs" | "webinar_sections" | "profile";
-export const EXPORT_TABLES: ExportTable[] = ["profile", ...(Object.keys(OWN) as (keyof typeof OWN)[]), "offer_components", "webinar_beliefs", "webinar_sections"];
-
-/** Columns that never leave the database: credentials, and hashes that only exist to be matched. */
-const STRIP = new Set(["passwordHash", "manualToken", "sessionVersion", "inboundSecretHash"]);
-
+/** Credentials never leave in an export, sealed or not, at any depth (the membership sits inside the profile). */
 function clean(rows: Row[]): Row[] {
-  return rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !STRIP.has(k))));
+  const strip = (v: unknown): unknown => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Row).filter(([k]) => !STRIP_COLUMNS.has(k)).map(([k, x]) => [k, strip(x)])) : v);
+  return rows.map((r) => strip(r) as Row);
 }
 
-async function own(table: keyof typeof OWN, workspaceId: string, userId: string): Promise<Row[]> {
-  const t = OWN[table];
-  const where = "workspaceId" in t ? and(eq(t.workspaceId, workspaceId), eq(t.userId, userId)) : eq(t.userId, userId);
-  return clean((await db.select().from(t).where(where)) as Row[]);
+async function memberRows(label: MemberLabel, workspaceId: string, userId: string): Promise<Row[]> {
+  const t = MEMBER_TABLES[label];
+  return (await db.select().from(t).where(and(eq(col(t, "workspaceId"), workspaceId), eq(col(t, "userId"), userId)))) as Row[];
+}
+
+/** A child table's rows: those whose parent is one of the member's own, found through the parent's own rows. */
+async function childRows(label: string, workspaceId: string, userId: string): Promise<Row[]> {
+  const c = CHILD_TABLES.find((x) => x.label === label)!;
+  const parents = c.parent === "membership" ? [] : c.parent in MEMBER_TABLES ? await memberRows(c.parent as MemberLabel, workspaceId, userId) : await childRows(c.parent, workspaceId, userId);
+  const ids = parents.map((p) => p.id as string);
+  return ids.length ? ((await db.select().from(c.table).where(inArray(col(c.table, c.fk), ids))) as Row[]) : [];
+}
+
+/**
+ * The member's stored files as a manifest of keys, not the bytes (the ruling of 22 Sep: a manifest rather than a zip): each
+ * with its store, the row that holds it, and its type. Private files (proof attachments, deck images) are named by key only;
+ * their bytes are reachable only through the app, signed in. A lead magnet's public files carry their public address.
+ */
+async function storedFiles(workspaceId: string, userId: string): Promise<Row[]> {
+  const out: Row[] = [];
+  for (const a of (await childRows("proof_attachments", workspaceId, userId)) as schema.ProofAttachment[]) {
+    out.push({ store: "private", table: "proof_attachments", rowId: a.id, key: a.blobKey, contentType: a.mime });
+    if (a.displayKey && a.displayKey !== a.blobKey) out.push({ store: "private", table: "proof_attachments", rowId: a.id, key: a.displayKey, contentType: "image/jpeg" });
+  }
+  for (const d of (await memberRows("deck_images", workspaceId, userId)) as schema.DeckImage[]) out.push({ store: "private", table: "deck_images", rowId: d.id, key: d.blobKey, contentType: d.mime });
+  for (const m of (await memberRows("lead_magnets", workspaceId, userId)) as schema.LeadMagnet[]) {
+    const files = await db.query.files.findMany({ where: and(eq(schema.files.workspaceId, workspaceId), like(schema.files.key, `public/magnets/${m.slug}/%`)) });
+    for (const f of files) out.push({ store: "public", table: "lead_magnets", rowId: m.id, key: f.key, contentType: f.contentType, size: f.size, url: f.url });
+  }
+  return out;
 }
 
 export async function exportTable(table: ExportTable, workspaceId: string, userId: string): Promise<Row[]> {
   if (table === "profile") {
-    const [user, membership, connection] = await Promise.all([
+    const [user, membership] = await Promise.all([
       db.query.users.findFirst({ where: eq(schema.users.id, userId) }),
       db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)) }),
-      db.query.socialConnections.findFirst({ where: and(eq(schema.socialConnections.workspaceId, workspaceId), eq(schema.socialConnections.userId, userId)) }),
     ]);
-    // Credentials never leave in an export, sealed or not: the two Community Loyalty webhook URLs are dropped from the membership.
-    const { passWebhookUrl: _pass, clDripWebhookUrl: _drip, ...membershipSafe } = membership ?? ({} as Record<string, unknown>);
-    void _pass;
-    void _drip;
-    return clean([{ ...(user ?? {}), membership: membership ? membershipSafe : null, publishing: connection ? { locationId: connection.locationId, mapping: connection.mapping, connectedAt: connection.connectedAt } : null }]);
+    return clean([{ ...(user ?? {}), membership: membership ?? null }]);
   }
-  if (table === "offer_components") {
-    const ids = (await own("offers", workspaceId, userId)).map((o) => o.id as string);
-    return ids.length ? clean((await db.select().from(schema.offerComponents).where(inArray(schema.offerComponents.offerId, ids))) as Row[]) : [];
+  if (table === "stored_files") return storedFiles(workspaceId, userId);
+  if (table in MEMBER_TABLES) return clean(await memberRows(table as MemberLabel, workspaceId, userId));
+  if (table in USER_TABLES) {
+    const t = USER_TABLES[table as UserLabel];
+    return clean((await db.select().from(t).where(eq(col(t, "userId"), userId))) as Row[]);
   }
-  if (table === "webinar_beliefs" || table === "webinar_sections") {
-    const ids = (await own("webinars", workspaceId, userId)).map((w) => w.id as string);
-    if (!ids.length) return [];
-    const t = table === "webinar_beliefs" ? schema.webinarBeliefs : schema.webinarSections;
-    return clean((await db.select().from(t).where(inArray(t.webinarId, ids))) as Row[]);
-  }
-  return own(table, workspaceId, userId);
+  return clean(await childRows(table, workspaceId, userId));
 }
 
 export async function exportAll(workspaceId: string, userId: string): Promise<Record<string, Row[]>> {

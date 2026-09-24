@@ -130,6 +130,9 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 <ConfirmDelete verb="Remove" what="this client" undo="Their access ends on their next request and their reminders stop. Their data is kept, and you can reinstate them from the Coach page." label="Remove client" className="btn btn-ghost btn-sm" testId="remove-client" />
               </form>
             )}
+            <Link href={`/coach/${m.id}/delete`} className="btn btn-ghost btn-sm text-danger" data-testid="erase-member" title="Deletion on request: their account and everything they made here, for good.">
+              Delete their data…
+            </Link>
             <Link href="/coach" className="btn btn-ghost btn-sm">
               All clients
             </Link>

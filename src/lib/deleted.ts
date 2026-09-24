@@ -26,6 +26,7 @@ export const DELETED_MESSAGES = {
   library: "Library post deleted.",
   contact: "Conversation deleted.",
   key: "Key removed.",
+  member: "Their account and everything they made in this workspace were deleted. The deletion is on the audit record, with no content.",
 } as const;
 export type DeletedKind = keyof typeof DELETED_MESSAGES;
 export const isDeletedKind = (k: string | null | undefined): k is DeletedKind => Boolean(k && Object.hasOwn(DELETED_MESSAGES, k));

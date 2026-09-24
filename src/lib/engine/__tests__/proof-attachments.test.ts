@@ -75,8 +75,9 @@ describe("proof attachments: the private store's addresses never leave the serve
   };
   // The only files that may name blob_url or display_url: the schema, the proof record/delete actions, the queries that delete,
   // the read route that streams, and the deck-image files that hold the same kind of private address (a deck image's own blob
-  // url, and the proof photo a testimonial resolves to). All are server-only; a client component never names them.
-  const MAY_NAME = ["db/schema.ts", "lib/actions/proof-attachments.ts", "lib/queries/proof-attachments.ts", "app/api/proofs/attachments/[id]/route.ts", "lib/actions/deck-images.ts", "lib/queries/deck-slots.ts", "app/api/deck-images/[id]/route.ts", "app/api/webinars/[id]/deck/route.ts"];
+  // url, and the proof photo a testimonial resolves to), and deletion on request, which deletes each object by its address before
+  // its row. All are server-only; a client component never names them.
+  const MAY_NAME = ["lib/erase.ts", "db/schema.ts", "lib/actions/proof-attachments.ts", "lib/queries/proof-attachments.ts", "app/api/proofs/attachments/[id]/route.ts", "lib/actions/deck-images.ts", "lib/queries/deck-slots.ts", "app/api/deck-images/[id]/route.ts", "app/api/webinars/[id]/deck/route.ts"];
   it("blob_url and display_url are read only in the server files that may hold a private address, and no client component names them", () => {
     const naming = walk(SRC)
       .filter((f) => /\b(blobUrl|displayUrl|blob_url|display_url)\b/.test(readFileSync(f, "utf8")))
@@ -87,13 +88,17 @@ describe("proof attachments: the private store's addresses never leave the serve
   });
   it("the orphan reconcile is workspace-wide, runs after the Settings response and gives up on a slow store; the upload door no longer lists", () => {
     const queries = readFileSync(join(SRC, "lib/queries/proof-attachments.ts"), "utf8");
-    expect(queries).toMatch(/listProofObjects\(`proofs\/\$\{workspaceId\}\/`, budget\)/);
+    // Two trees, the same rules: the proofs tree against the attachments, and (24 Sep) the deck tree against the deck images.
+    expect(queries).toMatch(/reapTree\(workspaceId, "proof-storage", `proofs\/\$\{workspaceId\}\/`/);
+    expect(queries).toMatch(/reapTree\(workspaceId, "deck-storage", `deck\/\$\{workspaceId\}\/`/);
+    expect(queries).toMatch(/db\.query\.deckImages\.findMany\(\{ where: eq\(schema\.deckImages\.workspaceId, workspaceId\)/);
+    expect(queries).toContain("listProofObjects(prefix, budget)");
     expect(queries).toContain("AbortSignal.timeout(RECONCILE_BUDGET_MS)");
     const settings = readFileSync(join(SRC, "app/(app)/settings/page.tsx"), "utf8");
     expect(settings).toMatch(/after\(\(\) => reapOrphans\(v\.workspace\.id\)\)/);
     expect(readFileSync(join(SRC, "app/api/proofs/upload/route.ts"), "utf8")).not.toContain("reapOrphans");
     // Every run writes one line, the empty ones included, and a run that hit its budget or could not list is a distinct line.
-    expect(queries).toMatch(/console\.log : console\.error\)\(`\[proof-storage\] reconcile \$\{report\.outcome\}`/);
+    expect(queries).toMatch(/console\.log : console\.error\)\(`\[\$\{tree\}\] reconcile \$\{report\.outcome\}`/);
     for (const outcome of ['"skipped"', '"list-failed"', '"budget-hit"']) expect(queries).toContain(outcome);
   });
   it("the schema says why, beside the columns", () => {
