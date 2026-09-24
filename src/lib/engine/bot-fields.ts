@@ -199,14 +199,23 @@ export function qualifyingQuestions(questions: (string | null | undefined)[] | u
 }
 const QUESTION_FIELDS = ["qualifying_question_1", "qualifying_question_2", "qualifying_question_3"] as const;
 /**
- * The fields whose value is only a house default, because the member has not written their own: the questions left blank. The
- * plan sends a house default only where the bot's field is empty or holds what HelixOS last sent, never over the bot's own text
- * (rev 83: Danno's own questions on his bot would have been replaced by the defaults on his first push).
+ * The fields whose value is only a house default, because the member has not written their own: the questions left blank, and
+ * the house rules when the list is empty (the six house lines). The plan sends a house default only where the bot's field is
+ * empty or holds what HelixOS last sent, never over the bot's own text (rev 83: Danno's own questions on his bot would have been
+ * replaced by the defaults on his first push; rev 87: the same for the house rules).
  */
 export function houseDefaultFields(input: Stage1Input): Stage1Field[] {
   const q = input.coach?.questions;
-  return QUESTION_FIELDS.filter((_, i) => !clean(q?.[i]));
+  const ownRules = (input.coach?.houseRules ?? []).some((r) => clean(r));
+  return [...(ownRules ? [] : (["ai_constraints_cbf"] as const)), ...QUESTION_FIELDS.filter((_, i) => !clean(q?.[i]))];
 }
+/** What the row says when a house default is held back because the bot has its own text there. */
+export const OWN_TEXT_LINE: Partial<Record<Stage1Field, string>> = {
+  ai_constraints_cbf: "Your bot has its own house rules here. Write yours in Essence to manage them from HelixOS.",
+  qualifying_question_1: "Your bot has its own question here. Type yours under Settings to manage it from HelixOS.",
+  qualifying_question_2: "Your bot has its own question here. Type yours under Settings to manage it from HelixOS.",
+  qualifying_question_3: "Your bot has its own question here. Type yours under Settings to manage it from HelixOS.",
+};
 
 /**
  * The Stage 1 payload: exactly STAGE1_FIELDS, every one present, composed from the record. A source the client has not filled
@@ -334,8 +343,8 @@ export const NOTHING_CURRENT_LABEL: Record<Stage1Field, string> = {
  * - missing: the bot has no field by either name, so there is nothing to write into;
  * - unread: no agent on the bot reads it, so it gets the plain line and is not sent, and its values are not shown;
  * - empty: HelixOS has nothing for it and the bot holds text HelixOS did not last send, so it is left out rather than sent as ""
- *   and the bot keeps what it holds; likewise a house default (`houseDefaults`, a question the member left blank) over the
- *   bot's own text;
+ *   and the bot keeps what it holds; likewise a house default (`houseDefaults`: a question the member left blank, or the house
+ *   lines when they have written no rules) over the bot's own text;
  * - same: the bot already holds exactly this (or already says there is none);
  * - change: sent, with the bot's current value beside the new one. That includes a field HelixOS last wrote and now has nothing
  *   for: it is sent its nothing-current sentence (`nothing` is set), so a retired offer stops being sold.
@@ -370,7 +379,7 @@ export function stage1Plan(payload: BotFieldPayload, held: { name: string; value
     if (current === row.next) return { ...row, status: "same" as const, line: "Your bot already holds this." };
     // A house default goes only where the bot's field is empty or holds what HelixOS last sent (or its own "none" sentence).
     const own = Boolean(current?.trim()) && current !== lastSent[name] && !isNothingCurrent(field, current);
-    if (houseDefaults.includes(field) && own) return { ...row, status: "empty" as const, line: "Your bot has its own question here. Type yours under Settings to manage it from HelixOS." };
+    if (houseDefaults.includes(field) && own) return { ...row, status: "empty" as const, line: OWN_TEXT_LINE[field] ?? "Your bot has its own text here, so the house default is not sent." };
     return { ...row, status: "change" as const, line: written };
   });
 }

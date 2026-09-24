@@ -70,7 +70,7 @@ describe("Stage 1 as the coach sees it before a push: per field, by the name the
   it("a question the member left blank never goes over the bot's own question; the house default goes only where the field is empty or HelixOS's (rev 83)", () => {
     const input = { businessName: "T", workspaceName: "W", timezone: "UTC", offers: [live], coach: { questions: [null, "Who else decides?", ""] } };
     const defaults = houseDefaultFields(input);
-    expect(defaults).toEqual(["qualifying_question_1", "qualifying_question_3"]);
+    expect(defaults).toEqual(["ai_constraints_cbf", "qualifying_question_1", "qualifying_question_3"]);
     const p = stage1Payload(input);
     const qs = ["qualifying_question_1", "qualifying_question_2", "qualifying_question_3"];
     const rows = byField(stage1Plan(p, bot({ qualifying_question_1: "Danno's own first question", qualifying_question_2: "His second", qualifying_question_3: "" }), [agent(qs)], {}, defaults));
@@ -88,6 +88,20 @@ describe("Stage 1 as the coach sees it before a push: per field, by the name the
     const none = { ...input, coach: {} };
     const all = byField(stage1Plan(stage1Payload(none), bot({ qualifying_question_1: "a", qualifying_question_2: "b", qualifying_question_3: "c" }), [agent(qs)], {}, houseDefaultFields(none)));
     expect(qs.map((q) => all[q].status)).toEqual(["empty", "empty", "empty"]);
+  });
+  it("with no house rules written, the six house lines never go over the bot's own rules; they go only where the field is empty or HelixOS's (rev 87)", () => {
+    const input = { businessName: "T", workspaceName: "W", timezone: "UTC", offers: [live], coach: { questions: ["a", "b", "c"] } };
+    expect(houseDefaultFields(input)).toEqual(["ai_constraints_cbf"]);
+    const p = stage1Payload(input);
+    const reads = [agent(["ai_constraints_cbf"])];
+    const own = byField(stage1Plan(p, bot({ ai_constraints_cbf: "Be kind." }), reads, {}, houseDefaultFields(input)));
+    expect(own.ai_constraints_cbf).toMatchObject({ status: "empty", line: "Your bot has its own house rules here. Write yours in Essence to manage them from HelixOS." });
+    expect(byField(stage1Plan(p, bot({ ai_constraints_cbf: "" }), reads, {}, houseDefaultFields(input))).ai_constraints_cbf).toMatchObject({ status: "change", next: houseConstraints("T") });
+    expect(byField(stage1Plan(p, bot({ ai_constraints_cbf: "What HelixOS sent" }), reads, { ai_constraints_cbf: "What HelixOS sent" }, houseDefaultFields(input))).ai_constraints_cbf.status).toBe("change");
+    // Rules of their own, even one: they go over whatever the bot holds.
+    const written = { ...input, coach: { ...input.coach, houseRules: ["", "Be brief."] } };
+    expect(houseDefaultFields(written)).toEqual([]);
+    expect(byField(stage1Plan(stage1Payload(written), bot({ ai_constraints_cbf: "Be kind." }), reads, {}, houseDefaultFields(written))).ai_constraints_cbf).toMatchObject({ status: "change", next: "1. Be brief." });
   });
   it("the offers field is written under its current name, and under the older one only when the bot has no field by the current one", () => {
     expect(PRODUCT_FIELD).toBe("ai_product_&_service_information_cbf");
