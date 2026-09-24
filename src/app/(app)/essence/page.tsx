@@ -5,6 +5,7 @@ import { requireViewer } from "@/lib/auth";
 import { saveEssenceSectionAction } from "@/lib/actions/essence";
 import { ESSENCE_CAP, ESSENCE_HELP, ESSENCE_SECTIONS, placeholderFor, completion, essenceChars, roughTokens, sectionByKey, sectionFilled, type Story } from "@/lib/engine/essence";
 import { essenceFor } from "@/lib/queries/essence";
+import { houseRuleSeed } from "@/lib/engine/bot-fields";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -34,6 +35,12 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
       ])
     : [[], 0];
   const help = (field: string) => ESSENCE_HELP[`${current.key}.${field}`];
+  // A member who has not written house rules starts from the six house lines as their own editable items (rev 80): what they
+  // save is what their bot gets, numbered in their order, and nothing is ever prepended at push.
+  const listValue = (field: string): string => {
+    const saved = (values[field] as string[] | undefined) ?? [];
+    return (saved.length || field !== "house_rules" ? saved : houseRuleSeed(v.membership.businessName || v.workspace.name)).join("\n");
+  };
   return (
     <>
       <PageHeader
@@ -110,7 +117,7 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
                 </div>
               ) : f.kind === "list" ? (
                 <Field key={f.key} label={f.label} hint={help(f.key) ?? "One per line."}>
-                  <textarea className="field" name={`${current.key}.${f.key}`} defaultValue={((values[f.key] as string[] | undefined) ?? []).join("\n")} rows={4} placeholder={placeholderFor(current.key, f.key, "list")} data-testid={`field-${f.key}`} />
+                  <textarea className="field" name={`${current.key}.${f.key}`} defaultValue={listValue(f.key)} rows={f.key === "house_rules" ? 8 : 4} placeholder={placeholderFor(current.key, f.key, "list")} data-testid={`field-${f.key}`} />
                 </Field>
               ) : (
                 <Field key={f.key} label={f.label} hint={help(f.key)}>

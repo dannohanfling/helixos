@@ -5,6 +5,9 @@ const id = () => text("id").primaryKey();
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
 
 /** A workspace is one coach deployment (one HelixOS base). */
+/** A guarantee's terms, structured (handoff rev 80, §2C): for the terms page and, later, the tracker. */
+export type GuaranteeTerms = { windowMonths?: number; measure?: string; conditions?: string[]; attendancePct?: number; replayDays?: number; exclusions?: string; remedy?: string };
+
 export const workspaces = sqliteTable("workspaces", {
   id: id(),
   name: text("name").notNull(),
@@ -70,8 +73,31 @@ export const memberships = sqliteTable(
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
     /** A fingerprint of HelixOS's Stage 1 record at the last push, so the Coach page can say "changed since the last push" without reading the bot. */
     clBotSourceKey: text("cl_bot_source_key"),
-    /** What the bot says when asked about price, for this coach, not per offer. Null means PRICE_ANSWER_DEFAULT. Sent only when an offer is ticked Never quote prices. */
+    /** What the bot says when asked about price in price mode "never", for this coach, not per offer. Null means PRICE_ANSWER_DEFAULT. */
     priceAnswer: text("price_answer"),
+    /* The bot sales rules (handoff rev 80): the coach-level lines the offers field is composed from. Each is the coach's own words. */
+    /** WHAT I DO: one paragraph, the first thing the bot knows about the business. */
+    whatIDo: text("what_i_do"),
+    /** How the bot handles price: never (the deflect line), range (the coach's range line), full (each bot offer's price). */
+    priceMode: text("price_mode", { enum: ["never", "range", "full"] }).notNull().default("full"),
+    /** Said when asked about price in range mode, verbatim. Needs your eyes. */
+    rangeLine: text("range_line"),
+    /** Said when asked about payment plans. Null means PAYMENT_PLAN_LINE_DEFAULT. Needs your eyes. */
+    paymentPlanLine: text("payment_plan_line"),
+    /** The guarantee as the bot says it, verbatim, written by the coach and approved by hand; never composed. Null means no guarantee on the bot. */
+    guaranteeLine: text("guarantee_line"),
+    /** What the guarantee covers and does not, as the bot says it. A suggestion is built from the offers; the coach's text is sent. */
+    guaranteeCoverageLine: text("guarantee_coverage_line"),
+    /** The guarantee's terms, structured, for the terms page and the tracker to read one record. Not sent to the bot. */
+    guaranteeTerms: text("guarantee_terms", { mode: "json" }).$type<GuaranteeTerms>().notNull().default({}),
+    /** Where the full terms live (a GHL page for now). */
+    guaranteeTermsUrl: text("guarantee_terms_url"),
+    /** The three questions the bot asks, for the coach, not per offer. Blank means the house default. */
+    botQuestion1: text("bot_question_1"),
+    botQuestion2: text("bot_question_2"),
+    botQuestion3: text("bot_question_3"),
+    /** Who pressed the last Stage 1 push that landed: the member themself or their coach. */
+    clBotFieldsPushedBy: text("cl_bot_fields_pushed_by"),
     /** The Community Loyalty agent the Bot Brief reads and pushes to (ai_agent_ns). Empty means the workspace's first agent. */
     clAgentNs: text("cl_agent_ns"),
     /** The one bot field the approved FAQ answers are composed into. Empty means the default in src/lib/engine/faq.ts. */
@@ -523,6 +549,21 @@ export const offers = sqliteTable(
     qualifyingQuestion3: text("qualifying_question_3"),
     /** "Never quote prices": the price is left out of what the bot is sent (Stage 1), and the Brief says so. */
     neverQuotePrice: integer("never_quote_price", { mode: "boolean" }).notNull().default(false),
+    /* On the bot (handoff rev 80). Only an offer with a bot role feeds the bot, whatever its live or draft state elsewhere. */
+    botRole: text("bot_role", { enum: ["entry", "core", "one_on_one", "not_on_bot"] }).notNull().default("not_on_bot"),
+    /** The short name the bot uses ("Academy"); blank means the offer's name. */
+    botName: text("bot_name"),
+    /** Who it's for, one line ("new businesses with a budget under $1,000 who want help."). */
+    botFor: text("bot_for"),
+    /** What they get, one line; optional, added under WHAT I DO. */
+    botEndResult: text("bot_end_result"),
+    /** The terms as the bot says them, deposit included. Needs your eyes. */
+    botTerms: text("bot_terms"),
+    depositAmount: real("deposit_amount"),
+    refundableIfNotFit: integer("refundable_if_not_fit", { mode: "boolean" }).notNull().default(false),
+    /** Said when the link goes out and the offer is refundable. Blank means the suggested default. */
+    botRefundLine: text("bot_refund_line"),
+    guaranteeCovered: integer("guarantee_covered", { mode: "boolean" }).notNull().default(false),
     objTime: text("obj_time"),
     objMoney: text("obj_money"),
     objPartner: text("obj_partner"),
@@ -1837,3 +1878,20 @@ export const deletionAudits = sqliteTable("deletion_audits", {
   stoppedAt: text("stopped_at"),
   createdAt: createdAt(),
 });
+
+/**
+ * One approval of one line the bot will be sent (Needs your eyes): the element, a hash of its exact text, who approved it and
+ * when. A changed line hashes differently, so it needs approving again; nothing is approved in bulk.
+ */
+export const botApprovals = sqliteTable(
+  "bot_approvals",
+  {
+    id: id(),
+    membershipId: text("membership_id").notNull(),
+    elementKey: text("element_key").notNull(),
+    textHash: text("text_hash").notNull(),
+    approvedBy: text("approved_by").notNull(),
+    approvedAt: text("approved_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [uniqueIndex("bot_approvals_member_element_hash").on(t.membershipId, t.elementKey, t.textHash)],
+);

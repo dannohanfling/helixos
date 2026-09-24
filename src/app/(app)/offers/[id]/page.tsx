@@ -12,7 +12,7 @@ import { CURRENCIES, offerOnePager, scoreOffer } from "@/lib/engine/offer-score"
 import { assetsFor } from "@/lib/queries/library";
 import { moveLegacyObjectionAction } from "@/lib/actions/objections";
 import { LEGACY_OFFER_OBJECTIONS, isSharedObjection, reframesOf } from "@/lib/engine/objections";
-import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
+import { BOT_ROLES, BOT_ROLE_LABEL, REFUND_LINE_DEFAULT } from "@/lib/engine/bot-fields";
 import { SubmitButton } from "@/components/submit-button";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
@@ -142,13 +142,6 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                       <input className="field tabular" name="price" type="number" min={0} defaultValue={offer.price} />
                     </div>
                   </Field>
-                <label className="flex items-start gap-2 text-sm sm:col-span-2" title="Your bot is sent this offer without its price, and its constraints forbid stating a price that is not in its fields.">
-                  <input type="checkbox" name="neverQuotePrice" defaultChecked={offer.neverQuotePrice} className="mt-1" data-testid="never-quote-price" />
-                  <span>
-                    Never quote prices
-                    <span className="block text-xs text-ink-3">Your bot is sent this offer without its price, so it has no price to state. Your Bot Brief says so.</span>
-                  </span>
-                </label>
                 <Field label="Payment plan">
                   <input className="field" name="paymentPlan" defaultValue={offer.paymentPlan ?? ""} placeholder="3 x $550" />
                 </Field>
@@ -168,14 +161,51 @@ export default async function OfferWizardPage({ params, searchParams }: { params
               <div className="grid gap-3 sm:grid-cols-2">
                 <T name="forYouIf" label="This is for you if…" value={offer.forYouIf} />
                 <T name="notForYouIf" label="This is not for you if…" value={offer.notForYouIf} />
-                <div className="sm:col-span-2">
-                  <p className="label">The three questions your bot asks before booking</p>
-                  <p className="mb-2 text-xs text-ink-3">Pushed to your Community Loyalty bot with this offer&apos;s facts. These are house defaults until you write your own; a blank one goes back to the default.</p>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {([offer.qualifyingQuestion1, offer.qualifyingQuestion2, offer.qualifyingQuestion3] as const).map((q, i) => (
-                      <input key={i} className="field" name={`qualifyingQuestion${i + 1}`} defaultValue={q ?? QUALIFYING_DEFAULTS[i]} data-testid={`qualifying-${i + 1}`} />
+                <p className="text-xs text-ink-3 sm:col-span-2">
+                  The three questions your bot asks before booking are yours, not this offer&apos;s: they live under <Link href="/settings#your-bot" className="underline">Settings</Link>.
+                </p>
+              </div>
+            </Card>
+            <Card id="bot" title="On your bot">
+              <p className="mb-3 text-xs text-ink-3">Only an offer with a role here reaches your Community Loyalty bot, whatever its status on this page. What your bot will be sent is on <Link href="/brain" className="underline">Your bot</Link>, for you to approve before anything goes.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Role on your bot">
+                  <select className="field" name="botRole" defaultValue={offer.botRole} data-testid="offer-bot-role">
+                    {BOT_ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {BOT_ROLE_LABEL[r]}
+                      </option>
                     ))}
-                  </div>
+                  </select>
+                </Field>
+                <Field label="Name on your bot" hint="Blank uses the offer's name.">
+                  <input className="field" name="botName" defaultValue={offer.botName ?? ""} placeholder={offer.name} data-testid="offer-bot-name" />
+                </Field>
+                <Field label="Who it's for, one line">
+                  <input className="field" name="botFor" defaultValue={offer.botFor ?? ""} placeholder="new businesses with a budget under $1,000 who want help." data-testid="offer-bot-for" />
+                </Field>
+                <Field label="What they get, one line (optional)" hint="Added under What I do.">
+                  <input className="field" name="botEndResult" defaultValue={offer.botEndResult ?? ""} data-testid="offer-bot-end-result" />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="The terms, as your bot says them" hint="The deposit and what follows it, in your words. Your bot quotes this, so you approve it on Your bot.">
+                    <input className="field" name="botTerms" defaultValue={offer.botTerms ?? ""} placeholder="$500 today, then $500 a month for the rest of the year. 12 payments in all." data-testid="offer-bot-terms" />
+                  </Field>
+                </div>
+                <Field label="Deposit amount">
+                  <input className="field tabular" name="depositAmount" type="number" min={0} step="any" defaultValue={offer.depositAmount ?? ""} data-testid="offer-deposit" />
+                </Field>
+                <p className="self-end text-xs text-ink-3">The payment link is the one under Links below; an entry or core offer can&apos;t be pushed without it.</p>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="refundableIfNotFit" defaultChecked={offer.refundableIfNotFit} data-testid="offer-refundable" /> Refunded in full if the call shows it&apos;s not a fit
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="guaranteeCovered" defaultChecked={offer.guaranteeCovered} data-testid="offer-guarantee-covered" /> Covered by your guarantee
+                </label>
+                <div className="sm:col-span-2">
+                  <Field label="The refund line, as your bot says it" hint={`Blank uses: ${REFUND_LINE_DEFAULT}`}>
+                    <input className="field" name="botRefundLine" defaultValue={offer.botRefundLine ?? ""} placeholder={REFUND_LINE_DEFAULT} data-testid="offer-refund-line" />
+                  </Field>
                 </div>
               </div>
             </Card>

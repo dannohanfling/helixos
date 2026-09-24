@@ -18,8 +18,8 @@ const l = (key: string): EssenceField => ({ key, label: label(key), kind: "list"
 
 /** Danno's production schema, thirteen sections, plus representative_stories, in his order. */
 export const ESSENCE_SECTIONS: EssenceSection[] = [
-  { key: "guidelines_to_respond", title: "Guidelines to respond", fields: [t("response_length"), t("tone"), l("style"), t("user_reference"), l("prohibited_actions"), t("role_and_focus")] },
-  { key: "identity", title: "Identity", fields: [t("name"), t("role"), l("core_traits"), l("tone_of_voice")] },
+  { key: "guidelines_to_respond", title: "Guidelines to respond", fields: [t("response_length"), t("tone"), l("style"), t("user_reference"), l("prohibited_actions"), t("role_and_focus"), { key: "house_rules", label: "Your bot's house rules, in order", kind: "list" }] },
+  { key: "identity", title: "Identity", fields: [t("name"), t("role"), l("core_traits"), l("tone_of_voice"), { key: "bot_persona", label: "Who your bot speaks as", kind: "text" }] },
   { key: "mission_and_vision", title: "Mission and vision", fields: [t("mission_statement"), t("vision_statement")] },
   { key: "goals_and_objectives", title: "Goals and objectives", fields: [l("primary_goals"), l("secondary_goals")] },
   { key: "behavior_and_interaction_style", title: "Behavior and interaction style", fields: [l("default_behavior"), l("response_style"), t("learning_adaptability")] },

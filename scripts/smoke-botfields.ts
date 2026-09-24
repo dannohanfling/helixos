@@ -5,9 +5,9 @@
  * the agent does not read gets the plain line and no values, a field HelixOS has nothing for is left out (never sent as ""), and
  * nothing is sent until the push is pressed. Pressed twice in the same instant it sends once and records once, showing that it
  * is working while it is out. Only the fields that change are sent, by the name the bot has, and only those are read back; a
- * 200 with a field silently dropped is a failed push, named. Never quote prices on the Offer leaves the price out of what is
- * sent, and the Brief says so. A plan that moved since the page was read sends nothing. The record and the log never carry the
- * token or a webhook address. Against scripts/mock-uchat.ts on :4060.
+ * 200 with a field silently dropped is a failed push, named. Every price and link is approved line by line before the Push
+ * opens. Price mode "never" leaves the price out of what is sent, and the page says so. A plan that moved since the page was
+ * read sends nothing. The record and the log never carry the token or a webhook address. Against scripts/mock-uchat.ts on :4060.
  */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -35,28 +35,30 @@ const store = async () => (await (await fetch(`${mock}/__fields`)).json()) as Re
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
-  const { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, STAGE1_NOTHING_CURRENT, QUALIFYING_DEFAULTS, houseConstraints } = await import("@/lib/engine/bot-fields");
+  const { BOT_WRITTEN_FIELDS, PAYMENT_PLAN_LINE_DEFAULT, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, STAGE1_NOTHING_CURRENT, QUALIFYING_DEFAULTS, houseConstraints } = await import("@/lib/engine/bot-fields");
   const up = await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false);
   const proc = up ? null : spawn("npx", ["tsx", "scripts/mock-uchat.ts", String(mockPort)], { stdio: "ignore", detached: true });
   for (let i = 0; i < 40 && !(await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
   await fetch(`${mock}/__reset`, { method: "POST" });
 
-  // The record, set to a known state: Maya's live offer at its seeded price with no questions written and prices quoted, the
-  // draft beside it, no agent chosen (the bot has one, so it is taken), and no push on the record.
+  // The record, set to a known state: Maya's live offer at its seeded price, the core offer on her bot with its payment link,
+  // prices stated, no questions written, nothing approved, the draft beside it, no agent chosen, and no push on the record.
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const membership = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
   const ws = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, membership.workspaceId) }))!;
   const reset = await db.query.offers.findFirst({ where: and(eq(schema.offers.userId, maya.id), eq(schema.offers.name, "90-Day Reset")) });
   if (!reset) throw new Error("the demo seed has Maya's 90-Day Reset");
-  await db.update(schema.offers).set({ status: "live", price: 1500, currency: "USD", neverQuotePrice: false, qualifyingQuestion1: null, qualifyingQuestion2: null, qualifyingQuestion3: null }).where(eq(schema.offers.id, reset.id));
-  await db.update(schema.memberships).set({ clAgentNs: null, clApiToken: null, clBotFields: {}, clBotFieldsPushedAt: null }).where(eq(schema.memberships.id, membership.id));
+  const LINK = `https://pay.example.com/reset-${RUN}`;
+  await db.update(schema.offers).set({ status: "live", price: 1500, currency: "USD", botRole: "core", botName: null, botFor: null, botTerms: null, botEndResult: null, paymentLink: LINK, refundableIfNotFit: false, guaranteeCovered: false }).where(eq(schema.offers.id, reset.id));
+  await db.update(schema.memberships).set({ clAgentNs: null, clApiToken: null, clBotFields: {}, clBotFieldsPushedAt: null, clBotFieldsPushedBy: null, priceMode: "full", priceAnswer: null, rangeLine: null, paymentPlanLine: null, guaranteeLine: null, guaranteeCoverageLine: null, whatIDo: null, botQuestion1: null, botQuestion2: null, botQuestion3: null }).where(eq(schema.memberships.id, membership.id));
+  await db.delete(schema.botApprovals).where(eq(schema.botApprovals.membershipId, membership.id));
   const zone = membership.timezone ?? ws.timezone;
 
   // What the bot holds before HelixOS ever writes: what the client and the agent wrote, a page of other fields, and the Stage 1
   // fields as someone set them by hand, the offers under the older name only.
   const botWritten = { calendar_id: "cal_chosen_at_onboarding", appointment_id: "appt_20261001_777", booked_time: "2026-10-01T17:00:00Z" };
   if (JSON.stringify(Object.keys(botWritten).sort()) !== JSON.stringify([...BOT_WRITTEN_FIELDS].sort())) throw new Error("the walk seeds exactly the fields the push must never touch");
-  const byHand = { business_name_cbf: "Torres Nutrition", business_time_zone_cbf: zone, [PRODUCT_FIELD_OLD]: "Hand-written on 21 Sep: the Reset, ask me about price", ai_constraints_cbf: "Be kind.", qualifying_question_1: "What brings you here?", qualifying_question_2: QUALIFYING_DEFAULTS[1], qualifying_question_3: "A third question written by hand" };
+  const byHand = { business_name_cbf: "Torres Nutrition", business_time_zone_cbf: zone, [PRODUCT_FIELD_OLD]: "Hand-written on 21 Sep: the Reset, ask me about price", ai_constraints_cbf: "Be kind.", ai_persona_role_cbf: "A persona written by hand", qualifying_question_1: "What brings you here?", qualifying_question_2: QUALIFYING_DEFAULTS[1], qualifying_question_3: "A third question written by hand" };
   await post("/__seed", botWritten);
   await post("/__seed", Object.fromEntries(Array.from({ length: READ_BACK_LIMIT }, (_, i) => [`other_field_${i + 1}`, `v${i + 1}`])));
   await post("/__seed", byHand);
@@ -106,21 +108,33 @@ async function main() {
     await preview.waitFor({ timeout: 20000 });
     const row = (field: string) => page.locator(`[data-testid="bot-field-row"][data-field="${field}"]`);
     const status = async (field: string) => row(field).getAttribute("data-status");
-    const before = async (field: string) => (await row(field).locator('[data-testid="bot-field-before"]').innerText()).trim();
-    const after = async (field: string) => (await row(field).locator('[data-testid="bot-field-after"]').innerText()).trim();
+    const before = async (field: string) => ((await row(field).locator('[data-testid="bot-field-before"]').textContent()) ?? "").trim();
+    const after = async (field: string) => ((await row(field).locator('[data-testid="bot-field-after"]').textContent()) ?? "").trim();
     if ((await page.locator('[data-testid="bot-agents"]').innerText()).trim() !== "Agents on this bot: Community FAQ Agent, Appointment Setter") throw new Error("the preview names every agent on the bot");
     if ((await row("business_name_cbf").locator('[data-testid="bot-field-readby"]').innerText()).trim() !== "read by Appointment Setter") throw new Error("each field names the agent that reads it, not the FAQ's chosen agent");
     if (!(await page.locator('[data-testid="bot-fallback"]').innerText()).includes(`the offers go into ${PRODUCT_FIELD_OLD}, the older name`)) throw new Error("the preview names the older field it writes the offers into");
     if ((await status("business_name_cbf")) !== "change" || (await before("business_name_cbf")) !== "Torres Nutrition" || (await after("business_name_cbf")) !== "Torres Nutrition Coaching") throw new Error("the business name shows what the bot holds against what HelixOS would write");
     if ((await status("business_time_zone_cbf")) !== "same") throw new Error("a field the bot already holds is shown unchanged");
-    if ((await status(PRODUCT_FIELD)) !== "change" || !(await row(PRODUCT_FIELD).innerText()).includes(PRODUCT_FIELD_OLD) || !/^Hand-written on 21 Sep/.test(await before(PRODUCT_FIELD)) || !/^90-Day Reset · .* · Group program · USD \$1,500 · 90 days$/.test(await after(PRODUCT_FIELD))) throw new Error(`the offers row writes the live offer's facts into the older name, got "${await row(PRODUCT_FIELD).innerText()}"`);
+    if ((await status(PRODUCT_FIELD)) !== "change" || !(await row(PRODUCT_FIELD).innerText()).includes(PRODUCT_FIELD_OLD) || !/^Hand-written on 21 Sep/.test(await before(PRODUCT_FIELD)) || (await after(PRODUCT_FIELD)) !== `PRICE\n90-Day Reset: USD $1,500.\nIf they ask about payment plans, say: "${PAYMENT_PLAN_LINE_DEFAULT}"\n\nCORE OFFER (90-Day Reset)\nLink: ${LINK}`) throw new Error(`the offers row writes the live offer's facts into the older name, got "${await row(PRODUCT_FIELD).innerText()}"`);
     if ((await status("qualifying_question_2")) !== "same" || (await status("qualifying_question_1")) !== "change") throw new Error("the questions: the one the bot holds is unchanged, the one it does not is a change");
     const unread = row("qualifying_question_3");
     if ((await status("qualifying_question_3")) !== "unread" || (await unread.locator('[data-testid="bot-field-line"]').innerText()).trim() !== "No agent on this bot reads qualifying_question_3 yet, so nothing is sent to it.") throw new Error("a field no agent reads gets the plain line");
     if ((await unread.locator('[data-testid="bot-field-before"], [data-testid="bot-field-after"], [data-testid="bot-field-same"]').count()) || (await page.content()).includes(byHand.qualifying_question_3)) throw new Error("a field the agent does not read shows no values");
+    if ((await status("ai_persona_role_cbf")) !== "unread") throw new Error("the persona, read by no agent here, is not sent");
     if ((await requests()).length !== 0) throw new Error("the preview sends nothing");
     const pushButton = page.locator('[data-testid="push-stage1"]');
     if ((await pushButton.innerText()).trim() !== "Push 4 changes to the bot") throw new Error(`the button says how many fields will change, got "${await pushButton.innerText()}"`);
+    // Every price and link is approved on its own before the Push opens; the button stays shut until then, and says why.
+    const eyesKeys = await page.locator('[data-testid="eyes-row"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-key")));
+    if (JSON.stringify(eyesKeys) !== JSON.stringify(["price.plan", `offer:${reset.id}.link`])) throw new Error(`the payment plan line and the link need eyes, got ${eyesKeys.join(", ")}`);
+    if (!(await pushButton.isDisabled())) throw new Error("the Push is shut while a line is not approved");
+    const holds = await page.locator('[data-testid="bot-hold"]').allInnerTexts();
+    if (JSON.stringify(holds.map((h) => h.trim())) !== JSON.stringify(["Not approved yet: Your payment plan line.", "Not approved yet: 90-Day Reset: the payment link."])) throw new Error(`the holds name each line, got ${holds.join(" | ")}`);
+    for (let i = 0; i < 2; i++) {
+      await submit(page, '[data-testid="eyes-row"][data-approved="no"] [data-testid="eyes-approve"]');
+      await preview.waitFor({ timeout: 20000 });
+    }
+    if ((await page.locator('[data-testid="eyes-row"][data-approved="yes"]').count()) !== 2 || (await pushButton.isDisabled())) throw new Error("both lines approved, one at a time, and the Push opens");
     // One log line per read of the bot: counts and times, never a value or the token.
     const readLine = readFileSync(join(__dirname, "..", "screenshots", "logs", "dev.log"), "utf8").split("\n").reverse().find((l) => l.includes("[stage1.read]") && l.includes(membership.id));
     if (!readLine || !/"agents":2,"fields":\d+,"agentsMs":\d+,"fieldsMs":\d+,"readMs":\d+/.test(readLine) || readLine.includes(TOKEN) || readLine.includes("Torres Nutrition")) throw new Error(`the read is logged with its counts and times and nothing else, got ${readLine}`);
@@ -149,8 +163,8 @@ async function main() {
     const pagedReads = (await (await fetch(`${mock}/__reads`)).json()) as { limit: number; page: number }[];
     if (pagedReads.some((r) => r.limit !== READ_BACK_LIMIT) || !pagedReads.some((r) => r.page === 2)) throw new Error(`the bot is read page by page at an explicit limit, got ${JSON.stringify(pagedReads.slice(0, 4))}`);
     const closing = (await page.locator('[data-testid="bot-nothing-to-push"]').innerText()).trim();
-    if (closing !== "Nothing to push: 6 unchanged, 1 not read by any agent.") throw new Error(`after the push, the closing line counts what happened, got "${closing}"`);
-    console.log(`✓ pressed twice: "Sending to your bot…" while out, one push of ${names.length} fields, one sync record; question 3, the calendar and the booking untouched`);
+    if (closing !== "Nothing to push: 6 unchanged, 2 not read by any agent.") throw new Error(`after the push, the closing line counts what happened, got "${closing}"`);
+    console.log(`✓ pressed twice: "Sending to your bot…" while out, one push of ${names.length} fields, one sync record; question 3, the persona, the calendar and the booking untouched`);
 
     // ── A 200 is not a match, and the read-back covers only what was sent. ──
     const pushedAt = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.clBotFieldsPushedAt;
@@ -168,13 +182,13 @@ async function main() {
     await Promise.all([page.waitForURL(/\?pushed=1/), pushButton.click()]);
     console.log(`✓ a 200 with a field silently dropped: "${refused.slice(0, 70)}"; the record moves only on a read-back that matches`);
 
-    // ── The offer retired: HelixOS last wrote the offers field and now has nothing for it, so the bot is told there is none; ──
+    // ── The offer taken off the bot: HelixOS last wrote the offers field and now has nothing for it, so the bot is told there is none; ──
     // ── edited by hand since, it is left out and the bot keeps what it holds. Never "" either way. ──
-    await db.update(schema.offers).set({ status: "draft" }).where(eq(schema.offers.id, reset.id));
+    await db.update(schema.offers).set({ botRole: "not_on_bot" }).where(eq(schema.offers.id, reset.id));
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
     const sentence = STAGE1_NOTHING_CURRENT[PRODUCT_FIELD];
-    if ((await status(PRODUCT_FIELD)) !== "change" || !(await row(PRODUCT_FIELD).innerText()).includes("HelixOS wrote this and now has nothing for it, so your bot is told: no current offer.") || !(await before(PRODUCT_FIELD)).startsWith("90-Day Reset") || (await after(PRODUCT_FIELD)) !== "No current offer") throw new Error(`a retired offer HelixOS wrote is a change to "No current offer", got "${await row(PRODUCT_FIELD).innerText()}"`);
+    if ((await status(PRODUCT_FIELD)) !== "change" || !(await row(PRODUCT_FIELD).innerText()).includes("HelixOS wrote this and now has nothing for it, so your bot is told: no current offer.") || !(await before(PRODUCT_FIELD)).startsWith("PRICE\n90-Day Reset") || (await after(PRODUCT_FIELD)) !== "No current offer") throw new Error(`a retired offer HelixOS wrote is a change to "No current offer", got "${await row(PRODUCT_FIELD).innerText()}"`);
     if ((await page.content()).includes(sentence)) throw new Error("the preview says no current offer and never quotes the sentence back");
     await Promise.all([page.waitForURL(/\?pushed=1/), pushButton.click()]);
     reqs = await requests();
@@ -187,12 +201,13 @@ async function main() {
     await preview.waitFor({ timeout: 20000 });
     if ((await status(PRODUCT_FIELD)) !== "empty" || !(await row(PRODUCT_FIELD).innerText()).includes("your bot holds text HelixOS did not send, so nothing is sent; your bot keeps what it holds.")) throw new Error("text HelixOS did not send is left out");
     const leftOut = (await page.locator('[data-testid="bot-nothing-to-push"]').innerText()).trim();
-    if (leftOut !== "Nothing to push: 5 unchanged, 1 not read by any agent, 1 with nothing in HelixOS.") throw new Error(`the closing line counts the field left out, got "${leftOut}"`);
+    if (leftOut !== "Nothing to push: 5 unchanged, 2 not read by any agent, 1 with nothing in HelixOS.") throw new Error(`the closing line counts the field left out, got "${leftOut}"`);
     if ((await requests()).length !== reqs.length || reqs.some((r) => r.fields.some((f) => !f.value.trim()))) throw new Error("nothing sent, and never an empty value");
-    await db.update(schema.offers).set({ status: "live" }).where(eq(schema.offers.id, reset.id));
-    console.log(`✓ offer retired: "No current offer" pushed over what HelixOS wrote and read back; edited by hand, it is left out ("${leftOut}")`);
+    await db.update(schema.offers).set({ botRole: "core" }).where(eq(schema.offers.id, reset.id));
+    console.log(`✓ offer off the bot: "No current offer" pushed over what HelixOS wrote and read back; edited by hand, it is left out ("${leftOut}")`);
 
-    // ── Never quote prices: ticked on the Offer by the client, nothing sent on save; the Brief says so; the push leaves it out. ──
+    // ── Price mode "never", set by the client on their own "Your bot" page: nothing sent on save; the page says so; the push ──
+    // ── sends the old deflect line in place of any price. ──
     const countBefore = reqs.length;
     await page.goto(`${base}/settings`);
     await page.click('button:has-text("Log out")');
@@ -200,19 +215,17 @@ async function main() {
     await signIn("client");
     // The coach's own line for price questions, one for the coach, not per offer.
     const PRICE_LINE = "Happy to walk you through the options on a call, once I know what you need.";
-    await page.goto(`${base}/settings`);
-    await page.fill('[data-testid="price-answer"]', PRICE_LINE);
-    await submit(page, 'form:has([data-testid="price-answer"]) button[type="submit"]');
-    if ((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.priceAnswer !== PRICE_LINE) throw new Error("the price line is saved on the member");
-    await page.goto(`${base}/offers/${reset.id}`);
-    await page.locator('[data-testid="never-quote-price"]').check();
-    await submit(page, 'button:has-text("Save offer")');
-    if (!(await db.query.offers.findFirst({ where: eq(schema.offers.id, reset.id) }))!.neverQuotePrice) throw new Error("the tick is saved on the offer");
-    if ((await requests()).length !== countBefore) throw new Error("saving an offer pushes nothing on its own");
     await page.goto(`${base}/brain`);
+    await page.locator('[data-testid="bot-price-mode"]').selectOption("never");
+    await page.fill('[data-testid="bot-price-answer"]', PRICE_LINE);
+    await submit(page, '[data-testid="bot-lines-save"]');
+    await page.locator('[data-testid="bot-lines-saved"]').waitFor({ timeout: 15000 });
+    const saved = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!;
+    if (saved.priceMode !== "never" || saved.priceAnswer !== PRICE_LINE) throw new Error("the price mode and line are saved on the member");
+    if ((await requests()).length !== countBefore) throw new Error("saving the lines pushes nothing on its own");
     const brief = (await page.locator('[data-testid="brief-price"]').innerText()).trim();
-    if (!brief.startsWith("How it handles price: it never states a price.") || !brief.includes("Never quote prices is ticked on 90-Day Reset, so that price is left out of what your bot is sent") || !brief.includes(`it answers with your line: “${PRICE_LINE}”`)) throw new Error(`the Brief says it never states a price and quotes the coach's line, got "${brief}"`);
-    if (/1,500/.test(await page.locator('[data-testid="brief-offers"]').innerText())) throw new Error("the Brief's offer line carries no price");
+    if (brief !== `How it handles price: it never states a price, and answers with your line: “${PRICE_LINE}”`) throw new Error(`the page says it never states a price and quotes the coach's line, got "${brief}"`);
+    if (/1,500/.test(await page.locator('[data-testid="brief-offers"]').innerText())) throw new Error("the offer line carries no price");
     await page.goto(`${base}/settings`);
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
@@ -224,29 +237,30 @@ async function main() {
     if ((await changedLine.innerText()).trim() !== "changed since the last push") throw new Error("the row says changed since the last push");
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
-    if (!(await page.locator('[data-testid="bot-prices-left-out"]').innerText()).includes("90-Day Reset")) throw new Error("the preview says the price is left out");
     const { priceDeflection, PRICE_ANSWER_DEFAULT } = await import("@/lib/engine/bot-fields");
-    const offerLine = (await after(PRODUCT_FIELD)).split("\n");
-    if (offerLine.length !== 2 || !offerLine[0].startsWith("90-Day Reset") || offerLine[1] !== priceDeflection(PRICE_LINE) || /\$|1,500|USD/.test(offerLine.join("\n"))) throw new Error(`the offers field goes without its price, with the coach's line appended once, got "${offerLine.join(" / ")}"`);
+    const neverText = `PRICE\n${priceDeflection(PRICE_LINE)}\n\nCORE OFFER (90-Day Reset)\nLink: ${LINK}`;
+    if ((await after(PRODUCT_FIELD)) !== neverText) throw new Error(`the offers field goes without its price, with the coach's line, got "${await after(PRODUCT_FIELD)}"`);
+    // No payment plan line is said in this mode, so only the link needs eyes, and it was approved already.
+    const neverKeys = await page.locator('[data-testid="eyes-row"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-key")}:${e.getAttribute("data-approved")}`));
+    if (JSON.stringify(neverKeys) !== JSON.stringify([`offer:${reset.id}.link:yes`])) throw new Error(`in never mode only the link needs eyes, still approved, got ${neverKeys.join(", ")}`);
     await Promise.all([page.waitForURL(/\?pushed=1/), pushButton.click()]);
     const quiet = (await requests()).at(-1)!.fields.find((f) => f.name === PRODUCT_FIELD_OLD)?.value ?? "";
-    if (quiet !== offerLine.join("\n") || /\$|1,500/.test(quiet)) throw new Error(`the push sends what the preview showed, with no price, got "${quiet}"`);
-    // Unticked: no appended sentence, and the price back. An empty line with a ticked offer: the default, never an empty quote.
-    await db.update(schema.offers).set({ neverQuotePrice: false }).where(eq(schema.offers.id, reset.id));
+    if (quiet !== neverText || /\$|1,500/.test(quiet.replace(LINK, ""))) throw new Error(`the push sends what the preview showed, with no price, got "${quiet}"`);
+    // Back to full: the price is back and no deflect line. An empty line in never mode: the default, never an empty quote.
+    await db.update(schema.memberships).set({ priceMode: "full" }).where(eq(schema.memberships.id, membership.id));
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
     const quoted = await after(PRODUCT_FIELD);
-    if (!/USD \$1,500/.test(quoted) || /asks about price/.test(quoted)) throw new Error(`unticked, the price is back and nothing is appended, got "${quoted}"`);
-    await db.update(schema.offers).set({ neverQuotePrice: true }).where(eq(schema.offers.id, reset.id));
-    await db.update(schema.memberships).set({ priceAnswer: null }).where(eq(schema.memberships.id, membership.id));
+    if (!/USD \$1,500/.test(quoted) || /never state a price/.test(quoted)) throw new Error(`in full mode the price is back and nothing deflects, got "${quoted}"`);
+    await db.update(schema.memberships).set({ priceMode: "never", priceAnswer: null }).where(eq(schema.memberships.id, membership.id));
     await page.goto(`${base}/coach/${membership.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
-    if (!(await after(PRODUCT_FIELD)).endsWith(priceDeflection(null)) || !(await after(PRODUCT_FIELD)).includes(`"${PRICE_ANSWER_DEFAULT}"`) || (await after(PRODUCT_FIELD)).includes('""')) throw new Error("an empty line uses the default, never an empty quote");
+    if (!(await after(PRODUCT_FIELD)).includes(priceDeflection(null)) || !(await after(PRODUCT_FIELD)).includes(`"${PRICE_ANSWER_DEFAULT}"`) || (await after(PRODUCT_FIELD)).includes('""')) throw new Error("an empty line uses the default, never an empty quote");
     await db.update(schema.memberships).set({ priceAnswer: PRICE_LINE }).where(eq(schema.memberships.id, membership.id));
     await page.goto(`${base}/coach`);
     await page.locator(`li:has(${mayaForm}) [data-testid="review-bot"]`).waitFor({ timeout: 15000 });
     if (await page.locator(`li:has(${mayaForm}) [data-testid="bot-changed-since"]`).count()) throw new Error("after the push, the row no longer says changed");
-    console.log(`✓ never quote prices: the Brief says so, the offer line goes as "${quiet}"; the Coach row said "changed since the last push" until it went`);
+    console.log(`✓ price mode never: set on the client's page, nothing sent on save, the page says so; the offers field goes with the deflect line and no price; the Coach row said "changed since the last push" until it went`);
 
     // ── What is sent is what was shown: a plan that moved since the page was read sends nothing. ──
     await post("/__seed", { business_time_zone_cbf: "Pacific/Chatham" });
@@ -302,10 +316,10 @@ async function main() {
     const own = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUser.id), eq(schema.memberships.workspaceId, membership.workspaceId)) }))!;
     await page.goto(`${base}/coach/${own.id}/bot`);
     await preview.waitFor({ timeout: 20000 });
-    if (!/What a push would change on your bot/.test(await page.locator("h1").innerText())) throw new Error("the coach's own bot has the same page");
+    if ((await page.locator("h1").innerText()).trim() !== "Your bot") throw new Error("the coach's own bot has the same page");
     console.log("✓ the coach's own bot: the same before-and-after page");
   } finally {
-    await db.update(schema.offers).set({ neverQuotePrice: false, status: "live" }).where(eq(schema.offers.id, reset.id));
+    await db.update(schema.offers).set({ status: "live", botRole: "not_on_bot" }).where(eq(schema.offers.id, reset.id));
     await browser.close();
     if (proc?.pid) try { process.kill(-proc.pid); } catch { /* already gone */ }
   }

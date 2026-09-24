@@ -19,7 +19,7 @@ export const PRODUCT_FIELD_OLD = "ai_product_&_service_cbf";
 export const TEMPLATE_BOT_FIELDS = ["business_name_cbf", "business_time_zone_cbf", PRODUCT_FIELD, "ai_persona_role_cbf", "ai_skills_cbf", "ai_constraints_cbf", "qualifying_question_1", "qualifying_question_2", "qualifying_question_3", "calendar_id"] as const;
 
 /** Stage 1: facts with one right answer, plus the house constraints block and the three qualifying questions with their defaults. */
-export const STAGE1_FIELDS = ["business_name_cbf", "business_time_zone_cbf", PRODUCT_FIELD, "ai_constraints_cbf", "qualifying_question_1", "qualifying_question_2", "qualifying_question_3"] as const;
+export const STAGE1_FIELDS = ["business_name_cbf", "business_time_zone_cbf", "ai_persona_role_cbf", PRODUCT_FIELD, "ai_constraints_cbf", "qualifying_question_1", "qualifying_question_2", "qualifying_question_3"] as const;
 export type Stage1Field = (typeof STAGE1_FIELDS)[number];
 /** A Stage 1 field's older name, tried only when the bot has no field by the current one. */
 export const FIELD_FALLBACKS: Partial<Record<Stage1Field, string>> = { [PRODUCT_FIELD]: PRODUCT_FIELD_OLD };
@@ -30,8 +30,11 @@ export const FIELD_FALLBACKS: Partial<Record<Stage1Field, string>> = { [PRODUCT_
  */
 export const BOT_WRITTEN_FIELDS = ["calendar_id", "appointment_id", "booked_time"] as const;
 
-/** Stage 2, held until the Essence intake stops handing clients somebody else's words: paragraphs of the client's voice. */
-export const STAGE2_FIELDS = ["ai_persona_role_cbf", "ai_skills_cbf"] as const;
+/**
+ * Stage 2, held until the Essence intake stops handing clients somebody else's words. The persona left Stage 2 on 24 Sep (rev
+ * 80): it is the coach's own "Who your bot speaks as", sent verbatim, not drafted prose.
+ */
+export const STAGE2_FIELDS = ["ai_skills_cbf"] as const;
 
 for (const f of STAGE1_FIELDS) if ((BOT_WRITTEN_FIELDS as readonly string[]).includes(f)) throw new Error(`bot-fields: ${f} is written by the bot and cannot be pushed`);
 
@@ -50,69 +53,228 @@ export const HOUSE_CONSTRAINT_LINES = [
 /** The block with the business name written in: a bot field's value is plain text, so the name is filled here, not by the bot. No name, no block: the push refuses instead. */
 export const houseConstraints = (businessName: string): string => HOUSE_CONSTRAINT_LINES.map((l) => l.replace("{business_name_cbf}", businessName.trim())).join("\n");
 
-/** Why a Stage 1 payload cannot go: a fact with no value is a gap in the record, not a sentence to ship around. */
-export function stage1Problems(p: BotFieldPayload): string[] {
-  return p.business_name_cbf.trim() ? [] : ["No business name on the record: set it on the member's profile or the workspace."];
-}
-
-/** Provisional questions the bot asks before booking, until the coach writes their own on the Offer. On the sentence list. */
+/** Provisional questions the bot asks before booking, until the coach writes their own. On the sentence list. */
 export const QUALIFYING_DEFAULTS: [string, string, string] = [
   "What are you working towards right now, in a sentence?",
   "What have you already tried, and what happened?",
   "If we found a fit, when would you want to start?",
 ];
 
-export type OfferFacts = { name: string; promise: string | null; container: string; price: number; currency: string; length: string | null; status: string; neverQuotePrice?: boolean | null; qualifyingQuestion1?: string | null; qualifyingQuestion2?: string | null; qualifyingQuestion3?: string | null };
-export type Stage1Input = { businessName: string | null | undefined; workspaceName: string; timezone: string; offers: OfferFacts[]; priceAnswer?: string | null };
+/*
+ * The bot sales rules (handoff rev 80, from Danno's 23 Sep role-play). The offers field is composed in sections from the coach's
+ * own lines and the offers that have a bot role, in the house wording the golden fixture fixes
+ * (scripts/fixtures/golden-bot-danno.json): Danno's record composes to it byte for byte, and a unit test holds it there.
+ */
+export type BotRole = "entry" | "core" | "one_on_one" | "not_on_bot";
+export const BOT_ROLES: BotRole[] = ["not_on_bot", "entry", "core", "one_on_one"];
+export const BOT_ROLE_LABEL: Record<BotRole, string> = {
+  not_on_bot: "Not on your bot",
+  entry: "Entry offer: sold in chat with a payment link",
+  core: "Core offer: a deposit link for buyers who say they're ready",
+  one_on_one: "One-on-one: call only, never a link",
+};
+export type PriceMode = "never" | "range" | "full";
+export const PRICE_MODES: PriceMode[] = ["range", "never", "full"];
+export const PRICE_MODE_LABEL: Record<PriceMode, string> = {
+  range: "Give a price range when asked, never the full price",
+  never: "Never talk price in chat: answer with my line instead",
+  full: "State each offer's price",
+};
 
-/**
- * The coach's answer when someone asks about price, one line for the coach, not per offer (Danno, 23 Sep: price is discussed on
- * the sales call only). Empty means this default, which is also Danno's own. On the sentence list.
- */
-export const PRICE_ANSWER_DEFAULT = "We have multiple services for different business needs, and I'd be happy to go over all of that on a call. But first, it might make more sense to find out what you're needing support with exactly.";
-export const priceAnswerFor = (line: string | null | undefined): string => line?.trim() || PRICE_ANSWER_DEFAULT;
-/**
- * Appended once to the offers field, after the last offer line, when any live offer is ticked Never quote prices: the price is
- * already left out of that offer's line, and this tells the agent what to say instead of guessing. Nothing is appended when no
- * offer is ticked.
- */
-export const priceDeflection = (line: string | null | undefined): string => `If someone asks about price, cost or payment plans, never state a price, a payment plan or a discount. Say something like: "${priceAnswerFor(line)}" Then ask your next qualifying question.`;
+export type OfferFacts = {
+  id?: string;
+  name: string;
+  promise: string | null;
+  container: string;
+  price: number;
+  currency: string;
+  length: string | null;
+  status: string;
+  botRole?: BotRole | null;
+  botName?: string | null;
+  botFor?: string | null;
+  botEndResult?: string | null;
+  botTerms?: string | null;
+  depositAmount?: number | null;
+  refundableIfNotFit?: boolean | null;
+  botRefundLine?: string | null;
+  guaranteeCovered?: boolean | null;
+  paymentLink?: string | null;
+};
+/** The coach-level lines, all the coach's own words. */
+export type CoachBot = {
+  whatIDo?: string | null;
+  priceMode?: PriceMode | null;
+  rangeLine?: string | null;
+  paymentPlanLine?: string | null;
+  priceAnswer?: string | null;
+  guaranteeLine?: string | null;
+  guaranteeCoverageLine?: string | null;
+  houseRules?: string[] | null;
+  persona?: string | null;
+  questions?: (string | null | undefined)[];
+};
+export type Stage1Input = { businessName: string | null | undefined; workspaceName: string; timezone: string; offers: OfferFacts[]; coach?: CoachBot };
 export type BotFieldPayload = Record<Stage1Field, string>;
 
 /**
- * One line per live offer, facts only: name, promise, container, price with currency, length. Never a paragraph from the Essence.
- * An offer ticked "never quote prices" goes without its price: the house constraints already forbid a price that is not in this
- * field, so leaving it out is what keeps the bot from stating one.
+ * The coach's answer when someone asks about price in price mode "never", one line for the coach, not per offer. Empty means
+ * this default. On the sentence list.
  */
-export function productLine(o: OfferFacts): string {
-  return [o.name, o.promise?.trim() || "", o.container, o.neverQuotePrice ? "" : formatPrice(o.price, o.currency), o.length?.trim() || ""].filter(Boolean).join(" · ");
-}
-/** The live offers whose price is left out of what the bot is sent, by name, for the Brief and the preview to say so. */
-export const pricesLeftOut = (offers: OfferFacts[]): string[] => offers.filter((o) => o.status === "live" && o.neverQuotePrice).map((o) => o.name);
+export const PRICE_ANSWER_DEFAULT = "We have multiple services for different business needs, and I'd be happy to go over all of that on a call. But first, it might make more sense to find out what you're needing support with exactly.";
+export const priceAnswerFor = (line: string | null | undefined): string => line?.trim() || PRICE_ANSWER_DEFAULT;
+/** Price mode "never": the deflect line, as it was sent before the bot sales rules (a regression the walk holds). */
+export const priceDeflection = (line: string | null | undefined): string => `If someone asks about price, cost or payment plans, never state a price, a payment plan or a discount. Say something like: "${priceAnswerFor(line)}" Then ask your next qualifying question.`;
+/** Danno's approved wording, the default for every coach until they write their own. */
+export const PAYMENT_PLAN_LINE_DEFAULT = "Yes, there are options. I'll walk you through them on the call.";
+/** Suggested when an offer is refundable and the coach has not written its line. */
+export const REFUND_LINE_DEFAULT = "The deposit is fully refunded if our call shows it's not a fit.";
 
-/** The three questions: the live offer's own when written, the house default when not. */
-export function qualifyingQuestions(o: OfferFacts | undefined): [string, string, string] {
-  return [o?.qualifyingQuestion1?.trim() || QUALIFYING_DEFAULTS[0], o?.qualifyingQuestion2?.trim() || QUALIFYING_DEFAULTS[1], o?.qualifyingQuestion3?.trim() || QUALIFYING_DEFAULTS[2]];
+const ROLE_TITLE: Record<Exclude<BotRole, "not_on_bot">, string> = { entry: "ENTRY OFFER", core: "CORE OFFER", one_on_one: "ONE-ON-ONE" };
+const ROLE_NOUN: Record<Exclude<BotRole, "not_on_bot">, string> = { entry: "the entry offer", core: "the core offer", one_on_one: "one-on-one programs" };
+const clean = (v: string | null | undefined): string => (v ?? "").trim();
+/** "A", "A and B", "A, B and C". */
+export const joinNames = (names: string[]): string => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+/** The offers that feed the bot: a bot role, whatever their live or draft state elsewhere. Entry first, then core, then one-on-one. */
+export const botOffers = (offers: OfferFacts[]): OfferFacts[] => (["entry", "core", "one_on_one"] as const).flatMap((r) => offers.filter((o) => o.botRole === r));
+export const botNameOf = (o: OfferFacts): string => clean(o.botName) || clean(o.name);
+export const refundLineOf = (o: OfferFacts): string => (o.refundableIfNotFit ? clean(o.botRefundLine) || REFUND_LINE_DEFAULT : "");
+export const paymentPlanLineOf = (c: CoachBot): string => clean(c.paymentPlanLine) || PAYMENT_PLAN_LINE_DEFAULT;
+
+export type ProductSection = { key: string; title: string; text: string };
+/** The offers field, section by section, in the fixture's order. Empty when there is no WHAT I DO and no offer on the bot. */
+export function productSections(input: Stage1Input): ProductSection[] {
+  const c = input.coach ?? {};
+  const offers = botOffers(input.offers);
+  const what = [clean(c.whatIDo), ...offers.map((o) => clean(o.botEndResult))].filter(Boolean);
+  if (!what.length && !offers.length) return [];
+  const out: ProductSection[] = [];
+  if (what.length) out.push({ key: "what", title: "What I do", text: ["WHAT I DO", ...what].join("\n") });
+  const mode = c.priceMode ?? "full";
+  if (mode === "never") out.push({ key: "price", title: "Price", text: ["PRICE", priceDeflection(c.priceAnswer)].join("\n") });
+  else if (mode === "range" && clean(c.rangeLine))
+    out.push({ key: "price", title: "Price", text: ["PRICE", `If someone asks about price, say: "${clean(c.rangeLine)}" Then ask your next question.`, "Never state the full price of the core offer, a discount, or any custom deal.", `If they ask about payment plans, say: "${paymentPlanLineOf(c)}"`].join("\n") });
+  else if (mode === "full" && offers.length) out.push({ key: "price", title: "Price", text: ["PRICE", ...offers.map((o) => `${botNameOf(o)}: ${formatPrice(o.price, o.currency)}.`), `If they ask about payment plans, say: "${paymentPlanLineOf(c)}"`].join("\n") });
+  if (clean(c.guaranteeLine)) out.push({ key: "guarantee", title: "Guarantee", text: ["GUARANTEE", `If someone asks for a guarantee, say exactly: "${clean(c.guaranteeLine)}" Say nothing else about results.`, clean(c.guaranteeCoverageLine)].filter(Boolean).join("\n") });
+  for (const o of offers.filter((x) => x.botRole === "entry" || x.botRole === "core")) {
+    const role = o.botRole as "entry" | "core";
+    out.push({
+      key: `offer:${o.id ?? botNameOf(o)}`,
+      title: `${role === "entry" ? "Entry offer" : "Core offer"}: ${botNameOf(o)}`,
+      text: [`${ROLE_TITLE[role]} (${botNameOf(o)})`, clean(o.botFor) && `For: ${clean(o.botFor)}`, clean(o.botTerms) && `Terms: ${clean(o.botTerms)}`, clean(o.paymentLink) && `Link: ${clean(o.paymentLink)}`, refundLineOf(o)].filter(Boolean).join("\n"),
+    });
+  }
+  const one = offers.filter((o) => o.botRole === "one_on_one");
+  if (one.length) out.push({ key: "one_on_one", title: "One-on-one", text: [`ONE-ON-ONE (${joinNames(one.map(botNameOf))})`, "Call only. Never send a link for these."].join("\n") });
+  return out;
+}
+
+/** A suggestion for what the guarantee covers, from the offers' roles; the coach's own line is what is sent. */
+export function suggestCoverageLine(offers: OfferFacts[]): string {
+  const on = botOffers(offers);
+  const covered = on.filter((o) => o.guaranteeCovered);
+  if (!covered.length) return "";
+  const nouns = (list: OfferFacts[]) => joinNames([...new Set(list.map((o) => ROLE_NOUN[o.botRole as keyof typeof ROLE_NOUN]))]);
+  const not = on.filter((o) => !o.guaranteeCovered);
+  let line = `The guarantee covers ${nouns(covered)} only${not.length ? `, not ${nouns(not)}` : ""}.`;
+  const entry = not.find((o) => o.botRole === "entry" && o.refundableIfNotFit && o.depositAmount);
+  if (entry) line += ` If someone on the entry offer path asks, say the guarantee is for the programs it covers, and that their ${formatPrice(entry.depositAmount ?? 0, entry.currency)} is refunded if our call shows it's not a fit.`;
+  return line;
+}
+
+/**
+ * The house rules as the bot gets them: the coach's own list, numbered in their order, exactly as written (a number typed at the
+ * start of a line is not doubled). An empty list means the six house lines, as before; those are only ever a new coach's
+ * starting text, never prepended to a coach's own.
+ */
+export const houseRuleSeed = (businessName: string): string[] => HOUSE_CONSTRAINT_LINES.map((l) => l.replace("{business_name_cbf}", businessName.trim()));
+export function houseRulesText(rules: string[] | null | undefined, businessName: string): string {
+  const own = (rules ?? []).map((r) => r.replace(/^\s*\d+[.)]\s+/, "").trim()).filter(Boolean);
+  return own.length ? own.map((r, i) => `${i + 1}. ${r}`).join("\n") : houseConstraints(businessName);
+}
+
+/** The three questions: the coach's own when written, the house default when blank. */
+export function qualifyingQuestions(questions: (string | null | undefined)[] | undefined): [string, string, string] {
+  return [0, 1, 2].map((i) => clean(questions?.[i]) || QUALIFYING_DEFAULTS[i]) as [string, string, string];
 }
 
 /**
  * The Stage 1 payload: exactly STAGE1_FIELDS, every one present, composed from the record. A source the client has not filled
- * composes empty here, and the plan leaves it out of what is sent: Community Loyalty refuses an empty value (422, "The
- * data.0.value field is required."), and the bot keeps what it holds.
+ * composes empty here, and the plan leaves it out of what is sent (or sends its nothing-current sentence where HelixOS wrote
+ * the field last): Community Loyalty refuses an empty value.
  */
 export function stage1Payload(input: Stage1Input): BotFieldPayload {
-  const live = input.offers.filter((o) => o.status === "live");
-  const [q1, q2, q3] = qualifyingQuestions(live[0]);
-  const businessName = (input.businessName ?? "").trim() || input.workspaceName.trim();
+  const businessName = clean(input.businessName) || input.workspaceName.trim();
+  const c = input.coach ?? {};
+  const [q1, q2, q3] = qualifyingQuestions(c.questions);
   return {
     business_name_cbf: businessName,
     business_time_zone_cbf: input.timezone,
-    [PRODUCT_FIELD]: live.length ? [...live.map(productLine), ...(live.some((o) => o.neverQuotePrice) ? [priceDeflection(input.priceAnswer)] : [])].join("\n") : "",
-    ai_constraints_cbf: houseConstraints(businessName),
+    ai_persona_role_cbf: clean(c.persona),
+    [PRODUCT_FIELD]: productSections(input).map((s) => s.text).join("\n\n"),
+    ai_constraints_cbf: houseRulesText(c.houseRules, businessName),
     qualifying_question_1: q1,
     qualifying_question_2: q2,
     qualifying_question_3: q3,
-  };
+  } as BotFieldPayload;
+}
+
+/** Community Loyalty's limit on one bot field. */
+export const BOT_FIELD_BUDGET = 20000;
+
+/**
+ * What stops a push, each in a sentence the coach can act on: no business name, an entry or core offer with no payment link,
+ * range mode with no range line, or a field over the platform's limit (named by its longest section; nothing is dropped).
+ */
+export function stage1Problems(input: Stage1Input, p: BotFieldPayload = stage1Payload(input)): string[] {
+  const out: string[] = [];
+  if (!p.business_name_cbf.trim()) out.push("No business name on the record: set it on the member's profile or the workspace.");
+  for (const o of botOffers(input.offers)) {
+    if ((o.botRole === "entry" || o.botRole === "core") && !clean(o.paymentLink)) out.push(`${botNameOf(o)} is ${o.botRole === "entry" ? "an entry" : "a core"} offer on your bot with no payment link. Add the link on the Offer, or change its role.`);
+  }
+  const c = input.coach ?? {};
+  if (c.priceMode === "range" && !clean(c.rangeLine) && botOffers(input.offers).length) out.push("Price is set to a range, but there is no range line yet. Write it on Your bot.");
+  for (const f of STAGE1_FIELDS) {
+    const n = p[f].length;
+    if (n <= BOT_FIELD_BUDGET) continue;
+    if (f === PRODUCT_FIELD) {
+      const longest = [...productSections(input)].sort((a, b) => b.text.length - a.text.length)[0];
+      out.push(`The offers field is ${n.toLocaleString()} characters, over the ${BOT_FIELD_BUDGET.toLocaleString()} Community Loyalty holds. The longest section is ${longest.title} (${longest.text.length.toLocaleString()}). Shorten it; nothing is dropped.`);
+    } else out.push(`${f} is ${n.toLocaleString()} characters, over the ${BOT_FIELD_BUDGET.toLocaleString()} Community Loyalty holds. Shorten it; nothing is dropped.`);
+  }
+  return out;
+}
+
+/** Worth saying before a push, never a block. */
+export function stage1Warnings(input: Stage1Input): string[] {
+  const c = input.coach ?? {};
+  const out: string[] = [];
+  if (clean(c.guaranteeLine) && !botOffers(input.offers).some((o) => o.guaranteeCovered)) out.push("Your guarantee is on, but no offer on your bot is marked as covered by it.");
+  return out;
+}
+
+/**
+ * The lines a person must read and approve one at a time before a push (Needs your eyes): the range line, the payment plan
+ * line, the guarantee and what it covers, and each entry or core offer's terms, link and refund line. Each is keyed so an
+ * approval of its exact text can be recorded; a changed line needs approving again. Only lines that will be sent are listed.
+ */
+export type EyesLine = { key: string; label: string; text: string };
+export function needsEyes(input: Stage1Input): EyesLine[] {
+  const c = input.coach ?? {};
+  const offers = botOffers(input.offers);
+  const out: EyesLine[] = [];
+  if (!offers.length && !clean(c.whatIDo)) return out;
+  if (c.priceMode === "range" && clean(c.rangeLine)) out.push({ key: "price.range", label: "Your price range line", text: clean(c.rangeLine) });
+  if (c.priceMode === "range" || (c.priceMode ?? "full") === "full") out.push({ key: "price.plan", label: "Your payment plan line", text: paymentPlanLineOf(c) });
+  if (clean(c.guaranteeLine)) out.push({ key: "guarantee.line", label: "Your guarantee, as the bot says it", text: clean(c.guaranteeLine) });
+  if (clean(c.guaranteeLine) && clean(c.guaranteeCoverageLine)) out.push({ key: "guarantee.coverage", label: "What the guarantee covers", text: clean(c.guaranteeCoverageLine) });
+  for (const o of offers.filter((x) => x.botRole === "entry" || x.botRole === "core")) {
+    const id = o.id ?? botNameOf(o);
+    if (clean(o.botTerms)) out.push({ key: `offer:${id}.terms`, label: `${botNameOf(o)}: the terms and deposit`, text: clean(o.botTerms) });
+    if (clean(o.paymentLink)) out.push({ key: `offer:${id}.link`, label: `${botNameOf(o)}: the payment link`, text: clean(o.paymentLink) });
+    if (refundLineOf(o)) out.push({ key: `offer:${id}.refund`, label: `${botNameOf(o)}: the refund line`, text: refundLineOf(o) });
+  }
+  return out;
 }
 
 /** Nothing has changed since the last push: the bot already holds exactly this. */
@@ -132,6 +294,7 @@ export function samePayload(last: Record<string, string> | null | undefined, nex
 export const STAGE1_NOTHING_CURRENT: Record<Stage1Field, string> = {
   business_name_cbf: "No business name is set. Do not name a business; say you are an assistant and offer a call with the coach.",
   business_time_zone_cbf: "No time zone is set. Do not state a time without saying which time zone it is in.",
+  ai_persona_role_cbf: "No persona is set. Speak plainly, as the coach's assistant, and offer a call with the coach.",
   [PRODUCT_FIELD]: "There is no offer open right now. Do not describe or price any product; offer a call with the coach instead.",
   ai_constraints_cbf: "No extra rules are set. Never invent a statistic, a result, a price or a testimonial.",
   qualifying_question_1: "No question set.",
@@ -144,6 +307,7 @@ export const isNothingCurrent = (field: Stage1Field, held: string | null | undef
 export const NOTHING_CURRENT_LABEL: Record<Stage1Field, string> = {
   business_name_cbf: "No business name",
   business_time_zone_cbf: "No time zone",
+  ai_persona_role_cbf: "No persona",
   [PRODUCT_FIELD]: "No current offer",
   ai_constraints_cbf: "No extra rules",
   qualifying_question_1: "No question set",
@@ -173,9 +337,13 @@ export function stage1Plan(payload: BotFieldPayload, held: { name: string; value
   const nsByName = Object.fromEntries(held.filter((h) => h.ns).map((h) => [h.name, h.ns]));
   return STAGE1_FIELDS.map((field) => {
     const older = FIELD_FALLBACKS[field];
-    const name = byName.has(field) ? field : older && byName.has(older) ? older : null;
+    const readers = (n: string) => agents.filter((a) => agentReadsFields(a, [n], nsByName).reads.length).map((a) => a.name);
+    // The current name when the bot has it, the older one when it has only that. With both on the bot, the one an agent actually
+    // reads (rev 80): writing the name nobody reads would change nothing the bot says.
+    const both = byName.has(field) && older && byName.has(older);
+    const name = both ? (!readers(field).length && readers(older).length ? older : field) : byName.has(field) ? field : older && byName.has(older) ? older : null;
     const fallback = Boolean(name && name !== field);
-    const readBy = name ? agents.filter((a) => agentReadsFields(a, [name], nsByName).reads.length).map((a) => a.name) : [];
+    const readBy = name ? readers(name) : [];
     const current = name ? (byName.get(name)?.value ?? null) : null;
     const row = { field, name, fallback, current, next: payload[field], readBy, nothing: false };
     const written = fallback ? `Written to ${name}, this bot's older name for ${field}.` : "";

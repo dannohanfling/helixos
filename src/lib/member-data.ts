@@ -71,6 +71,7 @@ export const CHILD_TABLES = [
   { label: "proof_attachment_reads", table: schema.proofAttachmentReads, fk: "attachmentId", parent: "proof_attachments" },
   { label: "lead_magnet_hits", table: schema.leadMagnetHits, fk: "magnetId", parent: "lead_magnets" },
   { label: "coach_notes", table: schema.coachNotes, fk: "membershipId", parent: "membership" },
+  { label: "bot_approvals", table: schema.botApprovals, fk: "membershipId", parent: "membership" },
 ] as const;
 export type ChildLabel = (typeof CHILD_TABLES)[number]["label"];
 
@@ -108,6 +109,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 };
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "clApiToken", "passWebhookUrl", "clDripWebhookUrl"]);
+export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);

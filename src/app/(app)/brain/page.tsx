@@ -5,8 +5,9 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { formatDateTime } from "@/lib/dates";
 import { acceptFaqAction, acceptSafeFaqAction, deleteFaqAction, importFaqAction, sendFaqAction, updateFaqAction } from "@/lib/actions/faq";
-import { briefAccessFor, faqFieldFor, isApprovedOrigin, payloadFor } from "@/lib/community-loyalty";
-import { NOTHING_CURRENT_LABEL, PRODUCT_FIELD, PRODUCT_FIELD_OLD, TEMPLATE_BOT_FIELDS, priceAnswerFor } from "@/lib/engine/bot-fields";
+import { briefAccessFor, changedSinceLastPush, faqFieldFor, isApprovedOrigin, lastPushedLine, payloadFor, stage1Preview } from "@/lib/community-loyalty";
+import { YourBotPanel } from "@/components/your-bot";
+import { NOTHING_CURRENT_LABEL, PRODUCT_FIELD, PRODUCT_FIELD_OLD, TEMPLATE_BOT_FIELDS, paymentPlanLineOf, priceAnswerFor } from "@/lib/engine/bot-fields";
 import { FAQ_EMPTY_SENT, FAQ_FIELD_BUDGET, agentReadsFields, isFaqEmptyValue, composeField, diffSinceSync, needsEyes, notReadWarning, rankEntries } from "@/lib/engine/faq";
 import { ACCEPT_LABEL, UNREVIEWED_LABEL, isUnreviewed } from "@/lib/engine/provenance";
 import { essenceFor } from "@/lib/queries/essence";
@@ -14,7 +15,7 @@ import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import type { FaqEntry } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 
-export const metadata = { title: "Bot Brief" };
+export const metadata = { title: "Your bot" };
 
 const s = (v: unknown): string => (typeof v === "string" ? v : Array.isArray(v) ? v.map(String).join(", ") : "");
 
@@ -30,13 +31,23 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const m = v.membership;
   const field = faqFieldFor(m);
-  const [entries, syncs, log, essence, { payload: stage1, pricesLeftOut }] = await Promise.all([
+  const [entries, syncs, log, essence, { payload: stage1, input }, preview, changedSince, pushedLine] = await Promise.all([
     db.query.faqEntries.findMany({ where: and(eq(schema.faqEntries.workspaceId, v.workspace.id), eq(schema.faqEntries.userId, v.user.id)), orderBy: [desc(schema.faqEntries.createdAt)] }),
     db.query.faqSyncs.findMany({ where: and(eq(schema.faqSyncs.workspaceId, v.workspace.id), eq(schema.faqSyncs.userId, v.user.id)), orderBy: [desc(schema.faqSyncs.createdAt), desc(sql`rowid`)], limit: 10 }),
     db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, v.workspace.id), eq(schema.syncEvents.userId, v.user.id), like(schema.syncEvents.event, "faq.%")), orderBy: [desc(schema.syncEvents.createdAt)], limit: 50 }),
     essenceFor(v.workspace.id, v.user.id),
     payloadFor(m),
+    stage1Preview(m),
+    changedSinceLastPush(m),
+    lastPushedLine(m, v.user.id, v.workspace.timezone),
   ]);
+  const coachLines = input.coach ?? {};
+  const priceLine =
+    coachLines.priceMode === "range"
+      ? `How it handles price: when asked, it gives your range, “${coachLines.rangeLine?.trim() || "(no range line yet)"}”, and on payment plans says “${paymentPlanLineOf(coachLines)}”. It never states the full price, a discount or a custom deal.`
+      : coachLines.priceMode === "never"
+        ? `How it handles price: it never states a price, and answers with your line: “${priceAnswerFor(coachLines.priceAnswer)}”`
+        : `How it handles price: it states each offer's price on your bot, and on payment plans says “${paymentPlanLineOf(coachLines)}”.`;
   const { hasToken: token, agent, blocked, warning, fieldVarType, nsByName, heldValue } = await briefAccessFor(m);
   // Push only what the agent reads: of the template's fields and the FAQ's own, the ones whose token is in the agent's prompt.
   const candidates = [...new Set([...TEMPLATE_BOT_FIELDS, PRODUCT_FIELD_OLD, field])];
@@ -53,11 +64,11 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
   const byCategory = new Map<string, FaqEntry[]>();
   for (const e of approved) byCategory.set(e.category || "Uncategorised", [...(byCategory.get(e.category || "Uncategorised") ?? []), e]);
   const identity = (essence.identity ?? {}) as Record<string, unknown>;
-  const who = [s(identity.name), s(identity.role)].filter(Boolean).join(", ");
+  const who = s(identity.bot_persona) || [s(identity.name), s(identity.role)].filter(Boolean).join(", ");
 
   return (
     <>
-      <PageHeader title="Bot Brief" subtitle="What your bot knows, in plain language, and the one place anything is sent to it. Nothing reaches Community Loyalty without your approval here." />
+      <PageHeader title="Your bot" subtitle="Everything your bot is sent, in plain language, and the one place it is sent from. Nothing reaches Community Loyalty without your approval here." />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" data-testid="brain-error" role="alert">{sp.error}</p>
       ) : null}
@@ -79,6 +90,10 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
         </Card>
       ) : null}
 
+      <div className="mb-6">
+        <YourBotPanel m={m} preview={preview} own whose="your bot" sp={sp} lastPushedLine={`${pushedLine}${changedSince ? " · changed since the last push" : ""}`} />
+      </div>
+      <h2 className="mb-3 text-lg font-semibold" id="faq">Your FAQ answers</h2>
       <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
         <div className="space-y-4">
           <Card title="Bring your knowledge in">
@@ -142,15 +157,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
               <div>
                 <dt className="font-semibold">What it offers</dt>
                 <dd className="whitespace-pre-line text-ink-2" data-testid="brief-offers">{stage1[PRODUCT_FIELD] || `${NOTHING_CURRENT_LABEL[PRODUCT_FIELD]}.`}</dd>
-                <dd className="text-xs text-ink-3" data-testid="brief-price">
-                  {pricesLeftOut.length ? (
-                    <>
-                      How it handles price: it never states a price. Never quote prices is ticked on {pricesLeftOut.join(", ")}, so {pricesLeftOut.length === 1 ? "that price is" : "those prices are"} left out of what your bot is sent, and asked about price it answers with your line: &ldquo;{priceAnswerFor(m.priceAnswer)}&rdquo; Change the line under Settings.
-                    </>
-                  ) : (
-                    "How it handles price: it states the prices in its product field, and never one it is unsure of."
-                  )}
-                </dd>
+                <dd className="text-xs text-ink-3" data-testid="brief-price">{priceLine}</dd>
               </div>
               <div>
                 <dt className="font-semibold">What it knows · {approved.length} approved {approved.length === 1 ? "answer" : "answers"}</dt>

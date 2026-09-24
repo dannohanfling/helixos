@@ -112,8 +112,8 @@ export default async function CoachPage() {
   return (
     <>
       <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link>} />
-      <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">My Bot Brief →</Link>}>
-        <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your Bot Brief can send nothing until the token is here.</p>
+      <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">Your bot →</Link>}>
+        <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your bot page can send nothing until the token is here.</p>
         <form action={setMyBotAction} className="flex flex-wrap items-center gap-2" data-testid="my-bot">
           <input className="field min-w-56 flex-1 py-1 text-xs" name="clApiToken" type="password" autoComplete="off" data-testid="my-cl-api-token" placeholder={myBot.clApiToken ? "Saved ✓ — leave blank to keep it, or type clear to remove it" : "Community Loyalty API token (your own workspace)"} title="Your own uChat API token. It is a credential: stored sealed, never shown again. It lets HelixOS write your bot's fields." />
           <AgentField choices={agentsOf.get(myBot.id) ?? []} value={myBot.clAgentNs ?? ""} testId="my-cl-agent-ns" />
@@ -242,7 +242,7 @@ export default async function CoachPage() {
                     <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>
-                  {r.m.clApiToken ? <BotPushLine m={r.m} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
+                  {r.m.clApiToken ? <BotPushLine m={r.m} clientName={r.u?.name ?? null} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
                 </li>
               ))}
             </ul>
@@ -432,7 +432,7 @@ export default async function CoachPage() {
  * is taken by the push. A stored ns that is not on the bot any more keeps its own option, named, rather than being dropped.
  */
 function AgentField({ choices, value, testId }: { choices: { ns: string; name: string }[]; value: string; testId: string }) {
-  const title = "The Community Loyalty agent the Bot Brief reads and pushes to. On a bot with one agent, that one; on a bot with more, the one that answers questions.";
+  const title = "The Community Loyalty agent your bot page reads and pushes to. On a bot with one agent, that one; on a bot with more, the one that answers questions.";
   if (!choices.length) return <input className="field w-36 py-1 text-xs" name="clAgentNs" placeholder="CL agent (ai_agent_ns)" defaultValue={value} data-testid={testId} title={title} />;
   const stale = value && !choices.some((c) => c.ns === value);
   return (
@@ -448,15 +448,22 @@ function AgentField({ choices, value, testId }: { choices: { ns: string; name: s
 
 /**
  * A bot's Stage 1 line on the Coach page: when it was last pushed, the way to the before-and-after (nothing is pushed from here),
- * and, when the bot still carries the offers under the older field name, that name.
+ * and, when the bot still carries the offers under the older field name, that name. A client may push their own bot from their
+ * "Your bot" page; that push is named here against their row, with the time, since no other notice reaches the coach.
  */
-function BotPushLine({ m, productField, changed, tz }: { m: { id: string; clBotFields: Record<string, string>; clBotFieldsPushedAt: string | null }; productField: { name: string | null; fallback: boolean } | null; changed: boolean | null; tz: string }) {
+function BotPushLine({ m, clientName, productField, changed, tz }: { m: { id: string; userId: string; clBotFields: Record<string, string>; clBotFieldsPushedAt: string | null; clBotFieldsPushedBy: string | null }; clientName?: string | null; productField: { name: string | null; fallback: boolean } | null; changed: boolean | null; tz: string }) {
+  const byClient = clientName !== undefined && m.clBotFieldsPushedAt && m.clBotFieldsPushedBy === m.userId;
   return (
     <div className="mt-2 flex w-full flex-wrap items-center gap-2 text-[11px] text-ink-3">
       <Link href={`/coach/${m.id}/bot`} className="btn btn-ghost btn-xs" data-testid="review-bot" title="Reads the bot and shows, field by field, what a push would change. Nothing is sent from here.">
         Review bot push →
       </Link>
       <span data-testid="bot-fields-pushed">{m.clBotFieldsPushedAt ? `${Object.keys(m.clBotFields).length} fields held from HelixOS, last pushed ${formatDateTime(m.clBotFieldsPushedAt, tz)}` : "not pushed yet"}</span>
+      {byClient ? (
+        <span className="rounded bg-accent-soft px-1.5 py-0.5 font-medium text-ink-2" data-testid="bot-pushed-by-client">
+          pushed by client {clientName ?? ""}, {formatDateTime(m.clBotFieldsPushedAt!, tz)}
+        </span>
+      ) : null}
       {changed ? (
         <span className="rounded bg-warn-soft px-1.5 py-0.5 font-medium text-ink-2" data-testid="bot-changed-since">
           changed since the last push

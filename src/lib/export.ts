@@ -36,7 +36,8 @@ async function memberRows(label: MemberLabel, workspaceId: string, userId: strin
 /** A child table's rows: those whose parent is one of the member's own, found through the parent's own rows. */
 async function childRows(label: string, workspaceId: string, userId: string): Promise<Row[]> {
   const c = CHILD_TABLES.find((x) => x.label === label)!;
-  const parents = c.parent === "membership" ? [] : c.parent in MEMBER_TABLES ? await memberRows(c.parent as MemberLabel, workspaceId, userId) : await childRows(c.parent, workspaceId, userId);
+  // A child of the membership (bot_approvals) hangs off the member's own membership in this workspace.
+  const parents = c.parent === "membership" ? ((await db.select({ id: schema.memberships.id }).from(schema.memberships).where(and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)))) as Row[]) : c.parent in MEMBER_TABLES ? await memberRows(c.parent as MemberLabel, workspaceId, userId) : await childRows(c.parent, workspaceId, userId);
   const ids = parents.map((p) => p.id as string);
   return ids.length ? ((await db.select().from(c.table).where(inArray(col(c.table, c.fk), ids))) as Row[]) : [];
 }

@@ -18,8 +18,9 @@ import { createHash } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
-import { nowIso } from "@/lib/dates";
-import { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, STAGE1_FIELDS, assertStorable, botFieldsRequest, morePages, parseBotFields, planPayload, pricesLeftOut, readBackMismatches, stage1Payload, stage1Plan, stage1Problems, type BotFieldPayload, type PlanRow } from "@/lib/engine/bot-fields";
+import { formatDateTime, nowIso } from "@/lib/dates";
+import { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, STAGE1_FIELDS, assertStorable, botFieldsRequest, morePages, needsEyes, parseBotFields, planPayload, productSections, readBackMismatches, stage1Payload, stage1Plan, stage1Problems, stage1Warnings, type BotFieldPayload, type EyesLine, type PlanRow, type ProductSection, type Stage1Input } from "@/lib/engine/bot-fields";
+import { normalizeEssence } from "@/lib/engine/essence";
 import { redactSecrets } from "@/lib/engine/redact";
 import { logSync } from "@/lib/integrations";
 
@@ -50,14 +51,54 @@ export function platformReason(status: number, body: string): string {
 
 export type PushOutcome = { status: "sent" | "skipped" | "failed" | "changed"; note: string; fields: string[] };
 
-/** The Stage 1 payload for one member, read off the record, with the live offers whose price is left out (never quote prices). */
-export async function payloadFor(membership: schema.Membership): Promise<{ payload: BotFieldPayload; pricesLeftOut: string[] }> {
-  const [workspace, offers] = await Promise.all([
+/**
+ * Everything Stage 1 composes from, read off the record: the membership (its business name, zone and the coach-level bot lines),
+ * the workspace, the member's offers (only those with a bot role feed the bot) and two Essence fields (the house rules and who
+ * the bot speaks as).
+ */
+export async function stage1InputFor(membership: schema.Membership): Promise<Stage1Input> {
+  const [workspace, offers, essenceRow] = await Promise.all([
     db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, membership.workspaceId) }),
-    db.query.offers.findMany({ where: and(eq(schema.offers.workspaceId, membership.workspaceId), eq(schema.offers.userId, membership.userId)) }),
+    db.query.offers.findMany({ where: and(eq(schema.offers.workspaceId, membership.workspaceId), eq(schema.offers.userId, membership.userId)), orderBy: [schema.offers.createdAt] }),
+    db.query.essences.findFirst({ where: and(eq(schema.essences.workspaceId, membership.workspaceId), eq(schema.essences.userId, membership.userId)) }),
   ]);
-  // The member's own zone, else the workspace's: the same rule Today and the reminders follow.
-  return { payload: stage1Payload({ businessName: membership.businessName, workspaceName: workspace?.name ?? "", timezone: membership.timezone ?? workspace?.timezone ?? "UTC", offers, priceAnswer: membership.priceAnswer }), pricesLeftOut: pricesLeftOut(offers) };
+  const essence = normalizeEssence(essenceRow?.data ?? {});
+  const houseRules = essence.guidelines_to_respond?.house_rules;
+  const persona = essence.identity?.bot_persona;
+  return {
+    businessName: membership.businessName,
+    workspaceName: workspace?.name ?? "",
+    // The member's own zone, else the workspace's: the same rule Today and the reminders follow.
+    timezone: membership.timezone ?? workspace?.timezone ?? "UTC",
+    offers,
+    coach: {
+      whatIDo: membership.whatIDo,
+      priceMode: membership.priceMode,
+      rangeLine: membership.rangeLine,
+      paymentPlanLine: membership.paymentPlanLine,
+      priceAnswer: membership.priceAnswer,
+      guaranteeLine: membership.guaranteeLine,
+      guaranteeCoverageLine: membership.guaranteeCoverageLine,
+      houseRules: Array.isArray(houseRules) ? (houseRules as string[]) : [],
+      persona: typeof persona === "string" ? persona : "",
+      questions: [membership.botQuestion1, membership.botQuestion2, membership.botQuestion3],
+    },
+  };
+}
+
+/** The Stage 1 payload for one member, with the input it was composed from. */
+export async function payloadFor(membership: schema.Membership): Promise<{ payload: BotFieldPayload; input: Stage1Input }> {
+  const input = await stage1InputFor(membership);
+  return { payload: stage1Payload(input), input };
+}
+
+/** An approval is of exact text: the line's hash. */
+export const textHash = (text: string): string => createHash("sha256").update(text).digest("hex").slice(0, 32);
+/** Each Needs-your-eyes line for this member, and whether its exact text is approved. */
+export async function eyesFor(membershipId: string, input: Stage1Input): Promise<{ line: EyesLine; approved: boolean }[]> {
+  const rows = await db.query.botApprovals.findMany({ where: eq(schema.botApprovals.membershipId, membershipId) });
+  const ok = new Set(rows.map((r) => `${r.elementKey}:${r.textHash}`));
+  return needsEyes(input).map((line) => ({ line, approved: ok.has(`${line.key}:${textHash(line.text)}`) }));
 }
 
 /**
@@ -67,17 +108,30 @@ export async function payloadFor(membership: schema.Membership): Promise<{ paylo
  * a list that names an agent the bot no longer answers for is read again once. `key` fingerprints exactly what would be sent
  * against what the bot holds now; the push carries the key the coach saw and refuses when it no longer matches, so what is sent
  * is what was shown.
+ *
+ * `blocked` means the bot could not be read at all. `holds` are what stop the push while the page still shows everything: a gap
+ * in the record (stage1Problems) or a Needs-your-eyes line not yet approved in its exact text. `warnings` never stop it.
  */
-export type Stage1Preview = { blocked: string | null; rows: PlanRow[]; key: string; pricesLeftOut: string[]; agentNames: string[] };
+export type Stage1Preview = {
+  blocked: string | null;
+  rows: PlanRow[];
+  key: string;
+  agentNames: string[];
+  input: Stage1Input;
+  sections: ProductSection[];
+  holds: string[];
+  warnings: string[];
+  eyes: { line: EyesLine; approved: boolean }[];
+};
 export async function stage1Preview(m: schema.Membership): Promise<Stage1Preview> {
-  const { payload, pricesLeftOut: leftOut } = await payloadFor(m);
-  const none = { rows: [], key: "", pricesLeftOut: leftOut, agentNames: [] };
+  const { payload, input } = await payloadFor(m);
+  const eyes = await eyesFor(m.id, input);
+  const unapproved = eyes.filter((e) => !e.approved).map((e) => `Not approved yet: ${e.line.label}.`);
+  const none = { rows: [], key: "", agentNames: [], input, sections: productSections(input), holds: [...stage1Problems(input, payload), ...unapproved], warnings: stage1Warnings(input), eyes };
   const token = open(m.clApiToken);
   if (!token) return { blocked: "No Community Loyalty API token on this member yet: add it on the Coach page first.", ...none };
   // The drip webhook is never opened here: its shape (/api/iwh/) is refused by assertStorable without the value in hand.
   assertStorable(payload, [token]);
-  const problems = stage1Problems(payload);
-  if (problems.length) return { blocked: problems.join(" "), ...none };
   const t0 = Date.now();
   const agents = await allAgents(token);
   const agentsMs = Date.now() - t0;
@@ -89,7 +143,10 @@ export async function stage1Preview(m: schema.Membership): Promise<Stage1Preview
   const rows = stage1Plan(payload, held.rows, agents.infos, m.clBotFields);
   for (const r of rows) if (r.name && (BOT_WRITTEN_FIELDS as readonly string[]).includes(r.name)) throw new Error(`bot-fields: ${r.name} is written by the bot and cannot be pushed`);
   const key = createHash("sha256").update(JSON.stringify(rows.filter((r) => r.status === "change").map((r) => [r.name, r.current, r.next]))).digest("hex").slice(0, 32);
-  return { blocked: null, rows, key, pricesLeftOut: leftOut, agentNames };
+  // Pushed but ignored: the rules would reach the bot and change nothing it says (true on Danno's bot and the master, 23 Sep).
+  const rules = rows.find((r) => r.field === "ai_constraints_cbf");
+  const warnings = [...none.warnings, ...(rules?.status === "unread" ? ["No agent on your bot reads your house rules yet, so they would be pushed and ignored. Add the house rules to your Booking Agent's prompt in Community Loyalty."] : [])];
+  return { ...none, blocked: null, rows, key, agentNames, warnings };
 }
 
 /**
@@ -117,6 +174,14 @@ async function allAgents(token: string, fresh = false): Promise<{ infos: AgentIn
  * the bot per row.
  */
 export const stage1SourceKey = (payload: BotFieldPayload): string => createHash("sha256").update(JSON.stringify(STAGE1_FIELDS.map((f) => [f, payload[f]]))).digest("hex").slice(0, 32);
+/** "Last pushed …, by …" for the page, naming whoever pressed it: you, the member themself, or their coach. */
+export async function lastPushedLine(m: schema.Membership, viewerId: string, tz: string): Promise<string> {
+  if (!m.clBotFieldsPushedAt) return "Not pushed yet.";
+  const by = m.clBotFieldsPushedBy ? await db.query.users.findFirst({ where: eq(schema.users.id, m.clBotFieldsPushedBy) }) : null;
+  const who = !by ? "" : by.id === viewerId ? " by you" : ` by ${by.name}`;
+  return `Last pushed ${formatDateTime(m.clBotFieldsPushedAt, tz)}${who}.`;
+}
+
 /** Whether HelixOS's record for any Stage 1 field has changed since the last push; null before any push. */
 export async function changedSinceLastPush(m: schema.Membership): Promise<boolean | null> {
   if (!m.clBotFieldsPushedAt || !m.clBotSourceKey) return null;
@@ -132,7 +197,7 @@ const pushing = new Set<string>();
  * moved since the page was read), when nothing would change, or while a push for this member is already out; none of those is
  * a push, so none is logged. Never throws.
  */
-export async function pushBotFields(membershipId: string, opts: { key: string; reason: string }): Promise<PushOutcome> {
+export async function pushBotFields(membershipId: string, opts: { key: string; reason: string; by: string }): Promise<PushOutcome> {
   const m = await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membershipId) });
   if (!m) return { status: "skipped", note: "No such member.", fields: [] };
   if (pushing.has(m.id)) return { status: "skipped", note: "A push to this bot is already on its way.", fields: [] };
@@ -143,10 +208,10 @@ export async function pushBotFields(membershipId: string, opts: { key: string; r
     pushing.delete(m.id);
   }
 }
-async function pushPlanned(m: schema.Membership, opts: { key: string; reason: string }): Promise<PushOutcome> {
+async function pushPlanned(m: schema.Membership, opts: { key: string; reason: string; by: string }): Promise<PushOutcome> {
   const log = async (status: "sent" | "failed", note: string, fields: string[]) => {
     // The sync log carries the names and the reason, never a value: values are on the membership row, the token nowhere.
-    await logSync({ workspaceId: m.workspaceId, userId: m.userId, provider: "community_loyalty", direction: "out", event: "botfields.push", payload: { reason: opts.reason, fields }, status, note: redactSecrets(note) });
+    await logSync({ workspaceId: m.workspaceId, userId: m.userId, provider: "community_loyalty", direction: "out", event: "botfields.push", payload: { reason: opts.reason, fields, by: opts.by }, status, note: redactSecrets(note) });
     return { status, note, fields };
   };
   const token = open(m.clApiToken);
@@ -158,6 +223,8 @@ async function pushPlanned(m: schema.Membership, opts: { key: string; reason: st
     return log("failed", e instanceof Error ? e.message : String(e), []);
   }
   if (preview.blocked) return log("failed", preview.blocked, []);
+  // A gap in the record or a line not yet approved stops the push before anything is sent; it is not a push, so not logged.
+  if (preview.holds.length) return { status: "skipped", note: `Not sent. ${preview.holds.join(" ")}`, fields: [] };
   if (preview.key !== opts.key) return { status: "changed", note: "The bot or the record changed since this page was read. Here is the new before-and-after; nothing was sent.", fields: [] };
   const payload = planPayload(preview.rows);
   const names = Object.keys(payload);
@@ -180,7 +247,7 @@ async function pushPlanned(m: schema.Membership, opts: { key: string; reason: st
     // What the bot now holds from HelixOS: the fields just sent and the ones it already held unchanged, over what earlier pushes
     // confirmed, so a field left out this time keeps its last sent value on the record (the nothing-current rule compares to it).
     const holds = { ...m.clBotFields, ...Object.fromEntries(preview.rows.filter((r) => (r.status === "change" || r.status === "same") && r.name).map((r) => [r.name as string, r.next])) };
-    await db.update(schema.memberships).set({ clBotFields: holds, clBotFieldsPushedAt: nowIso(), clBotSourceKey: stage1SourceKey((await payloadFor(m)).payload) }).where(eq(schema.memberships.id, m.id));
+    await db.update(schema.memberships).set({ clBotFields: holds, clBotFieldsPushedAt: nowIso(), clBotFieldsPushedBy: opts.by, clBotSourceKey: stage1SourceKey((await payloadFor(m)).payload) }).where(eq(schema.memberships.id, m.id));
     return log("sent", `${names.length} ${names.length === 1 ? "field" : "fields"} changed on the bot and read back`, names);
   } catch (e) {
     return log("failed", e instanceof Error ? e.message : String(e), names);

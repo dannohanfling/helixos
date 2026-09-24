@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { rotateInviteAction, saveBrandKitAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
+import { rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
@@ -15,7 +15,7 @@ import { getIntegration, onboardingOpen } from "@/lib/integrations";
 import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 import { SubmitButton } from "@/components/submit-button";
-import { PRICE_ANSWER_DEFAULT } from "@/lib/engine/bot-fields";
+import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
 
 export const metadata = { title: "Settings" };
 
@@ -73,9 +73,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Field label="Business">
               <input className="field" name="businessName" defaultValue={v.membership.businessName ?? ""} />
             </Field>
-            <Field label="When someone asks about price" hint="What your bot says instead of a price, when an offer is ticked Never quote prices. Empty uses the line shown.">
-              <textarea className="field" name="priceAnswer" rows={3} defaultValue={v.membership.priceAnswer ?? ""} placeholder={PRICE_ANSWER_DEFAULT} data-testid="price-answer" />
-            </Field>
             <Field label="Big promise" hint="I help [who] go from [pain] to [outcome] in [time] without [thing they hate].">
               <textarea className="field" name="bigPromise" defaultValue={v.membership.bigPromise ?? ""} />
             </Field>
@@ -102,6 +99,56 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <input type="checkbox" name="leaderboardOptIn" defaultChecked={v.membership.leaderboardOptIn} /> Show me on the weekly leaderboard
             </label>
             <SubmitButton className="btn btn-primary" pendingText="Saving…">
+              Save
+            </SubmitButton>
+          </form>
+        </Card>
+        <Card id="your-bot" title="What your bot says about your business">
+          <p className="mb-3 text-xs text-ink-3">Yours, not any one offer&apos;s. <a href="/brain" className="underline">Your bot</a> shows exactly what it will be sent, for you to approve before anything goes.</p>
+          <form action={updateBotFactsAction} className="space-y-3">
+            <Field label="What I do" hint="One paragraph, the first thing your bot knows about you.">
+              <textarea className="field" name="whatIDo" rows={4} defaultValue={v.membership.whatIDo ?? ""} data-testid="what-i-do" />
+            </Field>
+            {[v.membership.botQuestion1, v.membership.botQuestion2, v.membership.botQuestion3].map((q, i) => (
+              <Field key={i} label={`Question ${i + 1} your bot asks before booking`} hint="Blank uses the house question shown.">
+                <input className="field" name={`botQuestion${i + 1}`} defaultValue={q ?? ""} placeholder={QUALIFYING_DEFAULTS[i]} data-testid={`bot-question-${i + 1}`} />
+              </Field>
+            ))}
+            <details className="rounded-lg border p-3">
+              <summary className="cursor-pointer text-sm font-medium">Your guarantee&apos;s full terms</summary>
+              <p className="mt-2 text-xs text-ink-3">Kept here for the terms page and, later, for tracking who has earned it. Your bot is sent only the guarantee line you approve on Your bot.</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Window, in months">
+                  <input className="field tabular" name="termsWindowMonths" type="number" min={0} defaultValue={v.membership.guaranteeTerms.windowMonths ?? ""} />
+                </Field>
+                <Field label="Attendance, % of scheduled calls">
+                  <input className="field tabular" name="termsAttendancePct" type="number" min={0} max={100} defaultValue={v.membership.guaranteeTerms.attendancePct ?? ""} />
+                </Field>
+                <Field label="A replay counts if watched within, days">
+                  <input className="field tabular" name="termsReplayDays" type="number" min={0} defaultValue={v.membership.guaranteeTerms.replayDays ?? ""} />
+                </Field>
+                <Field label="Terms page (link)">
+                  <input className="field" name="guaranteeTermsUrl" type="url" defaultValue={v.membership.guaranteeTermsUrl ?? ""} />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="How it's measured">
+                    <textarea className="field" name="termsMeasure" rows={2} defaultValue={v.membership.guaranteeTerms.measure ?? ""} />
+                  </Field>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Conditions, one per line">
+                    <textarea className="field" name="termsConditions" rows={4} defaultValue={(v.membership.guaranteeTerms.conditions ?? []).join("\n")} />
+                  </Field>
+                </div>
+                <Field label="Exclusions">
+                  <textarea className="field" name="termsExclusions" rows={2} defaultValue={v.membership.guaranteeTerms.exclusions ?? ""} />
+                </Field>
+                <Field label="Remedy">
+                  <textarea className="field" name="termsRemedy" rows={2} defaultValue={v.membership.guaranteeTerms.remedy ?? ""} />
+                </Field>
+              </div>
+            </details>
+            <SubmitButton className="btn btn-primary" pendingText="Saving…" data-testid="save-bot-facts">
               Save
             </SubmitButton>
           </form>

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { BOT_WRITTEN_FIELDS, PRICE_ANSWER_DEFAULT, priceDeflection, NOTHING_CURRENT_LABEL, STAGE1_NOTHING_CURRENT, isNothingCurrent, nothingToPushLine, PRODUCT_FIELD, PRODUCT_FIELD_OLD, planPayload, pricesLeftOut, stage1Plan, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, productLine, samePayload, stage1Payload } from "../bot-fields";
+import { BOT_WRITTEN_FIELDS, productSections, NOTHING_CURRENT_LABEL, STAGE1_NOTHING_CURRENT, isNothingCurrent, nothingToPushLine, PRODUCT_FIELD, PRODUCT_FIELD_OLD, planPayload, stage1Plan, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, samePayload, stage1Payload } from "../bot-fields";
 
-const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live" };
+// An offer on the bot (one-on-one needs no link) and a draft with no bot role, which never reaches the bot.
+const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live", botRole: "one_on_one" as const };
 const draft = { name: "Holiday Survival Sprint", promise: "Get through the holidays", container: "Workshop", price: 297, currency: "USD", length: null, status: "draft" };
 
 describe("the Stage 1 push is a named subset of the template's fields, never the ones the bot writes", () => {
@@ -13,12 +14,16 @@ describe("the Stage 1 push is a named subset of the template's fields, never the
     for (const f of STAGE2_FIELDS) expect(STAGE1_FIELDS).not.toContain(f);
     expect(BOT_WRITTEN_FIELDS).toContain("calendar_id");
   });
-  it("composes every Stage 1 field from the record: the membership's business name else the workspace's, the zone, live offers as fact lines, the house constraints, the questions with defaults", () => {
-    const p = stage1Payload({ businessName: "Torres Nutrition Coaching", workspaceName: "Evolve Omega Academy", timezone: "America/New_York", offers: [live, draft] });
+  it("composes every Stage 1 field from the record: the membership's business name else the workspace's, the zone, the offers on the bot in sections, the house constraints, the questions with defaults", () => {
+    const input = { businessName: "Torres Nutrition Coaching", workspaceName: "Evolve Omega Academy", timezone: "America/New_York", offers: [live, draft] };
+    const p = stage1Payload(input);
     expect(Object.keys(p).sort()).toEqual([...STAGE1_FIELDS].sort());
     expect(p.business_name_cbf).toBe("Torres Nutrition Coaching");
     expect(p.business_time_zone_cbf).toBe("America/New_York");
-    expect(p[PRODUCT_FIELD]).toBe("90-Day Reset · Drop 15 lbs in 90 days · Group program · USD $1,500 · 90 days");
+    expect(p[PRODUCT_FIELD]).toBe(productSections(input).map((x) => x.text).join("\n\n"));
+    expect(p[PRODUCT_FIELD]).toContain("90-Day Reset: USD $1,500.");
+    expect(p[PRODUCT_FIELD]).toContain("ONE-ON-ONE (90-Day Reset)");
+    expect(p[PRODUCT_FIELD]).not.toContain("Holiday Survival Sprint");
     expect(p.ai_constraints_cbf).toBe(houseConstraints("Torres Nutrition Coaching"));
     expect(HOUSE_CONSTRAINT_LINES).toHaveLength(6);
     expect(p.ai_constraints_cbf).toContain("Never claim to be Torres Nutrition Coaching.");
@@ -29,15 +34,16 @@ describe("the Stage 1 push is a named subset of the template's fields, never the
     expect(stage1Payload({ businessName: "  ", workspaceName: "Evolve Omega Academy", timezone: "UTC", offers: [] }).business_name_cbf).toBe("Evolve Omega Academy");
   });
   it("a source the client has not filled composes empty (the plan leaves it out); a written question replaces only its own default", () => {
-    const p = stage1Payload({ businessName: null, workspaceName: "", timezone: "UTC", offers: [{ ...live, qualifyingQuestion2: "Who else decides?" }] });
+    const input = { businessName: null, workspaceName: "", timezone: "UTC", offers: [live], coach: { questions: [null, "Who else decides?", ""] } };
+    const p = stage1Payload(input);
     expect(p.business_name_cbf).toBe("");
     // No name, no push: the gap is named rather than a sentence about "the business" shipped
-    expect(stage1Problems(p)).toEqual(["No business name on the record: set it on the member's profile or the workspace."]);
-    expect(stage1Problems({ ...p, business_name_cbf: "T" })).toEqual([]);
+    expect(stage1Problems(input)).toEqual(["No business name on the record: set it on the member's profile or the workspace."]);
+    expect(stage1Problems({ ...input, businessName: "T" })).toEqual([]);
     expect(p.qualifying_question_2).toBe("Who else decides?");
     expect(p.qualifying_question_1).toBe(QUALIFYING_DEFAULTS[0]);
+    expect(p.qualifying_question_3).toBe(QUALIFYING_DEFAULTS[2]);
     expect(stage1Payload({ businessName: null, workspaceName: "", timezone: "UTC", offers: [draft] })[PRODUCT_FIELD]).toBe("");
-    expect(productLine({ ...live, promise: null, length: null })).toBe("90-Day Reset · Group program · USD $1,500");
   });
   it("nothing changed means nothing sent; a value carrying a credential refuses", () => {
     const p = stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [live] });
@@ -69,6 +75,9 @@ describe("Stage 1 as the coach sees it before a push: per field, by the name the
     expect(old.line).toBe(`Written to ${PRODUCT_FIELD_OLD}, this bot's older name for ${PRODUCT_FIELD}.`);
     const both = byField(stage1Plan(payload, bot({ [PRODUCT_FIELD_OLD]: "a", [PRODUCT_FIELD]: "b" }), [agent([PRODUCT_FIELD, PRODUCT_FIELD_OLD])]))[PRODUCT_FIELD];
     expect(both).toMatchObject({ name: PRODUCT_FIELD, fallback: false, current: "b" });
+    // With both names on the bot, the one an agent actually reads wins.
+    const oldRead = byField(stage1Plan(payload, bot({ [PRODUCT_FIELD_OLD]: "a", [PRODUCT_FIELD]: "b" }), [agent([PRODUCT_FIELD_OLD])]))[PRODUCT_FIELD];
+    expect(oldRead).toMatchObject({ name: PRODUCT_FIELD_OLD, fallback: true, current: "a" });
     const none = byField(stage1Plan(payload, bot({}), [agent([PRODUCT_FIELD])]))[PRODUCT_FIELD];
     expect(none).toMatchObject({ name: null, status: "missing" });
     expect(none.line).toBe(`Your bot has no ${PRODUCT_FIELD} field (nor the older ${PRODUCT_FIELD_OLD}), so nothing is sent to it.`);
@@ -143,34 +152,10 @@ describe("Stage 1 as the coach sees it before a push: per field, by the name the
       expect(NOTHING_CURRENT_LABEL[f].trim().length, f).toBeGreaterThan(0);
     }
   });
-  it("never quote prices: the offer goes without its price, and the offer is named so the Brief can say so", () => {
-    const quiet = { ...live, neverQuotePrice: true };
-    expect(productLine(quiet)).toBe("90-Day Reset · Drop 15 lbs in 90 days · Group program · 90 days");
-    expect(productLine(quiet)).not.toMatch(/\$|USD|1,500/);
-    expect(stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [quiet] })[PRODUCT_FIELD]).not.toMatch(/1,500/);
-    expect(pricesLeftOut([quiet, { ...draft, neverQuotePrice: true }, live])).toEqual(["90-Day Reset"]);
-    expect(pricesLeftOut([live])).toEqual([]);
-  });
-  it("never quote prices carries the coach's price line: appended once after the last offer, the default when empty, nothing when no offer is ticked", () => {
-    const quiet = { ...live, neverQuotePrice: true };
-    const second = { ...live, name: "Academy", neverQuotePrice: true };
-    const line = "Happy to walk you through the options on a call.";
-    const field = stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [quiet, second], priceAnswer: line })[PRODUCT_FIELD];
-    expect(field.split("\n")).toEqual([productLine(quiet), productLine(second), `If someone asks about price, cost or payment plans, never state a price, a payment plan or a discount. Say something like: "${line}" Then ask your next qualifying question.`]);
-    expect(field).not.toMatch(/\$|1,500/);
-    expect(stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [quiet], priceAnswer: "   " })[PRODUCT_FIELD]).toContain(`"${PRICE_ANSWER_DEFAULT}"`);
-    expect(priceDeflection(null)).not.toContain('""');
-    const quoted = stage1Payload({ businessName: "T", workspaceName: "W", timezone: "UTC", offers: [live], priceAnswer: line })[PRODUCT_FIELD];
-    expect(quoted).toBe(productLine(live));
-    expect(quoted).toMatch(/USD \$1,500/);
-    // Danno's live offer as HelixOS holds it (23 Sep), ticked, with no line of his own: exactly what Stage 1 would send.
-    const academy = { name: "Evolve Omega Academy", promise: null, container: "Group program", price: 12000, currency: "USD", length: null, status: "live", neverQuotePrice: true };
-    expect(stage1Payload({ businessName: "Evolve Omega", workspaceName: "W", timezone: "UTC", offers: [academy] })[PRODUCT_FIELD]).toBe(`Evolve Omega Academy · Group program\nIf someone asks about price, cost or payment plans, never state a price, a payment plan or a discount. Say something like: "${PRICE_ANSWER_DEFAULT}" Then ask your next qualifying question.`);
-  });
-  it("nothing pushes on its own: the only caller of the Stage 1 push is the coach's press on the preview", () => {
+  it("nothing pushes on its own: the only caller of the Stage 1 push is a press on the \"Your bot\" page", () => {
     const dir = join(process.cwd(), "src/lib/actions");
     const callers = readdirSync(dir).filter((f) => readFileSync(join(dir, f), "utf8").includes("pushBotFields("));
-    expect(callers).toEqual(["integrations.ts"]);
+    expect(callers).toEqual(["your-bot.ts"]);
     expect(readFileSync(join(process.cwd(), "src/lib/community-loyalty.ts"), "utf8")).not.toMatch(/repushForMember|repushWorkspace/);
   });
 });

@@ -8,10 +8,8 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { INBOUND_SECRET_COOKIE, PASS_NOT_WIRED, PROVIDER_META, getIntegration, logSync, passWired, pushPassMessage, resolveApiUrl, type Provider } from "@/lib/integrations";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { hashSecret, open, randomSecret, seal } from "@/lib/crypto";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
-import { pushBotFields } from "@/lib/community-loyalty";
 
 /** The inbound secret is stored only as a hash. The plaintext rides in a short-lived cookie so the Integrations page can show it once. */
 async function issueInboundSecret(provider: Provider): Promise<string> {
@@ -126,24 +124,6 @@ export async function setMyBotAction(formData: FormData): Promise<void> {
     .set({ clAgentNs: opt(formData, "clAgentNs"), faqBotField: opt(formData, "faqBotField"), faqOverwriteOk: formData.get("faqOverwriteOk") === "on", ...token })
     .where(eq(schema.memberships.id, coach.membership.id));
   refresh();
-}
-
-/**
- * Push the Stage 1 fields from the before-and-after on /coach/[clientId]/bot: only what that page showed as changing, carried by
- * its key, so the push refuses when the bot or the record moved since the coach read it. The coach's own bot goes through the
- * same page and this same action. Always back to the preview, with what happened in a sentence.
- */
-export async function pushStage1Action(formData: FormData): Promise<void> {
-  const coach = await requireCoach();
-  const membershipId = str(formData, "membershipId");
-  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)) });
-  if (!m) redirect("/coach");
-  const out = await pushBotFields(m.id, { key: str(formData, "key"), reason: m.id === coach.membership.id ? "own bot" : "coach push" });
-  refresh();
-  const to = `/coach/${m.id}/bot`;
-  if (out.status === "sent") redirect(`${to}?pushed=${out.fields.length}`);
-  if (out.status === "changed") redirect(`${to}?changed=1`);
-  redirect(`${to}?${out.status === "failed" ? "failed" : "note"}=${encodeURIComponent(out.note)}`);
 }
 
 export async function markPassInstalledAction(): Promise<void> {

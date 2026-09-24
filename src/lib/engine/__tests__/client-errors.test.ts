@@ -228,6 +228,7 @@ describe("the client's Community Loyalty API token is a credential", () => {
       expect(l, l.trim()).toContain("redactSecrets(");
       expect(l, l.trim()).not.toMatch(/\btoken\b|clApiToken/);
     }
-    expect(lib).toMatch(/payload: \{ reason: opts\.reason, fields \}/);
+    // The sync record carries the field names and who pushed (a user id), never a value or the token.
+    expect(lib).toMatch(/payload: \{ reason: opts\.reason, fields, by: opts\.by \}/);
   });
 });

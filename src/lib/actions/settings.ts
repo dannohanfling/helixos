@@ -37,7 +37,6 @@ async function updateProfile(formData: FormData): Promise<void> {
     .update(schema.memberships)
     .set({
       businessName: opt(formData, "businessName"),
-      priceAnswer: opt(formData, "priceAnswer"),
       bigPromise: opt(formData, "bigPromise"),
       audience: opt(formData, "audience"),
       reminderHour: Math.min(23, Math.max(0, num(formData, "reminderHour") || 8)),
@@ -46,6 +45,28 @@ async function updateProfile(formData: FormData): Promise<void> {
       timezone: validTimezone(str(formData, "timezone")),
     })
     .where(eq(schema.memberships.id, v.membership.id));
+  refresh();
+}
+
+/**
+ * What the bot says about the business, the coach's own and not any offer's (rev 80): What I do, the three questions (blank means
+ * the house question) and the guarantee's structured terms. Nothing is pushed from here; Your bot shows what would change.
+ */
+export async function updateBotFactsAction(formData: FormData): Promise<void> {
+  const { userId, workspaceId } = await ctx();
+  const n = (key: string): number | undefined => (str(formData, key) ? num(formData, key) : undefined);
+  const conditions = str(formData, "termsConditions").split("\n").map((l) => l.trim()).filter(Boolean);
+  await db
+    .update(schema.memberships)
+    .set({
+      whatIDo: opt(formData, "whatIDo"),
+      botQuestion1: opt(formData, "botQuestion1"),
+      botQuestion2: opt(formData, "botQuestion2"),
+      botQuestion3: opt(formData, "botQuestion3"),
+      guaranteeTermsUrl: opt(formData, "guaranteeTermsUrl"),
+      guaranteeTerms: { windowMonths: n("termsWindowMonths"), attendancePct: n("termsAttendancePct"), replayDays: n("termsReplayDays"), measure: opt(formData, "termsMeasure") ?? undefined, conditions: conditions.length ? conditions : undefined, exclusions: opt(formData, "termsExclusions") ?? undefined, remedy: opt(formData, "termsRemedy") ?? undefined },
+    })
+    .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)));
   refresh();
 }
 

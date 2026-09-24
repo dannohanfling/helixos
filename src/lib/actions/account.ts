@@ -6,7 +6,6 @@ import { db, schema } from "@/db";
 import { safeEqual } from "@/lib/crypto";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { brandedEmail } from "@/lib/branded-email";
-import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { allow, clientIp } from "@/lib/rate-limit";

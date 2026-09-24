@@ -20,7 +20,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/webinars", label: "Webinars", icon: "🎤", hint: "wizard" },
       { href: "/images", label: "Images", icon: "🖼️", line: "Your deck pictures" },
-      { href: "/brain", label: "Bot Brief", icon: "🧠", line: "What your bot knows" },
+      { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent" },
       { href: "/offers", label: "Offers", icon: "🎁", hint: "wizard" },
       { href: "/pathway", label: "Pathway", icon: "🛣️" },
       { href: "/courses", label: "Courses", icon: "📚" },

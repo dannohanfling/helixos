@@ -428,6 +428,13 @@
       "when": 1790211795739,
       "tag": "0060_deletion_audits",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "6",
+      "when": 1790216102130,
+      "tag": "0061_bot_sales_rules",
+      "breakpoints": true
     }
   ]
 }

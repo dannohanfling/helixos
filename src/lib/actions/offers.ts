@@ -8,6 +8,7 @@ import { CURRENCIES } from "@/lib/engine/offer-score";
 import { OFFER_CONTAINERS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { BOT_ROLES } from "@/lib/engine/bot-fields";
 
 async function own(id: string, userId: string) {
   const o = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, userId)) });
@@ -43,8 +44,6 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       currency: CURRENCIES.find((c) => c === str(formData, "currency").toUpperCase()) ?? "USD",
       length: opt(formData, "length"),
       price: num(formData, "price"),
-      // The tick sits in the same form as the price, so an unticked box is a deliberate "quote it".
-      neverQuotePrice: formData.get("neverQuotePrice") === "on",
       paymentPlan: opt(formData, "paymentPlan"),
       guarantee: opt(formData, "guarantee"),
       scarcity: opt(formData, "scarcity"),
@@ -57,9 +56,16 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       howItWorks: opt(formData, "howItWorks"),
       forYouIf: opt(formData, "forYouIf"),
       notForYouIf: opt(formData, "notForYouIf"),
-      qualifyingQuestion1: opt(formData, "qualifyingQuestion1"),
-      qualifyingQuestion2: opt(formData, "qualifyingQuestion2"),
-      qualifyingQuestion3: opt(formData, "qualifyingQuestion3"),
+      // On the bot (rev 80). The questions and the price handling are the coach's, not the offer's: they are not written here.
+      botRole: BOT_ROLES.find((r) => r === str(formData, "botRole")) ?? "not_on_bot",
+      botName: opt(formData, "botName"),
+      botFor: opt(formData, "botFor"),
+      botEndResult: opt(formData, "botEndResult"),
+      botTerms: opt(formData, "botTerms"),
+      depositAmount: str(formData, "depositAmount") ? num(formData, "depositAmount") : null,
+      refundableIfNotFit: formData.get("refundableIfNotFit") === "on",
+      botRefundLine: opt(formData, "botRefundLine"),
+      guaranteeCovered: formData.get("guaranteeCovered") === "on",
       objectionAssetIds: formData.getAll("objectionAssetIds").map(String).filter(Boolean),
       objTime: opt(formData, "objTime"),
       objMoney: opt(formData, "objMoney"),

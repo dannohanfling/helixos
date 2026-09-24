@@ -36,5 +36,7 @@
   "ethical_standards.transparency": "What you are open about, always.",
   "ethical_standards.inclusivity": "Who you make sure is never left out.",
   "ethical_standards.empowerment": "How you leave people more capable, not more dependent.",
-  "representative_stories.stories": "Your own story — what you came through, and what it taught you. Client results go in the proof bank, not here."
+  "representative_stories.stories": "Your own story — what you came through, and what it taught you. Client results go in the proof bank, not here.",
+  "guidelines_to_respond.house_rules": "The rules your bot follows, one per line, in the order you want them. They are sent numbered, exactly as written. Leave the list empty to use the house rules.",
+  "identity.bot_persona": "A short paragraph your bot speaks as, sent to it word for word: who you are, how you sound, and what the bot's job is."
 }
