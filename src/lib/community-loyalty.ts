@@ -78,15 +78,27 @@ export async function stage1Preview(m: schema.Membership): Promise<Stage1Preview
   assertStorable(payload, [token]);
   const problems = stage1Problems(payload);
   if (problems.length) return { blocked: problems.join(" "), ...none };
+  const t0 = Date.now();
   const agents = await allAgents(token);
+  const agentsMs = Date.now() - t0;
   if ("blocked" in agents) return { ...none, blocked: agents.blocked };
   const agentNames = agents.infos.map((a) => a.name);
   const held = await readBotFields(token);
+  logStage1Read(m.id, { agents: agentNames.length, fields: "rows" in held ? held.rows.length : null, agentsMs, fieldsMs: Date.now() - t0 - agentsMs, readMs: Date.now() - t0 });
   if ("refused" in held) return { ...none, agentNames, blocked: `Couldn't read the bot's fields from Community Loyalty. ${held.refused}` };
   const rows = stage1Plan(payload, held.rows, agents.infos, m.clBotFields);
   for (const r of rows) if (r.name && (BOT_WRITTEN_FIELDS as readonly string[]).includes(r.name)) throw new Error(`bot-fields: ${r.name} is written by the bot and cannot be pushed`);
   const key = createHash("sha256").update(JSON.stringify(rows.filter((r) => r.status === "change").map((r) => [r.name, r.current, r.next]))).digest("hex").slice(0, 32);
   return { blocked: null, rows, key, pricesLeftOut: leftOut, agentNames };
+}
+
+/**
+ * One log line per Stage 1 read of a bot: how many agents and fields, and how long each half took (24 Sep: the preview sat on
+ * "Loading…" for over a minute on Danno's bot, five agents). Counts and times only, never a value or the token. The agents'
+ * prompts are read in parallel; the field pages one after another, because the list gives no total to fan out over.
+ */
+function logStage1Read(member: string, t: { agents: number; fields: number | null; agentsMs: number; fieldsMs: number; readMs: number }): void {
+  console.info(`[stage1.read] ${redactSecrets(JSON.stringify({ member, ...t }))}`);
 }
 
 /** Every agent on the bot with its prompts: the cached list, read again once if it names an agent the bot no longer answers for. */

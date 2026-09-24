@@ -218,10 +218,11 @@ describe("the client's Community Loyalty API token is a credential", () => {
     }
     const lib = readFileSync(join(SRC, "lib/community-loyalty.ts"), "utf8");
     expect(lib).toContain("redactSecrets(");
-    // It logs in exactly two places, each asked for: the platform's own refusal body (22 Sep, so a 422 is readable) and the
-    // agent's raw prompt. Every console line goes through the redactor and names no token.
+    // It logs in exactly three places, each asked for: the platform's own refusal body (22 Sep, so a 422 is readable), the
+    // agent's raw prompt, and the Stage 1 read's counts and times (24 Sep). Every console line goes through the redactor and
+    // names no token.
     const consoleLines = stripComments(lib).split("\n").filter((l) => /console\.\w+\(/.test(l));
-    expect(consoleLines.length).toBe(2);
+    expect(consoleLines.length).toBe(3);
     for (const l of consoleLines) {
       expect(l, l.trim()).toContain("redactSecrets(");
       expect(l, l.trim()).not.toMatch(/\btoken\b|clApiToken/);

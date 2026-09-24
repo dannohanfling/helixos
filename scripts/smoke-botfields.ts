@@ -11,6 +11,8 @@
  */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium, type Page } from "@playwright/test";
 
 const base = process.argv[2] ?? "http://localhost:3000";
@@ -119,6 +121,9 @@ async function main() {
     if ((await requests()).length !== 0) throw new Error("the preview sends nothing");
     const pushButton = page.locator('[data-testid="push-stage1"]');
     if ((await pushButton.innerText()).trim() !== "Push 4 changes to the bot") throw new Error(`the button says how many fields will change, got "${await pushButton.innerText()}"`);
+    // One log line per read of the bot: counts and times, never a value or the token.
+    const readLine = readFileSync(join(__dirname, "..", "screenshots", "logs", "dev.log"), "utf8").split("\n").reverse().find((l) => l.includes("[stage1.read]") && l.includes(membership.id));
+    if (!readLine || !/"agents":2,"fields":\d+,"agentsMs":\d+,"fieldsMs":\d+,"readMs":\d+/.test(readLine) || readLine.includes(TOKEN) || readLine.includes("Torres Nutrition")) throw new Error(`the read is logged with its counts and times and nothing else, got ${readLine}`);
     console.log("✓ the before-and-after: 4 changes (name, offers into the older field, constraints, question 1), 2 unchanged, question 3 unread and not shown; nothing sent");
 
     // ── Pressed twice in the same instant while the bot is slow to answer: it says so, sends once, records once. ──
