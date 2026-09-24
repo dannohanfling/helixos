@@ -57,10 +57,12 @@ export type PushOutcome = { status: "sent" | "skipped" | "failed" | "changed"; n
  * the bot speaks as).
  */
 export async function stage1InputFor(membership: schema.Membership): Promise<Stage1Input> {
-  const [workspace, offers, essenceRow] = await Promise.all([
+  const [workspace, offers, essenceRow, proofs] = await Promise.all([
     db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, membership.workspaceId) }),
     db.query.offers.findMany({ where: and(eq(schema.offers.workspaceId, membership.workspaceId), eq(schema.offers.userId, membership.userId)), orderBy: [schema.offers.createdAt] }),
     db.query.essences.findFirst({ where: and(eq(schema.essences.workspaceId, membership.workspaceId), eq(schema.essences.userId, membership.userId)) }),
+    // Partner stories come only from this member's own Proof Bank: approved (the permission tick) and put on the bot (rev 101).
+    db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, membership.workspaceId), eq(schema.proofs.userId, membership.userId), eq(schema.proofs.onBot, true), eq(schema.proofs.status, "approved")), orderBy: [schema.proofs.createdAt] }),
   ]);
   const essence = normalizeEssence(essenceRow?.data ?? {});
   const houseRules = essence.guidelines_to_respond?.house_rules;
@@ -73,12 +75,17 @@ export async function stage1InputFor(membership: schema.Membership): Promise<Sta
     offers,
     coach: {
       whatIDo: membership.whatIDo,
-      priceMode: membership.priceMode,
-      rangeLine: membership.rangeLine,
-      paymentPlanLine: membership.paymentPlanLine,
       priceAnswer: membership.priceAnswer,
+      defaultPath: membership.defaultPath,
+      callMinutes: membership.callMinutes,
+      oneOnOneRange: membership.oneOnOneRange,
+      paymentPlanLine: membership.paymentPlanLine,
       guaranteeLine: membership.guaranteeLine,
-      guaranteeCoverageLine: membership.guaranteeCoverageLine,
+      guaranteeLeadIn: membership.guaranteeLeadIn,
+      peopleWord: membership.peopleWord,
+      examples: membership.botExamples,
+      stories: membership.botStories,
+      partnerStories: proofs.map((p) => ({ id: p.id, who: p.who ?? "", happened: p.shortVersion ?? "", fits: p.botFits })),
       houseRules: Array.isArray(houseRules) ? (houseRules as string[]) : [],
       persona: typeof persona === "string" ? persona : "",
       questions: [membership.botQuestion1, membership.botQuestion2, membership.botQuestion3],

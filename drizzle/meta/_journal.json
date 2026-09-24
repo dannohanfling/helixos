@@ -435,6 +435,13 @@
       "when": 1790216102130,
       "tag": "0061_bot_sales_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "6",
+      "when": 1790287845874,
+      "tag": "0062_bot_flow_rev4",
+      "breakpoints": true
     }
   ]
 }

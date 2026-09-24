@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/dates";
 import { acceptFaqAction, acceptSafeFaqAction, deleteFaqAction, importFaqAction, sendFaqAction, updateFaqAction } from "@/lib/actions/faq";
 import { briefAccessFor, changedSinceLastPush, faqFieldFor, isApprovedOrigin, lastPushedLine, payloadFor, stage1Preview } from "@/lib/community-loyalty";
 import { YourBotPanel } from "@/components/your-bot";
-import { NOTHING_CURRENT_LABEL, PRODUCT_FIELD, PRODUCT_FIELD_OLD, TEMPLATE_BOT_FIELDS, paymentPlanLineOf, priceAnswerFor } from "@/lib/engine/bot-fields";
+import { NOTHING_CURRENT_LABEL, PRODUCT_FIELD, PRODUCT_FIELD_OLD, TEMPLATE_BOT_FIELDS, priceAnswerFor } from "@/lib/engine/bot-fields";
 import { FAQ_EMPTY_SENT, FAQ_FIELD_BUDGET, agentReadsFields, isFaqEmptyValue, composeField, diffSinceSync, needsEyes, notReadWarning, rankEntries } from "@/lib/engine/faq";
 import { ACCEPT_LABEL, UNREVIEWED_LABEL, isUnreviewed } from "@/lib/engine/provenance";
 import { essenceFor } from "@/lib/queries/essence";
@@ -44,12 +44,8 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
     briefAccessFor(m),
   ]);
   const coachLines = input.coach ?? {};
-  const priceLine =
-    coachLines.priceMode === "range"
-      ? `How it handles price: when asked, it gives your range, “${coachLines.rangeLine?.trim() || "(no range line yet)"}”, and on payment plans says “${paymentPlanLineOf(coachLines)}”. It never states the full price, a discount or a custom deal.`
-      : coachLines.priceMode === "never"
-        ? `How it handles price: it never states a price, and answers with your line: “${priceAnswerFor(coachLines.priceAnswer)}”`
-        : `How it handles price: it states each offer's price on your bot, and on payment plans says “${paymentPlanLineOf(coachLines)}”.`;
+  const oneOnOne = input.offers.some((o) => o.botRole === "one_on_one") && coachLines.oneOnOneRange?.trim();
+  const priceLine = `How it handles price: asked early, it answers with no numbers, “${priceAnswerFor(coachLines.priceAnswer)}”, then asks a question. Numbers come only once it knows enough to recommend something${oneOnOne ? ", and never the one-on-one range and a start price in one breath" : ""}.`;
   const { hasToken: token, agent, blocked, warning, fieldVarType, nsByName, heldValue } = access;
   // Push only what the agent reads: of the template's fields and the FAQ's own, the ones whose token is in the agent's prompt.
   const candidates = [...new Set([...TEMPLATE_BOT_FIELDS, PRODUCT_FIELD_OLD, field])];

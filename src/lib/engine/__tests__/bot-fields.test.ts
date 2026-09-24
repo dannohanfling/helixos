@@ -21,15 +21,16 @@ describe("the Stage 1 push is a named subset of the template's fields, never the
     expect(p.business_name_cbf).toBe("Torres Nutrition Coaching");
     expect(p.business_time_zone_cbf).toBe("America/New_York");
     expect(p[PRODUCT_FIELD]).toBe(productSections(input).map((x) => x.text).join("\n\n"));
-    expect(p[PRODUCT_FIELD]).toContain("90-Day Reset: USD $1,500.");
-    expect(p[PRODUCT_FIELD]).toContain("ONE-ON-ONE (90-Day Reset)");
+    // Facts, not a price sheet: a one-on-one offer is call only, and its price is never composed.
+    expect(p[PRODUCT_FIELD]).not.toContain("USD $1,500");
+    expect(p[PRODUCT_FIELD]).toContain("ONE-ON-ONE\nCall only. Never send a link for one-on-one.");
     expect(p[PRODUCT_FIELD]).not.toContain("Holiday Survival Sprint");
     expect(p.ai_constraints_cbf).toBe(houseConstraints("Torres Nutrition Coaching"));
-    expect(HOUSE_CONSTRAINT_LINES).toHaveLength(6);
+    expect(HOUSE_CONSTRAINT_LINES).toHaveLength(7);
     expect(p.ai_constraints_cbf).toContain("Never claim to be Torres Nutrition Coaching.");
     expect(p.ai_constraints_cbf).not.toContain("{business_name_cbf}");
-    expect(HOUSE_CONSTRAINT_LINES[5]).toBe("If someone asks whether you are a person, say you are an assistant and whose assistant you are. Never claim to be {business_name_cbf}.");
-    expect(p.ai_constraints_cbf.split("\n")[5]).toBe("If someone asks whether you are a person, say you are an assistant and whose assistant you are. Never claim to be Torres Nutrition Coaching.");
+    expect(HOUSE_CONSTRAINT_LINES[6]).toBe("If someone asks whether you are a person, say you are an assistant and whose assistant you are. Never claim to be {business_name_cbf}.");
+    expect(p.ai_constraints_cbf.split("\n")[6]).toBe("If someone asks whether you are a person, say you are an assistant and whose assistant you are. Never claim to be Torres Nutrition Coaching.");
     expect([p.qualifying_question_1, p.qualifying_question_2, p.qualifying_question_3]).toEqual(QUALIFYING_DEFAULTS);
     expect(stage1Payload({ businessName: "  ", workspaceName: "Evolve Omega Academy", timezone: "UTC", offers: [] }).business_name_cbf).toBe("Evolve Omega Academy");
   });

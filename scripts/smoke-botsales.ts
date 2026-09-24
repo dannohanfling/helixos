@@ -1,29 +1,28 @@
 /**
- * The bot sales rules, walked end to end (handoff rev 80, §8 of the brief), on the demo client's own bot with Danno's data
- * entered the way the Offers, Settings, Essence and "Your bot" take it:
- * - it composes to scripts/fixtures/golden-bot-danno.json byte for byte, the two Link lines carrying the record's links;
- * - an entry offer with no payment link blocks the push, on the page and on the server;
- * - price mode "never" still sends the old deflect line;
- * - a client offer with no bot role, live and priced, never appears;
- * - the guarantee line and the links are in Needs your eyes, approved one at a time, never in bulk;
+ * How the bot sells, walked end to end (handoff rev 110/111, the "Bot flow (rev 4)" tab), on the demo client's own bot with
+ * Danno's data entered where each piece lives: the coach-level lines through the "Your bot" form, his offers, his examples and
+ * stories, and eleven partner stories from his Proof Bank (one put on the bot through the proof's own page):
+ * - it composes to scripts/fixtures/golden-bot-danno.json byte for byte;
+ * - a live, priced client offer with no bot role, the Academy taken off the bot, a draft proof and an approved proof not on the
+ *   bot never appear;
+ * - every fact, each of his stories and each partner story is in Needs your eyes, approved one at a time, never in bulk; the
+ *   examples, the money flow and the guarantee's lead-in are not;
+ * - an example over its length and a story with a number are warned, never blocked; an entry offer with no link blocks;
  * - the client pushes from their own "Your bot" page, the read-back matches the fixture, the sync record names who pushed, and
  *   the coach's Coach page shows "pushed by client …" with the time against that client's row;
- * - a changed line needs approving again.
- * Against scripts/mock-uchat.ts on :4060.
+ * - a partner story whose number changes needs approving again, and only that one.
+ * Against scripts/mock-uchat.ts on :4060. Nothing here reaches a real bot.
  */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { chromium, type Page } from "@playwright/test";
+import { COACH, ENTRY_LINK, EXAMPLES, OFFERS, PARTNERS, SCHOLARSHIP_LINK, STORIES, WHAT_I_DO, golden } from "./fixtures/danno-bot";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const mockPort = 4060;
 const mock = `http://localhost:${mockPort}`;
 const RUN = randomUUID().slice(0, 8);
 const TOKEN = `uchat-test-token-for-sales-${RUN}-0123456789`;
-const ENTRY_LINK = `https://pay.example.com/accelerator-${RUN}`;
-const CORE_LINK = `https://pay.example.com/academy-deposit-${RUN}`;
 
 async function submit(page: Page, selector: string) {
   await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(selector).first().click()]);
@@ -37,30 +36,32 @@ const store = async () => (await (await fetch(`${mock}/__fields`)).json()) as Re
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
-  const { PRODUCT_FIELD, STAGE1_FIELDS, priceDeflection } = await import("@/lib/engine/bot-fields");
-  const golden = JSON.parse(readFileSync(join(__dirname, "fixtures", "golden-bot-danno.json"), "utf8")) as Record<string, string>;
-  const placeholders = golden[PRODUCT_FIELD].split("\n").filter((l) => l.startsWith("Link: ")).map((l) => l.slice("Link: ".length));
-  const expected: Record<string, string> = { ...golden, [PRODUCT_FIELD]: golden[PRODUCT_FIELD].replace(placeholders[0], ENTRY_LINK).replace(placeholders[1], CORE_LINK) };
+  const { PRODUCT_FIELD, STAGE1_FIELDS } = await import("@/lib/engine/bot-fields");
+  const expected = golden;
 
   const up = await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false);
   const proc = up ? null : spawn("npx", ["tsx", "scripts/mock-uchat.ts", String(mockPort)], { stdio: "ignore", detached: true });
   for (let i = 0; i < 40 && !(await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
   await fetch(`${mock}/__reset`, { method: "POST" });
 
-  // ── Danno's data on the demo client's record, entered where each piece lives. ──
+  // ── Danno's data on the demo client's record. The coach-level lines start empty: the client types them on "Your bot". ──
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const membership = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
   const ws = membership.workspaceId;
   await db.update(schema.memberships).set({
     businessName: "Evolve Omega",
     timezone: "America/Los_Angeles",
-    whatIDo: golden[PRODUCT_FIELD].split("\n\n")[0].split("\n")[1],
-    priceMode: "range",
-    rangeLine: "Sure. It depends on what you need. Some partners start at $1,000, and some work with me one-on-one for up to $50,000 a year.",
-    paymentPlanLine: null,
+    whatIDo: WHAT_I_DO,
     priceAnswer: null,
-    guaranteeLine: "Yes. On my partner programs, if you do the work with me and haven't doubled your investment in 12 months, I keep working with you at no extra cost until you do. I'll walk you through the full terms on the call.",
-    guaranteeCoverageLine: "The guarantee covers the core offer and one-on-one programs only, not the entry offer. If someone on the entry offer path asks, say the guarantee is for the partner programs, and that their $500 is refunded if our call shows it's not a fit.",
+    defaultPath: "call",
+    callMinutes: null,
+    oneOnOneRange: null,
+    paymentPlanLine: null,
+    guaranteeLine: null,
+    guaranteeLeadIn: null,
+    peopleWord: null,
+    botExamples: EXAMPLES,
+    botStories: STORIES,
     botQuestion1: golden.qualifying_question_1,
     botQuestion2: golden.qualifying_question_2,
     botQuestion3: golden.qualifying_question_3,
@@ -79,15 +80,25 @@ async function main() {
   if (essence) await db.update(schema.essences).set({ data }).where(eq(schema.essences.id, essence.id));
   else await db.insert(schema.essences).values({ id: randomUUID(), workspaceId: ws, userId: maya.id, data });
   // The offers, in the order they were made: every offer the demo already has stays off the bot (the default).
-  const at = (i: number) => `2026-01-0${i + 1} 09:00:00`;
-  const ids = { epic: randomUUID(), acc: randomUUID(), acad: randomUUID(), elite: randomUUID(), luxe: randomUUID() };
+  const at = (i: number) => `2026-01-${String(i + 1).padStart(2, "0")} 09:00:00`;
+  const ids = { epic: randomUUID(), gs: randomUUID(), schol: randomUUID(), acad: randomUUID(), elite: randomUUID(), luxe: randomUUID() };
   await db.insert(schema.offers).values([
     // A client's offer, live and priced: no bot role, so it never reaches the bot.
     { id: ids.epic, workspaceId: ws, userId: maya.id, name: `The Epic Voice Immersion ${RUN}`, status: "live", price: 4997, createdAt: at(0) },
-    { id: ids.acc, workspaceId: ws, userId: maya.id, name: "Evolve Omega Accelerator", botName: "Accelerator", botRole: "entry", price: 6000, botFor: "new businesses with a budget under $1,000 who want help.", botTerms: "$500 today, then $500 a month for the rest of the year. 12 payments in all.", paymentLink: ENTRY_LINK, depositAmount: 500, refundableIfNotFit: true, botRefundLine: "The $500 is fully refunded if our call shows it's not a fit.", createdAt: at(1) },
-    { id: ids.acad, workspaceId: ws, userId: maya.id, name: "Evolve Omega Academy", botName: "Academy", botRole: "core", price: 12000, botFor: "established businesses who say plainly they are ready to buy now.", botTerms: "$1,000 deposit today. The next payment is 30 days later. I'll go over the rest on the call.", paymentLink: CORE_LINK, depositAmount: 1000, refundableIfNotFit: true, guaranteeCovered: true, createdAt: at(2) },
-    { id: ids.elite, workspaceId: ws, userId: maya.id, name: "Elite", botRole: "one_on_one", price: 25000, guaranteeCovered: true, createdAt: at(3) },
-    { id: ids.luxe, workspaceId: ws, userId: maya.id, name: "Luxe", botRole: "one_on_one", price: 50000, guaranteeCovered: true, createdAt: at(4) },
+    { id: ids.gs, workspaceId: ws, userId: maya.id, ...OFFERS.getStarted, paymentLink: ENTRY_LINK, createdAt: at(1) },
+    { id: ids.schol, workspaceId: ws, userId: maya.id, ...OFFERS.scholarship, paymentLink: SCHOLARSHIP_LINK, createdAt: at(2) },
+    { id: ids.acad, workspaceId: ws, userId: maya.id, ...OFFERS.academy, status: "live", paymentLink: "https://pay.example.com/academy", createdAt: at(3) },
+    { id: ids.elite, workspaceId: ws, userId: maya.id, ...OFFERS.elite, createdAt: at(4) },
+    { id: ids.luxe, workspaceId: ws, userId: maya.id, ...OFFERS.luxe, createdAt: at(5) },
+  ]);
+  // His Proof Bank: the eleven, approved with permission and on the bot; Candy approved but not yet on it (ticked on her page
+  // below); a draft on the bot and an approved proof off it, which never reach the bot.
+  const proofIds = PARTNERS.map(() => randomUUID());
+  const extra = { draft: randomUUID(), off: randomUUID() };
+  await db.insert(schema.proofs).values([
+    ...PARTNERS.map((p, i) => ({ id: proofIds[i], workspaceId: ws, userId: maya.id, name: `${p.who} ${RUN}`, who: p.who, shortVersion: p.happened, status: "approved" as const, permissionAt: at(20), permissionBy: maya.id, onBot: i !== 0, botFits: i === 0 ? null : p.fits, createdAt: `2026-02-${String(i + 1).padStart(2, "0")} 09:00:00` })),
+    { id: extra.draft, workspaceId: ws, userId: maya.id, name: `Draft ${RUN}`, who: "Rob", shortVersion: `A draft result ${RUN}.`, status: "draft" as const, onBot: true, botFits: "Anything", createdAt: "2026-02-20 09:00:00" },
+    { id: extra.off, workspaceId: ws, userId: maya.id, name: `Off ${RUN}`, who: "Kate", shortVersion: `An approved result off the bot ${RUN}.`, status: "approved" as const, permissionAt: at(20), permissionBy: maya.id, onBot: false, createdAt: "2026-02-21 09:00:00" },
   ]);
 
   // ── The bot: one Booking Agent that reads every Stage 1 field, each holding something written by hand. ──
@@ -122,49 +133,85 @@ async function main() {
     await submit(page, `${mayaForm} button:has-text("Save")`);
     await signOut();
 
-    // ── The client's own "Your bot" page: Danno's data composes to the fixture, byte for byte. ──
+    // ── The client, on her own pages: Candy goes on the bot from her proof's page; the lines go in on "Your bot". ──
     await signIn("client");
+    await page.goto(`${base}/proof/${proofIds[0]}`);
+    await page.locator('[data-testid="proof-on-bot"]').check();
+    await page.fill('[data-testid="proof-bot-fits"]', PARTNERS[0].fits);
+    await submit(page, 'form:has([data-testid="proof-on-bot"]) button:has-text("Save")');
+    const candy = (await db.query.proofs.findFirst({ where: eq(schema.proofs.id, proofIds[0]) }))!;
+    if (!candy.onBot || candy.botFits !== PARTNERS[0].fits || candy.status !== "approved") throw new Error("Candy's proof is on the bot, with when it fits, still approved");
     await page.goto(`${base}/brain`);
     const preview = page.locator('[data-testid="bot-preview"]');
     await preview.waitFor({ timeout: 20000 });
     if ((await page.locator("h1").innerText()).trim() !== "Your bot") throw new Error("the page is called Your bot");
+    await page.fill('[data-testid="bot-price-answer"]', COACH.priceAnswer);
+    await page.locator('[data-testid="bot-default-path"]').selectOption(COACH.defaultPath);
+    await page.fill('[data-testid="bot-call-minutes"]', String(COACH.callMinutes));
+    await page.fill('[data-testid="bot-one-on-one-range"]', COACH.oneOnOneRange);
+    await page.fill('[data-testid="bot-plan-line"]', COACH.paymentPlanLine);
+    await page.fill('[data-testid="bot-guarantee-line"]', COACH.guaranteeLine);
+    await page.fill('[data-testid="bot-guarantee-lead-in"]', COACH.guaranteeLeadIn);
+    await page.fill('[data-testid="bot-people-word"]', COACH.peopleWord);
+    await submit(page, '[data-testid="bot-lines-save"]');
+    await page.locator('[data-testid="bot-lines-saved"]').waitFor({ timeout: 20000 });
+    await preview.waitFor({ timeout: 20000 });
+
+    // ── Danno's data composes to the fixture, byte for byte. ──
     const row = (field: string) => page.locator(`[data-testid="bot-field-row"][data-field="${field}"]`);
     const after = async (field: string) => (await row(field).locator('[data-testid="bot-field-after"]').textContent()) ?? "";
-    // Each save starts from /brain with no "?saved" in the address, so the Saved banner can only be the page rendered after it:
-    // wait for that before reading, or the old render's text is read (seen once, 24 Sep).
-    const saveLines = async (mode: string) => {
-      await page.goto(`${base}/brain`);
-      await page.locator('[data-testid="bot-price-mode"]').selectOption(mode);
-      await submit(page, '[data-testid="bot-lines-save"]');
-      await page.locator('[data-testid="bot-lines-saved"]').waitFor({ timeout: 20000 });
-      await preview.waitFor({ timeout: 20000 });
-    };
     for (const f of ["ai_persona_role_cbf", PRODUCT_FIELD, "ai_constraints_cbf", "qualifying_question_1", "qualifying_question_2", "qualifying_question_3"]) {
       if ((await row(f).getAttribute("data-status")) !== "change") throw new Error(`${f} is a change`);
       if ((await after(f)) !== expected[f]) throw new Error(`${f} composes to the fixture byte for byte; got:\n${await after(f)}\n--- expected:\n${expected[f]}`);
     }
     const product = await after(PRODUCT_FIELD);
-    if (/Epic Voice|4,997/.test(product) || (await page.locator(`[data-testid="bot-section"]`).evaluateAll((els) => els.map((e) => e.textContent ?? "").join(" "))).includes("Epic Voice")) throw new Error("a client offer with no bot role never appears");
-    console.log(`✓ Danno's data composes to the fixture byte for byte (persona ${expected.ai_persona_role_cbf.length}, offers ${expected[PRODUCT_FIELD].length}, rules ${expected.ai_constraints_cbf.length}, questions); the live, priced offer with no role is absent`);
+    for (const absent of ["Epic Voice", "4,997", "Academy", "Rob", "Kate", RUN]) if (product.includes(absent)) throw new Error(`"${absent}" never reaches the bot`);
+    console.log(`✓ Danno's data composes to the fixture byte for byte (persona ${expected.ai_persona_role_cbf.length}, offers ${expected[PRODUCT_FIELD].length}, rules ${expected.ai_constraints_cbf.length}, questions); the client offer, the Academy off the bot, a draft proof and a proof off the bot are absent`);
 
-    // ── Needs your eyes: every price, term, link and guarantee line, one at a time; nothing in bulk; the Push shut until then. ──
+    // ── Warnings, never blocks: an example over its length, and a story with a number, each added on the page. ──
+    await page.locator('[data-testid="bot-example-add"]').click();
+    const exForm = page.locator('#examples > details [data-testid="bot-example-form"]');
+    await exForm.locator('input[name="moment"]').fill(`Too long ${RUN}.`);
+    await exForm.locator('textarea[name="me"]').fill("One. Two. Three?");
+    await submit(page, '#examples > details [data-testid="bot-example-form"] button');
+    await preview.waitFor({ timeout: 20000 });
+    await page.locator('[data-testid="bot-story-add"]').click();
+    const stForm = page.locator('#stories > details [data-testid="bot-story-form"]');
+    await stForm.locator('textarea[name="text"]').fill(`My first $5,000 week ${RUN}.`);
+    await stForm.locator('input[name="when"]').fill("Never");
+    await submit(page, '#stories > details [data-testid="bot-story-form"] button');
+    await preview.waitFor({ timeout: 20000 });
+    const warnings = (await page.locator('[data-testid="bot-warning"]').allInnerTexts()).map((w) => w.trim());
+    if (!warnings.includes(`"Too long ${RUN}.": 3 sentences, and a normal message is at most 2.`) || !warnings.some((w) => w.startsWith(`Your story "My first $5,000 week ${RUN}." has a number in it.`))) throw new Error(`both are warned, got ${warnings.join(" | ")}`);
+    if (!(await page.locator(`[data-testid="eyes-row"][data-key^="story:"]`).allInnerTexts()).some((t) => t.includes(`$5,000 week ${RUN}`))) throw new Error("a new story needs eyes");
+    // Taken off again, on the page.
+    await page.locator(`[data-testid="bot-example"]:has-text("Too long ${RUN}") summary`).click();
+    await submit(page, `[data-testid="bot-example"]:has-text("Too long ${RUN}") button:has-text("Remove")`);
+    await preview.waitFor({ timeout: 20000 });
+    await page.locator(`[data-testid="bot-story"]:has-text("$5,000 week ${RUN}") summary`).click();
+    await submit(page, `[data-testid="bot-story"]:has-text("$5,000 week ${RUN}") button:has-text("Remove")`);
+    await preview.waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="bot-warning"]').count()) || (await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD]) throw new Error("removed, no warning is left and the fixture composes again");
+    console.log("✓ an example over two sentences and a story with a number are warned, not blocked, added and removed on the page");
+
+    // ── Needs your eyes: every fact, his stories, the partner stories; one at a time; nothing in bulk; the Push shut. ──
     const eyes = async () => page.locator('[data-testid="eyes-row"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-key")}:${e.getAttribute("data-approved")}`));
     const keys = (await eyes()).map((k) => k.replace(/:(yes|no)$/, ""));
-    const want = ["price.range", "price.plan", "guarantee.line", "guarantee.coverage", ...[ids.acc, ids.acad].flatMap((id) => [`offer:${id}.terms`, `offer:${id}.link`, `offer:${id}.refund`])];
+    const want = [`offer:${ids.gs}.terms`, `offer:${ids.gs}.link`, `offer:${ids.gs}.cancel`, `offer:${ids.schol}.terms`, `offer:${ids.schol}.link`, "oneonone.range", "refund", "price.plan", "call", "guarantee.line", ...STORIES.map((x) => `story:${x.id}`), ...proofIds.map((id) => `proof:${id}`)];
     if (JSON.stringify(keys) !== JSON.stringify(want)) throw new Error(`the lines that need eyes, got ${keys.join(", ")}`);
     const eyesText = await page.locator('[data-testid="bot-eyes"]').innerText();
-    if (!eyesText.includes(ENTRY_LINK) || !eyesText.includes(CORE_LINK) || !eyesText.includes("haven't doubled your investment in 12 months")) throw new Error("the guarantee line and both links are in Needs your eyes, word for word");
+    if (eyesText.includes("Hey Jess") || eyesText.includes("Money comes up inside")) throw new Error("the examples and the money flow need no eyes");
     if ((await page.locator('[data-testid="bot-eyes"] button').count()) !== want.length || (await page.locator('[data-testid="bot-eyes"] button:has-text("all")').count())) throw new Error("one Approve per line, and no approve-all");
     const pushButton = page.locator('[data-testid="push-stage1"]');
     if (!(await pushButton.isDisabled())) throw new Error("the Push is shut while any line is not approved");
     if ((await page.locator('[data-testid="bot-hold"]').count()) !== want.length) throw new Error("each unapproved line is named as a hold");
-    console.log(`✓ Needs your eyes: ${want.length} lines (range, payment plan, guarantee, coverage, and each offer's terms, link and refund line), one Approve each, no bulk; the Push is shut`);
+    console.log(`✓ Needs your eyes: ${want.length} lines (10 facts, 8 stories, 11 partner stories), one Approve each, no bulk; the examples and the money flow are not among them; the Push is shut`);
 
     // ── An entry offer with no payment link blocks the push: said on the page, and refused by the server if pressed anyway. ──
-    await db.update(schema.offers).set({ paymentLink: null }).where(eq(schema.offers.id, ids.acc));
+    await db.update(schema.offers).set({ paymentLink: null }).where(eq(schema.offers.id, ids.gs));
     await page.goto(`${base}/brain`);
     await preview.waitFor({ timeout: 20000 });
-    const noLink = "Accelerator is an entry offer on your bot with no payment link. Add the link on the Offer, or change its role.";
+    const noLink = "Get started is an entry offer on your bot with no payment link. Add the link on the Offer, or change its role.";
     if (!(await page.locator('[data-testid="bot-hold"]').allInnerTexts()).map((h) => h.trim()).includes(noLink)) throw new Error("an entry offer with no link is named as a hold");
     if (!(await pushButton.isDisabled())) throw new Error("the Push is shut");
     const sentBefore = (await requests()).length;
@@ -172,17 +219,10 @@ async function main() {
     await Promise.all([page.waitForURL(/\?note=/, { timeout: 20000 }), pushButton.click()]);
     const note = (await page.locator('[data-testid="bot-push-note"]').innerText()).trim();
     if (!note.startsWith("Not sent.") || (await requests()).length !== sentBefore) throw new Error(`pressed anyway, the server sends nothing and says why, got "${note}"`);
-    await db.update(schema.offers).set({ paymentLink: ENTRY_LINK }).where(eq(schema.offers.id, ids.acc));
+    await db.update(schema.offers).set({ paymentLink: ENTRY_LINK }).where(eq(schema.offers.id, ids.gs));
+    await page.goto(`${base}/brain`);
+    await preview.waitFor({ timeout: 20000 });
     console.log(`✓ an entry offer with no link: "${noLink}"; pressed anyway, "${note.slice(0, 60)}…" and nothing sent`);
-
-    // ── Price mode "never" still sends the old deflect line, and drops the range and plan lines from Needs your eyes. ──
-    await saveLines("never");
-    const never = await after(PRODUCT_FIELD);
-    if (!never.includes(`PRICE\n${priceDeflection(null)}\n`) || never.includes("Some partners start at")) throw new Error(`price mode never sends the old deflect line, got:\n${never}`);
-    if ((await eyes()).some((k) => k.startsWith("price."))) throw new Error("in never mode no price line needs eyes");
-    await saveLines("range");
-    if ((await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD]) throw new Error(`back in range mode, the fixture again; got:\n${await after(PRODUCT_FIELD)}\nmode ${(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))?.priceMode}, url ${page.url()}`);
-    console.log("✓ price mode never: the old deflect line, no range; back to range, the fixture again");
 
     // ── Approve each line, one press each. ──
     for (let i = 0; i < want.length; i++) {
@@ -194,7 +234,7 @@ async function main() {
     if (await pushButton.isDisabled()) throw new Error("every line approved, the Push opens");
     if ((await page.locator('[data-testid="bot-hold"]').count())) throw new Error("no hold remains");
     const approvals = await db.query.botApprovals.findMany({ where: eq(schema.botApprovals.membershipId, membership.id) });
-    if (approvals.length !== want.length || approvals.some((a) => a.approvedBy !== maya.id)) throw new Error("one approval row per line, naming who approved");
+    if (approvals.filter((a) => want.includes(a.elementKey)).length !== want.length || approvals.some((a) => a.approvedBy !== maya.id)) throw new Error("one approval row per line, naming who approved");
 
     // ── The client pushes their own bot; the read-back matches the fixture. ──
     await Promise.all([page.waitForURL(/\?pushed=/, { timeout: 30000 }), pushButton.click()]);
@@ -227,16 +267,18 @@ async function main() {
     if (!(await page.locator('[data-testid="bot-last-pushed"]').innerText()).includes(`by ${maya.name}.`)) throw new Error("the coach's view of the bot names who pushed");
     console.log(`✓ the Coach page: "${line}"`);
 
-    // ── A changed line needs approving again, and the Push shuts until it is. ──
-    await db.update(schema.memberships).set({ guaranteeLine: "Yes. If you do the work and haven't doubled your investment in 12 months, I keep working with you until you do." }).where(eq(schema.memberships.id, membership.id));
+    // ── A partner story whose number changes needs approving again, and only that one; the Push shuts until it is. ──
+    await db.update(schema.proofs).set({ shortVersion: PARTNERS[3].happened.replace("$4,750", "$4,700") }).where(eq(schema.proofs.id, proofIds[3]));
     await page.reload();
     await preview.waitFor({ timeout: 20000 });
     const again = await eyes();
-    if (!again.includes("guarantee.line:no") || again.filter((k) => k.endsWith(":no")).length !== 1) throw new Error(`only the changed guarantee line needs approving again, got ${again.join(", ")}`);
+    if (!again.includes(`proof:${proofIds[3]}:no`) || again.filter((k) => k.endsWith(":no")).length !== 1) throw new Error(`only David's changed story needs approving again, got ${again.filter((k) => k.endsWith(":no")).join(", ")}`);
     if (!(await pushButton.isDisabled())) throw new Error("the Push shuts until the changed line is approved");
-    console.log("✓ a changed guarantee line needs approving again; the Push shuts until it is (the coach can approve and push for any client)");
+    console.log("✓ a partner story's number changed: only that line needs approving again, and the Push shuts until it is");
   } finally {
     for (const id of Object.values(ids)) await db.delete(schema.offers).where(eq(schema.offers.id, id));
+    for (const id of [...proofIds, ...Object.values(extra)]) await db.delete(schema.proofs).where(eq(schema.proofs.id, id));
+    await db.update(schema.memberships).set({ botExamples: [], botStories: [] }).where(eq(schema.memberships.id, membership.id));
     await db.delete(schema.botApprovals).where(eq(schema.botApprovals.membershipId, membership.id));
     await browser.close();
     if (proc?.pid) try { process.kill(-proc.pid); } catch { /* already gone */ }

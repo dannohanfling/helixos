@@ -5,6 +5,10 @@ const id = () => text("id").primaryKey();
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
 
 /** A workspace is one coach deployment (one HelixOS base). */
+/** One HOW I SAY IT example on a member's bot: the moment, what the lead says (optional), what the coach says. */
+export type BotExampleRow = { id: string; moment: string; them: string | null; me: string; kind: "normal" | "objection" };
+/** One of the coach's own stories on their bot: when it fits, and for a belief story the belief it answers. */
+export type BotStoryRow = { id: string; text: string; when: string | null; kind: "plain" | "belief"; belief: string | null };
 /** A guarantee's terms, structured (handoff rev 80, §2C): for the terms page and, later, the tracker. */
 export type GuaranteeTerms = { windowMonths?: number; measure?: string; conditions?: string[]; attendancePct?: number; replayDays?: number; exclusions?: string; remedy?: string };
 
@@ -92,6 +96,21 @@ export const memberships = sqliteTable(
     guaranteeTerms: text("guarantee_terms", { mode: "json" }).$type<GuaranteeTerms>().notNull().default({}),
     /** Where the full terms live (a GHL page for now). */
     guaranteeTermsUrl: text("guarantee_terms_url"),
+    /* How the bot sells (handoff rev 90 to 109, the Bot flow rev 4 tab): facts it knows, how the coach talks, and their stories. */
+    /** After the questions, where most people go: the call, or the first entry offer's link. */
+    defaultPath: text("default_path", { enum: ["call", "link"] }).notNull().default("call"),
+    /** How long the call is, in minutes: "the 15-minute call". Blank says "the call". */
+    callMinutes: integer("call_minutes"),
+    /** The one-on-one range as a fact ("$25,000 to $50,000 a year"): the contrast when recommending, never the answer to an early price question. Needs your eyes. */
+    oneOnOneRange: text("one_on_one_range"),
+    /** An optional lead-in before the guarantee promise, free words ("If you're putting skin in the game, I put skin in the game too."). Outside approval. */
+    guaranteeLeadIn: text("guarantee_lead_in"),
+    /** What the coach calls the people they work with, in the stories heading: "partners". Blank means "clients". */
+    peopleWord: text("people_word"),
+    /** HOW I SAY IT: short examples in the coach's words, each typed normal or objection. Outside approval. */
+    botExamples: text("bot_examples", { mode: "json" }).$type<BotExampleRow[]>().notNull().default([]),
+    /** MY STORIES: true stories from the coach's own life, plain or answering a belief. Each through Needs your eyes. */
+    botStories: text("bot_stories", { mode: "json" }).$type<BotStoryRow[]>().notNull().default([]),
     /** The three questions the bot asks, for the coach, not per offer. Blank means the house default. */
     botQuestion1: text("bot_question_1"),
     botQuestion2: text("bot_question_2"),
@@ -563,6 +582,10 @@ export const offers = sqliteTable(
     refundableIfNotFit: integer("refundable_if_not_fit", { mode: "boolean" }).notNull().default(false),
     /** Said when the link goes out and the offer is refundable. Blank means the suggested default. */
     botRefundLine: text("bot_refund_line"),
+    /** When the bot shares the terms ("Share when recommending it.", "Only when Get started is too much."). Blank means the first. */
+    botTermsWhen: text("bot_terms_when"),
+    /** Cancelling, said only if asked ("Get started is month to month. Cancel anytime."). Needs your eyes. */
+    botCancelLine: text("bot_cancel_line"),
     guaranteeCovered: integer("guarantee_covered", { mode: "boolean" }).notNull().default(false),
     objTime: text("obj_time"),
     objMoney: text("obj_money"),
@@ -1093,6 +1116,10 @@ export const proofs = sqliteTable(
     /** Tick two: "[Name] has given me permission to use what they said here in my marketing." Who ticked it and when. */
     permissionAt: text("permission_at"),
     permissionBy: text("permission_by"),
+    /** A partner story on the coach's bot (handoff rev 101): approved proof only, told as "who: short version (when it fits)". */
+    onBot: integer("on_bot", { mode: "boolean" }).notNull().default(false),
+    /** When the bot tells it, in the coach's words ("Too saturated, small audience"). Not the belief enum: that has four values. */
+    botFits: text("bot_fits"),
     createdAt: createdAt(),
   },
   (t) => [index("proofs_user").on(t.userId, t.status)],

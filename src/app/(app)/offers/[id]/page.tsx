@@ -12,7 +12,7 @@ import { CURRENCIES, offerOnePager, scoreOffer } from "@/lib/engine/offer-score"
 import { assetsFor } from "@/lib/queries/library";
 import { moveLegacyObjectionAction } from "@/lib/actions/objections";
 import { LEGACY_OFFER_OBJECTIONS, isSharedObjection, reframesOf } from "@/lib/engine/objections";
-import { BOT_ROLES, BOT_ROLE_LABEL, REFUND_LINE_DEFAULT } from "@/lib/engine/bot-fields";
+import { BOT_ROLES, BOT_ROLE_LABEL, REFUND_LINE_DEFAULT, TERMS_WHEN_DEFAULT } from "@/lib/engine/bot-fields";
 import { SubmitButton } from "@/components/submit-button";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
@@ -181,15 +181,20 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                 <Field label="Name on your bot" hint="Blank uses the offer's name.">
                   <input className="field" name="botName" defaultValue={offer.botName ?? ""} placeholder={offer.name} data-testid="offer-bot-name" />
                 </Field>
-                <Field label="Who it's for, one line">
-                  <input className="field" name="botFor" defaultValue={offer.botFor ?? ""} placeholder="new businesses with a budget under $1,000 who want help." data-testid="offer-bot-for" />
+                <div className="sm:col-span-2">
+                  <Field label="When your bot offers it, one sentence" hint="How it comes up in the conversation. Your bot reads it as part of how you talk about money.">
+                    <input className="field" name="botFor" defaultValue={offer.botFor ?? ""} placeholder="Get started comes up when they ask how to start, or after we have talked budget." data-testid="offer-bot-for" />
+                  </Field>
+                </div>
+                <Field label="The terms, as a fact" hint="Your bot knows this and shares it when the time comes. You approve it on Your bot.">
+                  <input className="field" name="botTerms" defaultValue={offer.botTerms ?? ""} placeholder="$500 today, then $500 a month." data-testid="offer-bot-terms" />
                 </Field>
-                <Field label="What they get, one line (optional)" hint="Sent inside this offer's block as its Result line.">
-                  <input className="field" name="botEndResult" defaultValue={offer.botEndResult ?? ""} data-testid="offer-bot-end-result" />
+                <Field label="When it shares the terms" hint={`Blank uses: ${TERMS_WHEN_DEFAULT}`}>
+                  <input className="field" name="botTermsWhen" defaultValue={offer.botTermsWhen ?? ""} placeholder={TERMS_WHEN_DEFAULT} data-testid="offer-bot-terms-when" />
                 </Field>
                 <div className="sm:col-span-2">
-                  <Field label="The terms, as your bot says them" hint="The deposit and what follows it, in your words. Your bot quotes this, so you approve it on Your bot.">
-                    <input className="field" name="botTerms" defaultValue={offer.botTerms ?? ""} placeholder="$500 today, then $500 a month for the rest of the year. 12 payments in all." data-testid="offer-bot-terms" />
+                  <Field label="Cancelling, said only if asked (optional)">
+                    <input className="field" name="botCancelLine" defaultValue={offer.botCancelLine ?? ""} placeholder="Get started is month to month. Cancel anytime." data-testid="offer-bot-cancel" />
                   </Field>
                 </div>
                 <Field label="Deposit amount">
@@ -203,7 +208,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                   <input type="checkbox" name="guaranteeCovered" defaultChecked={offer.guaranteeCovered} data-testid="offer-guarantee-covered" /> Covered by your guarantee
                 </label>
                 <div className="sm:col-span-2">
-                  <Field label="The refund line, as your bot says it" hint={`Blank uses: ${REFUND_LINE_DEFAULT}`}>
+                  <Field label="The refund, said only if they hesitate to pay" hint={`Blank uses: ${REFUND_LINE_DEFAULT}`}>
                     <input className="field" name="botRefundLine" defaultValue={offer.botRefundLine ?? ""} placeholder={REFUND_LINE_DEFAULT} data-testid="offer-refund-line" />
                   </Field>
                 </div>

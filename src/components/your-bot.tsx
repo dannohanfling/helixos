@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { schema } from "@/db";
-import { approveBotLineAction, pushYourBotAction, saveBotLinesAction } from "@/lib/actions/your-bot";
+import { approveBotLineAction, deleteBotExampleAction, deleteBotStoryAction, pushYourBotAction, saveBotExampleAction, saveBotLinesAction, saveBotStoryAction } from "@/lib/actions/your-bot";
 import type { Stage1Preview } from "@/lib/community-loyalty";
-import { NOTHING_CURRENT_LABEL, PAYMENT_PLAN_LINE_DEFAULT, PRICE_ANSWER_DEFAULT, PRICE_MODES, PRICE_MODE_LABEL, PRODUCT_FIELD, botNameOf, botOffers, nothingToPushLine, paymentPlanLineOf, priceAnswerFor, refundLineOf, suggestCoverageLine, type PlanRow, type Stage1Field } from "@/lib/engine/bot-fields";
+import { DEFAULT_PATHS, DEFAULT_PATH_LABEL, NOTHING_CURRENT_LABEL, PRICE_ANSWER_DEFAULT, PRODUCT_FIELD, botNameOf, botOffers, exampleWarnings, nothingToPushLine, peopleWordOf, priceAnswerFor, refundLineOf, type PlanRow, type Stage1Field } from "@/lib/engine/bot-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
 
@@ -22,7 +22,8 @@ const GROUPS: { field: Stage1Field; name: string; edit: string }[] = [
 ];
 
 /** Where a section of the offers field is changed. */
-const sectionEdit = (key: string): string => (key === "what" ? "/settings#your-bot" : key === "price" || key === "guarantee" ? "#lines" : key.startsWith("offer:") ? `/offers/${key.slice("offer:".length)}#bot` : "/offers");
+const SECTION_EDIT: Record<string, string> = { what: "/settings#your-bot", money: "#lines", facts: "#lines", examples: "#examples", stories: "#stories", partners: "/proof", one_on_one: "/offers" };
+const sectionEdit = (key: string): string => SECTION_EDIT[key] ?? "/offers";
 
 /**
  * The "Your bot" panel (handoff rev 77, 78 and 80): a summary of exactly what will be sent, grouped by the bot field it composes
@@ -30,17 +31,23 @@ const sectionEdit = (key: string): string => (key === "what" ? "/settings#your-b
  * checks, the steps that stay manual in Community Loyalty, and one Push. The member sees it for their own bot; their coach sees
  * the same panel for any member's.
  */
-export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m: schema.Membership; preview: Stage1Preview; own: boolean; whose: string; sp: { pushed?: string; changed?: string; failed?: string; note?: string; saved?: string }; lastPushedLine: string }) {
+export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m: schema.Membership; preview: Stage1Preview; own: boolean; whose: string; sp: { pushed?: string; changed?: string; failed?: string; note?: string; saved?: string; exampleMissing?: string; storyMissing?: string }; lastPushedLine: string }) {
   const rowOf = new Map(preview.rows.map((r) => [r.field, r]));
   const sending = preview.rows.filter((r) => r.status === "change");
   const c = preview.input.coach ?? {};
   const offers = botOffers(preview.input.offers);
-  const payer = offers.find((o) => o.botRole === "core" && o.paymentLink) ?? offers.find((o) => o.botRole === "entry" && o.paymentLink);
+  const payer = offers.find((o) => (o.botRole === "entry" || o.botRole === "core") && o.paymentLink);
+  const guarantee = c.guaranteeLine?.trim() ? [c.guaranteeLeadIn?.trim(), c.guaranteeLine.trim()].filter(Boolean).join(" ") : "";
   const samples: [string, string][] = [
-    ["How much is it?", c.priceMode === "range" ? c.rangeLine?.trim() || "(no range line yet)" : c.priceMode === "never" ? priceAnswerFor(c.priceAnswer) : offers.length ? offers.map((o) => `${botNameOf(o)}: ${o.currency} ${o.price.toLocaleString()}`).join(". ") : "(no offer on your bot yet)"],
-    ["Is there a guarantee?", c.guaranteeLine?.trim() || "(no guarantee: your bot says nothing about results)"],
-    ["I'm ready, where do I pay?", payer ? `Here's the link for ${botNameOf(payer)}: ${payer.paymentLink}. ${refundLineOf(payer)}`.trim() : "(no offer on your bot takes payment in chat, so it books a call)"],
+    ["How much is it?", `${priceAnswerFor(c.priceAnswer)} Then a question about what they need.`],
+    ["Is there a guarantee?", guarantee || "(no guarantee: your bot says nothing about results)"],
+    ["Yes, send me the link.", payer ? `Here's the link for ${botNameOf(payer)}: ${payer.paymentLink}.` : "(no offer on your bot takes payment in chat, so it books a call)"],
+    ["I'd feel weird paying before we talk.", payer && refundLineOf(payer) ? `We can talk first, or ${refundLineOf(payer)}` : "(no refund on your bot: it offers the call)"],
   ];
+  const examples = m.botExamples;
+  const stories = m.botStories;
+  const partners = c.partnerStories ?? [];
+  const word = peopleWordOf(c);
   const edit = (href: string) => (own && href ? <Link href={href} className="text-xs underline" data-testid="bot-element-edit">Edit</Link> : href ? <span className="text-[11px] text-ink-3">edited by them</span> : null);
 
   return (
@@ -125,7 +132,7 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
 
       <Card title="Needs your eyes" action={<span className="text-xs text-ink-3">{preview.eyes.filter((e) => e.approved).length} of {preview.eyes.length} approved</span>}>
         <div id="eyes" data-testid="bot-eyes">
-          <p className="mb-2 text-xs text-ink-3">Every price, deposit, term, link and guarantee your bot will say, word for word. Each is approved on its own; a changed line needs approving again. Nothing is pushed until all are approved.</p>
+          <p className="mb-2 text-xs text-ink-3">Every fact your bot knows (prices, terms, links, the refund, the call, the guarantee) and every story it may tell as true, word for word. Each is approved on its own; a changed line needs approving again. Nothing is pushed until all are approved.</p>
           {preview.eyes.length ? (
             <ul className="space-y-2">
               {preview.eyes.map((e) => (
@@ -149,54 +156,139 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-ink-2" data-testid="eyes-none">Nothing to approve: no price, deposit, term, link or guarantee is on your bot yet.</p>
+            <p className="text-sm text-ink-2" data-testid="eyes-none">Nothing to approve: no fact or story is on your bot yet.</p>
           )}
         </div>
       </Card>
 
-      <Card title="Lines only your bot has">
+      <Card title="Facts and money: lines only your bot has">
         <form action={saveBotLinesAction} className="space-y-3" id="lines" data-testid="bot-lines">
           <input type="hidden" name="membershipId" value={m.id} />
           {sp.saved ? <p className="rounded-lg bg-good-soft p-2 text-xs" data-testid="bot-lines-saved">Saved. Changed lines need approving again.</p> : null}
+          <p className="text-xs text-ink-3">Your bot knows these and shares one only when the conversation gets there. Each offer&apos;s terms, link, cancelling and refund are on the offer&apos;s own page.</p>
           <label className="block text-sm">
-            How it handles price
-            <select className="field mt-1" name="priceMode" defaultValue={c.priceMode ?? "full"} data-testid="bot-price-mode">
-              {PRICE_MODES.map((p) => (
-                <option key={p} value={p}>
-                  {PRICE_MODE_LABEL[p]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm">
-            The range, when asked about price
-            <input className="field mt-1" name="rangeLine" defaultValue={c.rangeLine ?? ""} placeholder="Sure. It depends on what you need. Some start at …, and some work with me for up to …" data-testid="bot-range-line" />
-          </label>
-          <label className="block text-sm">
-            When asked about payment plans
-            <input className="field mt-1" name="paymentPlanLine" defaultValue={c.paymentPlanLine ?? ""} placeholder={PAYMENT_PLAN_LINE_DEFAULT} data-testid="bot-plan-line" />
-          </label>
-          <label className="block text-sm">
-            Instead of a price (when it never talks price)
+            When someone asks the price early, before you know their situation: no numbers
             <input className="field mt-1" name="priceAnswer" defaultValue={c.priceAnswer ?? ""} placeholder={PRICE_ANSWER_DEFAULT} data-testid="bot-price-answer" />
           </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              After your questions, most people get
+              <select className="field mt-1" name="defaultPath" defaultValue={c.defaultPath ?? "call"} data-testid="bot-default-path">
+                {DEFAULT_PATHS.map((p) => (
+                  <option key={p} value={p}>
+                    {DEFAULT_PATH_LABEL[p]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              The call, in minutes
+              <input className="field mt-1 tabular" name="callMinutes" type="number" min={1} defaultValue={c.callMinutes ?? ""} placeholder="15" data-testid="bot-call-minutes" />
+            </label>
+          </div>
           <label className="block text-sm">
-            Your guarantee, as your bot says it, word for word
+            The one-on-one range, as a fact (only the contrast when recommending, never the answer to an early price question)
+            <input className="field mt-1" name="oneOnOneRange" defaultValue={c.oneOnOneRange ?? ""} placeholder="$25,000 to $50,000 a year" data-testid="bot-one-on-one-range" />
+          </label>
+          <label className="block text-sm">
+            Payment plans, only if asked: what your bot does
+            <textarea className="field mt-1" name="paymentPlanLine" rows={2} defaultValue={c.paymentPlanLine ?? ""} placeholder="Leave empty and your bot never talks about payment plans." data-testid="bot-plan-line" />
+          </label>
+          <label className="block text-sm">
+            Your guarantee, the promise your bot says word for word
             <textarea className="field mt-1" name="guaranteeLine" rows={3} defaultValue={c.guaranteeLine ?? ""} placeholder="Leave empty for no guarantee on your bot." data-testid="bot-guarantee-line" />
           </label>
           <label className="block text-sm">
-            What the guarantee covers
-            <textarea className="field mt-1" name="guaranteeCoverageLine" rows={2} defaultValue={c.guaranteeCoverageLine ?? ""} placeholder={suggestCoverageLine(preview.input.offers) || "Mark the covered offers on their pages for a suggestion."} data-testid="bot-coverage-line" />
+            A lead-in before it (optional, free words)
+            <input className="field mt-1" name="guaranteeLeadIn" defaultValue={c.guaranteeLeadIn ?? ""} placeholder="If you're putting skin in the game, I put skin in the game too." data-testid="bot-guarantee-lead-in" />
           </label>
-          <p className="text-xs text-ink-3">The payment plan line uses &ldquo;{paymentPlanLineOf(c)}&rdquo; while its box is empty.</p>
+          <label className="block text-sm">
+            What you call the people you work with
+            <input className="field mt-1" name="peopleWord" defaultValue={c.peopleWord ?? ""} placeholder="clients" data-testid="bot-people-word" />
+          </label>
+          <p className="text-xs text-ink-3">What the guarantee covers is composed from the &ldquo;covered&rdquo; tick on each offer, and said only when an offer on your bot isn&apos;t covered.</p>
           <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="bot-lines-save">
             Save these lines
           </SubmitButton>
         </form>
       </Card>
 
+      <Card title="How you say it" action={<span className="text-xs text-ink-3">{examples.length} examples</span>}>
+        <div id="examples" data-testid="bot-examples">
+          <p className="mb-2 text-xs text-ink-3">Short examples from your own chats. Your bot matches the tone and the order and never copies them word for word. No approval needed. A normal message is two sentences at most; an objection up to four: acknowledge them, a story if one fits, the answer, then one question.</p>
+          {sp.exampleMissing ? <p className="mb-2 rounded-lg bg-warn-soft p-2 text-xs" role="alert">An example needs the moment and what you say.</p> : null}
+          <ul className="space-y-2">
+            {examples.map((e) => (
+              <li key={e.id} className="rounded-lg border p-2 text-sm" data-testid="bot-example" data-kind={e.kind}>
+                <details>
+                  <summary className="cursor-pointer">
+                    <span className="font-medium">{e.moment}</span> <Badge tone={e.kind === "objection" ? "warn" : "neutral"}>{e.kind}</Badge>
+                    {exampleWarnings(e).map((w) => <span key={w} className="ml-2 text-xs text-warn" data-testid="bot-example-warning">{w}</span>)}
+                  </summary>
+                  <ExampleForm m={m} e={e} />
+                  <form action={deleteBotExampleAction} className="mt-1">
+                    <input type="hidden" name="membershipId" value={m.id} />
+                    <input type="hidden" name="id" value={e.id} />
+                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Removing…">Remove</SubmitButton>
+                  </form>
+                </details>
+              </li>
+            ))}
+          </ul>
+          <details className="mt-2">
+            <summary className="cursor-pointer text-sm underline" data-testid="bot-example-add">Add an example</summary>
+            <ExampleForm m={m} />
+          </details>
+        </div>
+      </Card>
+
+      <Card title="Your stories" action={<span className="text-xs text-ink-3">{stories.length} stories</span>}>
+        <div id="stories" data-testid="bot-stories">
+          <p className="mb-2 text-xs text-ink-3">True stories from your own life. Your bot tells only these, may shorten one and never adds to it: at most one plain story a chat, a belief story whenever its belief comes up, never more than two. Each is approved in Needs your eyes. No results or dollar figures here: those are proof.</p>
+          {sp.storyMissing ? <p className="mb-2 rounded-lg bg-warn-soft p-2 text-xs" role="alert">A story needs its words, and a belief story the belief it answers.</p> : null}
+          <ul className="space-y-2">
+            {stories.map((st) => (
+              <li key={st.id} className="rounded-lg border p-2 text-sm" data-testid="bot-story" data-kind={st.kind}>
+                <details>
+                  <summary className="cursor-pointer">
+                    {st.text} <Badge tone={st.kind === "belief" ? "accent" : "neutral"}>{st.kind === "belief" ? `belief: ${st.belief}` : "plain"}</Badge>
+                  </summary>
+                  <StoryForm m={m} st={st} />
+                  <form action={deleteBotStoryAction} className="mt-1">
+                    <input type="hidden" name="membershipId" value={m.id} />
+                    <input type="hidden" name="id" value={st.id} />
+                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Removing…">Remove</SubmitButton>
+                  </form>
+                </details>
+              </li>
+            ))}
+          </ul>
+          <details className="mt-2">
+            <summary className="cursor-pointer text-sm underline" data-testid="bot-story-add">Add a story</summary>
+            <StoryForm m={m} />
+          </details>
+        </div>
+      </Card>
+
+      <Card title={`${word[0].toUpperCase()}${word.slice(1, -1)} stories, from your Proof Bank`} action={<span className="text-xs text-ink-3">{partners.length} on your bot</span>}>
+        <div id="partners" data-testid="bot-partners">
+          <p className="mb-2 text-xs text-ink-3">Real results, told only inside an objection, one a chat, as that person&apos;s own. Each comes from an approved proof (their permission ticked) that you put on your bot on its page, with its first name, what happened, and when it fits. Each is approved again here in Needs your eyes.</p>
+          {partners.length ? (
+            <ul className="space-y-1 text-sm">
+              {partners.map((p) => (
+                <li key={p.id} data-testid="bot-partner">
+                  <Link href={`/proof/${p.id}#bot`} className="font-medium underline">{p.who}</Link>: {p.happened}{p.fits ? <span className="text-ink-3"> ({p.fits})</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-ink-2">None yet. On an approved proof in <Link href="/proof" className="underline">your Proof Bank</Link>, tick &ldquo;On my bot&rdquo;.</p>
+          )}
+        </div>
+      </Card>
+
       <Card title="Sample replies">
-        <p className="mb-2 text-xs text-ink-3">What your bot is told to say to each; it puts the reply in its own words, in your voice.</p>
+        <p className="mb-2 text-xs text-ink-3">What your bot knows for each; it puts the reply in its own words, in your voice, two sentences at most.</p>
         <dl className="space-y-2 text-sm" data-testid="bot-samples">
           {samples.map(([q, a]) => (
             <div key={q}>
@@ -209,8 +301,8 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
 
       <Card title="Before you push">
         <div data-testid="bot-checks">
-          {preview.holds.map((h) => <p key={h} className="mb-1 rounded bg-danger-soft p-2 text-sm" data-testid="bot-hold">{h}</p>)}
-          {preview.warnings.map((w) => <p key={w} className="mb-1 rounded bg-warn-soft p-2 text-sm" data-testid="bot-warning">{w}</p>)}
+          {preview.holds.map((h, i) => <p key={`${i}:${h}`} className="mb-1 rounded bg-danger-soft p-2 text-sm" data-testid="bot-hold">{h}</p>)}
+          {preview.warnings.map((w, i) => <p key={`${i}:${w}`} className="mb-1 rounded bg-warn-soft p-2 text-sm" data-testid="bot-warning">{w}</p>)}
           {!preview.holds.length && !preview.warnings.length ? <p className="text-sm text-ink-2">Nothing stops this push.</p> : null}
           <p className="mb-1 mt-3 text-xs font-medium text-ink-2">Steps that stay manual in Community Loyalty, read from your bot just now:</p>
           <ul className="space-y-0.5 text-xs">
@@ -239,5 +331,43 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
         </div>
       </Card>
     </div>
+  );
+}
+
+function ExampleForm({ m, e }: { m: schema.Membership; e?: schema.BotExampleRow }) {
+  return (
+    <form action={saveBotExampleAction} className="mt-2 space-y-2" data-testid="bot-example-form">
+      <input type="hidden" name="membershipId" value={m.id} />
+      <input type="hidden" name="id" value={e?.id ?? ""} />
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+        <input className="field" name="moment" defaultValue={e?.moment ?? ""} placeholder="The moment: They ask the price first, nothing else." required />
+        <select className="field" name="kind" defaultValue={e?.kind ?? "normal"}>
+          <option value="normal">Normal: two sentences</option>
+          <option value="objection">Objection: up to four</option>
+        </select>
+      </div>
+      <input className="field" name="them" defaultValue={e?.them ?? ""} placeholder="What they say (optional)" />
+      <textarea className="field" name="me" rows={2} defaultValue={e?.me ?? ""} placeholder="What you say" required />
+      <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…">{e ? "Save" : "Add"}</SubmitButton>
+    </form>
+  );
+}
+
+function StoryForm({ m, st }: { m: schema.Membership; st?: schema.BotStoryRow }) {
+  return (
+    <form action={saveBotStoryAction} className="mt-2 space-y-2" data-testid="bot-story-form">
+      <input type="hidden" name="membershipId" value={m.id} />
+      <input type="hidden" name="id" value={st?.id ?? ""} />
+      <textarea className="field" name="text" rows={2} defaultValue={st?.text ?? ""} placeholder="When I started, …" required />
+      <div className="grid gap-2 sm:grid-cols-[auto_1fr_1fr]">
+        <select className="field" name="kind" defaultValue={st?.kind ?? "plain"}>
+          <option value="plain">Plain story</option>
+          <option value="belief">Answers a belief</option>
+        </select>
+        <input className="field" name="when" defaultValue={st?.when ?? ""} placeholder="When it fits (plain)" />
+        <input className="field" name="belief" defaultValue={st?.belief ?? ""} placeholder="The belief: I'm not techy" />
+      </div>
+      <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…">{st ? "Save" : "Add"}</SubmitButton>
+    </form>
   );
 }

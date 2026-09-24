@@ -38,11 +38,15 @@ export const STAGE2_FIELDS = ["ai_skills_cbf"] as const;
 
 for (const f of STAGE1_FIELDS) if ((BOT_WRITTEN_FIELDS as readonly string[]).includes(f)) throw new Error(`bot-fields: ${f} is written by the bot and cannot be pushed`);
 
+/** The length rule, the same on Danno's bot and in the house default for every client's (rev 101): Danno's house rule 2, word for word. */
+export const LENGTH_RULE = "Two sentences max. Only when you need it to handle an objection, up to four: acknowledge them, a story if one fits, the answer, then one question. One question at a time. No jargon.";
 /**
- * The house default for ai_constraints_cbf: the claims discipline, shipped to every client bot so nothing ships with the brakes
- * off. The client's own prohibitions and ethics are appended when Stage 2 ships. Provisional wording, on the sentence list.
+ * The house default for ai_constraints_cbf: the length rule and the claims discipline, shipped to every client bot so nothing ships
+ * with the brakes off. The client's own prohibitions and ethics are appended when Stage 2 ships. Provisional wording, on the
+ * sentence list.
  */
 export const HOUSE_CONSTRAINT_LINES = [
+  LENGTH_RULE,
   "Never invent a statistic, a result or a testimonial. If a number is not in your fields, you do not have it.",
   "Never state a price, a discount or a payment plan that is not in your product and service field.",
   "Never claim a client's result without the number and the permission to say it.",
@@ -61,9 +65,11 @@ export const QUALIFYING_DEFAULTS: [string, string, string] = [
 ];
 
 /*
- * The bot sales rules (handoff rev 80, from Danno's 23 Sep role-play). The offers field is composed in sections from the coach's
- * own lines and the offers that have a bot role, in the house wording the golden fixture fixes
- * (scripts/fixtures/golden-bot-danno.json): Danno's record composes to it byte for byte, and a unit test holds it there.
+ * How the bot sells (handoff rev 90 to 109; the "Bot flow (rev 4)" tab): the offers field is facts the bot knows, how the coach
+ * talks about money, short examples in the coach's words, and two banks of true stories, the coach's own and their partners'.
+ * The wording around the coach's data is the house's and is fixed by the golden fixture (scripts/fixtures/golden-bot-danno.json,
+ * approved in the handoff at rev 110/111): Danno's record composes to it byte for byte, and a unit test holds it there. "Say
+ * exactly" is gone everywhere except the guarantee promise, which is a commitment.
  */
 export type BotRole = "entry" | "core" | "one_on_one" | "not_on_bot";
 export const BOT_ROLES: BotRole[] = ["not_on_bot", "entry", "core", "one_on_one"];
@@ -73,13 +79,9 @@ export const BOT_ROLE_LABEL: Record<BotRole, string> = {
   core: "Core offer: a deposit link for buyers who say they're ready",
   one_on_one: "One-on-one: call only, never a link",
 };
-export type PriceMode = "never" | "range" | "full";
-export const PRICE_MODES: PriceMode[] = ["range", "never", "full"];
-export const PRICE_MODE_LABEL: Record<PriceMode, string> = {
-  range: "Give a price range when asked, never the full price",
-  never: "Never talk price in chat: answer with my line instead",
-  full: "State each offer's price",
-};
+export type DefaultPath = "call" | "link";
+export const DEFAULT_PATHS: DefaultPath[] = ["call", "link"];
+export const DEFAULT_PATH_LABEL: Record<DefaultPath, string> = { call: "The call", link: "Your first entry offer's link" };
 
 export type OfferFacts = {
   id?: string;
@@ -92,24 +94,36 @@ export type OfferFacts = {
   status: string;
   botRole?: BotRole | null;
   botName?: string | null;
+  /** When to offer it, one sentence in the money flow ("Get started comes up when they ask how to start, or after we have talked budget."). */
   botFor?: string | null;
-  botEndResult?: string | null;
   botTerms?: string | null;
+  botTermsWhen?: string | null;
+  botCancelLine?: string | null;
   depositAmount?: number | null;
   refundableIfNotFit?: boolean | null;
   botRefundLine?: string | null;
   guaranteeCovered?: boolean | null;
   paymentLink?: string | null;
 };
+export type BotExample = { id: string; moment: string; them?: string | null; me: string; kind: "normal" | "objection" };
+export type BotStory = { id: string; text: string; when?: string | null; kind: "plain" | "belief"; belief?: string | null };
+/** A partner story: an approved Proof Bank row the coach put on their bot. First name, what happened, when it fits. */
+export type PartnerStory = { id: string; who: string; happened: string; fits?: string | null };
 /** The coach-level lines, all the coach's own words. */
 export type CoachBot = {
   whatIDo?: string | null;
-  priceMode?: PriceMode | null;
-  rangeLine?: string | null;
-  paymentPlanLine?: string | null;
+  /** The early price answer, with no numbers. Blank means PRICE_ANSWER_DEFAULT. */
   priceAnswer?: string | null;
+  defaultPath?: DefaultPath | null;
+  callMinutes?: number | null;
+  oneOnOneRange?: string | null;
+  paymentPlanLine?: string | null;
   guaranteeLine?: string | null;
-  guaranteeCoverageLine?: string | null;
+  guaranteeLeadIn?: string | null;
+  peopleWord?: string | null;
+  examples?: BotExample[] | null;
+  stories?: BotStory[] | null;
+  partnerStories?: PartnerStory[] | null;
   houseRules?: string[] | null;
   persona?: string | null;
   questions?: (string | null | undefined)[];
@@ -117,69 +131,149 @@ export type CoachBot = {
 export type Stage1Input = { businessName: string | null | undefined; workspaceName: string; timezone: string; offers: OfferFacts[]; coach?: CoachBot };
 export type BotFieldPayload = Record<Stage1Field, string>;
 
-/**
- * The coach's answer when someone asks about price in price mode "never", one line for the coach, not per offer. Empty means
- * this default. On the sentence list.
- */
+/** The early price answer when the coach has written none: no numbers, then a question. On the sentence list. */
 export const PRICE_ANSWER_DEFAULT = "We have multiple services for different business needs, and I'd be happy to go over all of that on a call. But first, it might make more sense to find out what you're needing support with exactly.";
 export const priceAnswerFor = (line: string | null | undefined): string => line?.trim() || PRICE_ANSWER_DEFAULT;
-/** Price mode "never": the deflect line, as it was sent before the bot sales rules (a regression the walk holds). */
-export const priceDeflection = (line: string | null | undefined): string => `If someone asks about price, cost or payment plans, never state a price, a payment plan or a discount. Say something like: "${priceAnswerFor(line)}" Then ask your next qualifying question.`;
-/** Danno's approved wording, the default for every coach until they write their own. */
-export const PAYMENT_PLAN_LINE_DEFAULT = "Yes, there are options. I'll walk you through them on the call.";
-/** Suggested when an offer is refundable and the coach has not written its line. */
-export const REFUND_LINE_DEFAULT = "The deposit is fully refunded if our call shows it's not a fit.";
+/** Suggested when an offer is refundable and the coach has not written its line. Get started has no deposit (rev 105). */
+export const REFUND_LINE_DEFAULT = "their first payment comes back if our call shows it is not a fit.";
+/** When the terms are shared, when the coach has not said. */
+export const TERMS_WHEN_DEFAULT = "Share when recommending it.";
 
-const ROLE_TITLE: Record<Exclude<BotRole, "not_on_bot">, string> = { entry: "ENTRY OFFER", core: "CORE OFFER", one_on_one: "ONE-ON-ONE" };
-const ROLE_NOUN: Record<Exclude<BotRole, "not_on_bot">, string> = { entry: "the entry offer", core: "the core offer", one_on_one: "one-on-one programs" };
 const clean = (v: string | null | undefined): string => (v ?? "").trim();
+/** A line that ends a sentence: a full stop added unless it already ends in one, a question mark or an exclamation. */
+export const asSentence = (v: string): string => (/[.?!]["”')]*$/.test(v) ? v : `${v}.`);
 /** "A", "A and B", "A, B and C". */
 export const joinNames = (names: string[]): string => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
 /** The offers that feed the bot: a bot role, whatever their live or draft state elsewhere. Entry first, then core, then one-on-one. */
 export const botOffers = (offers: OfferFacts[]): OfferFacts[] => (["entry", "core", "one_on_one"] as const).flatMap((r) => offers.filter((o) => o.botRole === r));
+/** The offers the bot can send a link for. */
+const linkOffers = (offers: OfferFacts[]): OfferFacts[] => botOffers(offers).filter((o) => o.botRole === "entry" || o.botRole === "core");
 export const botNameOf = (o: OfferFacts): string => clean(o.botName) || clean(o.name);
 export const refundLineOf = (o: OfferFacts): string => (o.refundableIfNotFit ? clean(o.botRefundLine) || REFUND_LINE_DEFAULT : "");
-export const paymentPlanLineOf = (c: CoachBot): string => clean(c.paymentPlanLine) || PAYMENT_PLAN_LINE_DEFAULT;
+export const peopleWordOf = (c: CoachBot): string => clean(c.peopleWord).toLowerCase() || "clients";
+
+/**
+ * Each fact the bot knows, as it is composed under THE FACTS, keyed for Needs your eyes: each offer's terms, link and cancelling;
+ * the one-on-one range; the refund; payment plans; the call; the guarantee promise and, when some offer on the bot is not covered,
+ * what it covers (composed from the flags). `text` is the line without its bullet, exactly as sent.
+ */
+export type Fact = { key: string; label: string; text: string; eyes: boolean };
+export function botFacts(input: Stage1Input): Fact[] {
+  const c = input.coach ?? {};
+  const out: Fact[] = [];
+  for (const o of linkOffers(input.offers)) {
+    const id = o.id ?? botNameOf(o);
+    const name = botNameOf(o);
+    if (clean(o.botTerms)) out.push({ key: `offer:${id}.terms`, label: `${name}: the terms`, text: `${name}: ${asSentence(clean(o.botTerms))} ${asSentence(clean(o.botTermsWhen) || TERMS_WHEN_DEFAULT)}`, eyes: true });
+    if (clean(o.paymentLink)) out.push({ key: `offer:${id}.link`, label: `${name}: the link`, text: `${name} link: ${clean(o.paymentLink)}. Send it only when they say yes.`, eyes: true });
+    if (clean(o.botCancelLine)) out.push({ key: `offer:${id}.cancel`, label: `${name}: cancelling`, text: `${asSentence(clean(o.botCancelLine))} Only if asked.`, eyes: true });
+  }
+  const one = botOffers(input.offers).filter((o) => o.botRole === "one_on_one");
+  if (one.length && clean(c.oneOnOneRange)) out.push({ key: "oneonone.range", label: "The one-on-one range", text: `One-on-one: ${clean(c.oneOnOneRange).replace(/[.]$/, "")}, call only. Use it as the contrast when recommending, or if they ask about one-on-one.`, eyes: true });
+  // One refund line when every refundable offer says the same; otherwise one per offer, named.
+  const refunds = linkOffers(input.offers).filter((o) => refundLineOf(o));
+  const distinct = [...new Set(refunds.map((o) => asSentence(refundLineOf(o))))];
+  if (distinct.length === 1) out.push({ key: "refund", label: "The refund", text: `Refund: ${distinct[0]} Say it only if they hesitate to pay.`, eyes: true });
+  else for (const o of refunds) out.push({ key: `offer:${o.id ?? botNameOf(o)}.refund`, label: `${botNameOf(o)}: the refund`, text: `Refund on ${botNameOf(o)}: ${asSentence(refundLineOf(o))} Say it only if they hesitate to pay.`, eyes: true });
+  if (clean(c.paymentPlanLine)) out.push({ key: "price.plan", label: "Payment plans", text: `Payment plans, only if asked: ${asSentence(clean(c.paymentPlanLine))}`, eyes: true });
+  out.push({ key: "call", label: "The call", text: `The call: ${c.callMinutes ? `${c.callMinutes} minutes, no pressure` : "no pressure"}. When inviting.`, eyes: true });
+  if (clean(c.guaranteeLine)) {
+    const lead = clean(c.guaranteeLeadIn);
+    out.push({ key: "guarantee.line", label: "Your guarantee, the promise word for word", text: `The guarantee, the first time they ask, this sentence word for word: "${clean(c.guaranteeLine)}"${lead ? ` You can lead in with "${lead}"` : ""} The details come on the call. Say nothing else about results.`, eyes: true });
+    const coverage = botOffers(input.offers).some((o) => !o.guaranteeCovered) ? suggestCoverageLine(input.offers) : "";
+    if (coverage) out.push({ key: "guarantee.coverage", label: "What the guarantee covers", text: coverage, eyes: true });
+  }
+  return out;
+}
+
+/** A story line as MY STORIES lists it: the story, then when it fits or the belief it answers. */
+export const storyLine = (s: BotStory): string => {
+  const tail = s.kind === "belief" && clean(s.belief) ? `Belief: "${asSentence(clean(s.belief))}"` : clean(s.when) ? asSentence(clean(s.when)) : "";
+  return `${clean(s.text)}${tail ? ` (${tail})` : ""}`;
+};
+/** A partner story as the bot reads it: first name, what happened, when it fits. */
+export const partnerLine = (p: PartnerStory): string => `${clean(p.who)}: ${clean(p.happened)}${clean(p.fits) ? ` (${asSentence(clean(p.fits))})` : ""}`;
+const storiesOf = (c: CoachBot) => (c.stories ?? []).filter((s) => clean(s.text));
+const partnersOf = (c: CoachBot) => (c.partnerStories ?? []).filter((p) => clean(p.who) && clean(p.happened));
+const examplesOf = (c: CoachBot) => (c.examples ?? []).filter((e) => clean(e.moment) && clean(e.me));
 
 export type ProductSection = { key: string; title: string; text: string };
 /** The offers field, section by section, in the fixture's order. Empty when there is no WHAT I DO and no offer on the bot. */
 export function productSections(input: Stage1Input): ProductSection[] {
   const c = input.coach ?? {};
   const offers = botOffers(input.offers);
-  // What an offer gives is its own "Result:" line inside its block (rev 88), never a loose line under WHAT I DO.
-  const what = [clean(c.whatIDo)].filter(Boolean);
-  if (!what.length && !offers.length) return [];
+  if (!clean(c.whatIDo) && !offers.length) return [];
   const out: ProductSection[] = [];
-  if (what.length) out.push({ key: "what", title: "What I do", text: ["WHAT I DO", ...what].join("\n") });
-  const mode = c.priceMode ?? "full";
-  if (mode === "never") out.push({ key: "price", title: "Price", text: ["PRICE", priceDeflection(c.priceAnswer)].join("\n") });
-  else if (mode === "range" && clean(c.rangeLine))
-    out.push({ key: "price", title: "Price", text: ["PRICE", `If someone asks about price, say: "${clean(c.rangeLine)}" Then ask your next question.`, "Never state the full price of the core offer, a discount, or any custom deal.", `If they ask about payment plans, say: "${paymentPlanLineOf(c)}"`].join("\n") });
-  else if (mode === "full" && offers.length) out.push({ key: "price", title: "Price", text: ["PRICE", ...offers.map((o) => `${botNameOf(o)}: ${formatPrice(o.price, o.currency)}.`), `If they ask about payment plans, say: "${paymentPlanLineOf(c)}"`].join("\n") });
-  if (clean(c.guaranteeLine)) out.push({ key: "guarantee", title: "Guarantee", text: ["GUARANTEE", `If someone asks for a guarantee, say exactly: "${clean(c.guaranteeLine)}" Say nothing else about results.`, clean(c.guaranteeCoverageLine)].filter(Boolean).join("\n") });
-  for (const o of offers.filter((x) => x.botRole === "entry" || x.botRole === "core")) {
-    const role = o.botRole as "entry" | "core";
+  if (clean(c.whatIDo)) out.push({ key: "what", title: "What I do", text: ["WHAT I DO", clean(c.whatIDo)].join("\n") });
+
+  // Money comes up inside the conversation: no numbers early, then the path by what they said, each offer's own "when".
+  const one = offers.some((o) => o.botRole === "one_on_one") && clean(c.oneOnOneRange);
+  const linkFirst = linkOffers(input.offers).find((o) => clean(o.paymentLink));
+  const path = c.defaultPath === "link" && linkFirst ? `After my questions, most people get ${botNameOf(linkFirst)}, and the link when they say yes.` : `After my questions, most people get the ${c.callMinutes ? `${c.callMinutes}-minute ` : ""}call.`;
+  const whens = [...new Set(offers.map((o) => clean(o.botFor)).filter(Boolean).map(asSentence))];
+  out.push({
+    key: "money",
+    title: "How I talk about money",
+    text: [
+      "HOW I TALK ABOUT MONEY",
+      "Money comes up inside the conversation, never as a price sheet.",
+      `If someone asks about price before I know their situation, answer with no numbers: "${priceAnswerFor(c.priceAnswer)}" Then ask a question.`,
+      `Numbers come only once I know enough to recommend something.${one ? " Never answer a price question with the one-on-one range and a start price in one breath." : ""}`,
+      [path, ...whens].join(" "),
+    ].join("\n"),
+  });
+
+  out.push({ key: "facts", title: "The facts", text: ["THE FACTS", "Know these. Never recite them as a list. Share one only when the conversation gets there or they ask.", ...botFacts(input).map((f) => `- ${f.text}`)].join("\n") });
+
+  const examples = examplesOf(c);
+  if (examples.length)
     out.push({
-      key: `offer:${o.id ?? botNameOf(o)}`,
-      title: `${role === "entry" ? "Entry offer" : "Core offer"}: ${botNameOf(o)}`,
-      text: [`${ROLE_TITLE[role]} (${botNameOf(o)})`, clean(o.botFor) && `For: ${clean(o.botFor)}`, clean(o.botEndResult) && `Result: ${clean(o.botEndResult)}`, clean(o.botTerms) && `Terms: ${clean(o.botTerms)}`, clean(o.paymentLink) && `Link: ${clean(o.paymentLink)}`, refundLineOf(o)].filter(Boolean).join("\n"),
+      key: "examples",
+      title: "How I say it",
+      text: ["HOW I SAY IT\nExamples from my own chats. Match the tone and the order, never copy word for word.", ...examples.map((e) => [clean(e.moment), clean(e.them) && `Them: ${clean(e.them)}`, `Me: ${clean(e.me)}`].filter(Boolean).join("\n"))].join("\n\n"),
+    });
+
+  const stories = storiesOf(c);
+  if (stories.length) {
+    const plain = stories.filter((s) => s.kind !== "belief");
+    const belief = stories.filter((s) => s.kind === "belief");
+    out.push({
+      key: "stories",
+      title: "My stories",
+      text: [
+        "MY STORIES",
+        "True stories from my life. Tell only these, never make one up, and never add numbers or results to one. You can shorten one, never add to it. At most one plain story per chat. A belief story is always told when its belief comes up, even if a plain story was already told. Never more than two stories in a chat, and never the same one twice.",
+        ...(plain.length ? ["Plain stories:", ...plain.map((s) => `- ${storyLine(s)}`)] : []),
+        ...(belief.length ? ["Belief stories:", ...belief.map((s) => `- ${storyLine(s)}`)] : []),
+      ].join("\n"),
     });
   }
-  const one = offers.filter((o) => o.botRole === "one_on_one");
-  if (one.length) out.push({ key: "one_on_one", title: "One-on-one", text: [`ONE-ON-ONE (${joinNames(one.map(botNameOf))})`, "Call only. Never send a link for these."].join("\n") });
+
+  const partners = partnersOf(c);
+  if (partners.length) {
+    const word = peopleWordOf(c);
+    out.push({
+      key: "partners",
+      title: `${word[0].toUpperCase()}${word.slice(1, -1)} stories`,
+      text: [`${word.replace(/s$/, "").toUpperCase()} STORIES`, `Real results my ${word} gave me permission to share. Tell one only inside an objection, at most one per chat, as that person's own result, never as what they'll get. Never change a number.`, ...partners.map((p) => `- ${partnerLine(p)}`)].join("\n"),
+    });
+  }
+
+  if (offers.some((o) => o.botRole === "one_on_one")) out.push({ key: "one_on_one", title: "One-on-one", text: "ONE-ON-ONE\nCall only. Never send a link for one-on-one." });
   return out;
 }
 
 /**
- * A suggestion for what the guarantee covers, built from the offers' "covered" flags and roles alone; the coach's own line is what
- * is sent, and an empty box sends none. A role with more than one offer on the bot is named in the plural (offer by offer when
- * only some of them are covered), and the deposit named
- * for the entry path is the offer's own amount (rev 88), or "their deposit" when the uncovered entry offers differ.
+ * What the guarantee covers, built from the offers' "covered" flags and roles alone (rev 104: coverage composes from the flags).
+ * A role with more than one offer on the bot is named in the plural (offer by offer when only some of them are covered), and the
+ * deposit named for the entry path is the offer's own amount (rev 88), or "their deposit" when the uncovered entry offers differ.
+ * Sent only when some offer on the bot is not covered; with every one covered there is nothing to say.
  */
 export function suggestCoverageLine(offers: OfferFacts[]): string {
   const on = botOffers(offers);
   const covered = on.filter((o) => o.guaranteeCovered);
   if (!covered.length) return "";
+  const ROLE_NOUN: Record<Exclude<BotRole, "not_on_bot">, string> = { entry: "the entry offer", core: "the core offer", one_on_one: "one-on-one programs" };
   // A role wholly on one side is named by its noun (plural when it has more than one offer); a role split across both sides is
   // named offer by offer, so the line never says it covers "the entry offers" and not "the entry offers".
   const nouns = (list: OfferFacts[]) =>
@@ -262,17 +356,15 @@ export function stage1Payload(input: Stage1Input): BotFieldPayload {
 export const BOT_FIELD_BUDGET = 20000;
 
 /**
- * What stops a push, each in a sentence the coach can act on: no business name, an entry or core offer with no payment link,
- * range mode with no range line, or a field over the platform's limit (named by its longest section; nothing is dropped).
+ * What stops a push, each in a sentence the coach can act on: no business name, an entry or core offer with no payment link, or a
+ * field over the platform's limit (named by its longest section; nothing is dropped).
  */
 export function stage1Problems(input: Stage1Input, p: BotFieldPayload = stage1Payload(input)): string[] {
   const out: string[] = [];
   if (!p.business_name_cbf.trim()) out.push("No business name on the record: set it on the member's profile or the workspace.");
-  for (const o of botOffers(input.offers)) {
-    if ((o.botRole === "entry" || o.botRole === "core") && !clean(o.paymentLink)) out.push(`${botNameOf(o)} is ${o.botRole === "entry" ? "an entry" : "a core"} offer on your bot with no payment link. Add the link on the Offer, or change its role.`);
+  for (const o of linkOffers(input.offers)) {
+    if (!clean(o.paymentLink)) out.push(`${botNameOf(o)} is ${o.botRole === "entry" ? "an entry" : "a core"} offer on your bot with no payment link. Add the link on the Offer, or change its role.`);
   }
-  const c = input.coach ?? {};
-  if (c.priceMode === "range" && !clean(c.rangeLine) && botOffers(input.offers).length) out.push("Price is set to a range, but there is no range line yet. Write it on Your bot.");
   for (const f of STAGE1_FIELDS) {
     const n = p[f].length;
     if (n <= BOT_FIELD_BUDGET) continue;
@@ -284,36 +376,51 @@ export function stage1Problems(input: Stage1Input, p: BotFieldPayload = stage1Pa
   return out;
 }
 
+const WEEKDAYS = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i;
+/** Sentences in a reply: each run of . ? or ! that ends a word, a closing quote allowed ("$1,200" and "30-second" are not ends). */
+export const sentenceCount = (text: string): number => (clean(text).match(/[.?!]+["”')]*(?=\s|$)/g) ?? []).length || (clean(text) ? 1 : 0);
+/**
+ * The checks on one example (rev 101): a normal message is at most two sentences, an objection at most four, one question, no
+ * weekday names. Warnings only, never a block.
+ */
+export function exampleWarnings(e: BotExample): string[] {
+  const out: string[] = [];
+  const me = clean(e.me);
+  const max = e.kind === "objection" ? 4 : 2;
+  const n = sentenceCount(me);
+  if (n > max) out.push(`"${clean(e.moment)}": ${n} sentences, and ${e.kind === "objection" ? "an objection" : "a normal message"} is at most ${max}.`);
+  if ((me.match(/\?/g) ?? []).length > 1) out.push(`"${clean(e.moment)}": more than one question.`);
+  if (WEEKDAYS.test(me)) out.push(`"${clean(e.moment)}": names a weekday; say a date instead.`);
+  return out;
+}
+
 /** Worth saying before a push, never a block. */
 export function stage1Warnings(input: Stage1Input): string[] {
   const c = input.coach ?? {};
   const out: string[] = [];
   if (clean(c.guaranteeLine) && !botOffers(input.offers).some((o) => o.guaranteeCovered)) out.push("Your guarantee is on, but no offer on your bot is marked as covered by it.");
+  for (const e of examplesOf(c)) out.push(...exampleWarnings(e));
+  // A digit in one of the coach's own stories may be a results claim; numbers belong in a partner story, approved as proof.
+  for (const s of storiesOf(c)) if (/\d/.test(s.text)) out.push(`Your story "${clean(s.text).slice(0, 60)}" has a number in it. If it's a result, it belongs in your Proof Bank, not in your stories.`);
+  for (const p of partnersOf(c)) if (/\s/.test(clean(p.who))) out.push(`"${clean(p.who)}" on your bot: first names only, and no business names.`);
   return out;
 }
 
 /**
- * The lines a person must read and approve one at a time before a push (Needs your eyes): the range line, the payment plan
- * line, the guarantee and what it covers, and each entry or core offer's terms, link and refund line. Each is keyed so an
- * approval of its exact text can be recorded; a changed line needs approving again. Only lines that will be sent are listed.
+ * The lines a person must read and approve one at a time before a push (Needs your eyes): every fact (prices, terms, links,
+ * cancelling, the one-on-one range, the refund, payment plans, the call, the guarantee promise and what it covers), each of the
+ * coach's own stories and each partner story. The examples, the money flow and the guarantee's lead-in are outside it. Each is
+ * keyed so an approval of its exact text can be recorded; a changed line needs approving again. Only lines that will be sent.
  */
 export type EyesLine = { key: string; label: string; text: string };
 export function needsEyes(input: Stage1Input): EyesLine[] {
   const c = input.coach ?? {};
-  const offers = botOffers(input.offers);
-  const out: EyesLine[] = [];
-  if (!offers.length && !clean(c.whatIDo)) return out;
-  if (c.priceMode === "range" && clean(c.rangeLine)) out.push({ key: "price.range", label: "Your price range line", text: clean(c.rangeLine) });
-  if (c.priceMode === "range" || (c.priceMode ?? "full") === "full") out.push({ key: "price.plan", label: "Your payment plan line", text: paymentPlanLineOf(c) });
-  if (clean(c.guaranteeLine)) out.push({ key: "guarantee.line", label: "Your guarantee, as the bot says it", text: clean(c.guaranteeLine) });
-  if (clean(c.guaranteeLine) && clean(c.guaranteeCoverageLine)) out.push({ key: "guarantee.coverage", label: "What the guarantee covers", text: clean(c.guaranteeCoverageLine) });
-  for (const o of offers.filter((x) => x.botRole === "entry" || x.botRole === "core")) {
-    const id = o.id ?? botNameOf(o);
-    if (clean(o.botTerms)) out.push({ key: `offer:${id}.terms`, label: `${botNameOf(o)}: the terms and deposit`, text: clean(o.botTerms) });
-    if (clean(o.paymentLink)) out.push({ key: `offer:${id}.link`, label: `${botNameOf(o)}: the payment link`, text: clean(o.paymentLink) });
-    if (refundLineOf(o)) out.push({ key: `offer:${id}.refund`, label: `${botNameOf(o)}: the refund line`, text: refundLineOf(o) });
-  }
-  return out;
+  if (!productSections(input).length) return [];
+  return [
+    ...botFacts(input).filter((f) => f.eyes).map(({ key, label, text }) => ({ key, label, text })),
+    ...storiesOf(c).map((s) => ({ key: `story:${s.id}`, label: `${s.kind === "belief" ? "Your belief story" : "Your story"} “${clean(s.text).split(" ").slice(0, 8).join(" ")}…”`, text: storyLine(s) })),
+    ...partnersOf(c).map((p) => ({ key: `proof:${p.id}`, label: `${clean(p.who)}'s story, from your Proof Bank`, text: partnerLine(p) })),
+  ];
 }
 
 /** Nothing has changed since the last push: the bot already holds exactly this. */

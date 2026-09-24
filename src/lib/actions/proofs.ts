@@ -29,6 +29,8 @@ function fields(fd: FormData) {
     hook: opt(fd, "hook"),
     punchline: opt(fd, "punchline"),
     link: opt(fd, "link"),
+    onBot: fd.get("onBot") === "on",
+    botFits: opt(fd, "botFits"),
     status: str(fd, "status") === "approved" ? ("approved" as const) : ("draft" as const),
   };
 }

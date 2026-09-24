@@ -170,6 +170,16 @@ export default async function ProofDetailPage({ params, searchParams }: { params
               <Field label="Link">
                 <input className="field" name="link" type="url" defaultValue={p.link ?? ""} />
               </Field>
+              <fieldset id="bot" className="space-y-2 rounded-lg border p-3" data-testid="proof-bot">
+                <legend className="px-1 text-sm font-medium">On my bot</legend>
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" name="onBot" defaultChecked={p.onBot} className="mt-1" data-testid="proof-on-bot" /> Tell this as a story on my bot: first name (Who), what happened (the one-liner), and when it fits.
+                </label>
+                <Field label="When it fits" hint="The objection it answers, in your words: Too saturated, small audience.">
+                  <input className="field" name="botFits" defaultValue={p.botFits ?? ""} data-testid="proof-bot-fits" />
+                </Field>
+                {p.onBot && p.status !== "approved" ? <p className="text-xs text-warn" data-testid="proof-bot-held">Not on your bot until it&apos;s approved with their permission.</p> : null}
+              </fieldset>
               <div className="flex items-center gap-2">
                 <SubmitButton className="btn btn-primary" pendingText="Saving…">Save</SubmitButton>
               </div>
