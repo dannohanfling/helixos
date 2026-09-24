@@ -130,6 +130,15 @@ async function main() {
     if ((await page.locator("h1").innerText()).trim() !== "Your bot") throw new Error("the page is called Your bot");
     const row = (field: string) => page.locator(`[data-testid="bot-field-row"][data-field="${field}"]`);
     const after = async (field: string) => (await row(field).locator('[data-testid="bot-field-after"]').textContent()) ?? "";
+    // Each save starts from /brain with no "?saved" in the address, so the Saved banner can only be the page rendered after it:
+    // wait for that before reading, or the old render's text is read (seen once, 24 Sep).
+    const saveLines = async (mode: string) => {
+      await page.goto(`${base}/brain`);
+      await page.locator('[data-testid="bot-price-mode"]').selectOption(mode);
+      await submit(page, '[data-testid="bot-lines-save"]');
+      await page.locator('[data-testid="bot-lines-saved"]').waitFor({ timeout: 20000 });
+      await preview.waitFor({ timeout: 20000 });
+    };
     for (const f of ["ai_persona_role_cbf", PRODUCT_FIELD, "ai_constraints_cbf", "qualifying_question_1", "qualifying_question_2", "qualifying_question_3"]) {
       if ((await row(f).getAttribute("data-status")) !== "change") throw new Error(`${f} is a change`);
       if ((await after(f)) !== expected[f]) throw new Error(`${f} composes to the fixture byte for byte; got:\n${await after(f)}\n--- expected:\n${expected[f]}`);
@@ -167,17 +176,12 @@ async function main() {
     console.log(`✓ an entry offer with no link: "${noLink}"; pressed anyway, "${note.slice(0, 60)}…" and nothing sent`);
 
     // ── Price mode "never" still sends the old deflect line, and drops the range and plan lines from Needs your eyes. ──
-    await page.goto(`${base}/brain`);
-    await page.locator('[data-testid="bot-price-mode"]').selectOption("never");
-    await submit(page, '[data-testid="bot-lines-save"]');
-    await preview.waitFor({ timeout: 20000 });
+    await saveLines("never");
     const never = await after(PRODUCT_FIELD);
     if (!never.includes(`PRICE\n${priceDeflection(null)}\n`) || never.includes("Some partners start at")) throw new Error(`price mode never sends the old deflect line, got:\n${never}`);
     if ((await eyes()).some((k) => k.startsWith("price."))) throw new Error("in never mode no price line needs eyes");
-    await page.locator('[data-testid="bot-price-mode"]').selectOption("range");
-    await submit(page, '[data-testid="bot-lines-save"]');
-    await preview.waitFor({ timeout: 20000 });
-    if ((await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD]) throw new Error("back in range mode, the fixture again");
+    await saveLines("range");
+    if ((await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD]) throw new Error(`back in range mode, the fixture again; got:\n${await after(PRODUCT_FIELD)}\nmode ${(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))?.priceMode}, url ${page.url()}`);
     console.log("✓ price mode never: the old deflect line, no range; back to range, the fixture again");
 
     // ── Approve each line, one press each. ──

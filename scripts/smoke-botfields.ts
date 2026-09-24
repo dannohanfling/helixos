@@ -116,14 +116,18 @@ async function main() {
     if ((await status("business_name_cbf")) !== "change" || (await before("business_name_cbf")) !== "Torres Nutrition" || (await after("business_name_cbf")) !== "Torres Nutrition Coaching") throw new Error("the business name shows what the bot holds against what HelixOS would write");
     if ((await status("business_time_zone_cbf")) !== "same") throw new Error("a field the bot already holds is shown unchanged");
     if ((await status(PRODUCT_FIELD)) !== "change" || !(await row(PRODUCT_FIELD).innerText()).includes(PRODUCT_FIELD_OLD) || !/^Hand-written on 21 Sep/.test(await before(PRODUCT_FIELD)) || (await after(PRODUCT_FIELD)) !== `PRICE\n90-Day Reset: USD $1,500.\nIf they ask about payment plans, say: "${PAYMENT_PLAN_LINE_DEFAULT}"\n\nCORE OFFER (90-Day Reset)\nLink: ${LINK}`) throw new Error(`the offers row writes the live offer's facts into the older name, got "${await row(PRODUCT_FIELD).innerText()}"`);
-    if ((await status("qualifying_question_2")) !== "same" || (await status("qualifying_question_1")) !== "change") throw new Error("the questions: the one the bot holds is unchanged, the one it does not is a change");
+    // The member has written no questions (rev 83): the bot's own question 1 is left alone, never replaced by the house default;
+    // question 2 already holds the default; question 3 is read by no agent. Nothing is pushed for the questions.
+    const q1Line = (await row("qualifying_question_1").locator('[data-testid="bot-field-line"]').innerText()).trim();
+    if ((await status("qualifying_question_1")) !== "empty" || q1Line !== "Your bot has its own question here. Type yours under Settings to manage it from HelixOS.") throw new Error(`the bot's own question is left alone, with the line, got ${await status("qualifying_question_1")} "${q1Line}"`);
+    if ((await status("qualifying_question_2")) !== "same") throw new Error("the question the bot already holds is unchanged");
     const unread = row("qualifying_question_3");
     if ((await status("qualifying_question_3")) !== "unread" || (await unread.locator('[data-testid="bot-field-line"]').innerText()).trim() !== "No agent on this bot reads qualifying_question_3 yet, so nothing is sent to it.") throw new Error("a field no agent reads gets the plain line");
     if ((await unread.locator('[data-testid="bot-field-before"], [data-testid="bot-field-after"], [data-testid="bot-field-same"]').count()) || (await page.content()).includes(byHand.qualifying_question_3)) throw new Error("a field the agent does not read shows no values");
     if ((await status("ai_persona_role_cbf")) !== "unread") throw new Error("the persona, read by no agent here, is not sent");
     if ((await requests()).length !== 0) throw new Error("the preview sends nothing");
     const pushButton = page.locator('[data-testid="push-stage1"]');
-    if ((await pushButton.innerText()).trim() !== "Push 4 changes to the bot") throw new Error(`the button says how many fields will change, got "${await pushButton.innerText()}"`);
+    if ((await pushButton.innerText()).trim() !== "Push 3 changes to the bot") throw new Error(`the button says how many fields will change, got "${await pushButton.innerText()}"`);
     // Every price and link is approved on its own before the Push opens; the button stays shut until then, and says why.
     const eyesKeys = await page.locator('[data-testid="eyes-row"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-key")));
     if (JSON.stringify(eyesKeys) !== JSON.stringify(["price.plan", `offer:${reset.id}.link`])) throw new Error(`the payment plan line and the link need eyes, got ${eyesKeys.join(", ")}`);
@@ -138,7 +142,7 @@ async function main() {
     // One log line per read of the bot: counts and times, never a value or the token.
     const readLine = readFileSync(join(__dirname, "..", "screenshots", "logs", "dev.log"), "utf8").split("\n").reverse().find((l) => l.includes("[stage1.read]") && l.includes(membership.id));
     if (!readLine || !/"agents":2,"fields":\d+,"agentsMs":\d+,"fieldsMs":\d+,"readMs":\d+/.test(readLine) || readLine.includes(TOKEN) || readLine.includes("Torres Nutrition")) throw new Error(`the read is logged with its counts and times and nothing else, got ${readLine}`);
-    console.log("✓ the before-and-after: 4 changes (name, offers into the older field, constraints, question 1), 2 unchanged, question 3 unread and not shown; nothing sent");
+    console.log(`✓ the before-and-after: 3 changes (name, offers into the older field, constraints), 2 unchanged; the bot's own question 1 left alone ("${q1Line}"), question 3 unread and not shown; nothing sent`);
 
     // ── Pressed twice in the same instant while the bot is slow to answer: it says so, sends once, records once. ──
     await post("/__delay", { ms: 1500 });
@@ -151,7 +155,7 @@ async function main() {
     if (reqs.length !== 1) throw new Error(`a double press sends once, got ${reqs.length} pushes`);
     if ((await pushEvents()).length - eventsBefore !== 1) throw new Error(`a double press records once, got ${(await pushEvents()).length - eventsBefore} sync records`);
     const names = reqs[0].fields.map((f) => f.name).sort();
-    if (JSON.stringify(names) !== JSON.stringify([PRODUCT_FIELD_OLD, "ai_constraints_cbf", "business_name_cbf", "qualifying_question_1"].sort())) throw new Error(`only the fields that change, by the bot's names, got ${names.join(", ")}`);
+    if (JSON.stringify(names) !== JSON.stringify([PRODUCT_FIELD_OLD, "ai_constraints_cbf", "business_name_cbf"].sort())) throw new Error(`only the fields that change, by the bot's names, got ${names.join(", ")}`);
     if (reqs[0].token !== TOKEN) throw new Error("the push carries the client's own token");
     if (reqs[0].fields.some((f) => !f.value.trim())) throw new Error("an empty value was sent");
     const sent = Object.fromEntries(reqs[0].fields.map((f) => [f.name, f.value]));
@@ -159,12 +163,13 @@ async function main() {
     const held = await store();
     for (const [k, v] of Object.entries(botWritten)) if (held[k] !== v) throw new Error(`${k} was changed by the push: "${held[k]}"`);
     if (held.qualifying_question_3 !== byHand.qualifying_question_3) throw new Error("the field the agent does not read keeps what was written by hand");
+    if (held.qualifying_question_1 !== byHand.qualifying_question_1) throw new Error("the bot's own question keeps what was written by hand");
     if (held[PRODUCT_FIELD]) throw new Error("the push never writes a field the bot does not have");
     const pagedReads = (await (await fetch(`${mock}/__reads`)).json()) as { limit: number; page: number }[];
     if (pagedReads.some((r) => r.limit !== READ_BACK_LIMIT) || !pagedReads.some((r) => r.page === 2)) throw new Error(`the bot is read page by page at an explicit limit, got ${JSON.stringify(pagedReads.slice(0, 4))}`);
     const closing = (await page.locator('[data-testid="bot-nothing-to-push"]').innerText()).trim();
-    if (closing !== "Nothing to push: 6 unchanged, 2 not read by any agent.") throw new Error(`after the push, the closing line counts what happened, got "${closing}"`);
-    console.log(`✓ pressed twice: "Sending to your bot…" while out, one push of ${names.length} fields, one sync record; question 3, the persona, the calendar and the booking untouched`);
+    if (closing !== "Nothing to push: 5 unchanged, 2 not read by any agent, 1 with nothing in HelixOS.") throw new Error(`after the push, the closing line counts what happened, got "${closing}"`);
+    console.log(`✓ pressed twice: "Sending to your bot…" while out, one push of ${names.length} fields, one sync record; the questions, the persona, the calendar and the booking untouched`);
 
     // ── A 200 is not a match, and the read-back covers only what was sent. ──
     const pushedAt = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.clBotFieldsPushedAt;
@@ -201,7 +206,7 @@ async function main() {
     await preview.waitFor({ timeout: 20000 });
     if ((await status(PRODUCT_FIELD)) !== "empty" || !(await row(PRODUCT_FIELD).innerText()).includes("your bot holds text HelixOS did not send, so nothing is sent; your bot keeps what it holds.")) throw new Error("text HelixOS did not send is left out");
     const leftOut = (await page.locator('[data-testid="bot-nothing-to-push"]').innerText()).trim();
-    if (leftOut !== "Nothing to push: 5 unchanged, 2 not read by any agent, 1 with nothing in HelixOS.") throw new Error(`the closing line counts the field left out, got "${leftOut}"`);
+    if (leftOut !== "Nothing to push: 4 unchanged, 2 not read by any agent, 2 with nothing in HelixOS.") throw new Error(`the closing line counts the field left out, got "${leftOut}"`);
     if ((await requests()).length !== reqs.length || reqs.some((r) => r.fields.some((f) => !f.value.trim()))) throw new Error("nothing sent, and never an empty value");
     await db.update(schema.offers).set({ botRole: "core" }).where(eq(schema.offers.id, reset.id));
     console.log(`✓ offer off the bot: "No current offer" pushed over what HelixOS wrote and read back; edited by hand, it is left out ("${leftOut}")`);

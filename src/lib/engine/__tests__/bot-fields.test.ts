@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { BOT_WRITTEN_FIELDS, productSections, NOTHING_CURRENT_LABEL, STAGE1_NOTHING_CURRENT, isNothingCurrent, nothingToPushLine, PRODUCT_FIELD, PRODUCT_FIELD_OLD, planPayload, stage1Plan, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, samePayload, stage1Payload } from "../bot-fields";
+import { BOT_WRITTEN_FIELDS, productSections, NOTHING_CURRENT_LABEL, STAGE1_NOTHING_CURRENT, isNothingCurrent, nothingToPushLine, PRODUCT_FIELD, PRODUCT_FIELD_OLD, planPayload, stage1Plan, HOUSE_CONSTRAINT_LINES, MAX_BOT_FIELDS_PER_CALL, QUALIFYING_DEFAULTS, READ_BACK_LIMIT, botFieldsRequest, houseConstraints, morePages, parseBotFields, readBackMismatches, stage1Problems, STAGE1_FIELDS, STAGE2_FIELDS, TEMPLATE_BOT_FIELDS, assertStorable, samePayload, stage1Payload, houseDefaultFields } from "../bot-fields";
 
 // An offer on the bot (one-on-one needs no link) and a draft with no bot role, which never reaches the bot.
 const live = { name: "90-Day Reset", promise: "Drop 15 lbs in 90 days", container: "Group program", price: 1500, currency: "USD", length: "90 days", status: "live", botRole: "one_on_one" as const };
@@ -67,6 +67,28 @@ describe("Stage 1 as the coach sees it before a push: per field, by the name the
   const bot = (vals: Record<string, string>) => Object.entries(vals).map(([name, value]) => ({ name, value, ns: ns(name) }));
   const byField = (rows: ReturnType<typeof stage1Plan>) => Object.fromEntries(rows.map((r) => [r.field, r]));
 
+  it("a question the member left blank never goes over the bot's own question; the house default goes only where the field is empty or HelixOS's (rev 83)", () => {
+    const input = { businessName: "T", workspaceName: "W", timezone: "UTC", offers: [live], coach: { questions: [null, "Who else decides?", ""] } };
+    const defaults = houseDefaultFields(input);
+    expect(defaults).toEqual(["qualifying_question_1", "qualifying_question_3"]);
+    const p = stage1Payload(input);
+    const qs = ["qualifying_question_1", "qualifying_question_2", "qualifying_question_3"];
+    const rows = byField(stage1Plan(p, bot({ qualifying_question_1: "Danno's own first question", qualifying_question_2: "His second", qualifying_question_3: "" }), [agent(qs)], {}, defaults));
+    expect(rows.qualifying_question_1).toMatchObject({ status: "empty", line: "Your bot has its own question here. Type yours under Settings to manage it from HelixOS." });
+    // Written in HelixOS: it goes, over whatever the bot holds.
+    expect(rows.qualifying_question_2.status).toBe("change");
+    // The bot's field is empty: the house default goes.
+    expect(rows.qualifying_question_3).toMatchObject({ status: "change", next: QUALIFYING_DEFAULTS[2] });
+    expect(planPayload(Object.values(rows))).not.toHaveProperty("qualifying_question_1");
+    // What HelixOS last sent there, or its own "none" sentence, is HelixOS's to replace.
+    const ours = byField(stage1Plan(p, bot({ qualifying_question_1: "An older default HelixOS sent", qualifying_question_3: STAGE1_NOTHING_CURRENT.qualifying_question_3 }), [agent(qs)], { qualifying_question_1: "An older default HelixOS sent" }, defaults));
+    expect(ours.qualifying_question_1.status).toBe("change");
+    expect(ours.qualifying_question_3.status).toBe("change");
+    // With no member questions at all and the bot's own three on it: nothing to push for the questions.
+    const none = { ...input, coach: {} };
+    const all = byField(stage1Plan(stage1Payload(none), bot({ qualifying_question_1: "a", qualifying_question_2: "b", qualifying_question_3: "c" }), [agent(qs)], {}, houseDefaultFields(none)));
+    expect(qs.map((q) => all[q].status)).toEqual(["empty", "empty", "empty"]);
+  });
   it("the offers field is written under its current name, and under the older one only when the bot has no field by the current one", () => {
     expect(PRODUCT_FIELD).toBe("ai_product_&_service_information_cbf");
     expect(PRODUCT_FIELD_OLD).toBe("ai_product_&_service_cbf");

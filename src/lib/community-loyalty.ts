@@ -19,7 +19,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import { formatDateTime, nowIso } from "@/lib/dates";
-import { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, STAGE1_FIELDS, assertStorable, botFieldsRequest, morePages, needsEyes, parseBotFields, planPayload, productSections, readBackMismatches, stage1Payload, stage1Plan, stage1Problems, stage1Warnings, type BotFieldPayload, type EyesLine, type PlanRow, type ProductSection, type Stage1Input } from "@/lib/engine/bot-fields";
+import { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, STAGE1_FIELDS, assertStorable, houseDefaultFields, botFieldsRequest, morePages, needsEyes, parseBotFields, planPayload, productSections, readBackMismatches, stage1Payload, stage1Plan, stage1Problems, stage1Warnings, type BotFieldPayload, type EyesLine, type PlanRow, type ProductSection, type Stage1Input } from "@/lib/engine/bot-fields";
 import { normalizeEssence } from "@/lib/engine/essence";
 import { redactSecrets } from "@/lib/engine/redact";
 import { logSync } from "@/lib/integrations";
@@ -140,7 +140,7 @@ export async function stage1Preview(m: schema.Membership): Promise<Stage1Preview
   const held = await readBotFields(token);
   logStage1Read(m.id, { agents: agentNames.length, fields: "rows" in held ? held.rows.length : null, agentsMs, fieldsMs: Date.now() - t0 - agentsMs, readMs: Date.now() - t0 });
   if ("refused" in held) return { ...none, agentNames, blocked: `Couldn't read the bot's fields from Community Loyalty. ${held.refused}` };
-  const rows = stage1Plan(payload, held.rows, agents.infos, m.clBotFields);
+  const rows = stage1Plan(payload, held.rows, agents.infos, m.clBotFields, houseDefaultFields(input));
   for (const r of rows) if (r.name && (BOT_WRITTEN_FIELDS as readonly string[]).includes(r.name)) throw new Error(`bot-fields: ${r.name} is written by the bot and cannot be pushed`);
   const key = createHash("sha256").update(JSON.stringify(rows.filter((r) => r.status === "change").map((r) => [r.name, r.current, r.next]))).digest("hex").slice(0, 32);
   // Pushed but ignored: the rules would reach the bot and change nothing it says (true on Danno's bot and the master, 23 Sep).

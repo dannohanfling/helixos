@@ -197,6 +197,16 @@ export function houseRulesText(rules: string[] | null | undefined, businessName:
 export function qualifyingQuestions(questions: (string | null | undefined)[] | undefined): [string, string, string] {
   return [0, 1, 2].map((i) => clean(questions?.[i]) || QUALIFYING_DEFAULTS[i]) as [string, string, string];
 }
+const QUESTION_FIELDS = ["qualifying_question_1", "qualifying_question_2", "qualifying_question_3"] as const;
+/**
+ * The fields whose value is only a house default, because the member has not written their own: the questions left blank. The
+ * plan sends a house default only where the bot's field is empty or holds what HelixOS last sent, never over the bot's own text
+ * (rev 83: Danno's own questions on his bot would have been replaced by the defaults on his first push).
+ */
+export function houseDefaultFields(input: Stage1Input): Stage1Field[] {
+  const q = input.coach?.questions;
+  return QUESTION_FIELDS.filter((_, i) => !clean(q?.[i]));
+}
 
 /**
  * The Stage 1 payload: exactly STAGE1_FIELDS, every one present, composed from the record. A source the client has not filled
@@ -324,7 +334,8 @@ export const NOTHING_CURRENT_LABEL: Record<Stage1Field, string> = {
  * - missing: the bot has no field by either name, so there is nothing to write into;
  * - unread: no agent on the bot reads it, so it gets the plain line and is not sent, and its values are not shown;
  * - empty: HelixOS has nothing for it and the bot holds text HelixOS did not last send, so it is left out rather than sent as ""
- *   and the bot keeps what it holds;
+ *   and the bot keeps what it holds; likewise a house default (`houseDefaults`, a question the member left blank) over the
+ *   bot's own text;
  * - same: the bot already holds exactly this (or already says there is none);
  * - change: sent, with the bot's current value beside the new one. That includes a field HelixOS last wrote and now has nothing
  *   for: it is sent its nothing-current sentence (`nothing` is set), so a retired offer stops being sold.
@@ -332,7 +343,7 @@ export const NOTHING_CURRENT_LABEL: Record<Stage1Field, string> = {
  */
 export type PlanStatus = "change" | "same" | "empty" | "missing" | "unread";
 export type PlanRow = { field: Stage1Field; name: string | null; fallback: boolean; current: string | null; next: string; status: PlanStatus; line: string; readBy: string[]; nothing: boolean };
-export function stage1Plan(payload: BotFieldPayload, held: { name: string; value: string; ns: string }[], agents: AgentInfo[], lastSent: Record<string, string> = {}): PlanRow[] {
+export function stage1Plan(payload: BotFieldPayload, held: { name: string; value: string; ns: string }[], agents: AgentInfo[], lastSent: Record<string, string> = {}, houseDefaults: readonly Stage1Field[] = []): PlanRow[] {
   const byName = new Map(held.map((h) => [h.name, h]));
   const nsByName = Object.fromEntries(held.filter((h) => h.ns).map((h) => [h.name, h.ns]));
   return STAGE1_FIELDS.map((field) => {
@@ -357,6 +368,9 @@ export function stage1Plan(payload: BotFieldPayload, held: { name: string; value
       return { ...row, status: "empty" as const, line: "HelixOS has nothing for this yet, and your bot holds text HelixOS did not send, so nothing is sent; your bot keeps what it holds." };
     }
     if (current === row.next) return { ...row, status: "same" as const, line: "Your bot already holds this." };
+    // A house default goes only where the bot's field is empty or holds what HelixOS last sent (or its own "none" sentence).
+    const own = Boolean(current?.trim()) && current !== lastSent[name] && !isNothingCurrent(field, current);
+    if (houseDefaults.includes(field) && own) return { ...row, status: "empty" as const, line: "Your bot has its own question here. Type yours under Settings to manage it from HelixOS." };
     return { ...row, status: "change" as const, line: written };
   });
 }

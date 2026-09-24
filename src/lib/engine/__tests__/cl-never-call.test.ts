@@ -26,7 +26,8 @@ describe("HelixOS never deletes a bot field", () => {
     // The calls HelixOS does make still go.
     await withTimeout(`${base}/flow/bot-fields?limit=100&page=1`, { method: "GET" });
     expect(fetch).toHaveBeenCalledTimes(1);
-  });
+    // The first import of the client loads the database module cold; under the full suite that once ran past the 5s default.
+  }, 30000);
 
   it("no code path reaches Community Loyalty except through that one guarded fetch", () => {
     const client = readFileSync(join(SRC, "lib/community-loyalty.ts"), "utf8");
