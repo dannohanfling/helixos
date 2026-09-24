@@ -102,6 +102,26 @@ describe("the rules around it", () => {
     expect(stage1Warnings(input)).toEqual(["Your guarantee is on, but no offer on your bot is marked as covered by it."]);
     expect(suggestCoverageLine(danno().offers)).toBe("The guarantee covers the core offer and one-on-one programs only, not the entry offer. If someone on the entry offer path asks, say the guarantee is for the programs it covers, and that their USD $500 is refunded if our call shows it's not a fit.");
   });
+  it("the coverage suggestion follows the flags as Danno now has them: two covered entry offers, the core off the bot (rev 88)", () => {
+    const now = danno().offers.map((o) => (o.id === "acad" ? { ...o, botRole: "not_on_bot" as const } : o.id === "acc" ? { ...o, botName: "Get started", guaranteeCovered: true } : o));
+    now.push(offer({ id: "schol", name: "Scholarship", botRole: "entry", price: 1200, paymentLink: "https://x/scholarship", guaranteeCovered: true }));
+    expect(suggestCoverageLine(now)).toBe("The guarantee covers the entry offers and one-on-one programs.");
+    // An uncovered entry offer is named with its own deposit; two with different deposits, as "their deposit".
+    const oneOff = now.map((o) => (o.id === "acc" ? { ...o, guaranteeCovered: false } : o));
+    expect(suggestCoverageLine(oneOff)).toBe("The guarantee covers Scholarship and one-on-one programs only, not Get started. If someone on the entry offer path asks, say the guarantee is for the programs it covers, and that their USD $500 is refunded if our call shows it's not a fit.");
+    const twoOff = oneOff.map((o) => (o.id === "schol" ? { ...o, guaranteeCovered: false, refundableIfNotFit: true, depositAmount: 300 } : o));
+    expect(suggestCoverageLine(twoOff)).toMatch(/covers one-on-one programs only, not the entry offers\. .* that their deposit is refunded/);
+  });
+  it("what an offer gives is its own Result line inside its block, once, never loose under WHAT I DO (rev 88)", () => {
+    const input = danno();
+    input.offers = input.offers.map((o) => (o.botRole === "entry" ? { ...o, botEndResult: "A booked calendar in 30 days." } : o));
+    input.offers.push(offer({ id: "schol", name: "Scholarship", botRole: "entry", price: 1200, paymentLink: "https://x/scholarship", botEndResult: "A booked calendar in 30 days." }));
+    const sections = productSections(input);
+    expect(sections.find((x) => x.key === "what")!.text).toBe(golden[PRODUCT_FIELD].split("\n\n")[0]);
+    expect(sections.find((x) => x.key === "offer:acc")!.text.split("\n").slice(0, 3)).toEqual(["ENTRY OFFER (Accelerator)", "For: new businesses with a budget under $1,000 who want help.", "Result: A booked calendar in 30 days."]);
+    expect(sections.find((x) => x.key === "offer:schol")!.text).toBe("ENTRY OFFER (Scholarship)\nResult: A booked calendar in 30 days.\nLink: https://x/scholarship");
+    expect(stage1Payload(input)[PRODUCT_FIELD].match(/A booked calendar/g)).toHaveLength(2);
+  });
   it("a field over the platform's limit blocks and names its longest section; nothing is dropped", () => {
     const input = danno();
     input.coach!.whatIDo = "x".repeat(20001);

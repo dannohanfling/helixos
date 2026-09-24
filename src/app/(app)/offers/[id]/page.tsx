@@ -184,7 +184,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                 <Field label="Who it's for, one line">
                   <input className="field" name="botFor" defaultValue={offer.botFor ?? ""} placeholder="new businesses with a budget under $1,000 who want help." data-testid="offer-bot-for" />
                 </Field>
-                <Field label="What they get, one line (optional)" hint="Added under What I do.">
+                <Field label="What they get, one line (optional)" hint="Sent inside this offer's block as its Result line.">
                   <input className="field" name="botEndResult" defaultValue={offer.botEndResult ?? ""} data-testid="offer-bot-end-result" />
                 </Field>
                 <div className="sm:col-span-2">

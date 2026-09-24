@@ -146,7 +146,8 @@ export type ProductSection = { key: string; title: string; text: string };
 export function productSections(input: Stage1Input): ProductSection[] {
   const c = input.coach ?? {};
   const offers = botOffers(input.offers);
-  const what = [clean(c.whatIDo), ...offers.map((o) => clean(o.botEndResult))].filter(Boolean);
+  // What an offer gives is its own "Result:" line inside its block (rev 88), never a loose line under WHAT I DO.
+  const what = [clean(c.whatIDo)].filter(Boolean);
   if (!what.length && !offers.length) return [];
   const out: ProductSection[] = [];
   if (what.length) out.push({ key: "what", title: "What I do", text: ["WHAT I DO", ...what].join("\n") });
@@ -161,7 +162,7 @@ export function productSections(input: Stage1Input): ProductSection[] {
     out.push({
       key: `offer:${o.id ?? botNameOf(o)}`,
       title: `${role === "entry" ? "Entry offer" : "Core offer"}: ${botNameOf(o)}`,
-      text: [`${ROLE_TITLE[role]} (${botNameOf(o)})`, clean(o.botFor) && `For: ${clean(o.botFor)}`, clean(o.botTerms) && `Terms: ${clean(o.botTerms)}`, clean(o.paymentLink) && `Link: ${clean(o.paymentLink)}`, refundLineOf(o)].filter(Boolean).join("\n"),
+      text: [`${ROLE_TITLE[role]} (${botNameOf(o)})`, clean(o.botFor) && `For: ${clean(o.botFor)}`, clean(o.botEndResult) && `Result: ${clean(o.botEndResult)}`, clean(o.botTerms) && `Terms: ${clean(o.botTerms)}`, clean(o.paymentLink) && `Link: ${clean(o.paymentLink)}`, refundLineOf(o)].filter(Boolean).join("\n"),
     });
   }
   const one = offers.filter((o) => o.botRole === "one_on_one");
@@ -169,16 +170,35 @@ export function productSections(input: Stage1Input): ProductSection[] {
   return out;
 }
 
-/** A suggestion for what the guarantee covers, from the offers' roles; the coach's own line is what is sent. */
+/**
+ * A suggestion for what the guarantee covers, built from the offers' "covered" flags and roles alone; the coach's own line is what
+ * is sent, and an empty box sends none. A role with more than one offer on the bot is named in the plural (offer by offer when
+ * only some of them are covered), and the deposit named
+ * for the entry path is the offer's own amount (rev 88), or "their deposit" when the uncovered entry offers differ.
+ */
 export function suggestCoverageLine(offers: OfferFacts[]): string {
   const on = botOffers(offers);
   const covered = on.filter((o) => o.guaranteeCovered);
   if (!covered.length) return "";
-  const nouns = (list: OfferFacts[]) => joinNames([...new Set(list.map((o) => ROLE_NOUN[o.botRole as keyof typeof ROLE_NOUN]))]);
+  // A role wholly on one side is named by its noun (plural when it has more than one offer); a role split across both sides is
+  // named offer by offer, so the line never says it covers "the entry offers" and not "the entry offers".
+  const nouns = (list: OfferFacts[]) =>
+    joinNames(
+      (["entry", "core", "one_on_one"] as const).flatMap((role) => {
+        const mine = list.filter((o) => o.botRole === role);
+        if (!mine.length) return [];
+        const all = on.filter((o) => o.botRole === role);
+        if (mine.length < all.length) return mine.map(botNameOf);
+        return [role !== "one_on_one" && all.length > 1 ? `${ROLE_NOUN[role]}s` : ROLE_NOUN[role]];
+      }),
+    );
   const not = on.filter((o) => !o.guaranteeCovered);
-  let line = `The guarantee covers ${nouns(covered)} only${not.length ? `, not ${nouns(not)}` : ""}.`;
-  const entry = not.find((o) => o.botRole === "entry" && o.refundableIfNotFit && o.depositAmount);
-  if (entry) line += ` If someone on the entry offer path asks, say the guarantee is for the programs it covers, and that their ${formatPrice(entry.depositAmount ?? 0, entry.currency)} is refunded if our call shows it's not a fit.`;
+  let line = not.length ? `The guarantee covers ${nouns(covered)} only, not ${nouns(not)}.` : `The guarantee covers ${nouns(covered)}.`;
+  const refunded = not.filter((o) => o.botRole === "entry" && o.refundableIfNotFit && o.depositAmount);
+  if (refunded.length) {
+    const amounts = [...new Set(refunded.map((o) => formatPrice(o.depositAmount ?? 0, o.currency)))];
+    line += ` If someone on the entry offer path asks, say the guarantee is for the programs it covers, and that ${amounts.length === 1 ? `their ${amounts[0]}` : "their deposit"} is refunded if our call shows it's not a fit.`;
+  }
   return line;
 }
 
