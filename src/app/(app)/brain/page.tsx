@@ -31,7 +31,8 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const m = v.membership;
   const field = faqFieldFor(m);
-  const [entries, syncs, log, essence, { payload: stage1, input }, preview, changedSince, pushedLine] = await Promise.all([
+  // The two reads of the bot, the Your bot panel's and the FAQ's, go side by side: one after the other doubled the wait (24 Sep).
+  const [entries, syncs, log, essence, { payload: stage1, input }, preview, changedSince, pushedLine, access] = await Promise.all([
     db.query.faqEntries.findMany({ where: and(eq(schema.faqEntries.workspaceId, v.workspace.id), eq(schema.faqEntries.userId, v.user.id)), orderBy: [desc(schema.faqEntries.createdAt)] }),
     db.query.faqSyncs.findMany({ where: and(eq(schema.faqSyncs.workspaceId, v.workspace.id), eq(schema.faqSyncs.userId, v.user.id)), orderBy: [desc(schema.faqSyncs.createdAt), desc(sql`rowid`)], limit: 10 }),
     db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, v.workspace.id), eq(schema.syncEvents.userId, v.user.id), like(schema.syncEvents.event, "faq.%")), orderBy: [desc(schema.syncEvents.createdAt)], limit: 50 }),
@@ -40,6 +41,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
     stage1Preview(m),
     changedSinceLastPush(m),
     lastPushedLine(m, v.user.id, v.workspace.timezone),
+    briefAccessFor(m),
   ]);
   const coachLines = input.coach ?? {};
   const priceLine =
@@ -48,7 +50,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
       : coachLines.priceMode === "never"
         ? `How it handles price: it never states a price, and answers with your line: “${priceAnswerFor(coachLines.priceAnswer)}”`
         : `How it handles price: it states each offer's price on your bot, and on payment plans says “${paymentPlanLineOf(coachLines)}”.`;
-  const { hasToken: token, agent, blocked, warning, fieldVarType, nsByName, heldValue } = await briefAccessFor(m);
+  const { hasToken: token, agent, blocked, warning, fieldVarType, nsByName, heldValue } = access;
   // Push only what the agent reads: of the template's fields and the FAQ's own, the ones whose token is in the agent's prompt.
   const candidates = [...new Set([...TEMPLATE_BOT_FIELDS, PRODUCT_FIELD_OLD, field])];
   const reads = agent ? agentReadsFields(agent, candidates, nsByName) : null;

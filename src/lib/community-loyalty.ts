@@ -259,23 +259,46 @@ async function pushPlanned(m: schema.Membership, opts: { key: string; reason: st
  * empty bot, so this one does not swallow the refusal.
  */
 async function readBotFields(token: string): Promise<{ rows: { name: string; value: string; varType: string; ns: string }[] } | { refused: string }> {
-  const rows: { name: string; value: string; varType: string; ns: string }[] = [];
   try {
-    for (let page = 1; page <= 100; page++) {
-      const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers: authed(token) });
-      if (!back.ok) {
-        const body = await back.text();
-        logPlatformRefusal("GET /flow/bot-fields (stage 1)", back.status, body);
-        return { refused: `${platformReason(back.status, body)} on page ${page}.` };
-      }
-      const pageRows = parseBotFields(await back.json());
-      rows.push(...pageRows);
-      if (!morePages(pageRows.length, READ_BACK_LIMIT)) break;
-    }
+    const read = await readAllBotFields(token, "GET /flow/bot-fields (stage 1)");
+    return "refused" in read ? { refused: read.refused } : { rows: read.rows };
   } catch (e) {
     return { refused: e instanceof Error ? e.message : String(e) };
   }
-  return { rows };
+}
+
+/**
+ * How long one listing of a bot's fields may take in all before HelixOS stops and says so. Each page already has its own 8s
+ * timeout, but a bot is read page by page with no total to go on, so without this a slow platform could hold a page render for
+ * minutes and past the function's own limit, which leaves the page on its loading line for good (24 Sep: Danno's "Your bot" sat
+ * on "Reading your bot…" for over 90 seconds).
+ */
+export const FIELD_READ_BUDGET_MS = 25_000;
+type FieldRow = { name: string; value: string; varType: string; ns: string };
+/**
+ * Every bot field, paged at an explicit limit. Stops at a short page, at the budget above, or when a page repeats the one before
+ * it name for name: a platform that ignored `page` would otherwise hand back the same full page a hundred times.
+ */
+async function readAllBotFields(token: string, label: string): Promise<{ rows: FieldRow[]; pages: number } | { refused: string; rows: FieldRow[]; pages: number }> {
+  const rows: FieldRow[] = [];
+  const started = Date.now();
+  let previous = "";
+  for (let page = 1; page <= 100; page++) {
+    if (Date.now() - started > FIELD_READ_BUDGET_MS) return { refused: `Community Loyalty took more than ${FIELD_READ_BUDGET_MS / 1000} seconds to list your bot's fields (${rows.length} read), so HelixOS stopped waiting. Try again in a minute.`, rows, pages: page - 1 };
+    const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers: authed(token) });
+    if (!back.ok) {
+      const body = await back.text();
+      logPlatformRefusal(label, back.status, body);
+      return { refused: `${platformReason(back.status, body)} on page ${page}.`, rows, pages: page };
+    }
+    const pageRows = parseBotFields(await back.json());
+    const names = pageRows.map((r) => r.name).join("\n");
+    if (page > 1 && names === previous) return { rows, pages: page };
+    previous = names;
+    rows.push(...pageRows);
+    if (!morePages(pageRows.length, READ_BACK_LIMIT)) return { rows, pages: page };
+  }
+  return { rows, pages: 100 };
 }
 
 /**
@@ -407,19 +430,8 @@ export async function agentChoicesFor(m: schema.Membership): Promise<{ ns: strin
 }
 
 /** Every bot field the client's workspace holds, by name, paged the way the Stage 1 read-back pages. */
-export async function listBotFields(token: string): Promise<{ name: string; value: string; varType: string; ns: string }[]> {
-  const out: { name: string; value: string; varType: string; ns: string }[] = [];
-  for (let page = 1; page <= 100; page++) {
-    const back = await withTimeout(`${uchatBase()}/flow/bot-fields?limit=${READ_BACK_LIMIT}&page=${page}`, { method: "GET", headers: authed(token) });
-    if (!back.ok) {
-      logPlatformRefusal("GET /flow/bot-fields", back.status, await back.text());
-      return out;
-    }
-    const rows = parseBotFields(await back.json());
-    out.push(...rows);
-    if (!morePages(rows.length, READ_BACK_LIMIT)) break;
-  }
-  return out;
+export async function listBotFields(token: string): Promise<FieldRow[]> {
+  return (await readAllBotFields(token, "GET /flow/bot-fields")).rows;
 }
 
 /** The field name this member's FAQ composes into: their override, else the default the Booking Agent reads. */
