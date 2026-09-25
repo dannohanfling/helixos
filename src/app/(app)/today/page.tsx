@@ -21,6 +21,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { weekOf } from "@/lib/engine/intentions";
 import { WeekCard } from "@/components/week-card";
+import { feedbackMonth } from "@/lib/engine/feedback";
+import { FeedbackCard } from "@/components/feedback-card";
 
 export const metadata = { title: "Today" };
 
@@ -43,7 +45,7 @@ function greeting(hour: number, name: string): string {
 
 const ENERGY = ["", "Dragging", "Slow", "Steady", "Bright", "On fire"];
 
-export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string }> }) {
+export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; feedbackError?: string; feedbackSaved?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const d = await todayData(v);
@@ -52,6 +54,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const weekTaskIds = (week?.tasks ?? []).map((t) => t.taskId).filter((x): x is string => Boolean(x));
   const weekTasks = weekTaskIds.length ? await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, v.user.id), inArray(schema.tasks.id, weekTaskIds)) }) : [];
   const taskDone = Object.fromEntries(weekTasks.map((t) => [t.id, t.status === "done"]));
+  // End-of-month feedback (rev 124): only in its window, about the month ending, and what they already sent for it.
+  const fbMonth = feedbackMonth(v.today);
+  const fbGiven = fbMonth ? ((await db.query.monthlyFeedback.findFirst({ where: and(eq(schema.monthlyFeedback.workspaceId, v.workspace.id), eq(schema.monthlyFeedback.userId, v.user.id), eq(schema.monthlyFeedback.month, fbMonth)) })) ?? null) : null;
   const closed = await closedDates(v.workspace.id, v.user.id);
   const streakDayIfClosedNow = d.log?.eveningDoneAt ? d.log.streakDay : weeklyStreakDay(closed, v.today);
   const bonusIfClosedNow = streakBonus(streakDayIfClosedNow);
@@ -85,6 +90,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       </div>
 
       <WeekCard week={week} today={v.today} taskDone={taskDone} sp={sp} />
+      {fbMonth ? <FeedbackCard month={fbMonth} given={fbGiven} sp={sp} /> : null}
 
       {d.firstSession ? (
         <section className="card mb-5 border-accent p-5" style={{ background: "var(--accent-soft)" }} data-testid="welcome">

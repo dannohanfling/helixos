@@ -324,6 +324,34 @@ export const dmTemplates = sqliteTable("dm_templates", {
 });
 
 /** One row per user per day. Morning lock-in and evening close both write here. */
+/* ───────────────────────── End-of-month feedback (handoff rev 124) ───────────────────────── */
+export const monthlyFeedback = sqliteTable(
+  "monthly_feedback",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** The month it is about ("YYYY-MM"), set from the date, never picked. */
+    month: text("month").notNull(),
+    /** Most proud of this past month. The member's own words: never a client result, never sent to Proof Bank or the bot. */
+    proud: text("proud").notNull(),
+    love: text("love").notNull(),
+    less: text("less").notNull(),
+    more: text("more").notNull(),
+    wow: text("wow").notNull(),
+    /** How likely they are to refer, 1 to 10, whole numbers. */
+    referralScore: integer("referral_score").notNull(),
+    /** Who they know who'd benefit. */
+    referral: text("referral"),
+    /** Their favorite part of the experience so far. */
+    favorite: text("favorite"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("monthly_feedback_member_month").on(t.workspaceId, t.userId, t.month)],
+);
+export type MonthlyFeedback = typeof monthlyFeedback.$inferSelect;
+
 /* ───────────────────────── Open Office Hours requests (handoff rev 124) ───────────────────────── */
 export const officeHoursRequests = sqliteTable(
   "office_hours_requests",

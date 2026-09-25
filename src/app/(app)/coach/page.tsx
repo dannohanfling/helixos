@@ -119,7 +119,7 @@ export default async function CoachPage() {
 
   return (
     <>
-      <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
+      <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
       <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">Your bot →</Link>}>
         <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your bot page can send nothing until the token is here.</p>
         <form action={setMyBotAction} className="flex flex-wrap items-center gap-2" data-testid="my-bot">

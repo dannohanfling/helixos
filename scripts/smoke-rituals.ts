@@ -7,6 +7,9 @@
  * 2. The Open Office Hours request: the two gates (going back saves nothing, the promise must be ticked), this month's upcoming
  *    Fridays only, the member's own list with a change until the Friday; the coach sees requests by Friday, sets who takes it,
  *    covered or no-show and notes the member never sees (nor their export), and edits the category and host lists.
+ * 3. End-of-month feedback: the card on Today only from the last 3 days of a month through the 5th of the next, about the month
+ *    ending; the score required; sent and changed; the coach sees each month's responses, the average referral score and its
+ *    trend, and the proud-of answers together, with nothing that sends them anywhere.
  * Dates are the real ones: what depends on the weekday is asserted against the engine's own answer for the member's today.
  */
 import { chromium, type Page } from "@playwright/test";
@@ -25,6 +28,7 @@ async function main() {
   const { todayInTz } = await import("@/lib/dates");
   const { intentionPrompt, lateForWeek, tasksDueOn, weekOf } = await import("@/lib/engine/intentions");
   const { upcomingFridays } = await import("@/lib/engine/office-hours");
+  const { feedbackMonth, monthSummary, prevMonth, trendLine } = await import("@/lib/engine/feedback");
   const { newId } = await import("@/lib/ids");
 
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
@@ -36,6 +40,7 @@ async function main() {
     await db.delete(schema.weeklyIntentions).where(eq(schema.weeklyIntentions.userId, u));
     await db.delete(schema.tasks).where(and(eq(schema.tasks.userId, u), eq(schema.tasks.source, "intention")));
     await db.delete(schema.officeHoursRequests).where(eq(schema.officeHoursRequests.userId, u));
+    await db.delete(schema.monthlyFeedback).where(eq(schema.monthlyFeedback.userId, u));
   }
   const mayaToday = todayInTz(mayaM.timezone || ws.timezone);
   const jordanToday = todayInTz(jordanM.timezone || ws.timezone);
@@ -223,6 +228,62 @@ async function main() {
     const exported = await (await page.request.get(`${base}/api/export?format=json`)).text();
     if (!exported.includes("office_hours_requests") || !exported.includes("My bot books the wrong calendar") || exported.includes(NOTES) || exported.includes("coachNotes")) throw new Error("the member's export has their request and not the coach's notes");
     console.log("✓ the coach: the request under its Friday, Shonna responsible, covered, notes kept the coach's (not on the member's page, not in their export); a category added to the list");
+
+    // ── 3. End-of-month feedback, on Today in its window only. ──
+    const PROUD = `Booked my first 3 calls ${Date.now()}`;
+    const fbMonth = feedbackMonth(mayaToday);
+    const month = fbMonth ?? mayaToday.slice(0, 7);
+    await page.goto(`${base}/today`);
+    await page.locator('[data-testid="week-card"]').waitFor({ timeout: 20000 });
+    const fbCard = page.locator('[data-testid="feedback-card"]');
+    if (fbMonth) {
+      if ((await fbCard.getAttribute("data-state")) !== "ask") throw new Error(`in the window (${mayaToday}), Today asks for feedback on ${fbMonth}`);
+      const fillFeedback = async () => {
+        for (const [k, t] of [["proud", PROUD], ["love", "The Friday calls."], ["less", "Long lessons."], ["more", "Templates."], ["wow", "A done-for-you funnel."], ["referral", "Sam, a fitness coach."], ["favorite", "The community."]]) await page.locator(`[data-testid="feedback-${k}"]`).last().fill(t);
+      };
+      await fillFeedback();
+      await submit(page, '[data-testid="feedback-save"]');
+      if ((await page.locator('[data-testid="feedback-error"]').innerText()).trim() !== "Pick a referral score from 1 to 10." || (await db.query.monthlyFeedback.findFirst({ where: eq(schema.monthlyFeedback.userId, maya.id) }))) throw new Error("without a score, nothing is sent");
+      await fillFeedback();
+      await page.locator('[data-testid="feedback-score-9"]').last().check();
+      await submit(page, '[data-testid="feedback-save"]');
+      await page.locator('[data-testid="feedback-saved"]').waitFor({ timeout: 20000 });
+      if ((await fbCard.getAttribute("data-state")) !== "given") throw new Error("once sent, the card thanks them");
+      await page.locator('[data-testid="feedback-edit"]').click();
+      await page.locator('[data-testid="feedback-score-10"]').last().check();
+      await submit(page, '[data-testid="feedback-save"]');
+      await page.locator('[data-testid="feedback-saved"]').waitFor({ timeout: 20000 });
+      const fb = await db.query.monthlyFeedback.findMany({ where: eq(schema.monthlyFeedback.userId, maya.id) });
+      if (fb.length !== 1 || fb[0].month !== fbMonth || fb[0].referralScore !== 10 || fb[0].proud !== PROUD) throw new Error(`one response for ${fbMonth}, changed in place, got ${JSON.stringify(fb.map((f) => [f.month, f.referralScore]))}`);
+      console.log(`✓ feedback on ${fbMonth}: the score required, sent, then changed in place (9 to 10)`);
+    } else {
+      if (await fbCard.count()) throw new Error(`outside the window (${mayaToday}) there is no feedback card`);
+      await db.insert(schema.monthlyFeedback).values({ id: newId(), workspaceId: ws.id, userId: maya.id, month, proud: PROUD, love: "The Friday calls.", less: "Long lessons.", more: "Templates.", wow: "A done-for-you funnel.", referralScore: 10 });
+      console.log(`✓ feedback: ${mayaToday} is outside the window, so Today asks nothing (the unit tests cover the window; a response is seeded for the coach's view)`);
+    }
+    const exportedFb = await (await page.request.get(`${base}/api/export?format=json`)).text();
+    if (!exportedFb.includes("monthly_feedback") || !exportedFb.includes(PROUD)) throw new Error("the member's export has their feedback");
+    await signOut();
+
+    // The coach: this month and the one before, for the average and its trend.
+    await db.insert(schema.monthlyFeedback).values([
+      { id: newId(), workspaceId: ws.id, userId: jordan.id, month, proud: "Launched my group.", love: "Office Hours.", less: "Email.", more: "Hot seats.", wow: "A retreat.", referralScore: 7 },
+      { id: newId(), workspaceId: ws.id, userId: jordan.id, month: prevMonth(month), proud: "Posted every day.", love: "The pathway.", less: "Tech.", more: "Examples.", wow: "Live builds.", referralScore: 6 },
+    ]);
+    const all = await db.query.monthlyFeedback.findMany({ where: eq(schema.monthlyFeedback.workspaceId, ws.id) });
+    const avg = monthSummary(all.filter((f) => f.month === month).map((f) => f.referralScore)).average;
+    const trend = trendLine(avg, monthSummary(all.filter((f) => f.month === prevMonth(month)).map((f) => f.referralScore)).average);
+    await signIn("coach");
+    await page.goto(`${base}/coach`);
+    await Promise.all([page.waitForURL(/\/coach\/feedback/), page.locator('[data-testid="coach-feedback-link"]').click()]);
+    const monthBox = page.locator(`[data-testid="feedback-month"][data-month="${month}"]`);
+    await monthBox.waitFor({ timeout: 20000 });
+    const averageLine = (await monthBox.locator('[data-testid="feedback-average"]').innerText()).trim();
+    if (!averageLine.includes(`${avg?.toFixed(1)} of 10`) || !averageLine.includes(trend)) throw new Error(`the month's average and trend (${avg}, ${trend}), got "${averageLine}"`);
+    const proudList = await monthBox.locator('[data-testid="feedback-proud"]').innerText();
+    if (!proudList.includes(PROUD) || !proudList.includes("Launched my group.")) throw new Error("the proud-of answers are listed together");
+    if (await page.locator('main form').count()) throw new Error("nothing on the feedback page sends an answer anywhere");
+    console.log(`✓ the coach: ${month} with ${avg?.toFixed(1)} average (${trend} on the month before), the proud-of answers together, and no way to send them on`);
   } finally {
     await browser.close();
   }
