@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-hours";
 
 const id = () => text("id").primaryKey();
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
@@ -22,6 +23,9 @@ export const workspaces = sqliteTable("workspaces", {
   airtableBaseId: text("airtable_base_id"),
   /** Soft cap on AI calls per member per day, on the member's own key. A runaway loop on a client's money gets blamed on HelixOS. */
   aiDailyCap: integer("ai_daily_cap").notNull().default(40),
+  /** Open Office Hours (rev 124): the categories a member picks from, and who can be responsible for a request. Coach-edited. */
+  oohCategories: text("ooh_categories", { mode: "json" }).$type<string[]>().notNull().default(OOH_CATEGORIES_DEFAULT),
+  oohHosts: text("ooh_hosts", { mode: "json" }).$type<string[]>().notNull().default(OOH_HOSTS_DEFAULT),
   createdAt: createdAt(),
 });
 
@@ -320,6 +324,34 @@ export const dmTemplates = sqliteTable("dm_templates", {
 });
 
 /** One row per user per day. Morning lock-in and evening close both write here. */
+/* ───────────────────────── Open Office Hours requests (handoff rev 124) ───────────────────────── */
+export const officeHoursRequests = sqliteTable(
+  "office_hours_requests",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** The Friday session it is for. */
+    friday: text("friday").notNull(),
+    description: text("description").notNull(),
+    /** How they tried to solve it themselves. */
+    triedSelf: text("tried_self").notNull(),
+    /** What tools are needed. */
+    tools: text("tools"),
+    /** What solution we're trying to reach on the call. */
+    goal: text("goal").notNull(),
+    category: text("category").notNull(),
+    /* The coach's, never the member's: who takes it, how it went, and notes. */
+    responsible: text("responsible"),
+    outcome: text("outcome", { enum: ["covered", "no_show"] }),
+    coachNotes: text("coach_notes"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [index("office_hours_requests_ws_friday").on(t.workspaceId, t.friday)],
+);
+export type OfficeHoursRequest = typeof officeHoursRequests.$inferSelect;
+
 /* ───────────────────────── Weekly intention: the 3-1-3 (handoff rev 124) ───────────────────────── */
 export type IntentionKeyResult = { text: string; done: boolean | null };
 export type IntentionTask = { title: string; taskId: string | null };

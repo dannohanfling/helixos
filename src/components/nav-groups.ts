@@ -13,6 +13,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/library", label: "Library", icon: "🗂️", hint: "swipes + hooks" },
       { href: "/conversations", label: "DMs", icon: "💬" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
+      { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays" },
     ],
   },
   {
@@ -49,6 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/numbers", label: "Numbers", icon: "📊" },
       { href: "/rewards", label: "Rewards", icon: "🏆" },
       { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
+      { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
       { href: "/integrations", label: "Integrations", icon: "🔌", coachOnly: true },
     ],
   },

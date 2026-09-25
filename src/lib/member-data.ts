@@ -24,6 +24,7 @@ export const MEMBER_TABLES = {
   goals: schema.goals,
   daily_logs: schema.dailyLogs,
   weekly_intentions: schema.weeklyIntentions,
+  office_hours_requests: schema.officeHoursRequests,
   points: schema.pointsLedger,
   reward_claims: schema.rewardClaims,
   pathway_progress: schema.pathwayProgress,
@@ -108,6 +109,12 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
   rate_limits: "throttle counters keyed by address and window, holding no content",
   deletion_audits: "the record that a deletion happened: kept by design, with no content",
 };
+
+/**
+ * Columns that are the coach's working notes on a member's own row, left out of that member's export the way coach_notes is: the
+ * coach's, not theirs. Deletion still removes them with the row.
+ */
+export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
 export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash"]);

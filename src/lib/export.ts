@@ -5,7 +5,7 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { db, schema } from "@/db";
-import { CHILD_TABLES, MEMBER_TABLES, STRIP_COLUMNS, USER_TABLES, type MemberLabel } from "@/lib/member-data";
+import { CHILD_TABLES, COACH_ONLY_COLUMNS, MEMBER_TABLES, STRIP_COLUMNS, USER_TABLES, type MemberLabel } from "@/lib/member-data";
 
 type Row = Record<string, unknown>;
 type AnyTable = SQLiteTable & Record<string, SQLiteColumn>;
@@ -22,9 +22,9 @@ type UserLabel = keyof typeof USER_TABLES;
 export type ExportTable = "profile" | MemberLabel | ChildExport | UserLabel | "stored_files";
 export const EXPORT_TABLES: ExportTable[] = ["profile", ...(Object.keys(MEMBER_TABLES) as MemberLabel[]), ...EXPORT_CHILDREN.map((c) => c.label), ...(Object.keys(USER_TABLES) as UserLabel[]), "stored_files"];
 
-/** Credentials never leave in an export, sealed or not, at any depth (the membership sits inside the profile). */
+/** Credentials never leave in an export, sealed or not, at any depth (the membership sits inside the profile); nor a coach's notes. */
 function clean(rows: Row[]): Row[] {
-  const strip = (v: unknown): unknown => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Row).filter(([k]) => !STRIP_COLUMNS.has(k)).map(([k, x]) => [k, strip(x)])) : v);
+  const strip = (v: unknown): unknown => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Row).filter(([k]) => !STRIP_COLUMNS.has(k) && !COACH_ONLY_COLUMNS.has(k)).map(([k, x]) => [k, strip(x)])) : v);
   return rows.map((r) => strip(r) as Row);
 }
 

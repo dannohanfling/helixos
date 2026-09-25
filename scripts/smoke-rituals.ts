@@ -4,6 +4,9 @@
  *    tasks); the tasks become this week's Tasks, due Friday; an edit renames, adds and removes them; Friday to Sunday the key
  *    results are marked done or not; the coach sees who has set it, who hasn't (under the quiet list from Tuesday), and each
  *    member's history.
+ * 2. The Open Office Hours request: the two gates (going back saves nothing, the promise must be ticked), this month's upcoming
+ *    Fridays only, the member's own list with a change until the Friday; the coach sees requests by Friday, sets who takes it,
+ *    covered or no-show and notes the member never sees (nor their export), and edits the category and host lists.
  * Dates are the real ones: what depends on the weekday is asserted against the engine's own answer for the member's today.
  */
 import { chromium, type Page } from "@playwright/test";
@@ -21,6 +24,8 @@ async function main() {
   const { and, eq } = await import("drizzle-orm");
   const { todayInTz } = await import("@/lib/dates");
   const { intentionPrompt, lateForWeek, tasksDueOn, weekOf } = await import("@/lib/engine/intentions");
+  const { upcomingFridays } = await import("@/lib/engine/office-hours");
+  const { newId } = await import("@/lib/ids");
 
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const jordan = (await db.query.users.findFirst({ where: eq(schema.users.email, "client2@demo.helixos.app") }))!;
@@ -30,6 +35,7 @@ async function main() {
   for (const u of [maya.id, jordan.id]) {
     await db.delete(schema.weeklyIntentions).where(eq(schema.weeklyIntentions.userId, u));
     await db.delete(schema.tasks).where(and(eq(schema.tasks.userId, u), eq(schema.tasks.source, "intention")));
+    await db.delete(schema.officeHoursRequests).where(eq(schema.officeHoursRequests.userId, u));
   }
   const mayaToday = todayInTz(mayaM.timezone || ws.timezone);
   const jordanToday = todayInTz(jordanM.timezone || ws.timezone);
@@ -135,6 +141,88 @@ async function main() {
     await history.first().waitFor({ timeout: 20000 });
     if ((await history.count()) !== 1 || !(await history.first().innerText()).includes("Consistent") || !(await history.first().innerText()).includes("Follow up with 12 leads")) throw new Error("the client page lists her weeks, with the word, key results and tasks");
     console.log(`✓ the coach: Maya set (Consistent), Jordan not set${jordanLate ? " and under the quiet list" : " (Monday: not yet on the quiet list)"}; Maya's history on her page`);
+    await signOut();
+
+    // ── 2. Open Office Hours: the member asks ahead of a Friday. ──
+    await signIn("client");
+    await page.goto(`${base}/office-hours`);
+    await page.locator("#request").waitFor({ timeout: 20000 });
+    const fridays = upcomingFridays(mayaToday);
+    const oohRows = () => db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.userId, maya.id) });
+    const NOTES = `Bring the calendar settings ${Date.now()}`;
+    if (fridays.length) {
+      const friday = fridays[fridays.length - 1];
+      const fillRequest = async (desc: string) => {
+        await page.locator('[data-testid="ooh-friday"]').first().selectOption(friday);
+        await page.locator('[data-testid="ooh-description"]').first().fill(desc);
+        await page.locator('[data-testid="ooh-tried"]').first().fill("Re-read the setup lesson and rebuilt the calendar link.");
+        await page.locator('[data-testid="ooh-tools"]').first().fill("Community Loyalty, GoHighLevel");
+        await page.locator('[data-testid="ooh-goal"]').first().fill("Bookings land on the right calendar.");
+        await page.locator('[data-testid="ooh-category"]').first().selectOption("Chatbot");
+      };
+      if ((await page.locator('#request [data-testid="ooh-friday"] option').evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value))).join() !== fridays.join()) throw new Error(`only this month's upcoming Fridays are offered: ${fridays.join(", ")}`);
+      // Gate one: going back to try it yourself sends nothing, and says so kindly.
+      await fillRequest("My bot books the wrong calendar.");
+      await page.locator('[data-testid="ooh-gate-back"]').check();
+      await page.locator('[data-testid="ooh-promise"]').check();
+      await submit(page, '[data-testid="ooh-submit"]');
+      await page.locator('[data-testid="ooh-back"]').waitFor({ timeout: 20000 });
+      if ((await oohRows()).length) throw new Error("going back to try it yourself saves nothing");
+      // Gate two: the promise to attend must be ticked.
+      await fillRequest("My bot books the wrong calendar.");
+      await page.locator('[data-testid="ooh-gate-yes"]').check();
+      await submit(page, '[data-testid="ooh-submit"]');
+      if ((await page.locator('[data-testid="ooh-error"]').innerText()).trim() !== "Promise to attend the call, so your spot isn't wasted." || (await oohRows()).length) throw new Error("without the promise, nothing is sent");
+      await fillRequest("My bot books the wrong calendar.");
+      await page.locator('[data-testid="ooh-gate-yes"]').check();
+      await page.locator('[data-testid="ooh-promise"]').check();
+      await submit(page, '[data-testid="ooh-submit"]');
+      await page.locator('[data-testid="ooh-saved"]').waitFor({ timeout: 20000 });
+      let rows = await oohRows();
+      if (rows.length !== 1 || rows[0].friday !== friday || rows[0].category !== "Chatbot" || rows[0].workspaceId !== ws.id) throw new Error(`the request is saved for ${friday}, from the login, got ${JSON.stringify(rows)}`);
+      if ((await page.locator('[data-testid="ooh-mine"]').count()) !== 1) throw new Error("the member sees their request");
+      // A change, until the Friday.
+      await page.locator('[data-testid="ooh-edit"]').click();
+      await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-description"]').fill("My bot books the wrong calendar, only on weekends.");
+      await submit(page, '[data-testid="ooh-mine"] [data-testid="ooh-submit"]');
+      await page.locator('[data-testid="ooh-saved"]').waitFor({ timeout: 20000 });
+      rows = await oohRows();
+      if (rows.length !== 1 || rows[0].description !== "My bot books the wrong calendar, only on weekends.") throw new Error("a change edits the same request");
+      console.log(`✓ Office Hours: going back sends nothing, the promise is required, the request for ${friday} is saved and changed; only ${fridays.length} upcoming Friday(s) offered`);
+    } else {
+      if (!(await page.locator('[data-testid="ooh-none"]').innerText()).includes("no Office Hours left this month")) throw new Error("with no Friday left this month, the page says so");
+      await db.insert(schema.officeHoursRequests).values({ id: newId(), workspaceId: ws.id, userId: maya.id, friday: "2099-01-02", description: "My bot books the wrong calendar.", triedSelf: "Re-read the lesson.", goal: "Bookings land right.", category: "Chatbot" });
+      console.log(`✓ Office Hours: no Friday left this month on ${mayaToday}, and the page says so (the unit tests cover the Fridays and the gates)`);
+    }
+    await signOut();
+
+    // ── The coach: requests by Friday, who takes it, how it went, notes; the lists. ──
+    await signIn("coach");
+    await page.goto(`${base}/coach`);
+    await Promise.all([page.waitForURL(/\/coach\/office-hours/), page.locator('[data-testid="coach-ooh-link"]').click()]);
+    const req = page.locator('[data-testid="ooh-request"]', { hasText: maya.name });
+    await req.waitFor({ timeout: 20000 });
+    await req.locator('[data-testid="ooh-responsible"]').selectOption("Shonna Roadruck");
+    await req.locator('[data-testid="ooh-outcome"]').selectOption("covered");
+    await req.locator('[data-testid="ooh-notes"]').fill(NOTES);
+    await submit(page, '[data-testid="ooh-request"] [data-testid="ooh-coach-save"]');
+    await page.locator('[data-testid="ooh-updated"]').waitFor({ timeout: 20000 });
+    const coachRow = (await oohRows())[0];
+    if (coachRow.responsible !== "Shonna Roadruck" || coachRow.outcome !== "covered" || coachRow.coachNotes !== NOTES) throw new Error(`the coach's side is saved, got ${JSON.stringify(coachRow)}`);
+    await page.locator('[data-testid="ooh-categories"]').fill("Chatbot\nAirtable\nFunnels\nFB Group Management\nOffer Creation\nTaxes\nOther");
+    await submit(page, '[data-testid="ooh-lists-save"]');
+    await page.locator('[data-testid="ooh-lists-saved"]').waitFor({ timeout: 20000 });
+    if (!(await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, ws.id) }))!.oohCategories.includes("Taxes")) throw new Error("the coach's category list is saved");
+    await signOut();
+    await signIn("client");
+    await page.goto(`${base}/office-hours`);
+    await page.locator('[data-testid="ooh-mine"]').first().waitFor({ timeout: 20000 });
+    const mineText = await page.locator('[data-testid="ooh-mine"]').first().innerText();
+    if (!mineText.includes("With Shonna Roadruck") || !mineText.includes("Covered") || (await page.content()).includes(NOTES)) throw new Error("the member sees who takes it and how it went, never the coach's notes");
+    if (fridays.length && !(await page.locator('#request [data-testid="ooh-category"] option').evaluateAll((els) => els.map((e) => e.textContent))).includes("Taxes")) throw new Error("the member picks from the coach's list");
+    const exported = await (await page.request.get(`${base}/api/export?format=json`)).text();
+    if (!exported.includes("office_hours_requests") || !exported.includes("My bot books the wrong calendar") || exported.includes(NOTES) || exported.includes("coachNotes")) throw new Error("the member's export has their request and not the coach's notes");
+    console.log("✓ the coach: the request under its Friday, Shonna responsible, covered, notes kept the coach's (not on the member's page, not in their export); a category added to the list");
   } finally {
     await browser.close();
   }
