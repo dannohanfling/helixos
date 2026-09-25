@@ -320,6 +320,34 @@ export const dmTemplates = sqliteTable("dm_templates", {
 });
 
 /** One row per user per day. Morning lock-in and evening close both write here. */
+/* ───────────────────────── Weekly intention: the 3-1-3 (handoff rev 124) ───────────────────────── */
+export type IntentionKeyResult = { text: string; done: boolean | null };
+export type IntentionTask = { title: string; taskId: string | null };
+export const weeklyIntentions = sqliteTable(
+  "weekly_intentions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** The Monday of the week it is for. */
+    weekOf: text("week_of").notNull(),
+    /** ONE word to embody this week. */
+    word: text("word").notNull(),
+    /** THREE trackable key results (the third optional), each marked done or not at the end of the week. */
+    keyResults: text("key_results", { mode: "json" }).$type<IntentionKeyResult[]>().notNull().default([]),
+    /** ONE initiative toward the bigger goal. */
+    initiative: text("initiative").notNull(),
+    /** THREE tasks that move the needle (the third optional), each also a row in tasks for the week. */
+    tasks: text("tasks", { mode: "json" }).$type<IntentionTask[]>().notNull().default([]),
+    /** When the key results were marked done or not; null until then. */
+    reviewedAt: text("reviewed_at"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("weekly_intentions_member_week").on(t.workspaceId, t.userId, t.weekOf)],
+);
+export type WeeklyIntention = typeof weeklyIntentions.$inferSelect;
+
 export const dailyLogs = sqliteTable(
   "daily_logs",
   {

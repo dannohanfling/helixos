@@ -23,6 +23,7 @@ export const MEMBER_TABLES = {
   tasks: schema.tasks,
   goals: schema.goals,
   daily_logs: schema.dailyLogs,
+  weekly_intentions: schema.weeklyIntentions,
   points: schema.pointsLedger,
   reward_claims: schema.rewardClaims,
   pathway_progress: schema.pathwayProgress,

@@ -25,6 +25,7 @@ import { addDays, daysBetween, formatDate, formatDateTime, todayInTz } from "@/l
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
+import { keyResultTally } from "@/lib/engine/intentions";
 
 export const metadata = { title: "Client" };
 
@@ -53,6 +54,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
   }
   const ws = v.workspace.id;
   const tz = m.timezone || v.workspace.timezone;
+  const weeks = await db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, m.userId)), orderBy: [desc(schema.weeklyIntentions.weekOf)], limit: 12 });
   const today = todayInTz(tz);
   const month = today.slice(0, 7);
   const [points, closed, recent, monthLogs, goal, stages, library, progress, claims, notes, offers, webinars, ladders, content] = await Promise.all([
@@ -230,6 +232,34 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 })}
               </ul>
             ) : null}
+          </Card>
+          <Card title="Their 3-1-3s" action={<span className="text-xs text-ink-3">{weeks.length ? `${weeks.length} week${weeks.length === 1 ? "" : "s"}` : "none yet"}</span>}>
+            <div id="weeks">
+              {weeks.length ? (
+                <ul className="divide-y text-sm" data-testid="their-weeks">
+                  {weeks.map((w) => (
+                    <li key={w.id} className="py-2" data-testid="their-week">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>
+                          <span className="text-ink-3">Week of {formatDate(w.weekOf)}</span> · <b>{w.word}</b>
+                        </span>
+                        <span className="text-xs text-ink-2">{w.reviewedAt ? keyResultTally(w.keyResults.map((k) => k.done)) : "not marked"}</span>
+                      </div>
+                      <ul className="mt-1 text-xs text-ink-2">
+                        {w.keyResults.map((k, i) => (
+                          <li key={i}>
+                            {k.done === true ? "✓" : k.done === false ? "✗" : "·"} {k.text}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-1 text-xs text-ink-3">Initiative: {w.initiative} · Tasks: {w.tasks.map((t) => t.title).join("; ")}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-ink-2">They haven&apos;t set a 3-1-3 yet. It&apos;s the &ldquo;Set your week&rdquo; card on their Today.</p>
+              )}
+            </div>
           </Card>
           <Card title="In their words" action={<span className="text-xs text-ink-3">last {words.length} days they showed up</span>}>
             {words.length ? (

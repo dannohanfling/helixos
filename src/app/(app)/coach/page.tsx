@@ -16,7 +16,8 @@ import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_DEGRADE_AT, EVI
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
-import { daysBetween, formatDate, formatDateTime } from "@/lib/dates";
+import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
+import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
 import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -95,6 +96,13 @@ export default async function CoachPage() {
     })
     .sort((a, b) => b.daysSilent - a.daysSilent);
   const atRisk = rows.filter((r) => r.daysSilent >= 3);
+  // The weekly 3-1-3 (rev 124), each member's own week by their own clock: who has set it, and, from Tuesday, who hasn't.
+  const weekRows = userIds.length ? await db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, wsId), inArray(schema.weeklyIntentions.userId, userIds)) }) : [];
+  const theirToday = (m: (typeof members)[number]) => todayInTz(m.timezone || v.workspace.timezone);
+  const weekRowOf = new Map(rows.map((r) => [r.m.id, weekRows.find((w) => w.userId === r.m.userId && w.weekOf === weekOf(theirToday(r.m))) ?? null]));
+  const weekSet = rows.filter((r) => weekRowOf.get(r.m.id));
+  const weekMissing = rows.filter((r) => !weekRowOf.get(r.m.id));
+  const weekLate = weekMissing.filter((r) => lateForWeek(theirToday(r.m)));
   // Which agent answers is chosen by name, not by typing an ai_agent_ns: the agents on each bot are read with that bot's own
   // saved token. A member with no token costs no call and gets the text box back.
   const withBots = [v.membership, ...members];
@@ -385,6 +393,28 @@ export default async function CoachPage() {
               <p className="text-sm text-ink-2">Nothing claimed yet. When a client spends points, it shows here with whether they&apos;ve followed the booking link.</p>
             )}
           </Card>
+          <Card title="This week's 3-1-3" action={<span className="text-xs text-ink-3">{weekSet.length} of {rows.length} set</span>}>
+            <ul className="space-y-1 text-sm" data-testid="week-coach">
+              {weekSet.map((r) => {
+                const w = weekRowOf.get(r.m.id)!;
+                return (
+                  <li key={r.m.id} className="flex flex-wrap items-center justify-between gap-2" data-testid="week-coach-row" data-set="yes">
+                    <Link href={`/coach/${r.m.id}#weeks`} className="underline-offset-2 hover:underline">{r.u?.name}</Link>
+                    <span className="text-xs text-ink-2">
+                      <b>{w.word}</b>
+                      {w.reviewedAt ? ` · ${keyResultTally(w.keyResults.map((k) => k.done))}` : ""}
+                    </span>
+                  </li>
+                );
+              })}
+              {weekMissing.map((r) => (
+                <li key={r.m.id} className="flex flex-wrap items-center justify-between gap-2 text-ink-3" data-testid="week-coach-row" data-set="no">
+                  <Link href={`/coach/${r.m.id}#weeks`} className="underline-offset-2 hover:underline">{r.u?.name}</Link>
+                  <span className="text-xs">not set yet</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
           <Card title="Who needs a nudge">
             {atRisk.length ? (
               <ul className="space-y-2 text-sm">
@@ -415,6 +445,18 @@ export default async function CoachPage() {
             ) : (
               <p className="text-sm text-ink-2">Everyone has shown up in the last 3 days.</p>
             )}
+            {weekLate.length ? (
+              <div className="mt-3 border-t pt-3">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-3">No 3-1-3 yet this week</div>
+                <ul className="space-y-1 text-sm">
+                  {weekLate.map((r) => (
+                    <li key={r.m.id} data-testid="week-late-row">
+                      {r.u?.avatarEmoji} {r.u?.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <p className="mt-3 text-xs text-ink-3">Tip: the &ldquo;Insider Check-In&rdquo; sequence in the DM playbook is built for exactly this.</p>
           </Card>
         </div>

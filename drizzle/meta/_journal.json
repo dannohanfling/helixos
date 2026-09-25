@@ -449,6 +449,13 @@
       "when": 1790353282495,
       "tag": "0063_bot_prices_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1790372805075,
+      "tag": "0064_weekly_intentions",
+      "breakpoints": true
     }
   ]
 }
