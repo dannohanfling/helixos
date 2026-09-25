@@ -115,6 +115,8 @@ export type CoachBot = {
   /** The early price answer, with no numbers. Blank means PRICE_ANSWER_DEFAULT. */
   priceAnswer?: string | null;
   defaultPath?: DefaultPath | null;
+  /** Prices on the bot (rev 121). Off composes the no-prices rules; blank or true is on, as every bot was before the switch. */
+  pricesOn?: boolean | null;
   callMinutes?: number | null;
   oneOnOneRange?: string | null;
   paymentPlanLine?: string | null;
@@ -148,6 +150,11 @@ export const joinNames = (names: string[]): string => (names.length <= 1 ? names
 export const botOffers = (offers: OfferFacts[]): OfferFacts[] => (["entry", "core", "one_on_one"] as const).flatMap((r) => offers.filter((o) => o.botRole === r));
 /** The offers the bot can send a link for. */
 const linkOffers = (offers: OfferFacts[]): OfferFacts[] => botOffers(offers).filter((o) => o.botRole === "entry" || o.botRole === "core");
+/** Prices are off on this bot (rev 121): no amounts, ranges, terms or links, no entry or core offer named, everyone to the call. */
+export const pricesOff = (c: CoachBot | undefined): boolean => c?.pricesOn === false;
+/** What prices-off leaves out of an example or a line: any "$", or the bot name of an entry or core offer. */
+const pricedText = (text: string, offers: OfferFacts[]): boolean =>
+  text.includes("$") || linkOffers(offers).some((o) => new RegExp(`\\b${botNameOf(o).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text));
 export const botNameOf = (o: OfferFacts): string => clean(o.botName) || clean(o.name);
 export const refundLineOf = (o: OfferFacts): string => (o.refundableIfNotFit ? clean(o.botRefundLine) || REFUND_LINE_DEFAULT : "");
 export const peopleWordOf = (c: CoachBot): string => clean(c.peopleWord).toLowerCase() || "clients";
@@ -160,8 +167,11 @@ export const peopleWordOf = (c: CoachBot): string => clean(c.peopleWord).toLower
 export type Fact = { key: string; label: string; text: string; eyes: boolean };
 export function botFacts(input: Stage1Input): Fact[] {
   const c = input.coach ?? {};
+  const off = pricesOff(c);
   const out: Fact[] = [];
-  for (const o of linkOffers(input.offers)) {
+  // Prices off: no offer's terms, link or cancelling, no one-on-one range, no payment plans and no coverage line (it names the
+  // offers). The refund stays when it is one line for every offer and carries no amount; the call and the promise stay.
+  for (const o of off ? [] : linkOffers(input.offers)) {
     const id = o.id ?? botNameOf(o);
     const name = botNameOf(o);
     if (clean(o.botTerms)) out.push({ key: `offer:${id}.terms`, label: `${name}: the terms`, text: `${name}: ${asSentence(clean(o.botTerms))} ${asSentence(clean(o.botTermsWhen) || TERMS_WHEN_DEFAULT)}`, eyes: true });
@@ -169,18 +179,20 @@ export function botFacts(input: Stage1Input): Fact[] {
     if (clean(o.botCancelLine)) out.push({ key: `offer:${id}.cancel`, label: `${name}: cancelling`, text: `${asSentence(clean(o.botCancelLine))} Only if asked.`, eyes: true });
   }
   const one = botOffers(input.offers).filter((o) => o.botRole === "one_on_one");
-  if (one.length && clean(c.oneOnOneRange)) out.push({ key: "oneonone.range", label: "The one-on-one range", text: `One-on-one: ${clean(c.oneOnOneRange).replace(/[.]$/, "")}, call only. Use it as the contrast when recommending, or if they ask about one-on-one.`, eyes: true });
+  if (!off && one.length && clean(c.oneOnOneRange)) out.push({ key: "oneonone.range", label: "The one-on-one range", text: `One-on-one: ${clean(c.oneOnOneRange).replace(/[.]$/, "")}, call only. Use it as the contrast when recommending, or if they ask about one-on-one.`, eyes: true });
   // One refund line when every refundable offer says the same; otherwise one per offer, named.
   const refunds = linkOffers(input.offers).filter((o) => refundLineOf(o));
   const distinct = [...new Set(refunds.map((o) => asSentence(refundLineOf(o))))];
-  if (distinct.length === 1) out.push({ key: "refund", label: "The refund", text: `Refund: ${distinct[0]} Say it only if they hesitate to pay.`, eyes: true });
+  if (off) {
+    if (distinct.length === 1 && !pricedText(distinct[0], input.offers)) out.push({ key: "refund", label: "The refund", text: `Refund: ${distinct[0]} Say it only if they hesitate to pay.`, eyes: true });
+  } else if (distinct.length === 1) out.push({ key: "refund", label: "The refund", text: `Refund: ${distinct[0]} Say it only if they hesitate to pay.`, eyes: true });
   else for (const o of refunds) out.push({ key: `offer:${o.id ?? botNameOf(o)}.refund`, label: `${botNameOf(o)}: the refund`, text: `Refund on ${botNameOf(o)}: ${asSentence(refundLineOf(o))} Say it only if they hesitate to pay.`, eyes: true });
-  if (clean(c.paymentPlanLine)) out.push({ key: "price.plan", label: "Payment plans", text: `Payment plans, only if asked: ${asSentence(clean(c.paymentPlanLine))}`, eyes: true });
+  if (!off && clean(c.paymentPlanLine)) out.push({ key: "price.plan", label: "Payment plans", text: `Payment plans, only if asked: ${asSentence(clean(c.paymentPlanLine))}`, eyes: true });
   out.push({ key: "call", label: "The call", text: `The call: ${c.callMinutes ? `${c.callMinutes} minutes, no pressure` : "no pressure"}. When inviting.`, eyes: true });
   if (clean(c.guaranteeLine)) {
     const lead = clean(c.guaranteeLeadIn);
     out.push({ key: "guarantee.line", label: "Your guarantee, the promise word for word", text: `The guarantee, the first time they ask, this sentence word for word: "${clean(c.guaranteeLine)}"${lead ? ` You can lead in with "${lead}"` : ""} The details come on the call. Say nothing else about results.`, eyes: true });
-    const coverage = botOffers(input.offers).some((o) => !o.guaranteeCovered) ? suggestCoverageLine(input.offers) : "";
+    const coverage = !off && botOffers(input.offers).some((o) => !o.guaranteeCovered) ? suggestCoverageLine(input.offers) : "";
     if (coverage) out.push({ key: "guarantee.coverage", label: "What the guarantee covers", text: coverage, eyes: true });
   }
   return out;
@@ -196,6 +208,15 @@ export const partnerLine = (p: PartnerStory): string => `${clean(p.who)}: ${clea
 const storiesOf = (c: CoachBot) => (c.stories ?? []).filter((s) => clean(s.text));
 const partnersOf = (c: CoachBot) => (c.partnerStories ?? []).filter((p) => clean(p.who) && clean(p.happened));
 const examplesOf = (c: CoachBot) => (c.examples ?? []).filter((e) => clean(e.moment) && clean(e.me));
+/** Payment terms in a reply, with or without an amount ("it's month to month"). */
+const TERMS = /\b(?:month[- ]to[- ]month|a month|per month|monthly|payment plans?|deposit|instal(?:l)?ments?|cancel anytime)\b/i;
+/**
+ * An example left out while prices are off: a "$" or an entry or core offer's name in any of its lines, or payment terms in the
+ * reply (only the reply: a lead may ask about payment plans, and an answer with no terms still goes).
+ */
+export const pricedExample = (e: BotExample, offers: OfferFacts[]): boolean => [e.moment, e.them ?? "", e.me].some((t) => pricedText(t, offers)) || TERMS.test(e.me);
+/** The examples that are sent: with prices off, none that is priced. */
+const sentExamples = (c: CoachBot, offers: OfferFacts[]) => examplesOf(c).filter((e) => !pricesOff(c) || !pricedExample(e, offers));
 
 export type ProductSection = { key: string; title: string; text: string };
 /** The offers field, section by section, in the fixture's order. Empty when there is no WHAT I DO and no offer on the bot. */
@@ -209,23 +230,39 @@ export function productSections(input: Stage1Input): ProductSection[] {
   // Money comes up inside the conversation: no numbers early, then the path by what they said, each offer's own "when".
   const one = offers.some((o) => o.botRole === "one_on_one") && clean(c.oneOnOneRange);
   const linkFirst = linkOffers(input.offers).find((o) => clean(o.paymentLink));
-  const path = c.defaultPath === "link" && linkFirst ? `After my questions, most people get ${botNameOf(linkFirst)}, and the link when they say yes.` : `After my questions, most people get the ${c.callMinutes ? `${c.callMinutes}-minute ` : ""}call.`;
-  const whens = [...new Set(offers.map((o) => clean(o.botFor)).filter(Boolean).map(asSentence))];
-  out.push({
-    key: "money",
-    title: "How I talk about money",
-    text: [
-      "HOW I TALK ABOUT MONEY",
-      "Money comes up inside the conversation, never as a price sheet.",
-      `If someone asks about price before I know their situation, answer with no numbers: "${priceAnswerFor(c.priceAnswer)}" Then ask a question.`,
-      `Numbers come only once I know enough to recommend something.${one ? " Never answer a price question with the one-on-one range and a start price in one breath." : ""}`,
-      [path, ...whens].join(" "),
-    ].join("\n"),
-  });
+  const call = `the ${c.callMinutes ? `${c.callMinutes}-minute ` : ""}call`;
+  if (pricesOff(c)) {
+    // Prices off (rev 121): the no-prices rules. Only the one-on-one "when" lines stay; an entry or core one names that offer.
+    const oneWhens = [...new Set(offers.filter((o) => o.botRole === "one_on_one").map((o) => clean(o.botFor)).filter(Boolean).map(asSentence))];
+    out.push({
+      key: "money",
+      title: "How I talk about money",
+      text: [
+        "HOW I TALK ABOUT MONEY",
+        "No prices for now. Never give an amount, a range or payment terms, never send a checkout link, and never name a program.",
+        `If someone asks about price, answer with no numbers: "${priceAnswerFor(c.priceAnswer)}" Then ask a question.`,
+        [`After my questions, everyone who is a fit gets ${call}.`, ...oneWhens].join(" "),
+      ].join("\n"),
+    });
+  } else {
+    const path = c.defaultPath === "link" && linkFirst ? `After my questions, most people get ${botNameOf(linkFirst)}, and the link when they say yes.` : `After my questions, most people get ${call}.`;
+    const whens = [...new Set(offers.map((o) => clean(o.botFor)).filter(Boolean).map(asSentence))];
+    out.push({
+      key: "money",
+      title: "How I talk about money",
+      text: [
+        "HOW I TALK ABOUT MONEY",
+        "Money comes up inside the conversation, never as a price sheet.",
+        `If someone asks about price before I know their situation, answer with no numbers: "${priceAnswerFor(c.priceAnswer)}" Then ask a question.`,
+        `Numbers come only once I know enough to recommend something.${one ? " Never answer a price question with the one-on-one range and a start price in one breath." : ""}`,
+        [path, ...whens].join(" "),
+      ].join("\n"),
+    });
+  }
 
   out.push({ key: "facts", title: "The facts", text: ["THE FACTS", "Know these. Never recite them as a list. Share one only when the conversation gets there or they ask.", ...botFacts(input).map((f) => `- ${f.text}`)].join("\n") });
 
-  const examples = examplesOf(c);
+  const examples = sentExamples(c, input.offers);
   if (examples.length)
     out.push({
       key: "examples",
@@ -362,7 +399,8 @@ export const BOT_FIELD_BUDGET = 20000;
 export function stage1Problems(input: Stage1Input, p: BotFieldPayload = stage1Payload(input)): string[] {
   const out: string[] = [];
   if (!p.business_name_cbf.trim()) out.push("No business name on the record: set it on the member's profile or the workspace.");
-  for (const o of linkOffers(input.offers)) {
+  // With prices off no link is sent, so a missing one holds nothing.
+  for (const o of pricesOff(input.coach) ? [] : linkOffers(input.offers)) {
     if (!clean(o.paymentLink)) out.push(`${botNameOf(o)} is ${o.botRole === "entry" ? "an entry" : "a core"} offer on your bot with no payment link. Add the link on the Offer, or change its role.`);
   }
   for (const f of STAGE1_FIELDS) {
@@ -379,18 +417,46 @@ export function stage1Problems(input: Stage1Input, p: BotFieldPayload = stage1Pa
 const WEEKDAYS = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i;
 /** Sentences in a reply: each run of . ? or ! that ends a word, a closing quote allowed ("$1,200" and "30-second" are not ends). */
 export const sentenceCount = (text: string): number => (clean(text).match(/[.?!]+["”')]*(?=\s|$)/g) ?? []).length || (clean(text) ? 1 : 0);
+/** A line's words, lowercased, for comparing a reply with what the lead said. */
+const wordsOf = (t: string): string[] => clean(t).toLowerCase().replace(/[‘’]/g, "'").match(/[a-z0-9$']+/g) ?? [];
+/**
+ * The longest run of three or more words a reply repeats from the lead's own line, or "". The bot copies a reply's opening to a
+ * lead who never said it (rev 119: "After two programs that didn't deliver…" to a lead who had said nothing of the kind).
+ */
+export function repeatedRun(them: string | null | undefined, me: string): string {
+  const said = ` ${wordsOf(them ?? "").join(" ")} `;
+  const mw = wordsOf(me);
+  let best = "";
+  for (let i = 0; i + 3 <= mw.length; i++) {
+    let j = i + 3;
+    if (!said.includes(` ${mw.slice(i, j).join(" ")} `)) continue;
+    while (j < mw.length && said.includes(` ${mw.slice(i, j + 1).join(" ")} `)) j++;
+    const run = mw.slice(i, j).join(" ");
+    if (run.length > best.length) best = run;
+  }
+  return best;
+}
+/** A lead's name in a reply: "Hey Jess", "Thanks, Jess". The bot may greet every lead by it. */
+const GREETED = /\b(?:[Hh]ey|[Hh]i|[Hh]ello|[Tt]hanks|[Tt]hank you),?\s+([A-Z][a-z]+)\b/;
+const NOT_A_NAME = new Set(["There", "Friend", "Everyone", "All", "Again"]);
 /**
  * The checks on one example (rev 101): a normal message is at most two sentences, an objection at most four, one question, no
- * weekday names. Warnings only, never a block.
+ * weekday names. Rev 121 adds two: a reply that repeats three or more words of the lead's own line, and a reply that names a
+ * person. Warnings only, never a block, and nothing here changes what is composed.
  */
 export function exampleWarnings(e: BotExample): string[] {
   const out: string[] = [];
   const me = clean(e.me);
+  const moment = clean(e.moment);
   const max = e.kind === "objection" ? 4 : 2;
   const n = sentenceCount(me);
-  if (n > max) out.push(`"${clean(e.moment)}": ${n} sentences, and ${e.kind === "objection" ? "an objection" : "a normal message"} is at most ${max}.`);
-  if ((me.match(/\?/g) ?? []).length > 1) out.push(`"${clean(e.moment)}": more than one question.`);
-  if (WEEKDAYS.test(me)) out.push(`"${clean(e.moment)}": names a weekday; say a date instead.`);
+  if (n > max) out.push(`"${moment}": ${n} sentences, and ${e.kind === "objection" ? "an objection" : "a normal message"} is at most ${max}.`);
+  if ((me.match(/\?/g) ?? []).length > 1) out.push(`"${moment}": more than one question.`);
+  if (WEEKDAYS.test(me)) out.push(`"${moment}": names a weekday; say a date instead.`);
+  const run = repeatedRun(e.them, me);
+  if (run) out.push(`"${moment}": this reply repeats what they said ("${run}"). Your bot may say it to someone who never did.`);
+  const name = me.match(GREETED)?.[1];
+  if (name && !NOT_A_NAME.has(name)) out.push(`"${moment}": names ${name}. Your bot may call every lead ${name}.`);
   return out;
 }
 

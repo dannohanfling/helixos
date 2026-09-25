@@ -442,6 +442,13 @@
       "when": 1790287845874,
       "tag": "0062_bot_flow_rev4",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "6",
+      "when": 1790353282495,
+      "tag": "0063_bot_prices_switch",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COACH, ENTRY_LINK, EXAMPLES, OFFERS, PARTNERS, SCHOLARSHIP_LINK, STORIES, WHAT_I_DO, golden } from "../../../../scripts/fixtures/danno-bot";
-import { LENGTH_RULE, PRICE_ANSWER_DEFAULT, PRODUCT_FIELD, QUALIFYING_DEFAULTS, STAGE1_FIELDS, exampleWarnings, houseConstraints, needsEyes, productSections, sentenceCount, stage1Payload, stage1Problems, stage1Warnings, suggestCoverageLine, type OfferFacts, type Stage1Input } from "../bot-fields";
+import { LENGTH_RULE, PRICE_ANSWER_DEFAULT, PRODUCT_FIELD, QUALIFYING_DEFAULTS, STAGE1_FIELDS, exampleWarnings, houseConstraints, needsEyes, pricedExample, productSections, repeatedRun, sentenceCount, stage1Payload, stage1Problems, stage1Warnings, suggestCoverageLine, type OfferFacts, type Stage1Input } from "../bot-fields";
 
 /**
  * The golden test (handoff rev 110/111): Danno's data, entered the way the "Your bot" page, the Offers and the Proof Bank take
@@ -43,8 +43,16 @@ describe("the golden fixture: Danno's data composes to it byte for byte", () => 
     for (const f of STAGE1_FIELDS) expect(p[f].length, f).toBeLessThan(20000);
     expect(stage1Problems(danno())).toEqual([]);
   });
-  it("his examples pass the checks and his stories carry no digit: no warnings at all", () => {
-    expect(stage1Warnings(danno())).toEqual([]);
+  it("his stories carry no digit; of his examples as approved at rev 110, four are warned (rev 121) and nothing blocks", () => {
+    // Examples 1, 2, 4 and 10. On his live record Danno has since fixed 1 ("Hey,") and 10 ("That's the right question to ask.");
+    // 2 and 4 mirror a lead who has just said it, and can stay. The fixture keeps the approved text.
+    expect(stage1Warnings(danno())).toEqual([
+      '"They ask the price first, nothing else.": names Jess. Your bot may call every lead Jess.',
+      '"They want a number before any call.": this reply repeats what they said ("want a ballpark"). Your bot may say it to someone who never did.',
+      '"Their budget comes up.": this reply repeats what they said ("don\'t have a big budget"). Your bot may say it to someone who never did.',
+      '"They ask for a guarantee: answer the first time.": this reply repeats what they said ("two programs that didn\'t deliver"). Your bot may say it to someone who never did.',
+    ]);
+    expect(stage1Problems(danno())).toEqual([]);
   });
   it("a real link replaces the link in its fact and nowhere else", () => {
     const real = stage1Payload(danno({ entry: "https://pay.example.com/get-started", scholarship: SCHOLARSHIP_LINK }))[PRODUCT_FIELD];
@@ -166,11 +174,88 @@ describe("the checks: warnings only", () => {
     expect(exampleWarnings({ ...n, me: "Is it you? Or me?" })).toEqual(['"Price": more than one question.']);
     expect(exampleWarnings({ ...n, me: "Want Tuesday?" })).toEqual(['"Price": names a weekday; say a date instead.']);
   });
+  it("a reply that repeats three or more of the lead's words, or names a person, is warned; the fixes Danno made are not (rev 121)", () => {
+    const ex10 = EXAMPLES.find((e) => e.moment.startsWith("They ask for a guarantee"))!;
+    expect(repeatedRun(ex10.them, ex10.me)).toBe("two programs that didn't deliver");
+    // His live edit: the opening and the closing no longer repeat the lead.
+    const fixed = { ...ex10, me: "That's the right question to ask. If you're putting skin in the game, I put skin in the game too. What made you ask?" };
+    expect(exampleWarnings(fixed)).toEqual([]);
+    const n = { id: "x", moment: "Price", them: "how much is it?", me: "Hey Jess, what do you need?", kind: "normal" as const };
+    expect(exampleWarnings(n)).toEqual(['"Price": names Jess. Your bot may call every lead Jess.']);
+    expect(exampleWarnings({ ...n, me: "Hey, what do you need?" })).toEqual([]);
+    expect(exampleWarnings({ ...n, me: "Hey there, what do you need?" })).toEqual([]);
+    expect(exampleWarnings({ ...n, me: "Thanks, Maria! What do you need?" })).toEqual(['"Price": names Maria. Your bot may call every lead Maria.']);
+    // Two words in common is not a repeat, and curly apostrophes match straight ones.
+    expect(repeatedRun("it didn't work", "That didn't work for you?")).toBe("");
+    expect(repeatedRun("I don’t have a big budget", "When you say you don't have a big budget, what does that mean?")).toBe("don't have a big budget");
+    // A warning never changes what is sent.
+    const a = danno();
+    const b = danno();
+    b.coach!.examples![0].me = "Hey Jess, the same reply otherwise.";
+    expect(stage1Payload(a)[PRODUCT_FIELD].replace("Hey Jess, I have different ways I help depending on what each business needs. What are you looking for help with right now?", "Hey Jess, the same reply otherwise.")).toBe(stage1Payload(b)[PRODUCT_FIELD]);
+  });
   it("a digit in one of his stories is a warning; a full name on a partner story is a warning; neither blocks", () => {
     const input = danno();
     input.coach!.stories![0].text = "My first $5,000 week.";
     input.coach!.partnerStories![0].who = "Candy Smith";
-    expect(stage1Warnings(input)).toEqual(['Your story "My first $5,000 week." has a number in it. If it\'s a result, it belongs in your Proof Bank, not in your stories.', '"Candy Smith" on your bot: first names only, and no business names.']);
+    // After the four example warnings every run carries (the fixture's approved examples; see above).
+    expect(stage1Warnings(input).slice(4)).toEqual(['Your story "My first $5,000 week." has a number in it. If it\'s a result, it belongs in your Proof Bank, not in your stories.', '"Candy Smith" on your bot: first names only, and no business names.']);
     expect(stage1Problems(input)).toEqual([]);
+  });
+});
+
+describe("prices on the bot, on or off (rev 121)", () => {
+  const off = () => {
+    const input = danno();
+    input.coach!.pricesOn = false;
+    return input;
+  };
+  it("on, and never set, compose the golden fixture unchanged", () => {
+    const on = danno();
+    on.coach!.pricesOn = true;
+    expect(stage1Payload(on)[PRODUCT_FIELD]).toBe(golden[PRODUCT_FIELD]);
+    expect(stage1Payload(danno())[PRODUCT_FIELD]).toBe(golden[PRODUCT_FIELD]);
+  });
+  it("off: no amount, term, link or entry offer's name anywhere but the partner stories, which are results", () => {
+    const sections = productSections(off());
+    const text = sections.filter((x) => x.key !== "partners").map((x) => x.text).join("\n\n");
+    expect(text).not.toMatch(/\$|Get started|Scholarship|evolveomega\.com|a month|month to month|payment plans, only if asked|25,000/i);
+    expect(sections.find((x) => x.key === "partners")!.text).toContain("$40,000");
+    expect(sections.map((x) => x.key)).toEqual(["what", "money", "facts", "examples", "stories", "partners", "one_on_one"]);
+  });
+  it("off: HOW I TALK ABOUT MONEY is the no-prices rules, with his early answer and the one-on-one line", () => {
+    expect(productSections(off()).find((x) => x.key === "money")!.text).toBe(
+      [
+        "HOW I TALK ABOUT MONEY",
+        "No prices for now. Never give an amount, a range or payment terms, never send a checkout link, and never name a program.",
+        `If someone asks about price, answer with no numbers: "${COACH.priceAnswer}" Then ask a question.`,
+        "After my questions, everyone who is a fit gets the 15-minute call. Bigger businesses, and anyone who wants one-on-one, get the call.",
+      ].join("\n"),
+    );
+  });
+  it("off: THE FACTS keeps the refund with no amount, the call and the guarantee promise; Needs your eyes follows", () => {
+    const keys = needsEyes(off()).map((e) => e.key);
+    expect(keys.slice(0, 3)).toEqual(["refund", "call", "guarantee.line"]);
+    expect(keys.slice(3)).toEqual([...STORIES.map((s) => `story:${s.id}`), ...PARTNERS.map((_, i) => `proof:p${i + 1}`)]);
+    // A refund line with an amount is left out rather than sent.
+    const priced = off();
+    priced.offers = priced.offers.map((o) => (o.id === "gs" ? { ...o, botRefundLine: "your $500 comes back if our call shows it's not a fit." } : o));
+    expect(needsEyes(priced).map((e) => e.key)).not.toContain("refund");
+  });
+  it("off: examples with a price, an entry offer's name or payment terms in the reply are left out (5, 6, 11 and 21 of his 23)", () => {
+    const left = EXAMPLES.filter((e) => pricedExample(e, off().offers)).map((e) => EXAMPLES.indexOf(e) + 1);
+    expect(left).toEqual([5, 6, 11, 21]);
+    const sent = productSections(off()).find((x) => x.key === "examples")!.text;
+    for (const e of EXAMPLES) expect(sent.includes(`Me: ${e.me}`)).toBe(!left.includes(EXAMPLES.indexOf(e) + 1));
+  });
+  it("off: a missing link holds nothing, since no link is sent; back on, it holds again", () => {
+    const noLink = danno({ entry: "", scholarship: SCHOLARSHIP_LINK });
+    expect(stage1Problems(noLink)).toHaveLength(1);
+    noLink.coach!.pricesOn = false;
+    expect(stage1Problems(noLink)).toEqual([]);
+  });
+  it("back on, every approved line is the same text as before, so nothing needs approving again", () => {
+    const before = new Map(needsEyes(danno()).map((e) => [e.key, e.text]));
+    for (const e of needsEyes(off())) expect(before.get(e.key)).toBe(e.text);
   });
 });

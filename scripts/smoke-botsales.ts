@@ -36,7 +36,9 @@ const store = async () => (await (await fetch(`${mock}/__fields`)).json()) as Re
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
-  const { PRODUCT_FIELD, STAGE1_FIELDS } = await import("@/lib/engine/bot-fields");
+  const { PRODUCT_FIELD, STAGE1_FIELDS, exampleWarnings } = await import("@/lib/engine/bot-fields");
+  // The approved rev 110 examples carry four warnings (rev 121): 1 names Jess, 2, 4 and 10 repeat the lead. Warnings, never blocks.
+  const baseline = EXAMPLES.flatMap((e) => exampleWarnings(e));
   const expected = golden;
 
   const up = await fetch(`${mock}/__fields`).then((r) => r.ok).catch(() => false);
@@ -168,6 +170,13 @@ async function main() {
     for (const absent of ["Epic Voice", "4,997", "Academy", "Rob", "Kate", RUN]) if (product.includes(absent)) throw new Error(`"${absent}" never reaches the bot`);
     console.log(`✓ Danno's data composes to the fixture byte for byte (persona ${expected.ai_persona_role_cbf.length}, offers ${expected[PRODUCT_FIELD].length}, rules ${expected.ai_constraints_cbf.length}, questions); the client offer, the Academy off the bot, a draft proof and a proof off the bot are absent`);
 
+    // ── The example checks (rev 121): the four on his approved examples, on the page and on each example's own row. ──
+    const pageWarnings = async () => (await page.locator('[data-testid="bot-warning"]').allInnerTexts()).map((w) => w.trim());
+    if (baseline.length !== 4 || JSON.stringify(await pageWarnings()) !== JSON.stringify(baseline)) throw new Error(`the four example warnings, got ${(await pageWarnings()).join(" | ")}`);
+    if (!baseline.some((w) => w.includes("names Jess")) || !baseline.some((w) => w.includes('("two programs that didn\'t deliver")'))) throw new Error("the name and the repeated lead line are among them");
+    if ((await page.locator('[data-testid="bot-example-warning"]').count()) !== 4) throw new Error("each warned example says so on its own row");
+    console.log(`✓ the example checks: ${baseline.length} warnings on his approved examples (a named lead, three repeats of the lead's words), none blocking`);
+
     // ── Warnings, never blocks: an example over its length, and a story with a number, each added on the page. ──
     await page.locator('[data-testid="bot-example-add"]').click();
     const exForm = page.locator('#examples > details [data-testid="bot-example-form"]');
@@ -191,7 +200,7 @@ async function main() {
     await page.locator(`[data-testid="bot-story"]:has-text("$5,000 week ${RUN}") summary`).click();
     await submit(page, `[data-testid="bot-story"]:has-text("$5,000 week ${RUN}") button:has-text("Remove")`);
     await preview.waitFor({ timeout: 20000 });
-    if ((await page.locator('[data-testid="bot-warning"]').count()) || (await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD]) throw new Error("removed, no warning is left and the fixture composes again");
+    if (JSON.stringify(await pageWarnings()) !== JSON.stringify(baseline) || (await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD]) throw new Error("removed, only the four example warnings are left and the fixture composes again");
     console.log("✓ an example over two sentences and a story with a number are warned, not blocked, added and removed on the page");
 
     // ── Needs your eyes: every fact, his stories, the partner stories; one at a time; nothing in bulk; the Push shut. ──
@@ -206,6 +215,28 @@ async function main() {
     if (!(await pushButton.isDisabled())) throw new Error("the Push is shut while any line is not approved");
     if ((await page.locator('[data-testid="bot-hold"]').count()) !== want.length) throw new Error("each unapproved line is named as a hold");
     console.log(`✓ Needs your eyes: ${want.length} lines (10 facts, 8 stories, 11 partner stories), one Approve each, no bulk; the examples and the money flow are not among them; the Push is shut`);
+
+    // ── Prices on the bot, off and on again (rev 121): the no-prices rules compose, nothing is sent, and on is the fixture again. ──
+    const pricesForm = page.locator('[data-testid="bot-prices"]');
+    if ((await pricesForm.getAttribute("data-on")) !== "yes") throw new Error("prices are on by default");
+    const sentBeforePrices = (await requests()).length;
+    await submit(page, '[data-testid="bot-prices-toggle"]');
+    await preview.waitFor({ timeout: 20000 });
+    await page.locator('[data-testid="bot-prices"][data-on="no"]').waitFor({ timeout: 20000 });
+    if ((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!.botPricesOn !== false) throw new Error("prices off is saved on the member");
+    const offText = await after(PRODUCT_FIELD);
+    const beforePartners = offText.split("\n\nPARTNER STORIES")[0];
+    if (/\$|Get started|Scholarship|evolveomega\.com|month to month/i.test(beforePartners) || !offText.includes("No prices for now.") || !offText.includes("everyone who is a fit gets the 15-minute call")) throw new Error(`prices off: no amount, term, link or entry offer's name, and everyone to the call; got\n${beforePartners}`);
+    const offKeys = (await eyes()).map((k) => k.replace(/:(yes|no)$/, ""));
+    if (JSON.stringify(offKeys) !== JSON.stringify(["refund", "call", "guarantee.line", ...STORIES.map((x) => `story:${x.id}`), ...proofIds.map((id) => `proof:${id}`)])) throw new Error(`prices off: Needs your eyes keeps the refund, the call, the promise and the stories, got ${offKeys.join(", ")}`);
+    if ((await page.locator('[data-testid="bot-example-priced"]').count()) !== 4) throw new Error("prices off: four examples say they are left out");
+    if ((await requests()).length !== sentBeforePrices) throw new Error("turning prices off sends nothing");
+    await submit(page, '[data-testid="bot-prices-toggle"]');
+    await preview.waitFor({ timeout: 20000 });
+    await page.locator('[data-testid="bot-prices"][data-on="yes"]').waitFor({ timeout: 20000 });
+    if ((await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD] || JSON.stringify((await eyes()).map((k) => k.replace(/:(yes|no)$/, ""))) !== JSON.stringify(want) || (await page.locator('[data-testid="bot-example-priced"]').count())) throw new Error("prices back on: the fixture and every line again");
+    if ((await requests()).length !== sentBeforePrices) throw new Error("turning prices on sends nothing");
+    console.log(`✓ prices off: the no-prices rules compose, ${offKeys.length} lines need eyes, 4 examples left out, nothing sent; back on, the fixture byte for byte`);
 
     // ── An entry offer with no payment link blocks the push: said on the page, and refused by the server if pressed anyway. ──
     await db.update(schema.offers).set({ paymentLink: null }).where(eq(schema.offers.id, ids.gs));
@@ -225,10 +256,19 @@ async function main() {
     console.log(`✓ an entry offer with no link: "${noLink}"; pressed anyway, "${note.slice(0, 60)}…" and nothing sent`);
 
     // ── Approve each line, one press each. ──
+    // An approval goes back to the same address (#eyes only), so nothing in the URL says the new page is in: wait until the page
+    // shows the count the database holds before each press, or the press lands on the row just approved and adds nothing (seen
+    // once in the gate, 25 Sep: "got 8 after 9"). A press that approves nothing still fails, with the count it left.
+    const approvedOnPage = async () => (await eyes()).filter((k) => k.endsWith(":yes")).length;
+    const settle = async (n: number) => {
+      for (let t = 0; t < 60 && (await approvedOnPage()) !== n; t++) await page.waitForTimeout(250);
+      return approvedOnPage();
+    };
     for (let i = 0; i < want.length; i++) {
+      if ((await settle(i)) !== i) throw new Error(`before press ${i + 1}, the page shows ${await approvedOnPage()} approved, not ${i}`);
       await submit(page, '[data-testid="eyes-row"][data-approved="no"] [data-testid="eyes-approve"]');
       await preview.waitFor({ timeout: 20000 });
-      const approved = (await eyes()).filter((k) => k.endsWith(":yes")).length;
+      const approved = await settle(i + 1);
       if (approved !== i + 1) throw new Error(`one press approves one line, got ${approved} after ${i + 1}`);
     }
     if (await pushButton.isDisabled()) throw new Error("every line approved, the Push opens");

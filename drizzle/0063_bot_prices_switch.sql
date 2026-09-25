@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `bot_prices_on` integer DEFAULT true NOT NULL;

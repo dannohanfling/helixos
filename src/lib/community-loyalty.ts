@@ -77,6 +77,7 @@ export async function stage1InputFor(membership: schema.Membership): Promise<Sta
       whatIDo: membership.whatIDo,
       priceAnswer: membership.priceAnswer,
       defaultPath: membership.defaultPath,
+      pricesOn: membership.botPricesOn,
       callMinutes: membership.callMinutes,
       oneOnOneRange: membership.oneOnOneRange,
       paymentPlanLine: membership.paymentPlanLine,

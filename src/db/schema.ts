@@ -99,6 +99,8 @@ export const memberships = sqliteTable(
     /* How the bot sells (handoff rev 90 to 109, the Bot flow rev 4 tab): facts it knows, how the coach talks, and their stories. */
     /** After the questions, where most people go: the call, or the first entry offer's link. */
     defaultPath: text("default_path", { enum: ["call", "link"] }).notNull().default("call"),
+    /** Prices on the bot (rev 121). Off composes the no-prices rules: no amounts, terms or links, no entry or core offer named, everyone to the call. */
+    botPricesOn: integer("bot_prices_on", { mode: "boolean" }).notNull().default(true),
     /** How long the call is, in minutes: "the 15-minute call". Blank says "the call". */
     callMinutes: integer("call_minutes"),
     /** The one-on-one range as a fact ("$25,000 to $50,000 a year"): the contrast when recommending, never the answer to an early price question. Needs your eyes. */

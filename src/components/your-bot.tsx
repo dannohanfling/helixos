@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { schema } from "@/db";
-import { approveBotLineAction, deleteBotExampleAction, deleteBotStoryAction, pushYourBotAction, saveBotExampleAction, saveBotLinesAction, saveBotStoryAction } from "@/lib/actions/your-bot";
+import { approveBotLineAction, deleteBotExampleAction, deleteBotStoryAction, pushYourBotAction, saveBotExampleAction, saveBotLinesAction, saveBotStoryAction, setBotPricesAction } from "@/lib/actions/your-bot";
 import type { Stage1Preview } from "@/lib/community-loyalty";
-import { DEFAULT_PATHS, DEFAULT_PATH_LABEL, NOTHING_CURRENT_LABEL, PRICE_ANSWER_DEFAULT, PRODUCT_FIELD, botNameOf, botOffers, exampleWarnings, nothingToPushLine, peopleWordOf, priceAnswerFor, refundLineOf, type PlanRow, type Stage1Field } from "@/lib/engine/bot-fields";
+import { DEFAULT_PATHS, DEFAULT_PATH_LABEL, NOTHING_CURRENT_LABEL, PRICE_ANSWER_DEFAULT, PRODUCT_FIELD, botNameOf, botOffers, exampleWarnings, nothingToPushLine, peopleWordOf, priceAnswerFor, pricedExample, pricesOff, refundLineOf, type PlanRow, type Stage1Field } from "@/lib/engine/bot-fields";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
 
@@ -36,13 +36,16 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
   const sending = preview.rows.filter((r) => r.status === "change");
   const c = preview.input.coach ?? {};
   const offers = botOffers(preview.input.offers);
-  const payer = offers.find((o) => (o.botRole === "entry" || o.botRole === "core") && o.paymentLink);
+  const off = pricesOff(c);
+  // With prices off no link goes out and everyone gets the call, so the samples say that instead of a link.
+  const payer = off ? undefined : offers.find((o) => (o.botRole === "entry" || o.botRole === "core") && o.paymentLink);
+  const call = `the ${c.callMinutes ? `${c.callMinutes}-minute ` : ""}call`;
   const guarantee = c.guaranteeLine?.trim() ? [c.guaranteeLeadIn?.trim(), c.guaranteeLine.trim()].filter(Boolean).join(" ") : "";
   const samples: [string, string][] = [
     ["How much is it?", `${priceAnswerFor(c.priceAnswer)} Then a question about what they need.`],
     ["Is there a guarantee?", guarantee || "(no guarantee: your bot says nothing about results)"],
-    ["Yes, send me the link.", payer ? `Here's the link for ${botNameOf(payer)}: ${payer.paymentLink}.` : "(no offer on your bot takes payment in chat, so it books a call)"],
-    ["I'd feel weird paying before we talk.", payer && refundLineOf(payer) ? `We can talk first, or ${refundLineOf(payer)}` : "(no refund on your bot: it offers the call)"],
+    ["Yes, send me the link.", off ? `(prices are off: no link, it offers ${call})` : payer ? `Here's the link for ${botNameOf(payer)}: ${payer.paymentLink}.` : "(no offer on your bot takes payment in chat, so it books a call)"],
+    ["I'd feel weird paying before we talk.", off ? `(prices are off: it offers ${call})` : payer && refundLineOf(payer) ? `We can talk first, or ${refundLineOf(payer)}` : "(no refund on your bot: it offers the call)"],
   ];
   const examples = m.botExamples;
   const stories = m.botStories;
@@ -161,6 +164,22 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
         </div>
       </Card>
 
+      <Card title="Prices on your bot" action={<Badge tone={off ? "warn" : "neutral"}>{off ? "off" : "on"}</Badge>}>
+        <form action={setBotPricesAction} className="flex flex-wrap items-center gap-3" id="prices" data-testid="bot-prices" data-on={off ? "no" : "yes"}>
+          <input type="hidden" name="membershipId" value={m.id} />
+          <input type="hidden" name="prices" value={off ? "on" : "off"} />
+          <p className="flex-1 text-sm text-ink-2">
+            {off
+              ? `Off: your bot gives no amount, range or payment terms, sends no checkout link and names no program. Everyone who is a fit gets ${call}. Your guarantee promise, and a refund line with no amount, still go.`
+              : "On: your bot shares your prices, terms and links once the conversation gets there, the way your facts and examples say."}
+          </p>
+          <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="bot-prices-toggle">
+            {off ? "Turn prices on" : "Turn prices off"}
+          </SubmitButton>
+          <p className="w-full text-xs text-ink-3">Nothing is sent until you push. Examples with a price or an offer&apos;s name are left out while prices are off, and come back when they&apos;re on.</p>
+        </form>
+      </Card>
+
       <Card title="Facts and money: lines only your bot has">
         <form action={saveBotLinesAction} className="space-y-3" id="lines" data-testid="bot-lines">
           <input type="hidden" name="membershipId" value={m.id} />
@@ -224,6 +243,7 @@ export function YourBotPanel({ m, preview, own, whose, sp, lastPushedLine }: { m
                   <summary className="cursor-pointer">
                     <span className="font-medium">{e.moment}</span> <Badge tone={e.kind === "objection" ? "warn" : "neutral"}>{e.kind}</Badge>
                     {exampleWarnings(e).map((w) => <span key={w} className="ml-2 text-xs text-warn" data-testid="bot-example-warning">{w}</span>)}
+                    {off && pricedExample(e, preview.input.offers) ? <span className="ml-2 rounded bg-surface-2 px-1.5 text-xs text-ink-3" data-testid="bot-example-priced">left out while prices are off</span> : null}
                   </summary>
                   <ExampleForm m={m} e={e} />
                   <form action={deleteBotExampleAction} className="mt-1">

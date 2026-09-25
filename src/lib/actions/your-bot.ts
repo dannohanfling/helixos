@@ -69,6 +69,21 @@ export async function saveBotLinesAction(formData: FormData): Promise<void> {
   redirect(`${back}?saved=1#lines`);
 }
 
+/**
+ * Prices on the bot, on or off (rev 121). Off composes the no-prices rules; nothing is sent until the Push, like any other change.
+ * Approvals are of each line's exact text, so turning prices back on needs no re-approval of a line that did not change.
+ */
+export async function setBotPricesAction(formData: FormData): Promise<void> {
+  const { v, workspaceId } = await ctx();
+  const { m, back } = await botOwner(v, formData);
+  await db
+    .update(schema.memberships)
+    .set({ botPricesOn: str(formData, "prices") !== "off" })
+    .where(and(eq(schema.memberships.id, m.id), eq(schema.memberships.workspaceId, workspaceId)));
+  refresh();
+  redirect(`${back}#prices`);
+}
+
 /** One HOW I SAY IT example, added or edited in place (by its id). The moment and what the coach says are required. */
 export async function saveBotExampleAction(formData: FormData): Promise<void> {
   const { v, workspaceId } = await ctx();
