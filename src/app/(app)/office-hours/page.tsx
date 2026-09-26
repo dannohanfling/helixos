@@ -95,11 +95,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
                 That&apos;s a good call. Work through it on your own first, and if you&apos;re still stuck, ask here before the next Friday. Nothing was sent.
               </p>
             ) : null}
-            {fridays.length ? (
-              <RequestForm fridays={fridays} categories={v.workspace.oohCategories} />
-            ) : (
-              <p className="text-sm text-ink-2" data-testid="ooh-none">There are no Office Hours left this month. Next month&apos;s Fridays open on the 1st.</p>
-            )}
+            <RequestForm fridays={fridays} categories={v.workspace.oohCategories} />
           </Card>
         </div>
         <div id="mine">

@@ -12,15 +12,12 @@ export const OOH_OUTCOMES = ["covered", "no_show"] as const;
 export type OohOutcome = (typeof OOH_OUTCOMES)[number];
 export const OOH_OUTCOME_LABEL: Record<OohOutcome, string> = { covered: "Covered", no_show: "No-show" };
 
-/** The Fridays a member can ask for: from today (a Friday counts) to the end of this month. */
-export function upcomingFridays(today: string): string[] {
-  const out: string[] = [];
-  let d = addDays(today, (5 - weekday(today) + 7) % 7);
-  while (d.slice(0, 7) === today.slice(0, 7)) {
-    out.push(d);
-    d = addDays(d, 7);
-  }
-  return out;
+/** How many Fridays a member can pick from. */
+export const OOH_FRIDAYS = 4;
+/** The Fridays a member can ask for: the next four, a Friday today included, across month ends (rev 129: no dead days). */
+export function upcomingFridays(today: string, n: number = OOH_FRIDAYS): string[] {
+  const first = addDays(today, (5 - weekday(today) + 7) % 7);
+  return Array.from({ length: n }, (_, i) => addDays(first, i * 7));
 }
 
 /** A member can change their request up to and including its Friday. */
@@ -41,7 +38,7 @@ export function readOohRequest(
   if (raw.triedGate !== "yes") return { error: "Tell us whether you've tried to overcome this yourself." };
   if (!raw.promise) return { error: "Promise to attend the call, so your spot isn't wasted." };
   const v = { friday: raw.friday.trim(), description: raw.description.trim(), triedSelf: raw.triedSelf.trim(), tools: raw.tools.trim(), goal: raw.goal.trim(), category: raw.category.trim() };
-  if (!upcomingFridays(today).includes(v.friday)) return { error: "Pick one of this month's upcoming Fridays." };
+  if (!upcomingFridays(today).includes(v.friday)) return { error: "Pick one of the next four Fridays." };
   if (!v.description) return { error: "Describe the issue." };
   if (!v.triedSelf) return { error: "Say how you tried to solve it yourself." };
   if (!v.goal) return { error: "Say what solution we're trying to reach on the call." };

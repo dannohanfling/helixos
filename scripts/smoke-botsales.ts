@@ -190,6 +190,8 @@ async function main() {
     await stForm.locator('input[name="when"]').fill("Never");
     await submit(page, '#stories > details [data-testid="bot-story-form"] button');
     await preview.waitFor({ timeout: 20000 });
+    // Both adds go back to the same address: wait until the page shows both before reading its warnings.
+    for (let t = 0; t < 60 && (await page.locator(`[data-testid="bot-story"]:has-text("$5,000 week ${RUN}"), [data-testid="bot-example"]:has-text("Too long ${RUN}")`).count()) < 2; t++) await page.waitForTimeout(250);
     const warnings = (await page.locator('[data-testid="bot-warning"]').allInnerTexts()).map((w) => w.trim());
     if (!warnings.includes(`"Too long ${RUN}.": 3 sentences, and a normal message is at most 2.`) || !warnings.some((w) => w.startsWith(`Your story "My first $5,000 week ${RUN}." has a number in it.`))) throw new Error(`both are warned, got ${warnings.join(" | ")}`);
     if (!(await page.locator(`[data-testid="eyes-row"][data-key^="story:"]`).allInnerTexts()).some((t) => t.includes(`$5,000 week ${RUN}`))) throw new Error("a new story needs eyes");
@@ -200,7 +202,11 @@ async function main() {
     await page.locator(`[data-testid="bot-story"]:has-text("$5,000 week ${RUN}") summary`).click();
     await submit(page, `[data-testid="bot-story"]:has-text("$5,000 week ${RUN}") button:has-text("Remove")`);
     await preview.waitFor({ timeout: 20000 });
-    if (JSON.stringify(await pageWarnings()) !== JSON.stringify(baseline) || (await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD]) throw new Error("removed, only the four example warnings are left and the fixture composes again");
+    // A remove goes back to the same address, so wait until the page no longer shows the story before reading it (the gate once
+    // read the old render here, 26 Sep). If it never goes, the check below fails with what the page shows.
+    for (let t = 0; t < 60 && (await page.locator(`[data-testid="bot-story"]:has-text("$5,000 week ${RUN}"), [data-testid="bot-example"]:has-text("Too long ${RUN}")`).count()); t++) await page.waitForTimeout(250);
+    const leftWarnings = await pageWarnings();
+    if (JSON.stringify(leftWarnings) !== JSON.stringify(baseline) || (await after(PRODUCT_FIELD)) !== expected[PRODUCT_FIELD]) throw new Error(`removed, only the four example warnings are left and the fixture composes again; got ${leftWarnings.join(" | ")}`);
     console.log("✓ an example over two sentences and a story with a number are warned, not blocked, added and removed on the page");
 
     // ── Needs your eyes: every fact, his stories, the partner stories; one at a time; nothing in bulk; the Push shut. ──

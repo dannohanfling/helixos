@@ -5,7 +5,7 @@
  *    results are marked done or not; the coach sees who has set it, who hasn't (under the quiet list from Tuesday), and each
  *    member's history.
  * 2. The Open Office Hours request: the two gates (going back saves nothing, the promise must be ticked), this month's upcoming
- *    Fridays only, the member's own list with a change until the Friday; the coach sees requests by Friday, sets who takes it,
+ *    the next four Fridays across month ends, the member's own list with a change until the Friday; the coach sees requests by Friday, sets who takes it,
  *    covered or no-show and notes the member never sees (nor their export), and edits the category and host lists.
  * 3. End-of-month feedback: the card on Today only from the last 3 days of a month through the 5th of the next, about the month
  *    ending; the score required; sent and changed; the coach sees each month's responses, the average referral score and its
@@ -155,50 +155,44 @@ async function main() {
     const fridays = upcomingFridays(mayaToday);
     const oohRows = () => db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.userId, maya.id) });
     const NOTES = `Bring the calendar settings ${Date.now()}`;
-    if (fridays.length) {
-      const friday = fridays[fridays.length - 1];
-      const fillRequest = async (desc: string) => {
-        await page.locator('[data-testid="ooh-friday"]').first().selectOption(friday);
-        await page.locator('[data-testid="ooh-description"]').first().fill(desc);
-        await page.locator('[data-testid="ooh-tried"]').first().fill("Re-read the setup lesson and rebuilt the calendar link.");
-        await page.locator('[data-testid="ooh-tools"]').first().fill("Community Loyalty, GoHighLevel");
-        await page.locator('[data-testid="ooh-goal"]').first().fill("Bookings land on the right calendar.");
-        await page.locator('[data-testid="ooh-category"]').first().selectOption("Chatbot");
-      };
-      if ((await page.locator('#request [data-testid="ooh-friday"] option').evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value))).join() !== fridays.join()) throw new Error(`only this month's upcoming Fridays are offered: ${fridays.join(", ")}`);
-      // Gate one: going back to try it yourself sends nothing, and says so kindly.
-      await fillRequest("My bot books the wrong calendar.");
-      await page.locator('[data-testid="ooh-gate-back"]').check();
-      await page.locator('[data-testid="ooh-promise"]').check();
-      await submit(page, '[data-testid="ooh-submit"]');
-      await page.locator('[data-testid="ooh-back"]').waitFor({ timeout: 20000 });
-      if ((await oohRows()).length) throw new Error("going back to try it yourself saves nothing");
-      // Gate two: the promise to attend must be ticked.
-      await fillRequest("My bot books the wrong calendar.");
-      await page.locator('[data-testid="ooh-gate-yes"]').check();
-      await submit(page, '[data-testid="ooh-submit"]');
-      if ((await page.locator('[data-testid="ooh-error"]').innerText()).trim() !== "Promise to attend the call, so your spot isn't wasted." || (await oohRows()).length) throw new Error("without the promise, nothing is sent");
-      await fillRequest("My bot books the wrong calendar.");
-      await page.locator('[data-testid="ooh-gate-yes"]').check();
-      await page.locator('[data-testid="ooh-promise"]').check();
-      await submit(page, '[data-testid="ooh-submit"]');
-      await page.locator('[data-testid="ooh-saved"]').waitFor({ timeout: 20000 });
-      let rows = await oohRows();
-      if (rows.length !== 1 || rows[0].friday !== friday || rows[0].category !== "Chatbot" || rows[0].workspaceId !== ws.id) throw new Error(`the request is saved for ${friday}, from the login, got ${JSON.stringify(rows)}`);
-      if ((await page.locator('[data-testid="ooh-mine"]').count()) !== 1) throw new Error("the member sees their request");
-      // A change, until the Friday.
-      await page.locator('[data-testid="ooh-edit"]').click();
-      await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-description"]').fill("My bot books the wrong calendar, only on weekends.");
-      await submit(page, '[data-testid="ooh-mine"] [data-testid="ooh-submit"]');
-      await page.locator('[data-testid="ooh-saved"]').waitFor({ timeout: 20000 });
-      rows = await oohRows();
-      if (rows.length !== 1 || rows[0].description !== "My bot books the wrong calendar, only on weekends.") throw new Error("a change edits the same request");
-      console.log(`✓ Office Hours: going back sends nothing, the promise is required, the request for ${friday} is saved and changed; only ${fridays.length} upcoming Friday(s) offered`);
-    } else {
-      if (!(await page.locator('[data-testid="ooh-none"]').innerText()).includes("no Office Hours left this month")) throw new Error("with no Friday left this month, the page says so");
-      await db.insert(schema.officeHoursRequests).values({ id: newId(), workspaceId: ws.id, userId: maya.id, friday: "2099-01-02", description: "My bot books the wrong calendar.", triedSelf: "Re-read the lesson.", goal: "Bookings land right.", category: "Chatbot" });
-      console.log(`✓ Office Hours: no Friday left this month on ${mayaToday}, and the page says so (the unit tests cover the Fridays and the gates)`);
-    }
+    const friday = fridays[fridays.length - 1];
+    const fillRequest = async (desc: string) => {
+      await page.locator('[data-testid="ooh-friday"]').first().selectOption(friday);
+      await page.locator('[data-testid="ooh-description"]').first().fill(desc);
+      await page.locator('[data-testid="ooh-tried"]').first().fill("Re-read the setup lesson and rebuilt the calendar link.");
+      await page.locator('[data-testid="ooh-tools"]').first().fill("Community Loyalty, GoHighLevel");
+      await page.locator('[data-testid="ooh-goal"]').first().fill("Bookings land on the right calendar.");
+      await page.locator('[data-testid="ooh-category"]').first().selectOption("Chatbot");
+    };
+    if ((await page.locator('#request [data-testid="ooh-friday"] option').evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value))).join() !== fridays.join()) throw new Error(`the next four Fridays are offered: ${fridays.join(", ")}`);
+    // Gate one: going back to try it yourself sends nothing, and says so kindly.
+    await fillRequest("My bot books the wrong calendar.");
+    await page.locator('[data-testid="ooh-gate-back"]').check();
+    await page.locator('[data-testid="ooh-promise"]').check();
+    await submit(page, '[data-testid="ooh-submit"]');
+    await page.locator('[data-testid="ooh-back"]').waitFor({ timeout: 20000 });
+    if ((await oohRows()).length) throw new Error("going back to try it yourself saves nothing");
+    // Gate two: the promise to attend must be ticked.
+    await fillRequest("My bot books the wrong calendar.");
+    await page.locator('[data-testid="ooh-gate-yes"]').check();
+    await submit(page, '[data-testid="ooh-submit"]');
+    if ((await page.locator('[data-testid="ooh-error"]').innerText()).trim() !== "Promise to attend the call, so your spot isn't wasted." || (await oohRows()).length) throw new Error("without the promise, nothing is sent");
+    await fillRequest("My bot books the wrong calendar.");
+    await page.locator('[data-testid="ooh-gate-yes"]').check();
+    await page.locator('[data-testid="ooh-promise"]').check();
+    await submit(page, '[data-testid="ooh-submit"]');
+    await page.locator('[data-testid="ooh-saved"]').waitFor({ timeout: 20000 });
+    let rows = await oohRows();
+    if (rows.length !== 1 || rows[0].friday !== friday || rows[0].category !== "Chatbot" || rows[0].workspaceId !== ws.id) throw new Error(`the request is saved for ${friday}, from the login, got ${JSON.stringify(rows)}`);
+    if ((await page.locator('[data-testid="ooh-mine"]').count()) !== 1) throw new Error("the member sees their request");
+    // A change, until the Friday.
+    await page.locator('[data-testid="ooh-edit"]').click();
+    await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-description"]').fill("My bot books the wrong calendar, only on weekends.");
+    await submit(page, '[data-testid="ooh-mine"] [data-testid="ooh-submit"]');
+    await page.locator('[data-testid="ooh-saved"]').waitFor({ timeout: 20000 });
+    rows = await oohRows();
+    if (rows.length !== 1 || rows[0].description !== "My bot books the wrong calendar, only on weekends.") throw new Error("a change edits the same request");
+    console.log(`✓ Office Hours: going back sends nothing, the promise is required, the request for ${friday} is saved and changed; the next ${fridays.length} Fridays offered, across month ends`);
     await signOut();
 
     // ── The coach: requests by Friday, who takes it, how it went, notes; the lists. ──
@@ -224,7 +218,7 @@ async function main() {
     await page.locator('[data-testid="ooh-mine"]').first().waitFor({ timeout: 20000 });
     const mineText = await page.locator('[data-testid="ooh-mine"]').first().innerText();
     if (!mineText.includes("With Shonna Roadruck") || !mineText.includes("Covered") || (await page.content()).includes(NOTES)) throw new Error("the member sees who takes it and how it went, never the coach's notes");
-    if (fridays.length && !(await page.locator('#request [data-testid="ooh-category"] option').evaluateAll((els) => els.map((e) => e.textContent))).includes("Taxes")) throw new Error("the member picks from the coach's list");
+    if (!(await page.locator('#request [data-testid="ooh-category"] option').evaluateAll((els) => els.map((e) => e.textContent))).includes("Taxes")) throw new Error("the member picks from the coach's list");
     const exported = await (await page.request.get(`${base}/api/export?format=json`)).text();
     if (!exported.includes("office_hours_requests") || !exported.includes("My bot books the wrong calendar") || exported.includes(NOTES) || exported.includes("coachNotes")) throw new Error("the member's export has their request and not the coach's notes");
     console.log("✓ the coach: the request under its Friday, Shonna responsible, covered, notes kept the coach's (not on the member's page, not in their export); a category added to the list");
