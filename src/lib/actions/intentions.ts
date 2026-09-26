@@ -8,6 +8,10 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { readIntention, tasksDueOn, weekOf } from "@/lib/engine/intentions";
+import { monthOf, readMonthIntention } from "@/lib/engine/month-intentions";
+
+/** Where a form goes back to: the Intentions page or Today, and nothing else. */
+const backTo = (formData: FormData): "/intentions" | "/today" => (str(formData, "back") === "/intentions" ? "/intentions" : "/today");
 
 /**
  * Set or edit this week's 3-1-3 (handoff rev 124). The week is always the member's current one, from the session's own date,
@@ -23,7 +27,7 @@ export async function saveIntentionAction(formData: FormData): Promise<void> {
     initiative: str(formData, "initiative"),
     tasks: [str(formData, "task1"), str(formData, "task2"), str(formData, "task3")],
   });
-  if ("error" in read) redirect(`/today?weekError=${encodeURIComponent(read.error)}#week`);
+  if ("error" in read) redirect(`${backTo(formData)}?weekError=${encodeURIComponent(read.error)}#week`);
   const { value } = read;
   const existing = await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, week)) });
   const before = existing?.tasks ?? [];
@@ -53,7 +57,7 @@ export async function saveIntentionAction(formData: FormData): Promise<void> {
     await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId, userId, weekOf: week, word: value.word, keyResults, initiative: value.initiative, tasks }).onConflictDoNothing();
   }
   refresh();
-  redirect("/today?weekSaved=1#week");
+  redirect(`${backTo(formData)}?weekSaved=1#week`);
 }
 
 /** The end-of-week check: each key result done or not done, all at once. Only this week's, and only once it is set. */
@@ -61,14 +65,50 @@ export async function reviewIntentionAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx();
   const week = weekOf(v.today);
   const existing = await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, week)) });
-  if (!existing) redirect("/today#week");
+  if (!existing) redirect(`${backTo(formData)}#week`);
   const marks = existing.keyResults.map((k, i) => ({ text: k.text, mark: str(formData, `kr${i + 1}`) }));
-  if (marks.some((m) => m.mark !== "done" && m.mark !== "not")) redirect(`/today?weekError=${encodeURIComponent("Mark each key result done or not done.")}#week`);
+  if (marks.some((m) => m.mark !== "done" && m.mark !== "not")) redirect(`${backTo(formData)}?weekError=${encodeURIComponent("Mark each key result done or not done.")}#week`);
   const keyResults = marks.map((m) => ({ text: m.text, done: m.mark === "done" }));
   await db
     .update(schema.weeklyIntentions)
     .set({ keyResults, reviewedAt: nowIso(), updatedAt: nowIso() })
     .where(and(eq(schema.weeklyIntentions.id, existing.id), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.workspaceId, workspaceId)));
   refresh();
-  redirect("/today?weekReviewed=1#week");
+  redirect(`${backTo(formData)}?weekReviewed=1#week`);
+}
+
+/**
+ * Set or edit this month's intention (handoff rev 129): the eleven questions, all required. The month is always the member's
+ * current one, from the session's own date, never from the form. The revenue goal is theirs and their coach's, never another
+ * member's.
+ */
+export async function saveMonthIntentionAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx();
+  const month = monthOf(v.today);
+  const read = readMonthIntention({
+    word: str(formData, "word"),
+    personalSeason: str(formData, "personalSeason"),
+    fear: str(formData, "fear"),
+    habit: str(formData, "habit"),
+    skill: str(formData, "skill"),
+    impact: str(formData, "impact"),
+    businessSeason: str(formData, "businessSeason"),
+    revenueGoal: str(formData, "revenueGoal"),
+    revenueWhy: str(formData, "revenueWhy"),
+    plan: str(formData, "plan"),
+    proudLast: str(formData, "proudLast"),
+    proudEnd: str(formData, "proudEnd"),
+  });
+  if ("error" in read) redirect(`${backTo(formData)}?monthError=${encodeURIComponent(read.error)}#month`);
+  const existing = await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, workspaceId), eq(schema.monthlyIntentions.userId, userId), eq(schema.monthlyIntentions.month, month)) });
+  if (existing) {
+    await db
+      .update(schema.monthlyIntentions)
+      .set({ ...read.value, updatedAt: nowIso() })
+      .where(and(eq(schema.monthlyIntentions.id, existing.id), eq(schema.monthlyIntentions.userId, userId), eq(schema.monthlyIntentions.workspaceId, workspaceId)));
+  } else {
+    await db.insert(schema.monthlyIntentions).values({ id: newId(), workspaceId, userId, month, ...read.value }).onConflictDoNothing();
+  }
+  refresh();
+  redirect(`${backTo(formData)}?monthSaved=1#month`);
 }

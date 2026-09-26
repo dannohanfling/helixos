@@ -10,6 +10,10 @@
  * 3. End-of-month feedback: the card on Today only from the last 3 days of a month through the 5th of the next, about the month
  *    ending; the score required; sent and changed; the coach sees each month's responses, the average referral score and its
  *    trend, and the proud-of answers together, with nothing that sends them anywhere.
+ * 4. The monthly intention and the Intentions page (rev 129/130): "Set your month" above "Set your week" on Today until each is set,
+ *    then one line on Today and the full cards on Intentions; the eleven questions (a revenue goal as a number); edits and
+ *    history there; the coach's month card, everyone's answers, the quiet list from the 4th and each member's history; one
+ *    member never sees another's; and the feedback card shows the member what they wrote for question 11.
  * Dates are the real ones: what depends on the weekday is asserted against the engine's own answer for the member's today.
  */
 import { chromium, type Page } from "@playwright/test";
@@ -29,6 +33,7 @@ async function main() {
   const { intentionPrompt, lateForWeek, tasksDueOn, weekOf } = await import("@/lib/engine/intentions");
   const { upcomingFridays } = await import("@/lib/engine/office-hours");
   const { feedbackMonth, monthSummary, prevMonth, trendLine } = await import("@/lib/engine/feedback");
+  const { lateForMonth, monthOf } = await import("@/lib/engine/month-intentions");
   const { newId } = await import("@/lib/ids");
 
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
@@ -38,6 +43,7 @@ async function main() {
   const jordanM = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, jordan.id), eq(schema.memberships.workspaceId, ws.id)) }))!;
   for (const u of [maya.id, jordan.id]) {
     await db.delete(schema.weeklyIntentions).where(eq(schema.weeklyIntentions.userId, u));
+    await db.delete(schema.monthlyIntentions).where(eq(schema.monthlyIntentions.userId, u));
     await db.delete(schema.tasks).where(and(eq(schema.tasks.userId, u), eq(schema.tasks.source, "intention")));
     await db.delete(schema.officeHoursRequests).where(eq(schema.officeHoursRequests.userId, u));
     await db.delete(schema.monthlyFeedback).where(eq(schema.monthlyFeedback.userId, u));
@@ -77,6 +83,9 @@ async function main() {
     await page.goto(`${base}/today`);
     await card.waitFor({ timeout: 20000 });
     if ((await card.getAttribute("data-state")) !== "set" || !((await card.textContent()) ?? "").includes("Set your week")) throw new Error("with no 3-1-3 this week, Today asks to set it");
+    const monthRect = await page.locator('[data-testid="month-card"]').boundingBox();
+    const weekRect = await card.boundingBox();
+    if (!monthRect || !weekRect || monthRect.y >= weekRect.y) throw new Error("with both due, Set your month sits above Set your week");
     // One word, and at least two key results and two tasks: a gap says so and saves nothing.
     await fill({ word: "two words", kr: ["Book 5 calls", "Post 5 times"], initiative: "Finish my webinar slides", tasks: ["Follow up with 10 leads", "Record 2 videos"] });
     await submit(page, '[data-testid="week-save"]');
@@ -85,20 +94,25 @@ async function main() {
     if (await db.query.weeklyIntentions.findFirst({ where: eq(schema.weeklyIntentions.userId, maya.id) })) throw new Error("a refused form saves nothing");
     await fill({ word: "Consistent", kr: ["Book 5 calls", "Post 5 times", ""], initiative: "Finish my webinar slides", tasks: ["Follow up with 10 leads", "Record 2 videos", "Email my list"] });
     await submit(page, '[data-testid="week-save"]');
-    await page.locator('[data-testid="week-saved"]').waitFor({ timeout: 20000 });
+    // Once set, Today keeps one line and the full card moves to Intentions (rev 130).
+    await page.locator('[data-testid="summary-week-word"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="summary-week-word"]').innerText()).trim() !== "Consistent" || (await card.count()) || !(await page.locator('[data-testid="summary-saved"]').count())) throw new Error("once set, Today shows only the week's word in one line");
     const saved = (await db.query.weeklyIntentions.findFirst({ where: eq(schema.weeklyIntentions.userId, maya.id) }))!;
     if (saved.weekOf !== week || saved.word !== "Consistent" || saved.keyResults.length !== 2 || saved.tasks.length !== 3) throw new Error(`saved for this week, the blank third key result dropped, got ${JSON.stringify(saved)}`);
     const expectedState = intentionPrompt(mayaToday, { reviewedAt: null });
+    if ((await page.locator('[data-testid="summary-review"]').count()) !== (expectedState === "review" ? 1 : 0)) throw new Error("Friday to Sunday, Today's line links to the end-of-week check");
+    await page.goto(`${base}/intentions`);
+    await card.waitFor({ timeout: 20000 });
     if ((await card.getAttribute("data-state")) !== expectedState || (await page.locator('[data-testid="week-word-shown"]').innerText()).trim() !== "Consistent") throw new Error(`once set, Today shows the week (${expectedState})`);
     let tasks = await intentionTasks();
     if (tasks.length !== 3 || tasks.some((t) => t.dueDate !== tasksDueOn(mayaToday) || t.sourceRef !== week) || tasks.map((t) => t.title).join("|") !== "Follow up with 10 leads|Record 2 videos|Email my list") throw new Error(`the three tasks are this week's Tasks, due Friday, got ${JSON.stringify(tasks.map((t) => [t.title, t.dueDate]))}`);
     await page.goto(`${base}/tasks`);
     for (const t of tasks) await page.getByText(t.title, { exact: false }).first().waitFor({ timeout: 15000 });
-    console.log(`✓ the 3-1-3 set on Today (one word, 2 key results, 1 initiative, 3 tasks); the tasks are on Tasks, due ${tasksDueOn(mayaToday)}; Today shows the week (${expectedState})`);
+    console.log(`✓ the 3-1-3 set on Today (one word, 2 key results, 1 initiative, 3 tasks); Today keeps one line, Intentions the full card (${expectedState}); the tasks are on Tasks, due ${tasksDueOn(mayaToday)}`);
 
     // ── Edit: the first task renamed in place, the third taken off; a done task stays done. ──
     await db.update(schema.tasks).set({ status: "done" }).where(eq(schema.tasks.id, tasks[1].id));
-    await page.goto(`${base}/today`);
+    await page.goto(`${base}/intentions`);
     await card.waitFor();
     if ((await page.locator('[data-testid="week-task"][data-done="yes"]').count()) !== 1) throw new Error("a task ticked off on Tasks shows done on the week");
     await page.locator('[data-testid="week-edit"]').click();
@@ -128,6 +142,57 @@ async function main() {
       if (await page.locator('[data-testid="week-review"]').count()) throw new Error("Monday to Thursday there is no end-of-week check");
       console.log(`✓ ${mayaToday} is before Friday: no end-of-week check yet (the unit tests cover Friday to Sunday)`);
     }
+
+    // ── 4. The monthly intention: set on Today (above the week while both are due), then one line; the full card on Intentions. ──
+    const thisMonth = monthOf(mayaToday);
+    const PAST_PROUD = `Showing up for my clients every week ${Date.now()}`;
+    await page.goto(`${base}/today`);
+    const monthCard = page.locator('[data-testid="month-card"]');
+    await monthCard.waitFor({ timeout: 20000 });
+    if ((await monthCard.getAttribute("data-state")) !== "set") throw new Error("with no intention this month, Today asks to set it");
+    const fillMonth = async (revenue: string) => {
+      await page.locator('[data-testid="month-word"]').last().fill("Rooted");
+      await page.locator('[data-testid="month-personalSeason-wealth"]').last().check();
+      for (const [k, t] of [["fear", "That I'm not ready."], ["habit", "A morning walk."], ["skill", "Public speaking."], ["impact", "Help 5 coaches book calls; they benefit most."], ["revenueWhy", "To hire help."], ["plan", "Two webinars and daily DMs."], ["proudLast", "Finishing my offer."], ["proudEnd", "Showing up every single day."]]) await page.locator(`[data-testid="month-${k}"]`).last().fill(t);
+      await page.locator('[data-testid="month-businessSeason-sales"]').last().check();
+      await page.locator('[data-testid="month-revenueGoal"]').last().fill(revenue);
+    };
+    await fillMonth("lots");
+    await submit(page, '[data-testid="month-save"]');
+    await monthCard.waitFor();
+    if ((await page.locator('[data-testid="month-error"]').innerText()).trim() !== "Write your revenue goal as a number, like 10000." || (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) }))) throw new Error("a revenue goal that isn't a number is refused, and nothing saved");
+    await fillMonth("$10,000");
+    await submit(page, '[data-testid="month-save"]');
+    await page.locator('[data-testid="summary-month-word"]').waitFor({ timeout: 20000 });
+    const mi = (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) }))!;
+    if (mi.month !== thisMonth || mi.revenueGoal !== 10000 || mi.personalSeason !== "wealth" || mi.businessSeason !== "sales" || (await monthCard.count()) || (await page.locator('[data-testid="summary-month-word"]').innerText()).trim() !== "Rooted") throw new Error(`saved for ${thisMonth}; Today keeps one line with the month's word beside the week's`);
+    // Intentions: the answers, an edit, and the history of past weeks and months in folds.
+    await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId: ws.id, userId: maya.id, weekOf: "2026-01-05", word: "Patient", keyResults: [{ text: "Post 3 times", done: true }], initiative: "Plan Q1", tasks: [{ title: "Draft the plan", taskId: null }], reviewedAt: "2026-01-09T18:00:00Z" });
+    await db.insert(schema.monthlyIntentions).values({ id: newId(), workspaceId: ws.id, userId: maya.id, month: prevMonth(thisMonth), word: "Steady", personalSeason: "self", fear: "Being seen.", habit: "Journaling.", skill: "Sales calls.", impact: "More clients served.", businessSeason: "marketing", revenueGoal: 5000, revenueWhy: "A first full month.", plan: "Daily posts.", proudLast: "Starting.", proudEnd: PAST_PROUD });
+    await page.goto(`${base}/intentions`);
+    await monthCard.waitFor({ timeout: 20000 });
+    if ((await monthCard.getAttribute("data-state")) !== "shown" || !(await page.locator('[data-testid="month-answers"]').first().innerText()).includes("$10,000. To hire help.")) throw new Error("Intentions shows the month's answers, the revenue goal with its why");
+    await page.locator('[data-testid="month-edit"]').click();
+    await page.locator('[data-testid="month-habit"]').last().fill("A morning walk, no phone.");
+    await submit(page, '[data-testid="month-save"]');
+    await page.locator('[data-testid="month-saved"]').waitFor({ timeout: 20000 });
+    if ((await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.userId, maya.id), eq(schema.monthlyIntentions.month, thisMonth)) }))!.habit !== "A morning walk, no phone.") throw new Error("an edit on Intentions changes the month");
+    const hWeeks = await page.locator('[data-testid="history-week"]').allInnerTexts();
+    const hMonths = await page.locator('[data-testid="history-month"]').allInnerTexts();
+    if (!hWeeks.some((t) => t.includes("Patient")) || !hMonths.some((t) => t.includes("Steady")) || hWeeks.some((t) => t.includes("Consistent")) || hMonths.some((t) => t.includes("Rooted"))) throw new Error("history holds the past weeks and months only, each in a fold");
+    console.log(`✓ the monthly intention: set on Today (above the week), a non-number revenue goal refused, one line after; Intentions shows the answers, an edit, and the history (a past week and month)`);
+    await signOut();
+
+    // ── One member never sees another's intention or revenue goal. ──
+    await page.goto(`${base}/login`);
+    await page.fill('input[name="email"]', "client2@demo.helixos.app");
+    await page.fill('input[name="password"]', "demo1234");
+    await Promise.all([page.waitForURL(/\/today/), page.click('button[type="submit"]')]);
+    await page.goto(`${base}/intentions`);
+    await monthCard.waitFor({ timeout: 20000 });
+    const jordanPage = await page.content();
+    if ((await monthCard.getAttribute("data-state")) !== "set" || jordanPage.includes("Rooted") || jordanPage.includes("10,000") || jordanPage.includes("Steady")) throw new Error("Jordan sees only an empty month of their own, nothing of Maya's");
+    console.log("✓ another member's Intentions shows only their own: none of Maya's words or revenue");
     await signOut();
 
     // ── The coach: who has set it, who hasn't, the quiet list from Tuesday, and each member's history. ──
@@ -136,7 +201,7 @@ async function main() {
     const mayaRow = page.locator('[data-testid="week-coach-row"]', { hasText: maya.name });
     const jordanRow = page.locator('[data-testid="week-coach-row"]', { hasText: jordan.name });
     await mayaRow.waitFor({ timeout: 20000 });
-    if ((await mayaRow.getAttribute("data-set")) !== "yes" || !(await mayaRow.innerText()).includes("Consistent")) throw new Error("the coach sees Maya's week and her word");
+    if ((await mayaRow.getAttribute("data-set")) !== "yes" || !(await mayaRow.innerText()).includes("Consistent")) throw new Error("the coach sees Maya's week and word");
     if ((await jordanRow.getAttribute("data-set")) !== "no" || !(await jordanRow.innerText()).includes("not set yet")) throw new Error("the coach sees Jordan hasn't set it");
     const lateRows = await page.locator('[data-testid="week-late-row"]').allInnerTexts();
     const jordanLate = lateForWeek(jordanToday);
@@ -144,8 +209,21 @@ async function main() {
     await page.goto(`${base}/coach/${mayaM.id}`);
     const history = page.locator('[data-testid="their-week"]');
     await history.first().waitFor({ timeout: 20000 });
-    if ((await history.count()) !== 1 || !(await history.first().innerText()).includes("Consistent") || !(await history.first().innerText()).includes("Follow up with 12 leads")) throw new Error("the client page lists her weeks, with the word, key results and tasks");
-    console.log(`✓ the coach: Maya set (Consistent), Jordan not set${jordanLate ? " and under the quiet list" : " (Monday: not yet on the quiet list)"}; Maya's history on her page`);
+    if ((await history.count()) !== 2 || !(await history.nth(1).innerText()).includes("Patient") || !(await history.first().innerText()).includes("Consistent") || !(await history.first().innerText()).includes("Follow up with 12 leads")) throw new Error("the client page lists the member's weeks, newest first, with the word, key results and tasks");
+    console.log(`✓ the coach: Maya set (Consistent), Jordan not set${jordanLate ? " and under the quiet list" : " (Monday: not yet on the quiet list)"}; Maya's history on Maya's page`);
+    await page.goto(`${base}/coach`);
+    const mayaMonth = page.locator('[data-testid="month-coach-row"]', { hasText: maya.name });
+    await mayaMonth.waitFor({ timeout: 20000 });
+    if ((await mayaMonth.getAttribute("data-set")) !== "yes" || !(await mayaMonth.innerText()).includes("Rooted") || (await page.locator('[data-testid="month-coach-row"]', { hasText: jordan.name }).getAttribute("data-set")) !== "no") throw new Error("the coach sees Maya's month and word, and Jordan's not set");
+    await page.locator('[data-testid="month-coach-answers"]').click();
+    if (!(await page.locator('[data-testid="month-coach-answer"]').first().innerText()).includes("$10,000")) throw new Error("the coach sees everyone's answers in a fold, revenue included");
+    const monthLateRows = await page.locator('[data-testid="month-late-row"]').allInnerTexts();
+    if (monthLateRows.some((t) => t.includes(jordan.name)) !== lateForMonth(jordanToday) || monthLateRows.some((t) => t.includes(maya.name))) throw new Error(`the quiet list from the 4th only: got ${monthLateRows.join(" | ")}`);
+    if ((await page.locator(`[data-testid="month-coach-row"] a[href="/coach/${mayaM.id}#intentions"]`).count()) !== 1) throw new Error("the row links to the intentions on Maya's page");
+    await page.goto(`${base}/coach/${mayaM.id}#intentions`);
+    const theirMonths = await page.locator('[data-testid="their-month"]').allInnerTexts();
+    if (theirMonths.length !== 2 || !theirMonths[0].includes("Rooted") || !theirMonths[1].includes("Steady")) throw new Error(`Maya's page lists Maya's months, newest first, got ${theirMonths.join(" | ")}`);
+    console.log(`✓ the coach: Maya's month (Rooted) and everyone's answers, Jordan not set${lateForMonth(jordanToday) ? " and under the quiet list" : ""}; Maya's months on Maya's page`);
     await signOut();
 
     // ── 2. Open Office Hours: the member asks ahead of a Friday. ──
@@ -228,10 +306,13 @@ async function main() {
     const fbMonth = feedbackMonth(mayaToday);
     const month = fbMonth ?? mayaToday.slice(0, 7);
     await page.goto(`${base}/today`);
-    await page.locator('[data-testid="week-card"]').waitFor({ timeout: 20000 });
+    await page.locator('[data-testid="intentions-summary"]').waitFor({ timeout: 20000 });
     const fbCard = page.locator('[data-testid="feedback-card"]');
     if (fbMonth) {
       if ((await fbCard.getAttribute("data-state")) !== "ask") throw new Error(`in the window (${mayaToday}), Today asks for feedback on ${fbMonth}`);
+      // What Maya wrote for that month's question 11, shown back to compare.
+      const wrote = fbMonth === thisMonth ? "Showing up every single day." : PAST_PROUD;
+      if (!(await page.locator('[data-testid="feedback-lookback"]').innerText()).includes(wrote)) throw new Error(`the feedback card shows what Maya wrote for question 11 of ${fbMonth}`);
       const fillFeedback = async () => {
         for (const [k, t] of [["proud", PROUD], ["love", "The Friday calls."], ["less", "Long lessons."], ["more", "Templates."], ["wow", "A done-for-you funnel."], ["referral", "Sam, a fitness coach."], ["favorite", "The community."]]) await page.locator(`[data-testid="feedback-${k}"]`).last().fill(t);
       };

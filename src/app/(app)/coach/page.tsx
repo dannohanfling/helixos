@@ -18,6 +18,8 @@ import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
 import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
+import { lateForMonth, monthOf } from "@/lib/engine/month-intentions";
+import { MonthAnswers } from "@/components/month-card";
 import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -103,6 +105,11 @@ export default async function CoachPage() {
   const weekSet = rows.filter((r) => weekRowOf.get(r.m.id));
   const weekMissing = rows.filter((r) => !weekRowOf.get(r.m.id));
   const weekLate = weekMissing.filter((r) => lateForWeek(theirToday(r.m)));
+  // The monthly intention (rev 129), each member's own month: who has set it, everyone's answers, and, from the 4th, who hasn't.
+  const monthRows = userIds.length ? await db.query.monthlyIntentions.findMany({ where: and(eq(schema.monthlyIntentions.workspaceId, wsId), inArray(schema.monthlyIntentions.userId, userIds)) }) : [];
+  const monthRowOf = new Map(rows.map((r) => [r.m.id, monthRows.find((x) => x.userId === r.m.userId && x.month === monthOf(theirToday(r.m))) ?? null]));
+  const monthSet = rows.filter((r) => monthRowOf.get(r.m.id));
+  const monthLate = rows.filter((r) => !monthRowOf.get(r.m.id) && lateForMonth(theirToday(r.m)));
   // Which agent answers is chosen by name, not by typing an ai_agent_ns: the agents on each bot are read with that bot's own
   // saved token. A member with no token costs no call and gets the text box back.
   const withBots = [v.membership, ...members];
@@ -399,7 +406,7 @@ export default async function CoachPage() {
                 const w = weekRowOf.get(r.m.id)!;
                 return (
                   <li key={r.m.id} className="flex flex-wrap items-center justify-between gap-2" data-testid="week-coach-row" data-set="yes">
-                    <Link href={`/coach/${r.m.id}#weeks`} className="underline-offset-2 hover:underline">{r.u?.name}</Link>
+                    <Link href={`/coach/${r.m.id}#intentions`} className="underline-offset-2 hover:underline">{r.u?.name}</Link>
                     <span className="text-xs text-ink-2">
                       <b>{w.word}</b>
                       {w.reviewedAt ? ` · ${keyResultTally(w.keyResults.map((k) => k.done))}` : ""}
@@ -409,11 +416,37 @@ export default async function CoachPage() {
               })}
               {weekMissing.map((r) => (
                 <li key={r.m.id} className="flex flex-wrap items-center justify-between gap-2 text-ink-3" data-testid="week-coach-row" data-set="no">
-                  <Link href={`/coach/${r.m.id}#weeks`} className="underline-offset-2 hover:underline">{r.u?.name}</Link>
+                  <Link href={`/coach/${r.m.id}#intentions`} className="underline-offset-2 hover:underline">{r.u?.name}</Link>
                   <span className="text-xs">not set yet</span>
                 </li>
               ))}
             </ul>
+          </Card>
+          <Card title="This month's intentions" action={<span className="text-xs text-ink-3">{monthSet.length} of {rows.length} set</span>}>
+            <ul className="space-y-1 text-sm" data-testid="month-coach">
+              {rows.map((r) => {
+                const mi = monthRowOf.get(r.m.id);
+                return (
+                  <li key={r.m.id} className={`flex flex-wrap items-center justify-between gap-2 ${mi ? "" : "text-ink-3"}`} data-testid="month-coach-row" data-set={mi ? "yes" : "no"}>
+                    <Link href={`/coach/${r.m.id}#intentions`} className="underline-offset-2 hover:underline">{r.u?.name}</Link>
+                    <span className="text-xs">{mi ? <b className="text-ink-2">{mi.word}</b> : "not set yet"}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {monthSet.length ? (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs text-ink-3" data-testid="month-coach-answers">Everyone&apos;s answers</summary>
+                <div className="mt-2 space-y-4">
+                  {monthSet.map((r) => (
+                    <div key={r.m.id} data-testid="month-coach-answer">
+                      <div className="mb-1 text-sm font-semibold">{r.u?.name}</div>
+                      <MonthAnswers m={monthRowOf.get(r.m.id)!} />
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </Card>
           <Card title="Who needs a nudge">
             {atRisk.length ? (
@@ -451,6 +484,18 @@ export default async function CoachPage() {
                 <ul className="space-y-1 text-sm">
                   {weekLate.map((r) => (
                     <li key={r.m.id} data-testid="week-late-row">
+                      {r.u?.avatarEmoji} {r.u?.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {monthLate.length ? (
+              <div className="mt-3 border-t pt-3">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-3">No monthly intention yet</div>
+                <ul className="space-y-1 text-sm">
+                  {monthLate.map((r) => (
+                    <li key={r.m.id} data-testid="month-late-row">
                       {r.u?.avatarEmoji} {r.u?.name}
                     </li>
                   ))}

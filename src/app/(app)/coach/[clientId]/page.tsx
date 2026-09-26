@@ -26,6 +26,8 @@ import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
 import { keyResultTally } from "@/lib/engine/intentions";
+import { monthLabel } from "@/lib/engine/feedback";
+import { MonthAnswers } from "@/components/month-card";
 
 export const metadata = { title: "Client" };
 
@@ -54,6 +56,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
   }
   const ws = v.workspace.id;
   const tz = m.timezone || v.workspace.timezone;
+  const months = await db.query.monthlyIntentions.findMany({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, m.userId)), orderBy: [desc(schema.monthlyIntentions.month)], limit: 12 });
   const weeks = await db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, m.userId)), orderBy: [desc(schema.weeklyIntentions.weekOf)], limit: 12 });
   const today = todayInTz(tz);
   const month = today.slice(0, 7);
@@ -232,6 +235,27 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 })}
               </ul>
             ) : null}
+          </Card>
+          <div id="intentions" />
+          <Card title="Their monthly intentions" action={<span className="text-xs text-ink-3">{months.length ? `${months.length} month${months.length === 1 ? "" : "s"}` : "none yet"}</span>}>
+            {months.length ? (
+              <ul className="space-y-1" data-testid="their-months">
+                {months.map((mi) => (
+                  <li key={mi.id} data-testid="their-month">
+                    <details className="rounded-lg border p-2 text-sm">
+                      <summary className="cursor-pointer">
+                        {monthLabel(mi.month)} · <b>{mi.word}</b>
+                      </summary>
+                      <div className="mt-2">
+                        <MonthAnswers m={mi} />
+                      </div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-2">They haven&apos;t set a monthly intention yet. It&apos;s the &ldquo;Set your month&rdquo; card on their Today from the 1st.</p>
+            )}
           </Card>
           <Card title="Their 3-1-3s" action={<span className="text-xs text-ink-3">{weeks.length ? `${weeks.length} week${weeks.length === 1 ? "" : "s"}` : "none yet"}</span>}>
             <div id="weeks">

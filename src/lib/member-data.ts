@@ -24,6 +24,7 @@ export const MEMBER_TABLES = {
   goals: schema.goals,
   daily_logs: schema.dailyLogs,
   weekly_intentions: schema.weeklyIntentions,
+  monthly_intentions: schema.monthlyIntentions,
   office_hours_requests: schema.officeHoursRequests,
   monthly_feedback: schema.monthlyFeedback,
   points: schema.pointsLedger,

@@ -8,11 +8,13 @@ import { Badge, Card } from "@/components/ui";
 type Sp = { weekError?: string; weekSaved?: string; weekReviewed?: string };
 
 /** The 3-1-3 form, empty to set the week or filled to edit it. The third key result and the third task may stay blank. */
-function WeekForm({ week }: { week: WeeklyIntention | null }) {
+export type Back = "/today" | "/intentions";
+function WeekForm({ week, back }: { week: WeeklyIntention | null; back: Back }) {
   const kr = (i: number) => week?.keyResults[i]?.text ?? "";
   const task = (i: number) => week?.tasks[i]?.title ?? "";
   return (
     <form action={saveIntentionAction} className="space-y-3" data-testid="week-form">
+      <input type="hidden" name="back" value={back} />
       <label className="block text-sm font-medium">
         ONE word to embody this week
         <input className="field mt-1" name="word" defaultValue={week?.word ?? ""} placeholder="Consistent" data-testid="week-word" />
@@ -45,12 +47,12 @@ function WeekForm({ week }: { week: WeeklyIntention | null }) {
  * The weekly 3-1-3 on Today (handoff rev 124): "Set your week" until it is set, then the week at the top. From Friday to Sunday
  * it asks, once, which key results got done.
  */
-export function WeekCard({ week, today, taskDone, sp }: { week: WeeklyIntention | null; today: string; taskDone: Record<string, boolean>; sp: Sp }) {
+export function WeekCard({ week, today, taskDone, sp, back = "/intentions" }: { week: WeeklyIntention | null; today: string; taskDone: Record<string, boolean>; sp: Sp; back?: Back }) {
   const state = intentionPrompt(today, week);
   const notes = (
     <>
       {sp.weekError ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="week-error">{sp.weekError}</p> : null}
-      {sp.weekSaved ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="week-saved">Your week is set. Your tasks are on your list, due Friday.</p> : null}
+      {sp.weekSaved ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="week-saved">Saved. Your tasks are on your list, due Friday.</p> : null}
       {sp.weekReviewed ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="week-reviewed">Marked. See you Monday.</p> : null}
     </>
   );
@@ -60,7 +62,7 @@ export function WeekCard({ week, today, taskDone, sp }: { week: WeeklyIntention 
         <Card title="Set your week" action={<Badge tone="accent">3-1-3</Badge>}>
           {notes}
           <p className="mb-3 text-sm text-ink-2">Choose ONE word to embody this week, then THREE key results you can track, ONE initiative toward your bigger goal, and THREE tasks that move the needle.</p>
-          <WeekForm week={null} />
+          <WeekForm week={null} back={back} />
         </Card>
       </section>
     );
@@ -101,6 +103,7 @@ export function WeekCard({ week, today, taskDone, sp }: { week: WeeklyIntention 
         </div>
         {state === "review" ? (
           <form action={reviewIntentionAction} className="mt-4 rounded-lg border p-3" data-testid="week-review">
+            <input type="hidden" name="back" value={back} />
             <p className="mb-2 text-sm font-medium">The week is nearly done. Which key results did you hit?</p>
             <ul className="space-y-2 text-sm">
               {week.keyResults.map((k, i) => (
@@ -123,7 +126,7 @@ export function WeekCard({ week, today, taskDone, sp }: { week: WeeklyIntention 
         <details className="mt-4">
           <summary className="cursor-pointer text-xs text-ink-3" data-testid="week-edit">Edit this week</summary>
           <div className="mt-3">
-            <WeekForm week={week} />
+            <WeekForm week={week} back={back} />
           </div>
         </details>
       </Card>

@@ -380,6 +380,37 @@ export const officeHoursRequests = sqliteTable(
 );
 export type OfficeHoursRequest = typeof officeHoursRequests.$inferSelect;
 
+/* ───────────────────────── Monthly intention (handoff rev 129) ───────────────────────── */
+export const monthlyIntentions = sqliteTable(
+  "monthly_intentions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** The month it is for ("YYYY-MM"), from the date, never picked. */
+    month: text("month").notNull(),
+    /* The eleven answers, in Danno's order. */
+    word: text("word").notNull(),
+    personalSeason: text("personal_season", { enum: ["self", "wealth", "relationships", "spirituality"] }).notNull(),
+    fear: text("fear").notNull(),
+    habit: text("habit").notNull(),
+    skill: text("skill").notNull(),
+    impact: text("impact").notNull(),
+    businessSeason: text("business_season", { enum: ["marketing", "sales", "fulfillment", "operations"] }).notNull(),
+    /** The member's revenue goal for the month: theirs and their coach's to see, never another member's. */
+    revenueGoal: real("revenue_goal").notNull(),
+    revenueWhy: text("revenue_why").notNull(),
+    plan: text("plan").notNull(),
+    proudLast: text("proud_last").notNull(),
+    /** What they want to feel most proud of at the month's end: shown back to them, and only them, on that month's feedback. */
+    proudEnd: text("proud_end").notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("monthly_intentions_member_month").on(t.workspaceId, t.userId, t.month)],
+);
+export type MonthlyIntention = typeof monthlyIntentions.$inferSelect;
+
 /* ───────────────────────── Weekly intention: the 3-1-3 (handoff rev 124) ───────────────────────── */
 export type IntentionKeyResult = { text: string; done: boolean | null };
 export type IntentionTask = { title: string; taskId: string | null };

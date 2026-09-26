@@ -8,6 +8,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Daily",
     items: [
       { href: "/today", label: "Today", icon: "☀️" },
+      { href: "/intentions", label: "Intentions", icon: "🌱", hint: "week + month" },
       { href: "/tasks", label: "Tasks", icon: "✅" },
       { href: "/content", label: "Content", icon: "✍️", hint: "post + repurpose" },
       { href: "/library", label: "Library", icon: "🗂️", hint: "swipes + hooks" },

@@ -19,8 +19,10 @@ import { TIER_ICONS } from "@/lib/engine/tiers";
 import { closedDates } from "@/lib/queries/daily";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { weekOf } from "@/lib/engine/intentions";
+import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
+import { monthOf } from "@/lib/engine/month-intentions";
 import { WeekCard } from "@/components/week-card";
+import { MonthCard } from "@/components/month-card";
 import { feedbackMonth } from "@/lib/engine/feedback";
 import { FeedbackCard } from "@/components/feedback-card";
 
@@ -45,7 +47,7 @@ function greeting(hour: number, name: string): string {
 
 const ENERGY = ["", "Dragging", "Slow", "Steady", "Bright", "On fire"];
 
-export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; feedbackError?: string; feedbackSaved?: string }> }) {
+export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const d = await todayData(v);
@@ -54,9 +56,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const weekTaskIds = (week?.tasks ?? []).map((t) => t.taskId).filter((x): x is string => Boolean(x));
   const weekTasks = weekTaskIds.length ? await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, v.user.id), inArray(schema.tasks.id, weekTaskIds)) }) : [];
   const taskDone = Object.fromEntries(weekTasks.map((t) => [t.id, t.status === "done"]));
-  // End-of-month feedback (rev 124): only in its window, about the month ending, and what they already sent for it.
+  // The monthly intention (rev 129): this month's, if set.
+  const month = (await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, monthOf(v.today))) })) ?? null;
+  // End-of-month feedback (rev 124): only in its window, about the month ending, and what they already sent for it. What they wrote
+  // for that month's question 11 is shown back to them, and only them, to compare (rev 129).
   const fbMonth = feedbackMonth(v.today);
   const fbGiven = fbMonth ? ((await db.query.monthlyFeedback.findFirst({ where: and(eq(schema.monthlyFeedback.workspaceId, v.workspace.id), eq(schema.monthlyFeedback.userId, v.user.id), eq(schema.monthlyFeedback.month, fbMonth)) })) ?? null) : null;
+  const fbLookBack = fbMonth ? ((await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, fbMonth)) }))?.proudEnd ?? null) : null;
+  const weekState = intentionPrompt(v.today, week);
   const closed = await closedDates(v.workspace.id, v.user.id);
   const streakDayIfClosedNow = d.log?.eveningDoneAt ? d.log.streakDay : weeklyStreakDay(closed, v.today);
   const bonusIfClosedNow = streakBonus(streakDayIfClosedNow);
@@ -89,8 +96,33 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
-      <WeekCard week={week} today={v.today} taskDone={taskDone} sp={sp} />
-      {fbMonth ? <FeedbackCard month={fbMonth} given={fbGiven} sp={sp} /> : null}
+      {/* The prompts stay on Today until each is set; once set, one line and the full cards on Intentions (rev 130). */}
+      {month ? null : <MonthCard m={null} month={monthOf(v.today)} sp={sp} back="/today" />}
+      {week ? null : <WeekCard week={null} today={v.today} taskDone={taskDone} sp={sp} back="/today" />}
+      {month || week ? (
+        <section className="card mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 p-4 text-sm" data-testid="intentions-summary">
+          {month ? (
+            <span>
+              This month: <b data-testid="summary-month-word">{month.word}</b>
+            </span>
+          ) : null}
+          {week ? (
+            <span>
+              This week: <b data-testid="summary-week-word">{week.word}</b>
+            </span>
+          ) : null}
+          {sp.monthSaved || sp.weekSaved ? <span className="text-good" role="status" data-testid="summary-saved">Saved.</span> : null}
+          {weekState === "review" ? (
+            <Link href="/intentions#week" className="font-medium underline" data-testid="summary-review">
+              The week is nearly done: mark your key results
+            </Link>
+          ) : null}
+          <Link href="/intentions" className="ml-auto text-xs text-ink-2 underline" data-testid="summary-link">
+            Intentions →
+          </Link>
+        </section>
+      ) : null}
+      {fbMonth ? <FeedbackCard month={fbMonth} given={fbGiven} lookBack={fbLookBack} sp={sp} /> : null}
 
       {d.firstSession ? (
         <section className="card mb-5 border-accent p-5" style={{ background: "var(--accent-soft)" }} data-testid="welcome">
