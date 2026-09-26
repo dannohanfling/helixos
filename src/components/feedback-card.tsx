@@ -32,7 +32,7 @@ function FeedbackForm({ month, given }: { month: string; given: MonthlyFeedback 
         </div>
       </fieldset>
       {area("referral", "Who do you know who'd benefit? (optional)", given?.referral)}
-      {area("favorite", "Your favorite part of the experience so far (optional)", given?.favorite)}
+      {area("favorite", "Your favorite part of the experience so far", given?.favorite)}
       <SubmitButton className="btn btn-primary btn-sm" pendingText="Sending…" data-testid="feedback-save">
         {given ? "Save changes" : "Send my feedback"}
       </SubmitButton>

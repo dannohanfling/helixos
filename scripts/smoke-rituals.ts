@@ -238,7 +238,15 @@ async function main() {
       await fillFeedback();
       await submit(page, '[data-testid="feedback-save"]');
       if ((await page.locator('[data-testid="feedback-error"]').innerText()).trim() !== "Pick a referral score from 1 to 10." || (await db.query.monthlyFeedback.findFirst({ where: eq(schema.monthlyFeedback.userId, maya.id) }))) throw new Error("without a score, nothing is sent");
+      // Favorite part is required (rev 129); Referral stays optional.
       await fillFeedback();
+      await page.locator('[data-testid="feedback-favorite"]').last().fill("");
+      await page.locator('[data-testid="feedback-referral"]').last().fill("");
+      await page.locator('[data-testid="feedback-score-9"]').last().check();
+      await submit(page, '[data-testid="feedback-save"]');
+      if ((await page.locator('[data-testid="feedback-error"]').innerText()).trim() !== "Tell us your favorite part of the experience so far.") throw new Error("without a favorite part, nothing is sent");
+      await fillFeedback();
+      await page.locator('[data-testid="feedback-referral"]').last().fill("");
       await page.locator('[data-testid="feedback-score-9"]').last().check();
       await submit(page, '[data-testid="feedback-save"]');
       await page.locator('[data-testid="feedback-saved"]').waitFor({ timeout: 20000 });
@@ -249,7 +257,7 @@ async function main() {
       await page.locator('[data-testid="feedback-saved"]').waitFor({ timeout: 20000 });
       const fb = await db.query.monthlyFeedback.findMany({ where: eq(schema.monthlyFeedback.userId, maya.id) });
       if (fb.length !== 1 || fb[0].month !== fbMonth || fb[0].referralScore !== 10 || fb[0].proud !== PROUD) throw new Error(`one response for ${fbMonth}, changed in place, got ${JSON.stringify(fb.map((f) => [f.month, f.referralScore]))}`);
-      console.log(`✓ feedback on ${fbMonth}: the score required, sent, then changed in place (9 to 10)`);
+      console.log(`✓ feedback on ${fbMonth}: the score and the favorite part required, sent with no referral, then changed in place (9 to 10)`);
     } else {
       if (await fbCard.count()) throw new Error(`outside the window (${mayaToday}) there is no feedback card`);
       await db.insert(schema.monthlyFeedback).values({ id: newId(), workspaceId: ws.id, userId: maya.id, month, proud: PROUD, love: "The Friday calls.", less: "Long lessons.", more: "Templates.", wow: "A done-for-you funnel.", referralScore: 10 });

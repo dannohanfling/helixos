@@ -343,7 +343,7 @@ export const monthlyFeedback = sqliteTable(
     referralScore: integer("referral_score").notNull(),
     /** Who they know who'd benefit. */
     referral: text("referral"),
-    /** Their favorite part of the experience so far. */
+    /** Their favorite part of the experience so far. Required from rev 129; nullable for any sent before. */
     favorite: text("favorite"),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
     createdAt: createdAt(),
