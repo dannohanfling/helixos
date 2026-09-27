@@ -53,6 +53,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
       { href: "/coach/feedback", label: "Feedback", icon: "💬", coachOnly: true, hint: "monthly" },
+      { href: "/coach/move", label: "Move to a client", icon: "📦", coachOnly: true, hint: "your items to theirs" },
       { href: "/integrations", label: "Integrations", icon: "🔌", coachOnly: true },
     ],
   },
