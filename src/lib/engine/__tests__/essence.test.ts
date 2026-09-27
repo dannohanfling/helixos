@@ -3,7 +3,7 @@ import { ESSENCE_CAP, ESSENCE_PLACEHOLDERS, ESSENCE_SECTIONS, assembleSystem, co
 
 describe("the Essence schema", () => {
   it("has the thirteen production sections plus representative_stories, in order", () => {
-    expect(ESSENCE_SECTIONS.map((s) => s.key)).toEqual(["guidelines_to_respond", "identity", "mission_and_vision", "goals_and_objectives", "behavior_and_interaction_style", "knowledge_and_expertise", "cultural_and_philosophical_alignment", "communication_guidelines", "emotional_intelligence", "systems_and_methodology", "brand_and_differentiation", "key_outcomes_for_users", "ethical_standards", "representative_stories"]);
+    expect(ESSENCE_SECTIONS.map((s) => s.key)).toEqual(["guidelines_to_respond", "identity", "mission_and_vision", "goals_and_objectives", "behavior_and_interaction_style", "knowledge_and_expertise", "cultural_and_philosophical_alignment", "communication_guidelines", "emotional_intelligence", "systems_and_methodology", "brand_and_differentiation", "brand", "key_outcomes_for_users", "ethical_standards", "representative_stories"]);
     expect(ESSENCE_SECTIONS.find((s) => s.key === "guidelines_to_respond")?.fields.map((f) => f.key)).toEqual(["response_length", "tone", "style", "user_reference", "prohibited_actions", "role_and_focus", "house_rules"]);
     expect(ESSENCE_CAP).toBe(20000);
   });
@@ -14,6 +14,8 @@ describe("the Essence schema", () => {
   it("counts sections filled and knows when it is empty", () => {
     expect(completion({})).toEqual({ filled: 0, total: 14, empty: true });
     expect(completion(normalizeEssence({ identity: { name: "Maya" }, ethical_standards: { transparency: "Always." } })).filled).toBe(2);
+    // Brand is optional: it counts only once it holds something, so adding it lowered no one's progress.
+    expect(completion(normalizeEssence({ brand: { tagline: "Lead from the inside out." } }))).toEqual({ filled: 1, total: 15, empty: false });
   });
   it("serialises compact JSON of what is filled, or null", () => {
     expect(serializeEssence({})).toBeNull();

@@ -74,10 +74,12 @@ async function main() {
     if (/write in the coach's voice|Direct\. Clear\. Punchy|## VOICE|brand voice:/i.test(sys[0].text)) throw new Error("no hard-coded voice may remain in a task instruction");
     console.log("✓ no Essence: the task runs alone, no voice invented");
 
-    // The wizard: fourteen sections, save one at a time, count honestly, come back any time
+    // The wizard: fourteen sections plus the optional Brand one (27 Sep, filled by an Airtable import or by hand; counted only
+    // once filled), save one at a time, count honestly, come back any time
     await page.goto(`${base}/essence`);
     await expectText(page, "0 of 14 sections", "empty wizard");
-    if ((await page.locator('[data-testid="essence-section"]').count()) !== 14) throw new Error("fourteen sections");
+    if ((await page.locator('[data-testid="essence-section"]:not([data-optional])').count()) !== 14) throw new Error("fourteen sections");
+    if ((await page.locator('[data-testid="essence-section"][data-optional="1"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-section")))).join() !== "brand") throw new Error("Brand is the one optional section");
     await page.goto(`${base}/essence?step=identity`);
     // A placeholder is only ever a placeholder: saving without typing leaves the section empty
     if (!(await page.locator('[data-testid="field-name"]').getAttribute("placeholder"))?.includes("Priya Raman")) throw new Error("the example text must be a placeholder inside the input");

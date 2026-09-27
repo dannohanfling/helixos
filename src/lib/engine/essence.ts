@@ -1,5 +1,5 @@
 /**
- * The Essence System, pure: the fourteen sections of a client's brand voice, how they serialise into the block that leads
+ * The Essence System, pure: the fourteen sections of a client's brand voice (and the optional Brand), how they serialise into the block that leads
  * every AI system message, and the completion the wizard shows. Every word inside an Essence is the client's; this file
  * holds structure only. "Brand voice should be a config file, not a vibe."
  */
@@ -8,7 +8,8 @@ import placeholdersJson from "@/data/essence-placeholders.json";
 
 export type FieldKind = "text" | "list" | "stories";
 export type EssenceField = { key: string; label: string; kind: FieldKind };
-export type EssenceSection = { key: string; title: string; fields: EssenceField[] };
+/** optional: not counted in completion until it holds something (Brand, 27 Sep), so adding it lowers no one's progress. */
+export type EssenceSection = { key: string; title: string; fields: EssenceField[]; optional?: boolean };
 export type Story = { name: string; summary: string; when_to_use: string };
 export type EssenceData = Record<string, Record<string, string | string[] | Story[]>>;
 
@@ -29,6 +30,13 @@ export const ESSENCE_SECTIONS: EssenceSection[] = [
   { key: "emotional_intelligence", title: "Emotional intelligence", fields: [t("empathy"), t("encouragement"), t("conflict_resolution")] },
   { key: "systems_and_methodology", title: "Systems and methodology", fields: [l("frameworks"), l("tools")] },
   { key: "brand_and_differentiation", title: "Brand and differentiation", fields: [t("unique_value_proposition"), t("signature_style")] },
+  // The master brand, layered (27 Sep, Phase 1 of a client's Airtable import): what a coach's Vision holds beyond the UVP.
+  {
+    key: "brand",
+    title: "Brand",
+    optional: true,
+    fields: [t("purpose"), t("tagline"), t("slogan"), t("master_positioning"), t("competitive_advantage"), t("brand_promise"), t("three_year_snapshot"), t("culture"), t("standards"), t("operating_spine"), l("values"), l("principles"), l("content_pillars"), l("strategic_partners"), t("tone_and_values"), t("revenue_targets"), t("notes")],
+  },
   { key: "key_outcomes_for_users", title: "Key outcomes for users", fields: [t("clarity"), t("impact"), t("connection")] },
   { key: "ethical_standards", title: "Ethical standards", fields: [t("transparency"), t("inclusivity"), t("empowerment")] },
   { key: "representative_stories", title: "Representative stories", fields: [{ key: "stories", label: "Stories", kind: "stories" }] },
@@ -90,8 +98,9 @@ export function normalizeEssence(input: unknown): EssenceData {
 
 export const sectionFilled = (data: EssenceData, key: string) => Boolean(data[key] && Object.keys(data[key]).length);
 export function completion(data: EssenceData): { filled: number; total: number; empty: boolean } {
-  const filled = ESSENCE_SECTIONS.filter((s) => sectionFilled(data, s.key)).length;
-  return { filled, total: ESSENCE_SECTIONS.length, empty: filled === 0 };
+  const counted = ESSENCE_SECTIONS.filter((s) => !s.optional || sectionFilled(data, s.key));
+  const filled = counted.filter((s) => sectionFilled(data, s.key)).length;
+  return { filled, total: counted.length, empty: filled === 0 };
 }
 
 /**

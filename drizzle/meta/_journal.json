@@ -477,6 +477,13 @@
       "when": 1790461818775,
       "tag": "0067_monthly_intentions",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1790472105534,
+      "tag": "0068_airtable_import",
+      "breakpoints": true
     }
   ]
 }

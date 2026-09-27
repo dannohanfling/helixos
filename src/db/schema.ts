@@ -158,6 +158,8 @@ export const goals = sqliteTable("goals", {
   period: text("period").notNull().default("This month"),
   dueDate: text("due_date"),
   primary: integer("primary", { mode: "boolean" }).notNull().default(true),
+  /** The Airtable record (or row part) an imported goal came from, so a re-run updates it. */
+  sourceRef: text("source_ref"),
   createdAt: createdAt(),
 });
 
@@ -181,6 +183,10 @@ export const tasks = sqliteTable(
     source: text("source").notNull().default("manual"),
     sourceRef: text("source_ref"),
     repeatEveryDays: integer("repeat_every_days"),
+    /** Who does it, as free text: an imported task's assignee, until HelixOS has team members. */
+    assignee: text("assignee"),
+    /** An imported task's links as the source had them (its first-base id, goals, initiatives), kept to rebuild the links later. */
+    importRefs: text("import_refs", { mode: "json" }).$type<{ v1: string | null; goals: string[]; initiatives: string[] }>(),
     createdAt: createdAt(),
   },
   (t) => [index("tasks_user_status").on(t.userId, t.status), index("tasks_user_due").on(t.userId, t.dueDate)],
@@ -717,11 +723,62 @@ export const offers = sqliteTable(
     objectionAssetIds: text("objection_asset_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
     salesPageUrl: text("sales_page_url"),
     paymentLink: text("payment_link"),
+    /* The offer ladder (handoff 27 Sep, Phase 1 of a client's Airtable import): where an offer sits and its full sales copy. */
+    /** The ladder code ("T03", "B1"); blank for an offer off the ladder. */
+    tierCode: text("tier_code"),
+    /** Its place in its pathway: T00 is 0, B3 is 3. */
+    tierOrder: integer("tier_order"),
+    /** The client's pathway (sub-brand) this offer belongs to. */
+    pathwayId: text("pathway_id"),
+    /** Where it sits on the client's transformation arc, as they named it. */
+    arcStage: text("arc_stage"),
+    headline: text("headline"),
+    /** The current situation of the person it's for, in their words. */
+    currentSituation: text("current_situation"),
+    /** The desired situation it takes them to. */
+    desiredSituation: text("desired_situation"),
+    coreComponents: text("core_components"),
+    deliverables: text("deliverables"),
+    oneLiners: text("one_liners"),
+    trust: text("trust"),
+    getStarted: text("get_started"),
+    purpose: text("purpose"),
+    objWrongTime: text("obj_wrong_time"),
+    /** An archived offer: the current one that replaced it. */
+    replacedByOfferId: text("replaced_by_offer_id"),
+    /** The Airtable record it was imported from, so a re-run updates it. */
+    sourceRef: text("source_ref"),
     notes: text("notes"),
     createdAt: createdAt(),
   },
   (t) => [index("offers_user").on(t.userId)],
 );
+
+/**
+ * A client's pathways (27 Sep): the sub-brands their offer ladder is split into ("Organisations T00 to T05", "Business B0 to B5"),
+ * each with its own founder story and promise. An offer points at one.
+ */
+export const pathways = sqliteTable(
+  "pathways",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    /** The letter its tier codes start with ("T", "B"); blank when its offers have none. */
+    tierPrefix: text("tier_prefix"),
+    order: integer("order").notNull().default(0),
+    founderStory: text("founder_story"),
+    tagline: text("tagline"),
+    audiencePromise: text("audience_promise"),
+    promiseEvidence: text("promise_evidence"),
+    /** Where an imported pathway came from, so a re-run updates it. */
+    sourceRef: text("source_ref"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("pathways_user").on(t.userId, t.order)],
+);
+export type Pathway = typeof pathways.$inferSelect;
 
 export const offerComponents = sqliteTable(
   "offer_components",
@@ -962,7 +1019,8 @@ export const brandKits = sqliteTable("brand_kits", {
 export type BrandKit = typeof brandKits.$inferSelect;
 
 /** Story / analogy / objection / belief bank. workspaceId null = ships with the template. */
-export const ASSET_TYPES = ["story", "analogy", "objection", "belief", "framework"] as const;
+/** journey_stage: a stage of the client's own buyer-readiness journey (27 Sep), its order and messages in `extra`. */
+export const ASSET_TYPES = ["story", "analogy", "objection", "belief", "framework", "journey_stage"] as const;
 /** The one belief vocabulary: the proof bank's "belief broken", the webinar's three acts, and an objection's "which belief". "none" is a real answer (decision avoidance is not a belief). */
 export const BELIEF_KEYS = ["vehicle", "internal", "external", "none"] as const;
 export type BeliefKey = (typeof BELIEF_KEYS)[number];
@@ -989,6 +1047,8 @@ export const libraryAssets = sqliteTable(
     underneath: text("underneath"),
     /** Objections only. Which belief the objection is really about, in the proof bank's vocabulary; null when unmapped, "none" when it is not a belief at all. */
     belief: text("belief", { enum: BELIEF_KEYS }),
+    /** The Airtable record an imported entry came from, so a re-run updates it. */
+    sourceRef: text("source_ref"),
     createdAt: createdAt(),
   },
   (t) => [index("assets_type").on(t.type, t.workspaceId)],
@@ -1271,6 +1331,8 @@ export const groups = sqliteTable(
     rating: integer("rating"),
     lastPostedAt: text("last_posted_at"),
     notes: text("notes"),
+    /** The Airtable record an imported group came from, so a re-run updates it. */
+    sourceRef: text("source_ref"),
     createdAt: createdAt(),
   },
   (t) => [index("groups_user_kind").on(t.userId, t.kind, t.rank)],
@@ -1810,6 +1872,8 @@ export const leadMagnets = sqliteTable(
     origin: text("origin", { enum: ORIGINS }),
     /** When the client published the hosted page; the public route serves nothing before that. The publish action is where the provenance gate stands. */
     publishedAt: text("published_at"),
+    /** The Airtable record an imported magnet came from, so a re-run updates it. */
+    sourceRef: text("source_ref"),
     createdAt: createdAt(),
     updatedAt: text("updated_at"),
   },

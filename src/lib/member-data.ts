@@ -34,6 +34,7 @@ export const MEMBER_TABLES = {
   lesson_progress: schema.lessonProgress,
   certification_submissions: schema.certSubmissions,
   offers: schema.offers,
+  pathways: schema.pathways,
   webinars: schema.webinars,
   client_records: schema.clientRecords,
   proofs: schema.proofs,
