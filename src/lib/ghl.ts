@@ -106,7 +106,16 @@ export async function refreshAccounts(conn: SocialConnection): Promise<GhlResult
   return { ok: true, data: accounts };
 }
 
-export type NewPost = { accountId: string; summary: string; type: "post" | "story" | "reel"; scheduleDate: string | null; media?: { url: string; type: string }[]; followUpComment?: string | null };
+export type NewPost = {
+  accountId: string;
+  summary: string;
+  type: "post" | "story" | "reel";
+  scheduleDate: string | null;
+  media?: { url: string; type: string }[];
+  followUpComment?: string | null;
+  /** A community post: its title and the team user it comes from (src/lib/engine/community.ts), and that user as the creator. */
+  community?: { details: { title: string; postAsUser: Record<string, { id: string; name: string; avatar: string }> }; userId: string };
+};
 
 /** Creates a post in the Social Planner. Scheduled when a date is given, published now otherwise. Returns GHL's post id. */
 export async function createPost(conn: SocialConnection, post: NewPost): Promise<GhlResult<{ id: string | null }>> {
@@ -121,10 +130,12 @@ export async function createPost(conn: SocialConnection, post: NewPost): Promise
     scheduleDate: post.scheduleDate ?? undefined,
     type: post.type,
     followUpComment: post.followUpComment ?? undefined,
-    userId: conn.ghlUserId ?? "",
+    userId: post.community?.userId ?? conn.ghlUserId ?? "",
+    communityPostDetails: post.community?.details,
   };
   const r = await call<{ results?: { post?: { _id?: string; id?: string } } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
+  // The redacted reply rides along for the server's own classifier (an account on hold); it is never persisted or shown.
+  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status, detail: r.detail };
   const id = String(r.data.results?.post?._id ?? r.data.results?.post?.id ?? "");
   // Seen live 15 Sep: a 2xx with no id in results.post for an immediate post that was published within the minute. That is
   // accepted, not failed; the id is found from the planner's own list on the next check. The body's shape goes to the log
@@ -157,8 +168,11 @@ export async function updatePost(conn: SocialConnection, id: string, post: NewPo
   return { ok: true, data: { id } };
 }
 
-export type PostStatus = { status: string; error: string | null; postId: string | null; publishedAt: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[] };
-type RawPost = { _id?: string; id?: string; status?: string; error?: string; postId?: string; publishedAt?: string; createdAt?: string; summary?: string; scheduleDate?: string; accountIds?: unknown };
+export type PostStatus = { status: string; error: string | null; postId: string | null; publishedAt: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[]; author: string | null };
+type RawPost = { _id?: string; id?: string; status?: string; error?: string; postId?: string; publishedAt?: string; createdAt?: string; summary?: string; scheduleDate?: string; accountIds?: unknown; user?: { name?: string; firstName?: string; lastName?: string } };
+
+/** Who the planner says a post is from, when it says: its `user` object's name. */
+const authorOf = (p: RawPost): string | null => p.user?.name?.trim() || [p.user?.firstName, p.user?.lastName].filter(Boolean).join(" ").trim() || null;
 
 const accountIdsOf = (p: RawPost) => (Array.isArray(p.accountIds) ? p.accountIds.map(String) : []);
 
@@ -166,9 +180,9 @@ export async function getPost(conn: SocialConnection, id: string): Promise<GhlRe
   const cred = await credentials(conn);
   if (!cred.ok) return cred;
   const r = await call<{ results?: { post?: RawPost } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/${encodeURIComponent(id)}`);
-  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
+  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status, detail: r.detail };
   const p = r.data.results?.post ?? {};
-  return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p) } };
+  return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p), author: authorOf(p) } };
 }
 
 export type PlannerPost = { id: string; status: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[]; createdAt: string | null; publishedAt: string | null };
@@ -200,6 +214,23 @@ export async function listPostsIn(conn: SocialConnection, opts: { accountId: str
   const count = Array.isArray(r.data.results) ? null : (r.data.results?.count ?? r.data.count ?? null);
   const posts = raw.map((p) => ({ id: String(p._id ?? p.id ?? ""), status: p.status ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p), createdAt: p.createdAt ?? null, publishedAt: p.publishedAt ?? null })).filter((p) => p.id);
   return { ok: true, data: { posts, total: typeof count === "number" ? count : null } };
+}
+
+/**
+ * Which of the community's scopes the token has, checked read-only: the accounts list (socialplanner/account.readonly) and a
+ * one-post listing (socialplanner/post.readonly). Posting (socialplanner/post.write) has no read-only check: the test post is it.
+ */
+export async function probeCommunityScopes(conn: SocialConnection): Promise<{ scope: string; state: "ok" | "missing" | "unknown"; note?: string }[]> {
+  const cred = await credentials(conn);
+  if (!cred.ok) return [{ scope: "socialplanner/account.readonly", state: "unknown", note: cred.error }];
+  const state = (r: GhlResult<unknown>): "ok" | "missing" | "unknown" => (r.ok ? "ok" : r.status === 403 ? "missing" : "unknown");
+  const accounts = await call<unknown>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/accounts`);
+  const list = await call<unknown>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/list`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "all", skip: "0", limit: "1", includeUsers: "false" }) });
+  return [
+    { scope: "socialplanner/account.readonly", state: state(accounts), note: accounts.ok ? undefined : explain(accounts, "accounts") },
+    { scope: "socialplanner/post.readonly", state: state(list), note: list.ok ? undefined : explain(list, "post") },
+    { scope: "socialplanner/post.write", state: "unknown", note: "Checked by the test post: GoHighLevel has no read-only check for posting." },
+  ];
 }
 
 /** A GoHighLevel contact in the member's own sub-account (needs contacts.write on their token; skipped otherwise). */

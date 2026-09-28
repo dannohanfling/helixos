@@ -417,6 +417,71 @@ export const monthlyIntentions = sqliteTable(
 );
 export type MonthlyIntention = typeof monthlyIntentions.$inferSelect;
 
+/* ───────────────────────── The community connection (handoff revs 150 to 154) ───────────────────────── */
+/**
+ * One per workspace: where and when HelixOS posts into the coach's GoHighLevel community. Posts go out through the Social
+ * Planner on the connection of the coach who set this up (their own token, on Settings → Publishing), from a team user.
+ */
+export const communitySettings = sqliteTable(
+  "community_settings",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    /** The coach whose GoHighLevel connection posts. */
+    coachUserId: text("coach_user_id").notNull(),
+    /** The Social Planner account id of the community channel (Intentions), from the accounts list, never typed. */
+    channelAccountId: text("channel_account_id"),
+    channelName: text("channel_name"),
+    /** The Monday post: on or off, the coach's time of day ("HH:MM", their own zone) and their text (null = Danno's default). */
+    mondayOn: integer("monday_on", { mode: "boolean" }).notNull().default(false),
+    postTime: text("post_time").notNull().default("08:00"),
+    mondayText: text("monday_text"),
+    /** The team user the posts come from: a GoHighLevel user id and the name shown. Never a community member. */
+    postAsId: text("post_as_id"),
+    postAsName: text("post_as_name"),
+    /** How a published post's id becomes a link ("https://…{postId}…"), once the test post shows the pattern. */
+    linkPattern: text("link_pattern"),
+    /** Set when GoHighLevel says the account is on hold: nothing posts, and nothing retries, until the coach presses Resume. */
+    pausedReason: text("paused_reason"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("community_settings_workspace").on(t.workspaceId)],
+);
+export type CommunitySettings = typeof communitySettings.$inferSelect;
+
+/** Every post HelixOS sends to the community, with what happened to it: the coach's log. One Monday post per week, never two. */
+export const communityPosts = sqliteTable(
+  "community_posts",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    coachUserId: text("coach_user_id").notNull(),
+    kind: text("kind", { enum: ["monday", "test"] }).notNull(),
+    /** The Monday of the week it is for (monday posts only). */
+    weekOf: text("week_of"),
+    title: text("title").notNull(),
+    /** Null on a Monday row means the coach's current text at the time it posts. */
+    body: text("body"),
+    accountId: text("account_id"),
+    status: text("status", { enum: ["scheduled", "sent", "posted", "failed", "skipped"] }).notNull().default("scheduled"),
+    /** The Social Planner's own id, then the community's id once published, and the link to it. */
+    ghlPostId: text("ghl_post_id"),
+    platformPostId: text("platform_post_id"),
+    link: text("link"),
+    /** Why it failed, in the coach's words (the vendor's reply stays in the server log). */
+    error: text("error"),
+    /** What GoHighLevel shows the post as from, when it says (the test post settles whether a team user is accepted). */
+    authorShown: text("author_shown"),
+    sentAt: text("sent_at"),
+    postedAt: text("posted_at"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("community_posts_week").on(t.workspaceId, t.kind, t.weekOf), index("community_posts_workspace").on(t.workspaceId, t.createdAt)],
+);
+export type CommunityPost = typeof communityPosts.$inferSelect;
+
 /* ───────────────────────── Weekly intention: the 3-1-3 (handoff rev 124) ───────────────────────── */
 export type IntentionKeyResult = { text: string; done: boolean | null };
 export type IntentionTask = { title: string; taskId: string | null };

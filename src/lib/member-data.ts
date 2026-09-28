@@ -94,6 +94,8 @@ export const WORKSPACE_TABLES = {
   dm_templates: schema.dmTemplates,
   courses: schema.courses,
   files: schema.files,
+  community_settings: schema.communitySettings,
+  community_posts: schema.communityPosts,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */

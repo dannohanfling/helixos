@@ -81,6 +81,14 @@ createServer((req, res) => {
             { id: `${loc}_li_1`, name: "Maya Torres", platform: "linkedin", type: "profile", isExpired: false },
             { id: `${loc}_li_old`, name: "Old LinkedIn", platform: "linkedin", type: "page", isExpired: true },
             { id: `${loc}_threads_1_profile`, name: "@torresnutrition on Threads", platform: "threads", type: "profile", isExpired: false },
+            // Community channels as the Social Planner lists them once a community is connected (the test post settles the real
+            // shape). Only a location whose id says "community", so the other walks keep their six accounts.
+            ...(loc.includes("community")
+              ? [
+                  { id: `${loc}_community_intentions`, name: "Intentions", platform: "community", type: "channel", isExpired: false },
+                  { id: `${loc}_community_test`, name: "HelixOS test", platform: "community", type: "channel", isExpired: false },
+                ]
+              : []),
           ],
           groups: [],
         },
@@ -92,6 +100,17 @@ createServer((req, res) => {
       if (typeof body.userId !== "string" || !body.userId) return json(422, { statusCode: 422, message: ["userId must be a string", "userId should not be empty"], error: "Unprocessable Entity" });
       // A walk hook: this user id is refused as GoHighLevel refuses one it does not know.
       if (body.userId === "user_refused") return json(422, { statusCode: 422, message: ["userId must be a valid user id"], error: "Unprocessable Entity" });
+      // A walk hook: the account on hold, as GoHighLevel answered on 26 Sep when it was locked for a failed payment.
+      if (body.userId === "user_onhold") return json(403, { statusCode: 403, message: "This location is on hold due to a failed payment. Please update billing." });
+      // A community post needs its title and the team user it comes from, keyed by the community account (the live Create post page, 28 Sep).
+      const isCommunity = (body.accountIds as string[]).some((a) => String(a).includes("_community_"));
+      if (isCommunity) {
+        const d = body.communityPostDetails as { title?: string; postAsUser?: Record<string, { id?: string; name?: string }> } | undefined;
+        if (!d?.title) return json(422, { statusCode: 422, message: ["communityPostDetails.title should not be empty"], error: "Unprocessable Entity" });
+        const as = d.postAsUser?.[(body.accountIds as string[])[0]];
+        if (!as?.id) return json(422, { statusCode: 422, message: ["communityPostDetails.postAsUser must map the account to a user"], error: "Unprocessable Entity" });
+        body.user = { name: as.name ?? "Team" };
+      }
       const _id = `post_${++n}`;
       posts.set(_id, { _id, ...body, error: null, postId: null, createdAt: new Date().toISOString() });
       // A walk hook: seen live 15 Sep, a 2xx whose body carries no id. The post exists all the same.
@@ -125,7 +144,8 @@ createServer((req, res) => {
       // The planner "publishes" a post whose time has come (within two days, so a walk's "tomorrow" is due at any hour of
       // the day it runs); one scheduled further out stays scheduled.
       const due = !p.scheduleDate || new Date(String(p.scheduleDate)).getTime() <= Date.now() + 2 * 86400000;
-      const flipped = due ? { ...p, status: "published", postId: `fb_${id}`, publishedAt: new Date().toISOString() } : p;
+      const community = Array.isArray(p.accountIds) && p.accountIds.some((a) => String(a).includes("_community_"));
+      const flipped = due ? { ...p, status: "published", postId: `${community ? "cm" : "fb"}_${id}`, publishedAt: new Date().toISOString() } : p;
       return json(200, { success: true, statusCode: 200, message: "Fetched Post", results: { post: flipped } });
     }
     return json(404, { message: "Not found" });
