@@ -217,6 +217,55 @@ async function main() {
     if (!(await page.locator(`[data-testid="community-log-row"][data-week="${failWeek}"] [data-testid="community-retry"]`).count())) throw new Error("after a failure, Post now is offered again");
     console.log("✓ a create reply with no id: found in the planner's list, read back as posted with its link; a post the planner failed: Failed in GoHighLevel's words, with Post now offered again");
 
+    // 28 Sep, 11:40: a post HelixOS can't find is never Failed on that alone (it may be live: Post now would post it twice). It
+    // reads "unknown" with no Post now, until the coach says whether it went out.
+    const lostWeeks = [addDays(startOfWeek(today), -28), addDays(startOfWeek(today), -35)];
+    const longAgo = new Date(Date.now() - 20 * 60000).toISOString();
+    await db.insert(schema.communityPosts).values(lostWeeks.map((w) => ({ id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "monday" as const, weekOf: w, title: mondayTitle(w), body: `Never seen by the planner ${w}`, accountId: `${LOC}_community_intentions`, status: "sent" as const, sentAt: longAgo })));
+    await page.goto(`${base}/coach/community?view=lost#log`);
+    for (const w of lostWeeks) await submit(page, `[data-testid="community-log-row"][data-week="${w}"] [data-testid="community-check"]`);
+    for (const w of lostWeeks) {
+      const r = (await rowFor(w))!;
+      if (r.status !== "unknown" || !r.checkNote) throw new Error(`a post not found ten minutes on is unknown, with what the last check found: ${JSON.stringify(r)}`);
+      if (await page.locator(`[data-testid="community-log-row"][data-week="${w}"] [data-testid="community-retry"]`).count()) throw new Error("an unknown post never offers Post now");
+    }
+    await submit(page, `[data-testid="community-log-row"][data-week="${lostWeeks[0]}"] [data-testid="community-resolve-live"]`);
+    await submit(page, `[data-testid="community-log-row"][data-week="${lostWeeks[1]}"] [data-testid="community-resolve-not"]`);
+    if ((await rowFor(lostWeeks[0]))!.status !== "posted" || (await rowFor(lostWeeks[1]))!.status !== "failed" || !(await page.locator(`[data-testid="community-log-row"][data-week="${lostWeeks[1]}"] [data-testid="community-retry"]`).count())) throw new Error("It's live marks it posted; It didn't go out marks it failed and brings Post now back");
+    console.log("✓ a post HelixOS can't find: unknown with the last check shown, never Failed and no Post now; It's live / It didn't go out settle it (only the second brings Post now back)");
+
+    // 28 Sep, 12:30: this week's post was live while HelixOS said failed, with nowhere to put its link. Every row takes a link;
+    // saving one marks it published with the community's post id, Post now goes, and a channel with no pattern learns it.
+    const handWeek = addDays(startOfWeek(today), -42);
+    const handChannel = `${LOC}_community_wins`;
+    await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "monday", weekOf: handWeek, title: mondayTitle(handWeek), body: "Posted by hand", accountId: handChannel, status: "failed", error: "earlier" });
+    const patternsBefore = (await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!.linkPatterns;
+    if (patternsBefore[handChannel]) throw new Error("the walk's hand-posted channel starts with no pattern");
+    await page.goto(`${base}/coach/community?view=hand#log`);
+    const pasted: [string, string][] = [
+      [lostWeeks[1], "https://academy.example.com/channels/intentions/posts/aaaaaaaaaaaaaaaaaaaaaaaa"],
+      [handWeek, "https://academy.example.com/channels/Old-Slug-2sIZH/posts/6aba9e02b152d012a960d2f9?from=feed"],
+    ];
+    for (const [w, link] of pasted) {
+      const row = page.locator(`[data-testid="community-log-row"][data-week="${w}"]`);
+      if (!(await row.locator('[data-testid="community-retry"]').count())) throw new Error("a failed row offers Post now before its link is saved");
+      await row.locator('[data-testid="community-link"]').fill(link);
+      await submit(page, `[data-testid="community-log-row"][data-week="${w}"] [data-testid="community-link-save"]`);
+    }
+    const handRow = (await rowFor(handWeek))!;
+    const lostRow = (await rowFor(lostWeeks[1]))!;
+    if (handRow.status !== "posted" || handRow.platformPostId !== "6aba9e02b152d012a960d2f9" || handRow.error || !handRow.postedAt) throw new Error(`a saved link marks a failed row published with the community's post id: ${JSON.stringify(handRow)}`);
+    if (lostRow.status !== "posted" || lostRow.platformPostId !== "aaaaaaaaaaaaaaaaaaaaaaaa") throw new Error(`the same for a row the coach had marked not sent: ${JSON.stringify(lostRow)}`);
+    await page.goto(`${base}/coach/community?view=hand2#log`);
+    for (const [w] of pasted) {
+      if (await page.locator(`[data-testid="community-log-row"][data-week="${w}"] [data-testid="community-retry"]`).count()) throw new Error("a published row never offers Post now");
+      if ((await page.locator(`[data-testid="community-log-row"][data-week="${w}"]`).getAttribute("data-state")) !== "posted") throw new Error("the log shows a row with a saved link as published");
+    }
+    const patternsAfter = (await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!.linkPatterns;
+    if (patternsAfter[handChannel] !== "https://academy.example.com/channels/Old-Slug-2sIZH/posts/{postId}") throw new Error(`a channel with no pattern takes one from the saved link: ${JSON.stringify(patternsAfter)}`);
+    if (patternsAfter[`${LOC}_community_intentions`] !== patternsBefore[`${LOC}_community_intentions`]) throw new Error("a channel's saved pattern is never replaced by a pasted link");
+    console.log("✓ Save link on every row: a failed row with a pasted link is published with the community's post id and no Post now; a channel with no pattern learns it, one with a pattern keeps its own");
+
     // On a Monday after the coach's time, the job posts this week's by itself, once; any other day it posts nothing new.
     const thisWeek = startOfWeek(today);
     await db.update(schema.communitySettings).set({ postTime: "00:00" }).where(eq(schema.communitySettings.workspaceId, ws.id));

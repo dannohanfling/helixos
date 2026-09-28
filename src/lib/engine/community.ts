@@ -60,6 +60,17 @@ export function postLink(pattern: string | null | undefined, platformPostId: str
 export const validPattern = (p: string): boolean => /^https:\/\/[^\s]+$/.test(p) && p.includes("{postId}");
 /** A link the coach pastes for one post: any https address. */
 export const validLink = (u: string): boolean => /^https:\/\/[^\s]+$/.test(u);
+/** The community's own post id (24 hex) in a pasted post link: ".../posts/6aba9e02b152d012a960d2f9". Null when there isn't one. */
+export function postIdFromLink(link: string): string | null {
+  const m = /\/posts\/([0-9a-f]{24})(?=[/?#]|$)/i.exec(link);
+  return m ? m[1].toLowerCase() : null;
+}
+/** The pattern a pasted post link gives its channel: the same address with {postId} where the id is. Null without an id. */
+export function patternFromLink(link: string): string | null {
+  const id = postIdFromLink(link);
+  if (!id) return null;
+  return link.replace(/[?#].*$/, "").replace(new RegExp(`/posts/${id}$`, "i"), "/posts/{postId}");
+}
 
 /**
  * GoHighLevel's reply when the account itself is on hold (26 Sep: locked for a failed payment). The rule is to stop and say
@@ -71,8 +82,9 @@ export function isAccountHold(r: { status?: number; detail?: string }): boolean 
 }
 export const HOLD_REASON = "GoHighLevel says this account is on hold (for example, a failed payment). HelixOS has stopped posting and won't retry. Sort it out in GoHighLevel, then press Resume.";
 
-/** The planner's status word, in the coach's words. */
-export type CommunityStatus = "scheduled" | "sent" | "posted" | "failed" | "skipped";
+/** The planner's status word, in the coach's words. "unknown" is ours: sent, but HelixOS can't see whether it went out. */
+export type CommunityStatus = "scheduled" | "sent" | "posted" | "failed" | "skipped" | "unknown";
+export const UNKNOWN_REASON = "HelixOS can't see whether this went out. Check the community: if it's there, press It's live; if not, press It didn't go out, and Post now comes back.";
 export function fromPlanner(status: string): CommunityStatus {
   const s = status.toLowerCase();
   if (s === "published") return "posted";

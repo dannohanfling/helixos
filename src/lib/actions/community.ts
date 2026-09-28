@@ -9,7 +9,7 @@ import { nowIso, nowWallInTz } from "@/lib/dates";
 import { opt, str } from "@/lib/action-helpers";
 import { connectionFor, refreshAccounts } from "@/lib/ghl";
 import { checkPost, coachTz, postMonday, postTest, settingsFor } from "@/lib/community";
-import { DEFAULT_MONDAY_TEXT, TEXT_MAX, mondayTitle, normalTime, upcomingWeek, validLink, validPattern } from "@/lib/engine/community";
+import { DEFAULT_MONDAY_TEXT, TEXT_MAX, mondayTitle, normalTime, patternFromLink, postIdFromLink, upcomingWeek, validLink, validPattern } from "@/lib/engine/community";
 
 /** Back to the community page, with a note or an error, at the part of the page it is about. */
 function back(anchor: string, note: { saved?: string; error?: string } = {}): never {
@@ -98,7 +98,7 @@ export async function checkCommunityPostAction(formData: FormData): Promise<void
   const row = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.id, str(formData, "postId")), eq(schema.communityPosts.workspaceId, v.workspace.id)) });
   if (!s || !row) back("log");
   const after = await checkPost(s!, row!);
-  back(row!.kind === "test" ? "test" : "log", { saved: after.status === "posted" ? "Published." : after.status === "failed" ? undefined : "Still on its way." , error: after.status === "failed" ? (after.error ?? "It failed.") : undefined });
+  back(row!.kind === "test" ? "test" : "log", { saved: after.status === "posted" ? "Published." : after.status === "failed" ? undefined : after.status === "unknown" ? "HelixOS still can't see it. Check the community." : "Still on its way.", error: after.status === "failed" ? (after.error ?? "It failed.") : undefined });
 }
 
 /** Next Monday's post before it goes out: its own text for that week, or skipped. Only a week that hasn't been sent can change. */
@@ -135,13 +135,33 @@ export async function postCommunityNowAction(formData: FormData): Promise<void> 
   back("log", r.ok ? { saved: `${mondayTitle(weekOf)} sent.` } : { error: r.error ?? "It didn't go out." });
 }
 
-/** The link to one post, pasted by the coach when there's no pattern yet (or it's different). */
+/**
+ * The link to one post, pasted by the coach (28 Sep, live: this week's post was out while HelixOS still said failed). A link
+ * means the coach has seen the post in the community, so the row becomes published whatever it said before, with the
+ * community's post id taken from the link, and Post now goes away. When that channel has no link pattern yet, the link
+ * becomes its pattern, so the next weeks' links build themselves. An empty box only clears the link.
+ */
 export async function setCommunityLinkAction(formData: FormData): Promise<void> {
   const v = await requireCoach();
   const link = str(formData, "link").trim();
   if (link && !validLink(link)) back("log", { error: "Paste the post's full https link." });
-  await db.update(schema.communityPosts).set({ link: link || null, updatedAt: nowIso() }).where(and(eq(schema.communityPosts.id, str(formData, "postId")), eq(schema.communityPosts.workspaceId, v.workspace.id)));
-  back("log", { saved: "Link saved." });
+  const row = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.id, str(formData, "postId")), eq(schema.communityPosts.workspaceId, v.workspace.id)) });
+  if (!row) back("log");
+  const now = nowIso();
+  if (!link) {
+    await db.update(schema.communityPosts).set({ link: null, updatedAt: now }).where(and(eq(schema.communityPosts.id, row!.id), eq(schema.communityPosts.workspaceId, v.workspace.id)));
+    back("log", { saved: "Link cleared." });
+  }
+  const s = await settingsFor(v.workspace.id);
+  const channel = row!.accountId ?? s?.channelAccountId ?? null;
+  await db
+    .update(schema.communityPosts)
+    .set({ link, status: "posted", platformPostId: postIdFromLink(link) ?? row!.platformPostId, postedAt: row!.postedAt ?? now, accountId: channel, error: null, updatedAt: now })
+    .where(and(eq(schema.communityPosts.id, row!.id), eq(schema.communityPosts.workspaceId, v.workspace.id)));
+  const pattern = patternFromLink(link);
+  const learned = Boolean(s && channel && pattern && !s.linkPatterns[channel]);
+  if (learned) await db.update(schema.communitySettings).set({ linkPatterns: withPattern(s!.linkPatterns, channel!, pattern!), updatedAt: now }).where(and(eq(schema.communitySettings.id, s!.id), eq(schema.communitySettings.workspaceId, v.workspace.id)));
+  back("log", { saved: learned ? "Link saved. Marked published, and this channel's link pattern is set from it." : "Link saved. Marked published." });
 }
 
 /** After a hold is sorted out in GoHighLevel: posting may resume. Nothing missed is sent by this; Post now does that. */
@@ -149,4 +169,22 @@ export async function resumeCommunityAction(): Promise<void> {
   const v = await requireCoach();
   await db.update(schema.communitySettings).set({ pausedReason: null, updatedAt: nowIso() }).where(eq(schema.communitySettings.workspaceId, v.workspace.id));
   back("setup", { saved: "Resumed." });
+}
+
+/**
+ * The coach's word on a post HelixOS can't see (28 Sep, live): "It's live" marks it posted; "It didn't go out" marks it failed,
+ * which is what brings Post now back. Only for a post in that state, so a posted week is never reopened.
+ */
+export async function resolveCommunityPostAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const outcome = str(formData, "outcome");
+  // Never a guess: only an explicit answer changes the post.
+  if (outcome !== "live" && outcome !== "not") back("log", { error: "Say whether it's live or didn't go out." });
+  const now = nowIso();
+  const [row] = await db
+    .update(schema.communityPosts)
+    .set(outcome === "live" ? { status: "posted", postedAt: now, error: null, updatedAt: now } : { status: "failed", error: "You checked the community: it didn't go out.", updatedAt: now })
+    .where(and(eq(schema.communityPosts.id, str(formData, "postId")), eq(schema.communityPosts.workspaceId, v.workspace.id), eq(schema.communityPosts.status, "unknown")))
+    .returning();
+  back("log", row ? { saved: outcome === "live" ? "Marked live." : "Marked as not sent. Post now is back." } : { error: "That post isn't waiting for your check any more." });
 }

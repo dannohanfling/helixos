@@ -466,13 +466,16 @@ export const communityPosts = sqliteTable(
     /** Null on a Monday row means the coach's current text at the time it posts. */
     body: text("body"),
     accountId: text("account_id"),
-    status: text("status", { enum: ["scheduled", "sent", "posted", "failed", "skipped"] }).notNull().default("scheduled"),
+    /** "unknown": sent, but HelixOS can't see whether it went out (28 Sep, live): never Failed on that alone, never Post now. */
+    status: text("status", { enum: ["scheduled", "sent", "posted", "failed", "skipped", "unknown"] }).notNull().default("scheduled"),
     /** The Social Planner's own id, then the community's id once published, and the link to it. */
     ghlPostId: text("ghl_post_id"),
     platformPostId: text("platform_post_id"),
     link: text("link"),
     /** Why it failed, in the coach's words (the vendor's reply stays in the server log). */
     error: text("error"),
+    /** What the last read-back found (the planner's own status word, or its answer when the read failed), for the coach and for us. */
+    checkNote: text("check_note"),
     /** What GoHighLevel shows the post as from, when it says (the test post settles whether a team user is accepted). */
     authorShown: text("author_shown"),
     sentAt: text("sent_at"),

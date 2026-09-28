@@ -1,0 +1,1 @@
+ALTER TABLE `community_posts` ADD `check_note` text;

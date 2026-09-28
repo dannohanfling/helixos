@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { connectionFor, probeCommunityScopes } from "@/lib/ghl";
 import { coachTz, settingsFor } from "@/lib/community";
-import { checkCommunityPostAction, postCommunityNowAction, refreshCommunityChannelsAction, resumeCommunityAction, saveCommunitySettingsAction, saveNextMondayAction, sendCommunityTestAction, setCommunityLinkAction } from "@/lib/actions/community";
+import { checkCommunityPostAction, postCommunityNowAction, resolveCommunityPostAction, refreshCommunityChannelsAction, resumeCommunityAction, saveCommunitySettingsAction, saveNextMondayAction, sendCommunityTestAction, setCommunityLinkAction } from "@/lib/actions/community";
 import { DEFAULT_POST_TIME, mondayDue, mondayText, mondayTitle, upcomingWeek } from "@/lib/engine/community";
 import { ChannelPattern } from "@/components/channel-pattern";
 import { formatDate, formatDateTime, nowWallInTz } from "@/lib/dates";
@@ -14,8 +14,8 @@ import { Badge, Card, PageHeader } from "@/components/ui";
 
 export const metadata = { title: "Community posts" };
 
-const TONE = { scheduled: "neutral", sent: "accent", posted: "good", failed: "danger", skipped: "warn" } as const;
-const WORD = { scheduled: "scheduled", sent: "on its way", posted: "posted", failed: "failed", skipped: "skipped" } as const;
+const TONE = { scheduled: "neutral", sent: "accent", posted: "good", failed: "danger", skipped: "warn", unknown: "warn" } as const;
+const WORD = { scheduled: "scheduled", sent: "on its way", posted: "posted", failed: "failed", skipped: "skipped", unknown: "unknown: check the community" } as const;
 
 /**
  * The coach's community connection (handoff revs 150 to 154): where and when the Monday post goes, a test post that shows the
@@ -219,13 +219,13 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                       <SubmitButton className="btn btn-ghost btn-sm" pendingText="Posting…" data-testid="community-retry">Post now</SubmitButton>
                     </form>
                   ) : null}
-                  {p.status === "posted" || p.status === "sent" ? (
-                    <form action={setCommunityLinkAction} className="mt-2 flex flex-wrap gap-2">
-                      <input type="hidden" name="postId" value={p.id} />
-                      <input className="field max-w-md" name="link" defaultValue={p.link ?? ""} placeholder="Paste the post's link from the community" data-testid="community-link" />
-                      <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…" data-testid="community-link-save">Save link</SubmitButton>
-                    </form>
-                  ) : null}
+                  {/* On every row (28 Sep, live): a post the coach can see in the community is published, whatever HelixOS said. */}
+                  <form action={setCommunityLinkAction} className="mt-2 flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="postId" value={p.id} />
+                    <input className="field max-w-md" name="link" defaultValue={p.link ?? ""} placeholder="Paste the post's link from the community" data-testid="community-link" />
+                    <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…" data-testid="community-link-save">Save link</SubmitButton>
+                    {p.status !== "posted" ? <span className="text-xs text-ink-3">If it&apos;s in the community, paste its link: that marks it published.</span> : null}
+                  </form>
                 </li>
               ))}
           </ul>
@@ -257,11 +257,29 @@ function PostLine({ p, tz, testid }: { p: CommunityPost; tz: string; testid?: st
           </a>
         ) : null}
       </p>
-      {p.status === "sent" ? (
-        <form action={checkCommunityPostAction} className="mt-1">
-          <input type="hidden" name="postId" value={p.id} />
-          <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…" data-testid="community-check">Check again</SubmitButton>
-        </form>
+      {p.checkNote && p.status !== "posted" ? (
+        <p className="mt-1 text-xs text-ink-3" data-testid="community-check-note">
+          Last check: {p.checkNote}
+        </p>
+      ) : null}
+      {p.status === "sent" || p.status === "unknown" ? (
+        <div className="mt-1 flex flex-wrap gap-2">
+          <form action={checkCommunityPostAction}>
+            <input type="hidden" name="postId" value={p.id} />
+            <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…" data-testid="community-check">Check again</SubmitButton>
+          </form>
+          {p.status === "unknown"
+            ? (["live", "not"] as const).map((outcome) => (
+                <form key={outcome} action={resolveCommunityPostAction}>
+                  <input type="hidden" name="postId" value={p.id} />
+                  <input type="hidden" name="outcome" value={outcome} />
+                  <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…" data-testid={outcome === "live" ? "community-resolve-live" : "community-resolve-not"}>
+                    {outcome === "live" ? "It's live" : "It didn't go out"}
+                  </SubmitButton>
+                </form>
+              ))
+            : null}
+        </div>
       ) : null}
     </div>
   );

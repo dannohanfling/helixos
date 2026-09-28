@@ -12,7 +12,7 @@ import { nowIso, nowWallInTz, todayInTz } from "@/lib/dates";
 import { connectionFor, createPost, getPost, listPostsIn } from "@/lib/ghl";
 import { logSync } from "@/lib/integrations";
 import { redactSecrets } from "@/lib/engine/redact";
-import { HOLD_REASON, TEST_TITLE, communityDetails, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
+import { HOLD_REASON, TEST_TITLE, UNKNOWN_REASON, communityDetails, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
 
 export const settingsFor = (workspaceId: string) => db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, workspaceId) });
 
@@ -106,11 +106,14 @@ export async function postTest(s: CommunitySettings): Promise<CommunityPost> {
  * What the planner says happened to a sent post (fixed 28 Sep, after the first live tests): published (with the community's
  * own post id and the link from that channel's pattern), failed with GoHighLevel's own words (and Post now offered again), or
  * still on its way. When the create reply carried no id, the post is found in the planner's list for that channel (same text,
- * sent nearest in time); one still not found ten minutes on is marked failed with a sentence to look before posting again.
+ * sent nearest in time); one still not found ten minutes on is "unknown", never failed, until the coach says whether it went out.
  */
 export async function checkPost(s: CommunitySettings, row: CommunityPost): Promise<CommunityPost> {
-  if (row.status !== "sent") return row;
+  // An "unknown" post keeps being looked for: a later read may still find it.
+  if (row.status !== "sent" && row.status !== "unknown") return row;
   const now = nowIso();
+  // Every write is to a post still waiting: a coach's own answer (It's live, a pasted link) made meanwhile is never undone.
+  const waiting = and(eq(schema.communityPosts.id, row.id), inArray(schema.communityPosts.status, ["sent", "unknown"]));
   const reread = async () => (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, row.id) }))!;
   const conn = await connectionFor(s.coachUserId);
   if (!conn) return row;
@@ -123,20 +126,28 @@ export async function checkPost(s: CommunitySettings, row: CommunityPost): Promi
     const hit = list.ok ? pickPlannerPost(list.data.posts, { accountId: row.accountId, summary: row.body, sentAtIso: sentAt }) : null;
     if (hit) {
       ghlPostId = hit.id;
-      await db.update(schema.communityPosts).set({ ghlPostId, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
+      await db.update(schema.communityPosts).set({ ghlPostId, updatedAt: now }).where(waiting);
     }
   }
   if (!ghlPostId) {
-    if (Date.now() - new Date(sentAt).getTime() > 10 * 60000) await db.update(schema.communityPosts).set({ status: "failed", error: "GoHighLevel took the post but gave no id, and it isn't in the planner's list, so HelixOS can't see whether it went out. Look in the community before pressing Post now.", updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
+    // Never Failed on a missing id alone (28 Sep: a post live in the community read "failed", and Post now would have posted it
+    // twice). Ten minutes on it is "unknown": the coach looks in the community, and says whether it went out.
+    const late = Date.now() - new Date(sentAt).getTime() > 10 * 60000;
+    await db
+      .update(schema.communityPosts)
+      .set({ checkNote: "GoHighLevel gave no id for this post, and it isn't in the planner's list for this channel yet.", ...(late ? { status: "unknown" as const, error: UNKNOWN_REASON } : {}), updatedAt: now })
+      .where(waiting);
     return reread();
   }
   const r = await getPost(conn, ghlPostId);
   if (!r.ok) {
     const fail = r as { error: string; status?: number; detail?: string };
     if (isAccountHold(fail)) await pauseForHold(s);
+    await db.update(schema.communityPosts).set({ checkNote: `Reading it back failed: ${fail.error}`, updatedAt: now }).where(waiting);
     return reread();
   }
   const status = fromPlanner(r.data.status);
+  const checkNote = `The planner says: ${r.data.status}${r.data.postId ? `, community post ${r.data.postId}` : ""}.`;
   const platformPostId = r.data.postId ?? row.platformPostId;
   const pattern = patternFor(s.linkPatterns, { pattern: s.linkPattern, channel: s.channelAccountId }, row.accountId);
   await db
@@ -149,9 +160,10 @@ export async function checkPost(s: CommunitySettings, row: CommunityPost): Promi
       postedAt: status === "posted" ? (r.data.publishedAt ?? now) : row.postedAt,
       // The coach sees GoHighLevel's own reason (this page is theirs), with anything token-shaped taken out.
       error: status === "failed" ? failedReason(redactSecrets(r.data.error ?? "")) : null,
+      checkNote,
       updatedAt: now,
     })
-    .where(eq(schema.communityPosts.id, row.id));
+    .where(waiting);
   return reread();
 }
 
@@ -176,7 +188,7 @@ export async function runCommunity(now: Date = new Date()): Promise<{ workspaceI
           }
         }
       }
-      const waiting = await db.query.communityPosts.findMany({ where: and(eq(schema.communityPosts.workspaceId, s.workspaceId), eq(schema.communityPosts.status, "sent")), orderBy: [desc(schema.communityPosts.createdAt)], limit: 20 });
+      const waiting = await db.query.communityPosts.findMany({ where: and(eq(schema.communityPosts.workspaceId, s.workspaceId), inArray(schema.communityPosts.status, ["sent", "unknown"])), orderBy: [desc(schema.communityPosts.createdAt)], limit: 20 });
       const fresh = (await settingsFor(s.workspaceId)) ?? s;
       for (const row of waiting) await checkPost(fresh, row);
     } catch (e) {

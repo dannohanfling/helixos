@@ -505,6 +505,13 @@
       "when": 1790620652033,
       "tag": "0071_community_link_patterns",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1790623265574,
+      "tag": "0072_community_check_note",
+      "breakpoints": true
     }
   ]
 }

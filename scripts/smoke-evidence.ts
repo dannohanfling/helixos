@@ -269,12 +269,17 @@ async function main() {
     await fillExact(page, 'textarea[name="copy"]', `${copy}\nIt takes 21 days to form a habit.`);
     await submit(page, 'button:has-text("Save and re-check")');
     const check = page.locator('[data-testid="checklist"] li[data-check="fabricated"]');
-    if ((await check.getAttribute("data-ok")) !== "0") throw new Error("a fabricated statistic must fail the checklist");
+    // The checklist is redrawn once the save's answer lands; under a loaded gate that can be after the submit returns.
+    await page.locator('[data-testid="checklist"] li[data-check="fabricated"][data-ok="0"]').waitFor({ timeout: 15000 }).catch(() => {
+      throw new Error("a fabricated statistic must fail the checklist");
+    });
     const checkText = await check.innerText();
     if (!/This one doesn't hold up: "It takes 21 days to form a habit"/.test(checkText) || !/Psycho-Cybernetics/.test(checkText) || !/Say this instead: Habits take longer than people expect/.test(checkText)) throw new Error(`the block must show the verdict, the why and the say-instead:\n${checkText}`);
     await fillExact(page, 'textarea[name="copy"]', copy);
     await submit(page, 'button:has-text("Save and re-check")');
-    if ((await check.getAttribute("data-ok")) !== "1") throw new Error("the block should clear once the claim is gone");
+    await page.locator('[data-testid="checklist"] li[data-check="fabricated"][data-ok="1"]').waitFor({ timeout: 15000 }).catch(() => {
+      throw new Error("the block should clear once the claim is gone");
+    });
     console.log("✓ ladder: a fabricated statistic blocks publishing and explains itself");
 
     // And in the composer: blocked at once, why and say-instead beside the draft, scheduling disabled

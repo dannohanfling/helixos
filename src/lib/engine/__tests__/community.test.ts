@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern } from "../community";
+import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink } from "../community";
 
 describe("the Monday post's title", () => {
   it("is the week's Monday to Sunday, month/day", () => {
@@ -112,5 +112,24 @@ describe("reading a post back (28 Sep, live)", () => {
     expect(failedReason("The channel or group is either deleted or inactive")).toBe("GoHighLevel says: The channel or group is either deleted or inactive");
     expect(failedReason("")).toBe("The Social Planner marked it failed without a reason.");
     expect(testText("2026-09-28T10:44:08.000Z")).not.toBe(testText("2026-09-28T10:45:08.000Z"));
+  });
+});
+
+describe("a post link the coach pastes (28 Sep, live)", () => {
+  const link = "https://academy.example.com/communities/groups/g/channels/Old-Slug-2sIZH/posts/6aba9e02b152d012a960d2f9";
+  it("gives the community's post id, and only a 24-hex one after /posts/", () => {
+    expect(postIdFromLink(link)).toBe("6aba9e02b152d012a960d2f9");
+    expect(postIdFromLink(`${link}?ref=x`)).toBe("6aba9e02b152d012a960d2f9");
+    expect(postIdFromLink(link.toUpperCase().replace("HTTPS", "https"))).toBe("6aba9e02b152d012a960d2f9");
+    expect(postIdFromLink("https://academy.example.com/communities/groups/g/channels/c")).toBeNull();
+    expect(postIdFromLink("https://academy.example.com/posts/6aba9e02b152d012a960d2f")).toBeNull();
+    expect(postIdFromLink("https://academy.example.com/posts/6aba9e02b152d012a960d2f9ab")).toBeNull();
+  });
+  it("gives its channel's pattern, which builds the same link back", () => {
+    const pattern = patternFromLink(`${link}#top`)!;
+    expect(pattern).toBe("https://academy.example.com/communities/groups/g/channels/Old-Slug-2sIZH/posts/{postId}");
+    expect(validPattern(pattern)).toBe(true);
+    expect(postLink(pattern, "6aba9e02b152d012a960d2f9")).toBe(link);
+    expect(patternFromLink("https://academy.example.com/communities/groups/g")).toBeNull();
   });
 });
