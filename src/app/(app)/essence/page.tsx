@@ -9,6 +9,7 @@ import { houseRuleSeed } from "@/lib/engine/bot-fields";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { DraftKeeper } from "@/components/draft-keeper";
+import { EssenceOverNote } from "@/components/essence-over";
 
 export const metadata = { title: "Essence" };
 
@@ -57,6 +58,7 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
         action={<span className="text-xs text-ink-3" data-testid="essence-size">{chars.toLocaleString()} of {ESSENCE_CAP.toLocaleString()} characters · about {roughTokens(chars).toLocaleString()} tokens on every call</span>}
       />
       <Progress value={(done.filled / done.total) * 100} tone={done.filled === done.total ? "good" : "accent"} />
+      <EssenceOverNote data={data} own />
       {sp.saved ? <p className="mt-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="essence-saved">Saved.</p> : null}
       {sp.over ? (
         <p className="mt-3 rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="essence-over" role="alert">

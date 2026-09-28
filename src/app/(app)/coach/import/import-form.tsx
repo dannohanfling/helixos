@@ -32,7 +32,7 @@ export function ImportForm({ clients }: { clients: { id: string; label: string }
     },
   });
   const p = state?.preview;
-  const canApprove = p && !dirty && !p.overCap;
+  const canApprove = p && !dirty;
   const areas = p ? [...new Set(p.lines.map((l) => l.area))] : [];
 
   return (
@@ -142,7 +142,9 @@ export function ImportForm({ clients }: { clients: { id: string; label: string }
             </table>
             <p className={p.overCap ? "text-danger" : "text-ink-3"} data-testid="import-essence-size">
               Essence after the import: {p.essenceChars.toLocaleString()} of 20,000 characters.
-              {p.overCap ? " That's over the limit, so Approve is off: trim the Vision rows in the base, or their Essence here, and run it again." : ""}
+              {p.overCap
+                ? " That's over the limit. It goes in whole, with nothing cut, and is marked over the limit: their AI doesn't use it until it's trimmed under. Their Essence page and their client page show what to trim, section by section."
+                : ""}
             </p>
             {p.missing.length ? (
               <div data-testid="import-missing">

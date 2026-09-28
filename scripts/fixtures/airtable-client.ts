@@ -26,7 +26,7 @@ const vision: FixtureTable = {
     rec({ "👦 Name": "Master Brand Slogan + Master Positioning", "⭐️ Type": "🌎 Vision", "🎯 Slogan": "Lead lighter.", "🏷️ Tagline": "Calm is a skill.", "🏁 Master Positioning": "The calm-leadership coach for small teams.", "⚔️ Competitive Advantage": "Twenty years inside teams." }),
     rec({ "👦 Name": "Complete Founder Story + Content Pillars (Master)", "⭐️ Type": "🌎 Vision", "👨‍💼 Founders Story": "The whole story, start to now.", "📣 Content Pillar 1": "Calm first", "📣 Content Pillar 2": "Clear roles" }),
     rec({ "👦 Name": "Harbour — For Founders (Pathway Vision)", "⭐️ Type": "🌎 Vision", "🛤️ Specialist Pathway": "For Founders", "👨‍💼 Founders Story": "I started alone, with a laptop and a problem.", "🏷️ Tagline": "Build without breaking.", "🎤 Audience Promise": "A business that doesn't need you every hour." }),
-    rec({ "👦 Name": "3-Year Revenue Targets + Strategic Roadmap", "✍️ Description": "Y1: NZD 100,000 to 120,000\nY2: NZD 250,000\nThen we hire." }),
+    rec({ "👦 Name": "3-Year Revenue Targets + Strategic Roadmap", "✍️ Description": "YEAR 1 - 2026 — Proving it: $100,000–$120,000 NZD\n• 3x cohorts (20 x $2,000 = $40,000)\nYEAR 2 - 2027 — Nothing set yet\nYEAR 3 - 2028-2029 — Scale: $900,000–$950,000 NZD\nThen we hire." }),
     rec({ "👦 Name": "Brand Values + Tone of Voice", "✍️ Description": "Warm, plain, never loud." }),
     rec({ "👦 Name": "ZZ_TEST_DELETE_ME", "⭐️ Type": "❤️ Values" }, "2026-05-12T00:00:00.000Z"),
     rec({ "👦 Name": "Integrity", "⭐️ Type": "❤️ Values" }, TEMPLATE),

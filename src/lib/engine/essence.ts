@@ -116,6 +116,21 @@ export function serializeEssence(data: EssenceData): string | null {
 }
 export const essenceChars = (data: EssenceData) => serializeEssence(data)?.length ?? 0;
 
+/**
+ * Over the cap: an Essence can arrive over it whole (an Airtable import, 28 Sep: nothing of the client's is cut silently). It
+ * is kept as it is, marked, and left out of every AI call until it is trimmed under; a save that doesn't grow it is always
+ * allowed, so trimming works one section at a time.
+ */
+export const essenceOver = (data: EssenceData): number => Math.max(0, essenceChars(data) - ESSENCE_CAP);
+
+/** Trim to fit: each filled section's share of the size, largest first. */
+export function sectionSizes(data: EssenceData): { key: string; title: string; chars: number }[] {
+  const clean = normalizeEssence(data);
+  return ESSENCE_SECTIONS.filter((s) => clean[s.key])
+    .map((s) => ({ key: s.key, title: s.title, chars: essenceChars({ [s.key]: clean[s.key] } as EssenceData) }))
+    .sort((a, b) => b.chars - a.chars);
+}
+
 /** A rough token count for the cost display: about four characters a token. */
 export const roughTokens = (chars: number) => Math.ceil(chars / 4);
 

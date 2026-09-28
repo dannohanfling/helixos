@@ -158,16 +158,34 @@ async function main() {
     if (!t00?.pathwayId || old?.status !== "retired" || old.replacedByOfferId !== t00.id) throw new Error("the current offer sits on its pathway; the older one is archived and points at it");
     console.log(`✓ a base that changed after the dry run wrote nothing; Approve created ${name} with nothing sent and wrote ${Object.entries(first).map(([k, n]) => `${n} ${k}`).join(", ")}, the base as it was at Approve`);
 
-    // ── A re-run for the same client: all update, nothing doubled. ──
+    // ── A re-run for the same client: all update, nothing doubled. Their Essence is near the cap by now (28 Sep: the first live
+    // run came to 23,633), so this import takes it over: it still goes in whole, marked, and their AI stops using it until trimmed. ──
+    const { essenceBlockFor } = await import("@/lib/queries/essence");
+    const { ESSENCE_CAP, essenceChars } = await import("@/lib/engine/essence");
+    // Their Essence 20 characters under the cap without mission and vision; the re-run puts those back and takes it over.
+    const rest = Object.fromEntries(Object.entries(essence!.data as Record<string, unknown>).filter(([k]) => k !== "mission_and_vision"));
+    const base0 = essenceChars({ ...rest, identity: { name, role: "x" } } as never);
+    const withLong = { ...rest, identity: { name, role: "x".repeat(ESSENCE_CAP - 20 - base0 + 1) } };
+    await db.update(schema.essences).set({ data: withLong }).where(eq(schema.essences.id, essence!.id));
     await page.locator('[data-testid="import-client"]').selectOption(m.id);
     await fill(SOURCE_TOKEN, true);
     await press("import-dry", "import-preview");
     const again = await summary();
+    if (!(await page.locator('[data-testid="import-essence-size"]').innerText()).includes("goes in whole") || !(await page.locator('[data-testid="import-approve"]').isEnabled())) throw new Error("over the limit, the dry run says it goes in whole, and Approve stays on");
     if (Object.values(again).some((v) => !v.startsWith("0/"))) throw new Error(`a re-run says update for all of it, got ${JSON.stringify(again)}`);
     await press("import-approve", "import-done");
     const second = await count();
     if (JSON.stringify(second) !== JSON.stringify(first)) throw new Error(`a re-run doubles nothing, got ${JSON.stringify(second)}`);
-    console.log("✓ a re-run for the same client: every line an update, nothing doubled");
+    // Nothing in the Essence was cut; it's over, flagged on the client page with its trim-to-fit, and the AI leaves it out.
+    const after = (await db.query.essences.findFirst({ where: eq(schema.essences.id, essence!.id) }))!.data as { identity?: { role?: string }; brand?: { slogan?: string } };
+    if (after.identity?.role !== withLong.identity.role || after.brand?.slogan !== "Lead lighter.") throw new Error("nothing of theirs is cut");
+    await page.goto(`${base}/coach/${m.id}`);
+    const flag = await page.locator('[data-testid="essence-over-cap"]').innerText();
+    const trim = await page.locator('[data-testid="essence-trim"] li').allInnerTexts();
+    if (!flag.includes("Over the limit") || !trim[0]?.startsWith("Identity")) throw new Error(`the client page flags the Essence over the limit with its trim-to-fit, largest first, got ${flag} / ${trim.join(" | ")}`);
+    if ((await essenceBlockFor(ws, user.id)) !== null) throw new Error("an Essence over the limit is left out of the AI's calls until trimmed");
+    await page.goto(`${base}/coach/import`);
+    console.log(`✓ a re-run for the same client: every line an update, nothing doubled; an import over the limit went in whole (${essenceChars(after as never).toLocaleString()} characters), flagged on the client page with its trim-to-fit, and left out of the AI`);
 
     // ── No fallback: the dry run lists what it couldn't fill. ──
     await page.locator('[data-testid="import-client"]').selectOption(m.id);

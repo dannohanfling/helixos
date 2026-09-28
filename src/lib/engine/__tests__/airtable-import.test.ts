@@ -24,8 +24,15 @@ describe("reading a HelixOS-template base (27 Sep)", () => {
   });
   it("revenue targets from a note: each year's line, the range kept", () => {
     expect(revenueTargets("Y1: NZD 412,000 to 462,000\nY2 NZD 2,252,500 – 2,274,500\nnothing here")).toEqual([
-      { year: 1, low: 412000, high: 462000, line: "Y1: NZD 412,000 to 462,000" },
-      { year: 2, low: 2252500, high: 2274500, line: "Y2 NZD 2,252,500 – 2,274,500" },
+      { year: 1, low: 412000, high: 462000, calendar: null, line: "Y1: NZD 412,000 to 462,000" },
+      { year: 2, low: 2252500, high: 2274500, calendar: null, line: "Y2 NZD 2,252,500 – 2,274,500" },
+    ]);
+  });
+  it("a calendar year or span on the line is the period, never the target (28 Sep: the first live run read 2026 as the amount)", () => {
+    const note = "YEAR 1 - 2026 — Proving it: $100,000–$120,000 NZD\n• 3x cohorts (20 x $2,000 = $40,000)\nYEAR 2 - 2027 — Nothing set yet\nYEAR 3 - 2028-2029 — Scale: $900,000–$950,000 NZD\nFOUNDER ROLE: 2026: builder";
+    expect(revenueTargets(note)).toEqual([
+      { year: 1, low: 100000, high: 120000, calendar: "2026", line: "YEAR 1 - 2026 — Proving it: $100,000–$120,000 NZD" },
+      { year: 3, low: 900000, high: 950000, calendar: "2028-2029", line: "YEAR 3 - 2028-2029 — Scale: $900,000–$950,000 NZD" },
     ]);
   });
 });
@@ -60,7 +67,8 @@ describe("the dry run of a synthetic client base", () => {
     expect(plan.essence.mission_and_vision).toEqual({ mission_statement: "Calm leaders for busy teams.", vision_statement: "Every team led from the inside out." });
     expect(plan.assets.filter((a) => a.type === "belief").map((a) => [a.name, a.tag])).toEqual([["Growth is chosen daily", "Internal"]]);
     expect(plan.assets.filter((a) => a.type === "story").map((a) => a.name)).toEqual(["Founder story: Teams", "Founder story (master)", "Founder story: Founders"]);
-    expect(plan.goals.map((g) => [g.title, g.target, g.unit])).toEqual([["Year 1 revenue: Y1: NZD 100,000 to 120,000", 100000, "NZD"], ["Year 2 revenue: Y2: NZD 250,000", 250000, "NZD"]]);
+    expect(plan.goals.map((g) => [g.period, g.target, g.unit])).toEqual([["Year 1 (2026)", 100000, "NZD"], ["Year 3 (2028-2029)", 900000, "NZD"]]);
+    expect(plan.lines.filter((l) => l.area === "revenue goals").map((l) => `${l.label}: ${l.note}`)).toEqual(["Year 1 (2026): target NZD 100,000 to 120,000", "Year 3 (2028-2029): target NZD 900,000 to 950,000"]);
   });
   it("the journey: stages in order, the review row's full text from the fallback base, a link to an old offer pointed at its replacement; the name-only rows kept word for word together", () => {
     const journey = plan.assets.filter((a) => a.type === "journey_stage");

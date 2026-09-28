@@ -153,15 +153,25 @@ const STATUS_TASK: Record<string, TaskRow["status"]> = { Complete: "done", Today
 const URGENCY: Record<string, TaskRow["urgency"]> = { "Top 3": "top3", "Very High": "high", High: "high", Medium: "medium", Low: "low", "Very Low": "low" };
 const CATEGORY: Record<string, TaskRow["category"]> = { Sales: "sales", Marketing: "content", Operations: "system", Fulfillment: "fulfillment", Finances: "admin", "Human Resources": "admin", Admin: "admin", Vision: "admin" };
 
-/** Year targets from a free-text note: "Y1: NZD 412,000 to 462,000" and the like. Each line with a year and an amount. */
-export function revenueTargets(note: string): { year: number; low: number; high: number | null; line: string }[] {
-  const out: { year: number; low: number; high: number | null; line: string }[] = [];
-  for (const line of note.split(/\n+/)) {
-    const m = line.match(/\b(?:Y|Year\s*)([1-9])\b\D*?(\d[\d,]*(?:\.\d+)?)(?:\s*(?:–|—|-|to)\s*\D{0,5}?(\d[\d,]*(?:\.\d+)?))?/i);
-    if (!m) continue;
-    const n = (s: string) => Number(s.replace(/,/g, ""));
-    if (out.some((o) => o.year === Number(m[1]))) continue;
-    out.push({ year: Number(m[1]), low: n(m[2]), high: m[3] ? n(m[3]) : null, line: line.trim() });
+/**
+ * Year targets from a free-text note, one per line that starts with its year: "Y1: NZD 412,000 to 462,000", or a client's own
+ * "YEAR 1 - 2026 — System Validation: $412,000–$462,000 NZD". A calendar year or span on the line (2026, 2028-2029) is the
+ * period, never an amount: it is lifted out before the amounts are read. A year line with no amount on it is no target.
+ */
+export function revenueTargets(note: string): { year: number; low: number; high: number | null; calendar: string | null; line: string }[] {
+  const out: { year: number; low: number; high: number | null; calendar: string | null; line: string }[] = [];
+  for (const raw of note.split(/\n+/)) {
+    const line = raw.trim();
+    const label = line.match(/^\W*(?:Y|Year)\s*([1-9])\b/i);
+    if (!label) continue;
+    const year = Number(label[1]);
+    if (out.some((o) => o.year === year)) continue;
+    const rest = line.slice(label[0].length);
+    const CALENDAR = /(?<![\d,.])(?:19|20)\d{2}(?:\s*(?:-|–|to)\s*(?:19|20)\d{2})?(?![\d,.])/i;
+    const calendar = rest.match(CALENDAR)?.[0].replace(/\s+/g, "") ?? null;
+    const amounts = [...rest.replace(new RegExp(CALENDAR.source, "gi"), " ").matchAll(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g)].map((m) => Number(m[0].replace(/,/g, "")));
+    if (!amounts.length) continue;
+    out.push({ year, low: amounts[0], high: amounts[1] ?? null, calendar, line });
   }
   return out;
 }
@@ -316,8 +326,10 @@ export function buildPlan(src: ImportSource, rules: SkipRules, existing: Set<str
       const years = revenueTargets(note);
       for (const y of years) {
         const title = `Year ${y.year} revenue: ${y.line.replace(/^\W+/, "")}`;
-        plan.goals.push({ sourceRef: `${r.id}:Y${y.year}`, title, target: y.low, unit: /NZD/i.test(note) ? "NZD" : "$", period: `Year ${y.year}` });
-        add("revenue goals", visionT!.name, `${r.id}:Y${y.year}`, `Year ${y.year}`, `target ${y.low.toLocaleString("en-US")}${y.high ? ` (to ${y.high.toLocaleString("en-US")})` : ""}`);
+        const unit = /NZD/i.test(y.line) || (!/\$/.test(y.line) && /NZD/i.test(note)) ? "NZD" : "$";
+        const period = y.calendar ? `Year ${y.year} (${y.calendar})` : `Year ${y.year}`;
+        plan.goals.push({ sourceRef: `${r.id}:Y${y.year}`, title, target: y.low, unit, period });
+        add("revenue goals", visionT!.name, `${r.id}:Y${y.year}`, period, `target ${unit} ${y.low.toLocaleString("en-US")}${y.high ? ` to ${y.high.toLocaleString("en-US")}` : ""}`);
       }
       if (!years.length) add("brand", visionT!.name, r.id, name, "no year targets could be read from it; the note goes into Essence → Brand as written");
       else add("brand", visionT!.name, r.id, name, "the note also goes into Essence → Brand as written");

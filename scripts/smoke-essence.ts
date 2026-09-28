@@ -119,7 +119,21 @@ async function main() {
     await page.waitForURL(/over=/);
     await expectText(page, "over the 20,000 limit", "cap refused");
     await expectText(page, "3 of 14 sections", "nothing saved past the cap");
-    console.log("✓ wizard: sections save one at a time and count; a story from the bank; the cap refuses");
+    // Already over (an Airtable import brings an Essence in whole, 28 Sep): flagged with its trim-to-fit, left out of the AI,
+    // and a save that trims it goes through.
+    const { and: andOp } = await import("drizzle-orm");
+    const eRow = (await db.query.essences.findFirst({ where: andOp(eq(schema.essences.workspaceId, ws!.workspaceId), eq(schema.essences.userId, mayaRow!.id)) }))!;
+    const before = eRow.data;
+    await db.update(schema.essences).set({ data: { ...(before as Record<string, unknown>), ethical_standards: { transparency: "x".repeat(20500) } } }).where(eq(schema.essences.id, eRow.id));
+    await page.goto(`${base}/essence?step=ethical_standards`);
+    await page.locator('[data-testid="essence-over-cap"]').waitFor({ timeout: 15000 });
+    if (!(await page.locator('[data-testid="essence-trim"] li').first().innerText()).startsWith("Ethical standards")) throw new Error("the trim-to-fit leads with the largest section");
+    await fillExact(page, '[data-testid="field-transparency"]', "Always.");
+    await submit(page, 'button:has-text("Save")');
+    await page.waitForURL(/saved=1/);
+    if (await page.locator('[data-testid="essence-over-cap"]').count()) throw new Error("a save that trims an Essence over the limit goes through, and the flag goes with it");
+    await db.update(schema.essences).set({ data: before }).where(eq(schema.essences.id, eRow.id));
+    console.log("✓ wizard: sections save one at a time and count; a story from the bank; the cap refuses a save that grows it; one already over is flagged with its trim-to-fit and can be trimmed");
 
     // Filled: the promise line no longer warns; the system message leads with the Essence, cached, then the task
     await page.goto(`${base}/content/ladders`);

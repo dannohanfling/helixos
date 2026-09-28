@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ESSENCE_CAP, ESSENCE_PLACEHOLDERS, ESSENCE_SECTIONS, assembleSystem, completion, essenceChars, normalizeEssence, placeholderFor, serializeEssence } from "../essence";
+import { ESSENCE_CAP, ESSENCE_PLACEHOLDERS, ESSENCE_SECTIONS, assembleSystem, completion, essenceChars, essenceOver, normalizeEssence, placeholderFor, sectionSizes, serializeEssence } from "../essence";
 
 describe("the Essence schema", () => {
   it("has the thirteen production sections plus representative_stories, in order", () => {
@@ -16,6 +16,15 @@ describe("the Essence schema", () => {
     expect(completion(normalizeEssence({ identity: { name: "Maya" }, ethical_standards: { transparency: "Always." } })).filled).toBe(2);
     // Brand is optional: it counts only once it holds something, so adding it lowered no one's progress.
     expect(completion(normalizeEssence({ brand: { tagline: "Lead from the inside out." } }))).toEqual({ filled: 1, total: 15, empty: false });
+  });
+  it("over the cap: how far over, and each section's size largest first, so it can be trimmed to fit (28 Sep)", () => {
+    const under = normalizeEssence({ identity: { name: "Maya" } });
+    expect(essenceOver(under)).toBe(0);
+    const big = normalizeEssence({ identity: { name: "Maya" }, brand: { notes: "x".repeat(ESSENCE_CAP) }, mission_and_vision: { mission_statement: "y".repeat(300) } });
+    expect(essenceOver(big)).toBe(essenceChars(big) - ESSENCE_CAP);
+    const sizes = sectionSizes(big);
+    expect(sizes.map((x) => x.key)).toEqual(["brand", "mission_and_vision", "identity"]);
+    expect(sizes[0].chars).toBe(essenceChars(normalizeEssence({ brand: big.brand })));
   });
   it("serialises compact JSON of what is filled, or null", () => {
     expect(serializeEssence({})).toBeNull();

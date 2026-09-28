@@ -107,7 +107,6 @@ async function approve(coach: Coach, f: FormData): Promise<ImportState> {
   const r = await prepare(coach.workspace.id, coach.user.id, f);
   if ("error" in r) return { error: r.error };
   if (r.preview.key !== s(f, "key")) return { changed: true, preview: r.preview };
-  if (r.preview.overCap) return { preview: r.preview };
   let membershipId: string;
   let userId: string;
   if (r.t.kind === "new") {

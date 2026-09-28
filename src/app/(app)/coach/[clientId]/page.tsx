@@ -28,6 +28,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { keyResultTally, krProgress } from "@/lib/engine/intentions";
 import { monthLabel } from "@/lib/engine/feedback";
 import { MonthAnswers } from "@/components/month-card";
+import { EssenceOverNote } from "@/components/essence-over";
+import { essenceFor } from "@/lib/queries/essence";
 
 export const metadata = { title: "Client" };
 
@@ -42,6 +44,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, clientId), eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client")) });
   if (!m) notFound();
   const u = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
+  // An Essence over the cap (an import brings it in whole) is flagged here with its trim-to-fit, read-only.
+  const essence = await essenceFor(v.workspace.id, m.userId);
   if (!u) notFound();
   // The copy-link cookie the reset action leaves when there is no email: shown once, for this client only, then it expires on its own.
   let copyLink: string | null = null;
@@ -144,6 +148,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
           </span>
         }
       />
+      <EssenceOverNote data={essence} own={false} />
       {sp.reset === "emailed" ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="reset-emailed">A reset link is on its way to {u.email}.</p> : null}
       {sp.reset === "failed" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm" data-testid="reset-failed">The reset email could not be sent. Try again, or send the link with email off to copy it by hand.</p> : null}
       {sp.reset === "rate" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm">Too many reset links just now. Wait a few minutes and try again.</p> : null}

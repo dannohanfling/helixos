@@ -11,7 +11,8 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
 
 /**
  * Saves one section of the client's Essence. Every value is the client's own words; a story may be picked from their own
- * own story bank (their material, not invented; never the proof bank). Refused over the 20,000-character cap, with nothing saved.
+ * own story bank (their material, not invented; never the proof bank). Refused over the 20,000-character cap, with nothing saved,
+ * unless it makes an Essence that is already over smaller or no bigger.
  */
 export async function saveEssenceSectionAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
@@ -41,7 +42,8 @@ export async function saveEssenceSectionAction(formData: FormData): Promise<void
   }
   const next: EssenceData = normalizeEssence({ ...current, [section.key]: values });
   const chars = essenceChars(next);
-  if (chars > ESSENCE_CAP) redirect(`/essence?step=${section.key}&over=${chars}`);
+  // Over the cap only refuses a save that grows it: an Essence already over (an import) can always be trimmed.
+  if (chars > ESSENCE_CAP && chars > essenceChars(current)) redirect(`/essence?step=${section.key}&over=${chars}`);
   const existing = await db.query.essences.findFirst({ where: and(eq(schema.essences.workspaceId, workspaceId), eq(schema.essences.userId, userId)) });
   if (existing) await db.update(schema.essences).set({ data: next, updatedAt: nowIso() }).where(eq(schema.essences.id, existing.id));
   else await db.insert(schema.essences).values({ id: newId(), workspaceId, userId, data: next });
