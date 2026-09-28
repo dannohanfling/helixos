@@ -95,7 +95,7 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
         </div>
         {share ? (
           <div className="mt-4 rounded-lg border p-3" data-testid="week-share">
-            <p className="mb-2 text-sm font-medium">Share your 3-1-3 in the community thread</p>
+            <p className="mb-2 text-sm font-medium">Post your 3-1-3 in this week&apos;s community thread: one tap copies it and opens the post.</p>
             <ShareButton {...share} />
           </div>
         ) : null}

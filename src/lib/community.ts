@@ -212,3 +212,12 @@ export async function shareFor(workspaceId: string, userId: string, week: { week
   const target = shareTarget(post, week.weekOf);
   return { text: shareText(week), weekOf: week.weekOf, link: "link" in target ? target.link : null, reason: "reason" in target ? target.reason : null, shared: Boolean(shared) };
 }
+
+/**
+ * This week's thread, for anyone to open (rev 175): the Monday post's link once it is published, before or after the member's
+ * week is set. Nothing (never a broken link) until the post is published with a link.
+ */
+export async function threadLinkFor(workspaceId: string, weekOf: string): Promise<string | null> {
+  const post = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, workspaceId), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, weekOf)) });
+  return post?.status === "posted" && post.link ? post.link : null;
+}

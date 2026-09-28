@@ -8,7 +8,7 @@ import { FeedbackCard } from "@/components/feedback-card";
 import { MONTH_ASK_DAYS } from "@/lib/engine/intentions";
 import { formatDate } from "@/lib/dates";
 import { WeekCard } from "@/components/week-card";
-import { shareFor } from "@/lib/community";
+import { shareFor, threadLinkFor } from "@/lib/community";
 import { MonthAnswers, MonthCard } from "@/components/month-card";
 import { Card, PageHeader } from "@/components/ui";
 
@@ -36,7 +36,7 @@ export default async function IntentionsPage({ searchParams }: { searchParams: P
   const taskIds = (week?.tasks ?? []).map((t) => t.taskId).filter((x): x is string => Boolean(x));
   const tasks = taskIds.length ? await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, v.user.id), inArray(schema.tasks.id, taskIds)) }) : [];
   const taskDone = Object.fromEntries(tasks.map((t) => [t.id, t.status === "done"]));
-  const share = week ? await shareFor(ws, v.user.id, week) : null;
+  const [share, thread] = await Promise.all([week ? shareFor(ws, v.user.id, week) : null, threadLinkFor(ws, thisWeek)]);
   // End-of-month feedback (rev 157: here, not on Today): only in its window, about the month ending. What they wrote for that
   // month's question 11 is shown back to them, and only them, to compare (rev 129).
   const fbMonth = feedbackMonth(v.today);
@@ -51,7 +51,15 @@ export default async function IntentionsPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader title="Intentions" subtitle="Your week and your month, set on purpose." />
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">This week</h2>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-3">This week</h2>
+        {/* Where the week's thread is, set or not (rev 175): only to look, so no points and no share count. */}
+        {thread ? (
+          <a href={thread} target="_blank" rel="noopener noreferrer" className="text-sm font-medium underline" data-testid="week-thread">
+            This week&apos;s thread →
+          </a>
+        ) : null}
+      </div>
       <WeekCard week={week ?? null} today={v.today} taskDone={taskDone} sp={sp} back="/intentions" share={share} />
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">This month</h2>
       <MonthCard m={month ?? null} month={thisMonth} sp={sp} back="/intentions" optional={monthOptional} owner={v.user.id} />

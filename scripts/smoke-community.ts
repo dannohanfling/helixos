@@ -242,6 +242,11 @@ async function main() {
     const patternsBefore = (await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!.linkPatterns;
     if (patternsBefore[handChannel]) throw new Error("the walk's hand-posted channel starts with no pattern");
     await page.goto(`${base}/coach/community?view=hand#log`);
+    // An empty Save link on a row with no link says what's missing (rev 174), and changes nothing.
+    await submit(page, `[data-testid="community-log-row"][data-week="${handWeek}"] [data-testid="community-link-save"]`);
+    await page.getByText("Paste the post's link first.").first().waitFor({ timeout: 15000 });
+    if ((await rowFor(handWeek))!.status !== "failed") throw new Error("an empty Save link changes nothing");
+    await page.goto(`${base}/coach/community?view=hand1#log`);
     const pasted: [string, string][] = [
       [lostWeeks[1], "https://academy.example.com/channels/intentions/posts/aaaaaaaaaaaaaaaaaaaaaaaa"],
       [handWeek, "https://academy.example.com/channels/Old-Slug-2sIZH/posts/6aba9e02b152d012a960d2f9?from=feed"],
@@ -264,7 +269,18 @@ async function main() {
     const patternsAfter = (await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!.linkPatterns;
     if (patternsAfter[handChannel] !== "https://academy.example.com/channels/Old-Slug-2sIZH/posts/{postId}") throw new Error(`a channel with no pattern takes one from the saved link: ${JSON.stringify(patternsAfter)}`);
     if (patternsAfter[`${LOC}_community_intentions`] !== patternsBefore[`${LOC}_community_intentions`]) throw new Error("a channel's saved pattern is never replaced by a pasted link");
-    console.log("✓ Save link on every row: a failed row with a pasted link is published with the community's post id and no Post now; a channel with no pattern learns it, one with a pattern keeps its own");
+    // A post HelixOS never sent has no channel of its own: its link marks it published but teaches no pattern (rev 174: never
+    // the channel picked in the setup, which may be the test channel).
+    const missedWeek = addDays(startOfWeek(today), -49);
+    await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "monday", weekOf: missedWeek, title: mondayTitle(missedWeek), status: "scheduled" });
+    await page.goto(`${base}/coach/community?view=hand3#log`);
+    await page.locator(`[data-testid="community-log-row"][data-week="${missedWeek}"] [data-testid="community-link"]`).fill("https://academy.example.com/channels/Somewhere-Else/posts/bbbbbbbbbbbbbbbbbbbbbbbb");
+    await submit(page, `[data-testid="community-log-row"][data-week="${missedWeek}"] [data-testid="community-link-save"]`);
+    const patternsLast = (await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!.linkPatterns;
+    if ((await rowFor(missedWeek))!.status !== "posted" || JSON.stringify(patternsLast) !== JSON.stringify(patternsAfter)) throw new Error(`a post with no channel of its own is published by its link and teaches no pattern: ${JSON.stringify(patternsLast)}`);
+    const savedFor = await page.locator('[data-testid="community-patterns-saved"]').innerText();
+    if (!savedFor.includes("Intentions") || !savedFor.includes("a channel no longer connected")) throw new Error(`the setup names the channels with a saved pattern: ${savedFor}`);
+    console.log("✓ Save link on every row: empty says paste first; a failed row with a pasted link is published with the community's post id and no Post now; the channel it went to learns the pattern (one with a pattern keeps its own, a post with no channel teaches none); the setup names the channels with one");
 
     // On a Monday after the coach's time, the job posts this week's by itself, once; any other day it posts nothing new.
     const thisWeek = startOfWeek(today);
@@ -300,6 +316,7 @@ async function main() {
     await page.goto(`${base}/intentions`);
     await page.locator('[data-testid="week-share"]').waitFor({ timeout: 20000 });
     if (!(await page.locator('[data-testid="share-unavailable"]').innerText()).includes("isn't up yet") || (await page.locator('[data-testid="share-to-thread"]').count())) throw new Error("before this week's post is out, the button says so and opens nothing");
+    if (await page.locator('[data-testid="week-thread"]').count()) throw new Error("no thread link before this week's post is published");
     // The page's own requests on load (the tier celebration) finish before the walk writes to the same database.
     await page.waitForLoadState("networkidle");
     const LINK = "https://academy.example.com/post?id=cm_share";
@@ -307,13 +324,16 @@ async function main() {
     await page.reload();
     const shareBtn = page.locator('[data-testid="week-share"] [data-testid="share-to-thread"]');
     await shareBtn.waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="week-thread"]').getAttribute("href")) !== LINK) throw new Error("once the post is published, This week's thread links to it");
+    if (!(await shareBtn.getAttribute("class"))?.includes("w-full") || (await shareBtn.innerText()).trim() !== "Share to the thread") throw new Error("Share to the thread is the full-width main button under the set week");
     const [popup] = await Promise.all([page.waitForEvent("popup"), shareBtn.click()]);
     await popup.waitForLoadState();
     if (popup.url() !== LINK) throw new Error(`the tap opens this week's post: ${popup.url()}`);
     await popup.close();
     const note = page.locator('[data-testid="week-share"] [data-testid="share-note"]');
     await note.waitFor({ timeout: 20000 });
-    if (!(await note.innerText()).includes("Your 3-1-3 is copied") || !(await note.innerText()).includes(`+${SHARE_POINTS} points`)) throw new Error(`the member is told it's copied and what to do: ${await note.innerText()}`);
+    if (!(await note.innerText()).includes("Copied! On the post, tap Add a comment, paste, and press Post.") || !(await note.innerText()).includes(`+${SHARE_POINTS} points`)) throw new Error(`the member is told it's copied and what to do: ${await note.innerText()}`);
+    if ((await shareBtn.innerText()).trim() !== "Shared ✓, open the thread") throw new Error("after sharing, the button says so and opens the thread again");
     const clip = await page.evaluate(() => navigator.clipboard.readText());
     if (clip !== shareText(week) || /10,?000|Rooted|hire help/.test(clip)) throw new Error(`the comment is the 3-1-3 only, with nothing monthly and no revenue: ${clip}`);
     const scored = async () => db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.type, "community")) });
@@ -327,7 +347,15 @@ async function main() {
     if ((await page.locator('[data-testid="week-share"] [data-testid="share-note"]').innerText()).includes("points") || (await scored()).length !== 1) throw new Error("a second tap in the same week scores nothing");
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="intentions-summary"] [data-testid="share-to-thread"]').waitFor({ timeout: 20000 });
-    console.log(`✓ Share to the thread: says so before this week's post is out; then copies the 3-1-3 only (no revenue, nothing monthly), opens this week's post, and scores ${SHARE_POINTS} once for the week; on Today too`);
+    // A member who hasn't set the week still sees where the thread is (rev 175).
+    await page.waitForLoadState("networkidle");
+    await db.delete(schema.weeklyIntentions).where(and(eq(schema.weeklyIntentions.userId, maya.id), eq(schema.weeklyIntentions.weekOf, mayaWeek)));
+    await page.goto(`${base}/intentions`);
+    await page.locator('[data-testid="week-card"][data-state="set"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="week-thread"]').getAttribute("href")) !== LINK) throw new Error("before the week is set, This week's thread is still there");
+    await page.waitForLoadState("networkidle");
+    await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId: ws.id, userId: maya.id, weekOf: mayaWeek, ...week });
+    console.log(`✓ Share to the thread: says so before this week's post is out; then copies the 3-1-3 only (no revenue, nothing monthly), opens this week's post, and scores ${SHARE_POINTS} once for the week, then reads Shared ✓; on Today too; This week's thread shows once the post is published, set week or not`);
     await page.goto(`${base}/settings`);
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);

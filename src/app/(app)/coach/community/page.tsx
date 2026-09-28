@@ -136,6 +136,12 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                 Link pattern (optional)
                 <ChannelPattern patterns={{ ...(s?.linkPattern && s.channelAccountId ? { [s.channelAccountId]: s.linkPattern } : {}), ...(s?.linkPatterns ?? {}) }} channel={s?.channelAccountId ?? ""} />
                 <span className="mt-1 block text-xs text-ink-3">For the channel picked above: each channel has its own address. Copy a published post&apos;s link from that channel and put {"{postId}"} where its id is (the community&apos;s post id). Until then, paste each week&apos;s link below.</span>
+                {/* Which channels have one (rev 174), so a pattern learned from a pasted link can be seen on the right channel. */}
+                {Object.keys(s?.linkPatterns ?? {}).length ? (
+                  <span className="mt-1 block text-xs text-ink-2" data-testid="community-patterns-saved">
+                    Saved for: {Object.keys(s!.linkPatterns).map((id) => channels.find((c) => c.id === id)?.name ?? "a channel no longer connected").join(", ")}
+                  </span>
+                ) : null}
               </label>
               <div className="flex flex-wrap gap-2">
                 <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…" data-testid="community-save">Save</SubmitButton>

@@ -138,8 +138,8 @@ export async function postCommunityNowAction(formData: FormData): Promise<void> 
 /**
  * The link to one post, pasted by the coach (28 Sep, live: this week's post was out while HelixOS still said failed). A link
  * means the coach has seen the post in the community, so the row becomes published whatever it said before, with the
- * community's post id taken from the link, and Post now goes away. When that channel has no link pattern yet, the link
- * becomes its pattern, so the next weeks' links build themselves. An empty box only clears the link.
+ * community's post id taken from the link, and Post now goes away. When the channel it went to has no link pattern yet, the
+ * link becomes its pattern, so the next weeks' links build themselves. An empty box only clears the link.
  */
 export async function setCommunityLinkAction(formData: FormData): Promise<void> {
   const v = await requireCoach();
@@ -148,20 +148,25 @@ export async function setCommunityLinkAction(formData: FormData): Promise<void> 
   const row = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.id, str(formData, "postId")), eq(schema.communityPosts.workspaceId, v.workspace.id)) });
   if (!row) back("log");
   const now = nowIso();
+  // An empty box on a row with no link is a paste that didn't land (28 Sep, live): say so rather than do nothing.
+  if (!link && !row!.link) back("log", { error: "Paste the post's link first." });
   if (!link) {
     await db.update(schema.communityPosts).set({ link: null, updatedAt: now }).where(and(eq(schema.communityPosts.id, row!.id), eq(schema.communityPosts.workspaceId, v.workspace.id)));
     back("log", { saved: "Link cleared." });
   }
   const s = await settingsFor(v.workspace.id);
-  const channel = row!.accountId ?? s?.channelAccountId ?? null;
+  // The channel the post went to, never the one picked in the setup now (that may be the test channel): a post HelixOS never
+  // sent has no channel here, so it teaches no pattern.
+  const channel = row!.accountId;
   await db
     .update(schema.communityPosts)
-    .set({ link, status: "posted", platformPostId: postIdFromLink(link) ?? row!.platformPostId, postedAt: row!.postedAt ?? now, accountId: channel, error: null, updatedAt: now })
+    .set({ link, status: "posted", platformPostId: postIdFromLink(link) ?? row!.platformPostId, postedAt: row!.postedAt ?? now, error: null, updatedAt: now })
     .where(and(eq(schema.communityPosts.id, row!.id), eq(schema.communityPosts.workspaceId, v.workspace.id)));
   const pattern = patternFromLink(link);
   const learned = Boolean(s && channel && pattern && !s.linkPatterns[channel]);
   if (learned) await db.update(schema.communitySettings).set({ linkPatterns: withPattern(s!.linkPatterns, channel!, pattern!), updatedAt: now }).where(and(eq(schema.communitySettings.id, s!.id), eq(schema.communitySettings.workspaceId, v.workspace.id)));
-  back("log", { saved: learned ? "Link saved. Marked published, and this channel's link pattern is set from it." : "Link saved. Marked published." });
+  const name = learned ? ((await connectionFor(s!.coachUserId))?.accounts.find((a) => a.id === channel)?.name ?? "this channel") : "";
+  back("log", { saved: learned ? `Link saved. Marked published, and the link pattern for ${name} is set from it.` : "Link saved. Marked published." });
 }
 
 /** After a hold is sorted out in GoHighLevel: posting may resume. Nothing missed is sent by this; Post now does that. */

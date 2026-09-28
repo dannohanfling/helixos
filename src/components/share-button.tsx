@@ -10,7 +10,8 @@ import { recordShareAction } from "@/lib/actions/intentions";
  * button says so and opens nothing: never an older week's post.
  */
 export function ShareButton({ text, link, reason, shared, compact = false }: { text: string; link: string | null; reason: string | null; shared: boolean; compact?: boolean }) {
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNote] = useState<{ text: string; good: boolean } | null>(null);
+  const [done, setDone] = useState(shared);
   const [pending, start] = useTransition();
   if (!link) {
     return (
@@ -23,10 +24,11 @@ export function ShareButton({ text, link, reason, shared, compact = false }: { t
     <span className={compact ? "inline-flex flex-wrap items-center gap-2" : "block"}>
       <button
         type="button"
-        className={compact ? "btn btn-soft btn-xs" : "btn btn-primary btn-sm"}
+        // The main button under a set week (rev 176): full width, so it can't be missed.
+        className={compact ? "btn btn-soft btn-xs" : done ? "btn btn-soft w-full" : "btn btn-primary w-full"}
         disabled={pending}
         data-testid="share-to-thread"
-        data-shared={shared ? "yes" : "no"}
+        data-shared={done ? "yes" : "no"}
         onClick={() => {
           // The copy starts first so pasting works anywhere, even if the new tab is blocked.
           const copied = navigator.clipboard?.writeText(text).then(
@@ -37,16 +39,18 @@ export function ShareButton({ text, link, reason, shared, compact = false }: { t
           start(async () => {
             const ok = copied ? await copied : false;
             const r = await recordShareAction();
-            if (!r.ok) setNote(r.error ?? "That didn't work. Try again.");
-            else setNote(`${ok ? "Your 3-1-3 is copied." : "Couldn't copy it here: select it below and copy."} Paste it as a comment on this week's post and press Post.${r.points ? ` +${r.points} points.` : ""}`);
+            if (!r.ok) return setNote({ text: r.error ?? "That didn't work. Try again.", good: false });
+            setDone(true);
+            const points = r.points ? ` +${r.points} points.` : "";
+            setNote(ok ? { text: `Copied! On the post, tap Add a comment, paste, and press Post.${points}`, good: true } : { text: `Couldn't copy it here: select your 3-1-3 above and copy it. On the post, tap Add a comment, paste, and press Post.${points}`, good: false });
           });
         }}
       >
-        {shared ? "Share to the thread again" : "Share to the thread"}
+        {done ? "Shared ✓, open the thread" : "Share to the thread"}
       </button>
       {note ? (
-        <span className={compact ? "text-xs text-ink-2" : "mt-2 block text-sm text-ink-2"} role="status" data-testid="share-note">
-          {note}
+        <span className={`${compact ? "text-xs" : "mt-2 block text-sm"} ${note.good ? "font-medium text-good" : "text-ink-2"}`} role="status" data-testid="share-note">
+          {note.text}
         </span>
       ) : null}
     </span>
