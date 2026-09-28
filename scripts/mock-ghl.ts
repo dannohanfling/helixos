@@ -145,6 +145,8 @@ createServer((req, res) => {
       // the day it runs); one scheduled further out stays scheduled.
       const due = !p.scheduleDate || new Date(String(p.scheduleDate)).getTime() <= Date.now() + 2 * 86400000;
       const community = Array.isArray(p.accountIds) && p.accountIds.some((a) => String(a).includes("_community_"));
+      // A walk hook: the planner fails a post at the platform, with the words GoHighLevel gave on 28 Sep.
+      if (String(p.summary ?? "").includes("[fail]")) return json(200, { success: true, statusCode: 200, message: "Fetched Post", results: { post: { ...p, status: "failed", error: "The channel or group is either deleted or inactive, please select another or re-sync connected group to post successfully." } } });
       const flipped = due ? { ...p, status: "published", postId: `${community ? "cm" : "fb"}_${id}`, publishedAt: new Date().toISOString() } : p;
       return json(200, { success: true, statusCode: 200, message: "Fetched Post", results: { post: flipped } });
     }

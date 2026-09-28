@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern } from "../community";
+import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern } from "../community";
 
 describe("the Monday post's title", () => {
   it("is the week's Monday to Sunday, month/day", () => {
@@ -92,5 +92,25 @@ describe("Share to the thread", () => {
   it("scores 15 once per week", () => {
     expect(SHARE_POINTS).toBe(15);
     expect(shareRef("2026-09-28")).toBe("share:2026-09-28");
+  });
+});
+
+describe("reading a post back (28 Sep, live)", () => {
+  const post = (id: string, createdAt: string, summary = "Week text", accountIds = ["acc"]) => ({ id, status: "failed", summary, accountIds, createdAt });
+  it("finds the planner's post when the create reply had no id: same channel and text, nearest to our send", () => {
+    const posts = [post("a", "2026-09-28T10:43:05Z"), post("b", "2026-09-28T10:44:10Z"), post("c", "2026-09-28T10:44:12Z", "Other"), post("d", "2026-09-28T10:44:09Z", "Week text", ["other"])];
+    expect(pickPlannerPost(posts, { accountId: "acc", summary: "Week  text", sentAtIso: "2026-09-28T10:44:08Z" })?.id).toBe("b");
+    expect(pickPlannerPost(posts, { accountId: "acc", summary: "Week text", sentAtIso: "2026-09-28T12:00:00Z" })).toBeNull();
+  });
+  it("keeps each channel's own link pattern", () => {
+    expect(patternFor({ test: "https://x/test/{postId}" }, { pattern: null, channel: null }, "test")).toBe("https://x/test/{postId}");
+    expect(patternFor({ test: "https://x/test/{postId}" }, { pattern: null, channel: null }, "intentions")).toBeNull();
+    expect(patternFor({}, { pattern: "https://x/old/{postId}", channel: "test" }, "test")).toBe("https://x/old/{postId}");
+    expect(patternFor({}, { pattern: "https://x/old/{postId}", channel: "test" }, "intentions")).toBeNull();
+  });
+  it("says a failure in GoHighLevel's words, and makes each test post its own", () => {
+    expect(failedReason("The channel or group is either deleted or inactive")).toBe("GoHighLevel says: The channel or group is either deleted or inactive");
+    expect(failedReason("")).toBe("The Social Planner marked it failed without a reason.");
+    expect(testText("2026-09-28T10:44:08.000Z")).not.toBe(testText("2026-09-28T10:45:08.000Z"));
   });
 });

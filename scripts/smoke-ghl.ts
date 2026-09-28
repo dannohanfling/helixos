@@ -284,9 +284,12 @@ async function main() {
     const banner = page.locator("p", { hasText: /Saved \d+ versions/ }).first();
     await banner.waitFor({ timeout: 20000 });
     if (/Posted to/.test(await banner.innerText())) throw new Error("the banner must not count outcomes; the panel does");
-    const acceptedRow = page.locator('[data-testid="compose-outcomes"] li[data-channel="fb_page"][data-state="sending"]');
-    await acceptedRow.waitFor({ timeout: 15000 });
-    if (!(await acceptedRow.innerText()).includes("Accepted, id pending")) throw new Error("a 2xx without an id reads accepted with the id pending");
+    // The row is read as one piece: its state and its words together (the page can re-draw between finding a row and reading it).
+    const acceptedRow = page.locator('[data-testid="compose-outcomes"] li[data-channel="fb_page"][data-state="sending"]', { hasText: "Accepted, id pending" });
+    await acceptedRow.waitFor({ timeout: 15000 }).catch(async () => {
+      const seen = await page.locator('[data-testid="compose-outcomes"] li[data-channel="fb_page"]').allInnerTexts();
+      throw new Error(`a 2xx without an id reads accepted with the id pending, got ${JSON.stringify(seen)}`);
+    });
     if ((await plannerPosts()).length !== before + 1) throw new Error("the post exists in the planner");
     await page.click('a:has-text("See every version")');
     await page.waitForURL(/\/repurpose/);

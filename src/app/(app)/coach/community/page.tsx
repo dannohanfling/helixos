@@ -6,6 +6,7 @@ import { connectionFor, probeCommunityScopes } from "@/lib/ghl";
 import { coachTz, settingsFor } from "@/lib/community";
 import { checkCommunityPostAction, postCommunityNowAction, refreshCommunityChannelsAction, resumeCommunityAction, saveCommunitySettingsAction, saveNextMondayAction, sendCommunityTestAction, setCommunityLinkAction } from "@/lib/actions/community";
 import { DEFAULT_POST_TIME, mondayDue, mondayText, mondayTitle, upcomingWeek } from "@/lib/engine/community";
+import { ChannelPattern } from "@/components/channel-pattern";
 import { formatDate, formatDateTime, nowWallInTz } from "@/lib/dates";
 import type { CommunityPost } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
@@ -122,9 +123,9 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               </label>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block text-sm font-medium">
-                  Posted as (GoHighLevel user ID)
-                  <input className="field mt-1" name="postAsId" defaultValue={s?.postAsId ?? ""} placeholder={conn.ghlUserId ?? "your GHL user ID"} data-testid="community-post-as-id" />
-                  <span className="mt-1 block text-xs text-ink-3">Empty uses yours from Settings → Publishing. A team user only, never a member.</span>
+                  Posted as (community member contact ID)
+                  <input className="field mt-1" name="postAsId" defaultValue={s?.postAsId ?? ""} placeholder="The contact ID on your community profile" data-testid="community-post-as-id" />
+                  <span className="mt-1 block text-xs text-ink-3">Your own community profile&apos;s contact ID. A GoHighLevel staff user ID never works here. A team member only, never a client.</span>
                 </label>
                 <label className="block text-sm font-medium">
                   Name shown
@@ -133,8 +134,8 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               </div>
               <label className="block text-sm font-medium">
                 Link pattern (optional)
-                <input className="field mt-1" name="linkPattern" defaultValue={s?.linkPattern ?? ""} placeholder="https://your-community/…{postId}…" data-testid="community-link-pattern" />
-                <span className="mt-1 block text-xs text-ink-3">Once the test post is published, copy its link from the community and put {"{postId}"} where its id is. Until then, paste each week&apos;s link below.</span>
+                <ChannelPattern patterns={{ ...(s?.linkPattern && s.channelAccountId ? { [s.channelAccountId]: s.linkPattern } : {}), ...(s?.linkPatterns ?? {}) }} channel={s?.channelAccountId ?? ""} />
+                <span className="mt-1 block text-xs text-ink-3">For the channel picked above: each channel has its own address. Copy a published post&apos;s link from that channel and put {"{postId}"} where its id is (the community&apos;s post id). Until then, paste each week&apos;s link below.</span>
               </label>
               <div className="flex flex-wrap gap-2">
                 <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…" data-testid="community-save">Save</SubmitButton>

@@ -12,7 +12,8 @@ export const DEFAULT_POST_TIME = "08:00";
 export const TITLE_MAX = 1000;
 export const TEXT_MAX = 100000;
 export const TEST_TITLE = "HelixOS test, please ignore";
-export const TEST_TEXT = "A test from HelixOS, to check the connection. Please ignore it; it will be deleted.";
+/** The test post's text, with its send time, so each test is its own post in the planner's list (28 Sep: several tests a minute apart). */
+export const testText = (sentAtIso: string): string => `A test from HelixOS, to check the connection (sent ${sentAtIso.slice(0, 16).replace("T", " ")} UTC). Please ignore it; it will be deleted.`;
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 /** "Set Your Intentions 9/28-10/4": the week's Monday to its Sunday. */
@@ -102,3 +103,31 @@ export function shareTarget(post: { weekOf: string | null; status: string; link:
   if (!post.link || (post.status !== "posted" && post.status !== "sent")) return { reason: "This week's post isn't up yet. Check back later today." };
   return { link: post.link };
 }
+
+/* ───────── Reading a post back (28 Sep, live) ───────── */
+
+type PlannerLike = { id: string; status: string | null; summary: string | null; accountIds: string[]; createdAt: string | null };
+/**
+ * The planner's post for one of ours when its create reply carried no id (seen live on 28 Sep): same channel, same text, sent
+ * within a few minutes, and of several, the one created nearest our send. None when nothing fits.
+ */
+export function pickPlannerPost<T extends PlannerLike>(posts: T[], want: { accountId: string; summary: string; sentAtIso: string }): T | null {
+  const norm = (x: string | null) => (x ?? "").replace(/\s+/g, " ").trim();
+  const text = norm(want.summary);
+  const sent = new Date(want.sentAtIso).getTime();
+  const near = posts
+    .filter((p) => p.accountIds.includes(want.accountId) && norm(p.summary) === text && p.createdAt)
+    .map((p) => ({ p, d: Math.abs(new Date(String(p.createdAt)).getTime() - sent) }))
+    .filter((x) => Number.isFinite(x.d) && x.d <= 10 * 60000)
+    .sort((a, b) => a.d - b.d);
+  return near[0]?.p ?? null;
+}
+
+/** The link pattern for a channel: each channel has its own address (its slug doesn't follow renames), set per channel. */
+export function patternFor(patterns: Record<string, string> | null | undefined, legacy: { pattern: string | null; channel: string | null }, accountId: string | null): string | null {
+  if (!accountId) return null;
+  return patterns?.[accountId] ?? (legacy.channel === accountId ? legacy.pattern : null);
+}
+
+/** The planner's own words for a failed post, for the coach (redacted of anything token-shaped by the caller), or a plain fallback. */
+export const failedReason = (planner: string | null | undefined): string => (planner?.trim() ? `GoHighLevel says: ${planner.trim().slice(0, 400)}` : "The Social Planner marked it failed without a reason.");

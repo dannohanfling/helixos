@@ -17,6 +17,14 @@ const mock = `http://localhost:${mockPort}`;
 const LOC = "loc_community";
 
 async function submit(page: Page, selector: string) {
+  await page
+    .locator(selector)
+    .first()
+    .waitFor({ timeout: 20000 })
+    .catch(async () => {
+      await page.screenshot({ path: "screenshots/fail-community.png", fullPage: true });
+      throw new Error(`nothing to press for ${selector} on ${page.url()}`);
+    });
   await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(selector).first().click()]);
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(300);
@@ -109,12 +117,16 @@ async function main() {
     if (saved.channelAccountId !== `${LOC}_community_test` || saved.channelName !== "HelixOS test" || !saved.mondayOn || saved.mondayText !== null || saved.postTime !== "08:00") throw new Error(`the setup is saved, with Danno's text kept as the default: ${JSON.stringify({ ...saved, id: undefined })}`);
     console.log("✓ the channel is picked from the accounts list (community ones first); the Monday post can't be on without one");
 
-    // ── 3. The test post, as the team user; Check again shows it published. ──
+    // ── 3. The test post. With no "Posted as", nothing falls back to the staff user on Publishing (28 Sep: it never works). ──
+    await submit(page, '[data-testid="community-test"]');
+    if (!(await page.locator('[data-testid="community-error"]').innerText()).includes("Posted as")) throw new Error("with no Posted as, the test post says what's missing and sends nothing");
+    await page.locator('[data-testid="community-post-as-id"]').fill("contact_danno");
+    await submit(page, '[data-testid="community-save"]');
     await submit(page, '[data-testid="community-test"]');
     await page.locator('[data-testid="community-test-result"][data-state="sent"]').waitFor({ timeout: 20000 });
     const testSent = (await mockPosts()).find((p) => (p.communityPostDetails as { title?: string } | undefined)?.title === TEST_TITLE);
     const as = (testSent?.communityPostDetails as { postAsUser?: Record<string, { id: string; name: string }> } | undefined)?.postAsUser?.[`${LOC}_community_test`];
-    if (!testSent || testSent.userId !== "user_danno" || as?.id !== "user_danno" || as.name !== "HelixOS" || String(testSent.status) !== "published") throw new Error("the test post goes out now, from the team user, with its title");
+    if (!testSent || as?.id !== "contact_danno" || as.name !== "HelixOS" || String(testSent.status) !== "published") throw new Error("the test post goes out now, from the team user, with its title");
     await submit(page, '[data-testid="community-test-result"] [data-testid="community-check"]');
     const result = page.locator('[data-testid="community-test-result"]').first();
     await page.locator('[data-testid="community-test-result"][data-state="posted"]').waitFor({ timeout: 20000 });
@@ -131,15 +143,22 @@ async function main() {
     const before = (await mockPosts()).length;
     await cron(page);
     if ((await mockPosts()).length !== before) throw new Error("nothing posts while the account is on hold");
-    await page.locator('[data-testid="community-post-as-id"]').fill("");
+    await page.locator('[data-testid="community-post-as-id"]').fill("contact_danno");
     await submit(page, '[data-testid="community-save"]');
     await submit(page, '[data-testid="community-resume"]');
     if (await page.locator('[data-testid="community-paused"]').count()) throw new Error("Resume clears the hold");
     console.log("✓ an account on hold stops posting, says why, and the hourly job doesn't retry; Resume clears it");
 
-    // ── 5. Next Monday: its own text, skipped, and back on. ──
+    // ── 5. Next Monday: its own text, skipped, and back on. The Intentions channel gets its own link pattern. ──
     await page.locator('[data-testid="community-channel"]').selectOption(`${LOC}_community_intentions`);
+    if (await page.locator('[data-testid="community-link-pattern"]').inputValue()) throw new Error("picking another channel shows its own link pattern (none yet), not the test channel's");
+    await page.locator('[data-testid="community-channel"]').selectOption(`${LOC}_community_test`);
+    if ((await page.locator('[data-testid="community-link-pattern"]').inputValue()) !== "https://academy.example.com/post?id={postId}") throw new Error("picking the test channel again shows its saved pattern");
+    await page.locator('[data-testid="community-channel"]').selectOption(`${LOC}_community_intentions`);
+    await page.locator('[data-testid="community-link-pattern"]').fill("https://academy.example.com/channels/intentions/posts/{postId}");
     await submit(page, '[data-testid="community-save"]');
+    const patterns = (await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!.linkPatterns;
+    if (patterns[`${LOC}_community_test`] !== "https://academy.example.com/post?id={postId}" || patterns[`${LOC}_community_intentions`] !== "https://academy.example.com/channels/intentions/posts/{postId}") throw new Error(`each channel keeps its own link pattern: ${JSON.stringify(patterns)}`);
     const next = upcomingWeek(today, nowWallInTz(tz).slice(11, 16), "08:00");
     const nextCard = page.locator('[data-testid="community-next"]');
     if ((await nextCard.getAttribute("data-week")) !== next || (await page.locator('[data-testid="community-next-title"]').innerText()).trim() !== mondayTitle(next)) throw new Error(`next Monday is ${next}, titled with its week`);
@@ -170,10 +189,33 @@ async function main() {
     await cron(page);
     await cron(page);
     const row = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.weekOf, lastWeek)) });
-    if ((await titled(mondayTitle(lastWeek))).length !== 1 || row?.status !== "posted" || row.link !== `https://academy.example.com/post?id=${row.platformPostId}`) throw new Error("the job reads it back as posted, with the link, and never sends it again");
+    if ((await titled(mondayTitle(lastWeek))).length !== 1 || row?.status !== "posted" || row.link !== `https://academy.example.com/channels/intentions/posts/${row.platformPostId}`) throw new Error("the job reads it back as posted, with the link, and never sends it again");
     await page.goto(`${base}/coach/community#log`);
     if (await page.locator(`[data-testid="community-log-row"][data-week="${lastWeek}"] [data-testid="community-retry"]`).count()) throw new Error("a posted week has no Post now");
     console.log(`✓ a failed week (${lastWeek}) is posted once with Post now; the job reads it back as posted with its link, and never sends it twice`);
+
+    // Seen live on 28 Sep: a create reply with no id (the post is found in the planner's list and read back), and a post the
+    // planner fails (GoHighLevel's own words, and Post now offered again: the week isn't used up).
+    const noIdWeek = addDays(startOfWeek(today), -14);
+    const failWeek = addDays(startOfWeek(today), -21);
+    await db.insert(schema.communityPosts).values([
+      { id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "monday", weekOf: noIdWeek, title: mondayTitle(noIdWeek), body: "The week's post [noid]", status: "failed", error: "earlier" },
+      { id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "monday", weekOf: failWeek, title: mondayTitle(failWeek), body: "The week's post [fail]", status: "failed", error: "earlier" },
+    ]);
+    // A fresh load: the page is already at this address, and going to the same address only moves to #log.
+    await page.goto(`${base}/coach/community?view=log#log`);
+    for (const w of [noIdWeek, failWeek]) await submit(page, `[data-testid="community-log-row"][data-week="${w}"] [data-testid="community-retry"]`);
+    const rowFor = (w: string) => db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, w)) });
+    if ((await rowFor(noIdWeek))?.ghlPostId) throw new Error("the walk's hook sends no id back on create");
+    await submit(page, `[data-testid="community-log-row"][data-week="${noIdWeek}"] [data-testid="community-check"]`);
+    await submit(page, `[data-testid="community-log-row"][data-week="${failWeek}"] [data-testid="community-check"]`);
+    const noIdRow = (await rowFor(noIdWeek))!;
+    const failRow = (await rowFor(failWeek))!;
+    if (noIdRow.status !== "posted" || !noIdRow.ghlPostId || noIdRow.link !== `https://academy.example.com/channels/intentions/posts/${noIdRow.platformPostId}`) throw new Error(`a post created with no id is found in the planner's list and read back as posted, with its link: ${JSON.stringify(noIdRow)}`);
+    if (failRow.status !== "failed" || !failRow.error?.startsWith("GoHighLevel says: The channel or group is either deleted or inactive")) throw new Error(`a post the planner failed shows as failed, in GoHighLevel's words: ${JSON.stringify(failRow)}`);
+    await page.goto(`${base}/coach/community?view=again#log`);
+    if (!(await page.locator(`[data-testid="community-log-row"][data-week="${failWeek}"] [data-testid="community-retry"]`).count())) throw new Error("after a failure, Post now is offered again");
+    console.log("✓ a create reply with no id: found in the planner's list, read back as posted with its link; a post the planner failed: Failed in GoHighLevel's words, with Post now offered again");
 
     // On a Monday after the coach's time, the job posts this week's by itself, once; any other day it posts nothing new.
     const thisWeek = startOfWeek(today);

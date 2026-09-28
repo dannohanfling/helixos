@@ -436,11 +436,13 @@ export const communitySettings = sqliteTable(
     mondayOn: integer("monday_on", { mode: "boolean" }).notNull().default(false),
     postTime: text("post_time").notNull().default("08:00"),
     mondayText: text("monday_text"),
-    /** The team user the posts come from: a GoHighLevel user id and the name shown. Never a community member. */
+    /** Who the posts come from: the community member contact id of a team member (Danno's own community profile, 28 Sep live test), and the name shown. Never a client. */
     postAsId: text("post_as_id"),
     postAsName: text("post_as_name"),
-    /** How a published post's id becomes a link ("https://…{postId}…"), once the test post shows the pattern. */
+    /** How a published post's id becomes a link ("https://…{postId}…"). Superseded by linkPatterns; read only as a fallback. */
     linkPattern: text("link_pattern"),
+    /** The link pattern per channel (account id → pattern): each channel's address has its own slug, which doesn't follow renames. */
+    linkPatterns: text("link_patterns", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     /** Set when GoHighLevel says the account is on hold: nothing posts, and nothing retries, until the coach presses Resume. */
     pausedReason: text("paused_reason"),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),

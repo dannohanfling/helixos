@@ -17,6 +17,14 @@ function back(anchor: string, note: { saved?: string; error?: string } = {}): ne
   redirect(`/coach/community${q}#${anchor}`);
 }
 
+/** One channel's link pattern set (or cleared when empty), the other channels' kept. */
+function withPattern(patterns: Record<string, string>, channel: string, pattern: string): Record<string, string> {
+  const next = { ...patterns };
+  if (pattern) next[channel] = pattern;
+  else delete next[channel];
+  return next;
+}
+
 /** The workspace's settings, made on first use with this coach as the one whose GoHighLevel connection posts. */
 async function settingsOrNew(workspaceId: string, coachUserId: string) {
   const s = await settingsFor(workspaceId);
@@ -56,7 +64,9 @@ export async function saveCommunitySettingsAction(formData: FormData): Promise<v
       mondayText: text && text !== DEFAULT_MONDAY_TEXT ? text : null,
       postAsId: opt(formData, "postAsId"),
       postAsName: opt(formData, "postAsName"),
-      linkPattern: pattern || null,
+      // The pattern is the chosen channel's own (each channel's address has its own slug); the other channels' are kept.
+      linkPatterns: channel ? withPattern(s.linkPatterns, channel, pattern) : s.linkPatterns,
+      linkPattern: null,
       updatedAt: nowIso(),
     })
     .where(and(eq(schema.communitySettings.id, s.id), eq(schema.communitySettings.workspaceId, v.workspace.id)));

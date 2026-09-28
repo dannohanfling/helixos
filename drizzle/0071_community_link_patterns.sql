@@ -1,0 +1,1 @@
+ALTER TABLE `community_settings` ADD `link_patterns` text DEFAULT '{}' NOT NULL;

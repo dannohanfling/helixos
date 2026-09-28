@@ -9,10 +9,10 @@ import { db, schema } from "@/db";
 import type { CommunityPost, CommunitySettings } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso, nowWallInTz, todayInTz } from "@/lib/dates";
-import { connectionFor, createPost, getPost } from "@/lib/ghl";
+import { connectionFor, createPost, getPost, listPostsIn } from "@/lib/ghl";
 import { logSync } from "@/lib/integrations";
 import { redactSecrets } from "@/lib/engine/redact";
-import { HOLD_REASON, TEST_TEXT, TEST_TITLE, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, postLink, shareTarget, shareText } from "@/lib/engine/community";
+import { HOLD_REASON, TEST_TITLE, communityDetails, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
 
 export const settingsFor = (workspaceId: string) => db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, workspaceId) });
 
@@ -32,8 +32,10 @@ async function send(s: CommunitySettings, title: string, body: string): Promise<
   if (!s.channelAccountId) return { ok: false, error: "Pick the community channel first.", hold: false };
   const conn = await connectionFor(s.coachUserId);
   if (!conn) return { ok: false, error: "Connect GoHighLevel on Settings → Publishing first.", hold: false };
-  const postAsId = s.postAsId?.trim() || conn.ghlUserId?.trim();
-  if (!postAsId) return { ok: false, error: "Add the GoHighLevel user the posts come from (your GHL user ID on Settings → Publishing, or a team user here).", hold: false };
+  // Posted as (28 Sep, live): the community member contact id of a team member's own community profile. A GoHighLevel staff
+  // user id never works there ("You are not part of this group"), so there is no fallback to the one on Publishing.
+  const postAsId = s.postAsId?.trim();
+  if (!postAsId) return { ok: false, error: "Add \"Posted as\": the community member contact ID of your own community profile.", hold: false };
   const coach = await db.query.users.findFirst({ where: eq(schema.users.id, s.coachUserId) });
   const postAs = { id: postAsId, name: s.postAsName?.trim() || coach?.name || "HelixOS" };
   const r = await createPost(conn, { accountId: s.channelAccountId, summary: body, type: "post", scheduleDate: null, community: { details: communityDetails(s.channelAccountId, title, postAs), userId: postAsId } });
@@ -90,51 +92,67 @@ export async function postMonday(s: CommunitySettings, weekOf: string, opts: { r
 export async function postTest(s: CommunitySettings): Promise<CommunityPost> {
   const now = nowIso();
   const id = newId();
-  await db.insert(schema.communityPosts).values({ id, workspaceId: s.workspaceId, coachUserId: s.coachUserId, kind: "test", title: TEST_TITLE, body: TEST_TEXT, accountId: s.channelAccountId, status: "sent", sentAt: now });
+  await db.insert(schema.communityPosts).values({ id, workspaceId: s.workspaceId, coachUserId: s.coachUserId, kind: "test", title: TEST_TITLE, body: testText(now), accountId: s.channelAccountId, status: "sent", sentAt: now });
+  const text = testText(now);
   const row = (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, id) }))!;
   if (s.pausedReason) {
     await db.update(schema.communityPosts).set({ status: "failed", error: s.pausedReason }).where(eq(schema.communityPosts.id, id));
     return (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, id) }))!;
   }
-  return sendRow(s, row, TEST_TITLE, TEST_TEXT);
+  return sendRow(s, row, TEST_TITLE, text);
 }
 
 /**
- * What the planner says happened to a sent post: published (with the community's own id, and a link when the coach's pattern
- * is set), failed with the reason, or still on its way. A post sent without an id that stays unknown for ten minutes is marked
- * failed with a sentence that sends the coach to look before pressing Post now, so nothing is ever doubled blind.
+ * What the planner says happened to a sent post (fixed 28 Sep, after the first live tests): published (with the community's
+ * own post id and the link from that channel's pattern), failed with GoHighLevel's own words (and Post now offered again), or
+ * still on its way. When the create reply carried no id, the post is found in the planner's list for that channel (same text,
+ * sent nearest in time); one still not found ten minutes on is marked failed with a sentence to look before posting again.
  */
 export async function checkPost(s: CommunitySettings, row: CommunityPost): Promise<CommunityPost> {
   if (row.status !== "sent") return row;
   const now = nowIso();
-  if (!row.ghlPostId) {
-    const age = Date.now() - new Date(`${(row.sentAt ?? row.updatedAt).replace(" ", "T")}${(row.sentAt ?? row.updatedAt).includes("Z") ? "" : "Z"}`).getTime();
-    if (age > 10 * 60000) await db.update(schema.communityPosts).set({ status: "failed", error: "GoHighLevel took the post but gave no id, so HelixOS can't see whether it went out. Look in the community before pressing Post now.", updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
-    return (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, row.id) }))!;
-  }
+  const reread = async () => (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, row.id) }))!;
   const conn = await connectionFor(s.coachUserId);
   if (!conn) return row;
-  const r = await getPost(conn, row.ghlPostId);
+  let ghlPostId = row.ghlPostId;
+  const sentAt = row.sentAt ?? `${row.updatedAt.replace(" ", "T")}Z`;
+  if (!ghlPostId && row.accountId && row.body) {
+    const from = new Date(new Date(sentAt).getTime() - 10 * 60000).toISOString();
+    const to = new Date(Date.now() + 86400000).toISOString();
+    const list = await listPostsIn(conn, { accountId: row.accountId, fromIso: from, toIso: to, limit: 100 });
+    const hit = list.ok ? pickPlannerPost(list.data.posts, { accountId: row.accountId, summary: row.body, sentAtIso: sentAt }) : null;
+    if (hit) {
+      ghlPostId = hit.id;
+      await db.update(schema.communityPosts).set({ ghlPostId, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
+    }
+  }
+  if (!ghlPostId) {
+    if (Date.now() - new Date(sentAt).getTime() > 10 * 60000) await db.update(schema.communityPosts).set({ status: "failed", error: "GoHighLevel took the post but gave no id, and it isn't in the planner's list, so HelixOS can't see whether it went out. Look in the community before pressing Post now.", updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
+    return reread();
+  }
+  const r = await getPost(conn, ghlPostId);
   if (!r.ok) {
     const fail = r as { error: string; status?: number; detail?: string };
     if (isAccountHold(fail)) await pauseForHold(s);
-    return row;
+    return reread();
   }
   const status = fromPlanner(r.data.status);
   const platformPostId = r.data.postId ?? row.platformPostId;
+  const pattern = patternFor(s.linkPatterns, { pattern: s.linkPattern, channel: s.channelAccountId }, row.accountId);
   await db
     .update(schema.communityPosts)
     .set({
       status,
       platformPostId,
-      link: row.link ?? postLink(s.linkPattern, platformPostId),
+      link: row.link ?? postLink(pattern, platformPostId),
       authorShown: r.data.author ?? row.authorShown,
       postedAt: status === "posted" ? (r.data.publishedAt ?? now) : row.postedAt,
-      error: status === "failed" ? (r.data.error ? "The community didn't take the post. The reason is in GoHighLevel's Social Planner." : "The Social Planner marked it failed.") : null,
+      // The coach sees GoHighLevel's own reason (this page is theirs), with anything token-shaped taken out.
+      error: status === "failed" ? failedReason(redactSecrets(r.data.error ?? "")) : null,
       updatedAt: now,
     })
     .where(eq(schema.communityPosts.id, row.id));
-  return (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, row.id) }))!;
+  return reread();
 }
 
 /**
