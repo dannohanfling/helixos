@@ -159,7 +159,9 @@ async function main() {
       await page.goto(`${base}/today`);
       const redo = page.locator('summary:has-text("Redo lock-in")');
       if (await redo.count()) await redo.evaluate((el) => (el as HTMLElement).click()); // may sit under the fixed bottom nav on a phone
-      await page.fill('input[name="newFocus"]', "Double tap test");
+      await page.fill('[data-testid="top3-new"]', "Double tap test");
+      await page.click('[data-testid="top3-add"]');
+      await page.locator('[data-testid="top3-item"]', { hasText: "Double tap test" }).waitFor({ timeout: 15000 });
       await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Lock it in")')]);
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(800);
@@ -251,7 +253,15 @@ async function main() {
     await page.goto(`${base}/today`);
     const redoForTouch = page.locator('summary:has-text("Redo lock-in")');
     if (await redoForTouch.count()) await redoForTouch.evaluate((el) => (el as HTMLElement).click());
-    await page.fill('input[name="newFocus"]', "Touch target test");
+    await page.fill('[data-testid="top3-new"]', "Touch target test");
+    await page.press('[data-testid="top3-new"]', "Enter");
+    await page.locator('[data-testid="top3-item"]', { hasText: "Touch target test" }).waitFor({ timeout: 15000 });
+    // Tick it even when three are already ticked: untick the others first.
+    const touchPicker = page.locator('[data-testid="top3-picker"]');
+    if (!(await touchPicker.locator('[data-testid="top3-item"]', { hasText: "Touch target test" }).locator("input").isChecked())) {
+      while (await touchPicker.locator('input[name="focus"]:checked').count()) await touchPicker.locator('input[name="focus"]:checked').first().uncheck();
+      await touchPicker.locator('[data-testid="top3-item"]', { hasText: "Touch target test" }).locator("input").check();
+    }
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Lock it in")')]);
     await page.waitForLoadState("networkidle");
     const small = page.locator('[data-testid="task-row"]', { hasText: "Touch target test" }).locator(".btn-xs, .btn-sm").first();

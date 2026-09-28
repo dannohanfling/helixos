@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { NAV_GROUPS } from "@/components/nav-groups";
+import { DueBadge } from "@/components/nav";
+import { intentionsDueFor } from "@/lib/queries/intentions";
 import { PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -9,6 +11,7 @@ export const metadata = { title: "More" };
 
 export default async function MorePage() {
   const v = await requireViewer();
+  const due = (await intentionsDueFor(v.workspace.id, v.user.id, v.today)).length;
   return (
     <>
       <PageHeader title="Everything" />
@@ -22,7 +25,7 @@ export default async function MorePage() {
                 <Link key={n.href} href={n.href} className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2">
                   <span className="w-6 text-center text-lg">{n.icon}</span>
                   <span className="font-medium">{n.label}</span>
-                  {n.line ?? n.hint ? <span className="ml-auto text-xs text-ink-3">{n.line ?? n.hint}</span> : null}
+                  {n.href === "/intentions" && due ? <DueBadge count={due} /> : n.line ?? n.hint ? <span className="ml-auto text-xs text-ink-3">{n.line ?? n.hint}</span> : null}
                 </Link>
               ))}
           </div>

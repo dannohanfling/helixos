@@ -25,16 +25,17 @@ describe("the weekly 3-1-3 (handoff rev 124)", () => {
     expect(lateForWeek(MON)).toBe(false);
     for (const d of [TUE, THU, FRI, SAT, SUN]) expect(lateForWeek(d)).toBe(true);
   });
-  it("everything is required but a third key result and a third task; the word is one word", () => {
+  it("everything is required but a third key result and a third task; the word is a short phrase (rev 160)", () => {
     const full = { word: " Consistent ", kr: ["Book 5 calls", "Post 5 times", "Close 1"], initiative: "Webinar slides", tasks: ["A", "B", "C"] };
     expect(readIntention(full)).toEqual({ value: { word: "Consistent", keyResults: ["Book 5 calls", "Post 5 times", "Close 1"], initiative: "Webinar slides", tasks: ["A", "B", "C"] } });
-    expect(readIntention({ ...full, kr: ["a", "b", " "], tasks: ["x", "y", ""] })).toEqual({ value: { word: "Consistent", keyResults: ["a", "b"], initiative: "Webinar slides", tasks: ["x", "y"] } });
-    expect(readIntention({ ...full, word: "" })).toEqual({ error: "Choose one word for your week." });
-    expect(readIntention({ ...full, word: "two words" })).toEqual({ error: "Your word is one word." });
+    expect(readIntention({ ...full, kr: ["3 calls", "2 clients", " "], tasks: ["x", "y", ""] })).toEqual({ value: { word: "Consistent", keyResults: ["3 calls", "2 clients"], initiative: "Webinar slides", tasks: ["x", "y"] } });
+    expect(readIntention({ ...full, word: "" })).toMatchObject({ error: "Choose one word (or a short phrase) for your week.", field: "word" });
+    expect(readIntention({ ...full, word: "Show up daily" })).toMatchObject({ value: { word: "Show up daily" } });
+    expect(readIntention({ ...full, word: "x".repeat(41) })).toMatchObject({ field: "word" });
     expect(readIntention({ ...full, word: "self-led" })).toHaveProperty("value");
-    expect(readIntention({ ...full, kr: ["a", "", "c"] })).toEqual({ error: "Write at least two key results you can track." });
-    expect(readIntention({ ...full, initiative: " " })).toEqual({ error: "Write the one initiative that moves your bigger goal." });
-    expect(readIntention({ ...full, tasks: ["", "b", "c"] })).toEqual({ error: "Write at least two tasks that move the needle." });
+    expect(readIntention({ ...full, kr: ["3 calls", "", "2 clients"] })).toMatchObject({ error: "Write at least two key results you can track." });
+    expect(readIntention({ ...full, initiative: " " })).toMatchObject({ error: "Write the one initiative that moves your bigger goal." });
+    expect(readIntention({ ...full, tasks: ["", "b", "c"] })).toMatchObject({ error: "Write at least two tasks that move the needle." });
   });
   it("tallies the key results once marked", () => {
     expect(keyResultTally([true, false, true])).toBe("2 of 3 key results done");

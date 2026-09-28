@@ -5,12 +5,13 @@ import { monthLabel } from "@/lib/engine/feedback";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
 import type { Back } from "@/components/week-card";
+import { DraftKeeper } from "@/components/draft-keeper";
 
 type Sp = { monthError?: string; monthSaved?: string };
 const Q = Object.fromEntries(MONTH_QUESTIONS.map((q, i) => [q.key, `${i + 1}. ${q.q}`])) as Record<(typeof MONTH_QUESTIONS)[number]["key"], string>;
 
 /** The eleven questions, in Danno's order, empty to set the month or filled to edit it. All eleven are required. */
-function MonthForm({ m, back }: { m: MonthlyIntention | null; back: Back }) {
+function MonthForm({ m, back, owner }: { m: MonthlyIntention | null; back: Back; owner?: string }) {
   const area = (name: keyof MonthlyIntention, label: string, rows = 2) => (
     <label className="block text-sm font-medium">
       {label}
@@ -32,9 +33,10 @@ function MonthForm({ m, back }: { m: MonthlyIntention | null; back: Back }) {
   return (
     <form action={saveMonthIntentionAction} className="space-y-3" data-testid="month-form">
       <input type="hidden" name="back" value={back} />
+      {owner ? <DraftKeeper id={`month.${owner}.${m?.month ?? "new"}`} /> : null}
       <label className="block text-sm font-medium">
         {Q.word}
-        <input className="field mt-1" name="word" defaultValue={m?.word ?? ""} placeholder="Grounded" data-testid="month-word" />
+        <input className="field mt-1" name="word" defaultValue={m?.word ?? ""} placeholder="Grounded, or Show up daily" maxLength={60} data-testid="month-word" />
       </label>
       {seasons("personalSeason", Q.personalSeason, PERSONAL_SEASONS)}
       {area("fear", Q.fear)}
@@ -88,7 +90,7 @@ export function MonthAnswers({ m }: { m: MonthlyIntention }) {
  * The monthly intention (handoff rev 129/130): "Set your month" with the eleven questions until it is set, then the answers with
  * an Edit. On Today only the setting form shows; once set, the full card lives on the Intentions page.
  */
-export function MonthCard({ m, month, sp, back = "/intentions" }: { m: MonthlyIntention | null; month: string; sp: Sp; back?: Back }) {
+export function MonthCard({ m, month, sp, back = "/intentions", optional = false, owner }: { m: MonthlyIntention | null; month: string; sp: Sp; back?: Back; optional?: boolean; owner?: string }) {
   const notes = (
     <>
       {sp.monthError ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="month-error">{sp.monthError}</p> : null}
@@ -101,7 +103,8 @@ export function MonthCard({ m, month, sp, back = "/intentions" }: { m: MonthlyIn
         <Card title="Set your month" action={<Badge tone="accent">{monthLabel(month)}</Badge>}>
           {notes}
           <p className="mb-3 text-sm text-ink-2">Eleven questions to start the month on purpose. Take your time with them.</p>
-          <MonthForm m={null} back={back} />
+          {optional ? <p className="mb-3 text-xs text-ink-3" data-testid="month-optional">The month is asked for in its first week. It&apos;s optional now, and still worth doing.</p> : null}
+          <MonthForm m={null} back={back} owner={owner} />
         </Card>
       </section>
     );
@@ -117,7 +120,7 @@ export function MonthCard({ m, month, sp, back = "/intentions" }: { m: MonthlyIn
         <details className="mt-4">
           <summary className="cursor-pointer text-xs text-ink-3" data-testid="month-edit">Edit this month</summary>
           <div className="mt-3">
-            <MonthForm m={m} back={back} />
+            <MonthForm m={m} back={back} owner={owner} />
           </div>
         </details>
       </Card>

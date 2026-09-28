@@ -1,10 +1,11 @@
 import type { WeeklyIntention } from "@/db/schema";
 import { reviewIntentionAction, saveIntentionAction } from "@/lib/actions/intentions";
-import { intentionPrompt, keyResultTally } from "@/lib/engine/intentions";
+import { intentionPrompt, keyResultTally, krProgress, targetOf } from "@/lib/engine/intentions";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
 import { ShareButton } from "@/components/share-button";
+import { WeekLists } from "@/components/week-lists";
 
 type Sp = { weekError?: string; weekSaved?: string; weekReviewed?: string };
 
@@ -18,26 +19,15 @@ function WeekForm({ week, back }: { week: WeeklyIntention | null; back: Back }) 
     <form action={saveIntentionAction} className="space-y-3" data-testid="week-form">
       <input type="hidden" name="back" value={back} />
       <label className="block text-sm font-medium">
-        ONE word to embody this week
-        <input className="field mt-1" name="word" defaultValue={week?.word ?? ""} placeholder="Consistent" data-testid="week-word" />
+        ONE word (or a short phrase) to embody this week
+        <input className="field mt-1" name="word" defaultValue={week?.word ?? ""} placeholder="Consistent, or Show up daily" maxLength={60} data-testid="week-word" />
       </label>
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">THREE key results you can track</legend>
-        {[0, 1, 2].map((i) => (
-          <input key={i} className="field" name={`kr${i + 1}`} defaultValue={kr(i)} placeholder={i === 2 ? "A third, if you have one" : ["Book 5 calls", "Post 5 times"][i]} data-testid={`week-kr${i + 1}`} />
-        ))}
-      </fieldset>
-      <label className="block text-sm font-medium">
-        ONE initiative toward your bigger goal
-        <input className="field mt-1" name="initiative" defaultValue={week?.initiative ?? ""} placeholder="Finish my webinar slides" data-testid="week-initiative" />
-      </label>
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">THREE tasks that move the needle</legend>
-        {[0, 1, 2].map((i) => (
-          <input key={i} className="field" name={`task${i + 1}`} defaultValue={task(i)} placeholder={i === 2 ? "A third, if you have one" : ["Follow up with 10 leads", "Record 2 videos"][i]} data-testid={`week-task${i + 1}`} />
-        ))}
-        <p className="text-xs text-ink-3">These become this week&apos;s tasks, due Friday, so you tick them off where you already work.</p>
-      </fieldset>
+      <WeekLists keyResults={[0, 1, 2].map(kr)} tasks={[0, 1, 2].map(task)}>
+        <label className="block text-sm font-medium">
+          ONE initiative toward your bigger goal
+          <input className="field mt-1" name="initiative" defaultValue={week?.initiative ?? ""} placeholder="Finish my webinar slides" data-testid="week-initiative" />
+        </label>
+      </WeekLists>
       <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…" data-testid="week-save">
         {week ? "Save changes" : "Set my week"}
       </SubmitButton>
@@ -63,7 +53,7 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
       <section id="week" className="mb-5" data-testid="week-card" data-state="set">
         <Card title="Set your week" action={<Badge tone="accent">3-1-3</Badge>}>
           {notes}
-          <p className="mb-3 text-sm text-ink-2">Choose ONE word to embody this week, then THREE key results you can track, ONE initiative toward your bigger goal, and THREE tasks that move the needle.</p>
+          <p className="mb-3 text-sm text-ink-2">Choose ONE word (or a short phrase) to embody this week, then THREE key results you can track, ONE initiative toward your bigger goal, and THREE tasks that move the needle.</p>
           <WeekForm week={null} back={back} />
         </Card>
       </section>
@@ -82,7 +72,7 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
               {week.keyResults.map((k, i) => (
                 <li key={i} data-testid="week-key-result" data-done={k.done === null ? "unmarked" : k.done ? "yes" : "no"}>
                   {k.done === true ? "✓ " : k.done === false ? "✗ " : ""}
-                  {k.text}
+                  {krProgress(k.text, k.actual)}
                 </li>
               ))}
             </ul>
@@ -112,17 +102,26 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
         {state === "review" ? (
           <form action={reviewIntentionAction} className="mt-4 rounded-lg border p-3" data-testid="week-review">
             <input type="hidden" name="back" value={back} />
-            <p className="mb-2 text-sm font-medium">The week is nearly done. Which key results did you hit?</p>
+            <p className="mb-2 text-sm font-medium">The week is nearly done. How many did you get?</p>
             <ul className="space-y-2 text-sm">
               {week.keyResults.map((k, i) => (
                 <li key={i} className="flex flex-wrap items-center gap-3">
                   <span className="flex-1">{k.text}</span>
-                  <label className="flex items-center gap-1">
-                    <input type="radio" name={`kr${i + 1}`} value="done" data-testid={`week-review-kr${i + 1}-done`} /> Done
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <input type="radio" name={`kr${i + 1}`} value="not" data-testid={`week-review-kr${i + 1}-not`} /> Not done
-                  </label>
+                  {targetOf(k.text) !== null ? (
+                    <label className="flex items-center gap-2">
+                      <input className="field w-20" name={`kr${i + 1}Count`} inputMode="numeric" defaultValue={k.actual ?? ""} placeholder="0" aria-label={`How many: ${k.text}`} data-testid={`week-review-kr${i + 1}-count`} />
+                      <span className="text-ink-3">of {targetOf(k.text)}</span>
+                    </label>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-1">
+                        <input type="radio" name={`kr${i + 1}`} value="done" data-testid={`week-review-kr${i + 1}-done`} /> Done
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <input type="radio" name={`kr${i + 1}`} value="not" data-testid={`week-review-kr${i + 1}-not`} /> Not done
+                      </label>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

@@ -33,16 +33,16 @@ export function readOohRequest(
   raw: { friday: string; description: string; triedSelf: string; tools: string; goal: string; category: string; triedGate: string; promise: boolean },
   today: string,
   categories: string[],
-): { value: OohInput } | { error: string } | { goBack: string } {
+): { value: OohInput } | { error: string; field?: string } | { goBack: string } {
   if (raw.triedGate === GO_BACK) return { goBack: "That's a good call. Work through it on your own first, and if you're still stuck, ask here before the next Friday. Nothing was sent." };
-  if (raw.triedGate !== "yes") return { error: "Tell us whether you've tried to overcome this yourself." };
-  if (!raw.promise) return { error: "Promise to attend the call, so your spot isn't wasted." };
+  if (raw.triedGate !== "yes") return { error: "Tell us whether you've tried to overcome this yourself.", field: "triedGate" };
+  if (!raw.promise) return { error: "Promise to attend the call, so your spot isn't wasted.", field: "promise" };
   const v = { friday: raw.friday.trim(), description: raw.description.trim(), triedSelf: raw.triedSelf.trim(), tools: raw.tools.trim(), goal: raw.goal.trim(), category: raw.category.trim() };
-  if (!upcomingFridays(today).includes(v.friday)) return { error: "Pick one of the next four Fridays." };
-  if (!v.description) return { error: "Describe the issue." };
-  if (!v.triedSelf) return { error: "Say how you tried to solve it yourself." };
-  if (!v.goal) return { error: "Say what solution we're trying to reach on the call." };
-  if (!categories.includes(v.category)) return { error: "Pick a category." };
+  if (!upcomingFridays(today).includes(v.friday)) return { error: "Pick one of the next four Fridays.", field: "friday" };
+  if (!v.description) return { error: "Describe the issue.", field: "description" };
+  if (!v.triedSelf) return { error: "Say how you tried to solve it yourself.", field: "triedSelf" };
+  if (!v.goal) return { error: "Say what solution we're trying to reach on the call.", field: "goal" };
+  if (!categories.includes(v.category)) return { error: "Pick a category.", field: "category" };
   return { value: v };
 }
 

@@ -14,6 +14,7 @@ import { moveLegacyObjectionAction } from "@/lib/actions/objections";
 import { LEGACY_OFFER_OBJECTIONS, isSharedObjection, reframesOf } from "@/lib/engine/objections";
 import { BOT_ROLES, BOT_ROLE_LABEL, REFUND_LINE_DEFAULT, TERMS_WHEN_DEFAULT } from "@/lib/engine/bot-fields";
 import { SubmitButton } from "@/components/submit-button";
+import { DraftKeeper } from "@/components/draft-keeper";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
   return (
@@ -74,6 +75,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
         <div className="space-y-4">
           <form action={updateOfferAction} className="space-y-4">
             <input type="hidden" name="id" value={offer.id} />
+            <DraftKeeper id={`offer.${v.user.id}.${offer.id}`} />
             <Card id="who" title="1 · Who and what" action={<SubmitButton className="btn btn-accent btn-sm" pendingText="Saving…">Save offer</SubmitButton>}>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Offer name">

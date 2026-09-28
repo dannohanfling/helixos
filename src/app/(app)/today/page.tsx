@@ -18,15 +18,12 @@ import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { TIER_ICONS } from "@/lib/engine/tiers";
 import { shareFor } from "@/lib/community";
 import { ShareButton } from "@/components/share-button";
+import { Top3Picker } from "@/components/top3-picker";
 import { closedDates } from "@/lib/queries/daily";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
-import { WeekCard } from "@/components/week-card";
-import { MonthCard } from "@/components/month-card";
-import { feedbackMonth } from "@/lib/engine/feedback";
-import { FeedbackCard } from "@/components/feedback-card";
 
 export const metadata = { title: "Today" };
 
@@ -56,16 +53,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.
   const week = (await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, v.user.id), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) })) ?? null;
   const share = week ? await shareFor(v.workspace.id, v.user.id, week) : null;
-  const weekTaskIds = (week?.tasks ?? []).map((t) => t.taskId).filter((x): x is string => Boolean(x));
-  const weekTasks = weekTaskIds.length ? await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, v.user.id), inArray(schema.tasks.id, weekTaskIds)) }) : [];
-  const taskDone = Object.fromEntries(weekTasks.map((t) => [t.id, t.status === "done"]));
   // The monthly intention (rev 129): this month's, if set.
   const month = (await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, monthOf(v.today))) })) ?? null;
-  // End-of-month feedback (rev 124): only in its window, about the month ending, and what they already sent for it. What they wrote
-  // for that month's question 11 is shown back to them, and only them, to compare (rev 129).
-  const fbMonth = feedbackMonth(v.today);
-  const fbGiven = fbMonth ? ((await db.query.monthlyFeedback.findFirst({ where: and(eq(schema.monthlyFeedback.workspaceId, v.workspace.id), eq(schema.monthlyFeedback.userId, v.user.id), eq(schema.monthlyFeedback.month, fbMonth)) })) ?? null) : null;
-  const fbLookBack = fbMonth ? ((await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, fbMonth)) }))?.proudEnd ?? null) : null;
   const weekState = intentionPrompt(v.today, week);
   const closed = await closedDates(v.workspace.id, v.user.id);
   const streakDayIfClosedNow = d.log?.eveningDoneAt ? d.log.streakDay : weeklyStreakDay(closed, v.today);
@@ -99,9 +88,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
 
-      {/* The prompts stay on Today until each is set; once set, one line and the full cards on Intentions (rev 130). */}
-      {month ? null : <MonthCard m={null} month={monthOf(v.today)} sp={sp} back="/today" />}
-      {week ? null : <WeekCard week={null} today={v.today} taskDone={taskDone} sp={sp} back="/today" />}
+      {/* The week, the month and the feedback live on Intentions (rev 157): Today keeps one line once they're set, and the menu's badge says when something is due. */}
       {month || week ? (
         <section className="card mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 p-4 text-sm" data-testid="intentions-summary">
           {month ? (
@@ -126,7 +113,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           </Link>
         </section>
       ) : null}
-      {fbMonth ? <FeedbackCard month={fbMonth} given={fbGiven} lookBack={fbLookBack} sp={sp} /> : null}
 
       {d.firstSession ? (
         <section className="card mb-5 border-accent p-5" style={{ background: "var(--accent-soft)" }} data-testid="welcome">
@@ -482,19 +468,10 @@ function LockInForm({ openTasks, today, defaultIntention }: { openTasks: { id: s
       <Field label="One line: what would make today a win?">
         <input className="field" name="intention" defaultValue={defaultIntention} placeholder="Three real conversations before noon." />
       </Field>
-      <div>
-        <div className="label">Pick your top 3</div>
-        <div className="grid gap-1 sm:grid-cols-2">
-          {candidates.map((t) => (
-            <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent-soft">
-              <input type="checkbox" name="focus" value={t.id} defaultChecked={t.focusDate === today} />
-              <span className="truncate">{t.title}</span>
-              {t.dueDate && t.dueDate < today ? <span className="ml-auto shrink-0 text-[10px] font-semibold text-danger">late</span> : null}
-            </label>
-          ))}
-        </div>
-        <input className="field mt-2" name="newFocus" placeholder="…or type a new top-3 task" />
-      </div>
+      <Top3Picker
+        candidates={candidates.map((t) => ({ id: t.id, title: t.title, late: Boolean(t.dueDate && t.dueDate < today) }))}
+        initiallyChecked={candidates.filter((t) => t.focusDate === today).map((t) => t.id)}
+      />
       <SubmitButton className="btn btn-accent" pendingText="Locking in…">
         Lock it in · +10
       </SubmitButton>

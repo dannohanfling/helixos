@@ -62,9 +62,27 @@ async function main() {
   if (await redo.isVisible()) await redo.click();
   await page.locator('label:has(input[name="energy"][value="4"])').click();
   await page.fill('input[name="intention"]', "Three real conversations before noon.");
-  await page.fill('input[name="newFocus"]', "Smoke focus task");
+  // Several new tasks before locking in (rev 157): Add or Enter puts each in the list, ticked up to three, and clears the box.
+  const picker = page.locator('[data-testid="top3-picker"]');
+  while (await picker.locator('input[name="focus"]:checked').count()) await picker.locator('input[name="focus"]:checked').first().uncheck();
+  const NEW_TASKS = ["Smoke focus task", "Smoke task two", "Smoke task three", "Smoke task four"];
+  for (const [i, t] of NEW_TASKS.entries()) {
+    await page.fill('[data-testid="top3-new"]', t);
+    if (i % 2) await page.click('[data-testid="top3-add"]');
+    else await page.press('[data-testid="top3-new"]', "Enter");
+    await picker.locator('[data-testid="top3-item"]', { hasText: t }).waitFor({ timeout: 15000 });
+    if ((await page.inputValue('[data-testid="top3-new"]')) !== "") throw new Error("adding clears the box for the next one");
+  }
+  const tickedTitles = await picker.locator('[data-testid="top3-item"]:has(input:checked)').allInnerTexts();
+  if (tickedTitles.length !== 3 || tickedTitles.some((t) => t.includes("Smoke task four")) || !(await page.locator('[data-testid="top3-note"]').innerText()).includes("You've picked 3. Untick one to swap.")) throw new Error(`three are ticked, the fourth goes in unticked with a quiet line: ${tickedTitles.join(" | ")}`);
+  if (!(await page.locator('[data-testid="top3-note"]').innerText()).includes("Task added ✓")) throw new Error("adding a task on Today confirms it in green");
+  await picker.locator('[data-testid="top3-item"]', { hasText: "Smoke task four" }).locator('[data-testid="top3-remove"]').click();
+  await picker.locator('[data-testid="top3-item"]', { hasText: "Smoke task four" }).waitFor({ state: "detached", timeout: 15000 });
   await submit(page, 'button:has-text("Lock it in")');
   await expectText(page, "Done · +10", "lock-in done");
+  for (const t of NEW_TASKS.slice(0, 3)) await page.locator('[data-testid="task-row"]', { hasText: t }).first().waitFor({ timeout: 15000 });
+  if (await page.locator('[data-testid="task-row"]', { hasText: "Smoke task four" }).count()) throw new Error("a task taken back before the lock-in is gone");
+  console.log("✓ lock-in: four tasks added (Add and Enter), three ticked, the fourth unticked with a quiet line, one taken back, three locked in");
   const errors = await page.locator("nextjs-portal").count();
   console.log(`dev overlay portals: ${errors}`);
   await shot(page, "02-today-locked-in");
@@ -142,6 +160,11 @@ async function main() {
   await shot(page, "12-rewards");
   await page.goto(`${base}/settings`);
   await expectText(page, "Your one goal", "settings");
+  // A save on Settings confirms in green, near the button (rev 157).
+  await submit(page, 'button:has-text("Save goal")');
+  await page.locator('[data-testid="save-confirm"]').first().waitFor({ timeout: 15000 });
+  if ((await page.locator('[data-testid="save-confirm"]').first().innerText()).trim() !== "Saved ✓") throw new Error("Save goal on Settings shows the green confirmation");
+  console.log("✓ Settings: Save goal shows \"Saved ✓\" in green");
 
   // Mobile view of Today
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, colorScheme: "dark" });

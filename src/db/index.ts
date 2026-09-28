@@ -16,6 +16,9 @@ type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 function create(): Db {
   const client = createClient({ url, authToken });
+  // A local database file is shared by the dev server and the walks' own scripts: a read that meets another process's write
+  // waits up to five seconds for it instead of failing at once with "database is locked". A remote database needs none of this.
+  if (url.startsWith("file:")) void client.execute("PRAGMA busy_timeout = 5000").catch(() => undefined);
   return drizzle(client, { schema });
 }
 

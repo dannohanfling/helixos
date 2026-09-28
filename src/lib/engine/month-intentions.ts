@@ -2,6 +2,7 @@
  * The monthly intention (handoff rev 129): the first-of-the-month version of the 3-1-3, the eleven questions from Danno's September
  * post in the Intentions channel, in his order. Pure: dates are the member's own "YYYY-MM-DD", months "YYYY-MM".
  */
+import { WORD_MAX } from "./intentions";
 
 export const PERSONAL_SEASONS = ["self", "wealth", "relationships", "spirituality"] as const;
 export type PersonalSeason = (typeof PERSONAL_SEASONS)[number];
@@ -11,7 +12,7 @@ export const seasonLabel = (s: string): string => s.charAt(0).toUpperCase() + s.
 
 /** The eleven questions, in Danno's order, keyed by the field that holds each answer. The revenue goal is a number plus the why. */
 export const MONTH_QUESTIONS = [
-  { key: "word", q: "What is one word of intention that will guide your actions and mindset this month?" },
+  { key: "word", q: "What is one word (or a short phrase) of intention that will guide your actions and mindset this month?" },
   { key: "personalSeason", q: "What personal season are you in?" },
   { key: "fear", q: "What is one fear or limiting belief you'll commit to overcoming this month?" },
   { key: "habit", q: "What is one positive personal habit you'll commit to starting this month?" },
@@ -53,24 +54,24 @@ export type MonthIntentionInput = {
   proudLast: string;
   proudEnd: string;
 };
-/** All eleven are required (rev 129), the revenue goal a number plus the why. The word is one word, as on the 3-1-3. */
-export function readMonthIntention(raw: Record<keyof Omit<MonthIntentionInput, "revenueGoal"> | "revenueGoal", string>): { value: MonthIntentionInput } | { error: string } {
+/** All eleven are required (rev 129), the revenue goal a number plus the why. The word can be a short phrase, as on the 3-1-3 (rev 160). A refusal names its field. */
+export function readMonthIntention(raw: Record<keyof Omit<MonthIntentionInput, "revenueGoal"> | "revenueGoal", string>): { value: MonthIntentionInput } | { error: string; field?: string } {
   const t = (k: keyof typeof raw) => (raw[k] ?? "").trim();
-  if (!t("word")) return { error: "Choose one word for your month." };
-  if (/\s/.test(t("word"))) return { error: "Your word is one word." };
+  if (!t("word")) return { error: "Choose one word (or a short phrase) for your month.", field: "word" };
+  if (t("word").length > WORD_MAX) return { error: `Keep your word to a short phrase, ${WORD_MAX} characters or fewer.`, field: "word" };
   const personalSeason = PERSONAL_SEASONS.find((s) => s === t("personalSeason"));
-  if (!personalSeason) return { error: "Pick your personal season." };
-  if (!t("fear")) return { error: "Name one fear or limiting belief to overcome." };
-  if (!t("habit")) return { error: "Name one habit to start." };
-  if (!t("skill")) return { error: "Name the skill you'll develop." };
-  if (!t("impact")) return { error: "Say what impact you want to create, and who benefits most." };
+  if (!personalSeason) return { error: "Pick your personal season.", field: "personalSeason" };
+  if (!t("fear")) return { error: "Name one fear or limiting belief to overcome.", field: "fear" };
+  if (!t("habit")) return { error: "Name one habit to start.", field: "habit" };
+  if (!t("skill")) return { error: "Name the skill you'll develop.", field: "skill" };
+  if (!t("impact")) return { error: "Say what impact you want to create, and who benefits most.", field: "impact" };
   const businessSeason = BUSINESS_SEASONS.find((s) => s === t("businessSeason"));
-  if (!businessSeason) return { error: "Pick your business's season." };
+  if (!businessSeason) return { error: "Pick your business's season.", field: "businessSeason" };
   const revenueGoal = parseRevenue(t("revenueGoal"));
-  if (revenueGoal === null) return { error: "Write your revenue goal as a number, like 10000." };
-  if (!t("revenueWhy")) return { error: "Say why that revenue goal." };
-  if (!t("plan")) return { error: "Write your plan to reach it." };
-  if (!t("proudLast")) return { error: "Say what you're most proud of from last month." };
-  if (!t("proudEnd")) return { error: "Say what you want to feel most proud of at the end of the month." };
+  if (revenueGoal === null) return { error: "Write your revenue goal as a number, like 10000.", field: "revenueGoal" };
+  if (!t("revenueWhy")) return { error: "Say why that revenue goal.", field: "revenueWhy" };
+  if (!t("plan")) return { error: "Write your plan to reach it.", field: "plan" };
+  if (!t("proudLast")) return { error: "Say what you're most proud of from last month.", field: "proudLast" };
+  if (!t("proudEnd")) return { error: "Say what you want to feel most proud of at the end of the month.", field: "proudEnd" };
   return { value: { word: t("word"), personalSeason, fear: t("fear"), habit: t("habit"), skill: t("skill"), impact: t("impact"), businessSeason, revenueGoal, revenueWhy: t("revenueWhy"), plan: t("plan"), proudLast: t("proudLast"), proudEnd: t("proudEnd") } };
 }

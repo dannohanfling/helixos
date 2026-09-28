@@ -31,7 +31,7 @@ export async function saveOohRequestAction(formData: FormData): Promise<void> {
     v.workspace.oohCategories,
   );
   if ("goBack" in read) redirect(`/office-hours?back=1#request`);
-  if ("error" in read) redirect(`/office-hours?error=${encodeURIComponent(read.error)}#request`);
+  if ("error" in read) redirect(`/office-hours?error=${encodeURIComponent(read.error)}${read.field ? `&field=${read.field}` : ""}#request`);
   const { value } = read;
   const requestId = str(formData, "requestId");
   if (requestId) {

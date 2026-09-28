@@ -25,7 +25,7 @@ import { addDays, daysBetween, formatDate, formatDateTime, todayInTz } from "@/l
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
-import { keyResultTally } from "@/lib/engine/intentions";
+import { keyResultTally, krProgress } from "@/lib/engine/intentions";
 import { monthLabel } from "@/lib/engine/feedback";
 import { MonthAnswers } from "@/components/month-card";
 
@@ -272,7 +272,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
                       <ul className="mt-1 text-xs text-ink-2">
                         {w.keyResults.map((k, i) => (
                           <li key={i}>
-                            {k.done === true ? "✓" : k.done === false ? "✗" : "·"} {k.text}
+                            {k.done === true ? "✓" : k.done === false ? "✗" : "·"} {krProgress(k.text, k.actual)}
+                            {k.kept ? <span className="ml-1 text-xs text-ink-3" data-testid="their-kr-kept">(kept as written; reads like a task)</span> : null}
                           </li>
                         ))}
                       </ul>

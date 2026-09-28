@@ -3,10 +3,11 @@ import { saveFeedbackAction } from "@/lib/actions/feedback";
 import { monthLabel } from "@/lib/engine/feedback";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
+import { DraftKeeper } from "@/components/draft-keeper";
 
 type Sp = { feedbackError?: string; feedbackSaved?: string };
 
-function FeedbackForm({ month, given, lookBack }: { month: string; given: MonthlyFeedback | null; lookBack: string | null }) {
+function FeedbackForm({ month, given, lookBack, owner }: { month: string; given: MonthlyFeedback | null; lookBack: string | null; owner?: string }) {
   const area = (name: string, label: string, value: string | null | undefined, rows = 2) => (
     <label className="block text-sm font-medium">
       {label}
@@ -15,6 +16,7 @@ function FeedbackForm({ month, given, lookBack }: { month: string; given: Monthl
   );
   return (
     <form action={saveFeedbackAction} className="space-y-3" data-testid="feedback-form">
+      {owner ? <DraftKeeper id={`feedback.${owner}.${month}`} /> : null}
       {lookBack ? (
         <p className="rounded-lg bg-surface-2 p-2 text-sm text-ink-2" data-testid="feedback-lookback">
           At the start of {monthLabel(month).split(" ")[0]} you wrote that you wanted to look back and feel most proud of: <span className="whitespace-pre-line italic">&ldquo;{lookBack}&rdquo;</span>
@@ -49,7 +51,7 @@ function FeedbackForm({ month, given, lookBack }: { month: string; given: Monthl
  * End-of-month feedback on Today (handoff rev 124), from the last 3 days of a month through the 5th of the next, about the month
  * ending. Once sent it folds to a thank-you that can be opened to change it while the window is open.
  */
-export function FeedbackCard({ month, given, lookBack = null, sp }: { month: string; given: MonthlyFeedback | null; lookBack?: string | null; sp: Sp }) {
+export function FeedbackCard({ month, given, lookBack = null, sp, owner }: { month: string; given: MonthlyFeedback | null; lookBack?: string | null; sp: Sp; owner?: string }) {
   return (
     <section id="feedback" className="mb-5" data-testid="feedback-card" data-state={given ? "given" : "ask"}>
       <Card title={`Your feedback on ${monthLabel(month)}`} action={<Badge tone={given ? "good" : "accent"}>{given ? "Sent" : "5 to 10 minutes"}</Badge>}>
@@ -59,13 +61,13 @@ export function FeedbackCard({ month, given, lookBack = null, sp }: { month: str
           <details>
             <summary className="cursor-pointer text-sm text-ink-2" data-testid="feedback-edit">Thanks for your feedback. Change it until the 5th.</summary>
             <div className="mt-3">
-              <FeedbackForm month={month} given={given} lookBack={lookBack} />
+              <FeedbackForm month={month} given={given} lookBack={lookBack} owner={owner} />
             </div>
           </details>
         ) : (
           <>
             <p className="mb-3 text-sm text-ink-2">A few questions about the month. It takes 5 to 10 minutes, and it shapes what we do next.</p>
-            <FeedbackForm month={month} given={null} lookBack={lookBack} />
+            <FeedbackForm month={month} given={null} lookBack={lookBack} owner={owner} />
           </>
         )}
       </Card>

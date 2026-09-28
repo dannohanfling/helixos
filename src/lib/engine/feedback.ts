@@ -34,13 +34,13 @@ export type FeedbackInput = { proud: string; love: string; less: string; more: s
  * Required: proud, Love, Less, More, Wow, a whole-number referral score from 1 to 10, and their favorite part (rev 129). Optional:
  * who they'd refer, since it asks for other people's names.
  */
-export function readFeedback(raw: Record<keyof FeedbackInput, string>): { value: FeedbackInput } | { error: string } {
+export function readFeedback(raw: Record<keyof FeedbackInput, string>): { value: FeedbackInput } | { error: string; field?: string } {
   const t = (k: keyof FeedbackInput) => (raw[k] ?? "").trim();
-  if (!t("proud")) return { error: "Tell us what you're most proud of this past month." };
-  for (const [k, label] of [["love", "Love"], ["less", "Less"], ["more", "More"], ["wow", "Wow"]] as const) if (!t(k)) return { error: `Fill in ${label}.` };
+  if (!t("proud")) return { error: "Tell us what you're most proud of this past month.", field: "proud" };
+  for (const [k, label] of [["love", "Love"], ["less", "Less"], ["more", "More"], ["wow", "Wow"]] as const) if (!t(k)) return { error: `Fill in ${label}.`, field: k };
   const score = Number(t("referralScore"));
-  if (!/^\d+$/.test(t("referralScore")) || score < 1 || score > 10) return { error: "Pick a referral score from 1 to 10." };
-  if (!t("favorite")) return { error: "Tell us your favorite part of the experience so far." };
+  if (!/^\d+$/.test(t("referralScore")) || score < 1 || score > 10) return { error: "Pick a referral score from 1 to 10.", field: "referralScore" };
+  if (!t("favorite")) return { error: "Tell us your favorite part of the experience so far.", field: "favorite" };
   return { value: { proud: t("proud"), love: t("love"), less: t("less"), more: t("more"), wow: t("wow"), referralScore: score, referral: t("referral"), favorite: t("favorite") } };
 }
 

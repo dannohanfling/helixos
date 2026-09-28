@@ -1,17 +1,18 @@
 /**
  * The member rituals inside HelixOS (handoff rev 124), walked as members and their coach meet them.
- * 1. The weekly 3-1-3: "Set your week" on Today until it is set (one word, two or three key results, one initiative, two or three
- *    tasks); the tasks become this week's Tasks, due Friday; an edit renames, adds and removes them; Friday to Sunday the key
- *    results are marked done or not; the coach sees who has set it, who hasn't (under the quiet list from Tuesday), and each
- *    member's history.
+ * 1. The weekly 3-1-3, on Intentions (rev 157; Today asks for nothing, the menu's badge counts what's due): a word or a short
+ *    phrase, key results that need a number (a refused form keeps everything typed, marks the field and focuses it, rev 160),
+ *    a task-like key result nudged into the tasks or kept (marked for the coach), the tasks as this week's Tasks, due Friday; an
+ *    edit renames, adds and removes them; Friday to Sunday "how many?" against each key result's number; the coach sees who has
+ *    set it, who hasn't (under the quiet list from Tuesday), and each member's history.
  * 2. The Open Office Hours request: the two gates (going back saves nothing, the promise must be ticked), this month's upcoming
  *    the next four Fridays across month ends, the member's own list with a change until the Friday; the coach sees requests by Friday, sets who takes it,
  *    covered or no-show and notes the member never sees (nor their export), and edits the category and host lists.
- * 3. End-of-month feedback: the card on Today only from the last 3 days of a month through the 5th of the next, about the month
+ * 3. End-of-month feedback: the card on Intentions (never Today) only from the last 3 days of a month through the 5th of the next, about the month
  *    ending; the score required; sent and changed; the coach sees each month's responses, the average referral score and its
  *    trend, and the proud-of answers together, with nothing that sends them anywhere.
- * 4. The monthly intention and the Intentions page (rev 129/130): "Set your month" above "Set your week" on Today until each is set,
- *    then one line on Today and the full cards on Intentions; the eleven questions (a revenue goal as a number); edits and
+ * 4. The monthly intention on the Intentions page (rev 129/130/157): asked for in the month's first week, optional after, one line
+ *    on Today once set; a refused one keeps every answer (rev 160); the eleven questions (a revenue goal as a number); edits and
  *    history there; the coach's month card, everyone's answers, the quiet list from the 4th and each member's history; one
  *    member never sees another's; and the feedback card shows the member what they wrote for question 11.
  * Dates are the real ones: what depends on the weekday is asserted against the engine's own answer for the member's today.
@@ -30,7 +31,7 @@ async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
   const { todayInTz } = await import("@/lib/dates");
-  const { intentionPrompt, lateForWeek, tasksDueOn, weekOf } = await import("@/lib/engine/intentions");
+  const { MONTH_ASK_DAYS, NEEDS_NUMBER, intentionPrompt, intentionsDue, lateForWeek, tasksDueOn, weekOf } = await import("@/lib/engine/intentions");
   const { upcomingFridays } = await import("@/lib/engine/office-hours");
   const { feedbackMonth, monthSummary, prevMonth, trendLine } = await import("@/lib/engine/feedback");
   const { lateForMonth, monthOf } = await import("@/lib/engine/month-intentions");
@@ -78,37 +79,50 @@ async function main() {
     };
     const intentionTasks = () => db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, maya.id), eq(schema.tasks.source, "intention")), orderBy: [schema.tasks.createdAt] });
 
-    // ── 1. The 3-1-3: set it on Today. ──
+    // ── 1. The 3-1-3, on Intentions (rev 157): Today asks for nothing; the menu's Intentions badge counts what's due. ──
     await signIn("client");
     await page.goto(`${base}/today`);
+    await page.waitForLoadState("networkidle");
+    if ((await card.count()) || (await page.locator('[data-testid="month-card"]').count()) || (await page.locator('[data-testid="feedback-card"]').count()) || (await page.locator('[data-testid="intentions-summary"]').count())) throw new Error("Today shows no Set your week, Set your month or feedback card, and no summary before anything is set");
+    const dueNow = intentionsDue(mayaToday, { week: null, monthSet: false, feedbackMonth: feedbackMonth(mayaToday), feedbackGiven: false }).length;
+    if (((await page.locator('aside [data-testid="due-badge"]').textContent()) ?? "").trim() !== String(dueNow)) throw new Error(`the Intentions badge counts what's due (${dueNow})`);
+    await page.goto(`${base}/intentions`);
     await card.waitFor({ timeout: 20000 });
-    if ((await card.getAttribute("data-state")) !== "set" || !((await card.textContent()) ?? "").includes("Set your week")) throw new Error("with no 3-1-3 this week, Today asks to set it");
-    const monthRect = await page.locator('[data-testid="month-card"]').boundingBox();
-    const weekRect = await card.boundingBox();
-    if (!monthRect || !weekRect || monthRect.y >= weekRect.y) throw new Error("with both due, Set your month sits above Set your week");
-    // One word, and at least two key results and two tasks: a gap says so and saves nothing.
-    await fill({ word: "two words", kr: ["Book 5 calls", "Post 5 times"], initiative: "Finish my webinar slides", tasks: ["Follow up with 10 leads", "Record 2 videos"] });
+    if ((await card.getAttribute("data-state")) !== "set" || !((await card.textContent()) ?? "").includes("Set your week")) throw new Error("with no 3-1-3 this week, Intentions asks to set it");
+    // A refused form keeps everything typed (rev 160), marks the field at fault beside it, and focuses it.
+    const typed = { word: "Show up daily", kr: ["3 booked calls from my posts", "more leads", ""], initiative: "Finish my webinar slides", tasks: ["Follow up with 10 leads", "Record 2 videos", ""] };
+    await fill(typed);
     await submit(page, '[data-testid="week-save"]');
-    await card.waitFor();
-    if ((await page.locator('[data-testid="week-error"]').innerText()).trim() !== "Your word is one word.") throw new Error("a two-word word is refused, plainly");
-    if (await db.query.weeklyIntentions.findFirst({ where: eq(schema.weeklyIntentions.userId, maya.id) })) throw new Error("a refused form saves nothing");
-    await fill({ word: "Consistent", kr: ["Book 5 calls", "Post 5 times", ""], initiative: "Finish my webinar slides", tasks: ["Follow up with 10 leads", "Record 2 videos", "Email my list"] });
+    await page.locator('[data-testid="week-form"] [data-testid="field-error"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="week-error"]').innerText()).trim() !== NEEDS_NUMBER || (await db.query.weeklyIntentions.findFirst({ where: eq(schema.weeklyIntentions.userId, maya.id) }))) throw new Error("a key result without a number is refused, kindly, and nothing is saved");
+    const kept = { word: await page.locator('[data-testid="week-word"]').last().inputValue(), kr: await Promise.all([1, 2, 3].map((i) => page.locator(`[data-testid="week-kr${i}"]`).last().inputValue())), initiative: await page.locator('[data-testid="week-initiative"]').last().inputValue(), tasks: await Promise.all([1, 2, 3].map((i) => page.locator(`[data-testid="week-task${i}"]`).last().inputValue())) };
+    if (JSON.stringify(kept) !== JSON.stringify(typed)) throw new Error(`a refused 3-1-3 keeps every typed value: ${JSON.stringify(kept)}`);
+    if ((await page.locator('[data-testid="week-kr2"]').last().getAttribute("aria-invalid")) !== "true" || !(await page.locator('[data-testid="week-kr2"]').last().evaluate((el) => el === document.activeElement))) throw new Error("the key result at fault is marked beside it and focused");
+    // A task written as a result: a nudge, with Move it to my tasks.
+    await page.locator('[data-testid="week-kr2"]').last().fill("Post 5 times");
+    await page.locator('[data-testid="week-kr2-nudge"]').waitFor({ timeout: 10000 });
+    await page.locator('[data-testid="week-kr2-move"]').click();
+    if ((await page.locator('[data-testid="week-kr2"]').last().inputValue()) !== "" || (await page.locator('[data-testid="week-task3"]').last().inputValue()) !== "Post 5 times") throw new Error("Move it to my tasks moves the line into the free task slot and empties the key result");
+    await page.locator('[data-testid="week-kr2"]').last().fill("10 new leads from my lead magnet");
     await submit(page, '[data-testid="week-save"]');
-    // Once set, Today keeps one line and the full card moves to Intentions (rev 130).
-    await page.locator('[data-testid="summary-week-word"]').waitFor({ timeout: 20000 });
-    if ((await page.locator('[data-testid="summary-week-word"]').innerText()).trim() !== "Consistent" || (await card.count()) || !(await page.locator('[data-testid="summary-saved"]').count())) throw new Error("once set, Today shows only the week's word in one line");
+    await page.locator('[data-testid="save-confirm"]').first().waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="save-confirm"]').first().innerText()).trim() !== "Saved ✓") throw new Error("a save on Intentions shows the green confirmation");
     const saved = (await db.query.weeklyIntentions.findFirst({ where: eq(schema.weeklyIntentions.userId, maya.id) }))!;
-    if (saved.weekOf !== week || saved.word !== "Consistent" || saved.keyResults.length !== 2 || saved.tasks.length !== 3) throw new Error(`saved for this week, the blank third key result dropped, got ${JSON.stringify(saved)}`);
+    if (saved.weekOf !== week || saved.word !== "Show up daily" || saved.keyResults.length !== 2 || saved.tasks.length !== 3) throw new Error(`saved for this week with a short phrase as its word, the blank third key result dropped, got ${JSON.stringify(saved)}`);
+    // Today keeps one line once set, and links to the check Friday to Sunday.
     const expectedState = intentionPrompt(mayaToday, { reviewedAt: null });
+    await page.goto(`${base}/today`);
+    await page.locator('[data-testid="summary-week-word"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="summary-week-word"]').innerText()).trim() !== "Show up daily" || (await card.count())) throw new Error("once set, Today shows only the week's word, as written, in one line");
     if ((await page.locator('[data-testid="summary-review"]').count()) !== (expectedState === "review" ? 1 : 0)) throw new Error("Friday to Sunday, Today's line links to the end-of-week check");
     await page.goto(`${base}/intentions`);
     await card.waitFor({ timeout: 20000 });
-    if ((await card.getAttribute("data-state")) !== expectedState || (await page.locator('[data-testid="week-word-shown"]').innerText()).trim() !== "Consistent") throw new Error(`once set, Today shows the week (${expectedState})`);
+    if ((await card.getAttribute("data-state")) !== expectedState || (await page.locator('[data-testid="week-word-shown"]').innerText()).trim() !== "Show up daily") throw new Error(`once set, Intentions shows the week (${expectedState})`);
     let tasks = await intentionTasks();
-    if (tasks.length !== 3 || tasks.some((t) => t.dueDate !== tasksDueOn(mayaToday) || t.sourceRef !== week) || tasks.map((t) => t.title).join("|") !== "Follow up with 10 leads|Record 2 videos|Email my list") throw new Error(`the three tasks are this week's Tasks, due Friday, got ${JSON.stringify(tasks.map((t) => [t.title, t.dueDate]))}`);
+    if (tasks.length !== 3 || tasks.some((t) => t.dueDate !== tasksDueOn(mayaToday) || t.sourceRef !== week) || tasks.map((t) => t.title).join("|") !== "Follow up with 10 leads|Record 2 videos|Post 5 times") throw new Error(`the three tasks are this week's Tasks, due Friday, got ${JSON.stringify(tasks.map((t) => [t.title, t.dueDate]))}`);
     await page.goto(`${base}/tasks`);
     for (const t of tasks) await page.getByText(t.title, { exact: false }).first().waitFor({ timeout: 15000 });
-    console.log(`✓ the 3-1-3 set on Today (one word, 2 key results, 1 initiative, 3 tasks); Today keeps one line, Intentions the full card (${expectedState}); the tasks are on Tasks, due ${tasksDueOn(mayaToday)}`);
+    console.log(`✓ the 3-1-3 on Intentions: Today asks nothing and the menu badge counts ${dueNow}; a key result without a number refused with everything typed kept, the field marked and focused; a task-like key result moved to the tasks; a short phrase as the word; saved with the green confirmation; Today keeps one line (${expectedState}); the tasks are on Tasks, due ${tasksDueOn(mayaToday)}`);
 
     // ── Edit: the first task renamed in place, the third taken off; a done task stays done. ──
     await db.update(schema.tasks).set({ status: "done" }).where(eq(schema.tasks.id, tasks[1].id));
@@ -116,56 +130,77 @@ async function main() {
     await card.waitFor();
     if ((await page.locator('[data-testid="week-task"][data-done="yes"]').count()) !== 1) throw new Error("a task ticked off on Tasks shows done on the week");
     await page.locator('[data-testid="week-edit"]').click();
-    await fill({ word: "Consistent", kr: ["Book 5 calls", "Post 5 times", "Close 1 client"], initiative: "Finish my webinar slides", tasks: ["Follow up with 12 leads", "Record 2 videos", ""] });
+    await fill({ word: "Show up daily", kr: ["3 booked calls from my posts", "10 new leads from my lead magnet", "Post 3 reels"], initiative: "Finish my webinar slides", tasks: ["Follow up with 12 leads", "Record 2 videos", ""] });
+    // A task-like key result can be kept as written; the save marks it for the coach.
+    await page.locator('[data-testid="week-kr3-nudge"]').last().waitFor({ timeout: 10000 });
+    await page.locator('[data-testid="week-kr3-keep"]').last().click();
+    if (await page.locator('[data-testid="week-kr3-nudge"]').count()) throw new Error("Keep it closes the nudge");
     await submit(page, '[data-testid="week-save"]');
     await page.locator('[data-testid="week-saved"]').waitFor({ timeout: 20000 });
     const after = await intentionTasks();
     if (after.length !== 2 || after[0].id !== tasks[0].id || after[0].title !== "Follow up with 12 leads" || after[1].id !== tasks[1].id || after[1].status !== "done") throw new Error(`an edit renames in place, removes the one taken off and keeps a done one, got ${JSON.stringify(after.map((t) => [t.title, t.status]))}`);
     if ((await page.locator('[data-testid="week-key-result"]').count()) !== 3) throw new Error("the third key result added on edit shows");
+    const keptKr = (await db.query.weeklyIntentions.findFirst({ where: eq(schema.weeklyIntentions.userId, maya.id) }))!.keyResults;
+    if (!keptKr[2].kept || keptKr[0].kept) throw new Error("a key result kept as written though it reads like a task is marked for the coach, and only that one");
     tasks = after;
-    console.log("✓ an edit renames the task in its slot, removes the one taken off, keeps the done one done, and adds a key result");
+    console.log("✓ an edit renames the task in its slot, removes the one taken off, keeps the done one done, and adds a key result (a task-like one kept as written, marked for the coach)");
 
     // ── The end of the week: Friday to Sunday, each key result done or not, once. ──
     if (expectedState === "review") {
       await submit(page, '[data-testid="week-review-save"]');
       await card.waitFor();
-      if ((await page.locator('[data-testid="week-error"]').innerText()).trim() !== "Mark each key result done or not done.") throw new Error("the check needs every key result marked");
-      await page.locator('[data-testid="week-review-kr1-done"]').check();
-      await page.locator('[data-testid="week-review-kr2-not"]').check();
-      await page.locator('[data-testid="week-review-kr3-done"]').check();
+      if ((await page.locator('[data-testid="week-error"]').innerText()).trim() !== "Write how many you got for each key result, like 2.") throw new Error("the check needs a count for every key result");
+      // How many, against the number set: done means the number was hit.
+      await page.locator('[data-testid="week-review-kr1-count"]').fill("2");
+      await page.locator('[data-testid="week-review-kr2-count"]').fill("12");
+      await page.locator('[data-testid="week-review-kr3-count"]').fill("3");
       await submit(page, '[data-testid="week-review-save"]');
       await page.locator('[data-testid="week-reviewed"]').waitFor({ timeout: 20000 });
       const marks = await page.locator('[data-testid="week-key-result"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-done")));
-      if (JSON.stringify(marks) !== JSON.stringify(["yes", "no", "yes"]) || (await page.locator('[data-testid="week-review"]').count()) || (await card.getAttribute("data-state")) !== "shown") throw new Error(`marked once, and the check goes away, got ${marks.join(",")}`);
-      console.log("✓ Friday to Sunday: the key results marked done / not done (2 of 3), and the check goes away");
+      const shown = await page.locator('[data-testid="week-key-result"]').first().innerText();
+      if (JSON.stringify(marks) !== JSON.stringify(["no", "yes", "yes"]) || !shown.includes("2 of 3 booked calls from my posts") || (await page.locator('[data-testid="week-review"]').count()) || (await card.getAttribute("data-state")) !== "shown") throw new Error(`checked against the number (2 of 3 is not done; 12 of 10 is), and the check goes away, got ${marks.join(",")} / ${shown}`);
+      console.log("✓ Friday to Sunday: how many for each key result, against its number (2 of 3 booked calls: not done), and the check goes away");
     } else {
       if (await page.locator('[data-testid="week-review"]').count()) throw new Error("Monday to Thursday there is no end-of-week check");
       console.log(`✓ ${mayaToday} is before Friday: no end-of-week check yet (the unit tests cover Friday to Sunday)`);
     }
 
-    // ── 4. The monthly intention: set on Today (above the week while both are due), then one line; the full card on Intentions. ──
+    // ── 4. The monthly intention, on Intentions (rev 157): asked for in the month's first week, optional after, never on Today. ──
     const thisMonth = monthOf(mayaToday);
     const PAST_PROUD = `Showing up for my clients every week ${Date.now()}`;
-    await page.goto(`${base}/today`);
+    await page.goto(`${base}/intentions`);
     const monthCard = page.locator('[data-testid="month-card"]');
     await monthCard.waitFor({ timeout: 20000 });
-    if ((await monthCard.getAttribute("data-state")) !== "set") throw new Error("with no intention this month, Today asks to set it");
+    if ((await monthCard.getAttribute("data-state")) !== "set") throw new Error("with no intention this month, Intentions offers to set it");
+    if ((await page.locator('[data-testid="month-optional"]').count()) !== (Number(mayaToday.slice(8, 10)) > MONTH_ASK_DAYS ? 1 : 0)) throw new Error("after the month's first week, setting it is optional, and says so");
+    const MONTH_TEXT: [string, string][] = [["fear", "That I'm not ready."], ["habit", "A morning walk."], ["skill", "Public speaking."], ["impact", "Help 5 coaches book calls; they benefit most."], ["revenueWhy", "To hire help."], ["plan", "Two webinars and daily DMs."], ["proudLast", "Finishing my offer."], ["proudEnd", "Showing up every single day."]];
     const fillMonth = async (revenue: string) => {
-      await page.locator('[data-testid="month-word"]').last().fill("Rooted");
+      await page.locator('[data-testid="month-word"]').last().fill("Rooted and ready");
       await page.locator('[data-testid="month-personalSeason-wealth"]').last().check();
-      for (const [k, t] of [["fear", "That I'm not ready."], ["habit", "A morning walk."], ["skill", "Public speaking."], ["impact", "Help 5 coaches book calls; they benefit most."], ["revenueWhy", "To hire help."], ["plan", "Two webinars and daily DMs."], ["proudLast", "Finishing my offer."], ["proudEnd", "Showing up every single day."]]) await page.locator(`[data-testid="month-${k}"]`).last().fill(t);
+      for (const [k, t] of MONTH_TEXT) await page.locator(`[data-testid="month-${k}"]`).last().fill(t);
       await page.locator('[data-testid="month-businessSeason-sales"]').last().check();
       await page.locator('[data-testid="month-revenueGoal"]').last().fill(revenue);
     };
     await fillMonth("lots");
+    // A slip (a refresh) loses nothing: the typed answers come back as a draft (rev 160).
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.locator('[data-testid="month-form"] [data-testid="draft-restored"]').filter({ hasText: "Draft restored" }).waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="month-plan"]').last().inputValue()) !== "Two webinars and daily DMs." || !(await page.locator('[data-testid="month-businessSeason-sales"]').last().isChecked())) throw new Error("a refresh brings the month's typed answers back as a draft");
     await submit(page, '[data-testid="month-save"]');
-    await monthCard.waitFor();
+    await page.locator('[data-testid="month-form"] [data-testid="field-error"]').waitFor({ timeout: 20000 });
     if ((await page.locator('[data-testid="month-error"]').innerText()).trim() !== "Write your revenue goal as a number, like 10000." || (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) }))) throw new Error("a revenue goal that isn't a number is refused, and nothing saved");
-    await fillMonth("$10,000");
+    // Every answer typed is still there, the seasons too, and the revenue goal is marked and focused.
+    const monthKept = await Promise.all(MONTH_TEXT.map(async ([k]) => page.locator(`[data-testid="month-${k}"]`).last().inputValue()));
+    if (JSON.stringify(monthKept) !== JSON.stringify(MONTH_TEXT.map(([, t]) => t)) || (await page.locator('[data-testid="month-word"]').last().inputValue()) !== "Rooted and ready" || !(await page.locator('[data-testid="month-personalSeason-wealth"]').last().isChecked()) || !(await page.locator('[data-testid="month-businessSeason-sales"]').last().isChecked()) || (await page.locator('[data-testid="month-revenueGoal"]').last().inputValue()) !== "lots") throw new Error("a refused month keeps every typed answer");
+    if (!(await page.locator('[data-testid="month-revenueGoal"]').last().evaluate((el) => el === document.activeElement && el.getAttribute("aria-invalid") === "true"))) throw new Error("the revenue goal is marked beside it and focused");
+    await page.locator('[data-testid="month-revenueGoal"]').last().fill("$10,000");
     await submit(page, '[data-testid="month-save"]');
-    await page.locator('[data-testid="summary-month-word"]').waitFor({ timeout: 20000 });
+    await page.locator('[data-testid="month-saved"]').waitFor({ timeout: 20000 });
     const mi = (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) }))!;
-    if (mi.month !== thisMonth || mi.revenueGoal !== 10000 || mi.personalSeason !== "wealth" || mi.businessSeason !== "sales" || (await monthCard.count()) || (await page.locator('[data-testid="summary-month-word"]').innerText()).trim() !== "Rooted") throw new Error(`saved for ${thisMonth}; Today keeps one line with the month's word beside the week's`);
+    await page.goto(`${base}/today`);
+    await page.locator('[data-testid="summary-month-word"]').waitFor({ timeout: 20000 });
+    if (mi.month !== thisMonth || mi.word !== "Rooted and ready" || mi.revenueGoal !== 10000 || mi.personalSeason !== "wealth" || mi.businessSeason !== "sales" || (await monthCard.count()) || (await page.locator('[data-testid="summary-month-word"]').innerText()).trim() !== "Rooted and ready") throw new Error(`saved for ${thisMonth}; Today keeps one line with the month's words beside the week's`);
     // Intentions: the answers, an edit, and the history of past weeks and months in folds.
     await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId: ws.id, userId: maya.id, weekOf: "2026-01-05", word: "Patient", keyResults: [{ text: "Post 3 times", done: true }], initiative: "Plan Q1", tasks: [{ title: "Draft the plan", taskId: null }], reviewedAt: "2026-01-09T18:00:00Z" });
     await db.insert(schema.monthlyIntentions).values({ id: newId(), workspaceId: ws.id, userId: maya.id, month: prevMonth(thisMonth), word: "Steady", personalSeason: "self", fear: "Being seen.", habit: "Journaling.", skill: "Sales calls.", impact: "More clients served.", businessSeason: "marketing", revenueGoal: 5000, revenueWhy: "A first full month.", plan: "Daily posts.", proudLast: "Starting.", proudEnd: PAST_PROUD });
@@ -179,8 +214,8 @@ async function main() {
     if ((await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.userId, maya.id), eq(schema.monthlyIntentions.month, thisMonth)) }))!.habit !== "A morning walk, no phone.") throw new Error("an edit on Intentions changes the month");
     const hWeeks = await page.locator('[data-testid="history-week"]').allInnerTexts();
     const hMonths = await page.locator('[data-testid="history-month"]').allInnerTexts();
-    if (!hWeeks.some((t) => t.includes("Patient")) || !hMonths.some((t) => t.includes("Steady")) || hWeeks.some((t) => t.includes("Consistent")) || hMonths.some((t) => t.includes("Rooted"))) throw new Error("history holds the past weeks and months only, each in a fold");
-    console.log(`✓ the monthly intention: set on Today (above the week), a non-number revenue goal refused, one line after; Intentions shows the answers, an edit, and the history (a past week and month)`);
+    if (!hWeeks.some((t) => t.includes("Patient")) || !hMonths.some((t) => t.includes("Steady")) || hWeeks.some((t) => t.includes("Show up daily")) || hMonths.some((t) => t.includes("Rooted and ready"))) throw new Error("history holds the past weeks and months only, each in a fold");
+    console.log(`✓ the monthly intention on Intentions (optional after the first week): a draft restored after a refresh; a non-number revenue goal refused with every answer kept and the field focused; a short phrase as the word; one line on Today after; the answers, an edit, and the history (a past week and month)`);
     await signOut();
 
     // ── One member never sees another's intention or revenue goal. ──
@@ -201,7 +236,7 @@ async function main() {
     const mayaRow = page.locator('[data-testid="week-coach-row"]', { hasText: maya.name });
     const jordanRow = page.locator('[data-testid="week-coach-row"]', { hasText: jordan.name });
     await mayaRow.waitFor({ timeout: 20000 });
-    if ((await mayaRow.getAttribute("data-set")) !== "yes" || !(await mayaRow.innerText()).includes("Consistent")) throw new Error("the coach sees Maya's week and word");
+    if ((await mayaRow.getAttribute("data-set")) !== "yes" || !(await mayaRow.innerText()).includes("Show up daily")) throw new Error("the coach sees Maya's week and word");
     if ((await jordanRow.getAttribute("data-set")) !== "no" || !(await jordanRow.innerText()).includes("not set yet")) throw new Error("the coach sees Jordan hasn't set it");
     const lateRows = await page.locator('[data-testid="week-late-row"]').allInnerTexts();
     const jordanLate = lateForWeek(jordanToday);
@@ -209,8 +244,9 @@ async function main() {
     await page.goto(`${base}/coach/${mayaM.id}`);
     const history = page.locator('[data-testid="their-week"]');
     await history.first().waitFor({ timeout: 20000 });
-    if ((await history.count()) !== 2 || !(await history.nth(1).innerText()).includes("Patient") || !(await history.first().innerText()).includes("Consistent") || !(await history.first().innerText()).includes("Follow up with 12 leads")) throw new Error("the client page lists the member's weeks, newest first, with the word, key results and tasks");
-    console.log(`✓ the coach: Maya set (Consistent), Jordan not set${jordanLate ? " and under the quiet list" : " (Monday: not yet on the quiet list)"}; Maya's history on Maya's page`);
+    if ((await history.count()) !== 2 || !(await history.nth(1).innerText()).includes("Patient") || !(await history.first().innerText()).includes("Show up daily") || !(await history.first().innerText()).includes("Follow up with 12 leads")) throw new Error("the client page lists the member's weeks, newest first, with the word, key results and tasks");
+    if ((await history.first().locator('[data-testid="their-kr-kept"]').count()) !== 1) throw new Error("the coach sees the key result kept as written though it reads like a task");
+    console.log(`✓ the coach: Maya set (Show up daily), Jordan not set${jordanLate ? " and under the quiet list" : " (Monday: not yet on the quiet list)"}; Maya's history on Maya's page`);
     await page.goto(`${base}/coach`);
     const mayaMonth = page.locator('[data-testid="month-coach-row"]', { hasText: maya.name });
     await mayaMonth.waitFor({ timeout: 20000 });
@@ -301,15 +337,18 @@ async function main() {
     if (!exported.includes("office_hours_requests") || !exported.includes("My bot books the wrong calendar") || exported.includes(NOTES) || exported.includes("coachNotes")) throw new Error("the member's export has their request and not the coach's notes");
     console.log("✓ the coach: the request under its Friday, Shonna responsible, covered, notes kept the coach's (not on the member's page, not in their export); a category added to the list");
 
-    // ── 3. End-of-month feedback, on Today in its window only. ──
+    // ── 3. End-of-month feedback, on Intentions in its window only (rev 157: never on Today). ──
     const PROUD = `Booked my first 3 calls ${Date.now()}`;
     const fbMonth = feedbackMonth(mayaToday);
     const month = fbMonth ?? mayaToday.slice(0, 7);
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="intentions-summary"]').waitFor({ timeout: 20000 });
+    if (await page.locator('[data-testid="feedback-card"]').count()) throw new Error("feedback is never on Today");
+    await page.goto(`${base}/intentions`);
+    await page.locator('[data-testid="week-card"]').waitFor({ timeout: 20000 });
     const fbCard = page.locator('[data-testid="feedback-card"]');
     if (fbMonth) {
-      if ((await fbCard.getAttribute("data-state")) !== "ask") throw new Error(`in the window (${mayaToday}), Today asks for feedback on ${fbMonth}`);
+      if ((await fbCard.getAttribute("data-state")) !== "ask") throw new Error(`in the window (${mayaToday}), Intentions asks for feedback on ${fbMonth}`);
       // What Maya wrote for that month's question 11, shown back to compare.
       const wrote = fbMonth === thisMonth ? "Showing up every single day." : PAST_PROUD;
       if (!(await page.locator('[data-testid="feedback-lookback"]').innerText()).includes(wrote)) throw new Error(`the feedback card shows what Maya wrote for question 11 of ${fbMonth}`);
@@ -342,7 +381,7 @@ async function main() {
     } else {
       if (await fbCard.count()) throw new Error(`outside the window (${mayaToday}) there is no feedback card`);
       await db.insert(schema.monthlyFeedback).values({ id: newId(), workspaceId: ws.id, userId: maya.id, month, proud: PROUD, love: "The Friday calls.", less: "Long lessons.", more: "Templates.", wow: "A done-for-you funnel.", referralScore: 10 });
-      console.log(`✓ feedback: ${mayaToday} is outside the window, so Today asks nothing (the unit tests cover the window; a response is seeded for the coach's view)`);
+      console.log(`✓ feedback: ${mayaToday} is outside the window, so Intentions asks nothing (the unit tests cover the window; a response is seeded for the coach's view)`);
     }
     const exportedFb = await (await page.request.get(`${base}/api/export?format=json`)).text();
     if (!exportedFb.includes("monthly_feedback") || !exportedFb.includes(PROUD)) throw new Error("the member's export has their feedback");

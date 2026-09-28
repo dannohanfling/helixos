@@ -16,7 +16,7 @@ import { feedbackMonth, readFeedback } from "@/lib/engine/feedback";
 export async function saveFeedbackAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx();
   const month = feedbackMonth(v.today);
-  if (!month) redirect("/today");
+  if (!month) redirect("/intentions");
   const read = readFeedback({
     proud: str(formData, "proud"),
     love: str(formData, "love"),
@@ -27,7 +27,7 @@ export async function saveFeedbackAction(formData: FormData): Promise<void> {
     referral: str(formData, "referral"),
     favorite: str(formData, "favorite"),
   });
-  if ("error" in read) redirect(`/today?feedbackError=${encodeURIComponent(read.error)}#feedback`);
+  if ("error" in read) redirect(`/intentions?feedbackError=${encodeURIComponent(read.error)}${read.field ? `&field=${read.field}` : ""}#feedback`);
   const f = read.value;
   const row = { proud: f.proud, love: f.love, less: f.less, more: f.more, wow: f.wow, referralScore: f.referralScore, referral: f.referral || null, favorite: f.favorite || null };
   const existing = await db.query.monthlyFeedback.findFirst({ where: and(eq(schema.monthlyFeedback.workspaceId, workspaceId), eq(schema.monthlyFeedback.userId, userId), eq(schema.monthlyFeedback.month, month)) });
@@ -40,5 +40,5 @@ export async function saveFeedbackAction(formData: FormData): Promise<void> {
     await db.insert(schema.monthlyFeedback).values({ id: newId(), workspaceId, userId, month, ...row }).onConflictDoNothing();
   }
   refresh();
-  redirect("/today?feedbackSaved=1#feedback");
+  redirect("/intentions?feedbackSaved=1#feedback");
 }

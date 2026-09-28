@@ -496,7 +496,11 @@ export const communityShares = sqliteTable(
 );
 
 /* ───────────────────────── Weekly intention: the 3-1-3 (handoff rev 124) ───────────────────────── */
-export type IntentionKeyResult = { text: string; done: boolean | null };
+/**
+ * A key result as set and as checked on Friday (rev 158): `actual` is "how many did you get", against the number in the text;
+ * `kept` marks one saved as written though it reads like a task, for the coach.
+ */
+export type IntentionKeyResult = { text: string; done: boolean | null; actual?: number | null; kept?: boolean };
 export type IntentionTask = { title: string; taskId: string | null };
 export const weeklyIntentions = sqliteTable(
   "weekly_intentions",

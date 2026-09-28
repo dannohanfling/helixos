@@ -8,6 +8,7 @@ import { essenceFor } from "@/lib/queries/essence";
 import { houseRuleSeed } from "@/lib/engine/bot-fields";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { DraftKeeper } from "@/components/draft-keeper";
 
 export const metadata = { title: "Essence" };
 
@@ -82,6 +83,7 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
         <Card title={`${idx + 1}. ${current.title}`} action={<Badge tone={sectionFilled(data, current.key) ? "good" : "neutral"}>{sectionFilled(data, current.key) ? "filled" : "empty"}</Badge>}>
           <form action={saveEssenceSectionAction} className="space-y-4" data-testid="essence-form" data-section={current.key}>
             <input type="hidden" name="section" value={current.key} />
+            <DraftKeeper id={`essence.${v.user.id}.${current.key}`} />
             {current.fields.map((f) =>
               f.kind === "stories" ? (
                 <div key={f.key} className="space-y-3">

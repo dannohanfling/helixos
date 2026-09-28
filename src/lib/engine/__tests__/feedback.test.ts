@@ -20,10 +20,10 @@ describe("end-of-month feedback (handoff rev 124)", () => {
   it("proud, Love, Less, More, Wow, a whole referral score from 1 to 10 and their favorite part are required; who they'd refer is not (rev 129)", () => {
     expect(readFeedback(full)).toEqual({ value: { ...full, referralScore: 9 } });
     expect(readFeedback({ ...full, referral: " " })).toEqual({ value: { ...full, referralScore: 9, referral: "" } });
-    expect(readFeedback({ ...full, favorite: " " })).toEqual({ error: "Tell us your favorite part of the experience so far." });
-    expect(readFeedback({ ...full, proud: "" })).toEqual({ error: "Tell us what you're most proud of this past month." });
-    expect(readFeedback({ ...full, wow: " " })).toEqual({ error: "Fill in Wow." });
-    for (const s of ["", "0", "11", "7.5", "ten"]) expect(readFeedback({ ...full, referralScore: s })).toEqual({ error: "Pick a referral score from 1 to 10." });
+    expect(readFeedback({ ...full, favorite: " " })).toMatchObject({ error: "Tell us your favorite part of the experience so far." });
+    expect(readFeedback({ ...full, proud: "" })).toMatchObject({ error: "Tell us what you're most proud of this past month." });
+    expect(readFeedback({ ...full, wow: " " })).toMatchObject({ error: "Fill in Wow." });
+    for (const s of ["", "0", "11", "7.5", "ten"]) expect(readFeedback({ ...full, referralScore: s })).toMatchObject({ error: "Pick a referral score from 1 to 10." });
     expect(readFeedback({ ...full, referralScore: "10" })).toHaveProperty("value");
   });
   it("sums a month for the coach, and says the trend plainly", () => {

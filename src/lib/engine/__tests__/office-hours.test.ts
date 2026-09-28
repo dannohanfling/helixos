@@ -17,18 +17,18 @@ describe("Open Office Hours requests (handoff rev 124)", () => {
   });
   it("the two gates come first: going back saves nothing and says so kindly; the promise must be ticked", () => {
     expect(readOohRequest({ ...base, triedGate: GO_BACK }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toHaveProperty("goBack");
-    expect(readOohRequest({ ...base, triedGate: "" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ error: "Tell us whether you've tried to overcome this yourself." });
-    expect(readOohRequest({ ...base, promise: false }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ error: "Promise to attend the call, so your spot isn't wasted." });
+    expect(readOohRequest({ ...base, triedGate: "" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toMatchObject({ error: "Tell us whether you've tried to overcome this yourself." });
+    expect(readOohRequest({ ...base, promise: false }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toMatchObject({ error: "Promise to attend the call, so your spot isn't wasted." });
   });
   it("then the fields: one of the next four Fridays, the issue, what they tried, the goal and a listed category; tools optional", () => {
     expect(readOohRequest({ ...base, tools: " " }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ value: { ...base, tools: "", triedGate: undefined, promise: undefined } });
-    expect(readOohRequest({ ...base, friday: "2026-09-18" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ error: "Pick one of the next four Fridays." });
+    expect(readOohRequest({ ...base, friday: "2026-09-18" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toMatchObject({ error: "Pick one of the next four Fridays." });
     expect(readOohRequest({ ...base, friday: "2026-10-16" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toHaveProperty("value");
-    expect(readOohRequest({ ...base, friday: "2026-10-23" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ error: "Pick one of the next four Fridays." });
-    expect(readOohRequest({ ...base, description: "" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ error: "Describe the issue." });
-    expect(readOohRequest({ ...base, triedSelf: "" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ error: "Say how you tried to solve it yourself." });
-    expect(readOohRequest({ ...base, goal: "" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ error: "Say what solution we're trying to reach on the call." });
-    expect(readOohRequest({ ...base, category: "Taxes" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toEqual({ error: "Pick a category." });
+    expect(readOohRequest({ ...base, friday: "2026-10-23" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toMatchObject({ error: "Pick one of the next four Fridays." });
+    expect(readOohRequest({ ...base, description: "" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toMatchObject({ error: "Describe the issue." });
+    expect(readOohRequest({ ...base, triedSelf: "" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toMatchObject({ error: "Say how you tried to solve it yourself." });
+    expect(readOohRequest({ ...base, goal: "" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toMatchObject({ error: "Say what solution we're trying to reach on the call." });
+    expect(readOohRequest({ ...base, category: "Taxes" }, "2026-09-24", OOH_CATEGORIES_DEFAULT)).toMatchObject({ error: "Pick a category." });
     expect(readOohRequest({ ...base, category: "Taxes" }, "2026-09-24", [...OOH_CATEGORIES_DEFAULT, "Taxes"])).toHaveProperty("value");
   });
   it("the coach's lists: one per line, trimmed, no blanks or repeats", () => {

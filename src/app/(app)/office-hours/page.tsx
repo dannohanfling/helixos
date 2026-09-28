@@ -6,6 +6,7 @@ import { saveOohRequestAction } from "@/lib/actions/office-hours";
 import { GO_BACK, OOH_OUTCOME_LABEL, oohEditable, upcomingFridays } from "@/lib/engine/office-hours";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { Badge, Card, PageHeader } from "@/components/ui";
 
 export const metadata = { title: "Office Hours" };
@@ -13,11 +14,12 @@ export const metadata = { title: "Office Hours" };
 const fridayLabel = (d: string) => formatDate(d, { weekday: "long", month: "long", day: "numeric" });
 
 /** The request form, new or filled to edit. The two gates sit at the end, as on the old form. */
-function RequestForm({ fridays, categories, request }: { fridays: string[]; categories: string[]; request?: OfficeHoursRequest }) {
+function RequestForm({ fridays, categories, request, owner }: { fridays: string[]; categories: string[]; request?: OfficeHoursRequest; owner: string }) {
   const choices = request && !fridays.includes(request.friday) ? [request.friday, ...fridays] : fridays;
   return (
     <form action={saveOohRequestAction} className="space-y-3" data-testid="ooh-form">
       {request ? <input type="hidden" name="requestId" value={request.id} /> : null}
+      <DraftKeeper id={`ooh.${owner}.${request?.id ?? "new"}`} />
       <label className="block text-sm font-medium">
         Which Friday
         <select className="field mt-1" name="friday" defaultValue={request?.friday ?? fridays[0]} data-testid="ooh-friday">
@@ -95,7 +97,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
                 That&apos;s a good call. Work through it on your own first, and if you&apos;re still stuck, ask here before the next Friday. Nothing was sent.
               </p>
             ) : null}
-            <RequestForm fridays={fridays} categories={v.workspace.oohCategories} />
+            <RequestForm fridays={fridays} categories={v.workspace.oohCategories} owner={v.user.id} />
           </Card>
         </div>
         <div id="mine">
@@ -118,7 +120,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs underline" data-testid="ooh-edit">Change this request</summary>
                         <div className="mt-2">
-                          <RequestForm fridays={fridays} categories={v.workspace.oohCategories} request={r} />
+                          <RequestForm fridays={fridays} categories={v.workspace.oohCategories} request={r} owner={v.user.id} />
                         </div>
                       </details>
                     ) : null}

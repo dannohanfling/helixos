@@ -10,7 +10,7 @@ import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { BottomNav, SideNav } from "./nav";
 import { SubmitButton } from "@/components/submit-button";
 
-export function AppShell({ viewer, points, streak, children }: { viewer: Viewer; points: number; streak: number; children: ReactNode }) {
+export function AppShell({ viewer, points, streak, badges = {}, children }: { viewer: Viewer; points: number; streak: number; badges?: Record<string, number>; children: ReactNode }) {
   const tier = tierProgress(points);
   return (
     <div className="min-h-screen md:flex">
@@ -24,7 +24,7 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
           </div>
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} badges={badges} />
         </div>
         <div className="mt-3 space-y-3 border-t px-5 pt-3">
           <div className="rounded-xl bg-surface-2 p-3 text-xs">
@@ -82,7 +82,7 @@ export function AppShell({ viewer, points, streak, children }: { viewer: Viewer;
           {children}
         </main>
       </div>
-      <BottomNav role={viewer.role} />
+      <BottomNav role={viewer.role} badges={badges} />
     </div>
   );
 }

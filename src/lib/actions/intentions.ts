@@ -3,11 +3,11 @@
 import { and, eq, ne } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
-import type { IntentionTask } from "@/db/schema";
+import type { IntentionKeyResult, IntentionTask } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { readIntention, tasksDueOn, weekOf } from "@/lib/engine/intentions";
+import { hitTarget, readIntention, soundsLikeTask, targetOf, tasksDueOn, weekOf } from "@/lib/engine/intentions";
 import { monthOf, readMonthIntention } from "@/lib/engine/month-intentions";
 import { SHARE_POINTS, shareRef } from "@/lib/engine/community";
 import { shareFor } from "@/lib/community";
@@ -30,7 +30,7 @@ export async function saveIntentionAction(formData: FormData): Promise<void> {
     initiative: str(formData, "initiative"),
     tasks: [str(formData, "task1"), str(formData, "task2"), str(formData, "task3")],
   });
-  if ("error" in read) redirect(`${backTo(formData)}?weekError=${encodeURIComponent(read.error)}#week`);
+  if ("error" in read) redirect(`${backTo(formData)}?weekError=${encodeURIComponent(read.error)}${read.field ? `&field=${read.field}` : ""}#week`);
   const { value } = read;
   const existing = await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, week)) });
   const before = existing?.tasks ?? [];
@@ -50,7 +50,11 @@ export async function saveIntentionAction(formData: FormData): Promise<void> {
     if (gone.taskId) await db.delete(schema.tasks).where(and(eq(schema.tasks.id, gone.taskId), eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId), ne(schema.tasks.status, "done")));
   }
   // A key result keeps its mark only while its words are unchanged.
-  const keyResults = value.keyResults.map((text, i) => ({ text, done: existing?.keyResults[i]?.text === text ? existing.keyResults[i].done : null }));
+  // One saved as written though it reads like a task is marked for the coach (rev 158: the nudge asks, it never blocks).
+  const keyResults = value.keyResults.map((text, i) => {
+    const same = existing?.keyResults[i]?.text === text ? existing.keyResults[i] : null;
+    return { text, done: same ? same.done : null, actual: same?.actual ?? null, ...(soundsLikeTask(text) ? { kept: true } : {}) };
+  });
   if (existing) {
     await db
       .update(schema.weeklyIntentions)
@@ -69,9 +73,21 @@ export async function reviewIntentionAction(formData: FormData): Promise<void> {
   const week = weekOf(v.today);
   const existing = await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, week)) });
   if (!existing) redirect(`${backTo(formData)}#week`);
-  const marks = existing.keyResults.map((k, i) => ({ text: k.text, mark: str(formData, `kr${i + 1}`) }));
-  if (marks.some((m) => m.mark !== "done" && m.mark !== "not")) redirect(`${backTo(formData)}?weekError=${encodeURIComponent("Mark each key result done or not done.")}#week`);
-  const keyResults = marks.map((m) => ({ text: m.text, done: m.mark === "done" }));
+  // Against the number set (rev 158): "how many did you get?", and done means they hit it. A key result with no number (set
+  // before the rule) is still marked done or not done.
+  const keyResults: IntentionKeyResult[] = [];
+  for (const [i, k] of existing.keyResults.entries()) {
+    if (targetOf(k.text) !== null) {
+      const raw = str(formData, `kr${i + 1}Count`).trim();
+      if (!/^\d+(\.\d+)?$/.test(raw)) redirect(`${backTo(formData)}?weekError=${encodeURIComponent("Write how many you got for each key result, like 2.")}#week`);
+      const actual = Number(raw);
+      keyResults.push({ ...k, actual, done: hitTarget(k.text, actual) });
+    } else {
+      const mark = str(formData, `kr${i + 1}`);
+      if (mark !== "done" && mark !== "not") redirect(`${backTo(formData)}?weekError=${encodeURIComponent("Mark each key result done or not done.")}#week`);
+      keyResults.push({ ...k, done: mark === "done" });
+    }
+  }
   await db
     .update(schema.weeklyIntentions)
     .set({ keyResults, reviewedAt: nowIso(), updatedAt: nowIso() })
@@ -102,7 +118,7 @@ export async function saveMonthIntentionAction(formData: FormData): Promise<void
     proudLast: str(formData, "proudLast"),
     proudEnd: str(formData, "proudEnd"),
   });
-  if ("error" in read) redirect(`${backTo(formData)}?monthError=${encodeURIComponent(read.error)}#month`);
+  if ("error" in read) redirect(`${backTo(formData)}?monthError=${encodeURIComponent(read.error)}${read.field ? `&field=${read.field}` : ""}#month`);
   const existing = await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, workspaceId), eq(schema.monthlyIntentions.userId, userId), eq(schema.monthlyIntentions.month, month)) });
   if (existing) {
     await db

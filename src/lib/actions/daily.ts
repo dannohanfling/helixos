@@ -164,3 +164,25 @@ export async function repairStreakAction(formData: FormData): Promise<void> {
   await db.update(schema.dailyLogs).set({ eveningDoneAt: nowIso(), repairedAt: nowIso(), streakDay: 0, win: log.win ?? "Streak repaired" }).where(eq(schema.dailyLogs.id, log.id));
   refresh();
 }
+
+/**
+ * A new task typed in the morning lock-in (handoff rev 157): added straight away as a real task for today, due today, so it is
+ * on Tasks too, and handed back for the pick list. The same title twice finds the open task instead of making a second one.
+ */
+export async function addTodayTaskAction(title: string): Promise<{ ok: true; task: { id: string; title: string } } | { ok: false; error: string }> {
+  const { v, workspaceId, userId } = await ctx();
+  const t = title.trim().slice(0, 200);
+  if (!t) return { ok: false, error: "Type the task first." };
+  const existing = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId), ne(schema.tasks.status, "done"), sql`lower(${schema.tasks.title}) = lower(${t})`) });
+  if (existing) return { ok: true, task: { id: existing.id, title: existing.title } };
+  const id = newId();
+  await db.insert(schema.tasks).values({ id, workspaceId, userId, title: t, urgency: "medium", status: "today", dueDate: v.today, points: POINTS.task });
+  return { ok: true, task: { id, title: t } };
+}
+
+/** One tap takes back a task just added in the lock-in: only an open one of the member's own, added today and not yet picked. */
+export async function removeTodayTaskAction(id: string): Promise<{ ok: boolean }> {
+  const { v, workspaceId, userId } = await ctx();
+  await db.delete(schema.tasks).where(and(eq(schema.tasks.id, id), eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId), ne(schema.tasks.status, "done"), eq(schema.tasks.dueDate, v.today), sql`${schema.tasks.focusDate} is null`, sql`date(${schema.tasks.createdAt}) >= date(${v.today}, '-1 day')`));
+  return { ok: true };
+}

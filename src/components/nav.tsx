@@ -41,7 +41,7 @@ function writeCollapsed(next: Record<string, boolean>) {
   listeners.forEach((l) => l());
 }
 
-export function SideNav({ role, passEnabled }: { role: "coach" | "client"; passEnabled: boolean }) {
+export function SideNav({ role, passEnabled, badges = {} }: { role: "coach" | "client"; passEnabled: boolean; badges?: Record<string, number> }) {
   const pathname = usePathname();
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const collapsed = useMemo<Record<string, boolean>>(() => {
@@ -87,6 +87,7 @@ export function SideNav({ role, passEnabled }: { role: "coach" | "client"; passE
                       {n.label}
                       {n.line ? <span className="text-[11px] font-normal text-ink-3">{n.line}</span> : null}
                     </span>
+                    {badges[n.href] ? <DueBadge count={badges[n.href]} /> : null}
                   </Link>
                 ))}
               </div>
@@ -98,7 +99,7 @@ export function SideNav({ role, passEnabled }: { role: "coach" | "client"; passE
   );
 }
 
-export function BottomNav({ role }: { role: "coach" | "client" }) {
+export function BottomNav({ role, badges = {} }: { role: "coach" | "client"; badges?: Record<string, number> }) {
   const pathname = usePathname();
   const items: NavItem[] = [
     { href: "/today", label: "Today", icon: "☀️" },
@@ -116,12 +117,25 @@ export function BottomNav({ role }: { role: "coach" | "client" }) {
         const active = n.href === "/more" ? moreActive && pathname !== "/today" : isActive(pathname, n.href);
         return (
           <Link key={n.href} href={n.href} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${active ? "text-ink" : "text-ink-3"}`}>
-            <span className="text-lg leading-none">{n.icon}</span>
+            <span className="relative text-lg leading-none">
+              {n.icon}
+              {n.href === "/more" && Object.values(badges).some(Boolean) ? <span className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-accent" aria-label="Something is due" data-testid="more-due-dot" /> : null}
+            </span>
             {n.label}
           </Link>
         );
       })}
     </nav>
     </PinToViewport>
+  );
+}
+
+/** A small dot with a count beside a menu item while something there is due (rev 157: Intentions). */
+export function DueBadge({ count }: { count: number }) {
+  return (
+    <span className="ml-auto inline-flex min-w-5 items-center justify-center gap-1 rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent" aria-label={`${count} due`} data-testid="due-badge">
+      <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />
+      {count}
+    </span>
   );
 }
