@@ -9,6 +9,9 @@ import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { readIntention, tasksDueOn, weekOf } from "@/lib/engine/intentions";
 import { monthOf, readMonthIntention } from "@/lib/engine/month-intentions";
+import { SHARE_POINTS, shareRef } from "@/lib/engine/community";
+import { shareFor } from "@/lib/community";
+import { award } from "@/lib/queries/points";
 
 /** Where a form goes back to: the Intentions page or Today, and nothing else. */
 const backTo = (formData: FormData): "/intentions" | "/today" => (str(formData, "back") === "/intentions" ? "/intentions" : "/today");
@@ -111,4 +114,20 @@ export async function saveMonthIntentionAction(formData: FormData): Promise<void
   }
   refresh();
   redirect(`${backTo(formData)}?monthSaved=1#month`);
+}
+
+/**
+ * The tap on "Share to the thread" (piece 2): recorded once per week, with the week's points on the first tap (the coach can
+ * take them back). Only for the member's own current week, and only once this week's post is out: nothing is recorded for a
+ * post that doesn't exist. The comment itself is posted by the member, under their own name; HelixOS never posts it.
+ */
+export async function recordShareAction(): Promise<{ ok: boolean; points: number; error?: string }> {
+  const { v, workspaceId, userId } = await ctx();
+  const week = await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) });
+  if (!week) return { ok: false, points: 0, error: "Set your 3-1-3 first." };
+  const share = await shareFor(workspaceId, userId, week);
+  if (!share.link) return { ok: false, points: 0, error: share.reason ?? "This week's post isn't up yet." };
+  await db.insert(schema.communityShares).values({ id: newId(), workspaceId, userId, weekOf: week.weekOf }).onConflictDoNothing();
+  const scored = await award({ workspaceId, userId }, "community", SHARE_POINTS, "Shared your 3-1-3 in the community", shareRef(week.weekOf));
+  return { ok: true, points: scored ? SHARE_POINTS : 0 };
 }

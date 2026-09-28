@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { connectionFor, probeCommunityScopes } from "@/lib/ghl";
@@ -41,10 +41,20 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
   const thisWeek = mondays.find((p) => p.weekOf === v.today) ?? null;
   const missed = s?.channelAccountId && mondayDue(v.today, nowTime, postTime) && (!thisWeek || thisWeek.status === "scheduled") ? v.today : null;
   const weeks = [...new Set(mondays.filter((p) => p.weekOf && p.weekOf <= v.today).map((p) => p.weekOf!))];
+  // Per week: how many members set their 3-1-3, how many tapped "Share to the thread", and who hasn't shared yet.
   const setCounts = new Map<string, number>();
+  const shareCounts = new Map<string, number>();
+  const notShared = new Map<string, string[]>();
+  const clientNames = clients.length ? new Map((await db.query.users.findMany({ where: inArray(schema.users.id, clients.map((c) => c.userId)) })).map((u) => [u.id, u.name])) : new Map<string, string>();
   for (const w of weeks) {
-    const rows = await db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.weekOf, w)) });
+    const [rows, shares] = await Promise.all([
+      db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.weekOf, w)) }),
+      db.query.communityShares.findMany({ where: and(eq(schema.communityShares.workspaceId, v.workspace.id), eq(schema.communityShares.weekOf, w)) }),
+    ]);
     setCounts.set(w, rows.filter((r) => clients.some((c) => c.userId === r.userId)).length);
+    const sharedIds = new Set(shares.map((x) => x.userId));
+    shareCounts.set(w, clients.filter((c) => sharedIds.has(c.userId)).length);
+    notShared.set(w, clients.filter((c) => !sharedIds.has(c.userId)).map((c) => clientNames.get(c.userId) ?? "A member").sort());
   }
   const channels = (conn?.accounts ?? []).slice().sort((a, b) => Number(b.platform === "community") - Number(a.platform === "community"));
   const missing = scopes.filter((x) => x.state === "missing");
@@ -190,9 +200,17 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                 <li key={p.id} className="py-3" data-testid="community-log-row" data-week={p.weekOf ?? ""} data-state={p.status}>
                   <PostLine p={p} tz={tz} />
                   {p.weekOf && p.weekOf <= v.today ? (
-                    <p className="mt-1 text-xs text-ink-3" data-testid="community-week-counts">
-                      3-1-3s set that week: {setCounts.get(p.weekOf) ?? 0} of {clients.length}
-                    </p>
+                    <div className="mt-1 text-xs text-ink-3">
+                      <p data-testid="community-week-counts">
+                        3-1-3s set that week: {setCounts.get(p.weekOf) ?? 0} of {clients.length} · shared to the thread: <span data-testid="community-week-shares">{shareCounts.get(p.weekOf) ?? 0}</span>
+                      </p>
+                      {(notShared.get(p.weekOf) ?? []).length ? (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer">Not shared yet ({(notShared.get(p.weekOf) ?? []).length})</summary>
+                          <p className="mt-1 text-ink-2" data-testid="community-not-shared">{(notShared.get(p.weekOf) ?? []).join(", ")}</p>
+                        </details>
+                      ) : null}
+                    </div>
                   ) : null}
                   {p.status === "failed" ? (
                     <form action={postCommunityNowAction} className="mt-2">

@@ -4,10 +4,12 @@ import { intentionPrompt, keyResultTally } from "@/lib/engine/intentions";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
+import { ShareButton } from "@/components/share-button";
 
 type Sp = { weekError?: string; weekSaved?: string; weekReviewed?: string };
 
 /** The 3-1-3 form, empty to set the week or filled to edit it. The third key result and the third task may stay blank. */
+export type Share = { text: string; link: string | null; reason: string | null; shared: boolean };
 export type Back = "/today" | "/intentions";
 function WeekForm({ week, back }: { week: WeeklyIntention | null; back: Back }) {
   const kr = (i: number) => week?.keyResults[i]?.text ?? "";
@@ -47,7 +49,7 @@ function WeekForm({ week, back }: { week: WeeklyIntention | null; back: Back }) 
  * The weekly 3-1-3 on Today (handoff rev 124): "Set your week" until it is set, then the week at the top. From Friday to Sunday
  * it asks, once, which key results got done.
  */
-export function WeekCard({ week, today, taskDone, sp, back = "/intentions" }: { week: WeeklyIntention | null; today: string; taskDone: Record<string, boolean>; sp: Sp; back?: Back }) {
+export function WeekCard({ week, today, taskDone, sp, back = "/intentions", share = null }: { week: WeeklyIntention | null; today: string; taskDone: Record<string, boolean>; sp: Sp; back?: Back; share?: Share | null }) {
   const state = intentionPrompt(today, week);
   const notes = (
     <>
@@ -101,6 +103,12 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions" }: { 
             </ul>
           </div>
         </div>
+        {share ? (
+          <div className="mt-4 rounded-lg border p-3" data-testid="week-share">
+            <p className="mb-2 text-sm font-medium">Share your 3-1-3 in the community thread</p>
+            <ShareButton {...share} />
+          </div>
+        ) : null}
         {state === "review" ? (
           <form action={reviewIntentionAction} className="mt-4 rounded-lg border p-3" data-testid="week-review">
             <input type="hidden" name="back" value={back} />

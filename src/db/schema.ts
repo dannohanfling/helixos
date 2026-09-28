@@ -482,6 +482,19 @@ export const communityPosts = sqliteTable(
 );
 export type CommunityPost = typeof communityPosts.$inferSelect;
 
+/** "Share to the thread" taps: one per member per week, the week's points on the first. What the coach's card counts. */
+export const communityShares = sqliteTable(
+  "community_shares",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    weekOf: text("week_of").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("community_shares_member_week").on(t.workspaceId, t.userId, t.weekOf)],
+);
+
 /* ───────────────────────── Weekly intention: the 3-1-3 (handoff rev 124) ───────────────────────── */
 export type IntentionKeyResult = { text: string; done: boolean | null };
 export type IntentionTask = { title: string; taskId: string | null };
@@ -566,6 +579,7 @@ export const POINT_TYPES = [
   "curriculum",
   "bonus",
   "redeem",
+  "community",
 ] as const;
 
 export const pointsLedger = sqliteTable(

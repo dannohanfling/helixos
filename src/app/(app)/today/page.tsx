@@ -16,6 +16,8 @@ import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
 import { formatDate, relativeDay } from "@/lib/dates";
 import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { TIER_ICONS } from "@/lib/engine/tiers";
+import { shareFor } from "@/lib/community";
+import { ShareButton } from "@/components/share-button";
 import { closedDates } from "@/lib/queries/daily";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -53,6 +55,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const d = await todayData(v);
   // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.
   const week = (await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, v.user.id), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) })) ?? null;
+  const share = week ? await shareFor(v.workspace.id, v.user.id, week) : null;
   const weekTaskIds = (week?.tasks ?? []).map((t) => t.taskId).filter((x): x is string => Boolean(x));
   const weekTasks = weekTaskIds.length ? await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, v.user.id), inArray(schema.tasks.id, weekTaskIds)) }) : [];
   const taskDone = Object.fromEntries(weekTasks.map((t) => [t.id, t.status === "done"]));
@@ -112,6 +115,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </span>
           ) : null}
           {sp.monthSaved || sp.weekSaved ? <span className="text-good" role="status" data-testid="summary-saved">Saved.</span> : null}
+          {share ? <ShareButton {...share} compact /> : null}
           {weekState === "review" ? (
             <Link href="/intentions#week" className="font-medium underline" data-testid="summary-review">
               The week is nearly done: mark your key results

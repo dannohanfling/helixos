@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MONDAY_TEXT, TITLE_MAX, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern } from "../community";
+import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern } from "../community";
 
 describe("the Monday post's title", () => {
   it("is the week's Monday to Sunday, month/day", () => {
@@ -72,5 +72,25 @@ describe("an account on hold", () => {
     expect(isAccountHold({ status: 401, detail: "Location is suspended" })).toBe(true);
     expect(isAccountHold({ status: 403, detail: "The token does not have access to this scope: socialplanner/post.write" })).toBe(false);
     expect(isAccountHold({ status: 422, detail: "userId must be a valid user id" })).toBe(false);
+  });
+});
+
+describe("Share to the thread", () => {
+  const week = { word: "Consistent ", keyResults: [{ text: "Follow up with 12 leads" }, { text: "Book 3 calls" }, { text: " " }], initiative: "Build my webinar", tasks: [{ title: "Write the hook" }, { title: "Record the intro" }] };
+  it("is the word, key results, initiative and tasks, and nothing else", () => {
+    expect(shareText(week)).toBe("My word: Consistent\n\nKey results:\n1. Follow up with 12 leads\n2. Book 3 calls\n\nInitiative: Build my webinar\n\nTasks:\n1. Write the hook\n2. Record the intro");
+  });
+  it("opens only this week's post, once it's out with a link", () => {
+    const posted = { weekOf: "2026-09-28", status: "posted", link: "https://c.example.com/p/1" };
+    expect(shareTarget(posted, "2026-09-28")).toEqual({ link: "https://c.example.com/p/1" });
+    expect("reason" in shareTarget(posted, "2026-10-05")).toBe(true);
+    expect("reason" in shareTarget({ ...posted, status: "skipped" }, "2026-09-28")).toBe(true);
+    expect("reason" in shareTarget({ ...posted, status: "failed" }, "2026-09-28")).toBe(true);
+    expect("reason" in shareTarget({ ...posted, link: null }, "2026-09-28")).toBe(true);
+    expect("reason" in shareTarget(null, "2026-09-28")).toBe(true);
+  });
+  it("scores 15 once per week", () => {
+    expect(SHARE_POINTS).toBe(15);
+    expect(shareRef("2026-09-28")).toBe("share:2026-09-28");
   });
 });

@@ -78,3 +78,27 @@ export function fromPlanner(status: string): CommunityStatus {
   if (s === "failed" || s === "deleted") return "failed";
   return "sent";
 }
+
+/* ───────── Piece 2: "Share to the thread" ───────── */
+
+/** Points for sharing the week's 3-1-3 to the thread: once per week, on the tap (rev 153: 15, type "community"). */
+export const SHARE_POINTS = 15;
+export const shareRef = (weekOf: string): string => `share:${weekOf}`;
+
+/**
+ * The member's 3-1-3 as a ready-made comment: the word, the key results, the initiative and the tasks, nothing else. No
+ * revenue and nothing from the monthly intention: those stay private.
+ */
+export function shareText(week: { word: string; keyResults: { text: string }[]; initiative: string; tasks: { title: string }[] }): string {
+  const list = (xs: string[]) => xs.filter((x) => x.trim()).map((x, i) => `${i + 1}. ${x.trim()}`).join("\n");
+  return [`My word: ${week.word.trim()}`, `Key results:\n${list(week.keyResults.map((k) => k.text))}`, `Initiative: ${week.initiative.trim()}`, `Tasks:\n${list(week.tasks.map((t) => t.title))}`].join("\n\n");
+}
+
+/**
+ * Where "Share to the thread" goes: this week's Monday post, once it's out and HelixOS has its link. Never an older week's post.
+ */
+export function shareTarget(post: { weekOf: string | null; status: string; link: string | null } | null | undefined, weekOf: string): { link: string } | { reason: string } {
+  if (!post || post.weekOf !== weekOf || post.status === "skipped") return { reason: "This week's post isn't up yet. Check back after Monday's post goes out." };
+  if (!post.link || (post.status !== "posted" && post.status !== "sent")) return { reason: "This week's post isn't up yet. Check back later today." };
+  return { link: post.link };
+}

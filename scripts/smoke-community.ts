@@ -54,7 +54,10 @@ async function main() {
     const tz = coachM.timezone || ws.timezone;
     const today = todayInTz(tz);
 
-    const page = await (await browser.newContext({ viewport: { width: 1300, height: 950 } })).newPage();
+    const context = await browser.newContext({ viewport: { width: 1300, height: 950 }, permissions: ["clipboard-read", "clipboard-write"] });
+    // The community itself: a post link opens this stand-in page, so the walk can see which post "Share to the thread" opened.
+    await context.route("https://academy.example.com/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<p>community post</p>" }));
+    const page = await context.newPage();
     page.on("response", (r) => {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
     });
@@ -182,6 +185,70 @@ async function main() {
     const mine = await titled(mondayTitle(thisWeek));
     if (due ? mine.length !== 1 : (await mockPosts()).length !== count0) throw new Error(due ? "on Monday the job posts this week's, once" : "on any other day the job posts nothing new");
     console.log(due ? `✓ ${today} is a Monday: the hourly job posted this week's by itself, once` : `✓ ${today} isn't a Monday: the hourly job posted nothing new (the unit tests cover Monday)`);
+
+    // ── 7. Share to the thread (piece 2): this week's post only, copied, opened, 15 points once per week. ──
+    const { weekOf } = await import("@/lib/engine/intentions");
+    const { SHARE_POINTS, shareText } = await import("@/lib/engine/community");
+    const mayaM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+    const mayaWeek = weekOf(todayInTz(mayaM.timezone || ws.timezone));
+    await db.delete(schema.weeklyIntentions).where(and(eq(schema.weeklyIntentions.userId, maya.id), eq(schema.weeklyIntentions.weekOf, mayaWeek)));
+    const week = { word: "Consistent", keyResults: [{ text: "Follow up with 12 leads", done: null }, { text: "Book 3 calls", done: null }], initiative: "Build my webinar", tasks: [{ title: "Write the hook", taskId: null }, { title: "Record the intro", taskId: null }] };
+    await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId: ws.id, userId: maya.id, weekOf: mayaWeek, ...week });
+    const { monthOf } = await import("@/lib/engine/month-intentions");
+    const mayaMonth = monthOf(todayInTz(mayaM.timezone || ws.timezone));
+    await db.delete(schema.monthlyIntentions).where(and(eq(schema.monthlyIntentions.userId, maya.id), eq(schema.monthlyIntentions.month, mayaMonth)));
+    await db.insert(schema.monthlyIntentions).values({ id: newId(), workspaceId: ws.id, userId: maya.id, month: mayaMonth, word: "Rooted", personalSeason: "wealth", fear: "f", habit: "h", skill: "s", impact: "i", businessSeason: "sales", revenueGoal: 10000, revenueWhy: "To hire help.", plan: "p", proudLast: "l", proudEnd: "e" });
+    await db.delete(schema.communityShares).where(eq(schema.communityShares.userId, maya.id));
+    await db.delete(schema.pointsLedger).where(and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.type, "community")));
+    await db.delete(schema.communityPosts).where(and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, mayaWeek)));
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As a client")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/intentions`);
+    await page.locator('[data-testid="week-share"]').waitFor({ timeout: 20000 });
+    if (!(await page.locator('[data-testid="share-unavailable"]').innerText()).includes("isn't up yet") || (await page.locator('[data-testid="share-to-thread"]').count())) throw new Error("before this week's post is out, the button says so and opens nothing");
+    // The page's own requests on load (the tier celebration) finish before the walk writes to the same database.
+    await page.waitForLoadState("networkidle");
+    const LINK = "https://academy.example.com/post?id=cm_share";
+    await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "monday", weekOf: mayaWeek, title: mondayTitle(mayaWeek), status: "posted", link: LINK, platformPostId: "cm_share" });
+    await page.reload();
+    const shareBtn = page.locator('[data-testid="week-share"] [data-testid="share-to-thread"]');
+    await shareBtn.waitFor({ timeout: 20000 });
+    const [popup] = await Promise.all([page.waitForEvent("popup"), shareBtn.click()]);
+    await popup.waitForLoadState();
+    if (popup.url() !== LINK) throw new Error(`the tap opens this week's post: ${popup.url()}`);
+    await popup.close();
+    const note = page.locator('[data-testid="week-share"] [data-testid="share-note"]');
+    await note.waitFor({ timeout: 20000 });
+    if (!(await note.innerText()).includes("Your 3-1-3 is copied") || !(await note.innerText()).includes(`+${SHARE_POINTS} points`)) throw new Error(`the member is told it's copied and what to do: ${await note.innerText()}`);
+    const clip = await page.evaluate(() => navigator.clipboard.readText());
+    if (clip !== shareText(week) || /10,?000|Rooted|hire help/.test(clip)) throw new Error(`the comment is the 3-1-3 only, with nothing monthly and no revenue: ${clip}`);
+    const scored = async () => db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), eq(schema.pointsLedger.type, "community")) });
+    if ((await scored()).length !== 1 || (await scored())[0].points !== SHARE_POINTS) throw new Error("the first tap scores 15");
+    await page.reload();
+    const again = page.locator('[data-testid="week-share"] [data-testid="share-to-thread"][data-shared="yes"]');
+    await again.waitFor({ timeout: 20000 });
+    const [popup2] = await Promise.all([page.waitForEvent("popup"), again.click()]);
+    await popup2.close();
+    await page.locator('[data-testid="week-share"] [data-testid="share-note"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="week-share"] [data-testid="share-note"]').innerText()).includes("points") || (await scored()).length !== 1) throw new Error("a second tap in the same week scores nothing");
+    await page.goto(`${base}/today`);
+    await page.locator('[data-testid="intentions-summary"] [data-testid="share-to-thread"]').waitFor({ timeout: 20000 });
+    console.log(`✓ Share to the thread: says so before this week's post is out; then copies the 3-1-3 only (no revenue, nothing monthly), opens this week's post, and scores ${SHARE_POINTS} once for the week; on Today too`);
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As the coach")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/coach/community#log`);
+    const shareRow = page.locator(`[data-testid="community-log-row"][data-week="${mayaWeek}"]`);
+    await shareRow.waitFor({ timeout: 20000 });
+    const jordan = (await db.query.users.findFirst({ where: eq(schema.users.email, "client2@demo.helixos.app") }))!;
+    const notSharedText = (await shareRow.locator('[data-testid="community-not-shared"]').textContent()) ?? "";
+    if ((await shareRow.locator('[data-testid="community-week-shares"]').innerText()).trim() !== "1" || notSharedText.includes(maya.name) || !notSharedText.includes(jordan.name)) throw new Error(`the coach sees the week's shares and who hasn't shared: ${notSharedText}`);
+    console.log("✓ the coach's log shows the week's shares and who hasn't shared yet");
 
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("Community smoke passed");

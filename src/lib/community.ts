@@ -12,7 +12,7 @@ import { nowIso, nowWallInTz, todayInTz } from "@/lib/dates";
 import { connectionFor, createPost, getPost } from "@/lib/ghl";
 import { logSync } from "@/lib/integrations";
 import { redactSecrets } from "@/lib/engine/redact";
-import { HOLD_REASON, TEST_TEXT, TEST_TITLE, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, postLink } from "@/lib/engine/community";
+import { HOLD_REASON, TEST_TEXT, TEST_TITLE, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, postLink, shareTarget, shareText } from "@/lib/engine/community";
 
 export const settingsFor = (workspaceId: string) => db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, workspaceId) });
 
@@ -168,4 +168,17 @@ export async function runCommunity(now: Date = new Date()): Promise<{ workspaceI
     }
   }
   return out;
+}
+
+/**
+ * "Share to the thread" for a member (piece 2): their 3-1-3 as a comment, where it goes (this week's Monday post, never an
+ * older one), and whether they've already shared it this week.
+ */
+export async function shareFor(workspaceId: string, userId: string, week: { weekOf: string; word: string; keyResults: { text: string }[]; initiative: string; tasks: { title: string }[] }): Promise<{ text: string; weekOf: string; link: string | null; reason: string | null; shared: boolean }> {
+  const [post, shared] = await Promise.all([
+    db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, workspaceId), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, week.weekOf)) }),
+    db.query.communityShares.findFirst({ where: and(eq(schema.communityShares.workspaceId, workspaceId), eq(schema.communityShares.userId, userId), eq(schema.communityShares.weekOf, week.weekOf)) }),
+  ]);
+  const target = shareTarget(post, week.weekOf);
+  return { text: shareText(week), weekOf: week.weekOf, link: "link" in target ? target.link : null, reason: "reason" in target ? target.reason : null, shared: Boolean(shared) };
 }

@@ -6,6 +6,7 @@ import { monthOf } from "@/lib/engine/month-intentions";
 import { monthLabel } from "@/lib/engine/feedback";
 import { formatDate } from "@/lib/dates";
 import { WeekCard } from "@/components/week-card";
+import { shareFor } from "@/lib/community";
 import { MonthAnswers, MonthCard } from "@/components/month-card";
 import { Card, PageHeader } from "@/components/ui";
 
@@ -33,12 +34,13 @@ export default async function IntentionsPage({ searchParams }: { searchParams: P
   const taskIds = (week?.tasks ?? []).map((t) => t.taskId).filter((x): x is string => Boolean(x));
   const tasks = taskIds.length ? await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, v.user.id), inArray(schema.tasks.id, taskIds)) }) : [];
   const taskDone = Object.fromEntries(tasks.map((t) => [t.id, t.status === "done"]));
+  const share = week ? await shareFor(ws, v.user.id, week) : null;
 
   return (
     <>
       <PageHeader title="Intentions" subtitle="Your week and your month, set on purpose." />
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">This week</h2>
-      <WeekCard week={week ?? null} today={v.today} taskDone={taskDone} sp={sp} back="/intentions" />
+      <WeekCard week={week ?? null} today={v.today} taskDone={taskDone} sp={sp} back="/intentions" share={share} />
       <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">This month</h2>
       <MonthCard m={month ?? null} month={thisMonth} sp={sp} back="/intentions" />
       <Card title="History" action={<span className="text-xs text-ink-3">{pastWeeks.length} weeks · {pastMonths.length} months</span>}>

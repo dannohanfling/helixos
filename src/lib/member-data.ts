@@ -58,6 +58,7 @@ export const MEMBER_TABLES = {
   socrates_questions: schema.socratesQuestions,
   socrates_scripts: schema.socratesScripts,
   social_connections: schema.socialConnections,
+  community_shares: schema.communityShares,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 
