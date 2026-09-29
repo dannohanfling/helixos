@@ -31,6 +31,8 @@ import { monthLabel } from "@/lib/engine/feedback";
 import { MonthAnswers } from "@/components/month-card";
 import { EssenceOverNote } from "@/components/essence-over";
 import { essenceFor } from "@/lib/queries/essence";
+import { coachBodySummary } from "@/lib/queries/body";
+import { MARK_ICON, fmtMacro } from "@/lib/engine/body";
 
 export const metadata = { title: "Client" };
 
@@ -67,6 +69,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const weeks = await db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, m.userId)), orderBy: [desc(schema.weeklyIntentions.weekOf)], limit: 12 });
   const today = todayInTz(tz);
   const month = today.slice(0, 7);
+  // Body is private: this is null unless the client has switched on "Let my coach see my Body data" (rev 179).
+  const body = await coachBodySummary(v, m.userId, today);
   const [points, closed, recent, monthLogs, goal, stages, library, progress, claims, notes, offers, webinars, ladders, content] = await Promise.all([
     totalPoints(ws, m.userId),
     closedDates(ws, m.userId),
@@ -340,6 +344,21 @@ export default async function CoachClientPage({ params, searchParams }: { params
         </div>
 
         <div className="space-y-4">
+          {body ? (
+            <Card title="Body" action={<Link href={`/coach/${m.id}/body`} className="text-xs text-ink-2 hover:underline" data-testid="coach-body-link">Their days →</Link>}>
+              <p className="mb-2 text-xs text-ink-3">Shared with you by {u.name.split(" ")[0]}: read-only, comments on a day.</p>
+              <ul className="space-y-0.5 text-sm" data-testid="coach-body-days">
+                {body.days.map((d) => (
+                  <li key={d.date} className="flex justify-between gap-2">
+                    <span>
+                      {formatDate(d.date, { weekday: "short", day: "numeric" })} <span className="text-xs text-ink-3">{d.dayType ?? ""}</span>
+                    </span>
+                    <span className="tabular text-xs text-ink-2">{d.logged ? `${fmtMacro("cal", d.totals.cal)} cal · ${fmtMacro("p", d.totals.p)} P ${d.worst ? MARK_ICON[d.worst] : ""}` : "—"}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
           <Card title="Pathway" action={<Badge tone="neutral">{verified} verified</Badge>}>
             <p className="text-sm">
               {path.allDone ? "Every stage done." : <>Stage {stage?.order ?? "?"}: <b>{stage?.name ?? "—"}</b> · {path.doneCount}/{path.pathCount} of this stage&apos;s path done</>}

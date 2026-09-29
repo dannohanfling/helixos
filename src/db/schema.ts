@@ -70,6 +70,12 @@ export const memberships = sqliteTable(
     passHashtag: text("pass_hashtag"),
     passCommunityUrl: text("pass_community_url"),
     certEnabled: integer("cert_enabled", { mode: "boolean" }).notNull().default(false),
+    /**
+     * Body ships dark (handoff rev 195): off for everyone until turned on per member by scripts/body-flag.ts, never in the UI. Off
+     * means no Body nav entry, no Body line on Today, a 404 on /body, /body/* and the Body export, and no Body card on the coach's
+     * client page.
+     */
+    bodyEnabled: integer("body_enabled", { mode: "boolean" }).notNull().default(false),
     eoPassUrl: text("eo_pass_url"),
     /** The Evolve Omega pass on eLoyalty, three identifiers (src/lib/engine/eloyalty.ts): the customer id is the key; the serial is a cache that goes stale on reinstall; the pass type id addresses v1 writes. Filled by the creation call. */
     eoCustomerId: text("eo_customer_id"),
@@ -2206,3 +2212,176 @@ export const botApprovals = sqliteTable(
   },
   (t) => [uniqueIndex("bot_approvals_member_element_hash").on(t.membershipId, t.elementKey, t.textHash)],
 );
+
+/* ───────────────────────── Body (nutrition + fitness, handoff rev 179) ───────────────────────── */
+/*
+ * Health data, private to the member by default: nothing here is read outside src/lib/queries/body.ts and src/lib/actions/body.ts
+ * (a unit test holds that), and a coach reads it only while the member's share switch is on. Never logged, never sent to AI.
+ */
+
+export type BodyWeekPattern = Partial<Record<"0" | "1" | "2" | "3" | "4" | "5" | "6", string | null>>;
+export type BodyCap = { tag: string; label: string; unit: string; soft: number; hard: number };
+export type BodyMealItem = { foodId: string; qty: number };
+/** A logged line, with the food's macros per unit copied at logging time: editing a food later never rewrites a past day. */
+export type BodyEntryItem = { foodId: string | null; name: string; unit: string; qty: number; cal: number; p: number; f: number; c: number; capTag: string | null };
+
+/** One per member: the share switch, units, floors, the weekly pattern, the refeed rule, meal slots and caps. */
+export const bodySettings = sqliteTable(
+  "body_settings",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** "Let my coach see my Body data": off by default, revocable any time; every change is a body_share_events row. */
+    shareWithCoach: integer("share_with_coach", { mode: "boolean" }).notNull().default(false),
+    weightUnit: text("weight_unit", { enum: ["lb", "kg"] }).notNull().default("lb"),
+    foodUnit: text("food_unit", { enum: ["oz", "g"] }).notNull().default("oz"),
+    calFloor: real("cal_floor"),
+    fatFloor: real("fat_floor"),
+    /** Macros where over the top of the band is harmless (🟢). */
+    overOk: text("over_ok", { mode: "json" }).$type<("cal" | "p" | "f" | "c")[]>().notNull().default(["p"]),
+    weekPattern: text("week_pattern", { mode: "json" }).$type<BodyWeekPattern>().notNull().default({}),
+    refeedDayTypeId: text("refeed_day_type_id"),
+    /** "Next refeed Saturday": until it's set, no refeed days are generated (rev 186). */
+    refeedAnchor: text("refeed_anchor"),
+    refeedEveryDays: integer("refeed_every_days").notNull().default(14),
+    mealSlots: text("meal_slots", { mode: "json" }).$type<string[]>().notNull().default(["Breakfast", "Lunch", "Dinner", "Snacks"]),
+    caps: text("caps", { mode: "json" }).$type<BodyCap[]>().notNull().default([]),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at"),
+  },
+  (t) => [uniqueIndex("body_settings_member").on(t.workspaceId, t.userId)],
+);
+export type BodySettings = typeof bodySettings.$inferSelect;
+
+/**
+ * A day type with its own bands for calories, protein, fat and carbs, and an optional reminder shown on those days. Every band is
+ * empty until the member enters it (rev 192: a blank start for everyone); a macro with no band is shown as a total, unmarked.
+ */
+export const bodyDayTypes = sqliteTable(
+  "body_day_types",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    order: integer("order").notNull().default(0),
+    calMin: real("cal_min"),
+    calMax: real("cal_max"),
+    pMin: real("p_min"),
+    pMax: real("p_max"),
+    fMin: real("f_min"),
+    fMax: real("f_max"),
+    cMin: real("c_min"),
+    cMax: real("c_max"),
+    reminder: text("reminder"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_day_types_member").on(t.workspaceId, t.userId)],
+);
+export type BodyDayType = typeof bodyDayTypes.$inferSelect;
+
+/** A food, per unit (1 oz, 1 egg, 1 scoop): calories, protein, fat, carbs, and an optional cap tag (cheese). */
+export const bodyFoods = sqliteTable(
+  "body_foods",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    unit: text("unit").notNull(),
+    cal: real("cal").notNull().default(0),
+    p: real("p").notNull().default(0),
+    f: real("f").notNull().default(0),
+    c: real("c").notNull().default(0),
+    capTag: text("cap_tag"),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_foods_member").on(t.workspaceId, t.userId)],
+);
+export type BodyFood = typeof bodyFoods.$inferSelect;
+
+/** A saved meal: foods × a default quantity, logged in one tap (the quantities can be adjusted when logging). */
+export const bodyMeals = sqliteTable(
+  "body_meals",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    slot: text("slot"),
+    items: text("items", { mode: "json" }).$type<BodyMealItem[]>().notNull().default([]),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_meals_member").on(t.workspaceId, t.userId)],
+);
+export type BodyMeal = typeof bodyMeals.$inferSelect;
+
+/** What was eaten: one logged meal or food on a date, in a slot, with its lines and totals as they were at logging time. */
+export const bodyEntries = sqliteTable(
+  "body_entries",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    slot: text("slot").notNull(),
+    name: text("name").notNull(),
+    mealId: text("meal_id"),
+    items: text("items", { mode: "json" }).$type<BodyEntryItem[]>().notNull().default([]),
+    cal: real("cal").notNull().default(0),
+    p: real("p").notNull().default(0),
+    f: real("f").notNull().default(0),
+    c: real("c").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_entries_member_date").on(t.workspaceId, t.userId, t.date)],
+);
+export type BodyEntry = typeof bodyEntries.$inferSelect;
+
+/** A date the member set by hand: a day type other than the pattern's. */
+export const bodyDays = sqliteTable(
+  "body_days",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    dayTypeId: text("day_type_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_days_member_date").on(t.workspaceId, t.userId, t.date)],
+);
+export type BodyDay = typeof bodyDays.$inferSelect;
+
+/** A coach's comment on one of the member's days, written while the member shared. userId is the member the day belongs to. */
+export const bodyComments = sqliteTable(
+  "body_comments",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    authorUserId: text("author_user_id").notNull(),
+    text: text("text").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_comments_member_date").on(t.workspaceId, t.userId, t.date)],
+);
+export type BodyComment = typeof bodyComments.$inferSelect;
+
+/** The share switch's log: every on and off, with when. */
+export const bodyShareEvents = sqliteTable(
+  "body_share_events",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    shared: integer("shared", { mode: "boolean" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_share_events_member").on(t.workspaceId, t.userId)],
+);
+export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;

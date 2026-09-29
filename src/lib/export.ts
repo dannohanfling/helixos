@@ -5,7 +5,7 @@
 import { and, eq, inArray, like } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { db, schema } from "@/db";
-import { CHILD_TABLES, COACH_ONLY_COLUMNS, MEMBER_TABLES, STRIP_COLUMNS, USER_TABLES, type MemberLabel } from "@/lib/member-data";
+import { BODY_LABELS, CHILD_TABLES, COACH_ONLY_COLUMNS, MEMBER_TABLES, STRIP_COLUMNS, USER_TABLES, type MemberLabel } from "@/lib/member-data";
 
 type Row = Record<string, unknown>;
 type AnyTable = SQLiteTable & Record<string, SQLiteColumn>;
@@ -21,6 +21,9 @@ type ChildExport = (typeof EXPORT_CHILDREN)[number]["label"];
 type UserLabel = keyof typeof USER_TABLES;
 export type ExportTable = "profile" | MemberLabel | ChildExport | UserLabel | "stored_files";
 export const EXPORT_TABLES: ExportTable[] = ["profile", ...(Object.keys(MEMBER_TABLES) as MemberLabel[]), ...EXPORT_CHILDREN.map((c) => c.label), ...(Object.keys(USER_TABLES) as UserLabel[]), "stored_files"];
+/** What a coach's export of a client may hold: everything but Body, which only the member exports (rev 179, privacy). */
+export const COACH_EXPORT_TABLES: ExportTable[] = EXPORT_TABLES.filter((t) => !BODY_LABELS.has(t as MemberLabel));
+export const BODY_EXPORT_TABLES: ExportTable[] = EXPORT_TABLES.filter((t) => BODY_LABELS.has(t as MemberLabel));
 
 /** Credentials never leave in an export, sealed or not, at any depth (the membership sits inside the profile); nor a coach's notes. */
 function clean(rows: Row[]): Row[] {
@@ -78,9 +81,10 @@ export async function exportTable(table: ExportTable, workspaceId: string, userI
   return clean(await childRows(table, workspaceId, userId));
 }
 
-export async function exportAll(workspaceId: string, userId: string): Promise<Record<string, Row[]>> {
+/** Every table in `tables` (the member's own: all of them; a coach's: COACH_EXPORT_TABLES; Body alone: BODY_EXPORT_TABLES). */
+export async function exportAll(workspaceId: string, userId: string, tables: ExportTable[] = EXPORT_TABLES): Promise<Record<string, Row[]>> {
   const out: Record<string, Row[]> = {};
-  for (const t of EXPORT_TABLES) out[t] = await exportTable(t, workspaceId, userId);
+  for (const t of tables) out[t] = await exportTable(t, workspaceId, userId);
   return out;
 }
 

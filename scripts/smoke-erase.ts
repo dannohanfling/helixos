@@ -160,11 +160,16 @@ async function main() {
     console.log(`✓ the plan: ${Object.keys(shown).length} tables counted and ${files.length} files listed before the button, nothing deleted`);
 
     // ── The export covers what the deletion removes: every table in the shared list, the files as a manifest of keys, no credential. ──
-    const { EXPORT_TABLES } = await import("@/lib/export");
+    // The coach runs this export, so it is every section but Body, which only the member exports (rev 179): its absence is checked too.
+    const { COACH_EXPORT_TABLES, BODY_EXPORT_TABLES } = await import("@/lib/export");
+    const EXPORT_TABLES = COACH_EXPORT_TABLES;
     const dump = (await (await page.request.get(`${base}/api/export?format=json&user=${A.userId}`)).json()) as Record<string, Record<string, unknown>[]>;
     const missing = EXPORT_TABLES.filter((t) => !Array.isArray(dump[t]));
     if (missing.length) throw new Error(`the export has every section: missing ${missing.join(", ")}`);
-    const emptyInExport = Object.keys(A.ids).filter((l) => l !== "membership" && l !== "coach_notes" && dump[l]?.length !== 1);
+    if (!BODY_EXPORT_TABLES.length || BODY_EXPORT_TABLES.some((t) => t in dump)) throw new Error(`a coach's export of a client carries no Body section, got ${BODY_EXPORT_TABLES.filter((t) => t in dump).join(", ")}`);
+    const bodyOnly = await page.request.get(`${base}/api/export?format=json&scope=body&user=${A.userId}`);
+    if (bodyOnly.status() !== 403) throw new Error(`a coach asking for a client's Body export is refused, got ${bodyOnly.status()}`);
+    const emptyInExport = Object.keys(A.ids).filter((l) => l !== "membership" && l !== "coach_notes" && !(BODY_EXPORT_TABLES as string[]).includes(l) && dump[l]?.length !== 1);
     if (emptyInExport.length) throw new Error(`the export carries A's row in every table it lists: ${emptyInExport.join(", ")}`);
     if (dump.coach_notes) throw new Error("the coach's own notes about a member are not in the member's export");
     const manifest = dump.stored_files.map((f) => f.key as string);
@@ -173,7 +178,7 @@ async function main() {
     const text = JSON.stringify(dump);
     for (const secret of ["keyEncrypted", "tokenHash", "clApiToken", "passwordHash", "manualToken", "clDripWebhookUrl"]) if (text.includes(`"${secret}"`)) throw new Error(`the export carries ${secret}`);
     if (text.includes(B.marker)) throw new Error("the export carries nothing of B's");
-    console.log(`✓ the export: all ${EXPORT_TABLES.length} sections, A's row in each, ${manifest.length} files as a manifest of keys, no credential and nothing of B's`);
+    console.log(`✓ the export: all ${EXPORT_TABLES.length} sections a coach may export, A's row in each, none of the ${BODY_EXPORT_TABLES.length} Body sections, ${manifest.length} files as a manifest of keys, no credential and nothing of B's`);
 
     // ── A wrong email deletes nothing. ──
     await page.fill('[data-testid="erase-email"]', `someone-else-${RUN}@example.com`);

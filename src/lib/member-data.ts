@@ -59,8 +59,21 @@ export const MEMBER_TABLES = {
   socrates_scripts: schema.socratesScripts,
   social_connections: schema.socialConnections,
   community_shares: schema.communityShares,
+  // Body (rev 179): health data, private to the member. The member's own export has it; a coach's export of a client never
+  // does (BODY_LABELS below). Deletion on request removes it with everything else.
+  body_settings: schema.bodySettings,
+  body_day_types: schema.bodyDayTypes,
+  body_foods: schema.bodyFoods,
+  body_meals: schema.bodyMeals,
+  body_entries: schema.bodyEntries,
+  body_days: schema.bodyDays,
+  body_comments: schema.bodyComments,
+  body_share_events: schema.bodyShareEvents,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
+
+/** The Body tables: in the member's own export and in deletion, never in a coach's export of a client, shared or not. */
+export const BODY_LABELS = new Set<MemberLabel>(["body_settings", "body_day_types", "body_foods", "body_meals", "body_entries", "body_days", "body_comments", "body_share_events"]);
 
 /** No owner column of their own: each row belongs to whoever owns its parent. Listed parents before children. */
 export const CHILD_TABLES = [

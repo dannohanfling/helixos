@@ -1,6 +1,7 @@
 /** The navigation model, in a plain module so both client components and server pages can read it. */
 /** `line`: a one-line description shown under the label everywhere, for the two sections a client would otherwise confuse. `hint` shows on the More page only. */
-export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; hint?: string; line?: string };
+/** `bodyOnly`: shown only to a member whose Body is switched on (rev 195: Body ships dark, per member). */
+export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -9,6 +10,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/today", label: "Today", icon: "☀️" },
       { href: "/intentions", label: "Intentions", icon: "🌱", hint: "week + month" },
+      { href: "/body", label: "Body", icon: "💪", hint: "food + training", bodyOnly: true },
       { href: "/tasks", label: "Tasks", icon: "✅" },
       { href: "/content", label: "Content", icon: "✍️", hint: "post + repurpose" },
       { href: "/library", label: "Library", icon: "🗂️", hint: "swipes + hooks" },
@@ -62,4 +64,8 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
+
+/** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean };
+export const navVisible = (n: NavItem, m: NavMember): boolean => (!n.coachOnly || m.role === "coach") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled);
 

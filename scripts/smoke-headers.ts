@@ -1,5 +1,6 @@
 /** Security headers walk: visits every main page as client and coach and fails on any Content-Security-Policy violation or page error the browser reports. Also prints the headers. */
 import { readdirSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { chromium } from "@playwright/test";
 
@@ -16,7 +17,7 @@ function routedPages(dir: string, prefix = ""): string[] {
   return out.sort();
 }
 // The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
-const PAGES_CLIENT = ["/today", "/intentions", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings"];
+const PAGES_CLIENT = ["/today", "/intentions", "/body", "/body/foods", "/body/settings", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings"];
 const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/office-hours", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {
@@ -45,6 +46,8 @@ async function main() {
       await page.waitForTimeout(300);
     }
   };
+  // Body ships dark (rev 195): switched on for the demo client, by the same script used in production, so its pages load and count.
+  execFileSync("npx", ["tsx", "scripts/body-flag.ts", "client@demo.helixos.app", "on", "--apply"], { stdio: "pipe" });
   await page.goto(`${base}/login`, { waitUntil: "networkidle" });
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);

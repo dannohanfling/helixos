@@ -24,7 +24,7 @@ export function AppShell({ viewer, points, streak, badges = {}, children }: { vi
           </div>
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} badges={badges} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} badges={badges} />
         </div>
         <div className="mt-3 space-y-3 border-t px-5 pt-3">
           <div className="rounded-xl bg-surface-2 p-3 text-xs">

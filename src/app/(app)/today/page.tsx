@@ -24,6 +24,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
+import { todayBody } from "@/lib/queries/body";
 
 export const metadata = { title: "Today" };
 
@@ -57,6 +58,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const month = (await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, monthOf(v.today))) })) ?? null;
   const weekState = intentionPrompt(v.today, week);
   const closed = await closedDates(v.workspace.id, v.user.id);
+  // Body's one line (rev 179): the member's own, only once they've set Body up. It counts toward nothing on this page.
+  const body = await todayBody(v);
   const streakDayIfClosedNow = d.log?.eveningDoneAt ? d.log.streakDay : weeklyStreakDay(closed, v.today);
   const bonusIfClosedNow = streakBonus(streakDayIfClosedNow);
   const morningDone = Boolean(d.log?.morningDoneAt);
@@ -403,6 +406,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                 </form>
               </div>
             </Card>
+          ) : null}
+          {body ? (
+            <Link href="/body" className="card block p-4 text-sm hover:bg-surface-2" data-testid="today-body">
+              <span className="font-semibold">{body.dayType ?? "Body"}</span>
+              <span className="tabular text-ink-2"> · {body.line}</span> →{body.reminder ? <span className="mt-1 block text-xs text-ink-3">📌 {body.reminder}</span> : null}
+            </Link>
           ) : null}
           {d.pathwayNext ? (
             <Card title="Next on your pathway" action={<Link href="/pathway" className="text-xs text-ink-2 hover:underline">Pathway →</Link>}>

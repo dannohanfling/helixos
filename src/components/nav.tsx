@@ -1,7 +1,7 @@
 "use client";
 
 import { PinToViewport } from "@/components/pin-to-viewport";
-import { NAV_GROUPS, type NavItem } from "./nav-groups";
+import { NAV_GROUPS, navVisible, type NavItem } from "./nav-groups";
 const STORAGE_KEY = "helix.nav.collapsed";
 
 import Link from "next/link";
@@ -41,7 +41,7 @@ function writeCollapsed(next: Record<string, boolean>) {
   listeners.forEach((l) => l());
 }
 
-export function SideNav({ role, passEnabled, badges = {} }: { role: "coach" | "client"; passEnabled: boolean; badges?: Record<string, number> }) {
+export function SideNav({ role, passEnabled, bodyEnabled, badges = {} }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; badges?: Record<string, number> }) {
   const pathname = usePathname();
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const collapsed = useMemo<Record<string, boolean>>(() => {
@@ -55,7 +55,7 @@ export function SideNav({ role, passEnabled, badges = {} }: { role: "coach" | "c
   return (
     <nav className="space-y-2">
       {NAV_GROUPS.map((g) => {
-        const items = g.items.filter((n) => (!n.coachOnly || role === "coach") && (!n.passOnly || passEnabled));
+        const items = g.items.filter((n) => navVisible(n, { role, passEnabled, bodyEnabled }));
         const activeItem = items.find((n) => isActive(pathname, n.href));
         const open = !collapsed[g.label];
         return (
