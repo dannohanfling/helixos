@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { V1_TABLES, V2_TABLES } from "../../../../scripts/fixtures/airtable-client";
 import { buildPlan, fieldKey, offerName, planSummary, revenueTargets, sameOffer, tableKey, type ImportSource } from "../airtable-import";
 
+const clean = (n: string) => n.replace(/^[^\p{L}\p{N}]+/u, "").replace(/\s+/g, " ").trim();
+// As the reader hands it over: every table named, the people tables never read.
 const source = (withFallback = true): ImportSource => ({
-  v2: Object.fromEntries(V2_TABLES.map((t) => [tableKey(t.name), { name: t.name.replace(/^[^\p{L}\p{N}]+/u, "").replace(/\s+/g, " ").trim(), records: t.records }])),
+  v2: Object.fromEntries(V2_TABLES.filter((t) => tableKey(t.name) !== "leads").map((t) => [tableKey(t.name), { name: clean(t.name), records: t.records }])),
+  names: Object.fromEntries(V2_TABLES.map((t) => [tableKey(t.name), clean(t.name)])),
   v1: withFallback ? Object.fromEntries(V1_TABLES.map((t) => [tableKey(t.name), { name: t.name, records: t.records }])) : {},
 });
 const rules = { createdSince: "2026-06-10" };
@@ -96,6 +99,16 @@ describe("the dry run of a synthetic client base", () => {
     expect(plan.assets.find((a) => a.type === "framework")).toMatchObject({ name: "The Calm Loop", summary: "Calm is a sequence, not a mood.", useWhen: "Teaching" });
     expect(plan.groups).toEqual([{ sourceRef: expect.any(String), name: "Calm Leaders Circle", url: "https://example.com/groups/calm", notes: "Type: Facebook · Engagement: High" }]);
     expect(plan.notInPhase1.find((t) => t.table.startsWith("Lead Magnet"))!.rows).toBe(1);
+  });
+  it("every other table of hers is answered on the dry run, counted without the template's rows; people are named, never counted; the rest named (29 Sep)", () => {
+    expect(plan.notInPhase1.map((t) => [t.status, t.table, t.rows])).toEqual([
+      ["Phase 2", "Lead Magnet (the rest)", 1],
+      ["Phase 2", "KPIs", 1],
+      ["No home yet", "Calendar", 2],
+      ["Stays out", "Leads", null],
+    ]);
+    expect(plan.notInPhase1.every((t) => t.why.length > 0)).toBe(true);
+    expect(plan.otherTables).toEqual(["Hub Settings"]);
   });
   it("a second run says update for what the client already has", () => {
     const first = buildPlan(source(), rules, new Set());

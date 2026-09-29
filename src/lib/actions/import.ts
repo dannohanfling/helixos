@@ -7,7 +7,7 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { AirtableError, airtableProblem, readSource, type BaseAccess } from "@/lib/airtable";
-import { buildPlan, planSummary, type ImportPlan, type PlanLine } from "@/lib/engine/airtable-import";
+import { buildPlan, planSummary, type ImportPlan, type NotImported, type PlanLine } from "@/lib/engine/airtable-import";
 import { ESSENCE_CAP } from "@/lib/engine/essence";
 import { newId } from "@/lib/ids";
 import { hashPassword } from "@/lib/password";
@@ -23,7 +23,8 @@ export type ImportPreview = {
   lines: PlanLine[];
   unfilled: string[];
   missing: string[];
-  notInPhase1: { table: string; rows: number }[];
+  notInPhase1: NotImported[];
+  otherTables: string[];
   essenceChars: number;
   overCap: boolean;
 };
@@ -86,7 +87,7 @@ async function prepare(workspaceId: string, coachId: string, f: FormData): Promi
   return {
     t,
     plan,
-    preview: { key, who: t.who, summary: planSummary(plan), lines: plan.lines, unfilled: plan.unfilled, missing: read.missing, notInPhase1: plan.notInPhase1, essenceChars: chars, overCap: chars > ESSENCE_CAP },
+    preview: { key, who: t.who, summary: planSummary(plan), lines: plan.lines, unfilled: plan.unfilled, missing: read.missing, notInPhase1: plan.notInPhase1, otherTables: plan.otherTables, essenceChars: chars, overCap: chars > ESSENCE_CAP },
   };
 }
 

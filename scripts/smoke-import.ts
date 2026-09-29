@@ -119,6 +119,9 @@ async function main() {
     const want = Object.fromEntries(planSummary(expected).map((s) => [s.area, `${s.create}/${s.update}`]));
     if (JSON.stringify(shown) !== JSON.stringify(want)) throw new Error(`the dry run shows the mapper's plan:\nwant ${JSON.stringify(want)}\ngot  ${JSON.stringify(shown)}`);
     if (await page.locator('[data-testid="import-unfilled"]').count()) throw new Error("with the fallback given, nothing is left unfilled");
+    const notImported = await page.locator('[data-testid="import-not-imported-row"]').allInnerTexts();
+    const wantNot = ["Phase 2 · Lead Magnet (the rest): 1 rows", "Phase 2 · KPIs: 1 rows", "No home yet · Calendar: 2 rows", "Stays out · Leads ·"];
+    if (!wantNot.every((w, i) => notImported[i]?.startsWith(w)) || notImported.length !== wantNot.length) throw new Error(`every other table of theirs is answered, got ${JSON.stringify(notImported)}`);
     if (await mine()) throw new Error("the dry run creates no one");
     if ((await page.locator('[data-testid="import-source-token"]').inputValue()) !== SOURCE_TOKEN || (await page.locator('[data-testid="import-fallback-token"]').inputValue()) !== FALLBACK_TOKEN) throw new Error("the tokens stay in their boxes for Approve");
     if (!(await page.locator('[data-testid="import-approve"]').isEnabled())) throw new Error("Approve is on after a clean dry run");
@@ -196,8 +199,9 @@ async function main() {
     console.log(`✓ with the fallback empty, the dry run lists what it couldn't fill: ${unfilled.length} row`);
 
     // ── Read only, and the tokens went nowhere. ──
-    const methods = ((await (await fetch(`http://localhost:${mockPort}/__methods`)).json()) as { methods: string[] }).methods;
+    const { methods, paths } = (await (await fetch(`http://localhost:${mockPort}/__methods`)).json()) as { methods: string[]; paths: string[] };
     if (!methods.length || methods.some((x) => x !== "GET")) throw new Error(`the import only reads, got ${[...new Set(methods)].join(", ")}`);
+    if (paths.some((x) => x.includes("tblLEADS"))) throw new Error("the people tables are never read");
     if (echoed.length) throw new Error(`a token came back from the server:\n${echoed.join("\n")}`);
     const log = readFileSync(process.env.DEV_LOG ?? "screenshots/logs/dev.log", "utf8");
     const dbFiles = readdirSync("data").filter((f) => /\.(db|sqlite)(-wal)?$/.test(f));
@@ -206,7 +210,7 @@ async function main() {
       return raw.includes(SOURCE_TOKEN) || raw.includes(FALLBACK_TOKEN);
     });
     if (log.includes(SOURCE_TOKEN) || log.includes(FALLBACK_TOKEN) || stored || !dbFiles.length) throw new Error("no token reaches the server log or the database");
-    console.log(`✓ ${methods.length} requests to Airtable, all GET; no token came back from the server, reached the log or the database`);
+    console.log(`✓ ${methods.length} requests to Airtable, all GET, none for the people tables' rows; no token came back from the server, reached the log or the database`);
   } finally {
     if (userId) {
       await db.delete(schema.tasks).where(eq(schema.tasks.userId, userId));

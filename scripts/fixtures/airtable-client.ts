@@ -95,7 +95,22 @@ const leadMagnet: FixtureTable = {
   ],
 };
 
-export const V2_TABLES: FixtureTable[] = [vision, offers, methodologies, readiness, tasks, groups, leadMagnet, { id: "tblKPIS000000001", name: "#️⃣ KPIs", records: [rec({ "KPI Name": "Calls booked" })] }];
+export const V2_TABLES: FixtureTable[] = [
+  vision,
+  offers,
+  methodologies,
+  readiness,
+  tasks,
+  groups,
+  leadMagnet,
+  // Tables of hers Phase 1 doesn't write: counted and answered on the dry run. KPIs has one template row, not counted.
+  { id: "tblKPIS000000001", name: "#️⃣ KPIs", records: [rec({ "KPI Name": "Calls booked" }), rec({ "KPI Name": "Template KPI" }, TEMPLATE)] },
+  { id: "tblCALENDAR00001", name: "📆 Calendar", records: [rec({ "Name": "Episode 1", "Day": "2026-10-06" }), rec({ "Name": "Episode 2", "Day": "2026-10-13" })] },
+  // People: named on the dry run, never read. A walk fails if the import asks for these rows.
+  { id: "tblLEADS00000001", name: "🧲 Leads", records: [rec({ "Name": "A person" })] },
+  // The template's own tools: named, not read.
+  { id: "tblHUBSET0000001", name: "⚙️ Hub Settings", records: [] },
+];
 
 /** The first base: the review row's full text, joined through its V1 Record ID. */
 export const V1_TABLES: FixtureTable[] = [

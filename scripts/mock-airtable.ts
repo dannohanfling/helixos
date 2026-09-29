@@ -3,7 +3,8 @@
  * AIRTABLE_API_URL=http://localhost:4070. It serves the synthetic bases in scripts/fixtures/airtable-client.ts, one token per base
  * as Danno set them up (27 Sep): `pat-source-good` reads the source base, `pat-fallback-good` the fallback; any other token is 401,
  * a good token on the other base is 403. Only GET answers. `POST /__edit` renames the first task, so a walk can change the base
- * between a dry run and Approve; `GET /__methods` lists every method it was sent, so a walk can prove the import only read.
+ * between a dry run and Approve; `GET /__methods` lists every method and path it was sent, so a walk can prove the import only read,
+ * and never asked for the people tables' rows.
  */
 import { createServer } from "node:http";
 import { V1_BASE, V1_TABLES, V2_BASE, V2_TABLES, type FixtureTable } from "./fixtures/airtable-client";
@@ -14,6 +15,7 @@ const bases: Record<string, { token: string; tables: FixtureTable[] }> = {
   [V1_BASE]: { token: "pat-fallback-good", tables: structuredClone(V1_TABLES) },
 };
 const methods: string[] = [];
+const paths: string[] = [];
 
 createServer((req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
@@ -21,13 +23,14 @@ createServer((req, res) => {
     res.writeHead(code, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
   };
-  if (url.pathname === "/__methods") return json(200, { methods });
+  if (url.pathname === "/__methods") return json(200, { methods, paths });
   if (url.pathname === "/__edit" && req.method === "POST") {
     const tasks = bases[V2_BASE].tables.find((t) => t.name.includes("TasksOS"))!;
     tasks.records[0].fields["📌 Tasks"] = `${tasks.records[0].fields["📌 Tasks"]} (edited)`;
     return json(200, { ok: true });
   }
   methods.push(req.method ?? "?");
+  paths.push(url.pathname);
   if (req.method !== "GET") return json(405, { error: { type: "METHOD_NOT_ALLOWED" } });
   const token = (req.headers.authorization ?? "").replace(/^Bearer /, "");
   const known = Object.values(bases).some((b) => b.token === token);

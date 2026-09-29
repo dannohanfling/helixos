@@ -4,7 +4,7 @@
  * tables are found by name through the metadata API, then only the Phase 1 tables are read, paged. AIRTABLE_API_URL points the
  * walk at scripts/mock-airtable.ts; production uses api.airtable.com.
  */
-import { tableKey, type AirtableRecord, type ImportSource, type SourceTable } from "@/lib/engine/airtable-import";
+import { COUNTED, tableKey, type AirtableRecord, type ImportSource, type SourceTable } from "@/lib/engine/airtable-import";
 
 const API = () => process.env.AIRTABLE_API_URL || "https://api.airtable.com";
 
@@ -71,19 +71,20 @@ async function rows(token: string, which: Which, baseId: string, tableId: string
   return out;
 }
 
-async function read(token: string, which: Which, baseId: string, wanted: string[]): Promise<{ found: Record<string, SourceTable | undefined>; missing: string[] }> {
+async function read(token: string, which: Which, baseId: string, wanted: string[], counted: string[] = []): Promise<{ found: Record<string, SourceTable | undefined>; missing: string[]; names: Record<string, string> }> {
   const all = await tables(token, which, baseId);
+  const names = Object.fromEntries(all.map((t) => [tableKey(t.name), t.name.replace(/^[^\p{L}\p{N}]+/u, "").replace(/\s+/g, " ").trim()]));
   const found: Record<string, SourceTable | undefined> = {};
   const missing: string[] = [];
-  for (const key of wanted) {
+  for (const key of [...wanted, ...counted]) {
     const t = all.find((x) => tableKey(x.name) === key);
     if (!t) {
-      missing.push(key);
+      if (wanted.includes(key)) missing.push(key);
       continue;
     }
     found[key] = { name: t.name.replace(/^[^\p{L}\p{N}]+/u, "").replace(/\s+/g, " ").trim(), records: await rows(token, which, baseId, t.id) };
   }
-  return { found, missing };
+  return { found, missing, names };
 }
 
 const BASE_ID = /^app[A-Za-z0-9]{14}$/;
@@ -97,7 +98,8 @@ export async function readSource(source: BaseAccess, fallback: BaseAccess | null
   if (!source.token.trim()) throw new AirtableError("no_token", "source");
   if (fallback && !BASE_ID.test(fallback.baseId.trim())) throw new AirtableError("base_id", "fallback");
   if (fallback && !fallback.token.trim()) throw new AirtableError("no_token", "fallback");
-  const v2 = await read(source.token.trim(), "source", source.baseId.trim(), V2_TABLES);
+  // The Phase 1 tables, and the other tables of hers read for their count only (never the people tables).
+  const v2 = await read(source.token.trim(), "source", source.baseId.trim(), V2_TABLES, COUNTED);
   const v1 = fallback ? await read(fallback.token.trim(), "fallback", fallback.baseId.trim(), V1_TABLES) : { found: {}, missing: [] };
-  return { source: { v2: v2.found, v1: v1.found }, missing: [...v2.missing, ...v1.missing.map((m) => `${m} (fallback base)`)] };
+  return { source: { v2: v2.found, v1: v1.found, names: v2.names }, missing: [...v2.missing, ...v1.missing.map((m) => `${m} (fallback base)`)] };
 }

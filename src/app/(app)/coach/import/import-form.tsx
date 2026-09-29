@@ -166,16 +166,23 @@ export function ImportForm({ clients }: { clients: { id: string; label: string }
                 </ul>
               </div>
             ) : null}
-            {p.notInPhase1.length ? (
-              <div>
-                <p className="font-semibold">Left for Phase 2</p>
-                <ul className="list-disc pl-5 text-ink-2">
+            {p.notInPhase1.length || p.otherTables.length ? (
+              <div data-testid="import-not-imported">
+                <p className="font-semibold">Not imported, and why</p>
+                <ul className="space-y-0.5 pl-1">
                   {p.notInPhase1.map((t) => (
-                    <li key={t.table}>
-                      {t.table}: {t.rows} rows
+                    <li key={t.table} data-testid="import-not-imported-row">
+                      <span className={t.status === "Phase 2" ? "text-accent" : "text-ink-3"}>{t.status}</span> · {t.table}
+                      {t.rows !== null ? `: ${t.rows} rows` : ""} <span className="text-ink-3">· {t.why}</span>
                     </li>
                   ))}
                 </ul>
+                {p.otherTables.length ? (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-ink-3">{p.otherTables.length} other tables in the base, not read by this import</summary>
+                    <p className="mt-1 text-xs text-ink-3">{p.otherTables.join(" · ")}</p>
+                  </details>
+                ) : null}
               </div>
             ) : null}
             <div className="space-y-1">

@@ -10,7 +10,8 @@
 export type AirtableRecord = { id: string; createdTime: string; fields: Record<string, unknown> };
 /** One table as fetched: its name in the base and its rows. */
 export type SourceTable = { name: string; records: AirtableRecord[] };
-export type ImportSource = { v2: Record<string, SourceTable | undefined>; v1: Record<string, SourceTable | undefined> };
+/** `names`: every table in the source base by key, read or not, so the dry run can name what it leaves. */
+export type ImportSource = { v2: Record<string, SourceTable | undefined>; v1: Record<string, SourceTable | undefined>; names?: Record<string, string> };
 
 /** A field's name without its emoji and with single spaces, lowercased: "🗝️ V1 Record ID" → "v1 record id". */
 export const fieldKey = (name: string): string =>
@@ -119,14 +120,42 @@ export type ImportPlan = {
   tasks: TaskRow[];
   groups: GroupRow[];
   essence: EssencePatch;
-  /** What was read and not used, by table, with the count: the tables Phase 1 doesn't cover. */
-  notInPhase1: { table: string; rows: number }[];
+  /** Every table of hers Phase 1 doesn't write, with its row count when read, and what happens to it and why (29 Sep). */
+  notInPhase1: NotImported[];
+  /** The base's remaining tables, by name: not read by the import, and named so none goes unmentioned. */
+  otherTables: string[];
   /** What only the fallback (first) base holds, left as this base has it because none was given or the row isn't there. */
   unfilled: string[];
 };
 
 /** Tables Phase 1 reads, by their key. */
 const PHASE1 = ["vision", "offersos", "methodologies", "buyer readiness", "tasksos", "groups", "lead magnet"];
+
+/** A row's name when its table's name field isn't known: its first text value. */
+const firstText = (r: AirtableRecord): string => (Object.values(r.fields).find((v) => typeof v === "string") as string | undefined) ?? "";
+
+export type NotImported = { table: string; rows: number | null; status: "Phase 2" | "No home yet" | "Stays out"; why: string };
+/**
+ * The template's other tables that hold a client's own rows, each with its answer (29 Sep: nothing of hers disappears silently).
+ * The ones with a status other than "Stays out" are read for their count only; the people tables are never read.
+ */
+export const NOT_IN_PHASE1: Record<string, Omit<NotImported, "table" | "rows">> = {
+  goalsos: { status: "Phase 2", why: "goals and key results, rebuilt with their links from the V1 Record ID" },
+  initiativesos: { status: "Phase 2", why: "each linked to its goal or key result" },
+  kpis: { status: "Phase 2", why: "into Targets" },
+  contentos: { status: "Phase 2", why: "into Content" },
+  "content distribution": { status: "Phase 2", why: "linked to Groups and Content" },
+  sopsos: { status: "Phase 2", why: "as written, into her workspace only; HelixOS needs a place for SOPs first" },
+  avataros: { status: "Phase 2", why: "HelixOS needs a place for avatars first" },
+  calendar: { status: "No home yet", why: "HelixOS has no calendar; the dates are text copied from the older base" },
+  "offer components": { status: "No home yet", why: "a HelixOS component belongs to one offer, and these stay unlinked to offers as decided" },
+  leads: { status: "Stays out", why: "people: not read, and not imported unless the coach says otherwise" },
+  clients: { status: "Stays out", why: "people: not read, and not imported unless the coach says otherwise" },
+};
+/** The ones counted: every answered table except the people. */
+export const COUNTED = Object.entries(NOT_IN_PHASE1)
+  .filter(([, v]) => v.status !== "Stays out")
+  .map(([k]) => k);
 
 const none = (s: string): string | null => (s ? s : null);
 /** "🗺️ B1 — True North Business Blueprint" → B1 and the name; "01 True North Leadership Core Diagnostic" → 01 and the name. */
@@ -182,7 +211,7 @@ export function revenueTargets(note: string): { year: number; low: number; high:
  */
 export function buildPlan(src: ImportSource, rules: SkipRules, existing: Set<string>): ImportPlan {
   const lines: PlanLine[] = [];
-  const plan: ImportPlan = { lines, pathways: [], offers: [], magnets: [], assets: [], goals: [], tasks: [], groups: [], essence: {}, notInPhase1: [], unfilled: [] };
+  const plan: ImportPlan = { lines, pathways: [], offers: [], magnets: [], assets: [], goals: [], tasks: [], groups: [], essence: {}, notInPhase1: [], otherTables: [], unfilled: [] };
   // Brand lines land in one Essence section: an update once the client has one ("brand:*").
   const act = (area: Area, ref: string) => (existing.has(`${area}:${ref}`) || (area === "brand" && existing.has("brand:*")) ? "update" : "create") as "create" | "update";
   const add = (area: Area, table: string, ref: string, label: string, note = "") => lines.push({ area, table, sourceRef: ref, label, action: act(area, ref), note });
@@ -264,7 +293,7 @@ export function buildPlan(src: ImportSource, rules: SkipRules, existing: Set<str
     }
     add("lead magnets", offersT!.name, m.sourceRef, m.title, hit ? `merged with "${text(hit, "lead magnet name", "name")}" in Lead Magnet` : "no Lead Magnet row by this name");
   }
-  if (lmT) plan.notInPhase1.push({ table: `${lmT.name} (the rest: Phase 2 delivery tools)`, rows: lmRows.filter((r) => !plan.magnets.some((m) => m.mergedWith === r.id)).length });
+  if (lmT) plan.notInPhase1.push({ table: `${lmT.name} (the rest)`, rows: lmRows.filter((r) => !plan.magnets.some((m) => m.mergedWith === r.id)).length, status: "Phase 2", why: "delivery tools" });
 
   /* ── Vision: brand into Essence, values and principles as lists, beliefs into the bank, founder stories, revenue targets. ── */
   const visionT = t("vision");
@@ -440,8 +469,16 @@ export function buildPlan(src: ImportSource, rules: SkipRules, existing: Set<str
     add("groups", groupT!.name, r.id, name);
   }
 
-  /* ── Everything else in the base: counted, not read into anything (Phase 2, or not hers). ── */
-  for (const [k, tb] of Object.entries(src.v2)) if (tb && !PHASE1.includes(k)) plan.notInPhase1.push({ table: tb.name, rows: tb.records.length });
+  /* ── The rest of hers: each answered table, counted when read (skipping the template's and test rows), or named if not. ── */
+  for (const [k, answer] of Object.entries(NOT_IN_PHASE1)) {
+    const tb = src.v2[k];
+    const named = src.names?.[k];
+    if (!tb && !named) continue;
+    plan.notInPhase1.push({ table: tb?.name ?? named!, rows: tb ? tb.records.filter((r) => !skipReason(r, firstText(r), rules)).length : null, ...answer });
+  }
+  plan.otherTables = Object.entries(src.names ?? {})
+    .filter(([k]) => !PHASE1.includes(k) && !NOT_IN_PHASE1[k])
+    .map(([, n]) => n);
   return plan;
 }
 
