@@ -12,6 +12,20 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 17,
+    date: "2026-09-29",
+    title: "Let your coach set things up for you",
+    lines: ["In Settings, \"Let my coach work in my HelixOS\" lets your coach set up offers, webinars, tasks and more for you. It's your choice, and you can switch it off any time.", "Everything they change is listed under \"Changes by your coach\". They never see Body, send anything as you, or change your account."],
+    audience: "everyone",
+  },
+  {
+    n: 16,
+    date: "2026-09-29",
+    title: "Switch to a client",
+    lines: ["On a client's page (or the client list), \"Switch to\" opens their HelixOS exactly as they see it. A banner says whose it is, with Back to my account.", "View looks without changing anything. Work in their HelixOS sets things up for them, when they've allowed it, and every change is shown to them."],
+    audience: "coach",
+  },
+  {
     n: 15,
     date: "2026-09-29",
     title: "Body: pick units from a list, and sodium on foods",

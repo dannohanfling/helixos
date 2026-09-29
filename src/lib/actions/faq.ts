@@ -121,7 +121,7 @@ export async function deleteFaqAction(formData: FormData): Promise<void> {
 
 /** Approve and send to my bot: the approved answers composed and pushed, read back both ways, and the outcome said plainly. */
 export async function sendFaqAction(): Promise<void> {
-  const { v } = await ctx();
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const out = await pushFaq(v.membership.id, { reason: "brief", sentBy: v.user.name });
   refresh();
   if (out.status === "sent") redirect(`${BRAIN}?sent=1`);

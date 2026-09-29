@@ -114,8 +114,9 @@ async function approve(coach: Coach, f: FormData): Promise<ImportState> {
     userId = newId();
     membershipId = newId();
     await db.insert(schema.users).values({ id: userId, email: r.t.email, name: r.t.name, passwordHash: await hashPassword(randomBytes(32).toString("base64url")), avatarEmoji: "🧭" });
-    // Emails off until the coach turns them on (29 Sep): an imported client hears nothing from HelixOS until introduced.
-    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: coach.workspace.id, userId, role: "client", businessName: r.t.businessName || null, startedAt: todayInTz(coach.workspace.timezone), emailsEnabled: false });
+    // Emails off until the coach turns them on (29 Sep): an imported client hears nothing from HelixOS until introduced. The
+    // coach set this client up, so they may work in the client's HelixOS (rev 216) until the client says otherwise.
+    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: coach.workspace.id, userId, role: "client", businessName: r.t.businessName || null, startedAt: todayInTz(coach.workspace.timezone), emailsEnabled: false, coachCanWork: true });
   } else {
     userId = r.t.userId;
     membershipId = r.t.membershipId;

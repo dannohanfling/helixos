@@ -14,7 +14,7 @@ import { feedbackMonth, readFeedback } from "@/lib/engine/feedback";
  * month: sending again inside the window changes it.
  */
 export async function saveFeedbackAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
   const month = feedbackMonth(v.today);
   if (!month) redirect("/intentions");
   const read = readFeedback({

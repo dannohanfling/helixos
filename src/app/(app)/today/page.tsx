@@ -227,7 +227,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-4">
           {/* Morning lock-in */}
           <Card id="checkin" title={morningDone ? "Today's lock-in" : "Morning lock-in"} action={morningDone ? <Badge tone="good">Done · +10</Badge> : <Badge tone="accent">+10 pts</Badge>}>

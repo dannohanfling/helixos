@@ -184,6 +184,8 @@ export async function recentDays(workspaceId: string, userId: string, today: str
  * stops it on the very next request. Only the member's own session: a coach, or a coach switched into the client's HelixOS, never.
  */
 export async function canAiUseBody(v: Viewer, memberUserId: string): Promise<boolean> {
+  // A coach switched into a client's HelixOS (rev 216) is never the member, whatever the viewer's user says.
+  if (v.switchedInto || v.actor.id !== v.user.id) return false;
   if (memberUserId !== v.user.id) return false;
   const s = await bodySettingsFor(v.workspace.id, memberUserId);
   return bodyAiAllowedFor({ viewerUserId: v.user.id, memberUserId, memberEnabled: v.membership.bodyEnabled, aiUse: !!s?.aiUse });

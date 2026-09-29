@@ -45,7 +45,7 @@ export async function createContactAction(formData: FormData): Promise<void> {
 }
 
 export async function logMessageAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const contactId = str(formData, "contactId");
   const body = str(formData, "body");
   const direction = str(formData, "direction") === "in" ? "in" : "out";

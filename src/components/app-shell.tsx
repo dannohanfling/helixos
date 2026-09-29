@@ -10,6 +10,7 @@ import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { BottomNav, SideNav } from "./nav";
 import { SubmitButton } from "@/components/submit-button";
 import { APP_VERSION } from "@/lib/version";
+import { SwitchBanner } from "@/components/switch-banner";
 
 export function AppShell({ viewer, points, streak, badges = {}, children }: { viewer: Viewer; points: number; streak: number; badges?: Record<string, number>; children: ReactNode }) {
   const tier = tierProgress(points);
@@ -58,6 +59,7 @@ export function AppShell({ viewer, points, streak, badges = {}, children }: { vi
         </div>
       </aside>
       <div className="min-w-0 flex-1">
+        {viewer.switchedInto ? <SwitchBanner sw={viewer.switchedInto} /> : null}
         <PinToViewport edge="top">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b bg-bg/90 px-4 py-2.5 backdrop-blur md:hidden">
           <Link href="/today" className="flex items-center gap-2 text-sm font-bold">
@@ -84,7 +86,14 @@ export function AppShell({ viewer, points, streak, badges = {}, children }: { vi
           <Suspense fallback={null}>
             <DeletedNotice />
           </Suspense>
-          {children}
+          {viewer.switchedInto?.mode === "view" ? (
+            // Viewing (rev 216): every form control on the page is disabled; the server refuses any write that gets through.
+            <fieldset disabled className="m-0 min-w-0 border-0 p-0" data-testid="switch-view-lock">
+              {children}
+            </fieldset>
+          ) : (
+            children
+          )}
         </main>
       </div>
       <BottomNav role={viewer.role} badges={badges} />

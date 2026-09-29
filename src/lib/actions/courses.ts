@@ -8,7 +8,7 @@ import { award } from "@/lib/queries/points";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function completeLessonAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That earns or spends {first}'s points, which only they can do." });
   const lessonId = str(formData, "lessonId");
   const lesson = await db.query.lessons.findFirst({ where: eq(schema.lessons.id, lessonId) });
   if (!lesson) return;
@@ -18,7 +18,7 @@ export async function completeLessonAction(formData: FormData): Promise<void> {
 }
 
 export async function uncompleteLessonAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "That earns or spends {first}'s points, which only they can do." });
   await db.delete(schema.lessonProgress).where(and(eq(schema.lessonProgress.userId, userId), eq(schema.lessonProgress.lessonId, str(formData, "lessonId"))));
   refresh();
 }
@@ -26,7 +26,7 @@ export async function uncompleteLessonAction(formData: FormData): Promise<void> 
 /* ───────── Certification ───────── */
 
 export async function submitCertAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
   if (!v.membership.certEnabled && v.role !== "coach") return;
   const deliverableId = str(formData, "deliverableId");
   const d = await db.query.certDeliverables.findFirst({ where: eq(schema.certDeliverables.id, deliverableId) });

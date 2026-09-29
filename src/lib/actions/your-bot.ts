@@ -23,7 +23,7 @@ async function botOwner(v: Awaited<ReturnType<typeof ctx>>["v"], formData: FormD
 
 /** Push what the page showed, carried by its key: the same checks and fingerprint whoever presses it. */
 export async function pushYourBotAction(formData: FormData): Promise<void> {
-  const { v } = await ctx();
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const { m, back } = await botOwner(v, formData);
   const self = m.userId === v.user.id;
   const out = await pushBotFields(m.id, { key: str(formData, "key"), reason: self ? (v.role === "coach" ? "own bot" : "client push") : "coach push", by: v.user.id });

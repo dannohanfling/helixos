@@ -15,7 +15,7 @@ import { OOH_OUTCOMES, oohEditable, readList, readOohRequest } from "@/lib/engin
  * including its Friday; the coach's fields (who takes it, how it went, notes) are never the member's to write.
  */
 export async function saveOohRequestAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
   const read = readOohRequest(
     {
       friday: str(formData, "friday"),

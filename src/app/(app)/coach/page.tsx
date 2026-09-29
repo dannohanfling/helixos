@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { switchToClientAction } from "@/lib/actions/switch";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -168,6 +169,14 @@ export default async function CoachPage() {
                             </Link>
                             <div className="text-xs text-ink-3">{r.m.businessName ?? r.m.programTier}</div>
                           </div>
+                          {/* Switch to client (rev 216): into their HelixOS as they see it; Work is chosen on the client page. */}
+                          <form action={switchToClientAction} className="ml-auto">
+                            <input type="hidden" name="membershipId" value={r.m.id} />
+                            <input type="hidden" name="mode" value="view" />
+                            <SubmitButton className="btn btn-ghost btn-xs" pendingText="Switching…" data-testid="list-switch" aria-label={`Switch to ${r.u?.name ?? "this client"}`}>
+                              Switch to
+                            </SubmitButton>
+                          </form>
                         </div>
                       </td>
                       <td className="py-2 pr-3">

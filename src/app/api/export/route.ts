@@ -15,6 +15,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const v = await getViewer();
   if (!v) return NextResponse.json({ error: "sign in first" }, { status: 401 });
+  // A client's export is theirs to ask for: never from a coach switched into their HelixOS (rev 216), in either mode.
+  if (v.switchedInto) return NextResponse.json({ error: "A client's export is theirs to download." }, { status: 403 });
   const url = new URL(request.url);
   const format = url.searchParams.get("format") === "csv" ? "csv" : "json";
   const table = url.searchParams.get("table") as ExportTable | null;

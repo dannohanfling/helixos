@@ -121,7 +121,7 @@ export async function resetAction(_prev: ResetState, formData: FormData): Promis
 
 /** Signed-in password change. Needs the current password; signs every other session out and keeps this one. */
 export async function changePasswordAction(_prev: PasswordState, formData: FormData): Promise<PasswordState> {
-  const { v } = await ctx();
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "{first}'s name, email, password and time zone are their own account settings." });
   const current = String(formData.get("current") ?? "");
   const password = String(formData.get("password") ?? "");
   if (!(await verifyPassword(current, v.user.passwordHash))) return { error: "That isn't your current password." };

@@ -69,6 +69,8 @@ export const MEMBER_TABLES = {
   body_days: schema.bodyDays,
   body_comments: schema.bodyComments,
   body_share_events: schema.bodyShareEvents,
+  // What a coach changed while working in this member's HelixOS, and their switches in and out (rev 216).
+  coach_changes: schema.coachChanges,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 

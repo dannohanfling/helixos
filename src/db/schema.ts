@@ -76,6 +76,11 @@ export const memberships = sqliteTable(
      * client page.
      */
     bodyEnabled: integer("body_enabled", { mode: "boolean" }).notNull().default(false),
+    /**
+     * "Let my coach work in my HelixOS" (rev 216): whether a coach switched into this client may create and edit, not only
+     * look. On for clients the coach creates or imports, off for those who join themselves; the client changes it in Settings.
+     */
+    coachCanWork: integer("coach_can_work", { mode: "boolean" }).notNull().default(false),
     eoPassUrl: text("eo_pass_url"),
     /** The Evolve Omega pass on eLoyalty, three identifiers (src/lib/engine/eloyalty.ts): the customer id is the key; the serial is a cache that goes stale on reinstall; the pass type id addresses v1 writes. Filled by the creation call. */
     eoCustomerId: text("eo_customer_id"),
@@ -2398,3 +2403,30 @@ export const bodyShareEvents = sqliteTable(
   (t) => [index("body_share_events_member").on(t.workspaceId, t.userId)],
 );
 export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
+
+/**
+ * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,
+ * in plain words. The client sees the changes in Settings ("Changes by your coach"); the coach's client page shows the
+ * switches. Never the values themselves: which page, which item, what was done.
+ */
+export const coachChanges = sqliteTable(
+  "coach_changes",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    clientMembershipId: text("client_membership_id").notNull(),
+    /** The client whose HelixOS it was: theirs, so it is in their export and goes with deletion on request. */
+    userId: text("user_id").notNull(),
+    coachUserId: text("coach_user_id").notNull(),
+    kind: text("kind", { enum: ["switch_in", "switch_out", "change"] }).notNull(),
+    mode: text("mode", { enum: ["view", "work"] }).notNull(),
+    /** What was done, in plain words ("Saved an offer"). */
+    action: text("action"),
+    /** The page it was done on ("Offers") and the item's name when there is one ("Deep Work Reset"). */
+    page: text("page"),
+    item: text("item"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("coach_changes_client").on(t.clientMembershipId, t.createdAt)],
+);
+export type CoachChange = typeof coachChanges.$inferSelect;

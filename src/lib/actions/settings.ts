@@ -22,8 +22,9 @@ function validTimezone(tz: string): string | null {
 }
 
 export async function updateProfileAction(formData: FormData): Promise<void> {
+  // Refused before anything is written: a coach switched in never changes the client's own account.
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "{first}'s name, email, password and time zone are their own account settings." });
   await updateProfile(formData);
-  const { workspaceId, userId } = await ctx();
   await syncFieldTasks(workspaceId, userId);
   refresh();
 }

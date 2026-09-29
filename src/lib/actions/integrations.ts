@@ -127,13 +127,13 @@ export async function setMyBotAction(formData: FormData): Promise<void> {
 }
 
 export async function markPassInstalledAction(): Promise<void> {
-  const { v } = await ctx();
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   await db.update(schema.memberships).set({ eoPassInstalledAt: v.membership.eoPassInstalledAt ?? nowIso() }).where(eq(schema.memberships.id, v.membership.id));
   refresh();
 }
 
 export async function sendTestPushAction(): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   await pushPassMessage({ workspaceId, userId }, "HelixOS", `${v.user.name.split(" ")[0]}, your pass is connected. Points you earn here are on their way to it.`);
   refresh();
 }

@@ -293,7 +293,7 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
  * other outward step, and the schedule itself (dates, targets) is never altered.
  */
 export async function pushLadderUpdateAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const l = await own(str(formData, "id"), userId);
   const back = str(formData, "back").startsWith("/") ? str(formData, "back") : `/content/ladders/${l.id}`;
   await assertPublishable(l);

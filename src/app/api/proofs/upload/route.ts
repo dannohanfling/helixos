@@ -19,6 +19,8 @@ import { PROOF_STORAGE_UNCONFIGURED, proofStorageConfigured, proofTokenOptions }
 export async function POST(request: Request) {
   const v = await getViewer();
   if (!v) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  // A coach viewing a client's HelixOS (rev 216) writes nothing, files included.
+  if (v.switchedInto?.mode === "view") return NextResponse.json({ error: `You're viewing ${v.switchedInto.clientName.split(" ")[0]}'s HelixOS. Switch to Work to add files.` }, { status: 403 });
   if (!proofStorageConfigured()) {
     console.error("[proof-storage] PROOF_BLOB_READ_WRITE_TOKEN is not set: an upload token was refused");
     return NextResponse.json({ error: PROOF_STORAGE_UNCONFIGURED }, { status: 503 });

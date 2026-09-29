@@ -10,6 +10,11 @@ export type SessionPayload = {
   role: "coach" | "client";
   /** users.sessionVersion at sign-in. A password change bumps it and signs every other session out. */
   sv?: number;
+  /**
+   * "Switch to client" (rev 216): a coach's own session, switched into one client's HelixOS. `m` is the client's membership,
+   * `mode` view or work. The session stays the coach's: nothing about the client's own sign-in changes.
+   */
+  sw?: { m: string; mode: "view" | "work" };
 };
 
 function secret(): Uint8Array {
@@ -33,7 +38,9 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
   try {
     const { payload } = await jwtVerify(token, secret());
     if (typeof payload.userId !== "string" || typeof payload.workspaceId !== "string") return null;
-    return { userId: payload.userId, workspaceId: payload.workspaceId, role: payload.role === "coach" ? "coach" : "client", sv: typeof payload.sv === "number" ? payload.sv : 0 };
+    const sw = payload.sw as { m?: unknown; mode?: unknown } | undefined;
+    const switched = sw && typeof sw.m === "string" && (sw.mode === "view" || sw.mode === "work") ? { m: sw.m, mode: sw.mode as "view" | "work" } : undefined;
+    return { userId: payload.userId, workspaceId: payload.workspaceId, role: payload.role === "coach" ? "coach" : "client", sv: typeof payload.sv === "number" ? payload.sv : 0, ...(switched ? { sw: switched } : {}) };
   } catch {
     return null;
   }

@@ -23,6 +23,16 @@ export async function pointsSince(workspaceId: string, userId: string, sinceIso:
   return Number(row?.total ?? 0);
 }
 
+/** Whether this request is a coach switched into a client's HelixOS. Outside a request (the hourly job) it never is. */
+async function switchedRequest(): Promise<boolean> {
+  try {
+    const { getViewer } = await import("@/lib/auth");
+    return Boolean((await getViewer())?.switchedInto);
+  } catch {
+    return false;
+  }
+}
+
 /** Idempotent when a refId is given: the same (user, type, ref) never scores twice. */
 export async function award(
   ctx: { workspaceId: string; userId: string },
@@ -32,6 +42,8 @@ export async function award(
   refId?: string,
 ): Promise<boolean> {
   if (!points) return false;
+  // Points are the member's own: nothing a coach does while switched into their HelixOS (rev 216) scores for them.
+  if (await switchedRequest()) return false;
   const res = await db
     .insert(schema.pointsLedger)
     .values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, type, points, reason, refId: refId ?? null })

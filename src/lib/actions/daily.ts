@@ -21,7 +21,7 @@ async function upsertLog(workspaceId: string, userId: string, date: string) {
 }
 
 export async function morningCheckinAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
   const today = v.today;
   const log = await upsertLog(workspaceId, userId, today);
   const energy = Math.min(5, Math.max(1, num(formData, "energy") || 3));
@@ -65,7 +65,7 @@ export async function morningCheckinAction(formData: FormData): Promise<void> {
 }
 
 export async function eveningCloseAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
   const today = v.today;
   const log = await upsertLog(workspaceId, userId, today);
   const numbers = {
@@ -153,7 +153,7 @@ async function setActivityPoints(ctx: { workspaceId: string; userId: string }, t
  * the weekly bonus still restarts at day 1.
  */
 export async function repairStreakAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
   const date = str(formData, "date");
   const closed = await closedDates(workspaceId, userId);
   const broken = brokenStreak(closed, v.today);

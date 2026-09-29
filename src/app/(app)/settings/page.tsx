@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
 import { after } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
+import { formatDateTime } from "@/lib/dates";
+import { setCoachCanWorkAction } from "@/lib/actions/switch";
 import { rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { CopyButton } from "@/components/copy-button";
@@ -49,6 +51,88 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   // Body ships dark (rev 195); the workspace owner alone can switch it on for themselves here (rev 209).
   const bodyOwner = await isWorkspaceOwner(v);
+  const goalCard = (
+    <Card id="goal" title="Your one goal">
+      <form action={updateGoalAction} className="space-y-3">
+        <Field label="Goal">
+          <input className="field" name="title" defaultValue={goal?.title ?? "Cash collected this month"} />
+        </Field>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Field label="Target">
+            <input className="field tabular" name="target" type="number" min={1} defaultValue={goal?.target ?? 5000} />
+          </Field>
+          <Field label="So far">
+            <input className="field tabular" name="actual" type="number" min={0} defaultValue={goal?.actual ?? 0} />
+          </Field>
+          <Field label="Unit">
+            <select className="field" name="unit" defaultValue={goal?.unit ?? "$"}>
+              <option value="$">$</option>
+              <option value="clients">clients</option>
+              <option value="calls">calls</option>
+              <option value="leads">leads</option>
+            </select>
+          </Field>
+        </div>
+        <Field label="Period">
+          <input className="field" name="period" defaultValue={goal?.period ?? "This month"} />
+        </Field>
+        <p className="text-xs text-ink-3">Cash you log in the evening close adds to a $ goal automatically.</p>
+        <SubmitButton className="btn btn-primary" pendingText="Saving…">
+          Save goal
+        </SubmitButton>
+      </form>
+    </Card>
+  );
+  // Switch to client (rev 216): what the coach changed while working in this member's HelixOS, for the member to see.
+  const coachChangeRows = v.role === "client" ? await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, v.membership.id), eq(schema.coachChanges.kind, "change")), orderBy: [desc(schema.coachChanges.createdAt)], limit: 50 }) : [];
+  const coachNames = new Map((coachChangeRows.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(coachChangeRows.map((c) => c.coachUserId))]) }) : []).map((u) => [u.id, u.name]));
+  const changesList = coachChangeRows.length ? (
+    <ul className="mt-2 space-y-1 text-sm" data-testid="coach-changes">
+      {coachChangeRows.map((c) => (
+        <li key={c.id} data-testid="coach-change">
+          <span className="font-medium">{c.action}</span>
+          {c.item ? <> · &ldquo;{c.item}&rdquo;</> : null} · on {c.page} · by {coachNames.get(c.coachUserId) ?? "your coach"} (coach) · <span className="text-ink-3">{formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p className="mt-2 text-sm text-ink-3">Your coach hasn&apos;t changed anything here.</p>
+  );
+  if (v.switchedInto) {
+    // A coach in a client's HelixOS (rev 216): their account, consent, keys and connections are their own, shown only as set
+    // or not set. What the coach may set up (the goal) stays; the rest is on the pages themselves.
+    const first = v.switchedInto.clientName.split(" ")[0];
+    const clientAi = await db.query.aiCredentials.findFirst({ where: and(eq(schema.aiCredentials.workspaceId, v.workspace.id), eq(schema.aiCredentials.userId, v.user.id)) });
+    const status: [string, string][] = [
+      ["Sign-in, name, email, password and time zone", `${first}'s own`],
+      ["GoHighLevel publishing", conn ? "set" : "not set"],
+      ["AI key", clientAi ? "set" : "not set"],
+      ["Emails from HelixOS", `${v.membership.emailsEnabled ? "on" : "off"} (changed on your client page)`],
+      ["Let my coach work in my HelixOS", v.membership.coachCanWork ? "on" : "off"],
+      ["Their data: download and delete", `${first}'s own`],
+    ];
+    return (
+      <>
+        <PageHeader title="Settings" subtitle={`${first}'s account, consent, keys and connections are their own. Nothing here can be seen or changed from their HelixOS.`} />
+        <Card className="mb-4" title="Account and connections">
+          <ul className="space-y-1 text-sm" data-testid="switched-settings-status">
+            {status.map(([k, val]) => (
+              <li key={k} className="flex flex-wrap justify-between gap-2">
+                <span>{k}</span>
+                <span className="text-ink-2">{val}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {goalCard}
+          <Card id="your-coach" title="Changes by their coach">
+            {changesList}
+          </Card>
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <PageHeader title="Settings" />
@@ -178,36 +262,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {storage.blocked ? <p className="mt-2 text-xs text-danger" data-testid="storage-blocked">Full. New attachments are refused until something is deleted.</p> : null}
           <p className="mt-2 text-xs text-ink-3">Attachments on your proofs, in private storage.</p>
         </Card>
-        <Card id="goal" title="Your one goal">
-          <form action={updateGoalAction} className="space-y-3">
-            <Field label="Goal">
-              <input className="field" name="title" defaultValue={goal?.title ?? "Cash collected this month"} />
-            </Field>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Field label="Target">
-                <input className="field tabular" name="target" type="number" min={1} defaultValue={goal?.target ?? 5000} />
-              </Field>
-              <Field label="So far">
-                <input className="field tabular" name="actual" type="number" min={0} defaultValue={goal?.actual ?? 0} />
-              </Field>
-              <Field label="Unit">
-                <select className="field" name="unit" defaultValue={goal?.unit ?? "$"}>
-                  <option value="$">$</option>
-                  <option value="clients">clients</option>
-                  <option value="calls">calls</option>
-                  <option value="leads">leads</option>
-                </select>
-              </Field>
-            </div>
-            <Field label="Period">
-              <input className="field" name="period" defaultValue={goal?.period ?? "This month"} />
-            </Field>
-            <p className="text-xs text-ink-3">Cash you log in the evening close adds to a $ goal automatically.</p>
-            <SubmitButton className="btn btn-primary" pendingText="Saving…">
-              Save goal
-            </SubmitButton>
-          </form>
-        </Card>
+        {goalCard}
+        {v.role === "client" ? (
+          <Card id="your-coach" title="Your coach">
+            {/* Switch to client (rev 216): the member's own choice, and what their coach changed while working in here. */}
+            <form action={setCoachCanWorkAction} className="flex flex-wrap items-center gap-3 text-sm" data-testid="coach-work" data-on={v.membership.coachCanWork ? "1" : "0"}>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="coachCanWork" defaultChecked={v.membership.coachCanWork} data-testid="coach-work-toggle" /> Let my coach work in my HelixOS
+              </label>
+              <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="coach-work-save">
+                Save
+              </SubmitButton>
+            </form>
+            <p className="mt-2 text-xs text-ink-3">Your coach can always look at your HelixOS to help you. With this on, they can also set things up for you (offers, webinars, tasks, Essence, groups, content). They never see Body, send anything as you, or change your account.</p>
+            <h3 className="mt-3 text-sm font-semibold">Changes by your coach</h3>
+            {changesList}
+          </Card>
+        ) : null}
         {v.role === "coach" ? (
           <>
             <Card title="Workspace">

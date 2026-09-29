@@ -198,7 +198,7 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
 
 /** One click from the Distribute page: every channel plus your group and top 3, scheduled 45 minutes apart from a start time. */
 export async function distributeAllAction(formData: FormData): Promise<void> {
-  const { v, userId } = await ctx();
+  const { v, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const itemId = String(formData.get("contentItemId") ?? "");
   // A cleared date or time input submits "", which ?? would keep: an empty start would schedule nothing.
   const startDate = String(formData.get("startDate") || v.today);

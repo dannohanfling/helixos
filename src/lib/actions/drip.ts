@@ -3,15 +3,14 @@
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
-import { refresh, str, opt } from "@/lib/action-helpers";
-import { requireViewer } from "@/lib/auth";
+import { ctx, refresh, str, opt } from "@/lib/action-helpers";
 import { nowFor } from "@/lib/engine/channel-outcome";
 import { ladderBlockers } from "@/lib/queries/outcomes";
 import { handOffLadder } from "@/lib/rung-drip";
 
 /** Hands one post's comment ladder to Community Loyalty. Refused, with the reason on the page, when the gate says no. */
 export async function handOffLadderAction(formData: FormData): Promise<void> {
-  const v = await requireViewer();
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const id = str(formData, "contentId");
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
   if (!item) return;

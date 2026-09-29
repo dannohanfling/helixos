@@ -13,7 +13,7 @@ import { redirect } from "next/navigation";
 
 /** Saves the member's own sub-account and validates the token against GoHighLevel right away. Errors carry the real reason. */
 export async function connectGhlAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const locationId = str(formData, "locationId");
   const ghlUserId = opt(formData, "ghlUserId");
   if (!locationId) return;
@@ -30,7 +30,7 @@ export async function connectGhlAction(formData: FormData): Promise<void> {
 }
 
 export async function refreshGhlAccountsAction(): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const conn = await connectionFor(userId);
   if (conn) await refreshAccounts(conn);
   refresh();
@@ -38,7 +38,7 @@ export async function refreshGhlAccountsAction(): Promise<void> {
 
 /** Channel → account choices from the mapping form. Empty means "don't auto-publish this channel". */
 export async function setGhlMappingAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const conn = await connectionFor(userId);
   if (!conn) return;
   // "Don't auto-publish" is kept as an explicit "" so the next account check does not fill the channel back in.
@@ -53,14 +53,14 @@ export async function setGhlMappingAction(formData: FormData): Promise<void> {
 }
 
 export async function disconnectGhlAction(): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   await db.delete(schema.socialConnections).where(and(eq(schema.socialConnections.userId, userId), eq(schema.socialConnections.provider, "gohighlevel")));
   refresh();
 }
 
 /** Asks GHL what happened to a scheduled post and stores the answer on the variant. */
 export async function syncPostStatusAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const id = str(formData, "variantId") || str(formData, "id");
   const variant = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.id, id), eq(schema.contentVariants.userId, userId)) });
   if (!variant || (!variant.externalId && variant.externalStatus !== "accepted")) return;
@@ -73,7 +73,7 @@ export async function syncPostStatusAction(formData: FormData): Promise<void> {
 
 /** Every version of one post that the planner holds, read back in one click. */
 export async function checkAllPostStatusAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const contentId = str(formData, "contentId");
   const conn = await connectionFor(userId);
   if (!conn) return;

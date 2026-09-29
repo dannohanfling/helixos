@@ -321,7 +321,7 @@ async function main() {
     const { bodyAiContext } = await import("@/lib/queries/body");
     const viewerFor = async () => {
       const [user, workspace, membership] = await Promise.all([db.query.users.findFirst({ where: eq(schema.users.id, maya.id) }), db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }), db.query.memberships.findFirst({ where: eq(schema.memberships.id, mem.id) })]);
-      return { user: user!, workspace: workspace!, membership: membership!, role: "client" as const, tz: membership!.timezone || workspace!.timezone, today, hour: 12 };
+      return { user: user!, workspace: workspace!, membership: membership!, role: "client" as const, tz: membership!.timezone || workspace!.timezone, today, hour: 12, actor: user!, switchedInto: null };
     };
     if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("with the AI switch off (the default), AI gets no Body data");
     await client.goto(`${base}/body/settings`);
@@ -331,7 +331,8 @@ async function main() {
     if (!aiText || !aiText.includes(MEALS[0].name) || !aiText.includes(`${fmtMacro("cal", totals.cal)} cal`)) throw new Error(`with the switch on, AI gets today's numbers and logged meals: ${aiText}`);
     if (aiText.includes(note)) throw new Error("the coach's comment never goes to AI");
     // Another viewer (the coach) never gets it, switch or not.
-    const coachViewer = { ...(await viewerFor()), user: (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!, role: "coach" as const };
+    const theCoach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+    const coachViewer = { ...(await viewerFor()), user: theCoach, actor: theCoach, role: "coach" as const };
     if ((await bodyAiContext(coachViewer)) !== null && (await bodyAiContext(coachViewer))!.includes(MEALS[0].name)) throw new Error("a coach's session never gets the client's Body data for AI");
     await press(client, '[data-testid="body-ai-toggle"]', async () => /: Off/.test(await client.locator('[data-testid="body-ai-state"]').innerText()), "AI use off");
     if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("switching it off stops it on the next request");

@@ -20,7 +20,7 @@ export type ClaimState = { error?: string; ok?: string } | undefined;
  * points and reveals that reward's own booking link.
  */
 export async function claimRewardAction(_prev: ClaimState, formData: FormData): Promise<ClaimState> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That earns or spends {first}'s points, which only they can do." });
   const name = str(formData, "name");
   const config = loadRewardsConfig();
   const item = catalogue(rewards, prizes, config).find((i) => i.name === name);

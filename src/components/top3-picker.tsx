@@ -54,7 +54,7 @@ export function Top3Picker({ candidates, initiallyChecked }: { candidates: Item[
   return (
     <div data-testid="top3-picker">
       <div className="label">Pick your top 3</div>
-      <div className="grid gap-1 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
         {items.map((t) => (
           <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent-soft" data-testid="top3-item" data-added={t.added ? "yes" : "no"}>
             <input type="checkbox" name="focus" value={t.id} checked={checked.includes(t.id)} onChange={(e) => toggle(t.id, e.target.checked)} />

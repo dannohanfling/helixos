@@ -22,7 +22,7 @@ const backTo = (formData: FormData): "/intentions" | "/today" => (str(formData, 
  * and removes one the member has taken off unless it is already done; a done task stays done.
  */
 export async function saveIntentionAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
   const week = weekOf(v.today);
   const read = readIntention({
     word: str(formData, "word"),
@@ -69,7 +69,7 @@ export async function saveIntentionAction(formData: FormData): Promise<void> {
 
 /** The end-of-week check: each key result done or not done, all at once. Only this week's, and only once it is set. */
 export async function reviewIntentionAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
   const week = weekOf(v.today);
   const existing = await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, week)) });
   if (!existing) redirect(`${backTo(formData)}#week`);
@@ -102,7 +102,7 @@ export async function reviewIntentionAction(formData: FormData): Promise<void> {
  * member's.
  */
 export async function saveMonthIntentionAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
   const month = monthOf(v.today);
   const read = readMonthIntention({
     word: str(formData, "word"),
@@ -138,7 +138,7 @@ export async function saveMonthIntentionAction(formData: FormData): Promise<void
  * post that doesn't exist. The comment itself is posted by the member, under their own name; HelixOS never posts it.
  */
 export async function recordShareAction(): Promise<{ ok: boolean; points: number; error?: string }> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const week = await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) });
   if (!week) return { ok: false, points: 0, error: "Set your 3-1-3 first." };
   const share = await shareFor(workspaceId, userId, week);

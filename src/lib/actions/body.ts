@@ -57,7 +57,7 @@ export async function setBodyBetaAction(formData: FormData): Promise<void> {
  * checklist on /body. Once only.
  */
 export async function setupBodyAction(): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   enabled(v);
   if (await bodySettingsFor(workspaceId, userId)) redirect("/body");
   const everyDay = newId();
@@ -72,7 +72,7 @@ export async function setupBodyAction(): Promise<void> {
 /* ───────── Settings ───────── */
 
 export async function saveBodySettingsAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's {first}'s own consent to give, so it can't be changed from their HelixOS." });
   const settings = await setUp(v);
   const types = await db.query.bodyDayTypes.findMany({ where: and(eq(schema.bodyDayTypes.workspaceId, workspaceId), eq(schema.bodyDayTypes.userId, userId)) });
   const typeIds = new Set(types.map((t) => t.id));
@@ -112,7 +112,7 @@ export async function saveBodySettingsAction(formData: FormData): Promise<void> 
 
 /** "Let my coach see my Body data": on or off, logged either way. */
 export async function setBodyShareAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's {first}'s own consent to give, so it can't be changed from their HelixOS." });
   const settings = await setUp(v);
   const shared = str(formData, "shared") === "1";
   if (shared === settings.shareWithCoach) return refresh();
@@ -125,7 +125,7 @@ export async function setBodyShareAction(formData: FormData): Promise<void> {
 
 /** "Let AI use my Body data to support me" (rev 219): on or off, logged either way, independent of coach sharing. */
 export async function setBodyAiAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's {first}'s own consent to give, so it can't be changed from their HelixOS." });
   const settings = await setUp(v);
   const on = str(formData, "on") === "1";
   // Yes or Not now on the checklist both answer the question; only a change of the switch itself is logged.
@@ -144,7 +144,7 @@ export async function setBodyAiAction(formData: FormData): Promise<void> {
 /* ───────── Day types ───────── */
 
 export async function saveDayTypeAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   await setUp(v);
   const id = str(formData, "id");
   const name = str(formData, "name").slice(0, 60);
@@ -170,7 +170,7 @@ export async function saveDayTypeAction(formData: FormData): Promise<void> {
 
 /** A day type goes; days set to it fall back to the pattern, and the pattern and refeed rule forget it. The last one stays. */
 export async function deleteDayTypeAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   const settings = await setUp(v);
   const id = str(formData, "id");
   const types = await db.query.bodyDayTypes.findMany({ where: and(eq(schema.bodyDayTypes.workspaceId, workspaceId), eq(schema.bodyDayTypes.userId, userId)) });
@@ -189,7 +189,7 @@ export async function deleteDayTypeAction(formData: FormData): Promise<void> {
 
 /** Set one date's day type by hand (a swapped lift day, an unplanned refeed), or clear it back to the pattern. */
 export async function setBodyDayTypeAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   await setUp(v);
   const date = str(formData, "date");
   if (!DATE.test(date)) return;
@@ -206,7 +206,7 @@ export async function setBodyDayTypeAction(formData: FormData): Promise<void> {
 /* ───────── Foods and meals ───────── */
 
 export async function saveFoodAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   await setUp(v);
   const id = str(formData, "id");
   const name = str(formData, "name").slice(0, 80);
@@ -223,7 +223,7 @@ export async function saveFoodAction(formData: FormData): Promise<void> {
 
 /** Archived foods leave the picker; meals and past days that use them keep working. */
 export async function archiveFoodAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   await setUp(v);
   await db.update(schema.bodyFoods).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyFoods.id, str(formData, "id")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
   refresh();
@@ -231,7 +231,7 @@ export async function archiveFoodAction(formData: FormData): Promise<void> {
 
 /** A meal's items come as item_<n>_food / item_<n>_qty pairs; a blank food or a zero quantity drops the row. */
 export async function saveMealAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   await setUp(v);
   const id = str(formData, "id");
   const name = str(formData, "name").slice(0, 80);
@@ -252,7 +252,7 @@ export async function saveMealAction(formData: FormData): Promise<void> {
 }
 
 export async function archiveMealAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   await setUp(v);
   await db.update(schema.bodyMeals).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyMeals.id, str(formData, "id")), and(eq(schema.bodyMeals.workspaceId, workspaceId), eq(schema.bodyMeals.userId, userId))));
   refresh();
@@ -274,7 +274,7 @@ function logTarget(formData: FormData, slots: string[]) {
 
 /** One tap on a saved meal: its default quantities, or the adjusted ones (qty_<n>, per item in order) when opened. */
 export async function logMealAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   const settings = await setUp(v);
   const { date, slot } = logTarget(formData, settings.mealSlots);
   const meal = await db.query.bodyMeals.findFirst({ where: and(eq(schema.bodyMeals.id, str(formData, "mealId")), and(eq(schema.bodyMeals.workspaceId, workspaceId), eq(schema.bodyMeals.userId, userId))) });
@@ -294,7 +294,7 @@ export async function logMealAction(formData: FormData): Promise<void> {
 
 /** A food × a quantity. */
 export async function logFoodAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   const settings = await setUp(v);
   const { date, slot } = logTarget(formData, settings.mealSlots);
   const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
@@ -311,7 +311,7 @@ export async function logFoodAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteEntryAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
   await setUp(v);
   await db.delete(schema.bodyEntries).where(and(eq(schema.bodyEntries.id, str(formData, "id")), and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId))));
   refresh();
@@ -339,7 +339,7 @@ export async function addBodyCommentAction(formData: FormData): Promise<void> {
  * purpose: deleting your own data is always allowed, even if Body is later switched off for you.
  */
 export async function eraseBodyAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
     db.delete(schema.bodyEntries).where(and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId))),

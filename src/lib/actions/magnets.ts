@@ -167,7 +167,7 @@ export async function acceptMagnetAction(formData: FormData): Promise<void> {
  * Continue anyway (confirm=1) is logged with who and when before it publishes. The public page itself shows nothing.
  */
 export async function publishMagnetAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const m = await own(str(formData, "id"), userId);
   const gate = gateFor([{ name: m.title, origin: m.origin }]);
   if (gate && str(formData, "confirm") !== "1") redirect(`/magnets/${m.id}?gate=publish`);
@@ -178,7 +178,7 @@ export async function publishMagnetAction(formData: FormData): Promise<void> {
 }
 
 export async function unpublishMagnetAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const m = await own(str(formData, "id"), userId);
   await db.update(schema.leadMagnets).set({ publishedAt: null, updatedAt: nowIso() }).where(eq(schema.leadMagnets.id, m.id));
   refresh();

@@ -35,17 +35,24 @@ export async function credentialFor(workspaceId: string, userId: string) {
   return db.query.aiCredentials.findFirst({ where: and(eq(schema.aiCredentials.workspaceId, workspaceId), eq(schema.aiCredentials.userId, userId)) });
 }
 
+/**
+ * Whose AI this is: the signed-in person's. A coach switched into a client's HelixOS (rev 216) drafts for the client with the
+ * coach's own key, counted and capped as the coach's; the client's key is never used or shown.
+ */
+const aiUserId = (v: Viewer): string => v.actor.id;
+const capExempt = (v: Viewer): boolean => (v.switchedInto ? false : v.membership.aiCapExempt);
+
 /** Rows are stamped in UTC by the database; "today" is the workspace day. Close enough for a soft cap. */
 async function callsToday(v: Viewer): Promise<number> {
-  const rows = await db.select({ id: schema.aiUsage.id }).from(schema.aiUsage).where(and(eq(schema.aiUsage.workspaceId, v.workspace.id), eq(schema.aiUsage.userId, v.user.id), gte(schema.aiUsage.createdAt, todayInTz(v.tz))));
+  const rows = await db.select({ id: schema.aiUsage.id }).from(schema.aiUsage).where(and(eq(schema.aiUsage.workspaceId, v.workspace.id), eq(schema.aiUsage.userId, aiUserId(v)), gte(schema.aiUsage.createdAt, todayInTz(v.tz))));
   return rows.length;
 }
 
 /** What the pages need to decide whether to show a ✨ button and what to say next to it. */
 export async function aiStatus(v: Viewer): Promise<AiStatus> {
-  const [cred, today] = await Promise.all([credentialFor(v.workspace.id, v.user.id), callsToday(v)]);
+  const [cred, today] = await Promise.all([credentialFor(v.workspace.id, aiUserId(v)), callsToday(v)]);
   const cap = v.workspace.aiDailyCap;
-  const exempt = v.membership.aiCapExempt;
+  const exempt = capExempt(v);
   return { hasKey: Boolean(cred && !cred.lastError), provider: cred?.provider ?? null, last4: cred?.last4 ?? "", lastError: cred?.lastError ?? null, callsToday: today, cap, exempt, blocked: !exempt && today >= cap };
 }
 
@@ -94,9 +101,9 @@ export type DraftOptions = { feature?: keyof typeof FEATURES | string };
 export async function draft(task: string, user: string, maxTokens = 4000, opts: DraftOptions = {}): Promise<string | null> {
   const v = await getViewer();
   if (!v) return null;
-  const cred = await credentialFor(v.workspace.id, v.user.id);
+  const cred = await credentialFor(v.workspace.id, aiUserId(v));
   if (!cred || cred.lastError) return null;
-  if (!v.membership.aiCapExempt && (await callsToday(v)) >= v.workspace.aiDailyCap) return null;
+  if (!capExempt(v) && (await callsToday(v)) >= v.workspace.aiDailyCap) return null;
   const key = open(cred.keyEncrypted);
   if (!key) return null;
   const feature = opts.feature ?? "composer_polish";
@@ -116,7 +123,7 @@ export async function draft(task: string, user: string, maxTokens = 4000, opts: 
     return null;
   }
   if (!r) return null;
-  await db.insert(schema.aiUsage).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, provider: cred.provider, model, feature, inputTokens: r.inputTokens, outputTokens: r.outputTokens, cacheWriteTokens: r.cacheWriteTokens, cacheReadTokens: r.cacheReadTokens, estimatedCostUsd: estimateCost(model, r.inputTokens, r.outputTokens, r.cacheWriteTokens, r.cacheReadTokens) ?? 0 });
+  await db.insert(schema.aiUsage).values({ id: newId(), workspaceId: v.workspace.id, userId: aiUserId(v), provider: cred.provider, model, feature, inputTokens: r.inputTokens, outputTokens: r.outputTokens, cacheWriteTokens: r.cacheWriteTokens, cacheReadTokens: r.cacheReadTokens, estimatedCostUsd: estimateCost(model, r.inputTokens, r.outputTokens, r.cacheWriteTokens, r.cacheReadTokens) ?? 0 });
   return r.text || null;
 }
 

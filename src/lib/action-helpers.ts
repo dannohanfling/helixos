@@ -1,8 +1,15 @@
 import { revalidatePath } from "next/cache";
 import { requireViewer } from "@/lib/auth";
+import { switchedWrite, type WhileSwitched } from "@/lib/switch";
 
-export async function ctx() {
+/**
+ * The viewer for a member's write. While a coach is switched into a client's HelixOS (rev 216) every write passes the gate in
+ * src/lib/switch.ts first: refused while viewing, logged for the client while working, and refused in both modes when the
+ * action says it is the client's own ("refuse", with a reason). "noop" is for a read-state side effect the caller then skips.
+ */
+export async function ctx(opts: { whileSwitched?: WhileSwitched; reason?: string } = {}) {
   const v = await requireViewer();
+  if (v.switchedInto) await switchedWrite(v, opts.whileSwitched ?? "log", opts.reason);
   return { v, workspaceId: v.workspace.id, userId: v.user.id };
 }
 

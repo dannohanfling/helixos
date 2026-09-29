@@ -9,7 +9,7 @@ import { award } from "@/lib/queries/points";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function submitPathwayTaskAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
   const key = str(formData, "key");
   const lib = await db.query.libraryTasks.findFirst({ where: eq(schema.libraryTasks.key, key) });
   if (!lib) return;
@@ -57,7 +57,7 @@ export async function reviewPathwayTaskAction(formData: FormData): Promise<void>
 }
 
 export async function completeCurriculumDayAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That earns or spends {first}'s points, which only they can do." });
   const day = Number(str(formData, "day"));
   const item = await db.query.curriculumDays.findFirst({ where: eq(schema.curriculumDays.day, day) });
   if (!item) return;

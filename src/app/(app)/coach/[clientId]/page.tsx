@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
+import { switchToClientAction } from "@/lib/actions/switch";
 import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientResetAction, setClientEmailsAction } from "@/lib/actions/coach";
 import { emailBlock } from "@/lib/engine/email-gate";
 import { COACH_RESET_COOKIE } from "@/lib/reset-link";
@@ -52,6 +53,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
   // Emails from HelixOS (29 Sep): the coach's switch, and why nothing goes out even when it's on.
   const emailsBlocked = emailBlock({ emailsEnabled: m.emailsEnabled, removedAt: m.removedAt, firstSignedInAt: u?.firstSignedInAt ?? null });
   if (!u) notFound();
+  const switches = await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, m.id), eq(schema.coachChanges.coachUserId, v.user.id), inArray(schema.coachChanges.kind, ["switch_in", "switch_out"])), orderBy: [desc(schema.coachChanges.createdAt)], limit: 20 });
   // The copy-link cookie the reset action leaves when there is no email: shown once, for this client only, then it expires on its own.
   let copyLink: string | null = null;
   if (sp.reset === "copy") {
@@ -158,6 +160,43 @@ export default async function CoachClientPage({ params, searchParams }: { params
         }
       />
       <EssenceOverNote data={essence} own={false} />
+      {/* Switch to client (rev 216): into this client's HelixOS, to look, or to set it up when they let their coach work in it. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line p-3 text-sm" data-testid="client-switch" data-can-work={m.coachCanWork ? "1" : "0"}>
+        <span>
+          <strong>Switch to {u.name.split(" ")[0]}:</strong>{" "}
+          <span className="text-ink-3" data-testid="client-switch-state">
+            {m.coachCanWork ? "they let their coach work in their HelixOS." : "view only: they haven't turned on \"Let my coach work in my HelixOS\"."}
+          </span>
+        </span>
+        <form action={switchToClientAction} className="flex gap-2">
+          <input type="hidden" name="membershipId" value={m.id} />
+          <input type="hidden" name="mode" value="view" />
+          <SubmitButton className="btn btn-soft btn-sm" pendingText="Switching…" data-testid="switch-view">
+            View
+          </SubmitButton>
+        </form>
+        {m.coachCanWork ? (
+          <form action={switchToClientAction}>
+            <input type="hidden" name="membershipId" value={m.id} />
+            <input type="hidden" name="mode" value="work" />
+            <SubmitButton className="btn btn-primary btn-sm" pendingText="Switching…" data-testid="switch-work">
+              Work in their HelixOS
+            </SubmitButton>
+          </form>
+        ) : null}
+        {switches.length ? (
+          <details className="w-full text-xs text-ink-3">
+            <summary className="cursor-pointer">Your switches ({switches.length})</summary>
+            <ul className="mt-1 space-y-0.5" data-testid="client-switches">
+              {switches.map((c) => (
+                <li key={c.id}>
+                  {c.kind === "switch_in" ? "In" : "Out"} · {c.mode === "work" ? "Working" : "Viewing"} · {formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </div>
       <form action={setClientEmailsAction} className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line p-3 text-sm" data-testid="client-emails" data-on={m.emailsEnabled ? "1" : "0"}>
         <input type="hidden" name="membershipId" value={m.id} />
         <input type="hidden" name="emails" value={m.emailsEnabled ? "off" : "on"} />

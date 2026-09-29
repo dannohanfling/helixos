@@ -14,7 +14,17 @@ export type Viewer = {
   tz: string;
   today: string;
   hour: number;
+  /** The person signed in: the viewer's own user, or, while switched, the coach acting in a client's HelixOS. */
+  actor: schema.User;
+  /**
+   * "Switch to client" (rev 216): set only while a coach is in a client's HelixOS. Then `user`, `membership` and `role` are
+   * the client's, so every page shows the client's own HelixOS, and `actor` is the coach. Null otherwise. Anything the coach
+   * must never do as the client (consent, secrets, exports, sends, streaks, points, Body) checks this.
+   */
+  switchedInto: Switched | null;
 };
+
+export type Switched = { membershipId: string; mode: "view" | "work"; clientName: string; coachName: string };
 
 /** Resolves the signed-in viewer once per request. */
 export const getViewer = cache(async (): Promise<Viewer | null> => {
@@ -33,14 +43,28 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   if (!user || !workspace) return null;
   if ((session.sv ?? 0) !== user.sessionVersion) return null;
   const tz = membership.timezone || workspace.timezone;
+  const own: Viewer = { user, workspace, membership, role: membership.role, tz, today: todayInTz(tz), hour: hourInTz(tz), actor: user, switchedInto: null };
+  if (!session.sw || membership.role !== "coach") return own;
+  // Switched into a client: checked on every request, not only at the switch. A client that is gone, removed, a coach, or in
+  // another workspace ends the switch (the coach is simply back in their own account).
+  const cm = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, session.sw.m), eq(schema.memberships.workspaceId, workspace.id)) });
+  if (!cm || cm.role !== "client" || cm.removedAt) return own;
+  const cu = await db.query.users.findFirst({ where: eq(schema.users.id, cm.userId) });
+  if (!cu) return own;
+  // Work needs the client's "Let my coach work in my HelixOS"; switched off meanwhile, the coach is back to view at once.
+  const mode = session.sw.mode === "work" && cm.coachCanWork ? "work" : "view";
+  const ctz = cm.timezone || workspace.timezone;
   return {
-    user,
+    user: cu,
     workspace,
-    membership,
-    role: membership.role,
-    tz,
-    today: todayInTz(tz),
-    hour: hourInTz(tz),
+    // Body is never visible while switched, even when the client shares it (rev 216): Body's own flag hides it everywhere.
+    membership: { ...cm, bodyEnabled: false },
+    role: "client",
+    tz: ctz,
+    today: todayInTz(ctz),
+    hour: hourInTz(ctz),
+    actor: user,
+    switchedInto: { membershipId: cm.id, mode, clientName: cu.name, coachName: user.name },
   };
 });
 

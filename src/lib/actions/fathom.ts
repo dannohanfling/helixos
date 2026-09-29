@@ -14,7 +14,7 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
 
 /** Saves the member's own Fathom key after a real check. Tick one (the acknowledgement) is required the first time and dated on the membership. */
 export async function saveFathomKeyAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const key = str(formData, "fathomKey");
   const ticked = formData.get("consent") === "on";
   if (!v.membership.fathomConsentAt && !ticked) redirect("/settings?fathom=consent#fathom");
@@ -30,7 +30,7 @@ export async function saveFathomKeyAction(formData: FormData): Promise<void> {
 }
 
 export async function recheckFathomKeyAction(): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const existing = await fathomConnectionFor(workspaceId, userId);
   if (!existing) return;
   const { open } = await import("@/lib/crypto");
@@ -45,7 +45,7 @@ export async function recheckFathomKeyAction(): Promise<void> {
 }
 
 export async function removeFathomKeyAction(): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   await db.delete(schema.fathomConnections).where(and(eq(schema.fathomConnections.workspaceId, workspaceId), eq(schema.fathomConnections.userId, userId)));
   refresh();
   redirect(deletedTo("/settings", "key"));
@@ -60,7 +60,7 @@ const TRANSCRIPT_CAP = 80000;
  * person submitted this form for this recording.
  */
 export async function harvestRecordingAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
   const recordingId = str(formData, "recordingId");
   const title = str(formData, "title") || "Recording";
   const url = str(formData, "url");

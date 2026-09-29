@@ -52,7 +52,7 @@ const all = files.flatMap((f) => actionsOf(readFileSync(path.join(dir, f), "utf8
 const takesId = (b: string) => /str\(formData, "\w*[iI]d"\)|opt\(formData, "\w*[iI]d"\)|formData\.(?:get|getAll|has)\("\w*[iI]ds?"\)|payload\.id\b|: string\)/.test(b);
 const mutates = (b: string) => /\.(update|delete|insert)\(schema\./.test(b);
 // Derives the caller from the session: ctx() or a require* guard. Never trusts the body for who is calling.
-const sessionScoped = (b: string) => /await ctx\(\)|requireViewer\(\)|requireCoach\(\)|getViewer\(\)/.test(b);
+const sessionScoped = (b: string) => /await ctx\(|requireViewer\(\)|requireCoach\(\)|getViewer\(\)/.test(b);
 
 describe("tenancy: no action trusts the request for who owns the data", () => {
   it("only the auth lifecycle runs without a session; everything else derives the caller from ctx()", () => {

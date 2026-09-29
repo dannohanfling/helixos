@@ -15,6 +15,8 @@ import { STORAGE_UNCONFIGURED, storageConfigured } from "@/lib/storage";
 export async function POST(request: Request) {
   const v = await getViewer();
   if (!v) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  // A coach viewing a client's HelixOS (rev 216) writes nothing, files included.
+  if (v.switchedInto?.mode === "view") return NextResponse.json({ error: `You're viewing ${v.switchedInto.clientName.split(" ")[0]}'s HelixOS. Switch to Work to add files.` }, { status: 403 });
   if (!storageConfigured()) {
     console.error("[storage] BLOB_READ_WRITE_TOKEN is not set: an upload token was refused");
     return NextResponse.json({ error: STORAGE_UNCONFIGURED }, { status: 503 });

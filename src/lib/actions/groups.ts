@@ -93,7 +93,7 @@ export async function deleteGroupAction(formData: FormData): Promise<void> {
 }
 
 export async function markPostedInGroupAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const id = str(formData, "id");
   await own(id, userId);
   await db.update(schema.groups).set({ lastPostedAt: nowIso() }).where(eq(schema.groups.id, id));
