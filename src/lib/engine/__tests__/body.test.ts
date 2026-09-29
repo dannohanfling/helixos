@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { bodyAccessFor, capUse, dayMarks, dayTypeIdFor, hasBands, markFor, nextRefeed, portionMacros, summaryLine, sumMacros, whatFits, worstMark, type Band, type Macro, type Macros, type WeekPattern } from "@/lib/engine/body";
+import { bodyAccessFor, bodyAiAllowedFor, capUse, formatBodyForAi, dayMarks, dayTypeIdFor, hasBands, markFor, nextRefeed, portionMacros, summaryLine, sumMacros, whatFits, worstMark, type Band, type Macro, type Macros, type WeekPattern } from "@/lib/engine/body";
 // Danno's protocol is test data only (rev 192): the app ships no preset, and the last describe below holds that.
 import { PHASE2_V4 } from "./fixtures/body-phase2v4";
 import { NAV, navVisible } from "@/components/nav-groups";
@@ -240,6 +240,44 @@ describe("Body ships dark: a member without the flag sees none of it (rev 195)",
     expect(beta).not.toMatch(/formData, "(id|membershipId|userId)"/);
     expect(beta).toMatch(/await logSync\(/);
     expect(read("src/app/(app)/settings/page.tsx")).toMatch(/\{bodyOwner \? \(/);
+  });
+});
+
+describe("AI and Body data (rev 219)", () => {
+  const read = (f: string) => readFileSync(join(process.cwd(), f), "utf8");
+  it("only the member's own session, with Body on and the AI switch on", () => {
+    const base = { viewerUserId: "maya", memberUserId: "maya", memberEnabled: true, aiUse: true };
+    expect(bodyAiAllowedFor(base)).toBe(true);
+    expect(bodyAiAllowedFor({ ...base, aiUse: false })).toBe(false);
+    expect(bodyAiAllowedFor({ ...base, memberEnabled: false })).toBe(false);
+    // A coach, or a coach switched into the client's HelixOS, is never the member's own session.
+    expect(bodyAiAllowedFor({ ...base, viewerUserId: "coach" })).toBe(false);
+  });
+  it("what AI is given is numbers and short text, with no place for photos, notes or a coach's comments", () => {
+    const lift = bandsOf("lift");
+    const text = formatBodyForAi({
+      today: "2026-09-29",
+      dayTypes: [{ name: "Lift day", bands: lift }],
+      days: [{ date: "2026-09-29", dayType: "Lift day", totals: { cal: 1408, p: 200, f: 61, c: 3 }, logged: 3 }, { date: "2026-09-28", dayType: "Off day", totals: { cal: 0, p: 0, f: 0, c: 0 }, logged: 0 }],
+      todayEntries: [{ slot: "Lunch", name: "Office Carne Asada Power Lunch", items: [{ name: "Carne asada", qty: 8, unit: "oz" }], totals: { cal: 783, p: 87, f: 47, c: 1 } }],
+      meals: ["Steak + Eggs Dinner"],
+    });
+    for (const want of ["1,400–1,500 cal", "1,408 cal, 200 P, 61 F, 3 C", "nothing logged", "Office Carne Asada Power Lunch (8 oz Carne asada) = 783 cal", "Steak + Eggs Dinner"]) expect(text).toContain(want);
+    const type = read("src/lib/engine/body.ts").match(/export type BodyAiInput = \{[\s\S]*?\n\};/)![0];
+    expect(type).not.toMatch(/photo|note|comment|blob|image/i);
+  });
+  it("Body data reaches AI only through bodyAiContext, which checks canAiUseBody first", () => {
+    const q = read("src/lib/queries/body.ts");
+    expect(q).toMatch(/export async function bodyAiContext\(v: Viewer\): Promise<string \| null> \{\n  if \(!\(await canAiUseBody\(v, v\.user\.id\)\)\) return null;/);
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
+    const files = walk(join(process.cwd(), "src")).filter((f) => /\.tsx?$/.test(f) && !f.includes("__tests__"));
+    const aiCallers = files.filter((f) => /from "@\/lib\/ai"/.test(readFileSync(f, "utf8")));
+    expect(aiCallers.length).toBeGreaterThan(3);
+    for (const f of aiCallers) {
+      const imports = [...readFileSync(f, "utf8").matchAll(/import \{([^}]*)\} from "@\/lib\/queries\/body"/g)].flatMap((m) => m[1].split(",").map((x) => x.trim()).filter(Boolean));
+      expect(imports.filter((n) => n !== "bodyAiContext"), f).toEqual([]);
+    }
+    expect(read("src/lib/actions/body.ts")).toMatch(/insert\(schema\.bodyShareEvents\)\.values\(\{ id: newId\(\), workspaceId, userId, shared: on, kind: "ai" \}\)/);
   });
 });
 

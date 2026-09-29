@@ -7,7 +7,7 @@ import { ConfirmDelete } from "@/components/confirm-delete";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { MACROS, MACRO_NAME, nextRefeed } from "@/lib/engine/body";
 import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory } from "@/lib/queries/body";
-import { deleteDayTypeAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, setBodyShareAction } from "@/lib/actions/body";
+import { deleteDayTypeAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, setBodyAiAction, setBodyShareAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
 
 export const metadata = { title: "Body settings" };
@@ -79,11 +79,23 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
             {s.shareWithCoach ? "Switch off" : "Switch on"}
           </SubmitButton>
         </form>
+        <p className="mt-4 text-sm text-ink-2">
+          Separately, you can let HelixOS&apos;s AI use your Body numbers (targets, what you logged, your saved meals) to support you better, on your own AI key. Never your photos or notes. Off, AI only sees Body data when you press a button for that one request.
+        </p>
+        <form action={setBodyAiAction} className="mt-3 flex flex-wrap items-center gap-3">
+          <input type="hidden" name="on" value={s.aiUse ? "0" : "1"} />
+          <span className="text-sm font-medium" data-testid="body-ai-state">
+            Let AI use my Body data to support me: {s.aiUse ? "On" : "Off"}
+          </span>
+          <SubmitButton className={`btn btn-sm ${s.aiUse ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="body-ai-toggle">
+            {s.aiUse ? "Switch off" : "Switch on"}
+          </SubmitButton>
+        </form>
         {history.length ? (
           <ul className="mt-3 space-y-0.5 text-xs text-ink-3" data-testid="body-share-log">
             {history.map((h) => (
-              <li key={h.id}>
-                {h.shared ? "Switched on" : "Switched off"} · {formatDateTime(h.createdAt.includes("T") ? h.createdAt : `${h.createdAt.replace(" ", "T")}Z`, v.tz)}
+              <li key={h.id} data-kind={h.kind}>
+                {h.kind === "ai" ? "AI use" : "Coach sharing"} {h.shared ? "switched on" : "switched off"} · {formatDateTime(h.createdAt.includes("T") ? h.createdAt : `${h.createdAt.replace(" ", "T")}Z`, v.tz)}
               </li>
             ))}
           </ul>

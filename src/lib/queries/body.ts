@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { addDays, todayInTz } from "@/lib/dates";
-import { MACROS, bodyAccessFor, capUse, dayMarks, dayTypeIdFor, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
+import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 
 /**
  * Body ships dark (rev 195): a member whose Body is off gets a 404 from every Body page and from the Body export, as if Body did
@@ -119,7 +119,7 @@ export async function bodyDay(workspaceId: string, userId: string, date: string,
   const left = bands ? Object.fromEntries(MACROS.flatMap((m) => (bands[m] ? [[m, { min: bands[m]!.min - totals[m], max: bands[m]!.max - totals[m] }]] : []))) as Partial<Record<Macro, { min: number; max: number }>> : null;
   const fits = bands ? whatFits(totals, bands, library.meals.filter((m) => !m.missing), { floors, overOk: settings.overOk }) : [];
   // The fill-in checklist (rev 192): shown at the top of /body until targets, a food and a first logged meal exist.
-  const checklist = { targets: dayTypes.some((t) => hasBands(bandsOf(t))), dayTypes: dayTypes.length > 1, foods: library.foods.length > 0, meals: library.meals.length > 0, logged: !!anyEntry };
+  const checklist = { ai: !!settings.aiAskedAt, targets: dayTypes.some((t) => hasBands(bandsOf(t))), dayTypes: dayTypes.length > 1, foods: library.foods.length > 0, meals: library.meals.length > 0, logged: !!anyEntry };
   const caps = capUse(settings.caps, entries.flatMap((e) => e.items.map((i) => ({ capTag: i.capTag, qty: i.qty }))));
   const authors = comments.length ? await db.query.users.findMany({ columns: { id: true, name: true }, where: inArray(schema.users.id, [...new Set(comments.map((c) => c.authorUserId))]) }) : [];
   const authorName = new Map(authors.map((a) => [a.id, a.name]));
@@ -175,6 +175,34 @@ export async function recentDays(workspaceId: string, userId: string, today: str
     out.push({ date: d, dayType: t?.name ?? null, logged: list.length, totals, worst: marks ? worstMark(marks) : null });
   }
   return out;
+}
+
+/**
+ * The one check every AI prompt that could include Body data goes through (rev 219). Read fresh on every call, so switching it off
+ * stops it on the very next request. Only the member's own session: a coach, or a coach switched into the client's HelixOS, never.
+ */
+export async function canAiUseBody(v: Viewer, memberUserId: string): Promise<boolean> {
+  if (memberUserId !== v.user.id) return false;
+  const s = await bodySettingsFor(v.workspace.id, memberUserId);
+  return bodyAiAllowedFor({ viewerUserId: v.user.id, memberUserId, memberEnabled: v.membership.bodyEnabled, aiUse: !!s?.aiUse });
+}
+
+/**
+ * The member's Body data as a short block of numbers and text for an AI prompt, or null when AI may not use it. The only way Body
+ * data reaches AI (a unit test holds that): targets, the last 7 days' totals, today's logged foods and meals, saved meal names.
+ * Never photos, private notes or a coach's comments.
+ */
+export async function bodyAiContext(v: Viewer): Promise<string | null> {
+  if (!(await canAiUseBody(v, v.user.id))) return null;
+  const [d, recent, types] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), recentDays(v.workspace.id, v.user.id, v.today), dayTypesFor(v.workspace.id, v.user.id)]);
+  if (!d) return null;
+  return formatBodyForAi({
+    today: v.today,
+    dayTypes: types.map((t) => ({ name: t.name, bands: bandsOf(t) })),
+    days: recent.map((r) => ({ date: r.date, dayType: r.dayType, totals: r.totals, logged: r.logged })),
+    todayEntries: d.entries.map((e) => ({ slot: e.slot, name: e.name, items: e.items.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit })), totals: { cal: e.cal, p: e.p, f: e.f, c: e.c } })),
+    meals: d.library.meals.map((m) => m.name),
+  });
 }
 
 export async function shareHistory(workspaceId: string, userId: string) {

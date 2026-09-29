@@ -2236,6 +2236,13 @@ export const bodySettings = sqliteTable(
     userId: text("user_id").notNull(),
     /** "Let my coach see my Body data": off by default, revocable any time; every change is a body_share_events row. */
     shareWithCoach: integer("share_with_coach", { mode: "boolean" }).notNull().default(false),
+    /**
+     * "Let AI use my Body data to support me" (rev 219): off by default, independent of coach sharing, every change a
+     * body_share_events row of kind "ai". Read only through canAiUseBody in src/lib/queries/body.ts.
+     */
+    aiUse: integer("ai_use", { mode: "boolean" }).notNull().default(false),
+    /** When the member answered "Choose whether AI can help you" (step 1 of the checklist, rev 222): Yes or Not now both set it. */
+    aiAskedAt: text("ai_asked_at"),
     weightUnit: text("weight_unit", { enum: ["lb", "kg"] }).notNull().default("lb"),
     foodUnit: text("food_unit", { enum: ["oz", "g"] }).notNull().default("oz"),
     calFloor: real("cal_floor"),
@@ -2382,6 +2389,8 @@ export const bodyShareEvents = sqliteTable(
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
     shared: integer("shared", { mode: "boolean" }).notNull(),
+    /** Which switch: coach sharing, or AI use (rev 219). */
+    kind: text("kind", { enum: ["coach", "ai"] }).notNull().default("coach"),
     createdAt: createdAt(),
   },
   (t) => [index("body_share_events_member").on(t.workspaceId, t.userId)],

@@ -122,6 +122,24 @@ export async function setBodyShareAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/** "Let AI use my Body data to support me" (rev 219): on or off, logged either way, independent of coach sharing. */
+export async function setBodyAiAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx();
+  const settings = await setUp(v);
+  const on = str(formData, "on") === "1";
+  // Yes or Not now on the checklist both answer the question; only a change of the switch itself is logged.
+  const askedAt = settings.aiAskedAt ?? nowIso();
+  if (on === settings.aiUse) {
+    if (!settings.aiAskedAt) await db.update(schema.bodySettings).set({ aiAskedAt: askedAt }).where(eq(schema.bodySettings.id, settings.id));
+    return refresh();
+  }
+  await db.batch([
+    db.update(schema.bodySettings).set({ aiUse: on, aiAskedAt: askedAt, updatedAt: nowIso() }).where(eq(schema.bodySettings.id, settings.id)),
+    db.insert(schema.bodyShareEvents).values({ id: newId(), workspaceId, userId, shared: on, kind: "ai" }),
+  ]);
+  refresh();
+}
+
 /* ───────── Day types ───────── */
 
 export async function saveDayTypeAction(formData: FormData): Promise<void> {

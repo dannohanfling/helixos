@@ -12,6 +12,21 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 14,
+    date: "2026-09-29",
+    title: "Body: choose whether AI can help you",
+    lines: ["The first step of Body asks whether HelixOS's AI may use your Body numbers (targets, what you logged, your saved meals) to support you. Yes or Not now; it stays off unless you say Yes.", "Never your photos or notes, and always on your own AI key. You can change it any time in Body settings, and every change is logged."],
+    audience: "coach",
+  },
+  {
+    n: 13,
+    date: "2026-09-29",
+    title: "Body (beta), just for you for now",
+    lines: ["Nutrition targets and fast meal logging: day types with their own bands, your foods and saved meals, a mark on each macro, and \"What fits tonight?\".", "Switch it on in Settings under Body (beta). It starts empty, with a short checklist to fill it in. Your Body data is private: nobody else sees it unless you share it."],
+    audience: "coach",
+    version: "b9ed9be",
+  },
+  {
     n: 12,
     date: "2026-09-29",
     title: "@everyone in the Monday post is a real tag",

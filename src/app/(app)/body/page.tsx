@@ -7,7 +7,7 @@ import { CapsLine, EntriesBySlot, LeftLine, MacroTiles, MarkKey } from "@/compon
 import { addDays, formatDate } from "@/lib/dates";
 import { MACROS, MACRO_LABEL, MARK_ICON, MARK_WORD, fmtMacro } from "@/lib/engine/body";
 import { bodyDay, recentDays, requireBodyEnabled } from "@/lib/queries/body";
-import { deleteEntryAction, logFoodAction, logMealAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
+import { deleteEntryAction, logFoodAction, logMealAction, setBodyAiAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
 
 export const metadata = { title: "Body" };
 
@@ -80,8 +80,35 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
         </p>
       ) : null}
 
-      {!(d.checklist.targets && d.checklist.foods && d.checklist.logged) ? (
+      {!(d.checklist.ai && d.checklist.targets && d.checklist.foods && d.checklist.logged) ? (
         <Card className="mb-4" title="Fill in your Body">
+          <div className="mb-3 rounded-lg border p-3" data-testid="body-step-ai" data-done={d.checklist.ai ? "1" : "0"}>
+            <div className="flex items-start gap-2 text-sm">
+              <span aria-hidden className="w-5 shrink-0">{d.checklist.ai ? "✅" : "①"}</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-medium">Choose whether AI can help you</div>
+                <p className="text-ink-2">With Yes, HelixOS&apos;s AI can use your Body numbers and short text (targets, what you logged, saved meals) to support you, on your own AI key. Never photos or notes. You can change it any time in Body settings.</p>
+                {d.checklist.ai ? (
+                  <p className="mt-1 text-xs text-ink-3" data-testid="body-ai-answer">{d.settings.aiUse ? "You said Yes." : "You said Not now."}</p>
+                ) : (
+                  <div className="mt-2 flex gap-2">
+                    <form action={setBodyAiAction}>
+                      <input type="hidden" name="on" value="1" />
+                      <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…" data-testid="body-ai-yes">
+                        Yes
+                      </SubmitButton>
+                    </form>
+                    <form action={setBodyAiAction}>
+                      <input type="hidden" name="on" value="0" />
+                      <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="body-ai-not-now">
+                        Not now
+                      </SubmitButton>
+                    </form>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           <ol className="space-y-1.5 text-sm" data-testid="body-checklist">
             {[
               { key: "targets", done: d.checklist.targets, href: "/body/settings#day-types", text: "Set your daily targets (calories, protein, fat, carbs)" },
@@ -91,7 +118,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
               { key: "logged", done: d.checklist.logged, href: "/body#log", text: "Log your first meal" },
             ].map((step, i) => (
               <li key={step.key} className="flex items-start gap-2" data-testid={`body-step-${step.key}`} data-done={step.done ? "1" : "0"}>
-                <span aria-hidden className="w-5 shrink-0">{step.done ? "✅" : ["①", "②", "③", "④", "⑤"][i]}</span>
+                <span aria-hidden className="w-5 shrink-0">{step.done ? "✅" : ["②", "③", "④", "⑤", "⑥"][i]}</span>
                 <Link href={step.href} className={step.done ? "text-ink-3 line-through" : "underline"}>
                   {step.text}
                 </Link>
@@ -99,7 +126,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
               </li>
             ))}
           </ol>
-          <p className="mt-2 text-xs text-ink-3">This list goes away once your targets, a food and your first meal are in.</p>
+          <p className="mt-2 text-xs text-ink-3">This list goes away once you&apos;ve chosen about AI and your targets, a food and your first meal are in.</p>
         </Card>
       ) : null}
 

@@ -153,10 +153,16 @@ async function main() {
     if (!(await client.locator('[data-testid="body-no-foods"]').innerText()).includes("Add your first food")) throw new Error("with no foods, the log says Add your first food");
     if (await client.locator('[data-testid="body-fits"], [data-testid="body-fits-none"]').count()) throw new Error("no What fits before there are targets");
     await noSideScroll(client, "/body blank");
+    // Step 1 (rev 222): "Choose whether AI can help you". Not now answers it and leaves AI off.
+    if (await step("ai")) throw new Error("the AI choice starts unanswered");
+    await press(client, '[data-testid="body-ai-not-now"]', async () => step("ai"), "the AI choice answered");
+    const afterNotNow = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!;
+    if (afterNotNow.aiUse || !afterNotNow.aiAskedAt) throw new Error("Not now answers the question and leaves AI off");
+    if (!/Not now/.test(await client.locator('[data-testid="body-ai-answer"]').innerText())) throw new Error("the step says what was chosen");
     await client.goto(`${base}/today`);
     await client.locator("main h1, main h2").first().waitFor({ timeout: 30000 });
     if (await client.locator('[data-testid="today-body"]').count()) throw new Error("the Today line waits for targets");
-    console.log("✓ the blank page: the checklist with every step open, totals only with Set targets, Add your first food, no What fits, no Today line");
+    console.log("✓ the blank page: step 1 asks about AI (Not now leaves it off); the checklist with every step open, totals only with Set targets, Add your first food, no What fits, no Today line");
 
     // ── ① Targets, through the day type form (the fixture's lift-day bands), and the floors through the settings form. ──
     await client.goto(`${base}/body/settings`);
@@ -287,6 +293,29 @@ async function main() {
     if (events.length !== 2 || events.filter((e) => e.shared).length !== 1) throw new Error(`both changes are logged: ${events.length}`);
     if ((await client.locator('[data-testid="body-share-log"] li').count()) !== 2) throw new Error("the member sees both changes in the sharing log");
     console.log("✓ revoked: the coach's view is private again, the card is gone, and the log holds both changes");
+
+    // ── "Let AI use my Body data" (rev 219): off by default; on, AI gets the numbers; off again, nothing on the next request. ──
+    const { bodyAiContext } = await import("@/lib/queries/body");
+    const viewerFor = async () => {
+      const [user, workspace, membership] = await Promise.all([db.query.users.findFirst({ where: eq(schema.users.id, maya.id) }), db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }), db.query.memberships.findFirst({ where: eq(schema.memberships.id, mem.id) })]);
+      return { user: user!, workspace: workspace!, membership: membership!, role: "client" as const, tz: membership!.timezone || workspace!.timezone, today, hour: 12 };
+    };
+    if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("with the AI switch off (the default), AI gets no Body data");
+    await client.goto(`${base}/body/settings`);
+    await press(client, '[data-testid="body-ai-toggle"]', async () => /: On/.test(await client.locator('[data-testid="body-ai-state"]').innerText()), "AI use on");
+    if (!/: Off/.test(await client.locator('[data-testid="body-share-state"]').innerText())) throw new Error("the AI switch is independent of coach sharing");
+    const aiText = await bodyAiContext(await viewerFor());
+    if (!aiText || !aiText.includes(MEALS[0].name) || !aiText.includes(`${fmtMacro("cal", totals.cal)} cal`)) throw new Error(`with the switch on, AI gets today's numbers and logged meals: ${aiText}`);
+    if (aiText.includes(note)) throw new Error("the coach's comment never goes to AI");
+    // Another viewer (the coach) never gets it, switch or not.
+    const coachViewer = { ...(await viewerFor()), user: (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!, role: "coach" as const };
+    if ((await bodyAiContext(coachViewer)) !== null && (await bodyAiContext(coachViewer))!.includes(MEALS[0].name)) throw new Error("a coach's session never gets the client's Body data for AI");
+    await press(client, '[data-testid="body-ai-toggle"]', async () => /: Off/.test(await client.locator('[data-testid="body-ai-state"]').innerText()), "AI use off");
+    if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("switching it off stops it on the next request");
+    const aiLog = await client.locator('[data-testid="body-share-log"] li[data-kind="ai"]').count();
+    const aiEvents = (await db.query.bodyShareEvents.findMany({ where: mine(schema.bodyShareEvents) })).filter((e) => e.kind === "ai");
+    if (aiLog !== 2 || aiEvents.length !== 2) throw new Error(`both AI changes are logged and shown: ${aiEvents.length} logged, ${aiLog} shown`);
+    console.log("✓ AI use: off by default (no Body data), on gives today's numbers and meals but never the coach's comment, off again stops it on the next request; independent of coach sharing; both changes logged");
 
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;

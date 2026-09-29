@@ -204,6 +204,41 @@ export function capUse(caps: Cap[], lines: { capTag: string | null; qty: number 
   });
 }
 
+/* ───────── AI (rev 219) ───────── */
+
+/**
+ * May AI features use this member's Body data without a per-request button press? Only the member's own session, only while their
+ * Body is on and they have switched on "Let AI use my Body data to support me". Never for anyone else's session: not a coach, not a
+ * coach switched into the client's HelixOS.
+ */
+export function bodyAiAllowedFor(a: { viewerUserId: string; memberUserId: string; memberEnabled: boolean; aiUse: boolean }): boolean {
+  return a.viewerUserId === a.memberUserId && a.memberEnabled && a.aiUse;
+}
+
+/**
+ * Everything AI may be given about a member's Body: numbers and short text only. There is no place here for photos, private notes
+ * or a coach's comments, so they can't be included by accident.
+ */
+export type BodyAiInput = {
+  today: string;
+  dayTypes: { name: string; bands: Bands }[];
+  days: { date: string; dayType: string | null; totals: Macros; logged: number }[];
+  todayEntries: { slot: string; name: string; items: { name: string; qty: number; unit: string }[]; totals: Macros }[];
+  meals: string[];
+};
+
+const short = (s: string, n = 60) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+const macroText = (t: Macros) => MACROS.map((m) => `${fmtMacro(m, t[m])} ${MACRO_LABEL[m]}`).join(", ");
+
+export function formatBodyForAi(x: BodyAiInput): string {
+  const lines = [`Body data the member lets you use to support them (today is ${x.today}):`];
+  if (x.dayTypes.length) lines.push(`Targets by day type: ${x.dayTypes.map((d) => `${short(d.name, 40)}: ${MACROS.filter((m) => d.bands[m]).map((m) => `${fmtBand(m, d.bands[m]!)} ${MACRO_LABEL[m]}`).join(", ") || "no targets yet"}`).join("; ")}.`);
+  if (x.days.length) lines.push(`Last ${x.days.length} days: ${x.days.map((d) => `${d.date}${d.dayType ? ` (${short(d.dayType, 40)})` : ""}: ${d.logged ? macroText(d.totals) : "nothing logged"}`).join("; ")}.`);
+  if (x.todayEntries.length) lines.push(`Eaten today: ${x.todayEntries.slice(0, 20).map((e) => `${short(e.slot, 20)}: ${short(e.name)} (${e.items.slice(0, 8).map((i) => `${i.qty} ${short(i.unit, 12)} ${short(i.name, 40)}`).join(", ")}) = ${macroText(e.totals)}`).join("; ")}.`);
+  if (x.meals.length) lines.push(`Saved meals: ${x.meals.slice(0, 30).map((m) => short(m)).join(", ")}.`);
+  return lines.join("\n");
+}
+
 /* ───────── Access (the privacy rule) ───────── */
 
 /**
