@@ -13,6 +13,8 @@ export const TITLE_MAX = 1000;
 export const TEXT_MAX = 100000;
 export const TEST_TITLE = "HelixOS test, please ignore";
 /** The test post's text, with its send time, so each test is its own post in the planner's list (28 Sep: several tests a minute apart). */
+/** The Monday text sent as a test (rev 169), to see its layout in the test channel; its send time on a last line tells tests apart. */
+export const mondayTestText = (text: string, sentAtIso: string): string => `${text}\n\n(A test of the Monday text from HelixOS, sent ${sentAtIso.slice(0, 16).replace("T", " ")} UTC. Please ignore it; it will be deleted.)`;
 export const testText = (sentAtIso: string): string => `A test from HelixOS, to check the connection (sent ${sentAtIso.slice(0, 16).replace("T", " ")} UTC). Please ignore it; it will be deleted.`;
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
@@ -47,8 +49,39 @@ export type PostAs = { id: string; name: string; avatar?: string | null };
  * The community part of a Create post body. `postAsUser` maps the community account to the team user who posts: a GoHighLevel
  * user, never a community member (members are contacts, and nothing is ever posted in a member's name).
  */
-export function communityDetails(accountId: string, title: string, postAs: PostAs): { title: string; postAsUser: Record<string, { id: string; name: string; avatar: string }> } {
-  return { title: title.slice(0, TITLE_MAX), postAsUser: { [accountId]: { id: postAs.id, name: postAs.name, avatar: postAs.avatar ?? "" } } };
+export function communityDetails(accountId: string, title: string, postAs: PostAs, notify = false): CommunityDetails {
+  // notifyAllGroupMembers is what the community's own composer sends for "Notify all group members" (rev 187, read from its
+  // request on 29 Sep). It is always sent, and false unless asked: a test post never notifies anyone.
+  return { title: title.slice(0, TITLE_MAX), postAsUser: { [accountId]: { id: postAs.id, name: postAs.name, avatar: postAs.avatar ?? "" } }, notifyAllGroupMembers: notify };
+}
+export type CommunityDetails = { title: string; postAsUser: Record<string, { id: string; name: string; avatar: string }>; notifyAllGroupMembers: boolean };
+
+/**
+ * The post's text as the community shows it (rev 169): its content is HTML, so plain text would run together in one block. The
+ * text is escaped first; a blank line starts a new paragraph and a single return is a line break.
+ */
+export function communityHtml(text: string): string {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split(/\n[ \t]*\n+/)
+    .map((p) => p.replace(/^\n+|\s+$/g, ""))
+    .filter((p) => p.trim())
+    .map((p) => `<p>${p.split("\n").map(esc).join("<br>")}</p>`)
+    .join("");
+}
+/** A post's words with any HTML taken back out, so a post sent as HTML and its plain text compare equal. */
+export function plainOf(text: string | null | undefined): string {
+  return (text ?? "")
+    .replace(/<br\s*\/?>|<\/p>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** The link to a published post, from the coach's pattern ("…?postId={postId}"), or null until both are known. */
@@ -124,8 +157,10 @@ type PlannerLike = { id: string; status: string | null; summary: string | null; 
  * within a few minutes, and of several, the one created nearest our send. None when nothing fits.
  */
 export function pickPlannerPost<T extends PlannerLike>(posts: T[], want: { accountId: string; summary: string; sentAtIso: string }): T | null {
-  const norm = (x: string | null) => (x ?? "").replace(/\s+/g, " ").trim();
-  const text = norm(want.summary);
+  // The planner holds the HTML that was sent (rev 169), or plain text for posts before it; the row keeps the plain text.
+  const ws = (x: string | null) => (x ?? "").replace(/\s+/g, " ").trim();
+  const norm = (x: string | null) => (/^\s*<p>/i.test(x ?? "") ? plainOf(x) : ws(x));
+  const text = ws(want.summary);
   const sent = new Date(want.sentAtIso).getTime();
   const near = posts
     .filter((p) => p.accountIds.includes(want.accountId) && norm(p.summary) === text && p.createdAt)

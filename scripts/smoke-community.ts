@@ -33,6 +33,14 @@ async function mockPosts(): Promise<Record<string, unknown>[]> {
   const r = await fetch(`${mock}/__posts`, { headers: { Authorization: `Bearer pit-${LOC}`, Version: "2021-07-28" } });
   return ((await r.json()) as { posts: Record<string, unknown>[] }).posts;
 }
+/**
+ * Lets the page's own requests on load (the tier celebration) finish before the walk writes to the same database file. Best
+ * effort: under a loaded gate "network idle" can take longer than the wait (29 Sep), and the database's busy timeout covers any
+ * overlap, so a slow page is not a failure here; every check after this still waits for what it reads.
+ */
+async function settle(page: Page) {
+  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
+}
 async function cron(page: Page) {
   const r = await page.request.get(`${base}/api/cron/reminders`, { headers: { Authorization: "Bearer change-me" } });
   if (!r.ok()) throw new Error(`the hourly job answered ${r.status()}`);
@@ -43,7 +51,7 @@ async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
   const { addDays, nowWallInTz, startOfWeek, todayInTz } = await import("@/lib/dates");
-  const { HOLD_REASON, TEST_TITLE, mondayDue, mondayTitle, upcomingWeek, DEFAULT_MONDAY_TEXT } = await import("@/lib/engine/community");
+  const { HOLD_REASON, TEST_TITLE, mondayDue, mondayTitle, upcomingWeek, DEFAULT_MONDAY_TEXT, communityHtml } = await import("@/lib/engine/community");
   const { newId } = await import("@/lib/ids");
 
   const child = spawn("npx", ["tsx", "scripts/mock-ghl.ts", String(mockPort)], { stdio: "ignore", detached: true });
@@ -133,6 +141,22 @@ async function main() {
     const resultText = await result.innerText();
     if (!resultText.includes("Shown as HelixOS") || !/Community id cm_post_\d+/.test(resultText) || !(await result.locator('[data-testid="community-post-link"]').getAttribute("href"))?.startsWith("https://academy.example.com/post?id=cm_post_")) throw new Error(`the test result shows who it's from, the community's id and the link: ${resultText}`);
     console.log("✓ a test post goes out as the team user with its title; Check again shows it published, who it shows as, its id and link");
+    type Details = { title?: string; notifyAllGroupMembers?: boolean };
+    if ((testSent.communityPostDetails as Details).notifyAllGroupMembers !== false) throw new Error("a test post never notifies (rev 187)");
+    if (!(await page.locator('[data-testid="community-monday-notify"]').isChecked())) throw new Error("Notify all members is on by default for the Monday post");
+
+    // Rev 169: the Monday text as a test, with its layout kept (a blank line a new paragraph, a return a line break), escaped,
+    // under next Monday's title, and never notifying anyone even with Notify all members on.
+    const LAID_OUT = "Set your intention.\n\nONE word\nTHREE key results & ONE initiative\n\nShare below @everyone";
+    await db.update(schema.communitySettings).set({ mondayText: LAID_OUT }).where(eq(schema.communitySettings.workspaceId, ws.id));
+    await submit(page, '[data-testid="community-test-monday"]');
+    const mondayTest = (await mockPosts()).find((p) => (p.communityPostDetails as Details | undefined)?.title?.startsWith("Test: Set Your Intentions "));
+    if (!mondayTest || !String(mondayTest.summary).startsWith(communityHtml(LAID_OUT)) || !String(mondayTest.summary).includes("<p>ONE word<br>THREE key results &amp; ONE initiative</p>")) throw new Error(`the Monday text goes out as a test with its paragraphs and line breaks: ${String(mondayTest?.summary)}`);
+    if ((mondayTest.communityPostDetails as Details).notifyAllGroupMembers !== false || !(mondayTest.accountIds as string[]).includes(`${LOC}_community_test`)) throw new Error("the Monday-text test goes to the test channel and never notifies");
+    await db.update(schema.communitySettings).set({ mondayText: null }).where(eq(schema.communitySettings.workspaceId, ws.id));
+    // A fresh page, so the setup form's next Save carries the default text again, not the walk's.
+    await page.goto(`${base}/coach/community?view=reset#setup`);
+    console.log("✓ Send the Monday text as a test: next Monday's title, paragraphs and line breaks kept as HTML, escaped, to the test channel, never notifying");
 
     // ── 4. An account on hold stops everything, with no retry, until Resume. ──
     await page.locator('[data-testid="community-post-as-id"]').fill("user_onhold");
@@ -185,14 +209,22 @@ async function main() {
     await submit(page, `[data-testid="community-log-row"][data-week="${lastWeek}"] [data-testid="community-retry"]`);
     const titled = async (t: string) => (await mockPosts()).filter((p) => (p.communityPostDetails as { title?: string } | undefined)?.title === t);
     const sentOnce = await titled(mondayTitle(lastWeek));
-    if (sentOnce.length !== 1 || sentOnce[0].summary !== DEFAULT_MONDAY_TEXT || !(sentOnce[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that week once, with the Monday text, to the Intentions channel");
+    if (sentOnce.length !== 1 || sentOnce[0].summary !== communityHtml(DEFAULT_MONDAY_TEXT) || !(sentOnce[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that week once, with the Monday text, to the Intentions channel");
+    if ((sentOnce[0].communityPostDetails as { notifyAllGroupMembers?: boolean }).notifyAllGroupMembers !== true) throw new Error("the Monday post notifies all members, as the setting says by default (rev 187)");
     await cron(page);
     await cron(page);
     const row = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.weekOf, lastWeek)) });
     if ((await titled(mondayTitle(lastWeek))).length !== 1 || row?.status !== "posted" || row.link !== `https://academy.example.com/channels/intentions/posts/${row.platformPostId}`) throw new Error("the job reads it back as posted, with the link, and never sends it again");
     await page.goto(`${base}/coach/community#log`);
     if (await page.locator(`[data-testid="community-log-row"][data-week="${lastWeek}"] [data-testid="community-retry"]`).count()) throw new Error("a posted week has no Post now");
-    console.log(`✓ a failed week (${lastWeek}) is posted once with Post now; the job reads it back as posted with its link, and never sends it twice`);
+    if (!(await page.locator(`[data-testid="community-log-row"][data-week="${lastWeek}"] [data-testid="community-notified"]`).count())) throw new Error("the log says the Monday post asked to notify all members");
+    console.log(`✓ a failed week (${lastWeek}) is posted once with Post now, notifying all members; the job reads it back as posted with its link, and never sends it twice`);
+
+    // With Notify all members off, the Monday posts that follow don't notify.
+    await page.goto(`${base}/coach/community?view=quiet#setup`);
+    await page.locator('[data-testid="community-monday-notify"]').uncheck();
+    await submit(page, '[data-testid="community-save"]');
+    if ((await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!.mondayNotify) throw new Error("Notify all members can be turned off");
 
     // Seen live on 28 Sep: a create reply with no id (the post is found in the planner's list and read back), and a post the
     // planner fails (GoHighLevel's own words, and Post now offered again: the week isn't used up).
@@ -205,6 +237,7 @@ async function main() {
     // A fresh load: the page is already at this address, and going to the same address only moves to #log.
     await page.goto(`${base}/coach/community?view=log#log`);
     for (const w of [noIdWeek, failWeek]) await submit(page, `[data-testid="community-log-row"][data-week="${w}"] [data-testid="community-retry"]`);
+    if ((await titled(mondayTitle(failWeek))).some((p) => (p.communityPostDetails as { notifyAllGroupMembers?: boolean }).notifyAllGroupMembers !== false)) throw new Error("with Notify all members off, a Monday post doesn't notify");
     const rowFor = (w: string) => db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, w)) });
     if ((await rowFor(noIdWeek))?.ghlPostId) throw new Error("the walk's hook sends no id back on create");
     await submit(page, `[data-testid="community-log-row"][data-week="${noIdWeek}"] [data-testid="community-check"]`);
@@ -317,8 +350,7 @@ async function main() {
     await page.locator('[data-testid="week-share"]').waitFor({ timeout: 20000 });
     if (!(await page.locator('[data-testid="share-unavailable"]').innerText()).includes("isn't up yet") || (await page.locator('[data-testid="share-to-thread"]').count())) throw new Error("before this week's post is out, the button says so and opens nothing");
     if (await page.locator('[data-testid="week-thread"]').count()) throw new Error("no thread link before this week's post is published");
-    // The page's own requests on load (the tier celebration) finish before the walk writes to the same database.
-    await page.waitForLoadState("networkidle");
+    await settle(page);
     const LINK = "https://academy.example.com/post?id=cm_share";
     await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "monday", weekOf: mayaWeek, title: mondayTitle(mayaWeek), status: "posted", link: LINK, platformPostId: "cm_share" });
     await page.reload();
@@ -348,12 +380,12 @@ async function main() {
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="intentions-summary"] [data-testid="share-to-thread"]').waitFor({ timeout: 20000 });
     // A member who hasn't set the week still sees where the thread is (rev 175).
-    await page.waitForLoadState("networkidle");
+    await settle(page);
     await db.delete(schema.weeklyIntentions).where(and(eq(schema.weeklyIntentions.userId, maya.id), eq(schema.weeklyIntentions.weekOf, mayaWeek)));
     await page.goto(`${base}/intentions`);
     await page.locator('[data-testid="week-card"][data-state="set"]').waitFor({ timeout: 20000 });
     if ((await page.locator('[data-testid="week-thread"]').getAttribute("href")) !== LINK) throw new Error("before the week is set, This week's thread is still there");
-    await page.waitForLoadState("networkidle");
+    await settle(page);
     await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId: ws.id, userId: maya.id, weekOf: mayaWeek, ...week });
     console.log(`✓ Share to the thread: says so before this week's post is out; then copies the 3-1-3 only (no revenue, nothing monthly), opens this week's post, and scores ${SHARE_POINTS} once for the week, then reads Shared ✓; on Today too; This week's thread shows once the post is published, set week or not`);
     await page.goto(`${base}/settings`);

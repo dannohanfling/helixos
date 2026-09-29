@@ -512,6 +512,13 @@
       "when": 1790623265574,
       "tag": "0072_community_check_note",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1790642271267,
+      "tag": "0073_community_notify",
+      "breakpoints": true
     }
   ]
 }

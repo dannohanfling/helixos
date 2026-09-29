@@ -10,6 +10,7 @@
  * Tokens are encrypted at rest (src/lib/crypto.ts) and decrypted only for the request.
  */
 import { and, eq } from "drizzle-orm";
+import type { CommunityDetails } from "@/lib/engine/community";
 import { db, schema } from "@/db";
 import type { SocialAccount, SocialConnection } from "@/db/schema";
 import { newId } from "@/lib/ids";
@@ -114,7 +115,7 @@ export type NewPost = {
   media?: { url: string; type: string }[];
   followUpComment?: string | null;
   /** A community post: its title and the team user it comes from (src/lib/engine/community.ts), and that user as the creator. */
-  community?: { details: { title: string; postAsUser: Record<string, { id: string; name: string; avatar: string }> }; userId: string };
+  community?: { details: CommunityDetails; userId: string };
 };
 
 /** Creates a post in the Social Planner. Scheduled when a date is given, published now otherwise. Returns GHL's post id. */

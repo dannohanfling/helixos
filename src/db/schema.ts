@@ -436,6 +436,8 @@ export const communitySettings = sqliteTable(
     mondayOn: integer("monday_on", { mode: "boolean" }).notNull().default(false),
     postTime: text("post_time").notNull().default("08:00"),
     mondayText: text("monday_text"),
+    /** "Notify all members" for the Monday post (rev 187): on unless the coach turns it off. Test posts never notify. */
+    mondayNotify: integer("monday_notify", { mode: "boolean" }).notNull().default(true),
     /** Who the posts come from: the community member contact id of a team member (Danno's own community profile, 28 Sep live test), and the name shown. Never a client. */
     postAsId: text("post_as_id"),
     postAsName: text("post_as_name"),
@@ -476,6 +478,8 @@ export const communityPosts = sqliteTable(
     error: text("error"),
     /** What the last read-back found (the planner's own status word, or its answer when the read failed), for the coach and for us. */
     checkNote: text("check_note"),
+    /** Whether this post asked the community to notify every member (the Monday post's setting when it was sent; never a test). */
+    notifyAll: integer("notify_all", { mode: "boolean" }).notNull().default(false),
     /** What GoHighLevel shows the post as from, when it says (the test post settles whether a team user is accepted). */
     authorShown: text("author_shown"),
     sentAt: text("sent_at"),

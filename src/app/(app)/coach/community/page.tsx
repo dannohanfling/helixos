@@ -111,6 +111,10 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" name="mondayOn" defaultChecked={s?.mondayOn ?? false} data-testid="community-monday-on" /> Post the 3-1-3 every Monday
                 </label>
+                {/* Rev 187: on by default. Only the Monday post notifies; a test post never does. */}
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="mondayNotify" defaultChecked={s?.mondayNotify ?? true} data-testid="community-monday-notify" /> Notify all members when it goes out
+                </label>
                 <label className="block text-sm font-medium">
                   At ({tz})
                   <input className="field mt-1" name="postTime" defaultValue={postTime} placeholder="08:00" data-testid="community-time" />
@@ -154,9 +158,17 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
 
       <Card id="test" title="Test post" className="mb-5">
         <p className="mb-3 text-sm text-ink-2">Sends &ldquo;HelixOS test, please ignore&rdquo; to the channel above: pick your hidden test channel first. It shows who GoHighLevel says it&apos;s from, and the post&apos;s id once published. Delete it in the community afterwards.</p>
-        <form action={sendCommunityTestAction}>
-          <SubmitButton className="btn btn-ghost btn-sm" pendingText="Sending…" data-testid="community-test">Send a test post</SubmitButton>
-        </form>
+        <div className="flex flex-wrap gap-2">
+          <form action={sendCommunityTestAction}>
+            <SubmitButton className="btn btn-ghost btn-sm" pendingText="Sending…" data-testid="community-test">Send a test post</SubmitButton>
+          </form>
+          {/* Rev 169: the Monday text itself, to see its layout in the test channel before the Monday post is on. */}
+          <form action={sendCommunityTestAction}>
+            <input type="hidden" name="kind" value="monday" />
+            <SubmitButton className="btn btn-ghost btn-sm" pendingText="Sending…" data-testid="community-test-monday">Send the Monday text as a test</SubmitButton>
+          </form>
+        </div>
+        <p className="mt-2 text-xs text-ink-3">Tests go to the channel picked above and never notify anyone.</p>
         {tests.length ? (
           <ul className="mt-3 space-y-2 text-sm">
             {tests.map((t) => (
@@ -255,6 +267,7 @@ function PostLine({ p, tz, testid }: { p: CommunityPost; tz: string; testid?: st
       {p.error ? <p className="mt-1 text-danger" data-testid="community-post-error">{p.error}</p> : null}
       <p className="mt-1 text-xs text-ink-3">
         {p.authorShown ? <span data-testid="community-author">Shown as {p.authorShown}. </span> : null}
+        {p.notifyAll ? <span data-testid="community-notified">Asked to notify all members. </span> : null}
         {p.ghlPostId ? <span>Planner id {p.ghlPostId}. </span> : null}
         {p.platformPostId ? <span data-testid="community-platform-id">Community id {p.platformPostId}. </span> : null}
         {p.link ? (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink } from "../community";
+import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink, communityHtml, plainOf, mondayTestText } from "../community";
 
 describe("the Monday post's title", () => {
   it("is the week's Monday to Sunday, month/day", () => {
@@ -49,7 +49,9 @@ describe("the coach's settings", () => {
 
 describe("the post body and what comes back", () => {
   it("maps the community account to the team user, with the title", () => {
-    expect(communityDetails("acc1", "Set Your Intentions 9/28-10/4", { id: "user1", name: "Danno" })).toEqual({ title: "Set Your Intentions 9/28-10/4", postAsUser: { acc1: { id: "user1", name: "Danno", avatar: "" } } });
+    expect(communityDetails("acc1", "Set Your Intentions 9/28-10/4", { id: "user1", name: "Danno" })).toEqual({ title: "Set Your Intentions 9/28-10/4", postAsUser: { acc1: { id: "user1", name: "Danno", avatar: "" } }, notifyAllGroupMembers: false });
+    // Rev 187: the composer's own flag, sent only when asked (the Monday post's setting), false otherwise.
+    expect(communityDetails("acc1", "t", { id: "u", name: "n" }, true).notifyAllGroupMembers).toBe(true);
     expect(communityDetails("acc1", "x".repeat(TITLE_MAX + 50), { id: "u", name: "n" }).title).toHaveLength(TITLE_MAX);
   });
   it("builds the link from the pattern once the community's id is known", () => {
@@ -131,5 +133,27 @@ describe("a post link the coach pastes (28 Sep, live)", () => {
     expect(validPattern(pattern)).toBe(true);
     expect(postLink(pattern, "6aba9e02b152d012a960d2f9")).toBe(link);
     expect(patternFromLink("https://academy.example.com/communities/groups/g")).toBeNull();
+  });
+});
+
+describe("the post's text as the community shows it (rev 169)", () => {
+  it("keeps paragraphs and line breaks, and escapes the text first", () => {
+    expect(communityHtml("Set your week.\n\nOne word\nThree key results\n\n\nShare below @everyone")).toBe("<p>Set your week.</p><p>One word<br>Three key results</p><p>Share below @everyone</p>");
+    expect(communityHtml("A & B <script>\r\n\r\n\"quoted\" it's")).toBe("<p>A &amp; B &lt;script&gt;</p><p>&quot;quoted&quot; it&#39;s</p>");
+    expect(communityHtml("  \n\n  ")).toBe("");
+  });
+  it("reads back to the same words, so the planner's copy is still found", () => {
+    expect(plainOf(communityHtml("One\ntwo\n\nA & <b>"))).toBe("One two A & <b>");
+    const posts = [{ id: "h", status: "published", accountIds: ["acc"], summary: communityHtml("Week\n\ntext & more"), createdAt: "2026-09-28T10:45:00Z" }];
+    expect(pickPlannerPost(posts, { accountId: "acc", summary: "Week\n\ntext & more", sentAtIso: "2026-09-28T10:44:08Z" })?.id).toBe("h");
+    // A plain post from before is still compared as plain text, "<" and all.
+    const old = [{ id: "p", status: "published", accountIds: ["acc"], summary: "1 < 2 <yes>", createdAt: "2026-09-28T10:45:00Z" }];
+    expect(pickPlannerPost(old, { accountId: "acc", summary: "1 < 2 <yes>", sentAtIso: "2026-09-28T10:44:08Z" })?.id).toBe("p");
+  });
+  it("sends the Monday text as a test with its send time on a last paragraph", () => {
+    const t = mondayTestText("Set your week.", "2026-09-29T10:44:08.000Z");
+    expect(t.startsWith("Set your week.\n\n(A test of the Monday text")).toBe(true);
+    expect(t).toContain("2026-09-29 10:44 UTC");
+    expect(communityHtml(t).startsWith("<p>Set your week.</p><p>(A test")).toBe(true);
   });
 });

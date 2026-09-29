@@ -59,6 +59,7 @@ export async function saveCommunitySettingsAction(formData: FormData): Promise<v
       channelAccountId: channel || null,
       channelName: account?.name ?? null,
       mondayOn: on,
+      mondayNotify: formData.get("mondayNotify") === "on",
       postTime: time!,
       // The default text is kept as "not customised", so a later change to the default reaches a coach who never edited it.
       mondayText: text && text !== DEFAULT_MONDAY_TEXT ? text : null,
@@ -82,12 +83,17 @@ export async function refreshCommunityChannelsAction(): Promise<void> {
   back("setup", r.ok ? { saved: `Found ${r.data.length} connected accounts.` } : { error: r.error });
 }
 
-/** One test post to the chosen channel, with the result on screen: the settling run for who posts and what a link looks like. */
-export async function sendCommunityTestAction(): Promise<void> {
+/**
+ * One test post to the chosen channel, with the result on screen: the settling run for who posts and what a link looks like.
+ * "monday" sends the Monday text itself under next Monday's title (rev 169), to see its layout. A test never notifies anyone.
+ */
+export async function sendCommunityTestAction(formData: FormData): Promise<void> {
   const v = await requireCoach();
   const s = await settingsFor(v.workspace.id);
   if (!s?.channelAccountId) back("setup", { error: "Pick the channel and save before sending a test post." });
-  const row = await postTest(s!);
+  const monday = str(formData, "kind") === "monday";
+  const tz = monday ? await coachTz(s!) : "";
+  const row = await postTest(s!, monday ? { mondayTitle: mondayTitle(upcomingWeek(v.today, nowWallInTz(tz).slice(11, 16), s!.postTime)) } : {});
   back("test", row.status === "failed" ? { error: row.error ?? "The test post didn't go out." } : { saved: "Test post sent. Press Check again in a minute to see it published." });
 }
 

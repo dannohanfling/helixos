@@ -12,7 +12,7 @@ import { nowIso, nowWallInTz, todayInTz } from "@/lib/dates";
 import { connectionFor, createPost, getPost, listPostsIn } from "@/lib/ghl";
 import { logSync } from "@/lib/integrations";
 import { redactSecrets } from "@/lib/engine/redact";
-import { HOLD_REASON, TEST_TITLE, UNKNOWN_REASON, communityDetails, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
+import { HOLD_REASON, TEST_TITLE, UNKNOWN_REASON, communityDetails, communityHtml, mondayTestText, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
 
 export const settingsFor = (workspaceId: string) => db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, workspaceId) });
 
@@ -28,7 +28,7 @@ export async function coachTz(s: CommunitySettings): Promise<string> {
 type Sent = { ok: true; ghlPostId: string | null } | { ok: false; error: string; hold: boolean };
 
 /** One post to the community channel, from the team user. Says what went wrong in the coach's words, and whether it was a hold. */
-async function send(s: CommunitySettings, title: string, body: string): Promise<Sent> {
+async function send(s: CommunitySettings, title: string, body: string, notify: boolean): Promise<Sent> {
   if (!s.channelAccountId) return { ok: false, error: "Pick the community channel first.", hold: false };
   const conn = await connectionFor(s.coachUserId);
   if (!conn) return { ok: false, error: "Connect GoHighLevel on Settings → Publishing first.", hold: false };
@@ -38,7 +38,8 @@ async function send(s: CommunitySettings, title: string, body: string): Promise<
   if (!postAsId) return { ok: false, error: "Add \"Posted as\": the community member contact ID of your own community profile.", hold: false };
   const coach = await db.query.users.findFirst({ where: eq(schema.users.id, s.coachUserId) });
   const postAs = { id: postAsId, name: s.postAsName?.trim() || coach?.name || "HelixOS" };
-  const r = await createPost(conn, { accountId: s.channelAccountId, summary: body, type: "post", scheduleDate: null, community: { details: communityDetails(s.channelAccountId, title, postAs), userId: postAsId } });
+  // The community shows HTML (rev 169): the plain text the coach wrote goes out with its paragraphs and line breaks kept.
+  const r = await createPost(conn, { accountId: s.channelAccountId, summary: communityHtml(body), type: "post", scheduleDate: null, community: { details: communityDetails(s.channelAccountId, title, postAs, notify), userId: postAsId } });
   if (r.ok) return { ok: true, ghlPostId: r.data.id };
   const fail = r as { error: string; status?: number; detail?: string };
   const hold = isAccountHold(fail);
@@ -52,7 +53,8 @@ async function pauseForHold(s: CommunitySettings): Promise<void> {
 
 /** Sends a claimed row and records the outcome on it. */
 async function sendRow(s: CommunitySettings, row: CommunityPost, title: string, body: string): Promise<CommunityPost> {
-  const r = await send(s, title, body);
+  // Only a Monday post ever notifies, and only as the row says (set when it was claimed): a test never does.
+  const r = await send(s, title, body, row.kind === "monday" && row.notifyAll);
   const now = nowIso();
   if (r.ok) {
     await db.update(schema.communityPosts).set({ ghlPostId: r.ghlPostId, error: null, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
@@ -78,7 +80,7 @@ export async function postMonday(s: CommunitySettings, weekOf: string, opts: { r
   const now = nowIso();
   const [claimed] = await db
     .update(schema.communityPosts)
-    .set({ status: "sent", sentAt: now, error: null, accountId: s.channelAccountId, title, updatedAt: now })
+    .set({ status: "sent", sentAt: now, error: null, accountId: s.channelAccountId, title, notifyAll: s.mondayNotify, updatedAt: now })
     .where(and(eq(schema.communityPosts.workspaceId, s.workspaceId), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, weekOf), inArray(schema.communityPosts.status, [...claimable])))
     .returning();
   if (!claimed) return { ok: false, error: "That week's post has already gone out, or was skipped." };
@@ -88,18 +90,23 @@ export async function postMonday(s: CommunitySettings, weekOf: string, opts: { r
   return { ok: row.status !== "failed", row, error: row.error ?? undefined };
 }
 
-/** The coach's test post, to their chosen (test) channel: the run that settles who posts, and how a post's link is built. */
-export async function postTest(s: CommunitySettings): Promise<CommunityPost> {
+/**
+ * The coach's test post, to their chosen (test) channel: the run that settles who posts, and how a post's link is built. With
+ * `mondayTitle`, it is the Monday text itself under that week's title (rev 169), to see its layout before the Monday post is
+ * on. A test never notifies anyone, whatever the Monday post's setting.
+ */
+export async function postTest(s: CommunitySettings, opts: { mondayTitle?: string } = {}): Promise<CommunityPost> {
   const now = nowIso();
   const id = newId();
-  await db.insert(schema.communityPosts).values({ id, workspaceId: s.workspaceId, coachUserId: s.coachUserId, kind: "test", title: TEST_TITLE, body: testText(now), accountId: s.channelAccountId, status: "sent", sentAt: now });
-  const text = testText(now);
+  const title = opts.mondayTitle ? `Test: ${opts.mondayTitle}` : TEST_TITLE;
+  const text = opts.mondayTitle ? mondayTestText(mondayText(s.mondayText), now) : testText(now);
+  await db.insert(schema.communityPosts).values({ id, workspaceId: s.workspaceId, coachUserId: s.coachUserId, kind: "test", title, body: text, accountId: s.channelAccountId, status: "sent", sentAt: now, notifyAll: false });
   const row = (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, id) }))!;
   if (s.pausedReason) {
     await db.update(schema.communityPosts).set({ status: "failed", error: s.pausedReason }).where(eq(schema.communityPosts.id, id));
     return (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, id) }))!;
   }
-  return sendRow(s, row, TEST_TITLE, text);
+  return sendRow(s, row, title, text);
 }
 
 /**
