@@ -120,6 +120,7 @@ export async function bodyDay(workspaceId: string, userId: string, date: string,
   const fits = bands ? whatFits(totals, bands, library.meals.filter((m) => !m.missing), { floors, overOk: settings.overOk }) : [];
   // The fill-in checklist (rev 192): shown at the top of /body until targets, a food and a first logged meal exist.
   const checklist = { ai: !!settings.aiAskedAt, targets: dayTypes.some((t) => hasBands(bandsOf(t))), dayTypes: dayTypes.length > 1, foods: library.foods.length > 0, meals: library.meals.length > 0, logged: !!anyEntry };
+  const sodium = entries.reduce((a, e) => a + e.items.reduce((b, i) => b + (i.sodium ?? 0) * i.qty, 0), 0);
   const caps = capUse(settings.caps, entries.flatMap((e) => e.items.map((i) => ({ capTag: i.capTag, qty: i.qty }))));
   const authors = comments.length ? await db.query.users.findMany({ columns: { id: true, name: true }, where: inArray(schema.users.id, [...new Set(comments.map((c) => c.authorUserId))]) }) : [];
   const authorName = new Map(authors.map((a) => [a.id, a.name]));
@@ -136,6 +137,7 @@ export async function bodyDay(workspaceId: string, userId: string, date: string,
     left,
     fits,
     caps,
+    sodium,
     final,
     nextRefeed: nextRefeed(today, refeed),
     comments: comments.map((c) => ({ ...c, author: authorName.get(c.authorUserId) ?? "Coach" })),

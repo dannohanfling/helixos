@@ -11,6 +11,7 @@ import { ctx, num, opt, optNum, refresh, str } from "@/lib/action-helpers";
 import { requireCoach, type Viewer } from "@/lib/auth";
 import { MACROS, portionMacros, sumMacros, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
+import { convertQty, storedUnit } from "@/lib/engine/body-units";
 import { nowIso } from "@/lib/dates";
 import { bodyAccess, bodySettingsFor, isWorkspaceOwner } from "@/lib/queries/body";
 import { logSync } from "@/lib/integrations";
@@ -209,10 +210,12 @@ export async function saveFoodAction(formData: FormData): Promise<void> {
   await setUp(v);
   const id = str(formData, "id");
   const name = str(formData, "name").slice(0, 80);
-  const unit = str(formData, "unit").slice(0, 30);
-  if (!name || !unit) back("/body/foods", "A food needs a name and a unit (oz, egg, scoop…).");
-  const food = { name, unit, cal: num(formData, "cal"), p: num(formData, "p"), f: num(formData, "f"), c: num(formData, "c"), capTag: opt(formData, "capTag")?.toLowerCase() ?? null };
-  if ([food.cal, food.p, food.f, food.c].some((n) => n < 0)) back("/body/foods", `${name}: macros can't be negative.`);
+  // The unit comes from the dropdown (rev 229), or its "Other…" box for anything off the list.
+  const choice = str(formData, "unitChoice");
+  const unit = storedUnit(choice === "other" ? str(formData, "unitOther") : choice || str(formData, "unit")).slice(0, 30);
+  if (!name || !unit) back("/body/foods", "A food needs a name and a unit (pick one, or type it under Other).");
+  const food = { name, unit, cal: num(formData, "cal"), p: num(formData, "p"), f: num(formData, "f"), c: num(formData, "c"), sodium: num(formData, "sodium"), capTag: opt(formData, "capTag")?.toLowerCase().slice(0, 30) ?? null };
+  if ([food.cal, food.p, food.f, food.c, food.sodium].some((n) => n < 0)) back("/body/foods", `${name}: macros can't be negative.`);
   if (id) await db.update(schema.bodyFoods).set(food).where(and(eq(schema.bodyFoods.id, id), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
   else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
   refresh();
@@ -258,7 +261,7 @@ export async function archiveMealAction(formData: FormData): Promise<void> {
 /* ───────── Logging ───────── */
 
 function entryItem(food: schema.BodyFood, qty: number): schema.BodyEntryItem {
-  return { foodId: food.id, name: food.name, unit: food.unit, qty, cal: food.cal, p: food.p, f: food.f, c: food.c, capTag: food.capTag };
+  return { foodId: food.id, name: food.name, unit: food.unit, qty, cal: food.cal, p: food.p, f: food.f, c: food.c, capTag: food.capTag, sodium: food.sodium };
 }
 const totalsOf = (items: schema.BodyEntryItem[]) => sumMacros(items.map((i) => portionMacros(i)));
 
@@ -295,10 +298,14 @@ export async function logFoodAction(formData: FormData): Promise<void> {
   const settings = await setUp(v);
   const { date, slot } = logTarget(formData, settings.mealSlots);
   const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
-  const qty = num(formData, "qty");
+  const typed = num(formData, "qty");
   if (!food) back(`/body?date=${date}`, "Pick a food.");
-  if (!(qty > 0)) back(`/body?date=${date}`, "Give a quantity above zero.");
-  const items = [entryItem(food!, qty)];
+  if (!(typed > 0)) back(`/body?date=${date}`, "Give a quantity above zero.");
+  // Logged in another unit of the same group (g for a food per oz): converted into the food's own unit, so its macros apply.
+  const as = str(formData, "unit") || food!.unit;
+  const converted = convertQty(typed, as, food!.unit);
+  if (converted === null) back(`/body?date=${date}`, `${food!.name} is per ${food!.unit}, which doesn't convert from ${as}.`);
+  const items = [entryItem(food!, Math.round(converted! * 100) / 100)];
   await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId, userId, date, slot, name: food!.name, mealId: null, items, ...totalsOf(items) });
   refresh();
 }

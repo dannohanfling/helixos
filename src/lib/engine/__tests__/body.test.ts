@@ -305,3 +305,37 @@ describe("Body tables are read in one place, and no Body value reaches a log", (
     for (const f of body) expect(readFileSync(f, "utf8"), f).not.toMatch(/console\.(log|error|warn|info|debug)/);
   });
 });
+
+describe("the unit dropdown (rev 229)", async () => {
+  const { convertQty, loggableUnits, readUnit, storedUnit, UNITS } = await import("@/lib/engine/body-units");
+  it("free-text units saved before the list read onto it, case and plurals aside; anything else is Other with its text kept", () => {
+    for (const [typed, want] of [["oz", "oz"], ["Ounces", "oz"], ["ounce", "oz"], ["G", "g"], ["grams", "g"], ["lbs", "lb"], ["Cup", "cup"], ["Tablespoons", "tbsp"], ["2 tbsp", null], ["egg", null], ["strip", null], ["slices", "slice"], ["Scoop", "scoop"]] as const) {
+      expect(readUnit(typed).unit, typed).toBe(want);
+    }
+    expect(readUnit("egg white")).toEqual({ unit: null, other: "egg white" });
+    expect(storedUnit("Ounces")).toBe("oz");
+    expect(storedUnit("  strip ")).toBe("strip");
+    // Every listed unit reads as itself.
+    for (const g of UNITS) for (const u of g.units) expect(readUnit(u.unit).unit).toBe(u.unit);
+  });
+  it("converts within weight and within volume", () => {
+    expect(convertQty(1, "lb", "oz")).toBeCloseTo(16, 6);
+    expect(convertQty(100, "g", "oz")).toBeCloseTo(3.5274, 3);
+    expect(convertQty(1, "kg", "lb")).toBeCloseTo(2.20462, 4);
+    expect(convertQty(1, "cup", "tbsp")).toBeCloseTo(16, 6);
+    expect(convertQty(3, "tsp", "tbsp")).toBeCloseTo(1, 6);
+    expect(convertQty(8, "fl oz", "cup")).toBeCloseTo(1, 6);
+    expect(convertQty(2, "Ounces", "oz")).toBe(2);
+  });
+  it("never across groups, and never for count units or Other", () => {
+    expect(convertQty(1, "cup", "oz")).toBeNull();
+    expect(convertQty(1, "g", "ml")).toBeNull();
+    expect(convertQty(2, "slice", "piece")).toBeNull();
+    expect(convertQty(1, "strip", "oz")).toBeNull();
+    expect(convertQty(3, "egg", "egg")).toBe(3);
+    expect(loggableUnits("oz")).toEqual(["oz", "g", "lb", "kg"]);
+    expect(loggableUnits("tbsp")).toEqual(["fl oz", "ml", "cup", "tbsp", "tsp"]);
+    expect(loggableUnits("slice")).toEqual(["slice"]);
+    expect(loggableUnits("egg white")).toEqual(["egg white"]);
+  });
+});

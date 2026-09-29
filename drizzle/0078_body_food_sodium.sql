@@ -1,0 +1,1 @@
+ALTER TABLE `body_foods` ADD `sodium` real DEFAULT 0 NOT NULL;

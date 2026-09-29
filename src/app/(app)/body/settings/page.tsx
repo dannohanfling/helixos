@@ -9,6 +9,7 @@ import { MACROS, MACRO_NAME, nextRefeed } from "@/lib/engine/body";
 import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory } from "@/lib/queries/body";
 import { deleteDayTypeAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, setBodyAiAction, setBodyShareAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
+import { EraseBodyForm } from "@/components/body/unit-inputs";
 
 export const metadata = { title: "Body settings" };
 
@@ -242,21 +243,18 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
         </form>
       </Card>
 
-      <Card title="Your data">
-        <p className="text-sm text-ink-2">Download everything in Body as one file, or delete all of it. The rest of your HelixOS is untouched either way.</p>
-        <div className="mt-3 flex flex-wrap items-end gap-3">
-          <a href="/api/export?format=json&scope=body" className="btn btn-soft btn-sm" data-testid="body-export">
-            Download my Body data
-          </a>
-          <form action={eraseBodyAction} className="flex flex-wrap items-end gap-2">
-            <label>
-              <span className="label">Type DELETE</span>
-              <input name="confirm" className="field w-28 py-1 text-sm" autoComplete="off" data-testid="body-erase-confirm" />
-            </label>
-            <ConfirmDelete what="all your Body data" undo="Your targets, foods, meals, logged days, comments and sharing log go for good." testId="body-erase" />
-          </form>
-        </div>
+      <Card className="mb-8" title="Download your Body data" id="download">
+        <p className="text-sm text-ink-2">One file with everything in Body: your targets and day types, foods, saved meals, every logged day, your coach&apos;s comments and your sharing log.</p>
+        <a href="/api/export?format=json&scope=body" className="btn btn-soft btn-sm mt-3" data-testid="body-export">
+          Download
+        </a>
       </Card>
+
+      <section className="card border-danger p-4 sm:p-5" id="delete" data-testid="body-delete-card">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-danger">Delete all Body data</h2>
+        <p className="text-sm text-ink-2">This removes every Body row: targets, foods, meals, logged days, comments and your sharing log. It can&apos;t be undone, so download your data first if you might want it. The rest of your HelixOS is untouched.</p>
+        <EraseBodyForm action={eraseBodyAction} />
+      </section>
     </>
   );
 }

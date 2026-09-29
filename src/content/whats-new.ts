@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 15,
+    date: "2026-09-29",
+    title: "Body: pick units from a list, and sodium on foods",
+    lines: ["A food's \"per\" unit is picked from a list (oz, g, cup, slice and more), or Other for anything else. Log a food in another unit of the same kind, such as grams for a food counted in ounces, and it converts.", "Foods take sodium and a tag for caps, and your day shows its sodium. Download and delete-all are now two separate boxes in Body settings."],
+    audience: "coach",
+  },
+  {
     n: 14,
     date: "2026-09-29",
     title: "Body: choose whether AI can help you",

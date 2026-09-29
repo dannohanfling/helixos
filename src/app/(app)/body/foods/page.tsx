@@ -8,28 +8,44 @@ import { fmtMacro } from "@/lib/engine/body";
 import { bodyLibrary, bodySettingsFor, requireBodyEnabled } from "@/lib/queries/body";
 import { archiveFoodAction, archiveMealAction, saveFoodAction, saveMealAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
+import { UnitPicker } from "@/components/body/unit-inputs";
 
 export const metadata = { title: "Foods & meals" };
 
 const MEAL_ROWS = 6;
 
-function FoodFields({ food }: { food?: schema.BodyFood }) {
+function FoodFields({ food, preferred, tags }: { food?: schema.BodyFood; preferred: "oz" | "g"; tags: string[] }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-8">
       <label className="col-span-2 sm:col-span-3">
         <span className="label">Name</span>
         <input name="name" className="field py-1 text-sm" defaultValue={food?.name} required maxLength={80} />
       </label>
-      <label className="col-span-2 sm:col-span-1">
+      <div className="col-span-2 sm:col-span-2">
         <span className="label">Per</span>
-        <input name="unit" className="field py-1 text-sm" defaultValue={food?.unit ?? "oz"} required maxLength={30} />
-      </label>
+        <UnitPicker value={food?.unit} preferred={preferred} />
+      </div>
       {(["cal", "p", "f", "c"] as const).map((k) => (
         <label key={k}>
           <span className="label">{k === "cal" ? "Cal" : k.toUpperCase()}</span>
           <input name={k} type="number" step="any" min={0} className="field py-1 text-sm tabular" defaultValue={food?.[k] ?? ""} required />
         </label>
       ))}
+      <label>
+        <span className="label">Sodium (mg)</span>
+        <input name="sodium" type="number" step="any" min={0} className="field py-1 text-sm tabular" defaultValue={food?.sodium || ""} placeholder="0" />
+      </label>
+      <label className="col-span-2 sm:col-span-3">
+        <span className="label">Tag (for caps, e.g. cheese)</span>
+        <input name="capTag" className="field py-1 text-sm" defaultValue={food?.capTag ?? ""} maxLength={30} list="body-cap-tags" placeholder="none" />
+      </label>
+      {tags.length ? (
+        <datalist id="body-cap-tags">
+          {tags.map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
+      ) : null}
     </div>
   );
 }
@@ -55,18 +71,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
       <Card className="mb-4" title={`Foods · ${foods.length}`} id="foods">
         <Disclosure summary={<span className="btn btn-soft btn-sm">＋ New food</span>} className="mb-3" open={!foods.length}>
           <form action={saveFoodAction} className="space-y-2" data-testid="body-new-food">
-            <FoodFields />
-            {capTags.length ? (
-              <label className="block text-sm">
-                <span className="label">Counts toward a cap</span>
-                <select name="capTag" className="field w-auto py-1 text-sm" defaultValue="">
-                  <option value="">No</option>
-                  {capTags.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
+            <FoodFields preferred={settings.foodUnit} tags={capTags} />
             <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
               Save food
             </SubmitButton>
@@ -97,9 +102,8 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
                         </summary>
                         <form action={saveFoodAction} className="mt-2 space-y-2">
                           <input type="hidden" name="id" value={f.id} />
-                          <FoodFields food={f} />
-                          <input type="hidden" name="capTag" value={f.capTag ?? ""} />
-                          <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
+                          <FoodFields food={f} preferred={settings.foodUnit} tags={capTags} />
+                                                    <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
                             Save
                           </SubmitButton>
                         </form>

@@ -2225,7 +2225,7 @@ export type BodyWeekPattern = Partial<Record<"0" | "1" | "2" | "3" | "4" | "5" |
 export type BodyCap = { tag: string; label: string; unit: string; soft: number; hard: number };
 export type BodyMealItem = { foodId: string; qty: number };
 /** A logged line, with the food's macros per unit copied at logging time: editing a food later never rewrites a past day. */
-export type BodyEntryItem = { foodId: string | null; name: string; unit: string; qty: number; cal: number; p: number; f: number; c: number; capTag: string | null };
+export type BodyEntryItem = { foodId: string | null; name: string; unit: string; qty: number; cal: number; p: number; f: number; c: number; capTag: string | null; /** mg per unit (rev 231); absent on lines logged before sodium existed. */ sodium?: number };
 
 /** One per member: the share switch, units, floors, the weekly pattern, the refeed rule, meal slots and caps. */
 export const bodySettings = sqliteTable(
@@ -2303,6 +2303,8 @@ export const bodyFoods = sqliteTable(
     p: real("p").notNull().default(0),
     f: real("f").notNull().default(0),
     c: real("c").notNull().default(0),
+    /** Sodium per unit, in mg (rev 231). */
+    sodium: real("sodium").notNull().default(0),
     capTag: text("cap_tag"),
     archivedAt: text("archived_at"),
     createdAt: createdAt(),

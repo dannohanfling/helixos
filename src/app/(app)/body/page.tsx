@@ -6,6 +6,8 @@ import { ConfirmDelete } from "@/components/confirm-delete";
 import { CapsLine, EntriesBySlot, LeftLine, MacroTiles, MarkKey } from "@/components/body/day-parts";
 import { addDays, formatDate } from "@/lib/dates";
 import { MACROS, MACRO_LABEL, MARK_ICON, MARK_WORD, fmtMacro } from "@/lib/engine/body";
+import { LogFoodForm } from "@/components/body/unit-inputs";
+import { loggableUnits } from "@/lib/engine/body-units";
 import { bodyDay, recentDays, requireBodyEnabled } from "@/lib/queries/body";
 import { deleteEntryAction, logFoodAction, logMealAction, setBodyAiAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
 
@@ -150,6 +152,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
             <div className="mt-3 space-y-1">
               {d.left && !d.final ? <LeftLine left={d.left} /> : null}
               <CapsLine caps={d.caps} />
+              {d.sodium ? <p className="text-xs text-ink-3" data-testid="body-sodium">Sodium: {Math.round(d.sodium).toLocaleString("en-US")} mg</p> : null}
               {d.bands ? <MarkKey /> : null}
             </div>
             {d.dayTypes.length > 1 ? (
@@ -225,37 +228,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
               </p>
             )}
             {d.library.foods.length ? (
-              <form action={logFoodAction} className="mt-3 flex flex-wrap items-end gap-2" data-testid="body-log-food-form">
-                <input type="hidden" name="date" value={date} />
-                <label className="min-w-0 flex-1">
-                  <span className="label">Food</span>
-                  <select name="foodId" className="field py-1 text-sm" defaultValue="">
-                    <option value="" disabled>
-                      Pick a food…
-                    </option>
-                    {d.library.foods.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name} (per {f.unit})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="label">Qty</span>
-                  <input name="qty" type="number" step="any" min={0} defaultValue={1} className="field w-20 py-1 text-sm tabular" />
-                </label>
-                <label>
-                  <span className="label">Slot</span>
-                  <select name="slot" className="field w-auto py-1 text-sm" defaultValue={defaultSlot}>
-                    {slots.map((s) => (
-                      <option key={s}>{s}</option>
-                    ))}
-                  </select>
-                </label>
-                <SubmitButton className="btn btn-soft btn-sm" pendingText="Logging…" data-testid="body-log-food">
-                  Log food
-                </SubmitButton>
-              </form>
+              <LogFoodForm action={logFoodAction} date={date} slots={slots} defaultSlot={defaultSlot} foods={d.library.foods.map((f) => ({ id: f.id, name: f.name, unit: f.unit, units: loggableUnits(f.unit) }))} />
             ) : null}
           </Card>
 

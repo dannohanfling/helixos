@@ -59,6 +59,8 @@ async function main() {
   const { PHASE2_V4 } = await import("../src/lib/engine/__tests__/fixtures/body-phase2v4");
   const { dayMarks, MACROS, fmtMacro, portionMacros, sumMacros } = await import("@/lib/engine/body");
   const { todayInTz } = await import("@/lib/dates");
+  const { loggableUnits, readUnit, storedUnit } = await import("@/lib/engine/body-units");
+  const EGG_SODIUM = 70;
 
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const mem = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
@@ -186,15 +188,25 @@ async function main() {
       const f = fx(key);
       const form = client.locator('[data-testid="body-new-food"]');
       if (!(await form.isVisible())) await client.locator("summary", { hasText: "New food" }).click();
-      for (const [name, value] of [["name", f.name], ["unit", f.unit], ["cal", f.cal], ["p", f.p], ["f", f.f], ["c", f.c]] as const) await fillExact(client, `[data-testid="body-new-food"] input[name="${name}"]`, String(value));
+      for (const [name, value] of [["name", f.name], ["cal", f.cal], ["p", f.p], ["f", f.f], ["c", f.c]] as const) await fillExact(client, `[data-testid="body-new-food"] input[name="${name}"]`, String(value));
+      // The "per" unit is a dropdown (rev 229): a listed unit is picked; anything else (an egg) is Other with its words.
+      if (readUnit(f.unit).unit) await form.locator('select[name="unitChoice"]').selectOption(readUnit(f.unit).unit!);
+      else {
+        await form.locator('select[name="unitChoice"]').selectOption("other");
+        await fillExact(client, '[data-testid="body-new-food"] input[name="unitOther"]', f.unit);
+      }
+      if (key === "egg") await fillExact(client, '[data-testid="body-new-food"] input[name="sodium"]', String(EGG_SODIUM));
+      if (key === "white-cheddar") await fillExact(client, '[data-testid="body-new-food"] input[name="capTag"]', "cheese");
       const before = await foodRows();
       await press(client, '[data-testid="body-new-food"] button[type="submit"]', async () => (await foodRows()) === before + 1, `${f.name} added`);
     }
     const foods = await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) });
+    if ((await db.query.bodyFoods.findFirst({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, fx("white-cheddar").name)) }))?.capTag !== "cheese") throw new Error("the tag field saves a cap tag");
+    if ((await db.query.bodyFoods.findFirst({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, fx("egg").name)) }))?.sodium !== EGG_SODIUM) throw new Error("sodium saves on the food");
     const idOf = (key: string) => foods.find((f) => f.name === fx(key).name)!.id;
     for (const key of FOODS) {
       const f = foods.find((x) => x.name === fx(key).name);
-      if (!f || f.cal !== fx(key).cal || f.p !== fx(key).p || f.f !== fx(key).f || f.c !== fx(key).c || f.unit !== fx(key).unit) throw new Error(`${fx(key).name} saved as typed: ${JSON.stringify(f)}`);
+      if (!f || f.cal !== fx(key).cal || f.p !== fx(key).p || f.f !== fx(key).f || f.c !== fx(key).c || f.unit !== storedUnit(fx(key).unit)) throw new Error(`${fx(key).name} saved as typed: ${JSON.stringify(f)}`);
     }
     const mealRows = () => client.locator('[data-testid="body-meal-list"] > li').count();
     for (const meal of MEALS) {
@@ -227,15 +239,26 @@ async function main() {
     console.log(`✓ ⑤ one tap logs the lunch and the checklist goes; what fits offers ${fits.length} meal${fits.length === 1 ? "" : "s"}, the steak dinner among them, no pizza`);
 
     // ── Dinner as foods × quantity: 10 oz lean steak and a cup of egg whites. ──
-    for (const [key, qty] of [["lean-steak", "10"], ["egg-whites-cup", "1"]] as const) {
+    // The steak goes in grams: 10 oz is 283.495 g, converted back into the food's own oz so its macros apply.
+    for (const [key, qty, unit] of [["lean-steak", "283.495", "g"], ["egg-whites-cup", "1", "cup"]] as const) {
       const form = client.locator('[data-testid="body-log-food-form"]');
       await form.locator('select[name="foodId"]').selectOption(idOf(key));
+      const offered = await form.locator('select[name="unit"] option').allTextContents();
+      if (JSON.stringify(offered) !== JSON.stringify(loggableUnits(fx(key).unit))) throw new Error(`${key} offers its group's units: ${JSON.stringify(offered)}`);
+      await form.locator('select[name="unit"]').selectOption(unit);
       await fillExact(client, '[data-testid="body-log-food-form"] input[name="qty"]', qty);
       await form.locator('select[name="slot"]').selectOption("Dinner");
       const before = await entryCount(client);
       await press(client, '[data-testid="body-log-food"]', async () => (await entryCount(client)) === before + 1, `${key} logged`);
     }
+    // A count or Other unit (an egg) doesn't convert: only its own unit, with the reason.
+    await client.locator('[data-testid="body-log-food-form"] select[name="foodId"]').selectOption(idOf("egg"));
+    if (JSON.stringify(await client.locator('[data-testid="body-log-food-form"] select[name="unit"] option').allTextContents()) !== JSON.stringify(["egg"]) || !(await client.locator('[data-testid="body-log-unit-note"]').count())) throw new Error("an egg is logged in eggs only, and the form says why");
     const entries = await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.date, today)) });
+    const steak = entries.find((e) => e.name === fx("lean-steak").name);
+    if (steak?.items[0].qty !== 10 || steak.items[0].unit !== "oz") throw new Error(`283.495 g of steak is logged as 10 oz: ${JSON.stringify(steak?.items[0])}`);
+    const sodiumShown = await client.locator('[data-testid="body-sodium"]').innerText();
+    if (!sodiumShown.includes(`${2 * EGG_SODIUM} mg`)) throw new Error(`the lunch's two eggs show ${2 * EGG_SODIUM} mg of sodium: "${sodiumShown}"`);
     if (entries.length !== 3) throw new Error(`three entries today, got ${entries.length}`);
     const settings = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!;
     const totals = sumMacros(entries.map((e) => sumMacros(e.items.map((i) => portionMacros(i)))));
@@ -320,7 +343,13 @@ async function main() {
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
     if ((own.body_entries ?? []).length !== 3 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
+    // Download and Delete are two separate cards (rev 230); the confirm stays shut until DELETE is typed exactly.
+    if (!(await client.locator('#download [data-testid="body-export"]').count()) || (await client.locator('#download [data-testid="body-erase"]').count()) || !(await client.locator('[data-testid="body-delete-card"] [data-testid="body-erase"]').count())) throw new Error("Download and Delete sit in separate cards");
+    await noSideScroll(client, "/body/settings with its data cards");
+    await fillExact(client, '[data-testid="body-erase-confirm"]', "delete");
+    if (!(await client.locator('[data-testid="body-erase"]').isDisabled())) throw new Error("the confirm stays shut until DELETE is typed exactly");
     await fillExact(client, '[data-testid="body-erase-confirm"]', "DELETE");
+    if (await client.locator('[data-testid="body-erase"]').isDisabled()) throw new Error("typing DELETE opens the confirm");
     await client.locator('[data-testid="body-erase"]').click();
     await Promise.all([client.waitForURL(/erased=1/), client.locator('dialog[open] [data-testid="confirm-delete-yes"]').click()]);
     const left = await count();
