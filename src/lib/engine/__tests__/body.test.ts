@@ -230,7 +230,16 @@ describe("Body ships dark: a member without the flag sees none of it (rev 195)",
     const actions = [...src.matchAll(/export async function (\w+Action)\([^)]*\)[^{]*\{([\s\S]*?)\n\}/g)].map((m) => ({ name: m[1], body: m[2] }));
     expect(actions.length).toBeGreaterThanOrEqual(15);
     const gated = (b: string) => /await setUp\(v\)|\n  enabled\(v\);|bodyAccess\(v, /.test(b);
-    expect(actions.filter((a) => !gated(a.body)).map((a) => a.name)).toEqual(["eraseBodyAction"]);
+    expect(actions.filter((a) => !gated(a.body)).map((a) => a.name).sort()).toEqual(["eraseBodyAction", "setBodyBetaAction"]);
+  });
+  it("the beta switch (rev 209) is the workspace owner's, for their own membership only, and logged", () => {
+    const src = read("src/lib/actions/body.ts");
+    const beta = src.slice(src.indexOf("export async function setBodyBetaAction"), src.indexOf("/* ───────── Setup ───────── */"));
+    expect(beta).toMatch(/const v = await requireCoach\(\);\n  if \(!\(await isWorkspaceOwner\(v\)\)\) redirect/);
+    expect(beta).toMatch(/\.where\(and\(eq\(schema\.memberships\.id, v\.membership\.id\)/);
+    expect(beta).not.toMatch(/formData, "(id|membershipId|userId)"/);
+    expect(beta).toMatch(/await logSync\(/);
+    expect(read("src/app/(app)/settings/page.tsx")).toMatch(/\{bodyOwner \? \(/);
   });
 });
 

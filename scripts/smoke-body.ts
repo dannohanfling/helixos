@@ -299,6 +299,40 @@ async function main() {
     if (!(await client.locator('[data-testid="body-erased"]').count())) throw new Error("the page says it's deleted");
     console.log("✓ the member's export holds their Body data alone; delete-all removes every Body row");
 
+    // ── The owner's beta switch (rev 209): the workspace owner turns Body on for themselves from Settings; nobody else sees it. ──
+    const coachUser = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+    const coachMem = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUser.id), eq(schema.memberships.workspaceId, mem.workspaceId)) }))!;
+    const betaEvents = async () => (await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, coachUser.id), eq(schema.syncEvents.provider, "account")) })).filter((e) => e.event.startsWith("body.beta_"));
+    if (coachMem.bodyEnabled) throw new Error("the owner's Body starts off");
+    const onBefore = (await db.query.memberships.findMany({ where: eq(schema.memberships.bodyEnabled, true) })).map((m) => m.id).sort();
+    await coach.goto(`${base}/settings`);
+    await press(coach, '[data-testid="body-beta-toggle"]', async () => /: On/.test(await coach.locator('[data-testid="body-beta-state"]').innerText()), "the owner's Body on");
+    if (!(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachMem.id) }))!.bodyEnabled) throw new Error("the switch sets the owner's own membership");
+    const onAfter = (await db.query.memberships.findMany({ where: eq(schema.memberships.bodyEnabled, true) })).map((m) => m.id).sort();
+    if (JSON.stringify(onAfter) !== JSON.stringify([...onBefore, coachMem.id].sort())) throw new Error(`the switch touches no other membership: ${onBefore.length} on before, ${onAfter.length} after`);
+    await coach.goto(`${base}/more`);
+    await coach.locator('main a[href="/today"]').waitFor({ timeout: 30000 });
+    if (!(await coach.locator('main a[href="/body"]').count())) throw new Error("with the switch on, the owner's menu has Body");
+    await coach.goto(`${base}/settings`);
+    await press(coach, '[data-testid="body-beta-toggle"]', async () => /: Off/.test(await coach.locator('[data-testid="body-beta-state"]').innerText()), "the owner's Body off");
+    const logged = (await betaEvents()).map((e) => e.event).sort();
+    if (JSON.stringify(logged) !== JSON.stringify(["body.beta_off", "body.beta_on"])) throw new Error(`both switches are logged: ${JSON.stringify(logged)}`);
+    await client.goto(`${base}/settings`);
+    await client.locator('main h1').first().waitFor({ timeout: 30000 });
+    if (await client.locator('[data-testid="body-beta-toggle"]').count()) throw new Error("a client never sees the beta switch");
+    // A second coach in the same workspace, joined after the owner: no switch either.
+    const { hashPassword } = await import("@/lib/password");
+    const { newId } = await import("@/lib/ids");
+    const second = { id: newId(), email: `second-coach-${Date.now()}@example.com` };
+    await db.insert(schema.users).values({ id: second.id, email: second.email, name: "Second Coach", passwordHash: await hashPassword("demo1234") });
+    await db.insert(schema.memberships).values({ id: newId(), workspaceId: mem.workspaceId, userId: second.id, role: "coach" });
+    const other = await (await browser.newContext()).newPage();
+    await login(other, second.email);
+    await other.goto(`${base}/settings`);
+    await other.locator('main h1').first().waitFor({ timeout: 30000 });
+    if (await other.locator('[data-testid="body-beta-toggle"]').count()) throw new Error("another coach never sees the beta switch");
+    console.log("✓ the beta switch: the owner turned Body on and off for themselves from Settings, both logged; no client and no second coach sees it");
+
     if (errors.length) throw new Error(errors.join("\n"));
     console.log("Body walk passed.");
   } finally {

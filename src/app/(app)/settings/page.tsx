@@ -16,6 +16,8 @@ import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 import { SubmitButton } from "@/components/submit-button";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
+import { isWorkspaceOwner } from "@/lib/queries/body";
+import { setBodyBetaAction } from "@/lib/actions/body";
 
 export const metadata = { title: "Settings" };
 
@@ -43,6 +45,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
   const [goal, conn, ghlIntegration] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel")]);
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  // Body ships dark (rev 195); the workspace owner alone can switch it on for themselves here (rev 209).
+  const bodyOwner = await isWorkspaceOwner(v);
   return (
     <>
       <PageHeader title="Settings" />
@@ -321,6 +325,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </div>
               </div>
             </Card>
+            {bodyOwner ? (
+              <Card id="body-beta" title="Body (beta)">
+                <p className="text-sm text-ink-2">Nutrition targets and meal logging, for you only while it&apos;s in beta. Nobody else in the workspace sees it, and your Body data stays private to you.</p>
+                <form action={setBodyBetaAction} className="mt-3 flex flex-wrap items-center gap-3">
+                  <input type="hidden" name="on" value={v.membership.bodyEnabled ? "0" : "1"} />
+                  <span className="text-sm font-medium" data-testid="body-beta-state">
+                    Show Body (beta) for me: {v.membership.bodyEnabled ? "On" : "Off"}
+                  </span>
+                  <SubmitButton className={`btn btn-sm ${v.membership.bodyEnabled ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="body-beta-toggle">
+                    {v.membership.bodyEnabled ? "Switch off" : "Switch on"}
+                  </SubmitButton>
+                </form>
+              </Card>
+            ) : null}
           </>
         ) : null}
       </div>

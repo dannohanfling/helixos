@@ -17,6 +17,20 @@ export function requireBodyEnabled(v: Viewer): void {
   if (!v.membership.bodyEnabled) notFound();
 }
 
+/**
+ * The workspace owner: its earliest coach membership still active (HelixOS has no owner column; the coach who set the workspace up
+ * comes first). Only they get the "Show Body (beta) for me" switch on Settings (rev 209, item 4).
+ */
+export async function workspaceOwnerId(workspaceId: string): Promise<string | null> {
+  const first = await db.query.memberships.findFirst({
+    columns: { id: true },
+    where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.role, "coach"), isNull(schema.memberships.removedAt)),
+    orderBy: [asc(schema.memberships.createdAt), asc(schema.memberships.id)],
+  });
+  return first?.id ?? null;
+}
+export const isWorkspaceOwner = async (v: Viewer): Promise<boolean> => v.role === "coach" && (await workspaceOwnerId(v.workspace.id)) === v.membership.id;
+
 export async function bodySettingsFor(workspaceId: string, userId: string): Promise<schema.BodySettings | null> {
   return (await db.query.bodySettings.findFirst({ where: and(eq(schema.bodySettings.workspaceId, workspaceId), eq(schema.bodySettings.userId, userId)) })) ?? null;
 }

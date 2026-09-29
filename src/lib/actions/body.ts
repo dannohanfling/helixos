@@ -12,7 +12,8 @@ import { requireCoach, type Viewer } from "@/lib/auth";
 import { MACROS, portionMacros, sumMacros, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { bodyAccess, bodySettingsFor } from "@/lib/queries/body";
+import { bodyAccess, bodySettingsFor, isWorkspaceOwner } from "@/lib/queries/body";
+import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const back = (path: string, error: string): never => redirect(`${path}${path.includes("?") ? "&" : "?"}error=${encodeURIComponent(error)}`);
@@ -28,6 +29,23 @@ async function setUp(v: Viewer): Promise<schema.BodySettings> {
   const settings = await bodySettingsFor(v.workspace.id, v.user.id);
   if (!settings) redirect("/body");
   return settings;
+}
+
+/* ───────── The owner's beta switch ───────── */
+
+/**
+ * "Show Body (beta) for me" (rev 209, item 4): the workspace owner turns Body on or off for their own membership, from Settings,
+ * because the flag script needs production's database. Nobody else can: not a client, not another coach, not for anyone else.
+ * Every change is logged. Not behind the Body flag: it is the flag.
+ */
+export async function setBodyBetaAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  if (!(await isWorkspaceOwner(v))) redirect("/settings");
+  const on = str(formData, "on") === "1";
+  if (on === v.membership.bodyEnabled) return refresh();
+  await db.update(schema.memberships).set({ bodyEnabled: on }).where(and(eq(schema.memberships.id, v.membership.id), eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.userId, v.user.id)));
+  await logSync({ workspaceId: v.workspace.id, userId: v.user.id, provider: "account", direction: "in", event: on ? "body.beta_on" : "body.beta_off", status: "received", note: `Body (beta) switched ${on ? "on" : "off"} by the workspace owner on Settings` });
+  refresh();
 }
 
 /* ───────── Setup ───────── */
