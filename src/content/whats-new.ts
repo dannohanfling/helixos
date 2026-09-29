@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 12,
+    date: "2026-09-29",
+    title: "@everyone in the Monday post is a real tag",
+    lines: ["The Monday post's @everyone now shows as a tag in the community, the way it does when you post by hand. Test posts keep it as plain words, so they never ping the group."],
+    audience: "coach",
+  },
+  {
     n: 11,
     date: "2026-09-29",
     title: "What's new, and the version you're on",

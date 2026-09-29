@@ -153,6 +153,8 @@ async function main() {
     const mondayTest = (await mockPosts()).find((p) => (p.communityPostDetails as Details | undefined)?.title?.startsWith("Test: Set Your Intentions "));
     if (!mondayTest || !String(mondayTest.summary).startsWith(communityHtml(LAID_OUT)) || !String(mondayTest.summary).includes("<p>ONE word<br>THREE key results &amp; ONE initiative</p>")) throw new Error(`the Monday text goes out as a test with its paragraphs and line breaks: ${String(mondayTest?.summary)}`);
     if ((mondayTest.communityPostDetails as Details).notifyAllGroupMembers !== false || !(mondayTest.accountIds as string[]).includes(`${LOC}_community_test`)) throw new Error("the Monday-text test goes to the test channel and never notifies");
+    // Rev 203: a test keeps @everyone as words, never the broadcast mention that could ping every member.
+    if (String(mondayTest.summary).includes("data-mention-type") || !String(mondayTest.summary).includes("Share below @everyone")) throw new Error("the Monday-text test keeps @everyone as plain words");
     await db.update(schema.communitySettings).set({ mondayText: null }).where(eq(schema.communitySettings.workspaceId, ws.id));
     // A fresh page, so the setup form's next Save carries the default text again, not the walk's.
     await page.goto(`${base}/coach/community?view=reset#setup`);
@@ -209,7 +211,7 @@ async function main() {
     await submit(page, `[data-testid="community-log-row"][data-week="${lastWeek}"] [data-testid="community-retry"]`);
     const titled = async (t: string) => (await mockPosts()).filter((p) => (p.communityPostDetails as { title?: string } | undefined)?.title === t);
     const sentOnce = await titled(mondayTitle(lastWeek));
-    if (sentOnce.length !== 1 || sentOnce[0].summary !== communityHtml(DEFAULT_MONDAY_TEXT) || !(sentOnce[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that week once, with the Monday text, to the Intentions channel");
+    if (sentOnce.length !== 1 || sentOnce[0].summary !== communityHtml(DEFAULT_MONDAY_TEXT, { mentionEveryone: true }) || !String(sentOnce[0].summary).includes('data-mention-type="broadcast"') || !(sentOnce[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that week once, with the Monday text, to the Intentions channel");
     if ((sentOnce[0].communityPostDetails as { notifyAllGroupMembers?: boolean }).notifyAllGroupMembers !== true) throw new Error("the Monday post notifies all members, as the setting says by default (rev 187)");
     await cron(page);
     await cron(page);

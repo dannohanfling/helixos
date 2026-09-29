@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink, communityHtml, plainOf, mondayTestText } from "../community";
+import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink, communityHtml, plainOf, mondayTestText, EVERYONE_MENTION } from "../community";
 
 describe("the Monday post's title", () => {
   it("is the week's Monday to Sunday, month/day", () => {
@@ -155,5 +155,26 @@ describe("the post's text as the community shows it (rev 169)", () => {
     expect(t.startsWith("Set your week.\n\n(A test of the Monday text")).toBe(true);
     expect(t).toContain("2026-09-29 10:44 UTC");
     expect(communityHtml(t).startsWith("<p>Set your week.</p><p>(A test")).toBe(true);
+  });
+});
+
+describe("@everyone as a real mention (rev 203)", () => {
+  const text = "Declare your goals here.\n\nShare below @everyone so we can check in.";
+  it("the Monday post gets the composer's own broadcast mention, exactly", () => {
+    expect(communityHtml(text, { mentionEveryone: true })).toBe(`<p>Declare your goals here.</p><p>Share below ${EVERYONE_MENTION} so we can check in.</p>`);
+    expect(EVERYONE_MENTION).toBe('<span data-label="everyone" data-icon-type="emoji" data-mention-type="broadcast" data-type="mention" class="min-h-6"><span class="mention-text truncate min-w-0">@everyone</span></span>');
+    expect(communityHtml("@everyone", { mentionEveryone: true })).toBe(`<p>${EVERYONE_MENTION}</p>`);
+    expect(communityHtml("Hi (@everyone)!\n@everyone.", { mentionEveryone: true })).toBe(`<p>Hi (${EVERYONE_MENTION})!<br>${EVERYONE_MENTION}.</p>`);
+  });
+  it("a test keeps it as words: the default, for both kinds of test", () => {
+    expect(communityHtml(text)).toBe("<p>Declare your goals here.</p><p>Share below @everyone so we can check in.</p>");
+    expect(communityHtml(mondayTestText(text, "2026-09-29T10:44:08.000Z"))).not.toContain("data-mention-type");
+  });
+  it("leaves @everyone inside another word or address alone, and still escapes the rest", () => {
+    expect(communityHtml("x@everyone a.b@everyone @everyones @everyone@x", { mentionEveryone: true })).toBe("<p>x@everyone a.b@everyone @everyones @everyone@x</p>");
+    expect(communityHtml("<b>Tom & Jerry</b> @everyone", { mentionEveryone: true })).toBe(`<p>&lt;b&gt;Tom &amp; Jerry&lt;/b&gt; ${EVERYONE_MENTION}</p>`);
+  });
+  it("reads back to the same words, so the planner's copy is still found", () => {
+    expect(plainOf(communityHtml(text, { mentionEveryone: true }))).toBe("Declare your goals here. Share below @everyone so we can check in.");
   });
 });

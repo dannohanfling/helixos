@@ -57,17 +57,25 @@ export function communityDetails(accountId: string, title: string, postAs: PostA
 export type CommunityDetails = { title: string; postAsUser: Record<string, { id: string; name: string; avatar: string }>; notifyAllGroupMembers: boolean };
 
 /**
- * The post's text as the community shows it (rev 169): its content is HTML, so plain text would run together in one block. The
- * text is escaped first; a blank line starts a new paragraph and a single return is a line break.
+ * @everyone as the community's own composer stores it (rev 203, read from Danno's 9/28 post): a broadcast mention, which shows
+ * as a tag. Typed as plain text it is only words.
  */
-export function communityHtml(text: string): string {
+export const EVERYONE_MENTION = `<span data-label="everyone" data-icon-type="emoji" data-mention-type="broadcast" data-type="mention" class="min-h-6"><span class="mention-text truncate min-w-0">@everyone</span></span>`;
+
+/**
+ * The post's text as the community shows it (rev 169): its content is HTML, so plain text would run together in one block. The
+ * text is escaped first; a blank line starts a new paragraph and a single return is a line break. With `mentionEveryone` (the
+ * real Monday post only, rev 203), a standalone @everyone becomes the broadcast mention; never in a test, which could ping
+ * every member. "x@everyone" or an address is left as it is.
+ */
+export function communityHtml(text: string, opts: { mentionEveryone?: boolean } = {}): string {
   const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   return text
     .replace(/\r\n?/g, "\n")
     .split(/\n[ \t]*\n+/)
     .map((p) => p.replace(/^\n+|\s+$/g, ""))
     .filter((p) => p.trim())
-    .map((p) => `<p>${p.split("\n").map(esc).join("<br>")}</p>`)
+    .map((p) => `<p>${p.split("\n").map((line) => (opts.mentionEveryone ? esc(line).replace(/(^|[^\w@.])@everyone(?![\w@])/g, `$1${EVERYONE_MENTION}`) : esc(line))).join("<br>")}</p>`)
     .join("");
 }
 /** A post's words with any HTML taken back out, so a post sent as HTML and its plain text compare equal. */

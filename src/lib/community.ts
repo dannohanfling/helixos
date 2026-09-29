@@ -28,7 +28,7 @@ export async function coachTz(s: CommunitySettings): Promise<string> {
 type Sent = { ok: true; ghlPostId: string | null } | { ok: false; error: string; hold: boolean };
 
 /** One post to the community channel, from the team user. Says what went wrong in the coach's words, and whether it was a hold. */
-async function send(s: CommunitySettings, title: string, body: string, notify: boolean): Promise<Sent> {
+async function send(s: CommunitySettings, title: string, body: string, notify: boolean, mentionEveryone: boolean): Promise<Sent> {
   if (!s.channelAccountId) return { ok: false, error: "Pick the community channel first.", hold: false };
   const conn = await connectionFor(s.coachUserId);
   if (!conn) return { ok: false, error: "Connect GoHighLevel on Settings → Publishing first.", hold: false };
@@ -39,7 +39,7 @@ async function send(s: CommunitySettings, title: string, body: string, notify: b
   const coach = await db.query.users.findFirst({ where: eq(schema.users.id, s.coachUserId) });
   const postAs = { id: postAsId, name: s.postAsName?.trim() || coach?.name || "HelixOS" };
   // The community shows HTML (rev 169): the plain text the coach wrote goes out with its paragraphs and line breaks kept.
-  const r = await createPost(conn, { accountId: s.channelAccountId, summary: communityHtml(body), type: "post", scheduleDate: null, community: { details: communityDetails(s.channelAccountId, title, postAs, notify), userId: postAsId } });
+  const r = await createPost(conn, { accountId: s.channelAccountId, summary: communityHtml(body, { mentionEveryone }), type: "post", scheduleDate: null, community: { details: communityDetails(s.channelAccountId, title, postAs, notify), userId: postAsId } });
   if (r.ok) return { ok: true, ghlPostId: r.data.id };
   const fail = r as { error: string; status?: number; detail?: string };
   const hold = isAccountHold(fail);
@@ -54,7 +54,8 @@ async function pauseForHold(s: CommunitySettings): Promise<void> {
 /** Sends a claimed row and records the outcome on it. */
 async function sendRow(s: CommunitySettings, row: CommunityPost, title: string, body: string): Promise<CommunityPost> {
   // Only a Monday post ever notifies, and only as the row says (set when it was claimed): a test never does.
-  const r = await send(s, title, body, row.kind === "monday" && row.notifyAll);
+  // @everyone as a real mention on the Monday post only (rev 203); a test keeps it as words. Independent of the notify flag.
+  const r = await send(s, title, body, row.kind === "monday" && row.notifyAll, row.kind === "monday");
   const now = nowIso();
   if (r.ok) {
     await db.update(schema.communityPosts).set({ ghlPostId: r.ghlPostId, error: null, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
