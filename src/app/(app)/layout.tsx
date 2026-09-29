@@ -8,6 +8,8 @@ import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { VoiceProvider } from "@/components/voice-context";
 import { voiceState } from "@/lib/queries/essence";
 import { intentionsDueFor } from "@/lib/queries/intentions";
+import { WHATS_NEW } from "@/content/whats-new";
+import { unseenCount } from "@/lib/engine/whats-new";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
 export const dynamic = "force-dynamic";
@@ -19,7 +21,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const [points, streak, voice, due] = await Promise.all([totalPoints(viewer.workspace.id, viewer.user.id), streakFor(viewer.workspace.id, viewer.user.id, viewer.today), voiceState(viewer.workspace.id, viewer.user.id), intentionsDueFor(viewer.workspace.id, viewer.user.id, viewer.today)]);
   const tier = tierFor(points);
   return (
-    <AppShell viewer={viewer} points={points} streak={streak.running} badges={{ "/intentions": due.length }}>
+    <AppShell viewer={viewer} points={points} streak={streak.running} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen) }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>

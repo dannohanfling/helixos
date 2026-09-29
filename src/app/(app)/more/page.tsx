@@ -4,6 +4,10 @@ import { logoutAction } from "@/lib/actions/auth";
 import { NAV_GROUPS, navVisible } from "@/components/nav-groups";
 import { DueBadge } from "@/components/nav";
 import { intentionsDueFor } from "@/lib/queries/intentions";
+import { NewDot } from "@/components/nav";
+import { WHATS_NEW } from "@/content/whats-new";
+import { unseenCount } from "@/lib/engine/whats-new";
+import { APP_VERSION } from "@/lib/version";
 import { PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -12,6 +16,7 @@ export const metadata = { title: "More" };
 export default async function MorePage() {
   const v = await requireViewer();
   const due = (await intentionsDueFor(v.workspace.id, v.user.id, v.today)).length;
+  const unseen = unseenCount(WHATS_NEW, v.role, v.membership.whatsNewSeen);
   return (
     <>
       <PageHeader title="Everything" />
@@ -25,7 +30,7 @@ export default async function MorePage() {
                 <Link key={n.href} href={n.href} className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2">
                   <span className="w-6 text-center text-lg">{n.icon}</span>
                   <span className="font-medium">{n.label}</span>
-                  {n.href === "/intentions" && due ? <DueBadge count={due} /> : n.line ?? n.hint ? <span className="ml-auto text-xs text-ink-3">{n.line ?? n.hint}</span> : null}
+                  {n.href === "/intentions" && due ? <DueBadge count={due} /> : n.href === "/whats-new" && unseen ? <NewDot /> : n.line ?? n.hint ? <span className="ml-auto text-xs text-ink-3">{n.line ?? n.hint}</span> : null}
                 </Link>
               ))}
           </div>
@@ -40,6 +45,9 @@ export default async function MorePage() {
             </SubmitButton>
           </form>
         </div>
+        <Link href="/whats-new" className="block text-center text-[11px] text-ink-3" data-testid="app-version">
+          {APP_VERSION}
+        </Link>
       </div>
     </>
   );

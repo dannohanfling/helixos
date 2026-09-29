@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { APP_VERSION } from "@/lib/version";
 import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -342,6 +344,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </>
         ) : null}
       </div>
+      {/* The version this deploy is (rev 193), linking to What's new. */}
+      <p className="mt-6 text-center text-xs text-ink-3">
+        <Link href="/whats-new" className="hover:text-ink" data-testid="settings-version">
+          {APP_VERSION}
+        </Link>
+      </p>
     </>
   );
 }
