@@ -56,6 +56,8 @@ export function SideNav({ role, passEnabled, bodyEnabled, badges = {} }: { role:
     <nav className="space-y-2">
       {NAV_GROUPS.map((g) => {
         const items = g.items.filter((n) => navVisible(n, { role, passEnabled, bodyEnabled }));
+        // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
+        if (!items.length) return null;
         const activeItem = items.find((n) => isActive(pathname, n.href));
         const open = !collapsed[g.label];
         return (

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
-import { Card, Disclosure, PageHeader } from "@/components/ui";
+import { Card, Disclosure } from "@/components/ui";
+import { HumanosHeader } from "@/components/body/humanos-header";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { formatDate, formatDateTime } from "@/lib/dates";
@@ -11,7 +12,7 @@ import { deleteDayTypeAction, eraseBodyAction, saveBodySettingsAction, saveDayTy
 import type * as schema from "@/db/schema";
 import { EraseBodyForm } from "@/components/body/unit-inputs";
 
-export const metadata = { title: "Body settings" };
+export const metadata = { title: "HumanOS · Settings" };
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -60,7 +61,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <PageHeader title="Body settings" subtitle="Your targets, your week, and who sees any of it." action={<Link href="/body" className="btn btn-ghost btn-sm">← Body</Link>} />
+      <HumanosHeader title="Settings" subtitle="Your targets, your week, and who sees any of it." gear={false} action={<Link href="/body" className="btn btn-ghost btn-sm">← Log</Link>} />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
           {sp.error}

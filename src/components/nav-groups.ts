@@ -10,13 +10,21 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/today", label: "Today", icon: "☀️" },
       { href: "/intentions", label: "Intentions", icon: "🌱", hint: "week + month" },
-      { href: "/body", label: "Body", icon: "💪", hint: "food + training", bodyOnly: true },
       { href: "/tasks", label: "Tasks", icon: "✅" },
       { href: "/content", label: "Content", icon: "✍️", hint: "post + repurpose" },
       { href: "/library", label: "Library", icon: "🗂️", hint: "swipes + hooks" },
       { href: "/conversations", label: "DMs", icon: "💬" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
       { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays" },
+    ],
+  },
+  {
+    // HumanOS (rev 238): its own section under Daily, behind the Body flag. An item joins only once its phase has shipped, so no
+    // page is ever empty; a member without Body sees no section at all (a group with nothing visible isn't drawn).
+    label: "HumanOS",
+    items: [
+      { href: "/body", label: "Log", icon: "🍽️", hint: "meals today", bodyOnly: true },
+      { href: "/body/foods", label: "Nutrition", icon: "🥗", hint: "foods + meals", bodyOnly: true },
     ],
   },
   {

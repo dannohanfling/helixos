@@ -107,10 +107,11 @@ async function main() {
     // The page streams: wait for the menu itself before reading what's in it.
     await client.locator('main a[href="/today"]').waitFor({ timeout: 30000 });
     if ((await client.locator("main a").count()) < 10) throw new Error("the More page lists the menu to read");
-    if (await client.locator('a[href="/body"]').count()) throw new Error("no Body entry anywhere in the menu while Body is off");
+    if (await client.locator('a[href="/body"], a[href="/body/foods"]').count()) throw new Error("no Body entry anywhere in the menu while Body is off");
+    if (/HumanOS/.test((await client.locator("main").textContent()) ?? "")) throw new Error("no HumanOS section at all in the menu while Body is off");
     await client.goto(`${base}/today`);
     await client.locator("main h1, main h2").first().waitFor({ timeout: 30000 });
-    if (await client.locator('[data-testid="today-body"]').count()) throw new Error("no Body line on Today while Body is off");
+    if (await client.locator('[data-testid="today-body"], [data-testid="today-humanos"]').count()) throw new Error("no Body line or Log a meal on Today while Body is off");
     await notFoundPage(coach, `/coach/${mem.id}/body`);
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("no Body card on the coach's client page while Body is off");
@@ -131,7 +132,8 @@ async function main() {
     if (!/private to you/i.test(await client.locator('[data-testid="body-private-note"]').innerText())) throw new Error("setup says Body is private to the member");
     await client.goto(`${base}/more`);
     await client.locator('main a[href="/today"]').waitFor({ timeout: 30000 });
-    if (!(await client.locator('main a[href="/body"]').count())) throw new Error("the menu has Body once it's on");
+    if (!(await client.locator('main a[href="/body"]').count()) || !(await client.locator('main a[href="/body/foods"]').count())) throw new Error("the menu has HumanOS's Log and Nutrition once it's on");
+    if (!/HumanOS/.test((await client.locator("main").textContent()) ?? "")) throw new Error("the menu has a HumanOS section once Body is on");
     await client.goto(`${base}/body`);
     if (await client.locator('[data-testid^="body-preset-"]').count()) throw new Error("there are no presets to pick: everyone starts blank");
     await noSideScroll(client, "/body setup");
@@ -164,6 +166,7 @@ async function main() {
     await client.goto(`${base}/today`);
     await client.locator("main h1, main h2").first().waitFor({ timeout: 30000 });
     if (await client.locator('[data-testid="today-body"]').count()) throw new Error("the Today line waits for targets");
+    if ((await client.locator('[data-testid="today-log-meal"]').getAttribute("href")) !== "/body#log") throw new Error("once set up, Today has Log a meal, to /body#log");
     console.log("✓ the blank page: step 1 asks about AI (Not now leaves it off); the checklist with every step open, totals only with Set targets, Add your first food, no What fits, no Today line");
 
     // ── ① Targets, through the day type form (the fixture's lift-day bands), and the floors through the settings form. ──
@@ -272,6 +275,10 @@ async function main() {
     }
     if (MACROS.some((m) => expectMarks[m] !== "in")) throw new Error(`the brief's day, ${JSON.stringify(totals)}, is ✅ on every macro: ${JSON.stringify(expectMarks)}`);
     await noSideScroll(client, "/body with a day logged");
+    // HumanOS's page (rev 238): the eyebrow, a gear to settings, and a lead line that says what's left in words.
+    if (!(await client.locator('[data-testid="humanos-eyebrow"]').count()) || (await client.locator('[data-testid="humanos-gear"]').getAttribute("href")) !== "/body/settings") throw new Error("the Log page has the HumanOS eyebrow and a gear to settings");
+    const lead = (await client.locator('[data-testid="body-lead"] [data-testid="body-left"]').textContent()) ?? "";
+    if (!/\d g protein (to go|left|over)/.test(lead) || !/cal (to go|left|over)/.test(lead)) throw new Error(`the Log page leads with what's left in words: "${lead}"`);
     console.log(`✓ lunch + a lean steak dinner = ${fmtMacro("cal", totals.cal)} / ${totals.p} P / ${totals.f} F / ${totals.c} C: every tile ✅ as the engine says`);
 
     await client.goto(`${base}/today`);

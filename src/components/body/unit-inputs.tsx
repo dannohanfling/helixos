@@ -34,20 +34,31 @@ export function UnitPicker({ value, preferred }: { value?: string; preferred: "o
 
 type LogFood = { id: string; name: string; unit: string; units: string[] };
 
-/** Food × quantity, in the food's own unit or another of the same group (oz, g, lb, kg). Count units and Other log as themselves. */
-export function LogFoodForm({ action, foods, slots, defaultSlot, date }: { action: (fd: FormData) => Promise<void>; foods: LogFood[]; slots: string[]; defaultSlot: string; date: string }) {
+/**
+ * Food × quantity, in the food's own unit or another of the same group (oz, g, lb, kg). Count units and Other log as themselves.
+ * Phone-first (rev 238): recently logged foods head the picker, and the fields are thumb-sized below the sm breakpoint.
+ */
+export function LogFoodForm({ action, foods, slots, defaultSlot, date, recent = [] }: { action: (fd: FormData) => Promise<void>; foods: LogFood[]; slots: string[]; defaultSlot: string; date: string; recent?: string[] }) {
   const [foodId, setFoodId] = useState("");
   const food = foods.find((f) => f.id === foodId);
   const [unit, setUnit] = useState("");
   const units = food?.units ?? [];
+  const recentFoods = recent.flatMap((id) => foods.filter((f) => f.id === id));
+  const otherFoods = foods.filter((f) => !recent.includes(f.id));
+  const option = (f: LogFood) => (
+    <option key={f.id} value={f.id}>
+      {f.name} (per {f.unit})
+    </option>
+  );
+  const big = "field py-2 text-base sm:py-1 sm:text-sm";
   return (
     <form action={action} className="mt-3 flex flex-wrap items-end gap-2" data-testid="body-log-food-form">
       <input type="hidden" name="date" value={date} />
-      <label className="min-w-0 flex-1">
+      <label className="w-full min-w-0 sm:w-auto sm:flex-1">
         <span className="label">Food</span>
         <select
           name="foodId"
-          className="field py-1 text-sm"
+          className={big}
           value={foodId}
           onChange={(e) => {
             setFoodId(e.target.value);
@@ -58,20 +69,23 @@ export function LogFoodForm({ action, foods, slots, defaultSlot, date }: { actio
           <option value="" disabled>
             Pick a food…
           </option>
-          {foods.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name} (per {f.unit})
-            </option>
-          ))}
+          {recentFoods.length ? (
+            <>
+              <optgroup label="Recent">{recentFoods.map(option)}</optgroup>
+              <optgroup label="All foods">{otherFoods.map(option)}</optgroup>
+            </>
+          ) : (
+            foods.map(option)
+          )}
         </select>
       </label>
       <label>
         <span className="label">Qty</span>
-        <input name="qty" type="number" step="any" min={0} defaultValue={1} className="field w-20 py-1 text-sm tabular" />
+        <input name="qty" type="number" step="any" min={0} defaultValue={1} className={`${big} w-20 tabular`} />
       </label>
       <label>
         <span className="label">Unit</span>
-        <select name="unit" className="field w-auto py-1 text-sm" value={unit} onChange={(e) => setUnit(e.target.value)} disabled={!food} data-testid="body-log-unit">
+        <select name="unit" className={`${big} w-auto`} value={unit} onChange={(e) => setUnit(e.target.value)} disabled={!food} data-testid="body-log-unit">
           {units.map((u) => (
             <option key={u} value={u}>
               {u}
@@ -81,13 +95,13 @@ export function LogFoodForm({ action, foods, slots, defaultSlot, date }: { actio
       </label>
       <label>
         <span className="label">Slot</span>
-        <select name="slot" className="field w-auto py-1 text-sm" defaultValue={defaultSlot}>
+        <select name="slot" className={`${big} w-auto`} defaultValue={defaultSlot}>
           {slots.map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
       </label>
-      <SubmitButton className="btn btn-soft btn-sm" pendingText="Logging…" data-testid="body-log-food">
+      <SubmitButton className="btn btn-humanos" pendingText="Logging…" data-testid="body-log-food">
         Log food
       </SubmitButton>
       {food && units.length === 1 ? (

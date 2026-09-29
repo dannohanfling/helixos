@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 18,
+    date: "2026-09-29",
+    title: "Body is now HumanOS",
+    lines: ["HumanOS has its own section in the menu: Log for today's meals and Nutrition for your foods and saved meals. A gear on every HumanOS page opens its settings.", "Log leads with what's left (\"62 g protein to go · 14 g fat left\"), puts your saved meals and recent foods first, and Today has a Log a meal button. Old Body links still work."],
+    audience: "coach",
+  },
+  {
     n: 17,
     date: "2026-09-29",
     title: "Let your coach set things up for you",

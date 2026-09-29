@@ -98,14 +98,18 @@ export async function bodyLibrary(workspaceId: string, userId: string, opts: { a
 export async function bodyDay(workspaceId: string, userId: string, date: string, today: string) {
   const settings = await bodySettingsFor(workspaceId, userId);
   if (!settings) return null;
-  const [dayTypes, entries, override, comments, library, anyEntry] = await Promise.all([
+  const [dayTypes, entries, override, comments, library, anyEntry, lately] = await Promise.all([
     dayTypesFor(workspaceId, userId),
     db.query.bodyEntries.findMany({ where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId), eq(schema.bodyEntries.date, date)), orderBy: asc(schema.bodyEntries.createdAt) }),
     db.query.bodyDays.findFirst({ where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), eq(schema.bodyDays.date, date)) }),
     db.query.bodyComments.findMany({ where: and(eq(schema.bodyComments.workspaceId, workspaceId), eq(schema.bodyComments.userId, userId), eq(schema.bodyComments.date, date)), orderBy: asc(schema.bodyComments.createdAt) }),
     bodyLibrary(workspaceId, userId),
     db.query.bodyEntries.findFirst({ columns: { id: true }, where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId)) }),
+    db.query.bodyEntries.findMany({ columns: { items: true }, where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId), gte(schema.bodyEntries.date, addDays(today, -14))), orderBy: desc(schema.bodyEntries.createdAt), limit: 80 }),
   ]);
+  // Recent foods (rev 238): the ones logged in the last two weeks, newest first, go on top of the log picker.
+  const live = new Set(library.foods.map((f) => f.id));
+  const recentFoodIds = [...new Set(lately.flatMap((e) => e.items.map((i) => i.foodId)).filter((id): id is string => !!id && live.has(id)))].slice(0, 8);
   const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
   const typeId = dayTypeIdFor(date, settings.weekPattern, refeed, override?.dayTypeId ?? null);
   const dayType = dayTypes.find((t) => t.id === typeId) ?? null;
@@ -142,17 +146,21 @@ export async function bodyDay(workspaceId: string, userId: string, date: string,
     nextRefeed: nextRefeed(today, refeed),
     comments: comments.map((c) => ({ ...c, author: authorName.get(c.authorUserId) ?? "Coach" })),
     library,
+    recentFoodIds,
     checklist,
   };
 }
 export type BodyDayView = NonNullable<Awaited<ReturnType<typeof bodyDay>>>;
 
-/** Today's one line: "Lift day · 780 of 1,400–1,500 cal · 110 of 180–200 P". Null until today's day type has targets (rev 192). */
+/**
+ * Body on Today: the one-tap "Log a meal" shortcut (rev 238) once Body is set up, and the line "Lift day · 780 of 1,400–1,500 cal ·
+ * 110 of 180–200 P" beside it once today's day type has targets (rev 192). Null while Body is off or not set up.
+ */
 export async function todayBody(v: Viewer) {
   if (!v.membership.bodyEnabled) return null;
   const d = await bodyDay(v.workspace.id, v.user.id, v.today, v.today);
-  if (!d?.bands) return null;
-  return { dayType: d.dayType?.name ?? null, line: summaryLine(d.totals, d.bands, d.marks), reminder: d.dayType?.reminder ?? null };
+  if (!d) return null;
+  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null };
 }
 
 /** The last days with anything logged, newest first, for the recent strip: date, totals and the worst mark. */

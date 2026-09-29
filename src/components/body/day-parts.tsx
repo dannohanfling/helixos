@@ -1,6 +1,6 @@
 /** The pieces of a Body day shared by the member's page and the coach's read-only view. Server components, no state. */
 import Link from "next/link";
-import { MACROS, MACRO_LABEL, MACRO_NAME, MARK_ICON, MARK_WORD, fmtBand, fmtMacro, type Bands, type Macro, type Macros, type Mark, type Marks } from "@/lib/engine/body";
+import { MACROS, MACRO_NAME, MARK_ICON, MARK_WORD, fmtBand, fmtMacro, type Bands, type Macro, type Macros, type Mark, type Marks } from "@/lib/engine/body";
 import type { BodyDayView } from "@/lib/queries/body";
 import { Progress } from "@/components/ui";
 import type { ReactNode } from "react";
@@ -55,19 +55,28 @@ export function MacroTiles({ totals, bands, marks, setTargetsHref }: { totals: M
 }
 
 /** "Left: 620–720 cal · 90–110 P · up to 14 F · up to 2 C". A band already reached shows only its headroom; one passed says so. */
+/**
+ * What's left, said the way a member thinks it (rev 238): "62 g protein to go · 14 g fat left". To go = still under the band's
+ * bottom; left = room up to its top; over = past the top. The page leads with this line.
+ */
 export function LeftLine({ left }: { left: Partial<Record<Macro, { min: number; max: number }>> }) {
   const parts = MACROS.flatMap((m) => {
     const band = left[m];
     if (!band) return [];
-    const lo = Math.max(0, band.min);
-    const hi = band.max;
-    if (hi < 0) return `${fmtMacro(m, -hi)} ${MACRO_LABEL[m]} over`;
-    if (lo <= 0) return `up to ${fmtMacro(m, hi)} ${MACRO_LABEL[m]}`;
-    return `${fmtMacro(m, lo)}–${fmtMacro(m, hi)} ${MACRO_LABEL[m]}`;
+    const amount = (n: number) => (m === "cal" ? `${fmtMacro(m, n)} cal` : `${fmtMacro(m, n)} g ${MACRO_NAME[m].toLowerCase()}`);
+    if (band.max < 0) return { m, text: `${amount(-band.max)} over`, over: true };
+    if (band.min > 0) return { m, text: `${amount(band.min)} to go`, over: false };
+    return { m, text: `${amount(band.max)} left`, over: false };
   });
+  if (!parts.length) return null;
   return (
-    <p className="text-sm text-ink-2" data-testid="body-left">
-      <span className="font-medium text-ink">Left:</span> {parts.join(" · ")}
+    <p className="text-lg font-semibold leading-snug text-humanos-ink" data-testid="body-left">
+      {parts.map((p, i) => (
+        <span key={p.m} className={p.over ? "text-danger" : undefined}>
+          {i ? <span className="text-ink-3"> · </span> : null}
+          {p.text}
+        </span>
+      ))}
     </p>
   );
 }

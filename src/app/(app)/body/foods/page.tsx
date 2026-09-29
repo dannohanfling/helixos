@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
-import { Card, Disclosure, PageHeader } from "@/components/ui";
+import { Card, Disclosure } from "@/components/ui";
+import { HumanosHeader } from "@/components/body/humanos-header";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { fmtMacro } from "@/lib/engine/body";
@@ -10,7 +11,7 @@ import { archiveFoodAction, archiveMealAction, saveFoodAction, saveMealAction } 
 import type * as schema from "@/db/schema";
 import { UnitPicker } from "@/components/body/unit-inputs";
 
-export const metadata = { title: "Foods & meals" };
+export const metadata = { title: "HumanOS · Nutrition" };
 
 const MEAL_ROWS = 6;
 
@@ -61,7 +62,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <PageHeader title="Foods & meals" subtitle="Foods per unit, and saved meals you log in one tap." action={<Link href="/body" className="btn btn-ghost btn-sm">← Body</Link>} />
+      <HumanosHeader title="Nutrition" subtitle="Your foods per unit, and saved meals you log in one tap." action={<Link href="/body" className="btn btn-ghost btn-sm">← Log</Link>} />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
           {sp.error}

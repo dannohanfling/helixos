@@ -408,10 +408,19 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Card>
           ) : null}
           {body ? (
-            <Link href="/body" className="card block p-4 text-sm hover:bg-surface-2" data-testid="today-body">
-              <span className="font-semibold">{body.dayType ?? "Body"}</span>
-              <span className="tabular text-ink-2"> · {body.line}</span> →{body.reminder ? <span className="mt-1 block text-xs text-ink-3">📌 {body.reminder}</span> : null}
-            </Link>
+            <div className="card flex flex-wrap items-center justify-between gap-3 p-4 text-sm" data-testid="today-humanos">
+              {body.line ? (
+                <Link href="/body" className="min-w-0 flex-1 hover:underline" data-testid="today-body">
+                  <span className="font-semibold">{body.dayType ?? "HumanOS"}</span>
+                  <span className="tabular text-ink-2"> · {body.line}</span> →{body.reminder ? <span className="mt-1 block text-xs text-ink-3">📌 {body.reminder}</span> : null}
+                </Link>
+              ) : (
+                <span className="min-w-0 flex-1 font-semibold">HumanOS</span>
+              )}
+              <Link href="/body#log" className="btn btn-humanos btn-sm" data-testid="today-log-meal">
+                Log a meal
+              </Link>
+            </div>
           ) : null}
           {d.pathwayNext ? (
             <Card title="Next on your pathway" action={<Link href="/pathway" className="text-xs text-ink-2 hover:underline">Pathway →</Link>}>

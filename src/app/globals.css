@@ -20,6 +20,10 @@
   --warn-soft: #fdebd3;
   --danger: #b3261e;
   --danger-soft: #fbe1df;
+  /* HumanOS's one accent (rev 238): cyan, so the space reads as its own. Never the marks' green, yellow, orange or red, never gold. */
+  --humanos: #0e7490;
+  --humanos-ink: #155e75;
+  --humanos-soft: #dff3f7;
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
@@ -45,6 +49,9 @@
     --warn-soft: #3d2c0a;
     --danger: #f87171;
     --danger-soft: #3f1715;
+    --humanos: #22d3ee;
+    --humanos-ink: #67e8f9;
+    --humanos-soft: #0c2f36;
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
@@ -73,6 +80,9 @@
     --warn-soft: #fdebd3;
     --danger: #b3261e;
     --danger-soft: #fbe1df;
+    --humanos: #0e7490;
+    --humanos-ink: #155e75;
+    --humanos-soft: #dff3f7;
   }
 }
 
@@ -93,6 +103,9 @@
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-humanos: var(--humanos);
+  --color-humanos-ink: var(--humanos-ink);
+  --color-humanos-soft: var(--humanos-soft);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
   --radius-card: 14px;
 }
@@ -185,6 +198,19 @@ textarea::placeholder {
 }
 .btn-ghost:hover {
   background: var(--surface-2);
+}
+/* HumanOS's own button (rev 238): the cyan accent as a fill. Dark ink on the bright dark-theme cyan, white on the light one. */
+.btn-humanos {
+  background: var(--humanos);
+  color: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .btn-humanos {
+    color: #0b1216;
+  }
+}
+.btn-humanos:hover {
+  filter: brightness(0.95);
 }
 .btn-soft {
   background: var(--surface-2);

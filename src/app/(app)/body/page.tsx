@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
-import { Badge, Card, Disclosure, PageHeader } from "@/components/ui";
+import { Badge, Card, Disclosure } from "@/components/ui";
+import { HumanosHeader } from "@/components/body/humanos-header";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { CapsLine, EntriesBySlot, LeftLine, MacroTiles, MarkKey } from "@/components/body/day-parts";
@@ -11,7 +12,7 @@ import { loggableUnits } from "@/lib/engine/body-units";
 import { bodyDay, recentDays, requireBodyEnabled } from "@/lib/queries/body";
 import { deleteEntryAction, logFoodAction, logMealAction, setBodyAiAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
 
-export const metadata = { title: "Body" };
+export const metadata = { title: "HumanOS · Log" };
 
 /** The slot a meal most likely goes in at this hour, from the member's own slots. */
 function slotNow(slots: string[], hour: number): string {
@@ -29,7 +30,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
   if (!d) {
     return (
       <>
-        <PageHeader title="Body" subtitle="Nutrition targets and fast meal logging. Workouts and weigh-ins come next." />
+        <HumanosHeader title="Log" gear={false} subtitle="Nutrition targets and fast meal logging. Workouts and weigh-ins come next." />
         {sp.erased ? (
           <p className="mb-4 rounded-xl border p-3 text-sm" role="status" data-testid="body-erased">
             All your Body data is deleted.
@@ -41,7 +42,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
             🔒 Your Body data is <b>private to you</b>. Your coach doesn&apos;t see it unless you switch on &quot;Let my coach see my Body data&quot; in Body settings, and it&apos;s never sent to AI.
           </p>
           <form action={setupBodyAction}>
-            <SubmitButton className="btn btn-primary btn-sm" pendingText="Setting up…" data-testid="body-start">
+            <SubmitButton className="btn btn-humanos btn-sm" pendingText="Setting up…" data-testid="body-start">
               Set up Body
             </SubmitButton>
           </form>
@@ -59,8 +60,8 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <PageHeader
-        title="Body"
+      <HumanosHeader
+        title="Log"
         subtitle={d.settings.shareWithCoach ? <span data-testid="body-sharing">👀 Shared with your coach (read-only). <Link href="/body/settings#share" className="underline">Change</Link></span> : <span data-testid="body-sharing">🔒 Private to you. <Link href="/body/settings#share" className="underline">Sharing</Link></span>}
         action={
           <div className="flex items-center gap-2 text-sm">
@@ -132,50 +133,16 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
         </Card>
       ) : null}
 
+      {d.left && !d.final ? (
+        <section className="card mb-4 border-l-4 border-l-humanos p-4" data-testid="body-lead">
+          <LeftLine left={d.left} />
+          {d.dayType?.reminder ? <p className="mt-1 text-sm text-ink-2">📌 {d.dayType.reminder}</p> : null}
+        </section>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="space-y-4">
-          <Card
-            title={
-              <span data-testid="body-day-type">
-                {d.dayType ? d.dayType.name : "No day type"}
-                {d.overridden ? <span className="ml-1 normal-case text-ink-3">(set by hand)</span> : null}
-              </span>
-            }
-            action={d.worst && d.entries.length ? <Badge tone={d.worst === "in" || d.worst === "over_ok" || d.worst === "open" ? "good" : "warn"}>{MARK_ICON[d.worst]} {d.final ? MARK_WORD[d.worst] : "so far"}</Badge> : null}
-          >
-            {d.dayType?.reminder ? (
-              <p className="mb-3 rounded-lg bg-surface-2 p-2 text-sm" data-testid="body-reminder">
-                📌 {d.dayType.reminder}
-              </p>
-            ) : null}
-            <MacroTiles totals={d.totals} bands={d.bands} marks={d.marks} setTargetsHref="/body/settings#day-types" />
-            <div className="mt-3 space-y-1">
-              {d.left && !d.final ? <LeftLine left={d.left} /> : null}
-              <CapsLine caps={d.caps} />
-              {d.sodium ? <p className="text-xs text-ink-3" data-testid="body-sodium">Sodium: {Math.round(d.sodium).toLocaleString("en-US")} mg</p> : null}
-              {d.bands ? <MarkKey /> : null}
-            </div>
-            {d.dayTypes.length > 1 ? (
-            <Disclosure summary={<span className="text-xs text-ink-3 underline">Change this day&apos;s type</span>} className="mt-2">
-              <form action={setBodyDayTypeAction} className="flex flex-wrap items-end gap-2">
-                <input type="hidden" name="date" value={date} />
-                <select name="dayTypeId" className="field w-auto py-1 text-sm" defaultValue={d.overridden ? d.dayType?.id : ""} aria-label="Day type">
-                  <option value="">From my weekly pattern</option>
-                  {d.dayTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-                <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…">
-                  Set
-                </SubmitButton>
-              </form>
-            </Disclosure>
-            ) : null}
-          </Card>
-
-          <Card id="log" title="Log" action={<Link href="/body/foods" className="text-xs text-ink-2 hover:underline">Foods &amp; meals →</Link>}>
+          <Card id="log" title="Log a meal" action={<Link href="/body/foods" className="text-xs text-ink-2 hover:underline">Nutrition →</Link>}>
             {!d.library.foods.length ? (
               <p className="text-sm text-ink-2" data-testid="body-no-foods">
                 Nothing to log from yet.{" "}
@@ -186,7 +153,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
             ) : d.library.meals.length ? (
               <ul className="divide-y rounded-lg border" data-testid="body-meals">
                 {d.library.meals.map((m) => (
-                  <li key={m.id} className="p-2.5" data-testid="body-meal" data-name={m.name}>
+                  <li key={m.id} className="p-3" data-testid="body-meal" data-name={m.name}>
                     <form action={logMealAction} className="flex flex-wrap items-center justify-between gap-2">
                       <input type="hidden" name="mealId" value={m.id} />
                       <input type="hidden" name="date" value={date} />
@@ -196,12 +163,12 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
                           {fmtMacro("cal", m.totals.cal)} cal · {fmtMacro("p", m.totals.p)} P · {fmtMacro("f", m.totals.f)} F · {fmtMacro("c", m.totals.c)} C
                         </div>
                       </div>
-                      <select name="slot" className="field w-auto py-1 text-sm" defaultValue={m.slot && slots.includes(m.slot) ? m.slot : defaultSlot} aria-label="Slot">
+                      <select name="slot" className="field w-auto py-2 text-base sm:py-1 sm:text-sm" defaultValue={m.slot && slots.includes(m.slot) ? m.slot : defaultSlot} aria-label="Slot">
                         {slots.map((s) => (
                           <option key={s}>{s}</option>
                         ))}
                       </select>
-                      <SubmitButton className="btn btn-primary btn-sm" pendingText="Logging…" data-testid="body-log-meal">
+                      <SubmitButton className="btn btn-humanos px-5" pendingText="Logging…" data-testid="body-log-meal">
                         Log
                       </SubmitButton>
                       <details className="w-full">
@@ -228,7 +195,47 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
               </p>
             )}
             {d.library.foods.length ? (
-              <LogFoodForm action={logFoodAction} date={date} slots={slots} defaultSlot={defaultSlot} foods={d.library.foods.map((f) => ({ id: f.id, name: f.name, unit: f.unit, units: loggableUnits(f.unit) }))} />
+              <LogFoodForm action={logFoodAction} date={date} slots={slots} defaultSlot={defaultSlot} foods={d.library.foods.map((f) => ({ id: f.id, name: f.name, unit: f.unit, units: loggableUnits(f.unit) }))} recent={d.recentFoodIds} />
+            ) : null}
+          </Card>
+
+          <Card
+            title={
+              <span data-testid="body-day-type">
+                {d.dayType ? d.dayType.name : "No day type"}
+                {d.overridden ? <span className="ml-1 normal-case text-ink-3">(set by hand)</span> : null}
+              </span>
+            }
+            action={d.worst && d.entries.length ? <Badge tone={d.worst === "in" || d.worst === "over_ok" || d.worst === "open" ? "good" : "warn"}>{MARK_ICON[d.worst]} {d.final ? MARK_WORD[d.worst] : "so far"}</Badge> : null}
+          >
+            {d.dayType?.reminder ? (
+              <p className="mb-3 rounded-lg bg-surface-2 p-2 text-sm" data-testid="body-reminder">
+                📌 {d.dayType.reminder}
+              </p>
+            ) : null}
+            <MacroTiles totals={d.totals} bands={d.bands} marks={d.marks} setTargetsHref="/body/settings#day-types" />
+            <div className="mt-3 space-y-1">
+              <CapsLine caps={d.caps} />
+              {d.sodium ? <p className="text-xs text-ink-3" data-testid="body-sodium">Sodium: {Math.round(d.sodium).toLocaleString("en-US")} mg</p> : null}
+              {d.bands ? <MarkKey /> : null}
+            </div>
+            {d.dayTypes.length > 1 ? (
+            <Disclosure summary={<span className="text-xs text-ink-3 underline">Change this day&apos;s type</span>} className="mt-2">
+              <form action={setBodyDayTypeAction} className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="date" value={date} />
+                <select name="dayTypeId" className="field w-auto py-1 text-sm" defaultValue={d.overridden ? d.dayType?.id : ""} aria-label="Day type">
+                  <option value="">From my weekly pattern</option>
+                  {d.dayTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…">
+                  Set
+                </SubmitButton>
+              </form>
+            </Disclosure>
             ) : null}
           </Card>
 
@@ -300,7 +307,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
 
           <div className="flex flex-wrap gap-2 text-sm">
             <Link href="/body/foods" className="btn btn-ghost btn-sm">
-              Foods &amp; meals
+              Nutrition
             </Link>
             <Link href="/body/settings" className="btn btn-ghost btn-sm" data-testid="body-settings-link">
               Targets &amp; settings
