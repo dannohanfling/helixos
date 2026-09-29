@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `whats_new_seen` integer;

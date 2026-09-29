@@ -87,7 +87,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, badges = {} }: { role:
                       {n.label}
                       {n.line ? <span className="text-[11px] font-normal text-ink-3">{n.line}</span> : null}
                     </span>
-                    {badges[n.href] ? <DueBadge count={badges[n.href]} /> : null}
+                    {badges[n.href] ? n.href === "/whats-new" ? <NewDot /> : <DueBadge count={badges[n.href]} /> : null}
                   </Link>
                 ))}
               </div>
@@ -128,6 +128,11 @@ export function BottomNav({ role, badges = {} }: { role: "coach" | "client"; bad
     </nav>
     </PinToViewport>
   );
+}
+
+/** A small dot beside What's new while there's an entry this member hasn't opened the page since (rev 193). */
+export function NewDot() {
+  return <span className="ml-auto h-2 w-2 rounded-full bg-accent" aria-label="New" data-testid="whats-new-dot" />;
 }
 
 /** A small dot with a count beside a menu item while something there is due (rev 157: Intentions). */

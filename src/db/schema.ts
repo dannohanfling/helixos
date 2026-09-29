@@ -149,6 +149,8 @@ export const memberships = sqliteTable(
     aiCapExempt: integer("ai_cap_exempt", { mode: "boolean" }).notNull().default(false),
     /** Highest tier level the member has seen the celebration for. Null until first seen: then stamped silently. */
     celebratedTierLevel: integer("celebrated_tier_level"),
+    /** The newest What's new entry (its `n`, src/content/whats-new.ts) this member has opened the page since: the menu dot. */
+    whatsNewSeen: integer("whats_new_seen"),
     /** The member's own timezone. Null means the workspace's. "Today", reminder hours and streak boundaries all follow it. */
     timezone: text("timezone"),
     lastNudgedAt: text("last_nudged_at"),

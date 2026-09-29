@@ -25,6 +25,10 @@ main() {
   step "migrations"
   npx tsx --tsconfig tsconfig.json scripts/check-migrations.ts
 
+  # A change people can see comes with its What's new entry (rev 193); NO_CHANGELOG=1 for one nobody would notice.
+  step "what's new"
+  npx tsx --tsconfig tsconfig.json scripts/check-whats-new.ts
+
   if [[ "${1:-}" == "--build" ]]; then
     step "production build"
     # A build needs a session secret; the value is irrelevant because no request runs during the build.

@@ -9,6 +9,7 @@ import { logoutAction } from "@/lib/actions/auth";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { BottomNav, SideNav } from "./nav";
 import { SubmitButton } from "@/components/submit-button";
+import { APP_VERSION } from "@/lib/version";
 
 export function AppShell({ viewer, points, streak, badges = {}, children }: { viewer: Viewer; points: number; streak: number; badges?: Record<string, number>; children: ReactNode }) {
   const tier = tierProgress(points);
@@ -50,6 +51,10 @@ export function AppShell({ viewer, points, streak, badges = {}, children }: { vi
               </SubmitButton>
             </form>
           </div>
+          {/* The version this deploy is (rev 193), from the build's own commit; it opens What's new. */}
+          <Link href="/whats-new" className="block pb-1 text-[11px] text-ink-3 hover:text-ink" data-testid="app-version">
+            {APP_VERSION}
+          </Link>
         </div>
       </aside>
       <div className="min-w-0 flex-1">

@@ -1,4 +1,6 @@
 import type { NextConfig } from "next";
+import { execSync } from "node:child_process";
+import { buildInfo } from "./src/lib/build-info";
 
 const dev = process.env.NODE_ENV !== "production";
 // A lead magnet file goes from the browser straight to the bucket, so the bucket's API is the one cross-origin connection the
@@ -38,7 +40,17 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
 ];
 
+// The version the app shows (rev 193), fixed when the build (or the dev server) starts.
+const build = buildInfo(process.env, new Date(), () => {
+  try {
+    return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString();
+  } catch {
+    return null;
+  }
+});
+
 const nextConfig: NextConfig = {
+  env: { HELIX_BUILD_DATE: build.date, HELIX_BUILD_SHA: build.sha },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
