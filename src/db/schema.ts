@@ -34,6 +34,8 @@ export const users = sqliteTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
+  /** The first time they signed in (29 Sep). Never signed in means no automated email (canEmail); set by markSignedIn. */
+  firstSignedInAt: text("first_signed_in_at"),
   /** Bumped on password change or reset; sessions carrying an older number are rejected. */
   sessionVersion: integer("session_version").notNull().default(0),
   avatarEmoji: text("avatar_emoji").notNull().default("🧭"),
@@ -52,6 +54,11 @@ export const memberships = sqliteTable(
     bigPromise: text("big_promise"),
     /** Who the Big Promise is for. One field for the whole business; offers and webinars refine it, nothing else copies it. */
     audience: text("audience"),
+    /**
+     * Emails from HelixOS, per member (29 Sep): the coach's switch on their client page, every change logged. Off means no
+     * automated email of any kind; a client the import creates starts off. Read only through canEmail (src/lib/email-gate.ts).
+     */
+    emailsEnabled: integer("emails_enabled", { mode: "boolean" }).notNull().default(true),
     reminderHour: integer("reminder_hour").notNull().default(8),
     eveningReminderHour: integer("evening_reminder_hour").notNull().default(17),
     leaderboardOptIn: integer("leaderboard_opt_in", { mode: "boolean" }).notNull().default(true),

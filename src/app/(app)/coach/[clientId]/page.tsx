@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientResetAction } from "@/lib/actions/coach";
+import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientResetAction, setClientEmailsAction } from "@/lib/actions/coach";
+import { emailBlock } from "@/lib/engine/email-gate";
 import { COACH_RESET_COOKIE } from "@/lib/reset-link";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { CopyButton } from "@/components/copy-button";
@@ -37,7 +38,7 @@ export const metadata = { title: "Client" };
  * One client, before a call. The page answers "what do I say to this person today": where they are, what they wrote in
  * their own words, what's stuck, what they claimed, what they've built. Then the call's decisions go back in as tasks.
  */
-export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string }> }) {
+export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string }> }) {
   const v = await requireCoach();
   const { clientId } = await params;
   const sp = await searchParams;
@@ -46,6 +47,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const u = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
   // An Essence over the cap (an import brings it in whole) is flagged here with its trim-to-fit, read-only.
   const essence = await essenceFor(v.workspace.id, m.userId);
+  // Emails from HelixOS (29 Sep): the coach's switch, and why nothing goes out even when it's on.
+  const emailsBlocked = emailBlock({ emailsEnabled: m.emailsEnabled, removedAt: m.removedAt, firstSignedInAt: u?.firstSignedInAt ?? null });
   if (!u) notFound();
   // The copy-link cookie the reset action leaves when there is no email: shown once, for this client only, then it expires on its own.
   let copyLink: string | null = null;
@@ -114,7 +117,9 @@ export default async function CoachClientPage({ params, searchParams }: { params
         subtitle={`${m.businessName ? `${m.businessName} · ` : ""}${m.programTier} · joined ${formatDate(m.createdAt.slice(0, 10))} · ${u.email}`}
         action={
           <span className="flex items-center gap-2">
-            {nudgedAgo === 0 ? (
+            {emailsBlocked ? (
+              <span className="text-xs text-ink-3" data-testid="nudge-off">no nudge: emails are {emailsBlocked === "never_signed_in" ? "held until they sign in" : "off"}</span>
+            ) : nudgedAgo === 0 ? (
               <span className="text-xs text-ink-3">nudged today</span>
             ) : (
               <form action={nudgeMemberAction}>
@@ -149,6 +154,24 @@ export default async function CoachClientPage({ params, searchParams }: { params
         }
       />
       <EssenceOverNote data={essence} own={false} />
+      <form action={setClientEmailsAction} className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line p-3 text-sm" data-testid="client-emails" data-on={m.emailsEnabled ? "1" : "0"}>
+        <input type="hidden" name="membershipId" value={m.id} />
+        <input type="hidden" name="emails" value={m.emailsEnabled ? "off" : "on"} />
+        <span>
+          <strong>Emails from HelixOS:</strong> {m.emailsEnabled ? "On" : "Off"}.{" "}
+          <span className="text-ink-3">
+            {!m.emailsEnabled
+              ? "No reminders, no nudges, nothing automated. The reset link below still sends."
+              : emailsBlocked === "never_signed_in"
+                ? "Held until they sign in for the first time: nothing automated goes out before then."
+                : "Morning and evening reminders, and the comeback email when they go quiet."}
+          </span>
+        </span>
+        <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="client-emails-toggle">
+          {m.emailsEnabled ? "Turn off" : "Turn on"}
+        </SubmitButton>
+        {sp.emails ? <span className="text-xs text-good" role="status">Saved ✓</span> : null}
+      </form>
       {sp.reset === "emailed" ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="reset-emailed">A reset link is on its way to {u.email}.</p> : null}
       {sp.reset === "failed" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm" data-testid="reset-failed">The reset email could not be sent. Try again, or send the link with email off to copy it by hand.</p> : null}
       {sp.reset === "rate" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm">Too many reset links just now. Wait a few minutes and try again.</p> : null}

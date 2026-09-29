@@ -1,5 +1,7 @@
 "use server";
 
+import { markSignedIn } from "@/lib/email-gate";
+
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -43,6 +45,7 @@ export async function setupAction(_prev: SetupState, formData: FormData): Promis
   });
   if (!r.ok) return { error: r.error };
   const coach = await db.query.users.findFirst({ where: eq(schema.users.id, r.data.coachId) });
+  await markSignedIn(r.data.coachId);
   await writeSession({ userId: r.data.coachId, workspaceId: r.data.workspaceId, role: "coach", sv: coach?.sessionVersion ?? 0 });
   // The invite links are shown once on /setup/done, carried in a short-lived cookie rather than the URL. /setup itself is a 404 from now on.
   const jar = await cookies();
@@ -111,6 +114,7 @@ export async function resetAction(_prev: ResetState, formData: FormData): Promis
   await db.update(schema.passwordResets).set({ usedAt: nowIso() }).where(and(eq(schema.passwordResets.userId, user.id), isNull(schema.passwordResets.usedAt)));
   const membership = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, user.id) });
   if (!membership) return { error: "Password updated, but this account isn't in a workspace yet. Ask your coach for an invite link." };
+  await markSignedIn(user.id);
   await writeSession({ userId: user.id, workspaceId: membership.workspaceId, role: membership.role, sv: sessionVersion });
   redirect("/today");
 }
@@ -126,6 +130,7 @@ export async function changePasswordAction(_prev: PasswordState, formData: FormD
   if (password === current) return { error: "Pick a password you haven't used here." };
   const sessionVersion = v.user.sessionVersion + 1;
   await db.update(schema.users).set({ passwordHash: await hashPassword(password), sessionVersion }).where(eq(schema.users.id, v.user.id));
+  await markSignedIn(v.user.id);
   await writeSession({ userId: v.user.id, workspaceId: v.workspace.id, role: v.role, sv: sessionVersion });
   return { ok: true };
 }

@@ -519,6 +519,13 @@
       "when": 1790642271267,
       "tag": "0073_community_notify",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "6",
+      "when": 1790647573626,
+      "tag": "0074_emails_gate",
+      "breakpoints": true
     }
   ]
 }

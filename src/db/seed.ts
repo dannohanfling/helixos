@@ -161,10 +161,12 @@ export async function seedDemo(): Promise<void> {
   const coachId = newId();
   const clientId = newId();
   const client2Id = newId();
+  // The demo accounts have been using the app for months: signed in, so the reminders walk emails them.
+  const signedIn = new Date(Date.now() - 120 * 86400000).toISOString();
   await db.insert(schema.users).values([
-    { id: coachId, email: "coach@demo.helixos.app", name: "Danno Hanfling", passwordHash: password, avatarEmoji: "🔱" },
-    { id: clientId, email: "client@demo.helixos.app", name: "Maya Torres", passwordHash: password, avatarEmoji: "🌊" },
-    { id: client2Id, email: "client2@demo.helixos.app", name: "Jordan Lee", passwordHash: password, avatarEmoji: "🔥" },
+    { id: coachId, email: "coach@demo.helixos.app", name: "Danno Hanfling", passwordHash: password, avatarEmoji: "🔱", firstSignedInAt: signedIn },
+    { id: clientId, email: "client@demo.helixos.app", name: "Maya Torres", passwordHash: password, avatarEmoji: "🌊", firstSignedInAt: signedIn },
+    { id: client2Id, email: "client2@demo.helixos.app", name: "Jordan Lee", passwordHash: password, avatarEmoji: "🔥", firstSignedInAt: signedIn },
   ]);
   await db.insert(schema.memberships).values([
     { id: newId(), workspaceId: wsId, userId: coachId, role: "coach", startedAt: addDays(today, -120) },

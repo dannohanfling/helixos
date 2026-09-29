@@ -34,7 +34,7 @@ export default async function ImportPage({ searchParams }: { searchParams: Promi
           <Link href={`/coach/${done.id}`} className="underline">
             Their page
           </Link>{" "}
-          has the reset link for when they should log in.
+          has the reset link for when they should log in, and the switch for emails from HelixOS, which starts off.
         </p>
       ) : null}
       {/* A fresh form after each import: no old dry run left on screen. */}

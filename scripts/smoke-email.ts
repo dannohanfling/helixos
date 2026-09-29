@@ -98,6 +98,30 @@ async function main() {
     if (survivorAt < 0) throw new Error(`the next member's reminder should still send after the first failed: ${JSON.stringify(results)}`);
     if (results.filter((r) => r.delivery === "failed").length !== 1) throw new Error("exactly one failure expected");
     console.log(`✓ runReminders: member 1 failed (${results[0].email}), member ${survivorAt + 1} still sent; the loop carried on`);
+
+    // Emails from HelixOS (29 Sep): a member with the switch off, one who has never signed in, and one removed get nothing from
+    // the run, while the other member still does. Each case is checked alone, then put back.
+    delete process.env.SENDGRID_API_KEY;
+    const { and } = await import("drizzle-orm");
+    const m2 = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, second.userId), eq(schema.memberships.role, "client")) }))!;
+    const u2 = (await db.query.users.findFirst({ where: eq(schema.users.id, second.userId) }))!;
+    // The send above may have been their comeback email, whose week of quiet would hide them from the run for the wrong reason.
+    await db.update(schema.memberships).set({ lastComebackAt: null }).where(eq(schema.memberships.id, m2.id));
+    if (!(await runReminders(new Date(), "morning")).some((r) => r.userId === second.userId)) throw new Error("before the cases, they get a reminder");
+    const cases: [string, () => Promise<unknown>, () => Promise<unknown>][] = [
+      ["emails switched off", () => db.update(schema.memberships).set({ emailsEnabled: false }).where(eq(schema.memberships.id, m2.id)), () => db.update(schema.memberships).set({ emailsEnabled: true }).where(eq(schema.memberships.id, m2.id))],
+      ["never signed in", () => db.update(schema.users).set({ firstSignedInAt: null }).where(eq(schema.users.id, u2.id)), () => db.update(schema.users).set({ firstSignedInAt: u2.firstSignedInAt }).where(eq(schema.users.id, u2.id))],
+      ["removed", () => db.update(schema.memberships).set({ removedAt: new Date().toISOString() }).where(eq(schema.memberships.id, m2.id)), () => db.update(schema.memberships).set({ removedAt: null }).where(eq(schema.memberships.id, m2.id))],
+    ];
+    for (const [why, set, undo] of cases) {
+      await set();
+      const run = await runReminders(new Date(), "morning");
+      await undo();
+      if (run.some((r) => r.userId === second.userId)) throw new Error(`${why}: the reminder run sends them nothing`);
+      if (!run.some((r) => r.userId === first.userId)) throw new Error(`${why}: the other member still gets theirs`);
+    }
+    if (!(await runReminders(new Date(), "morning")).some((r) => r.userId === second.userId)) throw new Error("put back, they get it again");
+    console.log("✓ canEmail: switched off, never signed in and removed each get nothing from the reminder run; the other member still does");
   } finally {
     try {
       if (mock.pid) process.kill(-mock.pid, "SIGTERM");

@@ -4,6 +4,7 @@ import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
+import { canEmail } from "@/lib/email-gate";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { allow } from "@/lib/rate-limit";
@@ -42,6 +43,8 @@ export async function nudgeMemberAction(formData: FormData): Promise<void> {
   if (m.lastNudgedAt && Date.now() - new Date(m.lastNudgedAt).getTime() < 20 * 3600_000) return;
   const user = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
   if (!user) return;
+  // The comeback email the reminders send: the same gate. Emails off, never signed in, or removed sends nothing.
+  if (!(await canEmail(m.id))) return;
   const c = comebackEmail(user.name.split(" ")[0], { morning: m.reminderHour, evening: m.eveningReminderHour }, process.env.APP_URL ?? "http://localhost:3000");
   try {
     await sendEmail(user.email, c.subject, c.text, c.html);
@@ -50,6 +53,23 @@ export async function nudgeMemberAction(formData: FormData): Promise<void> {
     console.error(`[coach] nudge to ${m.userId} failed: ${e instanceof Error ? e.message : String(e)}`);
   }
   refresh();
+}
+
+/**
+ * Emails from HelixOS, on or off, for one client (29 Sep). Every change is logged with who made it. Off stops every automated
+ * email and the Nudge; the reset link the coach sends by hand still goes.
+ */
+export async function setClientEmailsAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const membershipId = str(formData, "membershipId");
+  const m = await clientOf(coach.workspace.id, membershipId);
+  if (!m) redirect("/coach");
+  const on = str(formData, "emails") === "on";
+  if (m.emailsEnabled !== on) {
+    await db.update(schema.memberships).set({ emailsEnabled: on }).where(and(eq(schema.memberships.id, m.id), eq(schema.memberships.workspaceId, coach.workspace.id)));
+    await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: on ? "emails.on" : "emails.off", payload: { by: coach.user.name }, status: "sent", note: `Emails from HelixOS turned ${on ? "on" : "off"} by ${coach.user.name}` });
+  }
+  redirect(`/coach/${membershipId}?emails=${on ? "on" : "off"}`);
 }
 
 /**

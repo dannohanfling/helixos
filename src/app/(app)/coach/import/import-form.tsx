@@ -64,7 +64,7 @@ export function ImportForm({ clients }: { clients: { id: string; label: string }
               <span className="label">Business name</span>
               <input className="field" {...bind("newBusiness")} maxLength={120} placeholder="Tide Line Coaching" />
             </label>
-            <p className="text-xs text-ink-3 sm:col-span-3">Created when you press Approve, with no email sent. When it&apos;s time for them to log in, send the reset link from their page.</p>
+            <p className="text-xs text-ink-3 sm:col-span-3">Created when you press Approve, with no email sent and emails from HelixOS off: no reminders or nudges until you turn them on, on their page. When it&apos;s time for them to log in, send the reset link from there.</p>
           </div>
         ) : null}
       </Card>

@@ -7,6 +7,7 @@ import { comebackCopy, eveningCopy, morningCopy } from "@/lib/engine/reminder-co
 import { brandedEmail } from "@/lib/branded-email";
 import { totalPoints } from "@/lib/queries/points";
 import { sendEmail } from "@/lib/email";
+import { canEmail } from "@/lib/email-gate";
 
 /** The comeback email. Monday is restart day; on any other day the restart is today. Shared with the coach's nudge button. */
 export function comebackEmail(first: string, hours: { morning: number; evening: number }, appUrl: string): { subject: string; text: string; html: string } {
@@ -48,6 +49,8 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
       const hour = hourInTz(tz, now);
       const user = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
       if (!user) continue;
+      // Emails off, never signed in, or removed: nothing automated, of any kind (29 Sep).
+      if (!(await canEmail(m.id))) continue;
       const log = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, m.userId), eq(schema.dailyLogs.date, today)) });
       const logs = await db.query.dailyLogs.findMany({ where: eq(schema.dailyLogs.userId, m.userId) });
       const closed = new Set(logs.filter((l) => l.eveningDoneAt).map((l) => l.date));

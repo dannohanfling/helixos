@@ -161,6 +161,26 @@ async function main() {
     if (!t00?.pathwayId || old?.status !== "retired" || old.replacedByOfferId !== t00.id) throw new Error("the current offer sits on its pathway; the older one is archived and points at it");
     console.log(`✓ a base that changed after the dry run wrote nothing; Approve created ${name} with nothing sent and wrote ${Object.entries(first).map(([k, n]) => `${n} ${k}`).join(", ")}, the base as it was at Approve`);
 
+    // ── Emails from HelixOS (29 Sep): the new client starts with emails off, and the reminder run sends them nothing. Turning the
+    // switch on is logged, and still sends nothing until they have signed in once. ──
+    if (m.emailsEnabled !== false || user.firstSignedInAt !== null) throw new Error("the import creates the client with emails off, never signed in");
+    const { runReminders } = await import("@/lib/reminders");
+    const remind = async () => [...(await runReminders(new Date(), "morning")), ...(await runReminders(new Date(), "evening"))].filter((r) => r.userId === user.id);
+    if ((await remind()).length) throw new Error("the reminder run sends the imported client nothing");
+    await page.goto(`${base}/coach/${m.id}`);
+    if ((await page.locator('[data-testid="client-emails"]').getAttribute("data-on")) !== "0" || !(await page.locator('[data-testid="nudge-off"]').count())) throw new Error("their page shows emails off, and no Nudge");
+    await page.locator('[data-testid="client-emails-toggle"]').click();
+    await page.waitForURL(/emails=on/);
+    const onRow = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, m.id) }))!;
+    const logged = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, user.id), eq(schema.syncEvents.event, "emails.on")) });
+    if (!onRow.emailsEnabled || logged.length !== 1) throw new Error("turning emails on is saved and logged");
+    if ((await remind()).length) throw new Error("switched on but never signed in: still nothing");
+    if (!(await page.locator('[data-testid="client-emails"]').innerText()).includes("Held until they sign in")) throw new Error("their page says emails are held until they sign in");
+    await page.locator('[data-testid="client-emails-toggle"]').click();
+    await page.waitForURL(/emails=off/);
+    await page.goto(`${base}/coach/import`);
+    console.log("✓ the new client starts with emails off: the reminder run sends them nothing; turning it on is logged and still sends nothing until they sign in");
+
     // ── A re-run for the same client: all update, nothing doubled. Their Essence is near the cap by now (28 Sep: the first live
     // run came to 23,633), so this import takes it over: it still goes in whole, marked, and their AI stops using it until trimmed. ──
     const { essenceBlockFor } = await import("@/lib/queries/essence");
