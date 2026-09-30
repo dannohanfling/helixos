@@ -57,6 +57,13 @@ describe("Community Loyalty chat: the secret stays on the server", () => {
     const widget = read("components/chat-widget.tsx");
     expect(widget).toMatch(/identifier_hash: hash/);
     expect(widget).not.toMatch(/createHmac/);
+    // Rev 270: never before the SDK says it has loaded; at once if it already has; and a visible, non-secret signal once called.
+    expect(widget).toMatch(/if \(why !== "ready" && !bot\.hasLoaded\) return false;/);
+    expect(widget).toMatch(/window\.addEventListener\("chatbot:ready", onReady\)/);
+    expect(widget).toMatch(/setAttribute\("data-chat-identified", "true"\)/);
+    // The hash is hex over the very string passed as the id.
+    expect(read("lib/engine/chat.ts")).toMatch(/createHmac\("sha256", secret\)\.update\(userId, "utf8"\)\.digest\("hex"\)/);
+    expect(read("lib/chat.ts")).toMatch(/userId: v\.user\.id, name: v\.user\.name, email: v\.user\.email\.toLowerCase\(\), hash: identifierHash\(v\.user\.id, c\.secret\)/);
   });
 
   it("the widget never loads while a coach is switched into a client, and the hash is computed on the server per render", () => {

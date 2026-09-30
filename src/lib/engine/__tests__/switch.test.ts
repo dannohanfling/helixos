@@ -93,3 +93,15 @@ describe("switch to client: no write escapes the gate", () => {
     for (const r of ["app/api/deck-images/upload/route.ts", "app/api/magnets/upload/route.ts", "app/api/proofs/upload/route.ts"]) expect(read(r)).toMatch(/v\.switchedInto\?\.mode === "view"/);
   });
 });
+
+describe("switch to client: the backfill for clients the coach created (rev 275)", () => {
+  it("flips coach_can_work on only for a client with emails off from the import who has never signed in, and logs each one", () => {
+    const sql = readFileSync(join(SRC, "..", "drizzle", "0087_coach_work_backfill.sql"), "utf8");
+    const rule = /`role` = 'client' AND (m\.)?`coach_can_work` = 0 AND (m\.)?`emails_enabled` = 0 AND (m\.)?`removed_at` IS NULL/g;
+    expect(sql.match(rule)?.length).toBe(2);
+    expect(sql).toMatch(/u\.`first_signed_in_at` IS NULL/);
+    expect(sql).toMatch(/`first_signed_in_at` IS NULL\)/);
+    expect(sql).toMatch(/'account', 'in', 'coach_work\.on'/);
+    expect(sql.indexOf("INSERT INTO `sync_events`")).toBeLessThan(sql.indexOf("UPDATE `memberships`"));
+  });
+});

@@ -113,8 +113,32 @@ async function main() {
     if (html.includes(SECRET)) throw new Error("the secret never reaches the page");
     await page.goto(`${base}/settings`);
     if (!(await page.locator('[data-testid="linked-chats-empty"]').count())) throw new Error("Linked chats starts empty");
+    // The identity call (rev 270): the SDK's host is unreachable here, so a stand-in $chatbot records what setUser gets.
+    // Loaded before the page's script mounts: called at once. Not loaded: nothing until the SDK's own ready event.
+    for (const loaded of [true, false]) {
+      const ctxt = await browser.newContext();
+      const p2 = await ctxt.newPage();
+      // As a string: a function here would be transpiled with a helper (__name) the page doesn't have.
+      await p2.addInitScript({ content: `window.$chatbot = { hasLoaded: ${loaded}, setUser: function (id, u) { window.__setUser = { id: id, u: u }; } };` });
+      await p2.goto(`${base}/login`);
+      await p2.click('button:has-text("As a client")');
+      await p2.waitForURL(/\/today/);
+      if (loaded) {
+        await p2.locator('html[data-chat-identified="true"]').waitFor({ timeout: 10000 });
+      } else {
+        await p2.waitForTimeout(1500);
+        if (await p2.locator('html[data-chat-identified="true"]').count()) throw new Error("setUser is never called before the SDK says it has loaded");
+        await p2.evaluate(() => window.dispatchEvent(new Event("chatbot:ready")));
+        await p2.locator('html[data-chat-identified="true"]').waitFor({ timeout: 5000 });
+      }
+      const got = await p2.evaluate(() => (window as unknown as { __setUser: { id: string; u: { name: string; email: string; identifier_hash: string } } }).__setUser);
+      const by = await p2.locator("html").getAttribute("data-chat-identified-by");
+      if (got.id !== client.id || got.u.identifier_hash !== expected || got.u.email !== "client@demo.helixos.app" || got.u.name !== client.name) throw new Error(`setUser gets the member's id, name, email and the hex hash over that id: ${JSON.stringify(got)}`);
+      if (by !== (loaded ? "loaded" : "ready")) throw new Error(`the shell says how it was identified: ${by}`);
+      await ctxt.close();
+    }
     await logout(page);
-    console.log("✓ a member's page: the widget with the identifier hash, the CSP naming its host, no secret in the page");
+    console.log("✓ a member's page: the widget with the identifier hash, the CSP naming its host, no secret in the page; setUser called once the SDK has loaded (at once, or on chatbot:ready), and the shell says so");
 
     // ── 3. Switched in: no widget. ──
     await login(page, "As the coach");
