@@ -18,7 +18,9 @@ function create(): Db {
   const client = createClient({ url, authToken });
   // A local database file is shared by the dev server and the walks' own scripts: a read that meets another process's write
   // waits up to five seconds for it instead of failing at once with "database is locked". A remote database needs none of this.
-  if (url.startsWith("file:")) void client.execute("PRAGMA busy_timeout = 5000").catch(() => undefined);
+  // WAL mode goes with it: in the default rollback journal a writer blocks every reader, so one process's longer write failed
+  // the other's plain reads even inside the timeout; with WAL, readers never wait on a writer (writers still wait on writers).
+  if (url.startsWith("file:")) void client.execute("PRAGMA busy_timeout = 5000").then(() => client.execute("PRAGMA journal_mode = WAL")).catch(() => undefined);
   return drizzle(client, { schema });
 }
 

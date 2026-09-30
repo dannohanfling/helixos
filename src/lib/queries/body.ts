@@ -6,9 +6,9 @@ import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
-import { addDays, todayInTz } from "@/lib/dates";
+import { addDays, formatDate, rangeDays, startOfWeek, todayInTz } from "@/lib/dates";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
-import { bestSet, fmtSet, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, type WeightUnit } from "@/lib/engine/body-training";
+import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, weekTally, type WeightUnit } from "@/lib/engine/body-training";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 
 /**
@@ -219,6 +219,8 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
     : [];
   const ids = [...new Set([...(routine?.lines.map((l) => l.exerciseId) ?? []), ...daySets.map((s) => s.exerciseId)])].filter((id) => lib.byId.has(id));
   const history = await setsOf(workspaceId, userId, ids);
+  // Phase 3: the routine's lines against what's logged, and whether the session was finished.
+  const plan = sessionPlan(routine?.lines ?? [], daySets);
   const exercises = ids.map((id) => {
     const exercise = lib.byId.get(id)!;
     const all = history.filter((s) => s.exerciseId === id);
@@ -245,12 +247,49 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
     off: !!day?.off,
     session,
     routineName: session?.routineName ?? null,
+    completedAt: session?.completedAt ?? null,
+    note: session?.note ?? null,
+    plan,
     exercises,
     library: lib,
     suggested: routineForDay(lib.routines, typeId),
   };
 }
 export type TrainingDayView = NonNullable<Awaited<ReturnType<typeof trainingDay>>>;
+
+/**
+ * Consistency (phase 3): the last 12 weeks as a heatmap (a day's heat from its sets; Off and finished sessions named in the
+ * title), and this week's tally: days with a set logged, of the days whose day type has a routine tied to it.
+ */
+export async function trainingWeeks(workspaceId: string, userId: string, today: string) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const weekStart = startOfWeek(today);
+  const from = addDays(weekStart, -7 * 11);
+  const [sets, days, sessions, lib] = await Promise.all([
+    db.query.bodySets.findMany({ columns: { date: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, from)) }),
+    db.query.bodyDays.findMany({ columns: { date: true, off: true, dayTypeId: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, from)) }),
+    db.query.bodySessions.findMany({ columns: { date: true, routineName: true, completedAt: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), gte(schema.bodySessions.date, from)) }),
+    trainingLibrary(workspaceId, userId),
+  ]);
+  const setsOn = new Map<string, number>();
+  for (const s of sets) setsOn.set(s.date, (setsOn.get(s.date) ?? 0) + 1);
+  const dayRow = new Map(days.map((d) => [d.date, d]));
+  const sessionOn = new Map(sessions.map((s) => [s.date, s]));
+  const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
+  const offered = (date: string) => !!routineForDay(lib.routines, dayTypeIdFor(date, settings.weekPattern, refeed, dayRow.get(date)?.dayTypeId ?? null));
+  const weeks = Array.from({ length: 12 }, (_, i) => addDays(from, i * 7)).map((monday) => ({
+    monday,
+    days: rangeDays(monday, addDays(monday, 6)).map((date) => {
+      const n = setsOn.get(date) ?? 0;
+      const sess = sessionOn.get(date);
+      const what = dayRow.get(date)?.off ? "Off" : n ? `${n} set${n === 1 ? "" : "s"}${sess?.routineName ? ` · ${sess.routineName}` : ""}${sess?.completedAt ? " ✓" : ""}` : date > today ? "" : "nothing logged";
+      return { date, level: heatLevel(n), title: `${formatDate(date, { weekday: "short", month: "short", day: "numeric" })}${what ? `: ${what}` : ""}` };
+    }),
+  }));
+  const thisWeek = rangeDays(weekStart, addDays(weekStart, 6));
+  return { weeks, weekStart, tally: weekTally(thisWeek, (d) => (setsOn.get(d) ?? 0) > 0, offered) };
+}
 
 /** One exercise's history: a point per session (oldest first), each session's sets, and the PR. Null if it isn't the member's. */
 export async function exerciseHistory(workspaceId: string, userId: string, exerciseId: string) {

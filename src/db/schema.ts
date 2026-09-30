@@ -2580,6 +2580,9 @@ export const bodySessions = sqliteTable(
     date: text("date").notNull(),
     routineId: text("routine_id"),
     routineName: text("routine_name"),
+    /** Phase 3 (rev 237): "Finish workout" stamps the session done; logging another set reopens it. */
+    completedAt: text("completed_at"),
+    note: text("note"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("body_sessions_member_date").on(t.workspaceId, t.userId, t.date)],

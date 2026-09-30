@@ -93,3 +93,52 @@ export function routineForDay<T extends { dayTypeId: string | null }>(routines: 
   if (!dayTypeId) return null;
   return routines.find((r) => r.dayTypeId === dayTypeId) ?? null;
 }
+
+/* ───────── Phase 3 (rev 237): planned against actual, the week's tally, the heatmap ───────── */
+
+/** "8–10" → [8, 10]; "5" → [5, 5]; "8+" → [8, ∞); "AMRAP", "30s" and the like → null (no count to compare). */
+export function repsRange(target: string): [number, number] | null {
+  const t = target.trim().replace(/\s+/g, "");
+  let m = t.match(/^(\d+)[–\-—to]+(\d+)$/);
+  if (m) return [+m[1], +m[2]];
+  m = t.match(/^(\d+)\+$/);
+  if (m) return [+m[1], Infinity];
+  m = t.match(/^(\d+)$/);
+  if (m) return [+m[1], +m[1]];
+  return null;
+}
+
+/** How a set's reps sit against the plan: under its low end, in it, over its high end, or "none" with no countable target. */
+export function repsMark(reps: number, target: string | null | undefined): "under" | "in" | "over" | "none" {
+  const r = target ? repsRange(target) : null;
+  if (!r) return "none";
+  return reps < r[0] ? "under" : reps > r[1] ? "over" : "in";
+}
+
+export type ExercisePlan = { exerciseId: string; planned: number; reps: string; done: number; complete: boolean };
+export type SessionPlan = { exercises: ExercisePlan[]; plannedSets: number; doneSets: number; complete: boolean };
+
+/** The routine's lines against the sets logged: per exercise and in all. With no routine, every set counts and nothing is planned. */
+export function sessionPlan(lines: { exerciseId: string; sets: number; reps: string }[], sets: { exerciseId: string }[]): SessionPlan {
+  const exercises = lines.map((l) => {
+    const done = sets.filter((s) => s.exerciseId === l.exerciseId).length;
+    return { exerciseId: l.exerciseId, planned: l.sets, reps: l.reps, done, complete: done >= l.sets };
+  });
+  const plannedSets = exercises.reduce((a, x) => a + x.planned, 0);
+  return { exercises, plannedSets, doneSets: sets.length, complete: exercises.length > 0 && exercises.every((x) => x.complete) };
+}
+
+/** The heat of a day from its sets: none, a few, a session, a big one. */
+export function heatLevel(sets: number): 0 | 1 | 2 | 3 {
+  return sets === 0 ? 0 : sets < 5 ? 1 : sets < 12 ? 2 : 3;
+}
+
+/**
+ * "3 of 5 sessions this week": done is the days with a set logged; planned is the days whose day type has a routine tied to
+ * it (the week pattern says which), so a member with no routines tied gets "3 sessions" and no "of".
+ */
+export function weekTally(dates: string[], hasSets: (date: string) => boolean, routineOffered: (date: string) => boolean): { done: number; planned: number | null } {
+  const done = dates.filter(hasSets).length;
+  const planned = dates.filter(routineOffered).length;
+  return { done, planned: planned > 0 ? planned : null };
+}

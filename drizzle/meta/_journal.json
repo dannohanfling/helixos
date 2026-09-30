@@ -589,6 +589,13 @@
       "when": 1790789352318,
       "tag": "0083_body_composition",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "6",
+      "when": 1790794785571,
+      "tag": "0084_finish_training",
+      "breakpoints": true
     }
   ]
 }

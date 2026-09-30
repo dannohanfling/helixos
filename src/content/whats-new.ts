@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 23,
+    date: "2026-09-30",
+    title: "HumanOS: finish your workout",
+    lines: ["Training now counts your sets against the routine's plan (\"5 of 9 planned sets\", \"1 of 3 sets · 8–10 reps\" per exercise, a set under its reps marked), and a Finish workout button stamps the session done with an optional note. Logging another set reopens it.", "A Consistency card shows the last 12 weeks as a heatmap and \"3 of 5 sessions this week\", counting the days whose day type has a routine."],
+    audience: "coach",
+  },
+  {
     n: 22,
     date: "2026-09-30",
     title: "HumanOS: Weigh-ins",

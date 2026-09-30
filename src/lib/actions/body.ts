@@ -420,6 +420,30 @@ export async function logSetAction(formData: FormData): Promise<void> {
   if (exercise!.kind === "weight" && weight == null) back(trainingAt(date), `${exercise!.name}: enter the weight.`);
   const session = await sessionFor(workspaceId, userId, date, null);
   await db.insert(schema.bodySets).values({ id: newId(), workspaceId, userId, sessionId: session.id, exerciseId: exercise!.id, date, weight, unit: settings.weightUnit, reps });
+  // A set after "Finish workout" reopens the session (phase 3): finished means nothing more was logged.
+  if (session.completedAt) await db.update(schema.bodySessions).set({ completedAt: null }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
+  refresh();
+}
+
+/** "Finish workout" (phase 3): the day's session is stamped done, with a note if one was typed. Logging another set reopens it. */
+export async function finishSessionAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date) || date > v.today) back(TRAINING, "That day isn't open for a workout.");
+  const note = str(formData, "note").slice(0, 500) || null;
+  const session = await sessionFor(workspaceId, userId, date, null);
+  await db.update(schema.bodySessions).set({ completedAt: nowIso(), note }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
+  refresh();
+}
+
+/** Undo "Finish workout"; the note stays. */
+export async function reopenSessionAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date)) return;
+  await db.update(schema.bodySessions).set({ completedAt: null }).where(and(eq(schema.bodySessions.date, date), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
   refresh();
 }
 

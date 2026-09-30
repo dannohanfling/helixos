@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { Card } from "@/components/ui";
+import { StreakCalendar } from "@/components/charts";
 import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { addDays, formatDate } from "@/lib/dates";
-import { fmtSet, fmtTarget } from "@/lib/engine/body-training";
-import { requireBodyEnabled, trainingDay, type TrainingDayView } from "@/lib/queries/body";
-import { deleteSetAction, logSetAction, setDayOffAction, startSessionAction } from "@/lib/actions/body";
+import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
+import { requireBodyEnabled, trainingDay, trainingWeeks, type TrainingDayView } from "@/lib/queries/body";
+import { deleteSetAction, finishSessionAction, logSetAction, reopenSessionAction, setDayOffAction, startSessionAction } from "@/lib/actions/body";
 
 export const metadata = { title: "HumanOS · Training" };
 
@@ -20,7 +21,11 @@ function ExerciseCard({ x, date, unit }: { x: TrainingDayView["exercises"][numbe
           {x.exercise.name}
         </Link>
         <span className="text-xs text-ink-3">
-          {x.target ? <span data-testid="training-target">{fmtTarget(x.target)}</span> : null}
+          {x.target ? (
+            <span data-testid="training-plan" data-done={x.today.length >= x.target.sets ? "1" : "0"}>
+              {x.today.length} of {x.target.sets} sets · {x.target.reps || "?"} reps
+            </span>
+          ) : null}
           {x.target && x.pr ? " · " : null}
           {x.pr ? <span data-testid="training-pr">PR {x.pr.text}</span> : null}
         </span>
@@ -37,9 +42,10 @@ function ExerciseCard({ x, date, unit }: { x: TrainingDayView["exercises"][numbe
       {x.today.length ? (
         <ol className="mt-2 flex flex-wrap gap-2" data-testid="training-sets">
           {x.today.map((s, i) => (
-            <li key={s.id} className="flex items-center gap-1 rounded-lg bg-humanos-soft px-2.5 py-1 text-sm tabular" data-testid="training-set" data-pr={s.pr ? "1" : "0"}>
+            <li key={s.id} className="flex items-center gap-1 rounded-lg bg-humanos-soft px-2.5 py-1 text-sm tabular" data-testid="training-set" data-pr={s.pr ? "1" : "0"} data-plan={repsMark(s.reps, x.target?.reps)}>
               <span className="text-ink-3">{i + 1}.</span> {fmtSet(s, unit as "lb" | "kg", x.exercise.kind)}
               {s.pr ? <span title="A new PR">🏆</span> : null}
+              {repsMark(s.reps, x.target?.reps) === "under" ? <span title={`Under the planned ${x.target!.reps} reps`} className="text-warn" aria-label="under plan">▾</span> : null}
               <form action={deleteSetAction}>
                 <input type="hidden" name="id" value={s.id} />
                 <SubmitButton className="ml-1 text-ink-3 hover:text-danger" pendingText="…" aria-label={`Delete set ${i + 1}`} data-testid="training-delete-set">
@@ -77,7 +83,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
   requireBodyEnabled(v);
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= v.today ? sp.date : v.today;
-  const t = await trainingDay(v.workspace.id, v.user.id, date);
+  const [t, weeks] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today)]);
   if (!t) {
     return (
       <>
@@ -200,9 +206,43 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
           </div>
         </Card>
       ) : (
-        <p className="mb-3 text-sm text-ink-2" data-testid="training-session">
-          <span className="font-semibold text-ink">{t.routineName ?? "Workout"}</span> · {t.exercises.reduce((a, x) => a + x.today.length, 0)} sets logged
-        </p>
+        <section className="card mb-3 p-4" data-testid="training-session" data-complete={t.completedAt ? "1" : "0"}>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+            <span>
+              <span className="font-semibold">{t.routineName ?? "Workout"}</span>
+              <span className="text-ink-2"> · {t.plan.plannedSets ? `${t.plan.doneSets} of ${t.plan.plannedSets} planned sets` : `${t.plan.doneSets} set${t.plan.doneSets === 1 ? "" : "s"} logged`}</span>
+            </span>
+            {t.completedAt ? (
+              <span className="text-humanos-ink" data-testid="training-finished">
+                ✓ Finished{t.note ? <span className="text-ink-2"> · {t.note}</span> : null}
+              </span>
+            ) : null}
+          </div>
+          {t.plan.plannedSets ? (
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={Math.min(100, Math.round((t.plan.doneSets / t.plan.plannedSets) * 100))} aria-valuemin={0} aria-valuemax={100}>
+              <div className="h-full rounded-full bg-humanos transition-[width] duration-500" style={{ width: `${Math.min(100, Math.round((t.plan.doneSets / t.plan.plannedSets) * 100))}%` }} />
+            </div>
+          ) : null}
+          {t.completedAt ? (
+            <form action={reopenSessionAction} className="mt-2">
+              <input type="hidden" name="date" value={date} />
+              <SubmitButton className="btn btn-ghost btn-xs" pendingText="…" data-testid="training-reopen">
+                Reopen
+              </SubmitButton>
+            </form>
+          ) : (
+            <form action={finishSessionAction} className="mt-3 flex flex-wrap items-end gap-2" data-testid="training-finish-form">
+              <input type="hidden" name="date" value={date} />
+              <label className="w-full min-w-0 sm:w-auto sm:flex-1">
+                <span className="label">Note (optional)</span>
+                <input name="note" className="field py-2 text-base sm:py-1 sm:text-sm" maxLength={500} placeholder="How it went" defaultValue={t.note ?? ""} />
+              </label>
+              <SubmitButton className={`btn btn-sm ${t.plan.complete ? "btn-humanos" : "btn-soft"}`} pendingText="Finishing…" data-testid="training-finish">
+                Finish workout
+              </SubmitButton>
+            </form>
+          )}
+        </section>
       )}
 
       {!t.off && (t.session || t.library.exercises.length) ? (
@@ -242,6 +282,22 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
             </Card>
           ) : null}
         </div>
+      ) : null}
+
+      {weeks && (weeks.weeks.some((w) => w.days.some((d) => d.level > 0)) || t.session) ? (
+        <Card className="mt-4" title="Consistency" id="consistency">
+          <p className="mb-2 text-sm" data-testid="training-week">
+            <b className="text-humanos-ink">
+              {weeks.tally.done}
+              {weeks.tally.planned != null ? ` of ${weeks.tally.planned}` : ""} session{weeks.tally.planned === 1 || (weeks.tally.planned == null && weeks.tally.done === 1) ? "" : "s"}
+            </b>{" "}
+            this week{weeks.tally.planned == null ? ". Tie a routine to a day type and this counts the days planned." : "."}
+          </p>
+          <div data-testid="training-heat">
+            <StreakCalendar weeks={weeks.weeks} rows={7} tone="humanos" labelFor={(m) => (weeks.weeks.findIndex((w) => w.monday === m) % 4 === 0 ? formatDate(m, { month: "short" }) : "")} />
+          </div>
+          <p className="mt-2 text-[11px] text-ink-3">Last 12 weeks, a day&apos;s shade from its sets. Hover a day for what it held.</p>
+        </Card>
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2 text-sm">

@@ -78,13 +78,14 @@ export function Sparkline({ values, width = 120, height = 32 }: { values: number
   );
 }
 
-/** GitHub-style weekday heat calendar. Sequential single hue. */
-export function StreakCalendar({ weeks, labelFor }: { weeks: { monday: string; days: { date: string; level: 0 | 1 | 2 | 3; title: string }[] }[]; labelFor: (monday: string) => string }) {
-  const shade = ["var(--surface-2)", "color-mix(in oklab, var(--good) 35%, var(--surface))", "color-mix(in oklab, var(--good) 65%, var(--surface))", "var(--good)"];
+/** GitHub-style weekday heat calendar. Sequential single hue: Numbers' green, or HumanOS's cyan (`tone`); 5 weekdays or all 7 (`rows`). */
+export function StreakCalendar({ weeks, labelFor, rows = 5, tone = "good" }: { weeks: { monday: string; days: { date: string; level: 0 | 1 | 2 | 3; title: string }[] }[]; labelFor: (monday: string) => string; rows?: 5 | 7; tone?: "good" | "humanos" }) {
+  const hue = tone === "humanos" ? "var(--humanos)" : "var(--good)";
+  const shade = ["var(--surface-2)", `color-mix(in oklab, ${hue} 35%, var(--surface))`, `color-mix(in oklab, ${hue} 65%, var(--surface))`, hue];
   return (
     <div className="overflow-x-auto">
       <div className="inline-grid gap-1" style={{ gridTemplateColumns: `auto repeat(${weeks.length}, 14px)` }}>
-        {["M", "T", "W", "T", "F"].map((d, r) => (
+        {["M", "T", "W", "T", "F", "S", "S"].slice(0, rows).map((d, r) => (
           <div key={d + r} className="contents">
             <div className="pr-1 text-[10px] leading-[14px] text-ink-3">{d}</div>
             {weeks.map((w) => {

@@ -156,6 +156,8 @@ async function main() {
     if (!link || link.body.email !== "client@demo.helixos.app" || link.body.user_ns !== "walk-ns-1" || link.body.channel !== "messenger" || link.body.name !== client.name) throw new Error(`the bot got link with the member's own email: ${JSON.stringify(link)}`);
     if (Object.keys(link.body).sort().join(",") !== "at,channel,email,event,name,user_ns") throw new Error(`link carries only what was promised: ${Object.keys(link.body)}`);
     const row = page.locator('[data-testid="linked-chat"]');
+    // Settings streams: the address changes before the row has landed, so wait for it rather than counting once.
+    await row.first().waitFor({ timeout: 15000 }).catch(() => undefined);
     if ((await row.count()) !== 1 || (await row.getAttribute("data-channel")) !== "messenger") throw new Error("Settings lists the linked chat");
     if (!(await page.locator('[data-testid="chat-note"]').innerText()).includes("linked")) throw new Error("the note says it's linked");
     await page.goto(`${base}${path}`);

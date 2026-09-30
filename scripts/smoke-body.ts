@@ -357,7 +357,7 @@ async function main() {
     const benchLast = (await client.locator(`${card("Bench press")} [data-testid="training-last"]`).textContent()) ?? "";
     const benchPr = (await client.locator(`${card("Bench press")} [data-testid="training-pr"]`).textContent()) ?? "";
     if (!benchLast.includes("185 × 5 · 185 × 5") || benchPr !== "PR 185 × 5") throw new Error(`last time and the PR beside the bench: "${benchLast}", "${benchPr}"`);
-    if ((await client.locator(`${card("Bench press")} [data-testid="training-target"]`).textContent()) !== "3 × 5") throw new Error("the routine's target shows");
+    if (!((await client.locator(`${card("Bench press")} [data-testid="training-plan"]`).textContent()) ?? "").includes("0 of 3 sets · 5 reps")) throw new Error("the routine's plan shows, nothing logged yet");
     const openW = await client.locator(`${card("Bench press")} [data-testid="training-log-form"] input[name="weight"]`).inputValue();
     const openR = await client.locator(`${card("Bench press")} [data-testid="training-log-form"] input[name="reps"]`).inputValue();
     if (openW !== "185" || openR !== "5") throw new Error(`the set form opens on last time's set: ${openW} × ${openR}`);
@@ -370,9 +370,28 @@ async function main() {
     await press(client, `${card("Pull-up")} [data-testid="training-delete-set"] >> nth=1`, async () => (await setsIn("Pull-up").count()) === 1, "the mistaken set gone");
     const sets = await db.query.bodySets.findMany({ where: mine(schema.bodySets) });
     const want = [`${yesterday} Bench press 185x5 lb`, `${yesterday} Bench press 185x5 lb`, `${today} Bench press 190x5 lb`, `${today} Pull-up nullx10 lb`].sort();
+    // (a fifth set, Pull-up 7, is logged below, after Finish)
     const got = sets.map((x) => `${x.date} ${exRows.find((r) => r.id === x.exerciseId)!.name} ${x.weight}x${x.reps} ${x.unit}`).sort();
     if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`the sets saved as logged: ${got.join("; ")}`);
     await noSideScroll(client, "/body/training with sets");
+    // Phase 3: sets against the plan, Finish with a note, a set after finishing reopens, and the week's tally with the heatmap.
+    const header = async () => (await client.locator('[data-testid="training-session"]').textContent()) ?? "";
+    if (!(await header()).includes("2 of 6 planned sets")) throw new Error(`the header counts sets against the routine's plan: "${await header()}"`);
+    if (!((await client.locator(`${card("Bench press")} [data-testid="training-plan"]`).textContent()) ?? "").includes("1 of 3 sets")) throw new Error("each exercise counts its sets against the plan");
+    if ((await setsIn("Bench press").first().getAttribute("data-plan")) !== "in" || (await setsIn("Pull-up").first().getAttribute("data-plan")) !== "in") throw new Error("190 × 5 against 5, and 10 against 8–10, are in plan");
+    await fillExact(client, '[data-testid="training-finish-form"] input[name="note"]', "Felt strong");
+    await press(client, '[data-testid="training-finish"]', async () => (await client.locator('[data-testid="training-finished"]').count()) > 0, "the session finished");
+    const finished = await db.query.bodySessions.findFirst({ where: and(mine(schema.bodySessions), eq(schema.bodySessions.date, today)) });
+    if (!finished?.completedAt || finished.note !== "Felt strong" || !((await client.locator('[data-testid="training-finished"]').textContent()) ?? "").includes("Felt strong")) throw new Error("Finish stamps the session with its note");
+    await logSet("Pull-up", "", "7");
+    if ((await db.query.bodySessions.findFirst({ where: and(mine(schema.bodySessions), eq(schema.bodySessions.date, today)) }))?.completedAt) throw new Error("a set after finishing reopens the session");
+    if ((await client.locator('[data-testid="training-finished"]').count()) || (await setsIn("Pull-up").nth(1).getAttribute("data-plan")) !== "under") throw new Error("reopened, and 7 against 8–10 is under plan");
+    const { trainingWeeks } = await import("@/lib/queries/body");
+    const tw = (await trainingWeeks(mem.workspaceId, maya.id, today))!;
+    const weekText = (await client.locator('[data-testid="training-week"]').textContent()) ?? "";
+    if (tw.tally.planned == null || !weekText.includes(`${tw.tally.done} of ${tw.tally.planned} session`)) throw new Error(`the week's tally is the engine's (${tw.tally.done} of ${tw.tally.planned}): "${weekText}"`);
+    if ((await client.locator('[data-testid="training-heat"] .rounded-sm').count()) !== 84) throw new Error("the heatmap draws 12 weeks of 7 days");
+    await noSideScroll(client, "/body/training finished");
     // The history: a point per session, and the PR.
     await client.goto(`${base}/body/training/${exId("Bench press")}`);
     await client.locator('[data-testid="trend-line"]').waitFor({ timeout: 30000 });
@@ -551,7 +570,7 @@ async function main() {
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
     if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
-    if ((own.body_sets ?? []).length !== 4 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
+    if ((own.body_sets ?? []).length !== 5 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
     if ((own.body_entries ?? []).length !== 3 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // Download and Delete are two separate cards (rev 230); the confirm stays shut until DELETE is typed exactly.
     if (!(await client.locator('#download [data-testid="body-export"]').count()) || (await client.locator('#download [data-testid="body-erase"]').count()) || !(await client.locator('[data-testid="body-delete-card"] [data-testid="body-erase"]').count())) throw new Error("Download and Delete sit in separate cards");
