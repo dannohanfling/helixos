@@ -25,19 +25,23 @@ import { setBodyBetaAction } from "@/lib/actions/body";
 import { linkedChats } from "@/lib/chat";
 import { setChatProgressShareAction, unlinkChatAction } from "@/lib/actions/chat";
 import { CHANNEL_LABELS } from "@/lib/engine/chat";
+import { disconnectAppAction, setConnectedAppsOpenAction } from "@/lib/actions/mcp";
+import { SCOPE_WORDS, isScope } from "@/lib/engine/mcp";
+import { isNull } from "drizzle-orm";
 
 export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string }> }) {
   const v = await requireViewer();
   // The storage figure counts rows; an object without a row (an upload that never finished recording) is reconciled away
   // here, the one place the workspace's holdings are looked at, so the figure and the store agree. After the response:
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam } = await searchParams;
+  const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   const savedKit = v.role === "coach" ? await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) }) : null;
   // A refused kit comes back as typed, so the person fixes the one pair named rather than typing thirteen fields again.
@@ -52,6 +56,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const attempted = parseDraft(draft);
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
   const [goal, conn, ghlIntegration, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel"), linkedChats(v.workspace.id, v.user.id)]);
+  const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   // Body ships dark (rev 195); the workspace owner alone can switch it on for themselves here (rev 209).
   const bodyOwner = await isWorkspaceOwner(v);
@@ -267,6 +272,39 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="mt-2 text-xs text-ink-3">Attachments on your proofs, in private storage.</p>
         </Card>
         {goalCard}
+        <Card id="connected-apps" title="Connected apps">
+          {/* The MCP server (rev 224): the apps this member let act as them, and the way to cut each one. */}
+          {appsNote ? <p className="mb-2 text-sm text-good" data-testid="apps-note">{appsNote}</p> : null}
+          {v.role === "coach" ? (
+            <form action={setConnectedAppsOpenAction} className="mb-3 flex flex-wrap items-center gap-3 text-sm" data-testid="apps-open" data-on={v.workspace.connectedAppsOpen ? "1" : "0"}>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="connectedAppsOpen" defaultChecked={v.workspace.connectedAppsOpen} data-testid="apps-open-toggle" /> Connected apps open to clients
+              </label>
+              <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="apps-open-save">
+                Save
+              </SubmitButton>
+            </form>
+          ) : null}
+          {apps.length ? (
+            <ul className="divide-y text-sm" data-testid="connected-apps">
+              {apps.map((a) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="connected-app" data-scopes={a.scopes.join(" ")}>
+                  <span className="font-medium">{a.name}</span>
+                  <span className="text-xs text-ink-3">{a.scopes.filter(isScope).map((s) => SCOPE_WORDS[s].label).join(", ") || "nothing yet"}</span>
+                  <span className="text-xs text-ink-3">connected {formatDateTime(a.createdAt.includes("T") ? a.createdAt : a.createdAt.replace(" ", "T") + "Z", v.tz)}{a.lastUsedAt ? ` · last used ${formatDateTime(a.lastUsedAt, v.tz)} (${a.lastTool})` : " · not used yet"}</span>
+                  <form action={disconnectAppAction} className="ml-auto">
+                    <input type="hidden" name="id" value={a.id} />
+                    <SubmitButton className="text-xs text-ink-3 underline" pendingText="Disconnecting…" data-testid="app-disconnect">
+                      Disconnect
+                    </SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-ink-2" data-testid="connected-apps-empty">None yet. <Link href="/connect" className="underline">Connect HelixOS to Claude</Link> to read and write your own HelixOS from a chat.</p>
+          )}
+        </Card>
         <Card id="linked-chats" title="Your coach's assistant">
           {/* Community Loyalty chat (rev 241): the member's own switch on progress pushes, then the chats they confirmed as theirs. */}
           {chatNote ? <p className="mb-2 text-sm text-good" data-testid="chat-note">{chatNote}</p> : null}

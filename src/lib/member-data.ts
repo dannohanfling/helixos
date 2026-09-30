@@ -77,6 +77,9 @@ export const MEMBER_TABLES = {
   // What a coach changed while working in this member's HelixOS, and their switches in and out (rev 216).
   coach_changes: schema.coachChanges,
   chat_links: schema.chatLinks,
+  connected_apps: schema.connectedApps,
+  oauth_codes: schema.oauthCodes,
+  mcp_calls: schema.mcpCalls,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 
@@ -86,6 +89,7 @@ export const BODY_LABELS = new Set<MemberLabel>(["body_settings", "body_day_type
 /** No owner column of their own: each row belongs to whoever owns its parent. Listed parents before children. */
 export const CHILD_TABLES = [
   { label: "messages", table: schema.messages, fk: "contactId", parent: "leads" },
+  { label: "oauth_tokens", table: schema.oauthTokens, fk: "appId", parent: "connected_apps" },
   { label: "content_versions", table: schema.contentVariants, fk: "contentItemId", parent: "content" },
   { label: "offer_components", table: schema.offerComponents, fk: "offerId", parent: "offers" },
   { label: "webinar_beliefs", table: schema.webinarBeliefs, fk: "webinarId", parent: "webinars" },
@@ -123,6 +127,7 @@ export const WORKSPACE_TABLES = {
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */
 export const NOT_MEMBER_DATA: Record<string, string> = {
   users: "the account itself: removed last, and only when no membership in another workspace remains",
+  oauth_clients: "an app that registered itself with the MCP server (Claude's connector): nobody's data, the same row for every member who connects it",
   memberships: "the membership itself: removed after everything that hangs off it (the export shows it as the profile)",
   workspaces: "removed only when its last member is deleted",
   pathway_stages: "the shared Success Pathway, the same for everyone",
@@ -144,6 +149,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash"]);
+export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);

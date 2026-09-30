@@ -27,23 +27,28 @@ export type Viewer = {
 export type Switched = { membershipId: string; mode: "view" | "work"; clientName: string; coachName: string };
 
 /** Resolves the signed-in viewer once per request. */
+/**
+ * The viewer for one member of one workspace, as themselves: what a session cookie resolves to, and what a connected app's
+ * token (the MCP server) resolves to. A removed member has no access: every guard denies uniformly. No session version here:
+ * that check belongs to cookies, and a password change keeps connected apps (rev 247, B4).
+ */
+export async function viewerFor(userId: string, workspaceId: string): Promise<Viewer | null> {
+  const membership = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)) });
+  if (!membership) return null;
+  if (membership.removedAt) return null;
+  const [user, workspace] = await Promise.all([db.query.users.findFirst({ where: eq(schema.users.id, userId) }), db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, workspaceId) })]);
+  if (!user || !workspace) return null;
+  const tz = membership.timezone || workspace.timezone;
+  return { user, workspace, membership, role: membership.role, tz, today: todayInTz(tz), hour: hourInTz(tz), actor: user, switchedInto: null };
+}
+
 export const getViewer = cache(async (): Promise<Viewer | null> => {
   const session = await readSession();
   if (!session) return null;
-  const membership = await db.query.memberships.findFirst({
-    where: and(eq(schema.memberships.userId, session.userId), eq(schema.memberships.workspaceId, session.workspaceId)),
-  });
-  if (!membership) return null;
-  // A removed member has no access: every guard denies uniformly. requireViewer turns this into the "access ended" page.
-  if (membership.removedAt) return null;
-  const [user, workspace] = await Promise.all([
-    db.query.users.findFirst({ where: eq(schema.users.id, session.userId) }),
-    db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, session.workspaceId) }),
-  ]);
-  if (!user || !workspace) return null;
+  const own = await viewerFor(session.userId, session.workspaceId);
+  if (!own) return null;
+  const { user, workspace, membership } = own;
   if ((session.sv ?? 0) !== user.sessionVersion) return null;
-  const tz = membership.timezone || workspace.timezone;
-  const own: Viewer = { user, workspace, membership, role: membership.role, tz, today: todayInTz(tz), hour: hourInTz(tz), actor: user, switchedInto: null };
   if (!session.sw || membership.role !== "coach") return own;
   // Switched into a client: checked on every request, not only at the switch. A client that is gone, removed, a coach, or in
   // another workspace ends the switch (the coach is simply back in their own account).

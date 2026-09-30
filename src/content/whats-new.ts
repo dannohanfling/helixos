@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 21,
+    date: "2026-09-30",
+    title: "Connect HelixOS to Claude",
+    lines: ["Add HelixOS as a connector in Claude and it can read your HelixOS from a chat, acting only as you, with only the areas you tick. Settings shows every connected app with Disconnect, which cuts it at once. See Connect HelixOS to Claude in the More menu for the address and the steps.", "This first release answers who you are; tools for Today, tasks, offers and more follow."],
+    audience: "everyone",
+  },
+  {
     n: 20,
     date: "2026-09-30",
     title: "HumanOS: Training",

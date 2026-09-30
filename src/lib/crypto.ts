@@ -2,7 +2,7 @@
  * Secrets at rest. AES-256-GCM with a key derived from ENCRYPTION_KEY (or SESSION_SECRET when that's all that is set).
  * Values are stored as `enc:v1:<iv>.<tag>.<ciphertext>` (base64url). Anything without the prefix is returned as-is so older rows keep working.
  */
-import { createCipheriv, createDecipheriv, createHash, createPublicKey, randomBytes, timingSafeEqual, verify as verifySignature } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, createPublicKey, randomBytes, timingSafeEqual, verify as verifySignature } from "node:crypto";
 
 const PREFIX = "enc:v1:";
 
@@ -85,4 +85,13 @@ export function verifyEd25519(rawBody: Buffer | string, signatureB64: string, pu
   } catch {
     return false;
   }
+}
+
+/** A signature over a short value under the same key as the seals, for a form that must only approve the request it rendered. */
+export function signValue(value: string): string {
+  return createHmac("sha256", key()).update(value, "utf8").digest("base64url");
+}
+
+export function verifyValue(value: string, signature: string): boolean {
+  return safeEqual(signValue(value), signature);
 }

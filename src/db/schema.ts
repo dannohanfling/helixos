@@ -18,6 +18,8 @@ export const workspaces = sqliteTable("workspaces", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   timezone: text("timezone").notNull().default("America/Los_Angeles"),
+  /** "Connected apps open to clients" (MCP, rev 247 B5): whether clients may connect Claude to their HelixOS. On by default; coaches always may. */
+  connectedAppsOpen: integer("connected_apps_open", { mode: "boolean" }).notNull().default(true),
   clientInviteCode: text("client_invite_code").notNull().unique(),
   coachInviteCode: text("coach_invite_code").notNull().unique(),
   airtableBaseId: text("airtable_base_id"),
@@ -2413,6 +2415,94 @@ export const bodyShareEvents = sqliteTable(
 );
 export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
 
+/**
+ * The HelixOS MCP server's OAuth (rev 224, approved rev 247): HelixOS is the authorization server. A client app (Claude's
+ * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
+ * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
+ */
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "library", "webinars", "essence", "body"] as const;
+
+/** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
+export const oauthClients = sqliteTable("oauth_clients", {
+  id: id(),
+  name: text("name").notNull(),
+  redirectUris: text("redirect_uris", { mode: "json" }).$type<string[]>().notNull().default([]),
+  createdAt: createdAt(),
+});
+
+/** One authorization code: single use, ten minutes, bound to the client, its redirect URI, the PKCE challenge, the resource and the ticked scopes. */
+export const oauthCodes = sqliteTable(
+  "oauth_codes",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    clientId: text("client_id").notNull(),
+    codeHash: text("code_hash").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    resource: text("resource"),
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("oauth_codes_hash").on(t.codeHash)],
+);
+
+/** A member's grant to one app: the scopes they ticked, when it was last used and for what, and when they cut it. Settings lists these. */
+export const connectedApps = sqliteTable(
+  "connected_apps",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    clientId: text("client_id").notNull(),
+    name: text("name").notNull(),
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    lastUsedAt: text("last_used_at"),
+    lastTool: text("last_tool"),
+    revokedAt: text("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("connected_apps_member").on(t.workspaceId, t.userId)],
+);
+
+/** Access (one hour) and refresh (thirty days) tokens of a grant, by hash. A refresh token is used once; a second use revokes the grant. */
+export const oauthTokens = sqliteTable(
+  "oauth_tokens",
+  {
+    id: id(),
+    appId: text("app_id").notNull(),
+    kind: text("kind", { enum: ["access", "refresh"] }).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    revokedAt: text("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("oauth_tokens_hash").on(t.tokenHash), index("oauth_tokens_app").on(t.appId)],
+);
+
+/** Every tool call: which app, which tool, whether it worked and how long it took. Never the arguments. */
+export const mcpCalls = sqliteTable(
+  "mcp_calls",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    appId: text("app_id").notNull(),
+    tool: text("tool").notNull(),
+    ok: integer("ok", { mode: "boolean" }).notNull().default(true),
+    error: text("error"),
+    ms: integer("ms").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [index("mcp_calls_app").on(t.appId, t.createdAt)],
+);
+
 /** The chat channels Community Loyalty links (rev 247): chat only. Email and SMS run through GoHighLevel and are never here. */
 export const CHAT_CHANNELS = ["messenger", "instagram", "whatsapp", "telegram", "webchat"] as const;
 
@@ -2542,3 +2632,6 @@ export const coachChanges = sqliteTable(
 );
 export type CoachChange = typeof coachChanges.$inferSelect;
 export type ChatLink = typeof chatLinks.$inferSelect;
+export type OauthClient = typeof oauthClients.$inferSelect;
+export type ConnectedApp = typeof connectedApps.$inferSelect;
+export type OauthToken = typeof oauthTokens.$inferSelect;

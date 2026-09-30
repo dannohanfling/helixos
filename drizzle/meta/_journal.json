@@ -575,6 +575,13 @@
       "when": 1790738692791,
       "tag": "0081_body_workouts",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "6",
+      "when": 1790785192857,
+      "tag": "0082_mcp_core",
+      "breakpoints": true
     }
   ]
 }

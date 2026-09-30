@@ -5,7 +5,7 @@ import { SESSION_COOKIE } from "@/lib/session";
 // Inbound machine endpoints authenticate with their own secrets, never a browser session.
 // The manifest and icons must load without a session: the browser fetches them on the login page and when installing the app.
 // /g (a lead magnet's tracked link), /m (its hosted page) and /files (its public objects, and only those) are read by strangers.
-const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files"];
+const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/mcp", "/oauth/register", "/oauth/token", "/oauth/revoke", "/.well-known", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,7 +16,8 @@ export function proxy(request: NextRequest) {
   if (!isPublic && !hasSession) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", pathname);
+    // The whole address, query included: the OAuth consent screen (/oauth/authorize?client_id=...) needs its parameters back.
+    url.searchParams.set("next", pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
   if (pathname === "/login" && hasSession) {

@@ -69,6 +69,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach/import", label: "Import from Airtable", icon: "📥", coachOnly: true, hint: "a client's base into HelixOS" },
       { href: "/integrations", label: "Integrations", icon: "🔌", coachOnly: true },
       { href: "/whats-new", label: "What's new", icon: "✨", hint: "latest changes" },
+      { href: "/connect", label: "Connect to Claude", icon: "🔌", hint: "HelixOS from a chat" },
     ],
   },
 ];
