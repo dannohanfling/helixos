@@ -84,6 +84,13 @@ describe("Community Loyalty chat: the secret stays on the server", () => {
   it("the Content-Security-Policy names the widget's host, not the web, and reports what it blocks", () => {
     const cfg = readFileSync(join(SRC, "..", "next.config.ts"), "utf8");
     expect(cfg).toMatch(/const chatHosts = "https:\/\/communityloyalty\.io https:\/\/\*\.communityloyalty\.io";/);
+    // The widget's own SDK and geo lookup (rev 266): script and connections from both, the chat frame from the SDK host only.
+    expect(cfg).toMatch(/const chatSdkHosts = "https:\/\/sdk\.dfktv2\.com https:\/\/ipapi\.co";/);
+    expect(cfg).toMatch(/const chatFrameHosts = "https:\/\/sdk\.dfktv2\.com";/);
+    expect(cfg).toMatch(/script-src[^\n]*\$\{chatSdkHosts\}/);
+    expect(cfg).toMatch(/connect-src[^\n]*\$\{chatSdkHosts\}/);
+    expect(cfg).toMatch(/frame-src 'self' \$\{chatHosts\} \$\{chatFrameHosts\}/);
+    expect(cfg).not.toMatch(/frame-src[^\n]*ipapi/);
     expect(cfg).toMatch(/report-uri \/api\/csp-report/);
     expect(cfg).not.toMatch(/script-src[^\n]*https:\s/);
   });

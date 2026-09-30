@@ -22,15 +22,19 @@ const blobApiSource = `${blobApi.origin}${blobApi.pathname.replace(/\/?$/, "/")}
 // stylesheet, its chat frame and its connections. A host it loads beyond these shows up in the server log as `[csp] blocked`
 // (src/app/api/csp-report/route.ts) and is added here by name, never as a wildcard over the web.
 const chatHosts = "https://communityloyalty.io https://*.communityloyalty.io";
+// float.js only sets window.chatbotSettings, then loads the real SDK (script, the chat frame, audio) from sdk.dfktv2.com and a
+// geo lookup from ipapi.co (handoff rev 266, read from the loaded widget). Named here, not found by guessing.
+const chatSdkHosts = "https://sdk.dfktv2.com https://ipapi.co";
+const chatFrameHosts = "https://sdk.dfktv2.com";
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${chatHosts}${dev ? " 'unsafe-eval'" : ""}`,
+  `script-src 'self' 'unsafe-inline' ${chatHosts} ${chatSdkHosts}${dev ? " 'unsafe-eval'" : ""}`,
   `style-src 'self' 'unsafe-inline' ${chatHosts}`,
   "img-src 'self' data: blob: https:",
   "media-src 'self' https:",
   `font-src 'self' data: ${chatHosts}`,
-  `connect-src 'self' ${blobApiSource} ${chatHosts} wss://communityloyalty.io wss://*.communityloyalty.io${dev ? " ws: wss:" : ""}`,
-  `frame-src 'self' ${chatHosts}`,
+  `connect-src 'self' ${blobApiSource} ${chatHosts} ${chatSdkHosts} wss://communityloyalty.io wss://*.communityloyalty.io${dev ? " ws: wss:" : ""}`,
+  `frame-src 'self' ${chatHosts} ${chatFrameHosts}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
