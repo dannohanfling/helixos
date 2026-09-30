@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 27,
+    date: "2026-09-30",
+    title: "HumanOS: your week",
+    lines: ["A \"This week\" page from Log and Training: days logged and in band, average calories, protein against its floor and fat against its ceiling, sessions of those planned with sets and PRs, your average weight and its change against last week, and whether your weight goal is on pace.", "Step back a week at a time; every figure is computed from your days, never stored. In Claude, ask for \"my week\"."],
+    audience: "coach",
+  },
+  {
     n: 26,
     date: "2026-09-30",
     title: "Tasks brought over from Airtable wait for you",

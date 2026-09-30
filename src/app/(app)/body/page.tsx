@@ -307,7 +307,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
             </Card>
           ) : null}
 
-          <Card title="Last 7 days">
+          <Card title="Last 7 days" action={<Link href="/body/week" className="text-xs text-ink-2 hover:underline" data-testid="body-week-link">This week →</Link>}>
             <ul className="space-y-1 text-sm" data-testid="body-recent">
               {recent.map((r) => (
                 <li key={r.date}>

@@ -550,6 +550,29 @@ async function main() {
     await press(client, `${eggRow} [data-testid="pantry-use"]`, async () => (await client.locator(eggRow).count()) === 0, "the eggs gone");
     await noSideScroll(client, "/body/pantry");
     console.log("✓ pantry: 16 oz raw steak and 12 eggs on the shelf; the steak (use by in two days) to use soon on Pantry and Log; par 24 oz gives 8 oz to buy; 16 → 9.8 oz weighed learns a 61% yield; 8 oz logged raw lands as 4.88 oz cooked and the shelf keeps 8 oz raw; the eggs used up by hand");
+    // ── The weekly rollup (phase 6): the page's tiles against the query's own numbers, last week reachable, next week shut. ──
+    const { bodyWeek } = await import("@/lib/queries/body");
+    const { startOfWeek } = await import("@/lib/dates");
+    const wk = (await bodyWeek(mem.workspaceId, maya.id, startOfWeek(today), today))!;
+    await client.goto(`${base}/body`);
+    await client.locator('[data-testid="body-week-link"]').click();
+    await client.waitForURL(/\/body\/week/);
+    await client.locator('[data-testid="week-nutrition"]').waitFor({ timeout: 30000 });
+    const nut = client.locator('[data-testid="week-nutrition"]');
+    if ((await nut.getAttribute("data-logged")) !== String(wk.nutrition.daysLogged) || (await nut.getAttribute("data-judged")) !== String(wk.nutrition.daysJudged) || (await nut.getAttribute("data-in-band")) !== String(wk.nutrition.daysInBand)) throw new Error("the nutrition tiles carry the query's days logged, judged and in band");
+    if (wk.nutrition.daysLogged < 1 || !((await nut.textContent()) ?? "").includes(fmtMacro("cal", wk.nutrition.avgCal!))) throw new Error(`the week's average calories are the query's: ${wk.nutrition.avgCal}`);
+    const tr = client.locator('[data-testid="week-training"]');
+    if ((await tr.getAttribute("data-sessions")) !== String(wk.training.sessions) || (await tr.getAttribute("data-sets")) !== String(wk.training.sets) || (await tr.getAttribute("data-prs")) !== String(wk.training.prs) || wk.training.prs < 1) throw new Error(`the training tiles carry the query's sessions, sets and PRs (${wk.training.prs} PRs this week)`);
+    const wt = client.locator('[data-testid="week-weight"]');
+    if ((await wt.getAttribute("data-days")) !== String(wk.weigh.days) || wk.weigh.days < 1 || !((await wt.textContent()) ?? "").includes(fmtM("weight", wk.weigh.avg!, "lb"))) throw new Error("the weight tile carries the week's average");
+    if (!(await client.locator('[data-testid="week-pace"]').count())) throw new Error("a weight goal shows its pace");
+    await noSideScroll(client, "/body/week");
+    await client.locator('a[aria-label="Previous week"]').click();
+    await client.waitForURL(/week=/);
+    await client.locator('[data-testid="week-label"]').waitFor({ timeout: 30000 });
+    if (!((await client.locator('[data-testid="week-label"]').textContent()) ?? "").startsWith("Week of")) throw new Error("last week is reachable and named by its date");
+    console.log(`✓ the week: ${wk.nutrition.daysLogged} of ${wk.nutrition.daysPassed} days logged (${wk.nutrition.daysInBand} of ${wk.nutrition.daysJudged} in band), ${wk.training.sessions} sessions, ${wk.training.sets} sets, ${wk.training.prs} PRs, average ${wk.weigh.avg} lb over ${wk.weigh.days} weigh-ins, the goal's pace shown; last week reachable`);
+
 
 
 

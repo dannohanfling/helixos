@@ -8,6 +8,7 @@ import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { addDays, daysBetween, formatDate, rangeDays, startOfWeek, todayInTz } from "@/lib/dates";
 import { belowPar, daysLeft, dueSoon, yieldFor } from "@/lib/engine/body-pantry";
+import { change, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, weekTally, type WeightUnit } from "@/lib/engine/body-training";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
@@ -463,27 +464,100 @@ const figureText = (values: Partial<Record<MetricKey, number>>, unit: "lb" | "kg
 
 /** The last days with anything logged, newest first, for the recent strip: date, totals and the worst mark. */
 export async function recentDays(workspaceId: string, userId: string, today: string, days = 7) {
+  return daysInRange(workspaceId, userId, addDays(today, -(days - 1)), today, today);
+}
+
+/** Every day from `from` to `to`, newest first: its day type, bands, what was logged, the totals and the worst mark. */
+export async function daysInRange(workspaceId: string, userId: string, from: string, to: string, today: string) {
   const settings = await bodySettingsFor(workspaceId, userId);
-  if (!settings) return [];
-  const from = addDays(today, -(days - 1));
+  if (!settings || to < from) return [];
   const [entries, types, overrides] = await Promise.all([
-    db.query.bodyEntries.findMany({ where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId), gte(schema.bodyEntries.date, from)), orderBy: desc(schema.bodyEntries.date) }),
+    db.query.bodyEntries.findMany({ where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId), gte(schema.bodyEntries.date, from), lte(schema.bodyEntries.date, to)), orderBy: desc(schema.bodyEntries.date) }),
     dayTypesFor(workspaceId, userId),
-    db.query.bodyDays.findMany({ where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, from)) }),
+    db.query.bodyDays.findMany({ where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, from), lte(schema.bodyDays.date, to)) }),
   ]);
   const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
   const out = [];
-  for (let d = today; d >= from; d = addDays(d, -1)) {
+  for (let d = to; d >= from; d = addDays(d, -1)) {
     const list = entries.filter((e) => e.date === d);
     const typeId = dayTypeIdFor(d, settings.weekPattern, refeed, overrides.find((o) => o.date === d)?.dayTypeId ?? null);
     const t = types.find((x) => x.id === typeId) ?? null;
     const totals = sumMacros(list.map((e) => ({ cal: e.cal, p: e.p, f: e.f, c: e.c })));
-    const bands = t ? bandsOf(t) : null;
-    const marks = hasBands(bands) && list.length ? dayMarks(totals, bands, { floors: { cal: settings.calFloor, f: settings.fatFloor }, overOk: settings.overOk, final: d < today }) : null;
-    out.push({ date: d, dayType: t?.name ?? null, logged: list.length, totals, worst: marks ? worstMark(marks) : null });
+    const typeBands = t ? bandsOf(t) : null;
+    const bands = hasBands(typeBands) ? typeBands : null;
+    const final = d < today;
+    const marks = bands && list.length ? dayMarks(totals, bands, { floors: { cal: settings.calFloor, f: settings.fatFloor }, overOk: settings.overOk, final }) : null;
+    out.push({ date: d, dayType: t?.name ?? null, logged: list.length, totals, bands, final, worst: marks ? worstMark(marks) : null });
   }
   return out;
 }
+
+/* ───────── The weekly rollup (rev 237 phase 6) ───────── */
+
+/** One week's training, for the rollup: days with a set logged, of the days a routine was offered; the sets; the PRs. */
+async function trainingWeek(workspaceId: string, userId: string, monday: string, settings: schema.BodySettings) {
+  const sunday = addDays(monday, 6);
+  const [sets, days, lib] = await Promise.all([
+    db.query.bodySets.findMany({ columns: { id: true, date: true, exerciseId: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, monday), lte(schema.bodySets.date, sunday)) }),
+    db.query.bodyDays.findMany({ columns: { date: true, dayTypeId: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, monday), lte(schema.bodyDays.date, sunday)) }),
+    trainingLibrary(workspaceId, userId),
+  ]);
+  const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
+  const dayRow = new Map(days.map((d) => [d.date, d]));
+  const tally = weekTally(rangeDays(monday, sunday), (d) => sets.some((s) => s.date === d), (d) => !!routineForDay(lib.routines, dayTypeIdFor(d, settings.weekPattern, refeed, dayRow.get(d)?.dayTypeId ?? null)));
+  // A PR is judged against everything before it, so the week's exercises need their whole history.
+  const ids = [...new Set(sets.map((s) => s.exerciseId))];
+  const history = await setsOf(workspaceId, userId, ids);
+  let prs = 0;
+  for (const id of ids) {
+    const own = history.filter((s) => s.exerciseId === id);
+    const flags = prFlags(own, settings.weightUnit);
+    prs += own.filter((s, i) => flags[i] && s.date >= monday && s.date <= sunday).length;
+  }
+  return { sessions: tally.done, planned: tally.planned, sets: sets.length, prs };
+}
+
+/**
+ * The week of `monday` (Mon–Sun) beside the week before: nutrition averages and days in band, the training tally, the average
+ * weight and its change, and how the weight goal is pacing. Computed from the days, never stored. Null while Body isn't set up.
+ */
+export async function bodyWeek(workspaceId: string, userId: string, monday: string, today: string) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const sunday = addDays(monday, 6);
+  const to = sunday < today ? sunday : today;
+  const prevMonday = addDays(monday, -7);
+  const [days, prevDays, training, prevTraining, readings, goals] = await Promise.all([
+    daysInRange(workspaceId, userId, monday, to, today),
+    daysInRange(workspaceId, userId, prevMonday, addDays(monday, -1), today),
+    trainingWeek(workspaceId, userId, monday, settings),
+    trainingWeek(workspaceId, userId, prevMonday, settings),
+    scaleReadings(workspaceId, userId, addDays(today, -40) < prevMonday ? addDays(today, -40) : prevMonday),
+    db.query.bodyGoals.findMany({ where: and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)) }),
+  ]);
+  const asWeekDay = (d: (typeof days)[number]): WeekDay => ({ date: d.date, logged: d.logged, totals: d.totals, bands: d.bands, worst: d.worst, final: d.final });
+  const figures = dayFigures(readings).filter((f) => f.values.weight != null && f.date <= today).map((f) => ({ date: f.date, weight: f.values.weight! }));
+  const inWeek = (from: string, until: string) => figures.filter((f) => f.date >= from && f.date <= until);
+  const weigh = weighWeek(inWeek(monday, sunday));
+  const prevWeigh = weighWeek(inWeek(prevMonday, addDays(monday, -1)));
+  const weightGoal = goals.find((g) => g.key === "weight") ?? null;
+  const latest = figures[figures.length - 1] ?? null;
+  const pace = goalPace(weightGoal ? { target: weightGoal.target, by: weightGoal.by } : null, latest?.weight ?? null, avg7(figures.map((f) => ({ date: f.date, value: f.weight })), today, addDays), avg7(figures.map((f) => ({ date: f.date, value: f.weight })), addDays(today, -28), addDays), today, daysBetween);
+  return {
+    settings,
+    monday,
+    sunday,
+    isCurrent: monday <= today && today <= sunday,
+    days: [...days].reverse(),
+    nutrition: nutritionWeek(days.map(asWeekDay)),
+    prevNutrition: nutritionWeek(prevDays.map(asWeekDay)),
+    training,
+    prevTraining,
+    weigh: { ...weigh, prevAvg: prevWeigh.avg, change: change(weigh.avg, prevWeigh.avg), latest },
+    pace,
+  };
+}
+export type BodyWeekView = NonNullable<Awaited<ReturnType<typeof bodyWeek>>>;
 
 /**
  * The one check every AI prompt that could include Body data goes through (rev 219). Read fresh on every call, so switching it off

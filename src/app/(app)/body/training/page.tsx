@@ -285,7 +285,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
       ) : null}
 
       {weeks && (weeks.weeks.some((w) => w.days.some((d) => d.level > 0)) || t.session) ? (
-        <Card className="mt-4" title="Consistency" id="consistency">
+        <Card className="mt-4" title="Consistency" id="consistency" action={<Link href="/body/week" className="text-xs text-ink-2 hover:underline">This week →</Link>}>
           <p className="mb-2 text-sm" data-testid="training-week">
             <b className="text-humanos-ink">
               {weeks.tally.done}

@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+import { daysBetween } from "@/lib/dates";
+import { change, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
+
+const lift = { cal: { min: 1400, max: 1500 }, p: { min: 180, max: 200 }, f: { min: 55, max: 65 }, c: { min: 0, max: 5 } };
+const rest = { cal: { min: 1300, max: 1400 }, p: { min: 170, max: 190 }, f: { min: 50, max: 60 }, c: { min: 0, max: 5 } };
+const day = (date: string, logged: number, totals: [number, number, number, number], bands: WeekDay["bands"], worst: WeekDay["worst"], final = true): WeekDay => ({ date, logged, totals: { cal: totals[0], p: totals[1], f: totals[2], c: totals[3] }, bands, worst, final });
+
+describe("the weekly rollup (rev 231): nutrition", () => {
+  it("averages over the logged days, protein against its floor and fat against its ceiling, days in band among the judged", () => {
+    const days = [
+      day("2026-09-28", 3, [1450, 190, 60, 3], lift, "in"),
+      day("2026-09-29", 2, [1350, 175, 52, 2], rest, "in"),
+      day("2026-09-30", 0, [0, 0, 0, 0], lift, null),
+      day("2026-10-01", 3, [1600, 200, 70, 4], lift, "significant"),
+      day("2026-10-02", 1, [700, 90, 30, 1], lift, "open", false),
+    ];
+    expect(nutritionWeek(days)).toEqual({ daysLogged: 4, daysPassed: 5, avgCal: 1275, avgP: 163.8, avgPFloor: 177.5, avgF: 53, avgFCeiling: 63.8, avgC: 2.5, daysJudged: 3, daysInBand: 2 });
+  });
+  it("nothing logged: nulls, never zeros pretending", () => {
+    expect(nutritionWeek([day("2026-09-28", 0, [0, 0, 0, 0], lift, null)])).toEqual({ daysLogged: 0, daysPassed: 1, avgCal: null, avgP: null, avgPFloor: null, avgF: null, avgFCeiling: null, avgC: null, daysJudged: 0, daysInBand: 0 });
+    expect(nutritionWeek([])).toMatchObject({ daysLogged: 0, daysPassed: 0, avgCal: null });
+  });
+});
+
+describe("the weekly rollup: weight and goal pace", () => {
+  it("the week's average and the change against last week", () => {
+    expect(weighWeek([{ weight: 176.2 }, { weight: 175.6 }, { weight: 175.0 }])).toEqual({ avg: 175.6, days: 3 });
+    expect(weighWeek([])).toEqual({ avg: null, days: 0 });
+    expect(change(175.6, 177.1)).toBe(-1.5);
+    expect(change(175.6, null)).toBeNull();
+  });
+  it("goal pace: the gap, weeks left, the needed rate against the last four weeks' rate", () => {
+    const p = goalPace({ target: 170, by: "2026-12-01" }, 175.0, 175.3, 178.5, "2026-09-30", daysBetween)!;
+    expect(p.toGo).toBe(-5);
+    expect(p.weeksLeft).toBe(8.9);
+    expect(p.needPerWeek).toBe(-0.6);
+    expect(p.actualPerWeek).toBe(-0.8);
+    expect(p.onPace).toBe(true);
+    // Losing too slowly is off pace; gaining toward a gain goal reads the other way.
+    expect(goalPace({ target: 170, by: "2026-12-01" }, 175.0, 175.3, 176.0, "2026-09-30", daysBetween)!.onPace).toBe(false);
+    expect(goalPace({ target: 180, by: "2026-12-01" }, 175.0, 175.3, 172.0, "2026-09-30", daysBetween)!.onPace).toBe(true);
+    // No date: the gap and the actual rate only. Reached: on pace whatever the rate. No goal or no weight: nothing.
+    expect(goalPace({ target: 170, by: null }, 175.0, 175.3, 178.5, "2026-09-30", daysBetween)).toMatchObject({ weeksLeft: null, needPerWeek: null, actualPerWeek: -0.8, onPace: null });
+    expect(goalPace({ target: 175, by: "2026-12-01" }, 175.0, 175.3, 175.3, "2026-09-30", daysBetween)!.onPace).toBe(true);
+    expect(goalPace(null, 175.0, null, null, "2026-09-30", daysBetween)).toBeNull();
+    expect(goalPace({ target: 170, by: null }, null, null, null, "2026-09-30", daysBetween)).toBeNull();
+  });
+});

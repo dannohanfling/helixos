@@ -16,7 +16,8 @@ import { fmtSet } from "@/lib/engine/body-training";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
-import { bodyDay, bodyLibrary, bodySettingsFor, canAiUseBody, dayComposition, exerciseHistory, latestComposition, pantryView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { bodyDay, bodyLibrary, bodySettingsFor, bodyWeek, canAiUseBody, dayComposition, exerciseHistory, latestComposition, pantryView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { startOfWeek } from "@/lib/dates";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -355,5 +356,31 @@ export const bodyUpdatePantry = defineTool({
     const p = await pantryView(v.workspace.id, v.user.id, v.today);
     const left = p?.items.filter((it) => it.foodId === food.id) ?? [];
     return { text: `Took ${qty} ${unit} ${food.name} off the shelf. Left: ${left.length ? left.map((it) => `${it.qty} ${it.unit} ${it.state}`).join(", ") : "none"}.`, data: { used: { food: food.name, qty: inFood, unit: food.unit }, left: left.map((it) => ({ qty: it.qty, unit: it.unit, state: it.state, useBy: it.useBy })) } };
+  },
+});
+
+/* ───────── The weekly rollup (rev 237 phase 6) ───────── */
+
+export const bodyWeekTool = defineTool({
+  name: "body_week",
+  scope: "body",
+  kind: "read",
+  description: "The week's rollup, this week unless a date in another week is given: days logged and in band, average calories, protein against its floor and fat against its ceiling, sessions of those planned, sets and PRs, the average weight and its change against last week, and how the weight goal is pacing.",
+  input: { date: z.string().optional().describe("YYYY-MM-DD in the week wanted; this week when left out") },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const asked = typeof input.date === "string" && DATE.test(input.date) ? startOfWeek(input.date) : startOfWeek(v.today);
+    const monday = asked > startOfWeek(v.today) ? startOfWeek(v.today) : asked;
+    const w = await bodyWeek(v.workspace.id, v.user.id, monday, v.today);
+    if (!w) throw new Error("Body isn't set up for this member yet.");
+    const u = settings.weightUnit;
+    const n = w.nutrition;
+    const num = (x: number | null, d = 1) => (x == null ? "—" : x.toLocaleString("en-US", { maximumFractionDigits: d }));
+    const lines = [`${w.isCurrent ? "This week" : `Week of ${monday}`} (${monday} to ${w.sunday}).`];
+    lines.push(`Nutrition: ${n.daysLogged} of ${n.daysPassed} days logged${n.daysJudged ? `, ${n.daysInBand} of ${n.daysJudged} finished days in band` : ""}; average ${num(n.avgCal, 0)} cal, ${num(n.avgP)} g protein${n.avgPFloor != null ? ` (floor ${num(n.avgPFloor)})` : ""}, ${num(n.avgF)} g fat${n.avgFCeiling != null ? ` (ceiling ${num(n.avgFCeiling)})` : ""}, ${num(n.avgC)} g carbs.`);
+    lines.push(`Training: ${w.training.sessions}${w.training.planned != null ? ` of ${w.training.planned}` : ""} sessions, ${w.training.sets} sets, ${w.training.prs} PR${w.training.prs === 1 ? "" : "s"} (last week ${w.prevTraining.sessions} sessions, ${w.prevTraining.sets} sets).`);
+    lines.push(w.weigh.avg != null ? `Weight: average ${fmtMetric("weight", w.weigh.avg, u)} over ${w.weigh.days} weigh-in${w.weigh.days === 1 ? "" : "s"}${w.weigh.change != null ? `, ${w.weigh.change > 0 ? "+" : ""}${fmtMetric("weight", w.weigh.change, u)} vs last week` : ""}.` : "Weight: no weigh-ins this week.");
+    if (w.pace) lines.push(`Goal: ${fmtMetric("weight", w.pace.target, u)}${w.pace.by ? ` by ${w.pace.by}` : ""}, ${fmtMetric("weight", Math.abs(w.pace.toGo), u)} to go${w.pace.needPerWeek != null ? `, needs ${fmtMetric("weight", Math.abs(w.pace.needPerWeek), u)} a week` : ""}${w.pace.actualPerWeek != null ? `, doing ${w.pace.actualPerWeek > 0 ? "+" : "-"}${fmtMetric("weight", Math.abs(w.pace.actualPerWeek), u)} a week` : ""}: ${w.pace.onPace == null ? "pace unknown yet" : w.pace.onPace ? "on pace" : "behind"}.`);
+    return { text: lines.join("\n"), data: { monday, sunday: w.sunday, nutrition: n, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weight: { unit: u, avg: w.weigh.avg, days: w.weigh.days, change: w.weigh.change }, pace: w.pace } };
   },
 });
