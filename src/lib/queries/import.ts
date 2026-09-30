@@ -167,12 +167,19 @@ export async function applyImport(plan: ImportPlan, workspaceId: string, userId:
   await inBatches(stmts.splice(0));
   written += plan.goals.length;
 
-  const taskIds = by(await db.query.tasks.findMany({ where: and(eq(schema.tasks.workspaceId, workspaceId), eq(schema.tasks.userId, userId), eq(schema.tasks.source, "airtable")) }));
+  // An open task arrives waiting for review (30 Sep), off Today until its owner keeps it. A re-run updates the ones still waiting;
+  // one they have kept, finished or let go is theirs now and is left as they have it.
+  const existingTasks = new Map(
+    (await db.query.tasks.findMany({ where: and(eq(schema.tasks.workspaceId, workspaceId), eq(schema.tasks.userId, userId), eq(schema.tasks.source, "airtable")) }))
+      .filter((r) => r.sourceRef)
+      .map((r) => [r.sourceRef as string, r]),
+  );
   for (const t of plan.tasks) {
     const values = { title: t.title, details: t.details, status: t.status, urgency: t.urgency, category: t.category, dueDate: t.dueDate, completedAt: t.status === "done" ? (t.completedAt ?? now) : null, assignee: t.assignee, importRefs: t.refs };
-    const id = taskIds.get(t.sourceRef);
-    if (id) stmts.push(db.update(schema.tasks).set(values).where(eq(schema.tasks.id, id)));
-    else stmts.push(db.insert(schema.tasks).values({ id: newId(), workspaceId, userId, source: "airtable", sourceRef: t.sourceRef, ...values }));
+    const row = existingTasks.get(t.sourceRef);
+    if (row) {
+      if (row.reviewState === "to_review") stmts.push(db.update(schema.tasks).set(values).where(and(eq(schema.tasks.id, row.id), eq(schema.tasks.workspaceId, workspaceId))));
+    } else stmts.push(db.insert(schema.tasks).values({ id: newId(), workspaceId, userId, source: "airtable", sourceRef: t.sourceRef, reviewState: t.status === "done" ? null : "to_review", ...values }));
   }
   await inBatches(stmts.splice(0));
   written += plan.tasks.length;

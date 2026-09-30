@@ -46,7 +46,8 @@ export async function morningCheckinAction(formData: FormData): Promise<void> {
   // existing open task with that title instead.
   const existing = newFocus ? await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, userId), ne(schema.tasks.status, "done"), sql`lower(${schema.tasks.title}) = lower(${newFocus})`) }) : undefined;
   if (existing) {
-    await db.update(schema.tasks).set({ focusDate: today, urgency: "top3", status: "today" }).where(eq(schema.tasks.id, existing.id));
+    // Typing an imported task still waiting for review is looking at it: it joins the member's list (30 Sep).
+    await db.update(schema.tasks).set({ focusDate: today, urgency: "top3", status: "today", reviewState: null }).where(eq(schema.tasks.id, existing.id));
   } else if (newFocus) {
     await db.insert(schema.tasks).values({
       id: newId(),
@@ -174,7 +175,11 @@ export async function addTodayTaskAction(title: string): Promise<{ ok: true; tas
   const t = title.trim().slice(0, 200);
   if (!t) return { ok: false, error: "Type the task first." };
   const existing = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId), ne(schema.tasks.status, "done"), sql`lower(${schema.tasks.title}) = lower(${t})`) });
-  if (existing) return { ok: true, task: { id: existing.id, title: existing.title } };
+  if (existing) {
+    // An imported task waiting for review, typed here, joins the member's list (30 Sep).
+    if (existing.reviewState) await db.update(schema.tasks).set({ reviewState: null }).where(and(eq(schema.tasks.id, existing.id), eq(schema.tasks.workspaceId, workspaceId)));
+    return { ok: true, task: { id: existing.id, title: existing.title } };
+  }
   const id = newId();
   await db.insert(schema.tasks).values({ id, workspaceId, userId, title: t, urgency: "medium", status: "today", dueDate: v.today, points: POINTS.task });
   return { ok: true, task: { id, title: t } };

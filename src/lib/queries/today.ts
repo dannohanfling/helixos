@@ -48,6 +48,9 @@ export async function currentCurriculumDay(userId: string) {
   return days.find((d) => !doneDays.has(d.day)) ?? null;
 }
 
+/** Tasks in play: an imported task waiting for review, or one let go, stays off Today and out of the lock-in (30 Sep). */
+const inPlay = isNull(schema.tasks.reviewState);
+
 export async function todayData(v: Viewer) {
   const { user, today, hour } = v;
   const userId = user.id;
@@ -60,15 +63,15 @@ export async function todayData(v: Viewer) {
       streakFor(workspaceId, userId, today),
       totalPoints(workspaceId, userId),
       db.query.tasks.findMany({
-        where: and(eq(schema.tasks.userId, userId), eq(schema.tasks.focusDate, today)),
+        where: and(eq(schema.tasks.userId, userId), inPlay, eq(schema.tasks.focusDate, today)),
         orderBy: [asc(schema.tasks.status), asc(schema.tasks.createdAt)],
       }),
       db.query.tasks.findMany({
-        where: and(eq(schema.tasks.userId, userId), ne(schema.tasks.status, "done"), eq(schema.tasks.dueDate, today)),
+        where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done"), eq(schema.tasks.dueDate, today)),
         orderBy: asc(schema.tasks.createdAt),
       }),
       db.query.tasks.findMany({
-        where: and(eq(schema.tasks.userId, userId), ne(schema.tasks.status, "done"), lt(schema.tasks.dueDate, today)),
+        where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done"), lt(schema.tasks.dueDate, today)),
         orderBy: asc(schema.tasks.dueDate),
       }),
       db.query.contentItems.findMany({
@@ -170,12 +173,12 @@ export async function todayData(v: Viewer) {
   const actions: Action[] = nextBestActions(snapshot);
 
   const upcomingTasks = await db.query.tasks.findMany({
-    where: and(eq(schema.tasks.userId, userId), ne(schema.tasks.status, "done"), sql`${schema.tasks.dueDate} between ${tomorrow} and ${addDays(today, 7)}`),
+    where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done"), sql`${schema.tasks.dueDate} between ${tomorrow} and ${addDays(today, 7)}`),
     orderBy: asc(schema.tasks.dueDate),
     limit: 6,
   });
   const openTasks = await db.query.tasks.findMany({
-    where: and(eq(schema.tasks.userId, userId), ne(schema.tasks.status, "done")),
+    where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done")),
     orderBy: [asc(schema.tasks.dueDate), asc(schema.tasks.createdAt)],
     limit: 40,
   });

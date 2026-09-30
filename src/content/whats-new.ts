@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 26,
+    date: "2026-09-30",
+    title: "Tasks brought over from Airtable wait for you",
+    lines: ["If your coach brought your tasks over from Airtable, they wait on Tasks under \"From Airtable, to review\", with their dates as written there, and stay off Today until you keep them.", "Keep makes one yours, Done files it as history, and Let go hides it without deleting it. One button keeps every one dated after today."],
+    audience: "everyone",
+  },
+  {
     n: 25,
     date: "2026-09-30",
     title: "HumanOS: Pantry",

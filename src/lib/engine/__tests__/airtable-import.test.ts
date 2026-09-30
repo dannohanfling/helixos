@@ -89,7 +89,7 @@ describe("the dry run of a synthetic client base", () => {
   });
   it("tasks: status, urgency and category mapped, the assignee as text, the Airtable links kept for later", () => {
     expect(plan.tasks.map((t) => [t.title, t.status, t.urgency, t.category, t.assignee])).toEqual([
-      ["Book three discovery calls", "today", "top3", "sales", "Sam"],
+      ["Book three discovery calls", "upcoming", "top3", "sales", "Sam"],
       ["Write the team report template", "done", "medium", "system", null],
       ["Plan the retreat", "upcoming", "medium", "admin", null],
     ]);

@@ -153,6 +153,11 @@ async function main() {
     if (JSON.stringify(first) !== JSON.stringify(wantCounts)) throw new Error(`Approve writes the plan:\nwant ${JSON.stringify(wantCounts)}\ngot  ${JSON.stringify(first)}`);
     const edited = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, user.id), eq(schema.tasks.title, "Book three discovery calls (edited)")) });
     if (!edited) throw new Error("what was written is the base as it was at Approve");
+    // Open imported tasks wait for review (30 Sep); a task marked Today in the base arrives as an ordinary open one; done is history.
+    const imported = await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, user.id), eq(schema.tasks.source, "airtable")) });
+    const open = imported.filter((t) => t.status !== "done");
+    if (!open.length || open.some((t) => t.reviewState !== "to_review") || imported.some((t) => t.status === "done" && t.reviewState !== null)) throw new Error("open imported tasks wait for review; done ones are history");
+    if (edited.status !== "upcoming") throw new Error(`a task marked Today in the base arrives as an ordinary open task, got ${edited.status}`);
     const essence = await db.query.essences.findFirst({ where: and(eq(schema.essences.workspaceId, ws), eq(schema.essences.userId, user.id)) });
     const brand = (essence?.data as { brand?: { slogan?: string } } | undefined)?.brand;
     if (brand?.slogan !== "Lead lighter.") throw new Error("the brand lines are in their Essence");
@@ -190,6 +195,9 @@ async function main() {
     const base0 = essenceChars({ ...rest, identity: { name, role: "x" } } as never);
     const withLong = { ...rest, identity: { name, role: "x".repeat(ESSENCE_CAP - 20 - base0 + 1) } };
     await db.update(schema.essences).set({ data: withLong }).where(eq(schema.essences.id, essence!.id));
+    // One task the client has kept and renamed is theirs now: the re-run leaves it as they have it.
+    const retreat = (await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, user.id), eq(schema.tasks.title, "Plan the retreat")) }))!;
+    await db.update(schema.tasks).set({ reviewState: null, title: "Plan the retreat, my way" }).where(eq(schema.tasks.id, retreat.id));
     await page.locator('[data-testid="import-client"]').selectOption(m.id);
     await fill(SOURCE_TOKEN, true);
     await press("import-dry", "import-preview");
@@ -199,6 +207,8 @@ async function main() {
     await press("import-approve", "import-done");
     const second = await count();
     if (JSON.stringify(second) !== JSON.stringify(first)) throw new Error(`a re-run doubles nothing, got ${JSON.stringify(second)}`);
+    const kept = (await db.query.tasks.findFirst({ where: eq(schema.tasks.id, retreat.id) }))!;
+    if (kept.title !== "Plan the retreat, my way" || kept.reviewState !== null) throw new Error("a re-run leaves a task the client has kept as they have it");
     // Nothing in the Essence was cut; it's over, flagged on the client page with its trim-to-fit, and the AI leaves it out.
     const after = (await db.query.essences.findFirst({ where: eq(schema.essences.id, essence!.id) }))!.data as { identity?: { role?: string }; brand?: { slogan?: string } };
     if (after.identity?.role !== withLong.identity.role || after.brand?.slogan !== "Lead lighter.") throw new Error("nothing of theirs is cut");
@@ -217,6 +227,60 @@ async function main() {
     const unfilled = await page.locator('[data-testid="import-unfilled"] li').allInnerTexts();
     if (JSON.stringify(unfilled) !== JSON.stringify(bare.unfilled)) throw new Error(`without the fallback, the dry run lists what it couldn't fill, got ${JSON.stringify(unfilled)}`);
     console.log(`✓ with the fallback empty, the dry run lists what it couldn't fill: ${unfilled.length} row`);
+
+    // ── Imported tasks on the client's own pages (30 Sep): off Today until kept; Tasks' review group with Keep, Done and Let go;
+    // one press keeps all dated after today; Let go hides without deleting, and Keep brings one back. The demo client is used
+    // because an imported client can't sign in yet. ──
+    const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
+    const mayaM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+    const { todayInTz, addDays } = await import("@/lib/dates");
+    const today = todayInTz(mayaM.timezone || "America/Los_Angeles");
+    const T = (s2: string) => `${s2} ${RUN}`;
+    const reviewIds = { overdue: randomUUID(), future: randomUUID(), third: randomUUID() };
+    await db.insert(schema.tasks).values([
+      { id: reviewIds.overdue, workspaceId: ws, userId: maya.id, title: T("Old imported task"), status: "upcoming", dueDate: addDays(today, -40), source: "airtable", sourceRef: `rec-o-${RUN}`, reviewState: "to_review" },
+      { id: reviewIds.future, workspaceId: ws, userId: maya.id, title: T("Future imported task"), status: "upcoming", dueDate: addDays(today, 20), source: "airtable", sourceRef: `rec-f-${RUN}`, reviewState: "to_review" },
+      { id: reviewIds.third, workspaceId: ws, userId: maya.id, title: T("Undated imported task"), status: "upcoming", dueDate: null, source: "airtable", sourceRef: `rec-u-${RUN}`, reviewState: "to_review" },
+    ]);
+    try {
+      await page.goto(`${base}/settings`);
+      await page.click('button:has-text("Log out")');
+      await page.waitForURL(/\/login/);
+      await signIn("client");
+      if ((await page.content()).includes(T("Old imported task"))) throw new Error("an imported task waiting for review stays off Today, even overdue");
+      await page.goto(`${base}/tasks`);
+      if ((await page.locator('main').innerText()).split("From Airtable")[0].includes(T("Old imported task"))) throw new Error("waiting tasks aren't in Tasks' own lists");
+      const review = page.locator('[data-testid="tasks-review"]');
+      await review.locator("summary").click();
+      const row = (title: string) => review.locator('[data-testid="tasks-review-row"]', { hasText: title });
+      if (!(await row(T("Old imported task")).innerText()).includes("was due")) throw new Error("the review row shows its date as written");
+      await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="tasks-keep-future"]').click()]);
+      await page.waitForLoadState("networkidle");
+      const after1 = await db.query.tasks.findMany({ where: inArray(schema.tasks.id, Object.values(reviewIds)) });
+      const state = (id: string) => after1.find((t) => t.id === id)!.reviewState;
+      if (state(reviewIds.future) !== null || state(reviewIds.overdue) !== "to_review" || state(reviewIds.third) !== "to_review") throw new Error("Keep all dated after today keeps only the future one");
+      await page.goto(`${base}/tasks`);
+      await page.locator('[data-testid="tasks-review"] summary').click();
+      await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), row(T("Undated imported task")).locator('[data-testid="tasks-review-let_go"]').click()]);
+      await page.waitForLoadState("networkidle");
+      if ((await db.query.tasks.findFirst({ where: eq(schema.tasks.id, reviewIds.third) }))?.reviewState !== "let_go") throw new Error("Let go hides it, not deletes it");
+      await page.goto(`${base}/tasks`);
+      await page.locator('[data-testid="tasks-review"] summary').click();
+      await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), row(T("Old imported task")).locator('[data-testid="tasks-review-keep"]').click()]);
+      await page.waitForLoadState("networkidle");
+      await page.goto(`${base}/today`);
+      if (!(await page.content()).includes(T("Old imported task"))) throw new Error("kept, the overdue task shows on Today like any overdue task");
+      await page.goto(`${base}/tasks?filter=letgo`);
+      await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="tasks-letgo"] [data-testid="tasks-review-keep"]').first().click()]);
+      await page.waitForLoadState("networkidle");
+      if ((await db.query.tasks.findFirst({ where: eq(schema.tasks.id, reviewIds.third) }))?.reviewState !== null) throw new Error("Keep on the Let go tab brings it back");
+      console.log("✓ imported tasks: off Today while waiting (even overdue); Keep all dated after today kept only the future one; Let go hid one without deleting it and Keep brought it back; a kept overdue task shows on Today; a re-run left a kept task as the client has it");
+      await page.goto(`${base}/settings`);
+      await page.click('button:has-text("Log out")');
+      await page.waitForURL(/\/login/);
+    } finally {
+      await db.delete(schema.tasks).where(inArray(schema.tasks.id, Object.values(reviewIds)));
+    }
 
     // ── Read only, and the tokens went nowhere. ──
     const { methods, paths } = (await (await fetch(`http://localhost:${mockPort}/__methods`)).json()) as { methods: string[]; paths: string[] };

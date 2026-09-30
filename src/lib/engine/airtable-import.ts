@@ -178,7 +178,8 @@ export const sameOffer = (name: string): string =>
 /** The order a tier code sorts in its pathway: T00 → 0, B3 → 3, 05 → 5. No code sorts first (the doorway). */
 export const tierOrder = (code: string | null): number => (code ? Number(code.replace(/\D/g, "")) || 0 : -1);
 
-const STATUS_TASK: Record<string, TaskRow["status"]> = { Complete: "done", Today: "today", "In Progress": "in_progress" };
+// "Today" in the base was that day's plan, months old by the import: it arrives as an ordinary open task (30 Sep).
+const STATUS_TASK: Record<string, TaskRow["status"]> = { Complete: "done", "In Progress": "in_progress" };
 const URGENCY: Record<string, TaskRow["urgency"]> = { "Top 3": "top3", "Very High": "high", High: "high", Medium: "medium", Low: "low", "Very Low": "low" };
 const CATEGORY: Record<string, TaskRow["category"]> = { Sales: "sales", Marketing: "content", Operations: "system", Fulfillment: "fulfillment", Finances: "admin", "Human Resources": "admin", Admin: "admin", Vision: "admin" };
 

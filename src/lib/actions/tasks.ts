@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { deletedTo } from "@/lib/deleted";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, isNotNull, ne, gt } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { addDays, nowIso } from "@/lib/dates";
@@ -104,4 +104,31 @@ export async function deleteTaskAction(formData: FormData): Promise<void> {
   // A task is deleted from Today or Tasks; the person stays on whichever it was, with the line saying it went.
   const from = str(formData, "from");
   redirect(deletedTo(from === "/today" ? "/today" : "/tasks", "task"));
+}
+
+/**
+ * An imported task waiting for review (30 Sep): Keep makes it an ordinary task of theirs, Done files it as history, Let go hides
+ * it (never deleted; the Let go tab brings it back). Housekeeping, so Done here earns no points: the work was done before HelixOS.
+ */
+export async function reviewImportedTaskAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx();
+  const id = str(formData, "id");
+  const choice = str(formData, "choice");
+  const set =
+    choice === "done" ? { status: "done" as const, completedAt: nowIso(), reviewState: null, focusDate: null } : choice === "let_go" ? { reviewState: "let_go" as const, focusDate: null } : { reviewState: null };
+  await db
+    .update(schema.tasks)
+    .set(set)
+    .where(and(eq(schema.tasks.id, id), eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId), isNotNull(schema.tasks.reviewState)));
+  refresh();
+}
+
+/** One press keeps every imported task still waiting that is dated after today, as their own; the rest stay to review. */
+export async function keepFutureImportedTasksAction(): Promise<void> {
+  const { v, workspaceId, userId } = await ctx();
+  await db
+    .update(schema.tasks)
+    .set({ reviewState: null })
+    .where(and(eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId), eq(schema.tasks.reviewState, "to_review"), ne(schema.tasks.status, "done"), gt(schema.tasks.dueDate, v.today)));
+  refresh();
 }

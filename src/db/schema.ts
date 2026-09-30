@@ -216,6 +216,11 @@ export const tasks = sqliteTable(
     assignee: text("assignee"),
     /** An imported task's links as the source had them (its first-base id, goals, initiatives), kept to rebuild the links later. */
     importRefs: text("import_refs", { mode: "json" }).$type<{ v1: string | null; goals: string[]; initiatives: string[] }>(),
+    /**
+     * An imported task still waiting for its owner (30 Sep): "to_review" until they Keep it (back to null, a normal task) or Let go
+     * ("let_go", hidden, never deleted). Only tasks with no review state show on Today, in the lock-in and in Tasks' own lists.
+     */
+    reviewState: text("review_state", { enum: ["to_review", "let_go"] }),
     createdAt: createdAt(),
   },
   (t) => [index("tasks_user_status").on(t.userId, t.status), index("tasks_user_due").on(t.userId, t.dueDate)],
