@@ -30,7 +30,9 @@ export function defineScope(name: Scope, opts: { gate?: ScopeGate } = {}): void 
 
 export function defineTool(def: ToolDef): ToolDef {
   if (!isToolName(def.name)) throw new Error(`MCP tool name "${def.name}" must be letters, digits, underscores or hyphens (no dots)`);
-  if (tools.has(def.name)) throw new Error(`MCP tool "${def.name}" is defined twice`);
+  // Two definitions of one name is a mistake, except under the dev server, where it's a hot reload of a tool module (the
+  // registry's map survives, the module runs again), which used to make every MCP request fail until a restart.
+  if (tools.has(def.name) && process.env.NODE_ENV !== "development") throw new Error(`MCP tool "${def.name}" is defined twice`);
   tools.set(def.name, def);
   return def;
 }

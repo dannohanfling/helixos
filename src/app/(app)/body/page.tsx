@@ -6,7 +6,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { CapsLine, EntriesBySlot, LeftLine, MacroTiles, MarkKey } from "@/components/body/day-parts";
 import { addDays, formatDate } from "@/lib/dates";
-import { MACROS, MACRO_LABEL, MARK_ICON, MARK_WORD, fmtMacro } from "@/lib/engine/body";
+import { MACROS, MACRO_LABEL, MARK_ICON, MARK_WORD, fmtMacro, slotNow } from "@/lib/engine/body";
 import { LogFoodForm } from "@/components/body/unit-inputs";
 import { loggableUnits } from "@/lib/engine/body-units";
 import { bodyDay, latestComposition, recentDays, requireBodyEnabled } from "@/lib/queries/body";
@@ -15,11 +15,6 @@ import { deleteEntryAction, logFoodAction, logMealAction, setBodyAiAction, setBo
 
 export const metadata = { title: "HumanOS · Log" };
 
-/** The slot a meal most likely goes in at this hour, from the member's own slots. */
-function slotNow(slots: string[], hour: number): string {
-  const want = hour < 11 ? "breakfast" : hour < 15 ? "lunch" : "dinner";
-  return slots.find((s) => s.toLowerCase() === want) ?? (hour < 15 ? slots[0] : slots[slots.length - 1]) ?? "Meal";
-}
 
 export default async function BodyPage({ searchParams }: { searchParams: Promise<{ date?: string; error?: string; erased?: string }> }) {
   const v = await requireViewer();

@@ -560,18 +560,46 @@ async function main() {
     const theCoach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     const coachViewer = { ...(await viewerFor()), user: theCoach, actor: theCoach, role: "coach" as const };
     if ((await bodyAiContext(coachViewer)) !== null && (await bodyAiContext(coachViewer))!.includes(MEALS[0].name)) throw new Error("a coach's session never gets the client's Body data for AI");
+    // Body's MCP tools (phase 4), called with the member's viewer: reads from the day, draft-writes on yesterday, a refusal with the
+    // names to pick from, and nothing of the coach's comment. Then, with the switch off, every tool refuses.
+    await import("@/lib/mcp/tools/index");
+    const { allTools } = await import("@/lib/mcp/registry");
+    const tool = (name: string) => allTools().find((t) => t.name === name)!;
+    const todayTool = await tool("body_today").handler(await viewerFor(), {});
+    if (!todayTool.text.includes(MEALS[0].name) || !todayTool.text.includes(`${fmtMacro("cal", totals.cal)} cal`) || !todayTool.text.includes(ROUTINE.name) || !todayTool.text.includes("150.4 lb")) throw new Error(`body_today reads the day, the workout and the weigh-in: ${todayTool.text}`);
+    if (todayTool.text.includes(note)) throw new Error("the coach's comment never goes through a tool");
+    const foodsTool = await tool("body_foods").handler(await viewerFor(), {});
+    if (!foodsTool.text.includes(fx("egg").name) || !foodsTool.text.includes(MEALS[1].name)) throw new Error("body_foods lists the foods and meals");
+    const mealTool = await tool("body_log_meal").handler(await viewerFor(), { meal: MEALS[0].name.toLowerCase(), slot: "lunch", date: yesterday });
+    const yEntries = await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.date, yesterday)) });
+    if (yEntries.length !== 1 || yEntries[0].name !== MEALS[0].name || yEntries[0].slot !== "Lunch" || !mealTool.text.includes(`Logged ${MEALS[0].name} to Lunch`)) throw new Error(`body_log_meal logs the meal by name into the member's own slot: ${mealTool.text}`);
+    const foodTool = await tool("body_log_food").handler(await viewerFor(), { food: "lean steak", qty: 100, unit: "g", slot: "Dinner", date: yesterday });
+    const steakRow = (await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.date, yesterday)) })).find((e) => e.mealId === null)!;
+    if (!steakRow || Math.abs(steakRow.items[0].qty - 3.5274) > 0.01 || !foodTool.text.includes("100 g")) throw new Error(`body_log_food converts grams to the food's ounces: ${foodTool.text}`);
+    const setTool = await tool("body_log_set").handler(await viewerFor(), { exercise: "bench", weight: 180, reps: 8, date: yesterday });
+    if (!setTool.text.includes("180 × 8") || (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, yesterday)) })).length !== 3) throw new Error(`body_log_set adds a set to yesterday's session: ${setTool.text}`);
+    const weighTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.2, bodyFat: 21.5, date: yesterday, time: "07:00" });
+    if (!weighTool.text.includes("151.2 lb") || !weighTool.text.includes("21.5%")) throw new Error(`body_log_weigh_in logs the reading: ${weighTool.text}`);
+    const refused = await tool("body_log_food").handler(await viewerFor(), { food: "unicorn", qty: 1 }).then(() => "logged", (e: Error) => e.message);
+    if (!refused.startsWith('No food called "unicorn"') || !refused.includes(fx("egg").name)) throw new Error(`an unknown food is refused with the names to pick from: ${refused}`);
+    const trainTool = await tool("body_training").handler(await viewerFor(), { exercise: "Bench press" });
+    if (!trainTool.text.includes("PR 190 × 5")) throw new Error(`body_training gives an exercise's history: ${trainTool.text}`);
+    const wiTool = await tool("body_weigh_ins").handler(await viewerFor(), {});
+    if (!wiTool.text.includes("7-day average") || !wiTool.text.includes("150.4 lb")) throw new Error(`body_weigh_ins gives the trend: ${wiTool.text}`);
     await press(client, '[data-testid="body-ai-toggle"]', async () => /: Off/.test(await client.locator('[data-testid="body-ai-state"]').innerText()), "AI use off");
     if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("switching it off stops it on the next request");
+    const offAnswer = await tool("body_today").handler(await viewerFor(), {}).then(() => "answered", (e: Error) => e.message);
+    if (!offAnswer.includes("AI switch is off")) throw new Error(`with the switch off, every Body tool refuses: ${offAnswer}`);
     const aiLog = await client.locator('[data-testid="body-share-log"] li[data-kind="ai"]').count();
     const aiEvents = (await db.query.bodyShareEvents.findMany({ where: mine(schema.bodyShareEvents) })).filter((e) => e.kind === "ai");
     if (aiLog !== 2 || aiEvents.length !== 2) throw new Error(`both AI changes are logged and shown: ${aiEvents.length} logged, ${aiLog} shown`);
-    console.log("✓ AI use: off by default (no Body data), on gives today's numbers and meals but never the coach's comment, off again stops it on the next request; independent of coach sharing; both changes logged");
+    console.log("✓ AI use: off by default (no Body data), on gives today's numbers and meals but never the coach's comment, off again stops it on the next request; independent of coach sharing; both changes logged. MCP tools: the day, foods, a meal, a food in grams, a set and a weigh-in logged on yesterday, an unknown food refused with the names, an exercise's history, the trend; refused with the switch off");
 
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
     if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
-    if ((own.body_sets ?? []).length !== 5 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
-    if ((own.body_entries ?? []).length !== 3 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
+    if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
+    if ((own.body_entries ?? []).length !== 5 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // Download and Delete are two separate cards (rev 230); the confirm stays shut until DELETE is typed exactly.
     if (!(await client.locator('#download [data-testid="body-export"]').count()) || (await client.locator('#download [data-testid="body-erase"]').count()) || !(await client.locator('[data-testid="body-delete-card"] [data-testid="body-erase"]').count())) throw new Error("Download and Delete sit in separate cards");
     await noSideScroll(client, "/body/settings with its data cards");

@@ -245,6 +245,20 @@ export function formatBodyForAi(x: BodyAiInput): string {
   return lines.join("\n");
 }
 
+/* ───────── Logging helpers, shared by the forms and the MCP tools ───────── */
+
+/** A logged line: the food's macros per unit copied at logging time, so editing a food later never rewrites a past day. */
+export function entryItem(food: { id: string; name: string; unit: string; cal: number; p: number; f: number; c: number; capTag: string | null; sodium: number | null }, qty: number): { foodId: string; name: string; unit: string; qty: number; cal: number; p: number; f: number; c: number; capTag: string | null; sodium?: number } {
+  return { foodId: food.id, name: food.name, unit: food.unit, qty, cal: food.cal, p: food.p, f: food.f, c: food.c, capTag: food.capTag, sodium: food.sodium ?? undefined };
+}
+export const totalsOf = (items: { qty: number; cal: number; p: number; f: number; c: number }[]): Macros => sumMacros(items.map((i) => portionMacros(i)));
+
+/** The slot a meal most likely goes in at this hour, from the member's own slots. */
+export function slotNow(slots: string[], hour: number): string {
+  const want = hour < 11 ? "breakfast" : hour < 15 ? "lunch" : "dinner";
+  return slots.find((s) => s.toLowerCase() === want) ?? (hour < 15 ? slots[0] : slots[slots.length - 1]) ?? "Meal";
+}
+
 /* ───────── Access (the privacy rule) ───────── */
 
 /**

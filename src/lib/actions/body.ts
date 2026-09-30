@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { ctx, num, opt, optNum, refresh, str } from "@/lib/action-helpers";
 import { requireCoach, type Viewer } from "@/lib/auth";
-import { MACROS, portionMacros, sumMacros, type Macro } from "@/lib/engine/body";
+import { MACROS, entryItem, totalsOf, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
 import { convertQty, storedUnit } from "@/lib/engine/body-units";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
@@ -263,10 +263,6 @@ export async function archiveMealAction(formData: FormData): Promise<void> {
 
 /* ───────── Logging ───────── */
 
-function entryItem(food: schema.BodyFood, qty: number): schema.BodyEntryItem {
-  return { foodId: food.id, name: food.name, unit: food.unit, qty, cal: food.cal, p: food.p, f: food.f, c: food.c, capTag: food.capTag, sodium: food.sodium };
-}
-const totalsOf = (items: schema.BodyEntryItem[]) => sumMacros(items.map((i) => portionMacros(i)));
 
 function logTarget(formData: FormData, slots: string[]) {
   const date = str(formData, "date");

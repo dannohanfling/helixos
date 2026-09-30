@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 24,
+    date: "2026-09-30",
+    title: "HumanOS in Claude",
+    lines: ["With Body's AI switch on and the Body area ticked when you connect HelixOS to Claude, Claude can read your day (targets, what you've eaten, what's left and what fits), your foods, your weigh-ins and your training.", "It can also log for you: a saved meal or a food, a set, a weigh-in. Never your photos, injuries or what your coach wrote."],
+    audience: "coach",
+  },
+  {
     n: 23,
     date: "2026-09-30",
     title: "HumanOS: finish your workout",
