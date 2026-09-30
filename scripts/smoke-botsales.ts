@@ -29,6 +29,23 @@ async function submit(page: Page, selector: string) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(400);
 }
+/**
+ * Opens an add form and waits until its last field shows. A save's refresh can land after networkidle and shut a form just
+ * opened, so a form that isn't showing is opened again (at most three times) rather than filled blind.
+ */
+async function openForm(page: Page, add: string, lastField: ReturnType<Page["locator"]>) {
+  for (let i = 0; i < 3; i++) {
+    if (!(await lastField.isVisible())) await page.locator(add).click();
+    try {
+      await lastField.waitFor({ state: "visible", timeout: 5000 });
+      await page.waitForTimeout(300);
+      if (await lastField.isVisible()) return;
+    } catch {
+      // shut again before it showed: open it once more
+    }
+  }
+  throw new Error(`${add} opens its form`);
+}
 const post = (path: string, body: unknown) => fetch(`${mock}${path}`, { method: "POST", body: JSON.stringify(body) });
 const requests = async () => (await (await fetch(`${mock}/__requests`)).json()) as { fields: { name: string; value: string }[]; token: string }[];
 const store = async () => (await (await fetch(`${mock}/__fields`)).json()) as Record<string, string>;
@@ -178,14 +195,14 @@ async function main() {
     console.log(`✓ the example checks: ${baseline.length} warnings on his approved examples (a named lead, three repeats of the lead's words), none blocking`);
 
     // ── Warnings, never blocks: an example over its length, and a story with a number, each added on the page. ──
-    await page.locator('[data-testid="bot-example-add"]').click();
     const exForm = page.locator('#examples > details [data-testid="bot-example-form"]');
+    await openForm(page, '[data-testid="bot-example-add"]', exForm.locator('textarea[name="me"]'));
     await exForm.locator('input[name="moment"]').fill(`Too long ${RUN}.`);
     await exForm.locator('textarea[name="me"]').fill("One. Two. Three?");
     await submit(page, '#examples > details [data-testid="bot-example-form"] button');
     await preview.waitFor({ timeout: 20000 });
-    await page.locator('[data-testid="bot-story-add"]').click();
     const stForm = page.locator('#stories > details [data-testid="bot-story-form"]');
+    await openForm(page, '[data-testid="bot-story-add"]', stForm.locator('input[name="when"]'));
     await stForm.locator('textarea[name="text"]').fill(`My first $5,000 week ${RUN}.`);
     await stForm.locator('input[name="when"]').fill("Never");
     await submit(page, '#stories > details [data-testid="bot-story-form"] button');
