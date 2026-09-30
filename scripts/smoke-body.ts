@@ -37,6 +37,17 @@ async function press(page: Page, selector: string, shown: () => Promise<boolean>
   }
   throw new Error(`after pressing, the page shows ${what}`);
 }
+/**
+ * Opens a Disclosure by its summary text, only if it isn't already open. The page streams: wait for the summary to exist before
+ * reading whether its form shows, or a click on a Disclosure that renders open shuts it.
+ */
+async function openDisclosure(page: Page, summary: string, inside: string) {
+  const sum = page.locator("summary", { hasText: summary });
+  await sum.waitFor({ timeout: 30000 });
+  const field = page.locator(`${inside} input[name="name"]`).first();
+  if (!(await field.isVisible())) await sum.click();
+  await field.waitFor({ state: "visible", timeout: 10000 });
+}
 const entryCount = (page: Page) => page.locator('[data-testid="body-entry"]').count();
 async function noSideScroll(page: Page, where: string) {
   const [sw, cw] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
@@ -190,7 +201,7 @@ async function main() {
     for (const key of FOODS) {
       const f = fx(key);
       const form = client.locator('[data-testid="body-new-food"]');
-      if (!(await form.isVisible())) await client.locator("summary", { hasText: "New food" }).click();
+      await openDisclosure(client, "New food", '[data-testid="body-new-food"]');
       for (const [name, value] of [["name", f.name], ["cal", f.cal], ["p", f.p], ["f", f.f], ["c", f.c]] as const) await fillExact(client, `[data-testid="body-new-food"] input[name="${name}"]`, String(value));
       // The "per" unit is a dropdown (rev 229): a listed unit is picked; anything else (an egg) is Other with its words.
       if (readUnit(f.unit).unit) await form.locator('select[name="unitChoice"]').selectOption(readUnit(f.unit).unit!);
@@ -214,7 +225,7 @@ async function main() {
     const mealRows = () => client.locator('[data-testid="body-meal-list"] > li').count();
     for (const meal of MEALS) {
       const form = client.locator('[data-testid="body-new-meal"]');
-      if (!(await form.isVisible())) await client.locator("summary", { hasText: "New meal" }).click();
+      await openDisclosure(client, "New meal", '[data-testid="body-new-meal"]');
       await fillExact(client, '[data-testid="body-new-meal"] input[name="name"]', meal.name);
       if (meal.slot) await form.locator('select[name="slot"]').selectOption(meal.slot);
       for (const [i, item] of meal.items.entries()) {
