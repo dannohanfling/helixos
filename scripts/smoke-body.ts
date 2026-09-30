@@ -10,6 +10,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
+import type { Column } from "drizzle-orm";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const PHONE = { width: 390, height: 844 };
@@ -69,7 +70,7 @@ async function main() {
   const { and, eq } = await import("drizzle-orm");
   const { PHASE2_V4 } = await import("../src/lib/engine/__tests__/fixtures/body-phase2v4");
   const { dayMarks, MACROS, fmtMacro, portionMacros, sumMacros } = await import("@/lib/engine/body");
-  const { todayInTz } = await import("@/lib/dates");
+  const { addDays, todayInTz } = await import("@/lib/dates");
   const { loggableUnits, readUnit, storedUnit } = await import("@/lib/engine/body-units");
   const EGG_SODIUM = 70;
 
@@ -77,8 +78,11 @@ async function main() {
   const mem = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
   const ws = await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) });
   const today = todayInTz(mem.timezone || ws!.timezone);
-  const BODY = [schema.bodyEntries, schema.bodyDays, schema.bodyComments, schema.bodyMeals, schema.bodyFoods, schema.bodyDayTypes, schema.bodyShareEvents, schema.bodySettings];
-  const mine = <T extends (typeof BODY)[number]>(t: T) => and(eq(t.workspaceId, mem.workspaceId), eq(t.userId, maya.id));
+  // Every Body table, from the registry that export and deletion read (never a list typed here): B2's tables are in it.
+  const { BODY_LABELS, MEMBER_TABLES } = await import("@/lib/member-data");
+  const BODY = [...BODY_LABELS].map((l) => MEMBER_TABLES[l] as typeof schema.bodyEntries);
+  if (BODY.length < 12) throw new Error(`the Body registry lists every Body table, B2's included: ${BODY.length}`);
+  const mine = (t: { workspaceId: Column; userId: Column }) => and(eq(t.workspaceId, mem.workspaceId), eq(t.userId, maya.id));
   const count = async () => {
     let n = 0;
     for (const t of BODY) n += (await db.select().from(t).where(mine(t))).length;
@@ -111,7 +115,7 @@ async function main() {
       await page.locator('[data-testid="item-gone"]').waitFor({ timeout: 30000 });
       if (await page.locator('[data-testid="body-start"], [data-testid="body-tiles"], [data-testid="body-private-note"], [data-testid="coach-body-private"]').count()) throw new Error(`${path} shows nothing of Body while it's off`);
     };
-    for (const path of ["/body", "/body/foods", "/body/settings"]) await notFoundPage(client, path);
+    for (const path of ["/body", "/body/foods", "/body/settings", "/body/training", "/body/training/routines"]) await notFoundPage(client, path);
     const offExport = await client.request.get(`${base}/api/export?format=json&scope=body`);
     if (offExport.status() !== 404) throw new Error(`the Body export is a 404 while Body is off, got ${offExport.status()}`);
     await client.goto(`${base}/more`);
@@ -143,7 +147,7 @@ async function main() {
     if (!/private to you/i.test(await client.locator('[data-testid="body-private-note"]').innerText())) throw new Error("setup says Body is private to the member");
     await client.goto(`${base}/more`);
     await client.locator('main a[href="/today"]').waitFor({ timeout: 30000 });
-    if (!(await client.locator('main a[href="/body"]').count()) || !(await client.locator('main a[href="/body/foods"]').count())) throw new Error("the menu has HumanOS's Log and Nutrition once it's on");
+    if (!(await client.locator('main a[href="/body"]').count()) || !(await client.locator('main a[href="/body/foods"]').count()) || !(await client.locator('main a[href="/body/training"]').count())) throw new Error("the menu has HumanOS's Log, Nutrition and Training once it's on");
     if (!/HumanOS/.test((await client.locator("main").textContent()) ?? "")) throw new Error("the menu has a HumanOS section once Body is on");
     await client.goto(`${base}/body`);
     if (await client.locator('[data-testid^="body-preset-"]').count()) throw new Error("there are no presets to pick: everyone starts blank");
@@ -298,6 +302,93 @@ async function main() {
     await noSideScroll(client, "/today");
     console.log(`✓ Today carries one Body line once targets exist: "${line.replace(/\s+/g, " ").trim()}"`);
 
+    // ── B2 workouts (rev 182): exercises and a routine through the forms, yesterday's sets, then today's routine with last time,
+    // the PR and a new PR; the history chart; a day marked Off and undone. Everything typed as a member would. ──
+    await client.goto(`${base}/body/training`);
+    await client.locator('[data-testid="training-empty"]').waitFor({ timeout: 30000 });
+    await noSideScroll(client, "/body/training, nothing yet");
+    await client.goto(`${base}/body/training/routines`);
+    const EXERCISES = [{ name: "Bench press", kind: "weight" }, { name: "Pull-up", kind: "bodyweight" }] as const;
+    for (const e of EXERCISES) {
+      await openDisclosure(client, "New exercise", '[data-testid="training-new-exercise"]');
+      await fillExact(client, '[data-testid="training-new-exercise"] input[name="name"]', e.name);
+      await client.locator('[data-testid="training-new-exercise"] select[name="kind"]').selectOption(e.kind);
+      await press(client, '[data-testid="training-save-exercise"]', async () => (await client.locator(`[data-testid="training-exercise-row"][data-name="${e.name}"]`).count()) > 0, e.name);
+    }
+    const exRows = await db.query.bodyExercises.findMany({ where: mine(schema.bodyExercises) });
+    if (exRows.length !== EXERCISES.length || EXERCISES.some((e) => exRows.find((r) => r.name === e.name)?.kind !== e.kind)) throw new Error(`the exercises saved as typed: ${exRows.map((r) => `${r.name}/${r.kind}`).join(", ")}`);
+    const exId = (name: string) => exRows.find((r) => r.name === name)!.id;
+    const ROUTINE = { name: "Push A", lines: [{ ex: "Bench press", sets: 3, reps: "5" }, { ex: "Pull-up", sets: 3, reps: "8–10" }] };
+    const rForm = '[data-testid="training-new-routine"]';
+    await openDisclosure(client, "New routine", rForm);
+    await fillExact(client, `${rForm} input[name="name"]`, ROUTINE.name);
+    await client.locator(`${rForm} select[name="dayTypeId"]`).selectOption(types0[0].id);
+    for (const [i, l] of ROUTINE.lines.entries()) {
+      await client.locator(`${rForm} select[name="item_${i}_exercise"]`).selectOption(exId(l.ex));
+      await fillExact(client, `${rForm} input[name="item_${i}_sets"]`, String(l.sets));
+      await fillExact(client, `${rForm} input[name="item_${i}_reps"]`, l.reps);
+    }
+    await press(client, `${rForm} button[type="submit"]`, async () => (await client.locator(`[data-testid="training-routine-row"][data-name="${ROUTINE.name}"]`).count()) > 0, ROUTINE.name);
+    const routine = (await db.query.bodyRoutines.findFirst({ where: mine(schema.bodyRoutines) }))!;
+    const wantItems = ROUTINE.lines.map((l) => ({ exerciseId: exId(l.ex), sets: l.sets, reps: l.reps }));
+    if (routine.dayTypeId !== types0[0].id || JSON.stringify(routine.items) !== JSON.stringify(wantItems)) throw new Error(`the routine saved as typed, on ${types0[0].name} days: ${JSON.stringify(routine)}`);
+    await noSideScroll(client, "/body/training/routines");
+
+    const card = (name: string) => `[data-testid="training-exercise"][data-name="${name}"]`;
+    const setsIn = (name: string) => client.locator(`${card(name)} [data-testid="training-set"]`);
+    const logSet = async (name: string, weight: string, reps: string) => {
+      const before = await setsIn(name).count();
+      await fillExact(client, `${card(name)} [data-testid="training-log-form"] input[name="weight"]`, weight);
+      await fillExact(client, `${card(name)} [data-testid="training-log-form"] input[name="reps"]`, reps);
+      await press(client, `${card(name)} [data-testid="training-log-set"]`, async () => (await setsIn(name).count()) === before + 1, `${name}: set ${before + 1}`);
+    };
+    // Yesterday: the routine offered for the day type, started in one tap; two sets of bench, the first ever, so no PR yet.
+    const yesterday = addDays(today, -1);
+    await client.goto(`${base}/body/training?date=${yesterday}`);
+    await client.locator('[data-testid="training-start-suggested"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="training-start-suggested"]', async () => (await client.locator('[data-testid="training-exercise"]').count()) === ROUTINE.lines.length, `${ROUTINE.name}'s exercises`);
+    await logSet("Bench press", "185", "5");
+    await logSet("Bench press", "185", "5");
+    if ((await setsIn("Bench press").evaluateAll((els) => els.map((e) => e.getAttribute("data-pr")))).some((f) => f !== "0")) throw new Error("a first-ever set and its equal aren't PRs");
+    // Today: last time and the PR beside the exercise, the form opening on last time's set; 190 × 5 is a new PR.
+    await client.goto(`${base}/body/training`);
+    await client.locator('[data-testid="training-start-suggested"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="training-start-suggested"]', async () => (await client.locator('[data-testid="training-exercise"]').count()) === ROUTINE.lines.length, "today's routine");
+    const benchLast = (await client.locator(`${card("Bench press")} [data-testid="training-last"]`).textContent()) ?? "";
+    const benchPr = (await client.locator(`${card("Bench press")} [data-testid="training-pr"]`).textContent()) ?? "";
+    if (!benchLast.includes("185 × 5 · 185 × 5") || benchPr !== "PR 185 × 5") throw new Error(`last time and the PR beside the bench: "${benchLast}", "${benchPr}"`);
+    if ((await client.locator(`${card("Bench press")} [data-testid="training-target"]`).textContent()) !== "3 × 5") throw new Error("the routine's target shows");
+    const openW = await client.locator(`${card("Bench press")} [data-testid="training-log-form"] input[name="weight"]`).inputValue();
+    const openR = await client.locator(`${card("Bench press")} [data-testid="training-log-form"] input[name="reps"]`).inputValue();
+    if (openW !== "185" || openR !== "5") throw new Error(`the set form opens on last time's set: ${openW} × ${openR}`);
+    await logSet("Bench press", "190", "5");
+    if ((await setsIn("Bench press").first().getAttribute("data-pr")) !== "1") throw new Error("190 × 5 beats 185 × 5: a PR");
+    // Bodyweight: reps alone; then a set logged by mistake and deleted.
+    await logSet("Pull-up", "", "10");
+    if (!((await setsIn("Pull-up").first().textContent()) ?? "").includes("10 reps")) throw new Error("a bodyweight set reads as its reps");
+    await logSet("Pull-up", "", "8");
+    await press(client, `${card("Pull-up")} [data-testid="training-delete-set"] >> nth=1`, async () => (await setsIn("Pull-up").count()) === 1, "the mistaken set gone");
+    const sets = await db.query.bodySets.findMany({ where: mine(schema.bodySets) });
+    const want = [`${yesterday} Bench press 185x5 lb`, `${yesterday} Bench press 185x5 lb`, `${today} Bench press 190x5 lb`, `${today} Pull-up nullx10 lb`].sort();
+    const got = sets.map((x) => `${x.date} ${exRows.find((r) => r.id === x.exerciseId)!.name} ${x.weight}x${x.reps} ${x.unit}`).sort();
+    if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`the sets saved as logged: ${got.join("; ")}`);
+    await noSideScroll(client, "/body/training with sets");
+    // The history: a point per session, and the PR.
+    await client.goto(`${base}/body/training/${exId("Bench press")}`);
+    await client.locator('[data-testid="trend-line"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="trend-point"]').count()) !== 2 || !((await client.locator('[data-testid="history-pr"]').textContent()) ?? "").includes("PR 190 × 5")) throw new Error("the history charts both sessions and names the PR");
+    await noSideScroll(client, "the bench history");
+    // Off: two days ago marked Off, then undone; the row goes with it (no hand-set type on that day).
+    const twoAgo = addDays(today, -2);
+    await client.goto(`${base}/body/training?date=${twoAgo}`);
+    await client.locator('[data-testid="training-mark-off"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="training-mark-off"]', async () => (await client.locator('[data-testid="training-off"]').count()) > 0, "the day Off");
+    const offRow = await db.query.bodyDays.findFirst({ where: and(mine(schema.bodyDays), eq(schema.bodyDays.date, twoAgo)) });
+    if (!offRow?.off) throw new Error("Off is saved on the day");
+    await press(client, '[data-testid="training-undo-off"]', async () => (await client.locator('[data-testid="training-mark-off"]').count()) > 0, "the day back");
+    if (await db.query.bodyDays.findFirst({ where: and(mine(schema.bodyDays), eq(schema.bodyDays.date, twoAgo)) })) throw new Error("undoing Off leaves no row behind");
+    console.log(`✓ B2 workouts: ${EXERCISES.length} exercises and ${ROUTINE.name} through the forms; yesterday's 185 × 5 ×2 (no PR on a first), today's routine offered for the day type with last time, the PR and the form on 185 × 5; 190 × 5 flagged a PR; bodyweight as reps; a set deleted; the history charts 2 sessions; Off marked and undone`);
+
     // ── Private: the coach sees nothing, and a coach's export never has Body. ──
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("the client page shows no Body card while private");
@@ -315,7 +406,9 @@ async function main() {
     await coach.waitForURL(/\/body/);
     const coachCal = await coach.locator('[data-testid="body-tile-cal"]').innerText();
     if (!coachCal.includes(fmtMacro("cal", totals.cal))) throw new Error(`the coach reads the client's day: "${coachCal}"`);
-    if (await coach.locator('[data-testid="body-log-meal"], [data-testid="body-log-food"], [data-testid="body-share-toggle"], [data-testid="body-no-targets"]').count()) throw new Error("the coach's view has no way to log or change anything");
+    if (await coach.locator('[data-testid="body-log-meal"], [data-testid="body-log-food"], [data-testid="body-share-toggle"], [data-testid="body-no-targets"], [data-testid="training-log-form"]').count()) throw new Error("the coach's view has no way to log or change anything");
+    const coachTraining = (await coach.locator('[data-testid="coach-training"]').textContent()) ?? "";
+    if (!coachTraining.includes("Bench press") || !coachTraining.includes("190 × 5 🏆") || !coachTraining.includes("10 reps")) throw new Error(`the coach reads the day's workout, PR marked: "${coachTraining}"`);
     const note = `Great day ${Date.now()}`;
     await fillExact(coach, '[data-testid="coach-body-comment"]', note);
     await press(coach, '[data-testid="coach-body-comment-send"]', async () => (await coach.locator('[data-testid="coach-body-comments"]').count()) > 0 && (await coach.locator('[data-testid="coach-body-comments"]').innerText()).includes(note), "the comment");
@@ -348,6 +441,7 @@ async function main() {
     const aiText = await bodyAiContext(await viewerFor());
     if (!aiText || !aiText.includes(MEALS[0].name) || !aiText.includes(`${fmtMacro("cal", totals.cal)} cal`)) throw new Error(`with the switch on, AI gets today's numbers and logged meals: ${aiText}`);
     if (aiText.includes(note)) throw new Error("the coach's comment never goes to AI");
+    if (!aiText.includes(`${ROUTINE.name}: Bench press 190 × 5`) || !aiText.includes("Bench press 185 × 5, 185 × 5")) throw new Error(`with the switch on, AI gets the week's workouts: ${aiText}`);
     // Another viewer (the coach) never gets it, switch or not.
     const theCoach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     const coachViewer = { ...(await viewerFor()), user: theCoach, actor: theCoach, role: "coach" as const };
@@ -361,6 +455,7 @@ async function main() {
 
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
+    if ((own.body_sets ?? []).length !== 4 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
     if ((own.body_entries ?? []).length !== 3 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // Download and Delete are two separate cards (rev 230); the confirm stays shut until DELETE is typed exactly.
     if (!(await client.locator('#download [data-testid="body-export"]').count()) || (await client.locator('#download [data-testid="body-erase"]').count()) || !(await client.locator('[data-testid="body-delete-card"] [data-testid="body-erase"]').count())) throw new Error("Download and Delete sit in separate cards");

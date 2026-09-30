@@ -197,7 +197,9 @@ export async function setBodyDayTypeAction(formData: FormData): Promise<void> {
   const types = await db.query.bodyDayTypes.findMany({ where: and(eq(schema.bodyDayTypes.workspaceId, workspaceId), eq(schema.bodyDayTypes.userId, userId)) });
   const existing = await db.query.bodyDays.findFirst({ where: and(and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId)), eq(schema.bodyDays.date, date)) });
   if (!typeId || !types.some((t) => t.id === typeId)) {
-    if (existing) await db.delete(schema.bodyDays).where(eq(schema.bodyDays.id, existing.id));
+    // A day marked Off (B2) keeps its row: only the hand-set type goes.
+    if (existing?.off) await db.update(schema.bodyDays).set({ dayTypeId: null }).where(eq(schema.bodyDays.id, existing.id));
+    else if (existing) await db.delete(schema.bodyDays).where(eq(schema.bodyDays.id, existing.id));
   } else if (existing) await db.update(schema.bodyDays).set({ dayTypeId: typeId }).where(eq(schema.bodyDays.id, existing.id));
   else await db.insert(schema.bodyDays).values({ id: newId(), workspaceId, userId, date, dayTypeId: typeId });
   refresh();
@@ -317,6 +319,137 @@ export async function deleteEntryAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/* ───────── B2, workouts (rev 182) ───────── */
+
+const TRAINING = "/body/training";
+const R = "Body is never open from a client's HelixOS.";
+const trainingAt = (date: string) => `${TRAINING}?date=${date}`;
+
+/** Add or rename an exercise. Weighted logs weight × reps; bodyweight logs reps, with any added weight. */
+export async function saveExerciseAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const id = str(formData, "id");
+  const name = str(formData, "name").slice(0, 80);
+  const kind = str(formData, "kind") === "bodyweight" ? "bodyweight" : "weight";
+  if (!name) back(`${TRAINING}/routines`, "An exercise needs a name.");
+  if (id) await db.update(schema.bodyExercises).set({ name, kind }).where(and(eq(schema.bodyExercises.id, id), and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))));
+  else await db.insert(schema.bodyExercises).values({ id: newId(), workspaceId, userId, name, kind });
+  refresh();
+}
+
+/** Archived exercises leave the pickers; routines and past sessions that use them keep working. */
+export async function archiveExerciseAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.update(schema.bodyExercises).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyExercises.id, str(formData, "id")), and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))));
+  refresh();
+}
+
+/** A routine's lines come as item_<n>_exercise / item_<n>_sets / item_<n>_reps; a blank exercise drops the row. */
+export async function saveRoutineAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const id = str(formData, "id");
+  const name = str(formData, "name").slice(0, 80);
+  if (!name) back(`${TRAINING}/routines`, "A routine needs a name.");
+  const [exercises, types] = await Promise.all([
+    db.query.bodyExercises.findMany({ where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)) }),
+    db.query.bodyDayTypes.findMany({ where: and(eq(schema.bodyDayTypes.workspaceId, workspaceId), eq(schema.bodyDayTypes.userId, userId)) }),
+  ]);
+  const known = new Set(exercises.map((e) => e.id));
+  const items: schema.BodyRoutineItem[] = [];
+  for (let i = 0; i < 20; i++) {
+    const exerciseId = str(formData, `item_${i}_exercise`);
+    if (!known.has(exerciseId)) continue;
+    items.push({ exerciseId, sets: Math.min(20, Math.max(1, Math.round(num(formData, `item_${i}_sets`)) || 3)), reps: str(formData, `item_${i}_reps`).slice(0, 20) });
+  }
+  if (!items.length) back(`${TRAINING}/routines`, `${name}: add at least one exercise.`);
+  const typeId = str(formData, "dayTypeId");
+  const dayTypeId = types.some((t) => t.id === typeId) ? typeId : null;
+  if (id) await db.update(schema.bodyRoutines).set({ name, dayTypeId, items }).where(and(eq(schema.bodyRoutines.id, id), and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId))));
+  else await db.insert(schema.bodyRoutines).values({ id: newId(), workspaceId, userId, name, dayTypeId, items });
+  refresh();
+}
+
+export async function archiveRoutineAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.update(schema.bodyRoutines).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyRoutines.id, str(formData, "id")), and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId))));
+  refresh();
+}
+
+/** The day's session, made on first use: from a routine (its name copied) or empty. One per date; a second start is a no-op. */
+async function sessionFor(workspaceId: string, userId: string, date: string, routine: schema.BodyRoutine | null) {
+  await db
+    .insert(schema.bodySessions)
+    .values({ id: newId(), workspaceId, userId, date, routineId: routine?.id ?? null, routineName: routine?.name ?? null })
+    .onConflictDoNothing({ target: [schema.bodySessions.workspaceId, schema.bodySessions.userId, schema.bodySessions.date] });
+  return (await db.query.bodySessions.findFirst({ where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), eq(schema.bodySessions.date, date)) }))!;
+}
+
+/** Start a day's workout, from a routine or without one. Starting takes the day off Off. */
+export async function startSessionAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date) || date > v.today) back(TRAINING, "That day isn't open for a workout.");
+  const routineId = str(formData, "routineId");
+  const routine = routineId ? ((await db.query.bodyRoutines.findFirst({ where: and(eq(schema.bodyRoutines.id, routineId), and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId))) })) ?? null) : null;
+  const session = await sessionFor(workspaceId, userId, date, routine);
+  // A session started empty takes the routine picked later; one already on a routine keeps it.
+  if (routine && !session.routineId) await db.update(schema.bodySessions).set({ routineId: routine.id, routineName: routine.name }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
+  await db.update(schema.bodyDays).set({ off: false }).where(and(and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId)), eq(schema.bodyDays.date, date)));
+  refresh();
+  redirect(trainingAt(date));
+}
+
+/** One set, weight × reps, in the member's unit. Logging on a day with no session starts one without a routine. */
+export async function logSetAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  const settings = await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date) || date > v.today) back(TRAINING, "That day isn't open for a workout.");
+  const exercise = await db.query.bodyExercises.findFirst({ where: and(eq(schema.bodyExercises.id, str(formData, "exerciseId")), and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))) });
+  if (!exercise) back(trainingAt(date), "Pick an exercise.");
+  const reps = Math.round(num(formData, "reps"));
+  if (reps < 1 || reps > 1000) back(trainingAt(date), `${exercise!.name}: enter the reps.`);
+  const raw = optNum(formData, "weight");
+  const weight = raw != null && raw > 0 && raw < 5000 ? raw : null;
+  if (exercise!.kind === "weight" && weight == null) back(trainingAt(date), `${exercise!.name}: enter the weight.`);
+  const session = await sessionFor(workspaceId, userId, date, null);
+  await db.insert(schema.bodySets).values({ id: newId(), workspaceId, userId, sessionId: session.id, exerciseId: exercise!.id, date, weight, unit: settings.weightUnit, reps });
+  refresh();
+}
+
+export async function deleteSetAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.delete(schema.bodySets).where(and(eq(schema.bodySets.id, str(formData, "id")), and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId))));
+  refresh();
+}
+
+/** Mark a day Off, or undo it. A day with sets logged can't be Off: delete them first. */
+export async function setDayOffAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date) || date > v.today) return;
+  const off = str(formData, "off") === "1";
+  const where = and(and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId)), eq(schema.bodyDays.date, date));
+  const existing = await db.query.bodyDays.findFirst({ where });
+  if (off) {
+    const anySet = await db.query.bodySets.findFirst({ columns: { id: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), eq(schema.bodySets.date, date)) });
+    if (anySet) back(trainingAt(date), "This day has sets logged, so it isn't Off. Delete them first if it was a rest day.");
+    if (existing) await db.update(schema.bodyDays).set({ off: true }).where(where);
+    else await db.insert(schema.bodyDays).values({ id: newId(), workspaceId, userId, date, off: true });
+    // An empty session started by mistake goes with it.
+    await db.delete(schema.bodySessions).where(and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), eq(schema.bodySessions.date, date)));
+  } else if (existing?.dayTypeId) await db.update(schema.bodyDays).set({ off: false }).where(where);
+  else if (existing) await db.delete(schema.bodyDays).where(where);
+  refresh();
+}
+
 /* ───────── The coach, when shared ───────── */
 
 /** A coach's comment on one of the client's days: only while the client shares, and only on a day, never on their data. */
@@ -342,6 +475,10 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
+    db.delete(schema.bodySets).where(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId))),
+    db.delete(schema.bodySessions).where(and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))),
+    db.delete(schema.bodyRoutines).where(and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId))),
+    db.delete(schema.bodyExercises).where(and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))),
     db.delete(schema.bodyEntries).where(and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId))),
     db.delete(schema.bodyDays).where(and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId))),
     db.delete(schema.bodyComments).where(and(eq(schema.bodyComments.workspaceId, workspaceId), eq(schema.bodyComments.userId, userId))),

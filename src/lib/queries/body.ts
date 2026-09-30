@@ -2,11 +2,12 @@
  * Body reads. Every read of a Body table in the app is here (a unit test holds that), and every read of someone else's Body data
  * goes through bodyAccess first: a coach sees a client's Body only while the client's share switch is on (rev 179, privacy).
  */
-import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { addDays, todayInTz } from "@/lib/dates";
+import { bestSet, fmtSet, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, type WeightUnit } from "@/lib/engine/body-training";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 
 /**
@@ -163,6 +164,140 @@ export async function todayBody(v: Viewer) {
   return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null };
 }
 
+/* ───────── B2, workouts (rev 182) ───────── */
+
+/** The member's exercises and routines (archived left out unless asked), with each routine's lines resolved to exercises. */
+export async function trainingLibrary(workspaceId: string, userId: string) {
+  const [all, routines] = await Promise.all([
+    db.query.bodyExercises.findMany({ where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)), orderBy: asc(schema.bodyExercises.name) }),
+    db.query.bodyRoutines.findMany({ where: and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId), isNull(schema.bodyRoutines.archivedAt)), orderBy: asc(schema.bodyRoutines.name) }),
+  ]);
+  const byId = new Map(all.map((e) => [e.id, e]));
+  return {
+    exercises: all.filter((e) => !e.archivedAt),
+    byId,
+    // A routine keeps an archived exercise it already had: archiving hides it from pickers, it doesn't break a routine.
+    routines: routines.map((r) => ({ ...r, lines: r.items.flatMap((i) => (byId.has(i.exerciseId) ? [{ ...i, exercise: byId.get(i.exerciseId)! }] : [])) })),
+  };
+}
+export type TrainingLibrary = Awaited<ReturnType<typeof trainingLibrary>>;
+
+/** Sets in the order they were logged: created_at has whole seconds, so two quick sets tie and SQLite's rowid breaks it. */
+const setOrder = [asc(schema.bodySets.createdAt), asc(sql`rowid`)];
+
+/** Every set of these exercises, oldest first: what last time, the PR and the history read from. */
+async function setsOf(workspaceId: string, userId: string, exerciseIds: string[]) {
+  if (!exerciseIds.length) return [];
+  return db.query.bodySets.findMany({
+    where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), inArray(schema.bodySets.exerciseId, exerciseIds)),
+    orderBy: [asc(schema.bodySets.date), ...setOrder],
+  });
+}
+
+/**
+ * One day of Training: its day type and reminder, whether it's marked Off, the session if started, and for each exercise in view
+ * (the routine's, in order, then any other logged that day) its target, today's sets with PR flags, last time, the PR and what
+ * the next set's form opens with. Null while Body isn't set up.
+ */
+export async function trainingDay(workspaceId: string, userId: string, date: string) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const unit: WeightUnit = settings.weightUnit;
+  const [types, day, session, lib] = await Promise.all([
+    dayTypesFor(workspaceId, userId),
+    db.query.bodyDays.findFirst({ where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), eq(schema.bodyDays.date, date)) }),
+    db.query.bodySessions.findFirst({ where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), eq(schema.bodySessions.date, date)) }),
+    trainingLibrary(workspaceId, userId),
+  ]);
+  const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
+  const typeId = dayTypeIdFor(date, settings.weekPattern, refeed, day?.dayTypeId ?? null);
+  const dayType = types.find((t) => t.id === typeId) ?? null;
+  const routine = session?.routineId ? (lib.routines.find((r) => r.id === session.routineId) ?? null) : null;
+  const daySets = session
+    ? await db.query.bodySets.findMany({ where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), eq(schema.bodySets.sessionId, session.id)), orderBy: setOrder })
+    : [];
+  const ids = [...new Set([...(routine?.lines.map((l) => l.exerciseId) ?? []), ...daySets.map((s) => s.exerciseId)])].filter((id) => lib.byId.has(id));
+  const history = await setsOf(workspaceId, userId, ids);
+  const exercises = ids.map((id) => {
+    const exercise = lib.byId.get(id)!;
+    const all = history.filter((s) => s.exerciseId === id);
+    const flags = prFlags(all, unit);
+    const today = all.map((s, i) => ({ ...s, pr: flags[i] })).filter((s) => s.date === date);
+    const before = all.filter((s) => s.date < date);
+    const last = lastTime(before, date);
+    const pr = bestSet(before, unit);
+    return {
+      exercise,
+      target: routine?.lines.find((l) => l.exerciseId === id) ?? null,
+      today,
+      last: last.map((s) => fmtSet(s, unit, exercise.kind)),
+      lastDate: last[0]?.date ?? null,
+      pr: pr ? { text: fmtSet(pr, unit, exercise.kind), date: pr.date } : null,
+      next: nextSetDefaults(today, last, unit),
+    };
+  });
+  return {
+    settings,
+    unit,
+    dayType,
+    reminder: dayType?.reminder ?? null,
+    off: !!day?.off,
+    session,
+    routineName: session?.routineName ?? null,
+    exercises,
+    library: lib,
+    suggested: routineForDay(lib.routines, typeId),
+  };
+}
+export type TrainingDayView = NonNullable<Awaited<ReturnType<typeof trainingDay>>>;
+
+/** One exercise's history: a point per session (oldest first), each session's sets, and the PR. Null if it isn't the member's. */
+export async function exerciseHistory(workspaceId: string, userId: string, exerciseId: string) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const exercise = await db.query.bodyExercises.findFirst({ where: and(eq(schema.bodyExercises.id, exerciseId), eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)) });
+  if (!exercise) return null;
+  const unit: WeightUnit = settings.weightUnit;
+  const sets = await setsOf(workspaceId, userId, [exercise.id]);
+  const flags = prFlags(sets, unit);
+  const pr = bestSet(sets, unit);
+  const dates = [...new Set(sets.map((s) => s.date))].sort().reverse();
+  return {
+    exercise,
+    unit,
+    points: historyOf(sets, unit),
+    pr: pr ? { text: fmtSet(pr, unit, exercise.kind), date: pr.date } : null,
+    sessions: dates.map((date) => ({ date, sets: sets.flatMap((s, i) => (s.date === date ? [{ text: fmtSet(s, unit, exercise.kind), pr: flags[i] }] : [])) })),
+  };
+}
+
+/** The last week's sessions in words, for AI: "2026-09-29 Push A: Bench press 185 × 5, 185 × 5; Dips 12 reps". Newest first. */
+export async function recentTraining(workspaceId: string, userId: string, today: string, days = 7) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return [];
+  const from = addDays(today, -(days - 1));
+  const [sessions, sets, lib, offDays] = await Promise.all([
+    db.query.bodySessions.findMany({ where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), gte(schema.bodySessions.date, from)), orderBy: desc(schema.bodySessions.date) }),
+    db.query.bodySets.findMany({ where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, from)), orderBy: setOrder }),
+    trainingLibrary(workspaceId, userId),
+    db.query.bodyDays.findMany({ columns: { date: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), eq(schema.bodyDays.off, true), gte(schema.bodyDays.date, from)) }),
+  ]);
+  const out = sessions.map((sess) => {
+    const mine = sets.filter((s) => s.sessionId === sess.id);
+    // The routine's order first, then anything else in the order it was done.
+    const order = lib.routines.find((r) => r.id === sess.routineId)?.items.map((i) => i.exerciseId) ?? [];
+    const rank = (id: string) => (order.includes(id) ? order.indexOf(id) : order.length);
+    const ids = [...new Set(mine.map((s) => s.exerciseId))].sort((a, b) => rank(a) - rank(b));
+    const lines = ids.map((id) => {
+      const ex = lib.byId.get(id);
+      return `${ex?.name ?? "Exercise"} ${mine.filter((s) => s.exerciseId === id).map((s) => fmtSet(s, settings.weightUnit, ex?.kind ?? "weight")).join(", ")}`;
+    });
+    return { date: sess.date, routine: sess.routineName, lines, off: false };
+  });
+  for (const d of offDays) if (!out.some((o) => o.date === d.date)) out.push({ date: d.date, routine: null, lines: [], off: true });
+  return out.sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
 /** The last days with anything logged, newest first, for the recent strip: date, totals and the worst mark. */
 export async function recentDays(workspaceId: string, userId: string, today: string, days = 7) {
   const settings = await bodySettingsFor(workspaceId, userId);
@@ -206,7 +341,7 @@ export async function canAiUseBody(v: Viewer, memberUserId: string): Promise<boo
  */
 export async function bodyAiContext(v: Viewer): Promise<string | null> {
   if (!(await canAiUseBody(v, v.user.id))) return null;
-  const [d, recent, types] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), recentDays(v.workspace.id, v.user.id, v.today), dayTypesFor(v.workspace.id, v.user.id)]);
+  const [d, recent, types, training] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), recentDays(v.workspace.id, v.user.id, v.today), dayTypesFor(v.workspace.id, v.user.id), recentTraining(v.workspace.id, v.user.id, v.today)]);
   if (!d) return null;
   return formatBodyForAi({
     today: v.today,
@@ -214,6 +349,7 @@ export async function bodyAiContext(v: Viewer): Promise<string | null> {
     days: recent.map((r) => ({ date: r.date, dayType: r.dayType, totals: r.totals, logged: r.logged })),
     todayEntries: d.entries.map((e) => ({ slot: e.slot, name: e.name, items: e.items.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit })), totals: { cal: e.cal, p: e.p, f: e.f, c: e.c } })),
     meals: d.library.meals.map((m) => m.name),
+    training,
   });
 }
 

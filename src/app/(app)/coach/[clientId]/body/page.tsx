@@ -6,7 +6,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { CapsLine, EntriesBySlot, MacroTiles, MarkKey } from "@/components/body/day-parts";
 import { addDays, formatDate, formatDateTime } from "@/lib/dates";
 import { MARK_ICON, MARK_WORD } from "@/lib/engine/body";
-import { bodyDay, sharedClient } from "@/lib/queries/body";
+import { bodyDay, sharedClient, trainingDay } from "@/lib/queries/body";
+import { fmtSet } from "@/lib/engine/body-training";
 import { addBodyCommentAction } from "@/lib/actions/body";
 
 export const metadata = { title: "Client's Body" };
@@ -36,7 +37,8 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
   }
   const today = client.today;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
-  const d = await bodyDay(v.workspace.id, client.userId, date, today);
+  // Read only after sharedClient said shared, like the day itself.
+  const [d, t] = await Promise.all([bodyDay(v.workspace.id, client.userId, date, today), trainingDay(v.workspace.id, client.userId, date)]);
   if (!d) return null;
   const prev = addDays(date, -1);
   const next = addDays(date, 1);
@@ -75,6 +77,28 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
           <Card title="Eaten">
             <EntriesBySlot entries={d.entries} slots={d.settings.mealSlots} />
           </Card>
+          {t && (t.off || t.exercises.some((x) => x.today.length)) ? (
+            <Card title={t.off ? "Training" : `Training · ${t.routineName ?? "Workout"}`}>
+              {t.off ? (
+                <p className="text-sm text-ink-2" data-testid="coach-training-off">
+                  Off
+                </p>
+              ) : (
+                <ul className="space-y-1 text-sm" data-testid="coach-training">
+                  {t.exercises
+                    .filter((x) => x.today.length)
+                    .map((x) => (
+                      <li key={x.exercise.id}>
+                        <span className="font-medium">{x.exercise.name}</span>{" "}
+                        <span className="tabular text-ink-2">
+                          {x.today.map((s) => `${fmtSet(s, t.unit, x.exercise.kind)}${s.pr ? " 🏆" : ""}`).join(" · ")}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </Card>
+          ) : null}
         </div>
         <Card title="Comments on this day">
           {d.comments.length ? (

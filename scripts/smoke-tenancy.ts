@@ -68,6 +68,7 @@ const ROUTES: Record<string, Route> = {
   "/reset/[token]": { kind: "public", why: "a single-use password-reset token, its own secret" },
   "/link-chat/[token]": { kind: "public", why: "a single-use chat-link token, its own secret; the page itself refuses a token from another workspace" },
   "/api/deck-images/[id]": { kind: "owned", table: "deckImages" },
+  "/body/training/[exerciseId]": { kind: "owned", table: "bodyExercises" },
   "/api/proofs/attachments/[id]": { kind: "owned", table: "proofAttachments" },
   "/api/webinars/[id]/deck": { kind: "owned", table: "webinars" },
   "/files/[...key]": { kind: "public", why: "the public object store; a private proof file is served by /api/proofs/attachments/[id]" },
@@ -152,7 +153,25 @@ async function main() {
     }
     return d;
   };
-  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage()]);
+  // Body (B2): A has Body on and set up, so B's exercise id is refused by the member scoping, not by A's Body being off; B owns
+  // a private exercise with a logged set.
+  const { and } = await import("drizzle-orm");
+  const aMem = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, A.id), eq(schema.memberships.workspaceId, ws)) }))!;
+  await db.update(schema.memberships).set({ bodyEnabled: true }).where(eq(schema.memberships.id, aMem.id));
+  if (!(await db.query.bodySettings.findFirst({ where: and(eq(schema.bodySettings.workspaceId, ws), eq(schema.bodySettings.userId, A.id)) }))) await db.insert(schema.bodySettings).values({ id: newId(), workspaceId: ws, userId: A.id });
+  const ensureExercise = async () => {
+    let e = await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.userId, B.id) });
+    if (!e) {
+      const id = newId();
+      const sessionId = newId();
+      await db.insert(schema.bodyExercises).values({ id, workspaceId: ws, userId: B.id, name: "B's Private Lift" });
+      await db.insert(schema.bodySessions).values({ id: sessionId, workspaceId: ws, userId: B.id, date: "2026-09-01" });
+      await db.insert(schema.bodySets).values({ id: newId(), workspaceId: ws, userId: B.id, sessionId, exerciseId: id, date: "2026-09-01", weight: 123, reps: 4 });
+      e = (await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.id, id) }))!;
+    }
+    return e;
+  };
+  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise()]);
 
   // One B-owned id per table the routes name, so the walk can substitute B's id into A's request.
   const first = async <T>(q: Promise<T | undefined>): Promise<T> => {
@@ -175,12 +194,15 @@ async function main() {
     webinars: (await first(db.query.webinars.findFirst({ where: eq(schema.webinars.userId, B.id) }))).id,
     proofAttachments: (await ensureAttachment()).id,
     deckImages: (await ensureDeckImage()).id,
+    bodyExercises: (await ensureExercise()).id,
+    bodySets: (await first(db.query.bodySets.findFirst({ where: eq(schema.bodySets.userId, B.id) }))).id,
   };
   // B's private words, per table, that must never appear in a response to A.
   const bWord: Record<string, string> = {
     contentItems: (await first(db.query.contentItems.findFirst({ where: eq(schema.contentItems.userId, B.id) }))).title,
     webinars: (await first(db.query.webinars.findFirst({ where: eq(schema.webinars.userId, B.id) }))).title,
     offers: (await first(db.query.offers.findFirst({ where: eq(schema.offers.userId, B.id) }))).name,
+    bodyExercises: (await ensureExercise()).name,
   };
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
@@ -237,6 +259,8 @@ async function main() {
     console.log(`· public routes not owner-scoped, listed not skipped: ${publicListed.join("; ")}`);
 
     // ── Action sweep: a mutating action per owned table, called as A with B's id, changes nothing. ──
+    // The dev server compiles a page's actions on first visit: open A's own Training pages so the Body actions are registered.
+    for (const p of ["/body/training", "/body/training/routines"]) await page.goto(`${base}${p}`);
     const actionMap = buildActionMap();
     const byName = Object.fromEntries(Object.entries(actionMap).map(([id, n]) => [n, id]));
     const post = async (name: string, fields: Record<string, string>) => {
@@ -267,6 +291,9 @@ async function main() {
       { action: "deleteLadderAction", idField: "id", table: "ladders" },
       { action: "updateLibraryPostAction", idField: "id", table: "libraryPosts", extra: { title: "HACKED", body: "hacked" } },
       { action: "deleteLibraryPostAction", idField: "id", table: "libraryPosts" },
+      { action: "saveExerciseAction", idField: "id", table: "bodyExercises", extra: { name: "HACKED", kind: "bodyweight" } },
+      { action: "archiveExerciseAction", idField: "id", table: "bodyExercises" },
+      { action: "deleteSetAction", idField: "id", table: "bodySets" },
     ];
     const readers = {
       contentItems: async () => JSON.stringify(await db.query.contentItems.findFirst({ where: eq(schema.contentItems.id, bId.contentItems) })),
@@ -278,6 +305,8 @@ async function main() {
       leadMagnets: async () => JSON.stringify(await db.query.leadMagnets.findFirst({ where: eq(schema.leadMagnets.id, bId.leadMagnets) })),
       ladders: async () => JSON.stringify(await db.query.ladders.findFirst({ where: eq(schema.ladders.id, bId.ladders) })),
       libraryPosts: async () => JSON.stringify(await db.query.libraryPosts.findFirst({ where: eq(schema.libraryPosts.id, bId.libraryPosts) })),
+      bodyExercises: async () => JSON.stringify(await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.id, bId.bodyExercises) })),
+      bodySets: async () => JSON.stringify(await db.query.bodySets.findFirst({ where: eq(schema.bodySets.id, bId.bodySets) })),
     };
     let actionProbed = 0;
     for (const p of probes) {

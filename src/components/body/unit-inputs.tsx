@@ -79,9 +79,9 @@ export function LogFoodForm({ action, foods, slots, defaultSlot, date, recent = 
           )}
         </select>
       </label>
-      <label>
+      <label className="w-20">
         <span className="label">Qty</span>
-        <input name="qty" type="number" step="any" min={0} defaultValue={1} className={`${big} w-20 tabular`} />
+        <input name="qty" type="number" step="any" min={0} defaultValue={1} className={`${big} tabular`} />
       </label>
       <label>
         <span className="label">Unit</span>

@@ -2373,6 +2373,8 @@ export const bodyDays = sqliteTable(
     userId: text("user_id").notNull(),
     date: text("date").notNull(),
     dayTypeId: text("day_type_id"),
+    /** B2 (rev 182): a rest day by choice. Training shows it as Off instead of offering a routine. */
+    off: integer("off", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("body_days_member_date").on(t.workspaceId, t.userId, t.date)],
@@ -2439,6 +2441,79 @@ export const chatLinks = sqliteTable(
   },
   (t) => [index("chat_links_token").on(t.tokenHash), index("chat_links_member").on(t.workspaceId, t.userId)],
 );
+
+/* ── B2, workouts (rev 182): routines of exercises, one session a day, sets as weight × reps. ── */
+
+/** An exercise the member does. Weighted logs weight × reps; bodyweight logs reps (and any added weight). */
+export const bodyExercises = sqliteTable(
+  "body_exercises",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: ["weight", "bodyweight"] }).notNull().default("weight"),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_exercises_member").on(t.workspaceId, t.userId)],
+);
+export type BodyExercise = typeof bodyExercises.$inferSelect;
+
+/** One line of a routine: the exercise and its target, e.g. 3 sets of "8–10". */
+export type BodyRoutineItem = { exerciseId: string; sets: number; reps: string };
+
+/** A routine: exercises in order with targets. Tied to a day type, it's the one Training offers on that type's days. */
+export const bodyRoutines = sqliteTable(
+  "body_routines",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    dayTypeId: text("day_type_id"),
+    items: text("items", { mode: "json" }).$type<BodyRoutineItem[]>().notNull().default([]),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_routines_member").on(t.workspaceId, t.userId)],
+);
+export type BodyRoutine = typeof bodyRoutines.$inferSelect;
+
+/** A day's workout: at most one per date, with the routine it started from (its name copied, so renaming never rewrites it). */
+export const bodySessions = sqliteTable(
+  "body_sessions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    routineId: text("routine_id"),
+    routineName: text("routine_name"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_sessions_member_date").on(t.workspaceId, t.userId, t.date)],
+);
+export type BodySession = typeof bodySessions.$inferSelect;
+
+/** One set: weight × reps in the unit it was logged in (lb or kg). Weight is null for a bodyweight set with nothing added. */
+export const bodySets = sqliteTable(
+  "body_sets",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    sessionId: text("session_id").notNull(),
+    exerciseId: text("exercise_id").notNull(),
+    date: text("date").notNull(),
+    weight: real("weight"),
+    unit: text("unit", { enum: ["lb", "kg"] }).notNull().default("lb"),
+    reps: integer("reps").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_sets_member_exercise").on(t.workspaceId, t.userId, t.exerciseId, t.date), index("body_sets_session").on(t.sessionId)],
+);
+export type BodySet = typeof bodySets.$inferSelect;
 
 /**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,

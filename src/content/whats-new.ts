@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 20,
+    date: "2026-09-30",
+    title: "HumanOS: Training",
+    lines: ["Training is new under HumanOS. Add your exercises, group them into routines, and tie a routine to a day type so it's offered on those days.", "Log each set as weight × reps. Last time's sets and your PR sit beside each exercise, a new PR gets a 🏆, and each exercise has a history chart. Rest days can be marked Off."],
+    audience: "coach",
+  },
+  {
     n: 19,
     date: "2026-09-30",
     title: "Chat with your coach's assistant",

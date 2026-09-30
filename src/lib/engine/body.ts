@@ -225,6 +225,8 @@ export type BodyAiInput = {
   days: { date: string; dayType: string | null; totals: Macros; logged: number }[];
   todayEntries: { slot: string; name: string; items: { name: string; qty: number; unit: string }[]; totals: Macros }[];
   meals: string[];
+  /** B2: the last week's sessions, each exercise with its sets in words, and days marked Off. */
+  training?: { date: string; routine: string | null; lines: string[]; off: boolean }[];
 };
 
 const short = (s: string, n = 60) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -236,6 +238,7 @@ export function formatBodyForAi(x: BodyAiInput): string {
   if (x.days.length) lines.push(`Last ${x.days.length} days: ${x.days.map((d) => `${d.date}${d.dayType ? ` (${short(d.dayType, 40)})` : ""}: ${d.logged ? macroText(d.totals) : "nothing logged"}`).join("; ")}.`);
   if (x.todayEntries.length) lines.push(`Eaten today: ${x.todayEntries.slice(0, 20).map((e) => `${short(e.slot, 20)}: ${short(e.name)} (${e.items.slice(0, 8).map((i) => `${i.qty} ${short(i.unit, 12)} ${short(i.name, 40)}`).join(", ")}) = ${macroText(e.totals)}`).join("; ")}.`);
   if (x.meals.length) lines.push(`Saved meals: ${x.meals.slice(0, 30).map((m) => short(m)).join(", ")}.`);
+  if (x.training?.length) lines.push(`Training, last ${x.training.length} entries: ${x.training.slice(0, 10).map((t) => (t.off ? `${t.date}: Off` : `${t.date}${t.routine ? ` ${short(t.routine, 40)}` : ""}: ${t.lines.slice(0, 12).map((l) => short(l, 80)).join("; ") || "started, no sets"}`)).join(" | ")}.`);
   return lines.join("\n");
 }
 

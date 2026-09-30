@@ -57,7 +57,9 @@ async function main() {
 
     // Welcome card, not raw operational data; nothing behind the login is indexable
     await expectText(page, "Welcome to HelixOS", "welcome card");
-    if (!/name="robots" content="noindex/.test(await page.locator("head").innerHTML())) throw new Error("an authenticated page is indexable");
+    // Next 16 streams metadata to full browsers (crawlers get it in <head> up front), so on a cold compile the tag can land after
+    // the page's text: wait for it anywhere in the document rather than reading <head> once.
+    if (!(await page.locator('meta[name="robots"][content^="noindex"]').first().waitFor({ state: "attached", timeout: 15000 }).then(() => true, () => false))) throw new Error("an authenticated page is indexable");
     const mark = page.locator('header img[data-testid="app-logo"]').first();
     if (!(await mark.count()) || (await mark.getAttribute("alt")) !== "Evolve Omega" || (await mark.getAttribute("width")) !== "40") throw new Error("the header mark must be the real logo at 40px with real alt text");
     if (!/app-logo-(light|ondark)-80\.png$/.test(await mark.evaluate((el) => (el as HTMLImageElement).currentSrc))) throw new Error("a 40px logo must be served from the 80px file");

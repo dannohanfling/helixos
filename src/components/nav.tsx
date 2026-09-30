@@ -52,13 +52,17 @@ export function SideNav({ role, passEnabled, bodyEnabled, badges = {} }: { role:
     }
   }, [raw]);
   const toggle = (label: string) => writeCollapsed({ ...collapsed, [label]: !collapsed[label] });
+  // The most specific item wins: on /body/foods that's Nutrition, not Log (/body) as well (a prefix match alone lit both).
+  const activeHref = NAV_GROUPS.flatMap((g) => g.items)
+    .filter((n) => navVisible(n, { role, passEnabled, bodyEnabled }) && isActive(pathname, n.href))
+    .reduce<string | null>((best, n) => (!best || n.href.length > best.length ? n.href : best), null);
   return (
     <nav className="space-y-2">
       {NAV_GROUPS.map((g) => {
         const items = g.items.filter((n) => navVisible(n, { role, passEnabled, bodyEnabled }));
         // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
         if (!items.length) return null;
-        const activeItem = items.find((n) => isActive(pathname, n.href));
+        const activeItem = items.find((n) => n.href === activeHref);
         const open = !collapsed[g.label];
         return (
           <div key={g.label}>
@@ -82,7 +86,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, badges = {} }: { role:
                   <Link
                     key={n.href}
                     href={n.href}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition ${isActive(pathname, n.href) ? "bg-surface-2 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium transition ${n.href === activeHref ? "bg-surface-2 text-ink" : "text-ink-2 hover:bg-surface-2 hover:text-ink"}`}
                   >
                     <span className="w-5 text-center text-base">{n.icon}</span>
                     <span className="flex flex-col leading-tight">
