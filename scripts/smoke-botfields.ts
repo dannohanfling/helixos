@@ -143,6 +143,8 @@ async function main() {
       await submit(page, '[data-testid="eyes-row"][data-approved="no"] [data-testid="eyes-approve"]');
       await preview.waitFor({ timeout: 20000 });
     }
+    // The refreshed page lands a beat after the last approval's response: wait for the state rather than reading it once.
+    for (let i = 0; i < 100 && ((await page.locator('[data-testid="eyes-row"][data-approved="yes"]').count()) !== 2 || (await pushButton.isDisabled())); i++) await page.waitForTimeout(100);
     if ((await page.locator('[data-testid="eyes-row"][data-approved="yes"]').count()) !== 2 || (await pushButton.isDisabled())) throw new Error("both lines approved, one at a time, and the Push opens");
     // One log line per read of the bot: counts and times, never a value or the token.
     const readLine = readFileSync(join(__dirname, "..", "screenshots", "logs", "dev.log"), "utf8").split("\n").reverse().find((l) => l.includes("[stage1.read]") && l.includes(membership.id));

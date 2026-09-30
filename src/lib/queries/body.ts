@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { addDays, todayInTz } from "@/lib/dates";
+import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, type WeightUnit } from "@/lib/engine/body-training";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 
@@ -298,6 +299,86 @@ export async function recentTraining(workspaceId: string, userId: string, today:
   return out.sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+/* ───────── Body composition (rev 237 phase 2) ───────── */
+
+export type StoredReading = Reading & { readingId: string; source: schema.BodySource; createdAt: string };
+
+/** Rows → readings, oldest first (date, then time, then when logged), a reading's numbers together under its readingId. */
+export function groupReadings(rows: schema.BodyDailyRow[]): StoredReading[] {
+  const byId = new Map<string, StoredReading>();
+  for (const row of rows) {
+    if (!isMetricKey(row.key)) continue;
+    let x = byId.get(row.readingId);
+    if (!x) byId.set(row.readingId, (x = { readingId: row.readingId, date: row.date, time: row.time, source: row.source, createdAt: row.createdAt, values: {} }));
+    x.values[row.key] = row.value;
+  }
+  return [...byId.values()].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? "") || a.createdAt.localeCompare(b.createdAt));
+}
+
+/** Every reading of the member's, oldest first; from a date on when asked. */
+export async function scaleReadings(workspaceId: string, userId: string, from?: string): Promise<StoredReading[]> {
+  const rows = await db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId), from ? gte(schema.bodyDaily.date, from) : undefined) });
+  return groupReadings(rows);
+}
+
+/** One figure per date, oldest first: the day's lowest-weight reading, whole, with fat-free mass derived when it lacked one. */
+export function dayFigures(readings: StoredReading[]): StoredReading[] {
+  const dates = [...new Set(readings.map((x) => x.date))].sort();
+  return dates.map((d) => {
+    const f = dayFigure(readings.filter((x) => x.date === d))!;
+    return { ...f, values: withDerived(f.values) };
+  });
+}
+
+/** One day's figure, for the Log page and the coach's day view. Null with no reading that day. */
+export async function dayComposition(workspaceId: string, userId: string, date: string): Promise<StoredReading | null> {
+  const rows = await db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId), eq(schema.bodyDaily.date, date)) });
+  const f = dayFigure(groupReadings(rows));
+  return f ? { ...f, values: withDerived(f.values) } : null;
+}
+
+/** The latest day's figure, whenever it was. */
+export async function latestComposition(workspaceId: string, userId: string): Promise<StoredReading | null> {
+  const last = await db.query.bodyDaily.findFirst({ columns: { date: true }, where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), orderBy: desc(schema.bodyDaily.date) });
+  return last ? dayComposition(workspaceId, userId, last.date) : null;
+}
+
+/**
+ * The Weigh-ins page: the latest figure, the last readings, and a trend card per primary metric over the range in view, each with
+ * its day figures, the 7-day average alongside, the card's numbers and the goal. Null while Body isn't set up.
+ */
+export async function weighIns(workspaceId: string, userId: string, today: string, rangeDays: number | null) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const [all, goals] = await Promise.all([scaleReadings(workspaceId, userId), db.query.bodyGoals.findMany({ where: and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)) })]);
+  const figures = dayFigures(all).filter((f) => f.date <= today);
+  const from = rangeDays ? addDays(today, -(rangeDays - 1)) : null;
+  const inView = from ? figures.filter((f) => f.date >= from) : figures;
+  const goalOf = new Map(goals.map((g) => [g.key, g]));
+  const cards = METRICS.filter((m) => m.primary).map((metric) => {
+    const points = inView.flatMap((f) => (f.values[metric.key] != null ? [{ date: f.date, value: f.values[metric.key]! }] : []));
+    return { metric, points, average: points.map((p) => avg7(points, p.date, addDays)), stats: trendStats(points, today, addDays), goal: goalOf.get(metric.key) ?? null };
+  });
+  return { unit: settings.weightUnit, latest: figures[figures.length - 1] ?? null, todayFigure: figures.find((f) => f.date === today) ?? null, readings: all.slice(-40).reverse(), cards, goals, count: all.length, firstDate: all[0]?.date ?? null, from };
+}
+export type WeighInsView = NonNullable<Awaited<ReturnType<typeof weighIns>>>;
+
+/** For AI: the latest figure and the 7-day average of weight, in words. Null with no readings. */
+async function weighInsForAi(workspaceId: string, userId: string, today: string, unit: "lb" | "kg"): Promise<{ date: string; text: string; avg7: string | null } | null> {
+  const all = await scaleReadings(workspaceId, userId, addDays(today, -13));
+  const figures = dayFigures(all);
+  const latest = figures[figures.length - 1];
+  if (!latest) {
+    const any = await latestComposition(workspaceId, userId);
+    return any ? { date: any.date, text: figureText(any.values, unit), avg7: null } : null;
+  }
+  const weights = figures.flatMap((f) => (f.values.weight != null ? [{ date: f.date, value: f.values.weight }] : []));
+  const a = avg7(weights, today, addDays);
+  return { date: latest.date, text: figureText(latest.values, unit), avg7: a != null ? fmtMetric("weight", a, unit) : null };
+}
+const figureText = (values: Partial<Record<MetricKey, number>>, unit: "lb" | "kg") =>
+  (["weight", "bf", "ffm", "smm_pct", "visceral", "water", "bmr", "met_age"] as MetricKey[]).flatMap((k) => (values[k] != null ? [`${fmtMetric(k, values[k]!, unit)} ${METRICS.find((m) => m.key === k)!.label.toLowerCase()}`] : [])).join(", ");
+
 /** The last days with anything logged, newest first, for the recent strip: date, totals and the worst mark. */
 export async function recentDays(workspaceId: string, userId: string, today: string, days = 7) {
   const settings = await bodySettingsFor(workspaceId, userId);
@@ -343,6 +424,7 @@ export async function bodyAiContext(v: Viewer): Promise<string | null> {
   if (!(await canAiUseBody(v, v.user.id))) return null;
   const [d, recent, types, training] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), recentDays(v.workspace.id, v.user.id, v.today), dayTypesFor(v.workspace.id, v.user.id), recentTraining(v.workspace.id, v.user.id, v.today)]);
   if (!d) return null;
+  const weighIn = await weighInsForAi(v.workspace.id, v.user.id, v.today, d.settings.weightUnit);
   return formatBodyForAi({
     today: v.today,
     dayTypes: types.map((t) => ({ name: t.name, bands: bandsOf(t) })),
@@ -350,6 +432,7 @@ export async function bodyAiContext(v: Viewer): Promise<string | null> {
     todayEntries: d.entries.map((e) => ({ slot: e.slot, name: e.name, items: e.items.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit })), totals: { cal: e.cal, p: e.p, f: e.f, c: e.c } })),
     meals: d.library.meals.map((m) => m.name),
     training,
+    weighIn,
   });
 }
 

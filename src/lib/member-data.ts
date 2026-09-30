@@ -74,6 +74,9 @@ export const MEMBER_TABLES = {
   body_routines: schema.bodyRoutines,
   body_sessions: schema.bodySessions,
   body_sets: schema.bodySets,
+  // Body composition (rev 237 phase 2): every reading, and the goals.
+  body_daily: schema.bodyDaily,
+  body_goals: schema.bodyGoals,
   // What a coach changed while working in this member's HelixOS, and their switches in and out (rev 216).
   coach_changes: schema.coachChanges,
   chat_links: schema.chatLinks,
@@ -84,7 +87,7 @@ export const MEMBER_TABLES = {
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 
 /** The Body tables: in the member's own export and in deletion, never in a coach's export of a client, shared or not. */
-export const BODY_LABELS = new Set<MemberLabel>(["body_settings", "body_day_types", "body_foods", "body_meals", "body_entries", "body_days", "body_comments", "body_share_events", "body_exercises", "body_routines", "body_sessions", "body_sets"]);
+export const BODY_LABELS = new Set<MemberLabel>(["body_settings", "body_day_types", "body_foods", "body_meals", "body_entries", "body_days", "body_comments", "body_share_events", "body_exercises", "body_routines", "body_sessions", "body_sets", "body_daily", "body_goals"]);
 
 /** No owner column of their own: each row belongs to whoever owns its parent. Listed parents before children. */
 export const CHILD_TABLES = [

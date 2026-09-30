@@ -388,6 +388,99 @@ async function main() {
     await press(client, '[data-testid="training-undo-off"]', async () => (await client.locator('[data-testid="training-mark-off"]').count()) > 0, "the day back");
     if (await db.query.bodyDays.findFirst({ where: and(mine(schema.bodyDays), eq(schema.bodyDays.date, twoAgo)) })) throw new Error("undoing Off leaves no row behind");
     console.log(`✓ B2 workouts: ${EXERCISES.length} exercises and ${ROUTINE.name} through the forms; yesterday's 185 × 5 ×2 (no PR on a first), today's routine offered for the day type with last time, the PR and the form on 185 × 5; 190 × 5 flagged a PR; bodyweight as reps; a set deleted; the history charts 2 sessions; Off marked and undone`);
+    // ── Body composition (rev 237 phase 2): weigh-ins typed and imported from both RENPHO layouts (synthetic fixtures), the day's
+    // lowest reading kept whole as its figure, a re-import adding nothing, the trend cards with the engine's own 7-day average, a
+    // goal line, a reading deleted, and the Log page's line. ──
+    const { parseScaleCsv, dayFigure, fmtMetric: fmtM } = await import("@/lib/engine/body-scale");
+    const { dayComposition, weighIns } = await import("@/lib/queries/body");
+    const { readFileSync } = await import("node:fs");
+    await client.goto(`${base}/body`);
+    await client.locator('[data-testid="body-weight-line"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="body-weight-line"]').getAttribute("data-has")) !== "0") throw new Error("Log says there's no weigh-in yet");
+    await client.locator('[data-testid="body-weight-line"]').click();
+    await client.waitForURL(/\/body\/weight/);
+    await client.locator('[data-testid="weigh-empty"]').waitFor({ timeout: 30000 });
+    await noSideScroll(client, "/body/weight, empty");
+    const weigh = async (weight: string, bf: string, time: string) => {
+      await client.goto(`${base}/body/weight`);
+      await client.locator('[data-testid="weigh-form"]').waitFor({ timeout: 30000 });
+      await fillExact(client, '[data-testid="weigh-form"] input[name="weight"]', weight);
+      await fillExact(client, '[data-testid="weigh-form"] input[name="bf"]', bf);
+      const timeField = client.locator('[data-testid="weigh-form"] input[name="time"]');
+      if (!(await timeField.isVisible())) await client.locator('[data-testid="weigh-form"] summary').click();
+      await fillExact(client, '[data-testid="weigh-form"] input[name="time"]', time);
+      await Promise.all([client.waitForURL(/logged=1/), client.locator('[data-testid="weigh-save"]').click()]);
+      await client.locator('[data-testid="weigh-latest"]').waitFor({ timeout: 30000 });
+    };
+    // Two readings today, the heavier one first: the day's figure is the lighter one, with its own body fat.
+    await weigh("150.4", "21.0", "21:00");
+    await weigh("149.6", "20.6", "07:10");
+    const latestText = (await client.locator('[data-testid="weigh-latest"]').textContent()) ?? "";
+    if (!latestText.includes("149.6 lb") || !latestText.includes("20.6%")) throw new Error(`the day's figure is its lowest reading, whole: "${latestText}"`);
+    const todayRows = await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.date, today)) });
+    if (new Set(todayRows.map((x) => x.readingId)).size !== 2 || todayRows.filter((x) => x.key === "weight").length !== 2) throw new Error(`both readings are stored, whole: ${todayRows.length} rows`);
+    if (todayRows.some((x) => x.key === "ffm")) throw new Error("fat-free mass is derived on read, never stored when it wasn't typed");
+    // The older export: every reading it holds, the bad row skipped and said so; a second import adds nothing.
+    const importFile = async (name: string) => {
+      const text = readFileSync(`scripts/fixtures/${name}`, "utf8");
+      const parsed = parseScaleCsv(text);
+      await client.goto(`${base}/body/weight`);
+      // A file set before React has hydrated the input fires no change handler (a cold compile): set it again until the preview shows.
+      const preview = client.locator('[data-testid="scale-preview"]');
+      for (let i = 0; i < 5 && !(await preview.count()); i++) {
+        await client.locator('[data-testid="scale-file"]').setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from(text) });
+        await preview.waitFor({ timeout: 4000 }).catch(() => undefined);
+      }
+      await preview.waitFor({ timeout: 10000 });
+      if ((await preview.getAttribute("data-count")) !== String(parsed.readings.length)) throw new Error(`${name}: the preview counts the parser's readings`);
+      if ((await client.locator('[data-testid="scale-skipped"]').count()) !== (parsed.skipped.length ? 1 : 0)) throw new Error(`${name}: the preview names skipped rows only when there are any`);
+      await Promise.all([client.waitForURL(/imported=/), client.locator('[data-testid="scale-import-go"]').click()]);
+      const done = client.locator('[data-testid="scale-imported"]');
+      await done.waitFor({ timeout: 30000 });
+      return { parsed, imported: Number(await done.getAttribute("data-imported")), already: Number(await done.getAttribute("data-already")) };
+    };
+    const renphoReadings = async () => new Set((await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.source, "renpho")) })).map((x) => x.readingId)).size;
+    const older = await importFile("renpho-older.csv");
+    if (older.imported !== older.parsed.readings.length || older.already !== 0 || !older.parsed.skipped.length) throw new Error(`the older export imports every reading (${older.parsed.readings.length}), with its bad row skipped: got ${older.imported}`);
+    if ((await renphoReadings()) !== older.parsed.readings.length) throw new Error("each imported reading is one readingId");
+    const again = await importFile("renpho-older.csv");
+    if (again.imported !== 0 || again.already !== older.parsed.readings.length) throw new Error(`a re-import adds nothing: imported ${again.imported}, already ${again.already}`);
+    const newer = await importFile("renpho-newer.csv");
+    if (newer.imported !== newer.parsed.readings.length || newer.parsed.skipped.length) throw new Error(`the newer export imports every reading (${newer.parsed.readings.length}): got ${newer.imported}`);
+    // 12 Sep has two readings in the newer file: the day's figure is the engine's lowest, whole.
+    const twelfth = dayFigure(newer.parsed.readings.filter((x) => x.date === "2026-09-12"))!;
+    const stored12 = await dayComposition(mem.workspaceId, maya.id, "2026-09-12");
+    if (!stored12 || stored12.values.weight !== twelfth.values.weight || stored12.values.bf !== twelfth.values.bf || stored12.time !== twelfth.time) throw new Error(`12 Sep's figure is the lowest reading, whole: ${JSON.stringify(stored12?.values)} vs ${JSON.stringify(twelfth.values)}`);
+    // Trends over everything: a card per primary metric with data, the weight card's numbers the engine's, the average line, no goal yet.
+    await client.goto(`${base}/body/weight?range=all`);
+    await client.locator('[data-testid="trend-cards"]').waitFor({ timeout: 30000 });
+    const view = (await weighIns(mem.workspaceId, maya.id, today, null))!;
+    const withData = view.cards.filter((c) => c.points.length).length;
+    if (withData !== 8 || (await client.locator('[data-testid="trend-cards"]').getAttribute("data-count")) !== "8") throw new Error(`a trend card per primary metric with data: ${withData} in the record`);
+    const weightStats = (await client.locator('[data-testid="trend-weight-stats"]').textContent()) ?? "";
+    const wc = view.cards.find((c) => c.metric.key === "weight")!;
+    if (wc.stats.avg7 == null || !weightStats.includes(fmtM("weight", wc.stats.avg7, "lb"))) throw new Error(`the weight card shows the engine's 7-day average ${wc.stats.avg7}: "${weightStats}"`);
+    if (!(await client.locator('#trend-weight [data-testid="trend-avg"]').count()) || (await client.locator('#trend-weight [data-testid="trend-goal"]').count())) throw new Error("the average line is drawn and no goal line before a goal");
+    await noSideScroll(client, "/body/weight with trends");
+    // A goal: the line appears and the card names it.
+    if (!(await client.locator('[data-testid="goal-weight"] input[name="target"]').isVisible())) await client.locator("#trend-weight summary").click();
+    await fillExact(client, '[data-testid="goal-weight"] input[name="target"]', "145");
+    await fillExact(client, '[data-testid="goal-weight"] input[name="by"]', "2026-12-01");
+    await press(client, '[data-testid="goal-weight"] button[type="submit"]', async () => (await client.locator('#trend-weight [data-testid="trend-goal"]').count()) > 0, "the goal line");
+    const goal = await db.query.bodyGoals.findFirst({ where: mine(schema.bodyGoals) });
+    if (goal?.target !== 145 || goal.by !== "2026-12-01" || !((await client.locator('[data-testid="trend-weight-goal"]').textContent()) ?? "").includes("145 lb")) throw new Error("the goal is saved and shown");
+    // Delete today's lighter reading: the figure becomes the other one.
+    const lighter = client.locator(`[data-testid="weigh-reading"][data-date="${today}"]`, { hasText: "149.6" });
+    if ((await lighter.count()) !== 1) throw new Error("today's lighter reading is listed once");
+    await lighter.locator('[data-testid="weigh-delete"]').click();
+    await client.locator('dialog[open] [data-testid="confirm-delete-yes"]').click();
+    for (let i = 0; i < 100 && !((await client.locator('[data-testid="weigh-latest"]').textContent()) ?? "").includes("150.4 lb"); i++) await client.waitForTimeout(100);
+    if (!((await client.locator('[data-testid="weigh-latest"]').textContent()) ?? "").includes("150.4 lb")) throw new Error("with the lighter reading gone, the day's figure is the other one");
+    await client.goto(`${base}/body`);
+    const weightLine = (await client.locator('[data-testid="body-weight-line"]').textContent()) ?? "";
+    if (!weightLine.includes("150.4 lb") || !weightLine.includes("21%")) throw new Error(`Log carries the latest weigh-in: "${weightLine}"`);
+    console.log(`✓ weigh-ins: two typed today (the lighter kept whole as the day's figure), the older export imported (${older.imported} readings, its bad row skipped) then re-imported for nothing new, the newer export (${newer.imported}) with 12 Sep's lowest as its figure; 8 trend cards with the engine's 7-day average; a goal line; a reading deleted; the Log line`);
+
 
     // ── Private: the coach sees nothing, and a coach's export never has Body. ──
     await coach.goto(`${base}/coach/${mem.id}`);
@@ -407,6 +500,7 @@ async function main() {
     const coachCal = await coach.locator('[data-testid="body-tile-cal"]').innerText();
     if (!coachCal.includes(fmtMacro("cal", totals.cal))) throw new Error(`the coach reads the client's day: "${coachCal}"`);
     if (await coach.locator('[data-testid="body-log-meal"], [data-testid="body-log-food"], [data-testid="body-share-toggle"], [data-testid="body-no-targets"], [data-testid="training-log-form"]').count()) throw new Error("the coach's view has no way to log or change anything");
+    if (!((await coach.locator('[data-testid="coach-composition"]').textContent()) ?? "").includes("150.4 lb")) throw new Error("the coach reads the day's weigh-in while shared");
     const coachTraining = (await coach.locator('[data-testid="coach-training"]').textContent()) ?? "";
     if (!coachTraining.includes("Bench press") || !coachTraining.includes("190 × 5 🏆") || !coachTraining.includes("10 reps")) throw new Error(`the coach reads the day's workout, PR marked: "${coachTraining}"`);
     const note = `Great day ${Date.now()}`;
@@ -441,6 +535,7 @@ async function main() {
     const aiText = await bodyAiContext(await viewerFor());
     if (!aiText || !aiText.includes(MEALS[0].name) || !aiText.includes(`${fmtMacro("cal", totals.cal)} cal`)) throw new Error(`with the switch on, AI gets today's numbers and logged meals: ${aiText}`);
     if (aiText.includes(note)) throw new Error("the coach's comment never goes to AI");
+    if (!aiText.includes("Latest weigh-in") || !aiText.includes("150.4 lb")) throw new Error(`with the switch on, AI gets the latest weigh-in: ${aiText}`);
     if (!aiText.includes(`${ROUTINE.name}: Bench press 190 × 5`) || !aiText.includes("Bench press 185 × 5, 185 × 5")) throw new Error(`with the switch on, AI gets the week's workouts: ${aiText}`);
     // Another viewer (the coach) never gets it, switch or not.
     const theCoach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
@@ -455,6 +550,7 @@ async function main() {
 
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
+    if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
     if ((own.body_sets ?? []).length !== 4 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
     if ((own.body_entries ?? []).length !== 3 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // Download and Delete are two separate cards (rev 230); the confirm stays shut until DELETE is typed exactly.

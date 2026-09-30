@@ -2605,6 +2605,53 @@ export const bodySets = sqliteTable(
 );
 export type BodySet = typeof bodySets.$inferSelect;
 
+/* ── Body composition (rev 237 phase 2, migration 0083): every reading, as one long table. ── */
+
+/** Where a daily number came from. "health" is the Apple Health webhook (B4), "whoop" B6. */
+export const BODY_SOURCES = ["manual", "renpho", "airtable", "whoop", "health"] as const;
+export type BodySource = (typeof BODY_SOURCES)[number];
+
+/**
+ * One number of one reading: weight, body fat % and the rest, each its own row, so adding a metric is adding a key, never a
+ * migration. The rows of one step on the scale share a readingId and are kept together (rev 251: the day's figure is the
+ * lowest-weight reading, whole, never mixed across readings). Masses are stored in lb whatever the member's unit; the keys and
+ * their units are in src/lib/engine/body-scale.ts.
+ */
+export const bodyDaily = sqliteTable(
+  "body_daily",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    key: text("key").notNull(),
+    value: real("value").notNull(),
+    source: text("source", { enum: BODY_SOURCES }).notNull().default("manual"),
+    readingId: text("reading_id").notNull(),
+    /** The reading's wall time, HH:MM, when the source gave one. */
+    time: text("time"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_daily_member_key_date").on(t.workspaceId, t.userId, t.key, t.date), index("body_daily_reading").on(t.readingId)],
+);
+export type BodyDailyRow = typeof bodyDaily.$inferSelect;
+
+/** A goal per metric: the target (in the metric's stored unit) and, optionally, by when. One per key. */
+export const bodyGoals = sqliteTable(
+  "body_goals",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    key: text("key").notNull(),
+    target: real("target").notNull(),
+    by: text("by"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_goals_member_key").on(t.workspaceId, t.userId, t.key)],
+);
+export type BodyGoal = typeof bodyGoals.$inferSelect;
+
 /**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,
  * in plain words. The client sees the changes in Settings ("Changes by your coach"); the coach's client page shows the

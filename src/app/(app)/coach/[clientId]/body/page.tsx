@@ -6,7 +6,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { CapsLine, EntriesBySlot, MacroTiles, MarkKey } from "@/components/body/day-parts";
 import { addDays, formatDate, formatDateTime } from "@/lib/dates";
 import { MARK_ICON, MARK_WORD } from "@/lib/engine/body";
-import { bodyDay, sharedClient, trainingDay } from "@/lib/queries/body";
+import { bodyDay, dayComposition, sharedClient, trainingDay } from "@/lib/queries/body";
+import { fmtMetric } from "@/lib/engine/body-scale";
 import { fmtSet } from "@/lib/engine/body-training";
 import { addBodyCommentAction } from "@/lib/actions/body";
 
@@ -38,7 +39,7 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
   const today = client.today;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
   // Read only after sharedClient said shared, like the day itself.
-  const [d, t] = await Promise.all([bodyDay(v.workspace.id, client.userId, date, today), trainingDay(v.workspace.id, client.userId, date)]);
+  const [d, t, figure] = await Promise.all([bodyDay(v.workspace.id, client.userId, date, today), trainingDay(v.workspace.id, client.userId, date), dayComposition(v.workspace.id, client.userId, date)]);
   if (!d) return null;
   const prev = addDays(date, -1);
   const next = addDays(date, 1);
@@ -70,6 +71,12 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
           <Card title={d.dayType?.name ?? "No day type"} action={d.worst && d.entries.length ? <Badge tone={d.worst === "in" || d.worst === "over_ok" || d.worst === "open" ? "good" : "warn"}>{MARK_ICON[d.worst]} {d.final ? MARK_WORD[d.worst] : "so far"}</Badge> : null}>
             <MacroTiles totals={d.totals} bands={d.bands} marks={d.marks} />
             <div className="mt-3 space-y-1">
+              {figure?.values.weight != null ? (
+                <p className="text-sm tabular text-ink-2" data-testid="coach-composition">
+                  ⚖️ {fmtMetric("weight", figure.values.weight, d.settings.weightUnit)}
+                  {figure.values.bf != null ? ` · ${fmtMetric("bf", figure.values.bf, d.settings.weightUnit)} body fat` : ""}
+                </p>
+              ) : null}
               <CapsLine caps={d.caps} />
               <MarkKey />
             </div>

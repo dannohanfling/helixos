@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 22,
+    date: "2026-09-30",
+    title: "HumanOS: Weigh-ins",
+    lines: ["Log your weight and what the scale shows with it, or import your RENPHO export (either layout; readings already in are skipped). The day's figure is its lowest reading, kept whole.", "Trend cards for weight, body fat, fat-free mass and the rest, with a 7-day average, a goal line you set, and 30-day to all-time views. The Log page shows your latest weigh-in."],
+    audience: "coach",
+  },
+  {
     n: 21,
     date: "2026-09-30",
     title: "Connect HelixOS to Claude",

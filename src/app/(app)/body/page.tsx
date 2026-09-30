@@ -9,7 +9,8 @@ import { addDays, formatDate } from "@/lib/dates";
 import { MACROS, MACRO_LABEL, MARK_ICON, MARK_WORD, fmtMacro } from "@/lib/engine/body";
 import { LogFoodForm } from "@/components/body/unit-inputs";
 import { loggableUnits } from "@/lib/engine/body-units";
-import { bodyDay, recentDays, requireBodyEnabled } from "@/lib/queries/body";
+import { bodyDay, latestComposition, recentDays, requireBodyEnabled } from "@/lib/queries/body";
+import { fmtMetric } from "@/lib/engine/body-scale";
 import { deleteEntryAction, logFoodAction, logMealAction, setBodyAiAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
 
 export const metadata = { title: "HumanOS · Log" };
@@ -51,7 +52,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
     );
   }
 
-  const recent = await recentDays(v.workspace.id, v.user.id, v.today);
+  const [recent, weighIn] = await Promise.all([recentDays(v.workspace.id, v.user.id, v.today), latestComposition(v.workspace.id, v.user.id)]);
   const slots = d.settings.mealSlots;
   const defaultSlot = date === v.today ? slotNow(slots, v.hour) : slots[slots.length - 1] ?? "Meal";
   const prev = addDays(date, -1);
@@ -139,6 +140,22 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
           {d.dayType?.reminder ? <p className="mt-1 text-sm text-ink-2">📌 {d.dayType.reminder}</p> : null}
         </section>
       ) : null}
+
+      <Link href="/body/weight" className="card mb-4 flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm hover:bg-surface-2" data-testid="body-weight-line" data-has={weighIn ? "1" : "0"}>
+        <span>
+          ⚖️{" "}
+          {weighIn?.values.weight != null ? (
+            <>
+              <span className="font-semibold tabular">{fmtMetric("weight", weighIn.values.weight, d.settings.weightUnit)}</span>
+              {weighIn.values.bf != null ? <span className="tabular text-ink-2"> · {fmtMetric("bf", weighIn.values.bf, d.settings.weightUnit)} body fat</span> : null}
+              <span className="text-xs text-ink-3"> · {weighIn.date === v.today ? "today" : formatDate(weighIn.date)}</span>
+            </>
+          ) : (
+            <span className="text-ink-2">No weigh-in yet</span>
+          )}
+        </span>
+        <span className="text-xs text-ink-2">{weighIn ? "Weigh-ins & trends →" : "Log a weigh-in →"}</span>
+      </Link>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="space-y-4">

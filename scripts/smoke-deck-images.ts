@@ -139,7 +139,8 @@ async function main() {
     await coverSlot.locator('[data-testid="deck-slot-picker"]').selectOption(photos[0].id);
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), coverSlot.locator('[data-testid="deck-slot-attach"]').click()]);
     await settle(page);
-    if (!(await page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"] [data-testid="deck-slot-filled"]').count())) throw new Error("the cover slot shows a picture is attached");
+    // The refreshed page lands a beat after the action's response: wait for the marker rather than reading once.
+    if (!(await page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"] [data-testid="deck-slot-filled"]').waitFor({ timeout: 15000 }).then(() => true, () => false))) throw new Error("the cover slot shows a picture is attached");
     const slotRow = await db.query.deckSlots.findFirst({ where: and(eq(schema.deckSlots.webinarId, webinar.id), eq(schema.deckSlots.slotKey, "cover:photo")) });
     if (slotRow?.imageId !== photos[0].id) throw new Error("the slot points at the coach's chosen image");
     const emptyAfter = Number((await slotsText()).match(/^(\d+)/)?.[1] ?? "0");

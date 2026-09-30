@@ -12,8 +12,9 @@ import { requireCoach, type Viewer } from "@/lib/auth";
 import { MACROS, portionMacros, sumMacros, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
 import { convertQty, storedUnit } from "@/lib/engine/body-units";
+import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { nowIso } from "@/lib/dates";
-import { bodyAccess, bodySettingsFor, isWorkspaceOwner } from "@/lib/queries/body";
+import { bodyAccess, bodySettingsFor, groupReadings, isWorkspaceOwner } from "@/lib/queries/body";
 import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -450,6 +451,89 @@ export async function setDayOffAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/* ───────── Body composition (rev 237 phase 2) ───────── */
+
+const WEIGHT = "/body/weight";
+
+/** A weigh-in typed in: the weight at least, in the member's unit, plus whatever else the scale showed. One reading, kept whole. */
+export async function logWeighInAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  const settings = await setUp(v);
+  const date = str(formData, "date") || v.today;
+  if (!DATE.test(date) || date > v.today) back(WEIGHT, "Pick a day up to today.");
+  const time = readTime(str(formData, "time"));
+  const readingId = newId();
+  const rows = METRIC_KEYS.flatMap((key) => {
+    const typed = optNum(formData, key);
+    if (typed == null || typed <= 0) return [];
+    const value = storedValue(key, typed, settings.weightUnit);
+    if (!inRange(key, value)) back(WEIGHT, `${METRIC[key].label}: that number doesn't look right.`);
+    return [{ id: newId(), workspaceId, userId, date, key, value, source: "manual" as const, readingId, time }];
+  });
+  if (!rows.some((x) => x.key === "weight")) back(WEIGHT, "Enter your weight.");
+  await db.insert(schema.bodyDaily).values(rows);
+  refresh();
+  redirect(`${WEIGHT}?logged=1`);
+}
+
+/** One reading, all its numbers, gone. */
+export async function deleteReadingAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.readingId, str(formData, "id")), and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId))));
+  refresh();
+}
+
+/**
+ * The RENPHO CSV, either format. The browser showed a preview from the same parser; the server parses the text again and trusts
+ * only that. A reading already in (same date and time, or date and weight without a time) is skipped, so a re-export imports
+ * only what's new. Nothing of the file is logged.
+ */
+export async function importScaleCsvAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const text = str(formData, "csv");
+  if (!text) back(WEIGHT, "Choose a file first.");
+  if (text.length > 4_000_000) back(WEIGHT, "That file is too big to import in one go.");
+  const parsed = parseScaleCsv(text);
+  if (!parsed.readings.length) back(WEIGHT, `Nothing to import: ${parsed.skipped[0]?.why ?? "no readings in the file"}.`);
+  const have = new Set(groupReadings(await db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId), eq(schema.bodyDaily.source, "renpho")) })).map(readingKey));
+  const rows: (typeof schema.bodyDaily.$inferInsert)[] = [];
+  let fresh = 0;
+  for (const x of parsed.readings) {
+    const k = readingKey(x);
+    if (have.has(k)) continue;
+    have.add(k);
+    fresh++;
+    const readingId = newId();
+    for (const [key, value] of Object.entries(x.values) as [MetricKey, number][]) rows.push({ id: newId(), workspaceId, userId, date: x.date, key, value, source: "renpho", readingId, time: x.time });
+  }
+  for (let i = 0; i < rows.length; i += 400) await db.insert(schema.bodyDaily).values(rows.slice(i, i + 400));
+  refresh();
+  redirect(`${WEIGHT}?imported=${fresh}&already=${parsed.readings.length - fresh}&bad=${parsed.skipped.length}`);
+}
+
+/** A goal per metric, in the member's unit for masses; a blank target clears it. */
+export async function setBodyGoalAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  const settings = await setUp(v);
+  const key = str(formData, "key");
+  if (!(key in METRIC) || !METRIC[key as MetricKey].primary) return;
+  const typed = optNum(formData, "target");
+  const by = str(formData, "by");
+  const existing = await db.query.bodyGoals.findFirst({ where: and(and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)), eq(schema.bodyGoals.key, key)) });
+  if (typed == null || typed <= 0) {
+    if (existing) await db.delete(schema.bodyGoals).where(eq(schema.bodyGoals.id, existing.id));
+  } else {
+    const target = storedValue(key as MetricKey, typed, settings.weightUnit);
+    if (!inRange(key as MetricKey, target)) back(WEIGHT, `${METRIC[key as MetricKey].label} goal: that number doesn't look right.`);
+    const values = { target, by: DATE.test(by) ? by : null };
+    if (existing) await db.update(schema.bodyGoals).set(values).where(eq(schema.bodyGoals.id, existing.id));
+    else await db.insert(schema.bodyGoals).values({ id: newId(), workspaceId, userId, key, ...values });
+  }
+  refresh();
+}
+
 /* ───────── The coach, when shared ───────── */
 
 /** A coach's comment on one of the client's days: only while the client shares, and only on a day, never on their data. */
@@ -475,6 +559,8 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
+    db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId))),
+    db.delete(schema.bodyGoals).where(and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId))),
     db.delete(schema.bodySets).where(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId))),
     db.delete(schema.bodySessions).where(and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))),
     db.delete(schema.bodyRoutines).where(and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId))),

@@ -194,6 +194,8 @@ async function main() {
     const nextRow = () => db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, next)) });
     if ((await nextRow())?.body !== WEEK_TEXT || (await nextRow())?.status !== "scheduled") throw new Error("that Monday keeps its own text");
     await submit(page, '[data-testid="community-next-skip"]');
+    // The refreshed card lands a beat after the action's response: wait for its state rather than reading it once.
+    for (let i = 0; i < 50 && (await nextCard.getAttribute("data-state")) !== "skipped"; i++) await page.waitForTimeout(100);
     if ((await nextRow())?.status !== "skipped" || (await nextCard.getAttribute("data-state")) !== "skipped") throw new Error("the week is skipped");
     await submit(page, '[data-testid="community-next-unskip"]');
     if ((await nextRow())?.status !== "scheduled") throw new Error("and back on");
