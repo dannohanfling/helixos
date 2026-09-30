@@ -10,6 +10,7 @@ import { bodyLibrary, bodySettingsFor, requireBodyEnabled } from "@/lib/queries/
 import { archiveFoodAction, archiveMealAction, saveFoodAction, saveMealAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
 import { UnitPicker } from "@/components/body/unit-inputs";
+import { unitGroup } from "@/lib/engine/body-units";
 
 export const metadata = { title: "HumanOS · Nutrition" };
 
@@ -40,6 +41,21 @@ function FoodFields({ food, preferred, tags }: { food?: schema.BodyFood; preferr
         <span className="label">Tag (for caps, e.g. cheese)</span>
         <input name="capTag" className="field py-1 text-sm" defaultValue={food?.capTag ?? ""} maxLength={30} list="body-cap-tags" placeholder="none" />
       </label>
+      <label className="col-span-2">
+        <span className="label">Nutrition is per</span>
+        <select name="basis" className="field py-1 text-sm" defaultValue={food?.basis ?? "cooked"} data-testid="food-basis">
+          <option value="cooked">cooked weight</option>
+          <option value="raw">raw weight</option>
+        </select>
+      </label>
+      <label>
+        <span className="label">Par (on hand)</span>
+        <input name="par" type="number" step="any" min={0} className="field py-1 text-sm tabular" defaultValue={food?.par ?? ""} placeholder="none" />
+      </label>
+      <label>
+        <span className="label">Cooked yield %</span>
+        <input name="yieldPct" type="number" step="any" min={10} max={150} className="field py-1 text-sm tabular" defaultValue={food?.cookedYield != null ? Math.round(food.cookedYield * 100) : ""} placeholder="weighings" />
+      </label>
       {tags.length ? (
         <datalist id="body-cap-tags">
           {tags.map((t) => (
@@ -62,7 +78,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <HumanosHeader title="Nutrition" subtitle="Your foods per unit, and saved meals you log in one tap." action={<Link href="/body" className="btn btn-ghost btn-sm">← Log</Link>} />
+      <HumanosHeader title="Nutrition" subtitle="Your foods per unit, and saved meals you log in one tap." action={<span className="flex gap-2"><Link href="/body/pantry" className="btn btn-ghost btn-sm" data-testid="pantry-link">Pantry →</Link><Link href="/body" className="btn btn-ghost btn-sm">← Log</Link></span>} />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
           {sp.error}
@@ -191,7 +207,7 @@ function MealForm({ meal, foods, slots }: { meal?: { id: string; name: string; s
             <option value="">—</option>
             {foods.map((f) => (
               <option key={f.id} value={f.id}>
-                {f.name} (per {f.unit})
+                {f.name} (per {f.unit}{unitGroup(f.unit) === "weight" ? `, ${f.basis}` : ""})
               </option>
             ))}
           </select>

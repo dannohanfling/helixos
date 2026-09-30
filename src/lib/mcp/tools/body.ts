@@ -14,7 +14,9 @@ import { MACROS, MACRO_LABEL, MARK_ICON, entryItem, fmtBand, fmtMacro, slotNow, 
 import { convertQty, loggableUnits } from "@/lib/engine/body-units";
 import { fmtSet } from "@/lib/engine/body-training";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
-import { bodyDay, bodyLibrary, bodySettingsFor, canAiUseBody, dayComposition, exerciseHistory, latestComposition, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
+import { consumePantry } from "@/lib/body-pantry";
+import { bodyDay, bodyLibrary, bodySettingsFor, canAiUseBody, dayComposition, exerciseHistory, latestComposition, pantryView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -85,6 +87,7 @@ export const bodyToday = defineTool({
     if (d.fits.length) lines.push(`Saved meals that fit what's left: ${d.fits.map((f) => f.name).join(", ")}.`);
     if (d.caps.length) lines.push(`Caps: ${d.caps.map((c) => `${c.label} ${c.used} of ${c.soft}${c.hard > c.soft ? ` (hard ${c.hard})` : ""} ${c.unit}`).join("; ")}.`);
     if (d.sodium) lines.push(`Sodium: ${Math.round(d.sodium).toLocaleString("en-US")} mg.`);
+    if (d.dueSoon.length) lines.push(`Use soon from the pantry: ${d.dueSoon.map((u) => `${u.name} (${u.days < 0 ? "past its date" : u.days === 0 ? "today" : u.days === 1 ? "tomorrow" : `${u.days} days`})`).join(", ")}.`);
     const latest = figure ?? (await latestComposition(v.workspace.id, v.user.id));
     if (latest?.values.weight != null) lines.push(`${latest.date === date ? "Weigh-in" : `Latest weigh-in (${latest.date})`}: ${fmtMetric("weight", latest.values.weight, settings.weightUnit)}${latest.values.bf != null ? `, ${fmtMetric("bf", latest.values.bf, settings.weightUnit)} body fat` : ""}.`);
     if (t?.off) lines.push("Training: marked Off.");
@@ -183,6 +186,7 @@ export const bodyLogMeal = defineTool({
     if (!items.length) throw new Error(`${meal.name} has no foods left in it.`);
     const slot = slotFor(settings.mealSlots, input.slot, v.hour, meal.slot);
     await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, slot, name: meal.name, mealId: meal.id, items, ...totalsOf(items) });
+    await consumePantry(v.workspace.id, v.user.id, items);
     return { text: `Logged ${meal.name} to ${slot}${date === v.today ? "" : ` on ${date}`}: ${macroLine(totalsOf(items))}.\n${await dayAfter(v, date)}`, data: { logged: { name: meal.name, slot, date, totals: totalsOf(items) } } };
   },
 });
@@ -192,7 +196,7 @@ export const bodyLogFood = defineTool({
   scope: "body",
   kind: "write",
   description: "Log one of the member's foods by name × a quantity, in the food's own unit or another of the same kind (oz, g, lb, kg; cup, tbsp, tsp, fl oz, ml), into a slot. Today unless a date is given. Answers with the day's totals and what's left.",
-  input: { food: z.string().describe("The food's name"), qty: z.number().positive().describe("How much"), unit: z.string().optional().describe("The unit typed, when not the food's own"), slot: z.string().optional(), date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  input: { food: z.string().describe("The food's name"), qty: z.number().positive().describe("How much"), unit: z.string().optional().describe("The unit typed, when not the food's own"), weighed: z.enum(["raw", "cooked"]).optional().describe("Whether the quantity was weighed raw or cooked, for a food counted the other way; converts by the food's yield"), slot: z.string().optional(), date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
   handler: async (v, input): Promise<ToolResult> => {
     const settings = await ready(v);
     const date = dayOf(v, input.date);
@@ -204,10 +208,16 @@ export const bodyLogFood = defineTool({
     const allowed = loggableUnits(food.unit);
     const qty = unit === food.unit ? typed : convertQty(typed, unit, food.unit);
     if (qty == null) throw new Error(`${food.name} is counted per ${food.unit}; log it in ${allowed.join(", ")}.`);
-    const items = [entryItem(food, qty)];
+    // Weighed raw or cooked (phase 5): across the food's basis it converts by the yield; with no yield it's kept and flagged.
+    const weighed = input.weighed === "raw" || input.weighed === "cooked" ? input.weighed : food.basis;
+    const factor = weighed === food.basis ? null : yieldFor(food, await db.query.bodyYields.findMany({ where: and(and(eq(schema.bodyYields.workspaceId, v.workspace.id), eq(schema.bodyYields.userId, v.user.id)), eq(schema.bodyYields.foodId, food.id)) })).factor;
+    const asBasis = toBasis(Math.round(qty * 100) / 100, weighed, food.basis, factor);
+    const items = [{ ...entryItem(food, asBasis.qty), weighed, ...(asBasis.check ? { check: true } : {}) }];
     const slot = slotFor(settings.mealSlots, input.slot, v.hour, null);
-    await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, slot, name: food.name, mealId: null, items, ...totalsOf(items) });
-    return { text: `Logged ${typed} ${unit} ${food.name}${unit !== food.unit ? ` (${qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${food.unit})` : ""} to ${slot}${date === v.today ? "" : ` on ${date}`}: ${macroLine(totalsOf(items))}.\n${await dayAfter(v, date)}`, data: { logged: { name: food.name, qty, unit: food.unit, slot, date, totals: totalsOf(items) } } };
+    await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, slot, name: asBasis.check ? `${food.name} (weighed raw, check the yield)` : food.name, mealId: null, items, ...totalsOf(items) });
+    await consumePantry(v.workspace.id, v.user.id, items);
+    const asText = `${typed} ${unit}${unit !== food.unit ? ` (${qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${food.unit})` : ""}${asBasis.converted ? `, ${asBasis.qty} ${food.unit} ${food.basis} at a ${Math.round(factor! * 100)}% yield` : asBasis.check ? `, weighed ${weighed} with no yield known for a food counted ${food.basis}: logged as is, marked to check` : ""}`;
+    return { text: `Logged ${asText} ${food.name} to ${slot}${date === v.today ? "" : ` on ${date}`}: ${macroLine(totalsOf(items))}.\n${await dayAfter(v, date)}`, data: { logged: { name: food.name, qty: asBasis.qty, unit: food.unit, basis: food.basis, weighed, check: asBasis.check, slot, date, totals: totalsOf(items) } } };
   },
 });
 
@@ -286,5 +296,64 @@ export const bodyLogWeighIn = defineTool({
     const w = rows.find((r) => r.key === "weight")!.value;
     const bf = rows.find((r) => r.key === "bf")?.value;
     return { text: `Logged ${fmtMetric("weight", w, settings.weightUnit)}${bf != null ? `, ${fmtMetric("bf", bf, settings.weightUnit)} body fat` : ""}${date === v.today ? "" : ` for ${date}`}${time ? ` at ${time}` : ""}.${figure?.values.weight != null && figure.values.weight !== w ? ` The day's figure stays its lowest reading, ${fmtMetric("weight", figure.values.weight, settings.weightUnit)}.` : ""}`, data: { date, time, values: Object.fromEntries(rows.map((r) => [r.key, r.value])), dayFigure: figure?.values ?? null } };
+  },
+});
+
+/* ───────── Pantry (rev 237 phase 5) ───────── */
+
+export const bodyPantry = defineTool({
+  name: "body_pantry",
+  scope: "body",
+  kind: "read",
+  description: "The member's pantry: what's on the shelf (how much, raw or cooked, where, use by), what to use within two days, what's below its par level and how much to buy, and each weighed food's cooked yield.",
+  input: {},
+  handler: async (v): Promise<ToolResult> => {
+    await ready(v);
+    const p = await pantryView(v.workspace.id, v.user.id, v.today);
+    if (!p) throw new Error("Body isn't set up for this member yet.");
+    const lines: string[] = [];
+    lines.push(p.soon.length ? `Use soon: ${p.soon.map((it) => `${it.food?.name ?? "a food"} ${it.qty} ${it.unit} ${it.state} (${it.days < 0 ? "past its date" : it.days === 0 ? "today" : it.days === 1 ? "tomorrow" : `${it.days} days`})`).join("; ")}.` : "Nothing to use soon.");
+    lines.push(p.gaps.length ? `To buy: ${p.gaps.map((g) => `${g.short} ${g.unit} ${g.name} (${g.onHand} of ${g.par} on hand)`).join("; ")}.` : "Nothing below par.");
+    lines.push(p.items.length ? `On the shelf: ${p.items.map((it) => `${it.food?.name ?? "a food"} ${it.qty} ${it.unit} ${it.state}, ${it.location}${it.useBy ? `, use by ${it.useBy}` : ""}`).join("; ")}.` : "The shelf is empty.");
+    const yields = p.yields.filter((y) => y.factor != null);
+    if (yields.length) lines.push(`Cooked yields: ${yields.map((y) => `${y.food.name} ${Math.round(y.factor! * 100)}% (${y.source})`).join(", ")}.`);
+    return { text: lines.join("\n"), data: { soon: p.soon.map((it) => ({ food: it.food?.name ?? null, qty: it.qty, unit: it.unit, state: it.state, useBy: it.useBy, days: it.days })), toBuy: p.gaps, items: p.items.map((it) => ({ id: it.id, food: it.food?.name ?? null, qty: it.qty, unit: it.unit, state: it.state, location: it.location, boughtOn: it.boughtOn, useBy: it.useBy })), yields: yields.map((y) => ({ food: y.food.name, factor: y.factor, source: y.source })) } };
+  },
+});
+
+export const bodyUpdatePantry = defineTool({
+  name: "body_update_pantry",
+  scope: "body",
+  kind: "write",
+  description: "Change the pantry: add something to the shelf (a food by name, how much, raw or cooked, where, use by), or take some off it outside a logged meal (used up or thrown out), soonest use-by first.",
+  input: {
+    mode: z.enum(["add", "use"]).describe("add: onto the shelf; use: off it"),
+    food: z.string().describe("The food's name"),
+    qty: z.number().positive().describe("How much, in the food's unit unless a unit is given"),
+    unit: z.string().optional().describe("The unit, when not the food's own"),
+    state: z.enum(["raw", "cooked"]).optional().describe("Raw unless said (add only)"),
+    location: z.enum(PANTRY_LOCATIONS as [string, ...string[]]).optional().describe("fridge, freezer or pantry (add only)"),
+    useBy: z.string().optional().describe("YYYY-MM-DD (add only)"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const lib = await bodyLibrary(v.workspace.id, v.user.id);
+    const food = byName("food", lib.foods, String(input.food ?? ""));
+    const qty = Number(input.qty);
+    if (!Number.isFinite(qty) || qty <= 0) throw new Error("Give a quantity above zero.");
+    const unit = typeof input.unit === "string" && input.unit.trim() ? input.unit.trim().slice(0, 30) : food.unit;
+    if (input.mode === "add") {
+      const useBy = typeof input.useBy === "string" && DATE.test(input.useBy) ? input.useBy : null;
+      const state = input.state === "cooked" ? "cooked" : "raw";
+      const location = input.location === "freezer" || input.location === "pantry" ? input.location : "fridge";
+      await db.insert(schema.bodyPantry).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, foodId: food.id, qty, unit, state, location, boughtOn: v.today, useBy });
+      return { text: `Added ${qty} ${unit} ${food.name} (${state}) to the ${location}${useBy ? `, use by ${useBy}` : ""}.`, data: { added: { food: food.name, qty, unit, state, location, useBy } } };
+    }
+    const inFood = unit === food.unit ? qty : convertQty(qty, unit, food.unit);
+    if (inFood == null) throw new Error(`${food.name} is counted per ${food.unit}; ${unit} doesn't convert.`);
+    await consumePantry(v.workspace.id, v.user.id, [{ foodId: food.id, qty: inFood }]);
+    const p = await pantryView(v.workspace.id, v.user.id, v.today);
+    const left = p?.items.filter((it) => it.foodId === food.id) ?? [];
+    return { text: `Took ${qty} ${unit} ${food.name} off the shelf. Left: ${left.length ? left.map((it) => `${it.qty} ${it.unit} ${it.state}`).join(", ") : "none"}.`, data: { used: { food: food.name, qty: inFood, unit: food.unit }, left: left.map((it) => ({ qty: it.qty, unit: it.unit, state: it.state, useBy: it.useBy })) } };
   },
 });

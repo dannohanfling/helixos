@@ -4,6 +4,7 @@ import { MACROS, MACRO_NAME, MARK_ICON, MARK_WORD, fmtBand, fmtMacro, type Bands
 import type { BodyDayView } from "@/lib/queries/body";
 import { Progress } from "@/components/ui";
 import type { ReactNode } from "react";
+import { formatDate } from "@/lib/dates";
 
 const tone = (m: Mark): "good" | "accent" | "warn" => (m === "in" || m === "over_ok" ? "good" : m === "open" ? "accent" : "warn");
 
@@ -120,7 +121,9 @@ export function CapsLine({ caps }: { caps: BodyDayView["caps"] }) {
       {caps.map((c) => (
         <span key={c.tag} className={`mr-3 ${c.state === "over" ? "font-semibold text-danger" : ""}`} data-state={c.state}>
           {c.label}: {c.used} of {c.soft} {c.unit}
+          {c.per === "week" ? " this week" : ""}
           {c.state === "flex" ? ` (flex, top ${c.hard})` : c.state === "over" ? ` · over the ${c.hard} ${c.unit} cap` : ""}
+          {c.nextAllowed ? ` · next ${formatDate(c.nextAllowed, { weekday: "short", month: "short", day: "numeric" })}` : ""}
         </span>
       ))}
     </p>

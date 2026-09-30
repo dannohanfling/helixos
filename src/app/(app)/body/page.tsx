@@ -152,6 +152,12 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
         <span className="text-xs text-ink-2">{weighIn ? "Weigh-ins & trends →" : "Log a weigh-in →"}</span>
       </Link>
 
+      {d.dueSoon.length ? (
+        <Link href="/body/pantry" className="card mb-4 block px-4 py-2.5 text-sm hover:bg-surface-2" data-testid="body-use-soon">
+          ⏳ <span className="font-semibold">Use soon:</span> {d.dueSoon.map((u) => `${u.name} (${u.days < 0 ? "past" : u.days === 0 ? "today" : u.days === 1 ? "tomorrow" : `${u.days} days`})`).join(", ")} <span className="text-xs text-ink-2">· Pantry →</span>
+        </Link>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="space-y-4">
           <Card id="log" title="Log a meal" action={<Link href="/body/foods" className="text-xs text-ink-2 hover:underline">Nutrition →</Link>}>
@@ -207,7 +213,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
               </p>
             )}
             {d.library.foods.length ? (
-              <LogFoodForm action={logFoodAction} date={date} slots={slots} defaultSlot={defaultSlot} foods={d.library.foods.map((f) => ({ id: f.id, name: f.name, unit: f.unit, units: loggableUnits(f.unit) }))} recent={d.recentFoodIds} />
+              <LogFoodForm action={logFoodAction} date={date} slots={slots} defaultSlot={defaultSlot} foods={d.library.foods.map((f) => ({ id: f.id, name: f.name, unit: f.unit, units: loggableUnits(f.unit), basis: f.basis }))} recent={d.recentFoodIds} />
             ) : null}
           </Card>
 

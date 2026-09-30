@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 25,
+    date: "2026-09-30",
+    title: "HumanOS: Pantry",
+    lines: ["A Pantry under Nutrition: what's on the shelf (how much, raw or cooked, where, use by), what to use within two days (shown on Log too, and those meals come first in what fits), and what to buy when a food drops below the par level you give it.", "Logging a meal takes its foods off the shelf. Foods are counted cooked; weigh a food raw and cooked and its yield is learned, so logging raw converts. Caps can be per week and say when they open again."],
+    audience: "coach",
+  },
+  {
     n: 24,
     date: "2026-09-30",
     title: "HumanOS in Claude",

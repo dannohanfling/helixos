@@ -166,7 +166,7 @@ export function nextRefeed(from: string, refeed: RefeedRule): string | null {
 
 /* ───────── What fits tonight ───────── */
 
-export type MealOption = { id: string; name: string; totals: Macros };
+export type MealOption = { id: string; name: string; totals: Macros; /** Pantry (phase 5): the foods in it, so meals with something to use soon come first. */ foodIds?: string[] };
 export type Fit = { id: string; name: string; totals: Macros; after: Macros; inBand: number; marks: Marks };
 
 /**
@@ -175,7 +175,7 @@ export type Fit = { id: string; name: string; totals: Macros; after: Macros; inB
  * go over). The best fits land the most macros inside their bands; ties go to the one closest to the protein band, then fewest
  * calories.
  */
-export function whatFits(eaten: Macros, bands: Bands, meals: MealOption[], opts: { floors: Floors; overOk: Macro[] }, limit = 5): Fit[] {
+export function whatFits(eaten: Macros, bands: Bands, meals: MealOption[], opts: { floors: Floors; overOk: Macro[]; /** Foods to use soon (pantry): a meal holding one sorts first, ties aside. */ prefer?: Set<string> }, limit = 5): Fit[] {
   // Only the macros the member has bands for count; with no bands at all there is nothing to fit.
   const banded = MACROS.filter((m) => bands[m]);
   if (!banded.length) return [];
@@ -188,19 +188,26 @@ export function whatFits(eaten: Macros, bands: Bands, meals: MealOption[], opts:
     fits.push({ id: meal.id, name: meal.name, totals: meal.totals, after, inBand, marks });
   }
   const proteinGap = (f: Fit) => (bands.p ? Math.max(0, bands.p.min - f.after.p) : 0);
-  return fits.sort((a, b) => b.inBand - a.inBand || proteinGap(a) - proteinGap(b) || a.totals.cal - b.totals.cal).slice(0, limit);
+  const soon = (f: Fit) => (opts.prefer?.size && meals.find((m) => m.id === f.id)?.foodIds?.some((id) => opts.prefer!.has(id)) ? 1 : 0);
+  return fits.sort((a, b) => soon(b) - soon(a) || b.inBand - a.inBand || proteinGap(a) - proteinGap(b) || a.totals.cal - b.totals.cal).slice(0, limit);
 }
 
 /* ───────── Caps (e.g. cheese) ───────── */
 
 /** A per-member cap on a tagged kind of food, in that food's unit: up to `soft` is fine, up to `hard` is the flex top, above is flagged. */
-export type Cap = { tag: string; label: string; unit: string; soft: number; hard: number };
-export type CapUse = Cap & { used: number; state: "ok" | "flex" | "over" };
+export type Cap = { tag: string; label: string; unit: string; soft: number; hard: number; per?: "day" | "week" };
+export type CapUse = Cap & { used: number; state: "ok" | "flex" | "over"; /** A weekly cap at its top: the day it opens again (rev 231). */ nextAllowed?: string };
 
-export function capUse(caps: Cap[], lines: { capTag: string | null; qty: number }[]): CapUse[] {
+/**
+ * A day's caps from the day's lines; a weekly cap (per "week") from the week's lines instead, and at or past its flex top it
+ * names the day it opens again (the next week's first day).
+ */
+export function capUse(caps: Cap[], lines: { capTag: string | null; qty: number }[], week?: { lines: { capTag: string | null; qty: number }[]; nextWeekStart: string }): CapUse[] {
   return caps.map((cap) => {
-    const used = r1(lines.filter((l) => l.capTag === cap.tag).reduce((a, l) => a + l.qty, 0));
-    return { ...cap, used, state: used > cap.hard ? "over" : used > cap.soft ? "flex" : "ok" };
+    const from = cap.per === "week" && week ? week.lines : lines;
+    const used = r1(from.filter((l) => l.capTag === cap.tag).reduce((a, l) => a + l.qty, 0));
+    const nextAllowed = cap.per === "week" && week && used >= cap.hard && cap.hard > 0 ? week.nextWeekStart : undefined;
+    return { ...cap, used, state: used > cap.hard ? "over" : used > cap.soft ? "flex" : "ok", ...(nextAllowed ? { nextAllowed } : {}) };
   });
 }
 

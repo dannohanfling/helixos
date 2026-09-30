@@ -596,6 +596,13 @@
       "when": 1790794785571,
       "tag": "0084_finish_training",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "6",
+      "when": 1790803519345,
+      "tag": "0085_pantry",
+      "breakpoints": true
     }
   ]
 }

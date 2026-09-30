@@ -499,6 +499,58 @@ async function main() {
     const weightLine = (await client.locator('[data-testid="body-weight-line"]').textContent()) ?? "";
     if (!weightLine.includes("150.4 lb") || !weightLine.includes("21%")) throw new Error(`Log carries the latest weigh-in: "${weightLine}"`);
     console.log(`✓ weigh-ins: two typed today (the lighter kept whole as the day's figure), the older export imported (${older.imported} readings, its bad row skipped) then re-imported for nothing new, the newer export (${newer.imported}) with 12 Sep's lowest as its figure; 8 trend cards with the engine's 7-day average; a goal line; a reading deleted; the Log line`);
+    // ── Pantry (phase 5): items on the shelf, use soon on Pantry and Log, a par level and the gap to buy, a raw → cooked weighing
+    // and the yield learned, 8 oz logged raw against a cooked food (converted, off the shelf), and an item used up by hand. ──
+    await client.goto(`${base}/body/pantry`);
+    await client.locator('[data-testid="pantry-empty"]').waitFor({ timeout: 30000 });
+    const shelfRows = () => client.locator('[data-testid="pantry-item"]').count();
+    const addToShelf = async (foodId: string, qty: string, state: "raw" | "cooked", useBy: string) => {
+      const before = await shelfRows();
+      const form = client.locator('[data-testid="pantry-add"]');
+      if (!(await form.isVisible())) await client.locator("summary", { hasText: "Add to the shelf" }).click();
+      await form.locator('select[name="foodId"]').selectOption(foodId);
+      await fillExact(client, '[data-testid="pantry-qty"]', qty);
+      await form.locator('select[name="state"]').selectOption(state);
+      await fillExact(client, '[data-testid="pantry-use-by"]', useBy);
+      await press(client, '[data-testid="pantry-save"]', async () => (await shelfRows()) === before + 1, "the item on the shelf");
+    };
+    await addToShelf(idOf("lean-steak"), "16", "raw", addDays(today, 2));
+    await addToShelf(idOf("egg"), "12", "raw", addDays(today, 10));
+    if (!((await client.locator('[data-testid="pantry-soon"]').textContent()) ?? "").includes(fx("lean-steak").name)) throw new Error("the steak, use by in two days, is to use soon");
+    const steakPar = `[data-testid="pantry-par"][data-food="${fx("lean-steak").name}"]`;
+    if (!(await client.locator(`${steakPar} input[name="par"]`).isVisible())) await client.locator("summary", { hasText: "Par levels" }).click();
+    await fillExact(client, `${steakPar} input[name="par"]`, "24");
+    await press(client, `${steakPar} button[type="submit"]`, async () => (await client.locator('[data-testid="pantry-gap"]').count()) > 0, "the gap to buy");
+    const gap = (await client.locator('[data-testid="pantry-gap"]').first().textContent()) ?? "";
+    if (!gap.includes("8 oz") || !gap.includes("16 of 24")) throw new Error(`below par: 8 oz to buy with 16 of 24 on hand: "${gap}"`);
+    const weighForm = client.locator('[data-testid="pantry-weigh"]');
+    if (!(await weighForm.isVisible())) await client.locator("summary", { hasText: "Add a weighing" }).click();
+    await weighForm.locator('select[name="foodId"]').selectOption(idOf("lean-steak"));
+    await fillExact(client, '[data-testid="pantry-weigh-raw"]', "16");
+    await fillExact(client, '[data-testid="pantry-weigh-cooked"]', "9.8");
+    const steakYield = `[data-testid="pantry-yield"][data-food="${fx("lean-steak").name}"]`;
+    await press(client, '[data-testid="pantry-weigh-save"]', async () => (await client.locator(steakYield).getAttribute("data-factor")) === "0.61", "the 61% yield learned");
+    // On yesterday's Log (today's totals stay as checked): 8 oz of steak weighed raw is 4.88 oz cooked, and the shelf loses 8 oz raw.
+    await client.goto(`${base}/body?date=${yesterday}`);
+    await client.locator('[data-testid="body-log-food-form"]').waitFor({ timeout: 30000 });
+    if (!((await client.locator('[data-testid="body-use-soon"]').textContent()) ?? "").includes(fx("lean-steak").name)) throw new Error("Log says what to use soon");
+    const yBefore = await entryCount(client);
+    await client.locator('[data-testid="body-log-food-form"] select[name="foodId"]').selectOption(idOf("lean-steak"));
+    await fillExact(client, '[data-testid="body-log-food-form"] input[name="qty"]', "8");
+    await client.locator('[data-testid="body-log-weighed"]').selectOption("raw");
+    await press(client, '[data-testid="body-log-food"]', async () => (await entryCount(client)) === yBefore + 1, "the raw steak logged");
+    const rawEntry = (await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.date, yesterday)) })).find((e) => e.items[0]?.weighed === "raw");
+    if (!rawEntry || Math.abs(rawEntry.items[0].qty - 4.88) > 0.01 || rawEntry.items[0].check) throw new Error(`8 oz raw at 61% logs as 4.88 oz cooked, unflagged: ${JSON.stringify(rawEntry?.items)}`);
+    const steakShelf = await db.query.bodyPantry.findFirst({ where: and(mine(schema.bodyPantry), eq(schema.bodyPantry.foodId, idOf("lean-steak"))) });
+    if (!steakShelf || Math.abs(steakShelf.qty - 8) > 0.01) throw new Error(`the shelf loses the 8 oz raw: ${steakShelf?.qty}`);
+    await client.goto(`${base}/body/pantry`);
+    const eggRow = `[data-testid="pantry-item"][data-food="${fx("egg").name}"]`;
+    await client.locator(eggRow).waitFor({ timeout: 30000 });
+    await fillExact(client, `${eggRow} [data-testid="pantry-use-qty"]`, "12");
+    await press(client, `${eggRow} [data-testid="pantry-use"]`, async () => (await client.locator(eggRow).count()) === 0, "the eggs gone");
+    await noSideScroll(client, "/body/pantry");
+    console.log("✓ pantry: 16 oz raw steak and 12 eggs on the shelf; the steak (use by in two days) to use soon on Pantry and Log; par 24 oz gives 8 oz to buy; 16 → 9.8 oz weighed learns a 61% yield; 8 oz logged raw lands as 4.88 oz cooked and the shelf keeps 8 oz raw; the eggs used up by hand");
+
 
 
     // ── Private: the coach sees nothing, and a coach's export never has Body. ──
@@ -571,11 +623,13 @@ async function main() {
     const foodsTool = await tool("body_foods").handler(await viewerFor(), {});
     if (!foodsTool.text.includes(fx("egg").name) || !foodsTool.text.includes(MEALS[1].name)) throw new Error("body_foods lists the foods and meals");
     const mealTool = await tool("body_log_meal").handler(await viewerFor(), { meal: MEALS[0].name.toLowerCase(), slot: "lunch", date: yesterday });
+    // Yesterday already holds the pantry section's raw steak; the meal is the one entry with a meal id.
     const yEntries = await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.date, yesterday)) });
-    if (yEntries.length !== 1 || yEntries[0].name !== MEALS[0].name || yEntries[0].slot !== "Lunch" || !mealTool.text.includes(`Logged ${MEALS[0].name} to Lunch`)) throw new Error(`body_log_meal logs the meal by name into the member's own slot: ${mealTool.text}`);
+    const yMeal = yEntries.filter((e) => e.mealId);
+    if (yMeal.length !== 1 || yMeal[0].name !== MEALS[0].name || yMeal[0].slot !== "Lunch" || !mealTool.text.includes(`Logged ${MEALS[0].name} to Lunch`)) throw new Error(`body_log_meal logs the meal by name into the member's own slot: ${mealTool.text}`);
     const foodTool = await tool("body_log_food").handler(await viewerFor(), { food: "lean steak", qty: 100, unit: "g", slot: "Dinner", date: yesterday });
-    const steakRow = (await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.date, yesterday)) })).find((e) => e.mealId === null)!;
-    if (!steakRow || Math.abs(steakRow.items[0].qty - 3.5274) > 0.01 || !foodTool.text.includes("100 g")) throw new Error(`body_log_food converts grams to the food's ounces: ${foodTool.text}`);
+    const steakRow = (await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.date, yesterday)) })).find((e) => e.mealId === null && Math.abs(e.items[0].qty - 3.5274) < 0.01);
+    if (!steakRow || !foodTool.text.includes("100 g")) throw new Error(`body_log_food converts grams to the food's ounces: ${foodTool.text}`);
     const setTool = await tool("body_log_set").handler(await viewerFor(), { exercise: "bench", weight: 180, reps: 8, date: yesterday });
     if (!setTool.text.includes("180 × 8") || (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, yesterday)) })).length !== 3) throw new Error(`body_log_set adds a set to yesterday's session: ${setTool.text}`);
     const weighTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.2, bodyFat: 21.5, date: yesterday, time: "07:00" });
@@ -599,7 +653,8 @@ async function main() {
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
     if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
     if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
-    if ((own.body_entries ?? []).length !== 5 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
+    if (!(own.body_pantry ?? []).length || (own.body_yields ?? []).length !== 1) throw new Error("the member's Body export has their pantry and weighings");
+    if ((own.body_entries ?? []).length !== 6 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // Download and Delete are two separate cards (rev 230); the confirm stays shut until DELETE is typed exactly.
     if (!(await client.locator('#download [data-testid="body-export"]').count()) || (await client.locator('#download [data-testid="body-erase"]').count()) || !(await client.locator('[data-testid="body-delete-card"] [data-testid="body-erase"]').count())) throw new Error("Download and Delete sit in separate cards");
     await noSideScroll(client, "/body/settings with its data cards");

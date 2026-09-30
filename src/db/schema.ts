@@ -2236,10 +2236,11 @@ export const botApprovals = sqliteTable(
  */
 
 export type BodyWeekPattern = Partial<Record<"0" | "1" | "2" | "3" | "4" | "5" | "6", string | null>>;
-export type BodyCap = { tag: string; label: string; unit: string; soft: number; hard: number };
+/** A cap on a tagged kind of food: per day unless `per` is "week" (rev 231's weekly caps, which show a next-allowed date). */
+export type BodyCap = { tag: string; label: string; unit: string; soft: number; hard: number; per?: "day" | "week" };
 export type BodyMealItem = { foodId: string; qty: number };
 /** A logged line, with the food's macros per unit copied at logging time: editing a food later never rewrites a past day. */
-export type BodyEntryItem = { foodId: string | null; name: string; unit: string; qty: number; cal: number; p: number; f: number; c: number; capTag: string | null; /** mg per unit (rev 231); absent on lines logged before sodium existed. */ sodium?: number };
+export type BodyEntryItem = { foodId: string | null; name: string; unit: string; qty: number; cal: number; p: number; f: number; c: number; capTag: string | null; /** mg per unit (rev 231); absent on lines logged before sodium existed. */ sodium?: number; /** Pantry (phase 5): weighed raw or cooked when the member said; `check` when it couldn't convert to the food's basis. */ weighed?: "raw" | "cooked"; check?: boolean };
 
 /** One per member: the share switch, units, floors, the weekly pattern, the refeed rule, meal slots and caps. */
 export const bodySettings = sqliteTable(
@@ -2320,6 +2321,12 @@ export const bodyFoods = sqliteTable(
     /** Sodium per unit, in mg (rev 231). */
     sodium: real("sodium").notNull().default(0),
     capTag: text("cap_tag"),
+    /** Pantry (phase 5, rev 251): the nutrition is per cooked unit unless the only source was raw. */
+    basis: text("basis", { enum: ["cooked", "raw"] }).notNull().default("cooked"),
+    /** Keep at least this much on hand, in the food's unit; below it the food goes on the shopping list. */
+    par: real("par"),
+    /** The member's entered cooked ÷ raw factor; the median of their weighings (body_yields) stands in when blank. */
+    cookedYield: real("cooked_yield"),
     archivedAt: text("archived_at"),
     createdAt: createdAt(),
   },
@@ -2654,6 +2661,46 @@ export const bodyGoals = sqliteTable(
   (t) => [uniqueIndex("body_goals_member_key").on(t.workspaceId, t.userId, t.key)],
 );
 export type BodyGoal = typeof bodyGoals.$inferSelect;
+
+/* ── Pantry (rev 237 phase 5, migration 0086): what's on hand, and the weighings a cooked yield is learned from. ── */
+
+/** One thing on the shelf: a food, how much in what unit, raw or cooked, where, bought when, use by when. */
+export const bodyPantry = sqliteTable(
+  "body_pantry",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    foodId: text("food_id").notNull(),
+    qty: real("qty").notNull(),
+    unit: text("unit").notNull(),
+    state: text("state", { enum: ["raw", "cooked"] }).notNull().default("raw"),
+    location: text("location", { enum: ["fridge", "freezer", "pantry"] }).notNull().default("fridge"),
+    boughtOn: text("bought_on"),
+    useBy: text("use_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_pantry_member").on(t.workspaceId, t.userId), index("body_pantry_food").on(t.foodId)],
+);
+export type BodyPantryItem = typeof bodyPantry.$inferSelect;
+
+/** One raw → cooked weighing of a food, in one unit: the cooked yield is their median (rev 251). */
+export const bodyYields = sqliteTable(
+  "body_yields",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    foodId: text("food_id").notNull(),
+    raw: real("raw").notNull(),
+    cooked: real("cooked").notNull(),
+    unit: text("unit").notNull(),
+    date: text("date").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_yields_food").on(t.workspaceId, t.userId, t.foodId)],
+);
+export type BodyYield = typeof bodyYields.$inferSelect;
 
 /**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,

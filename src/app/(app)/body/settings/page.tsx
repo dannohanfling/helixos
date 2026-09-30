@@ -232,6 +232,10 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
                   <input name={`cap_${i}_unit`} className="field py-1" defaultValue={c?.unit ?? ""} placeholder="oz" aria-label="Cap unit" />
                   <input name={`cap_${i}_soft`} type="number" step="any" min={0} className="field py-1 tabular" defaultValue={c?.soft ?? ""} placeholder="default" aria-label="Cap default" />
                   <input name={`cap_${i}_hard`} type="number" step="any" min={0} className="field py-1 tabular" defaultValue={c?.hard ?? ""} placeholder="flex top" aria-label="Cap flex top" />
+                  <select name={`cap_${i}_per`} className="field py-1" defaultValue={c?.per ?? "day"} aria-label="Cap per">
+                    <option value="day">a day</option>
+                    <option value="week">a week</option>
+                  </select>
                 </div>
               ))}
             </div>

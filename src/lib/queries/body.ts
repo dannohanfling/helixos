@@ -2,11 +2,12 @@
  * Body reads. Every read of a Body table in the app is here (a unit test holds that), and every read of someone else's Body data
  * goes through bodyAccess first: a coach sees a client's Body only while the client's share switch is on (rev 179, privacy).
  */
-import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
-import { addDays, formatDate, rangeDays, startOfWeek, todayInTz } from "@/lib/dates";
+import { addDays, daysBetween, formatDate, rangeDays, startOfWeek, todayInTz } from "@/lib/dates";
+import { belowPar, daysLeft, dueSoon, yieldFor } from "@/lib/engine/body-pantry";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, weekTally, type WeightUnit } from "@/lib/engine/body-training";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
@@ -100,7 +101,7 @@ export async function bodyLibrary(workspaceId: string, userId: string, opts: { a
 export async function bodyDay(workspaceId: string, userId: string, date: string, today: string) {
   const settings = await bodySettingsFor(workspaceId, userId);
   if (!settings) return null;
-  const [dayTypes, entries, override, comments, library, anyEntry, lately] = await Promise.all([
+  const [dayTypes, entries, override, comments, library, anyEntry, lately, shelf] = await Promise.all([
     dayTypesFor(workspaceId, userId),
     db.query.bodyEntries.findMany({ where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId), eq(schema.bodyEntries.date, date)), orderBy: asc(schema.bodyEntries.createdAt) }),
     db.query.bodyDays.findFirst({ where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), eq(schema.bodyDays.date, date)) }),
@@ -108,7 +109,15 @@ export async function bodyDay(workspaceId: string, userId: string, date: string,
     bodyLibrary(workspaceId, userId),
     db.query.bodyEntries.findFirst({ columns: { id: true }, where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId)) }),
     db.query.bodyEntries.findMany({ columns: { items: true }, where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId), gte(schema.bodyEntries.date, addDays(today, -14))), orderBy: desc(schema.bodyEntries.createdAt), limit: 80 }),
+    db.query.bodyPantry.findMany({ columns: { foodId: true, useBy: true }, where: and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId)) }),
   ]);
+  // Pantry (phase 5): what to use within two days, named, and preferred in what fits.
+  const soonItems = dueSoon(shelf, today, daysBetween);
+  const useSoonFoods = [...new Set(soonItems.map((it) => it.foodId))].flatMap((id) => {
+    const f = library.foods.find((x) => x.id === id);
+    return f ? [{ foodId: id, name: f.name, days: Math.min(...soonItems.filter((it) => it.foodId === id).map((it) => it.days)) }] : [];
+  });
+  const prefer = new Set(useSoonFoods.map((x) => x.foodId));
   // Recent foods (rev 238): the ones logged in the last two weeks, newest first, go on top of the log picker.
   const live = new Set(library.foods.map((f) => f.id));
   const recentFoodIds = [...new Set(lately.flatMap((e) => e.items.map((i) => i.foodId)).filter((id): id is string => !!id && live.has(id)))].slice(0, 8);
@@ -123,11 +132,16 @@ export async function bodyDay(workspaceId: string, userId: string, date: string,
   const bands = hasBands(typeBands) ? typeBands : null;
   const marks = bands ? dayMarks(totals, bands, { floors, overOk: settings.overOk, final }) : null;
   const left = bands ? Object.fromEntries(MACROS.flatMap((m) => (bands[m] ? [[m, { min: bands[m]!.min - totals[m], max: bands[m]!.max - totals[m] }]] : []))) as Partial<Record<Macro, { min: number; max: number }>> : null;
-  const fits = bands ? whatFits(totals, bands, library.meals.filter((m) => !m.missing), { floors, overOk: settings.overOk }) : [];
+  const fits = bands ? whatFits(totals, bands, library.meals.filter((m) => !m.missing).map((m) => ({ ...m, foodIds: m.lines.map((l) => l.food.id) })), { floors, overOk: settings.overOk, prefer }) : [];
   // The fill-in checklist (rev 192): shown at the top of /body until targets, a food and a first logged meal exist.
   const checklist = { ai: !!settings.aiAskedAt, targets: dayTypes.some((t) => hasBands(bandsOf(t))), dayTypes: dayTypes.length > 1, foods: library.foods.length > 0, meals: library.meals.length > 0, logged: !!anyEntry };
   const sodium = entries.reduce((a, e) => a + e.items.reduce((b, i) => b + (i.sodium ?? 0) * i.qty, 0), 0);
-  const caps = capUse(settings.caps, entries.flatMap((e) => e.items.map((i) => ({ capTag: i.capTag, qty: i.qty }))));
+  // A weekly cap (rev 231) counts the whole week's lines and names the day it opens again.
+  const weekStart = startOfWeek(date);
+  const weekEntries = settings.caps.some((c) => c.per === "week")
+    ? await db.query.bodyEntries.findMany({ columns: { items: true }, where: and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId), gte(schema.bodyEntries.date, weekStart), lte(schema.bodyEntries.date, addDays(weekStart, 6))) })
+    : [];
+  const caps = capUse(settings.caps, entries.flatMap((e) => e.items.map((i) => ({ capTag: i.capTag, qty: i.qty }))), { lines: weekEntries.flatMap((e) => e.items.map((i) => ({ capTag: i.capTag, qty: i.qty }))), nextWeekStart: addDays(weekStart, 7) });
   const authors = comments.length ? await db.query.users.findMany({ columns: { id: true, name: true }, where: inArray(schema.users.id, [...new Set(comments.map((c) => c.authorUserId))]) }) : [];
   const authorName = new Map(authors.map((a) => [a.id, a.name]));
   return {
@@ -150,6 +164,7 @@ export async function bodyDay(workspaceId: string, userId: string, date: string,
     library,
     recentFoodIds,
     checklist,
+    dueSoon: useSoonFoods,
   };
 }
 export type BodyDayView = NonNullable<Awaited<ReturnType<typeof bodyDay>>>;
@@ -337,6 +352,34 @@ export async function recentTraining(workspaceId: string, userId: string, today:
   for (const d of offDays) if (!out.some((o) => o.date === d.date)) out.push({ date: d.date, routine: null, lines: [], off: true });
   return out.sort((a, b) => (a.date < b.date ? 1 : -1));
 }
+
+/* ───────── Pantry (rev 237 phase 5) ───────── */
+
+/**
+ * The Pantry page: every item with its food and days to use-by, soonest first; what to use soon; what's below par (the shopping
+ * list's seed); and each live food's cooked yield, entered or learned from its weighings.
+ */
+export async function pantryView(workspaceId: string, userId: string, today: string) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const [items, foods, weighings] = await Promise.all([
+    db.query.bodyPantry.findMany({ where: and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId)) }),
+    db.query.bodyFoods.findMany({ where: and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId)), orderBy: asc(schema.bodyFoods.name) }),
+    db.query.bodyYields.findMany({ where: and(eq(schema.bodyYields.workspaceId, workspaceId), eq(schema.bodyYields.userId, userId)), orderBy: desc(schema.bodyYields.createdAt) }),
+  ]);
+  const foodById = new Map(foods.map((f) => [f.id, f]));
+  const live = foods.filter((f) => !f.archivedAt);
+  const rows = items
+    .map((it) => ({ ...it, food: foodById.get(it.foodId) ?? null, days: daysLeft(it, today, daysBetween) }))
+    .sort((a, b) => (a.useBy ?? "9999").localeCompare(b.useBy ?? "9999") || (a.food?.name ?? "").localeCompare(b.food?.name ?? ""));
+  const soon = dueSoon(rows, today, daysBetween);
+  const yields = live.map((f) => {
+    const own = weighings.filter((w) => w.foodId === f.id);
+    return { food: f, ...yieldFor(f, own), weighings: own.slice(0, 10) };
+  });
+  return { settings, items: rows, soon, gaps: belowPar(live, items), foods: live, yields, count: items.length };
+}
+export type PantryView = NonNullable<Awaited<ReturnType<typeof pantryView>>>;
 
 /* ───────── Body composition (rev 237 phase 2) ───────── */
 

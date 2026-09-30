@@ -215,7 +215,7 @@ describe("Body ships dark: a member without the flag sees none of it (rev 195)",
     for (const f of ["src/components/nav.tsx", "src/app/(app)/more/page.tsx"]) expect(read(f)).toMatch(/navVisible\(n, \{[^}]*bodyEnabled/);
   });
   it("every Body page 404s first, the coach's view 404s for a client whose Body is off, and so does the Body export", () => {
-    const pages = ["src/app/(app)/body/page.tsx", "src/app/(app)/body/foods/page.tsx", "src/app/(app)/body/settings/page.tsx", "src/app/(app)/body/training/page.tsx", "src/app/(app)/body/training/routines/page.tsx", "src/app/(app)/body/training/[exerciseId]/page.tsx", "src/app/(app)/body/weight/page.tsx"];
+    const pages = ["src/app/(app)/body/page.tsx", "src/app/(app)/body/foods/page.tsx", "src/app/(app)/body/settings/page.tsx", "src/app/(app)/body/training/page.tsx", "src/app/(app)/body/training/routines/page.tsx", "src/app/(app)/body/training/[exerciseId]/page.tsx", "src/app/(app)/body/weight/page.tsx", "src/app/(app)/body/pantry/page.tsx"];
     for (const f of pages) expect(read(f), f).toMatch(/const v = await requireViewer\(\);\n  requireBodyEnabled\(v\);/);
     const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
     const routed = walk(join(process.cwd(), "src/app/(app)/body")).filter((f) => f.endsWith("page.tsx")).map((f) => f.slice(process.cwd().length + 1)).sort();
@@ -284,7 +284,7 @@ describe("AI and Body data (rev 219)", () => {
 describe("Body tables are read in one place, and no Body value reaches a log", () => {
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
   const files = walk(join(process.cwd(), "src")).filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes("__tests__"));
-  const ALLOWED = ["src/db/schema.ts", "src/lib/queries/body.ts", "src/lib/actions/body.ts", "src/lib/mcp/tools/body.ts", "src/lib/member-data.ts", "src/lib/export.ts"];
+  const ALLOWED = ["src/db/schema.ts", "src/lib/queries/body.ts", "src/lib/actions/body.ts", "src/lib/mcp/tools/body.ts", "src/lib/body-pantry.ts", "src/lib/member-data.ts", "src/lib/export.ts"];
   it("nothing of Danno's protocol ships as app data: no app module imports the fixture or carries its names (rev 192)", () => {
     expect(files.length).toBeGreaterThan(100);
     const names = ["body-phase2v4", "Phase 2 V4", ...V4.meals.map((m) => m.name), ...V4.foods.map((f) => f.name)];

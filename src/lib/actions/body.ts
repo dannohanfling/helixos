@@ -12,6 +12,8 @@ import { requireCoach, type Viewer } from "@/lib/auth";
 import { MACROS, entryItem, totalsOf, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
 import { convertQty, storedUnit } from "@/lib/engine/body-units";
+import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
+import { consumePantry } from "@/lib/body-pantry";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { nowIso } from "@/lib/dates";
 import { bodyAccess, bodySettingsFor, groupReadings, isWorkspaceOwner } from "@/lib/queries/body";
@@ -89,7 +91,7 @@ export async function saveBodySettingsAction(formData: FormData): Promise<void> 
     const soft = num(formData, `cap_${i}_soft`);
     const hard = num(formData, `cap_${i}_hard`);
     if (hard < soft) back("/body/settings", `The ${tag} cap's flex top can't be under its default.`);
-    caps.push({ tag, label: str(formData, `cap_${i}_label`) || tag, unit: str(formData, `cap_${i}_unit`) || "oz", soft, hard });
+    caps.push({ tag, label: str(formData, `cap_${i}_label`) || tag, unit: str(formData, `cap_${i}_unit`) || "oz", soft, hard, per: str(formData, `cap_${i}_per`) === "week" ? "week" : "day" });
   }
   await db
     .update(schema.bodySettings)
@@ -217,8 +219,12 @@ export async function saveFoodAction(formData: FormData): Promise<void> {
   const choice = str(formData, "unitChoice");
   const unit = storedUnit(choice === "other" ? str(formData, "unitOther") : choice || str(formData, "unit")).slice(0, 30);
   if (!name || !unit) back("/body/foods", "A food needs a name and a unit (pick one, or type it under Other).");
-  const food = { name, unit, cal: num(formData, "cal"), p: num(formData, "p"), f: num(formData, "f"), c: num(formData, "c"), sodium: num(formData, "sodium"), capTag: opt(formData, "capTag")?.toLowerCase().slice(0, 30) ?? null };
+  // Pantry (phase 5, rev 251): the nutrition's basis (cooked unless said raw), a par level, and an entered cooked yield in %.
+  const yieldPct = optNum(formData, "yieldPct");
+  const par = optNum(formData, "par");
+  const food = { name, unit, cal: num(formData, "cal"), p: num(formData, "p"), f: num(formData, "f"), c: num(formData, "c"), sodium: num(formData, "sodium"), capTag: opt(formData, "capTag")?.toLowerCase().slice(0, 30) ?? null, basis: str(formData, "basis") === "raw" ? ("raw" as const) : ("cooked" as const), par: par != null && par > 0 ? par : null, cookedYield: yieldPct != null && yieldPct >= 10 && yieldPct <= 150 ? Math.round(yieldPct) / 100 : null };
   if ([food.cal, food.p, food.f, food.c, food.sodium].some((n) => n < 0)) back("/body/foods", `${name}: macros can't be negative.`);
+  if (yieldPct != null && (yieldPct < 10 || yieldPct > 150)) back("/body/foods", `${name}: a cooked yield is between 10% and 150%.`);
   if (id) await db.update(schema.bodyFoods).set(food).where(and(eq(schema.bodyFoods.id, id), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
   else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
   refresh();
@@ -288,6 +294,7 @@ export async function logMealAction(formData: FormData): Promise<void> {
   });
   if (!items.length) return;
   await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId, userId, date, slot, name: meal.name, mealId: meal.id, items, ...totalsOf(items) });
+  await consumePantry(workspaceId, userId, items);
   refresh();
 }
 
@@ -304,8 +311,14 @@ export async function logFoodAction(formData: FormData): Promise<void> {
   const as = str(formData, "unit") || food!.unit;
   const converted = convertQty(typed, as, food!.unit);
   if (converted === null) back(`/body?date=${date}`, `${food!.name} is per ${food!.unit}, which doesn't convert from ${as}.`);
-  const items = [entryItem(food!, Math.round(converted! * 100) / 100)];
-  await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId, userId, date, slot, name: food!.name, mealId: null, items, ...totalsOf(items) });
+  // Weighed raw or cooked (phase 5): across the food's basis it converts by the yield; with no yield it's kept and flagged.
+  const said = str(formData, "weighed");
+  const weighed = said === "raw" || said === "cooked" ? said : food!.basis;
+  const factor = weighed === food!.basis ? null : yieldFor(food!, await db.query.bodyYields.findMany({ where: and(and(eq(schema.bodyYields.workspaceId, workspaceId), eq(schema.bodyYields.userId, userId)), eq(schema.bodyYields.foodId, food!.id)) })).factor;
+  const asBasis = toBasis(Math.round(converted! * 100) / 100, weighed, food!.basis, factor);
+  const items = [{ ...entryItem(food!, asBasis.qty), weighed, ...(asBasis.check ? { check: true } : {}) }];
+  await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId, userId, date, slot, name: asBasis.check ? `${food!.name} (weighed raw, check the yield)` : food!.name, mealId: null, items, ...totalsOf(items) });
+  await consumePantry(workspaceId, userId, items);
   refresh();
 }
 
@@ -471,6 +484,72 @@ export async function setDayOffAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/* ───────── Pantry (rev 237 phase 5) ───────── */
+
+const PANTRY = "/body/pantry";
+const stateOf = (s: string): "raw" | "cooked" => (s === "cooked" ? "cooked" : "raw");
+const locationOf = (s: string): "fridge" | "freezer" | "pantry" => (s === "freezer" ? "freezer" : s === "pantry" ? "pantry" : "fridge");
+const dateOrNull = (s: string): string | null => (DATE.test(s) ? s : null);
+
+/** Something onto the shelf: a food, how much in what unit, raw or cooked, where, bought when, use by when. */
+export async function savePantryItemAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
+  if (!food) back(PANTRY, "Pick a food.");
+  const qty = num(formData, "qty");
+  if (!(qty > 0)) back(PANTRY, "Give a quantity above zero.");
+  const values = { foodId: food!.id, qty, unit: storedUnit(str(formData, "unit") || food!.unit).slice(0, 30), state: stateOf(str(formData, "state")), location: locationOf(str(formData, "location")), boughtOn: dateOrNull(str(formData, "boughtOn")), useBy: dateOrNull(str(formData, "useBy")) };
+  const id = str(formData, "id");
+  if (id) await db.update(schema.bodyPantry).set(values).where(and(eq(schema.bodyPantry.id, id), and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId))));
+  else await db.insert(schema.bodyPantry).values({ id: newId(), workspaceId, userId, ...values });
+  refresh();
+}
+
+export async function deletePantryItemAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.delete(schema.bodyPantry).where(and(eq(schema.bodyPantry.id, str(formData, "id")), and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId))));
+  refresh();
+}
+
+/** Some of an item used or thrown out, outside a logged meal: the quantity comes down; at zero (or blank) the item goes. */
+export async function usePantryAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const where = and(eq(schema.bodyPantry.id, str(formData, "id")), and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId)));
+  const it = await db.query.bodyPantry.findFirst({ where });
+  if (!it) return;
+  const used = optNum(formData, "qty");
+  const left = used == null ? 0 : Math.round((it.qty - used) * 100) / 100;
+  if (left <= 0) await db.delete(schema.bodyPantry).where(where);
+  else await db.update(schema.bodyPantry).set({ qty: left }).where(where);
+  refresh();
+}
+
+/** A food's par level, in its unit; blank clears it. */
+export async function setFoodParAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const par = optNum(formData, "par");
+  await db.update(schema.bodyFoods).set({ par: par != null && par > 0 ? par : null }).where(and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
+  refresh();
+}
+
+/** One raw → cooked weighing of a food; the yield is the median of them (rev 251). */
+export async function addYieldAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
+  if (!food) back(PANTRY, "Pick a food.");
+  const raw = num(formData, "raw");
+  const cooked = num(formData, "cooked");
+  if (!(raw > 0 && cooked > 0)) back(PANTRY, "Give both weights, raw and cooked.");
+  if (cooked / raw < 0.1 || cooked / raw > 1.5) back(PANTRY, `${food!.name}: ${raw} raw → ${cooked} cooked isn't a yield (between 10% and 150%).`);
+  await db.insert(schema.bodyYields).values({ id: newId(), workspaceId, userId, foodId: food!.id, raw, cooked, unit: storedUnit(str(formData, "unit") || "oz").slice(0, 30), date: v.today });
+  refresh();
+}
+
 /* ───────── Body composition (rev 237 phase 2) ───────── */
 
 const WEIGHT = "/body/weight";
@@ -579,6 +658,8 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
+    db.delete(schema.bodyPantry).where(and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId))),
+    db.delete(schema.bodyYields).where(and(eq(schema.bodyYields.workspaceId, workspaceId), eq(schema.bodyYields.userId, userId))),
     db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId))),
     db.delete(schema.bodyGoals).where(and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId))),
     db.delete(schema.bodySets).where(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId))),

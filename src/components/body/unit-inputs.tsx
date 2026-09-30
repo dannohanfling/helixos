@@ -32,7 +32,7 @@ export function UnitPicker({ value, preferred }: { value?: string; preferred: "o
   );
 }
 
-type LogFood = { id: string; name: string; unit: string; units: string[] };
+type LogFood = { id: string; name: string; unit: string; units: string[]; /** Pantry (phase 5): the nutrition's basis, so a weighed food asks raw or cooked. */ basis?: "raw" | "cooked" };
 
 /**
  * Food × quantity, in the food's own unit or another of the same group (oz, g, lb, kg). Count units and Other log as themselves.
@@ -47,7 +47,7 @@ export function LogFoodForm({ action, foods, slots, defaultSlot, date, recent = 
   const otherFoods = foods.filter((f) => !recent.includes(f.id));
   const option = (f: LogFood) => (
     <option key={f.id} value={f.id}>
-      {f.name} (per {f.unit})
+      {f.name} (per {f.unit}{f.basis && f.units.length > 1 ? `, ${f.basis}` : ""})
     </option>
   );
   const big = "field py-2 text-base sm:py-1 sm:text-sm";
@@ -93,6 +93,15 @@ export function LogFoodForm({ action, foods, slots, defaultSlot, date, recent = 
           ))}
         </select>
       </label>
+      {food?.basis && food.units.length > 1 ? (
+        <label>
+          <span className="label">Weighed</span>
+          <select name="weighed" className={`${big} w-auto`} defaultValue={food.basis} data-testid="body-log-weighed">
+            <option value="cooked">cooked</option>
+            <option value="raw">raw</option>
+          </select>
+        </label>
+      ) : null}
       <label>
         <span className="label">Slot</span>
         <select name="slot" className={`${big} w-auto`} defaultValue={defaultSlot}>
