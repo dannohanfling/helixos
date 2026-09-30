@@ -10,6 +10,8 @@ import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
 import { INBOUND_SECRET_COOKIE, PASS_NOT_WIRED, PROVIDER_META, passWired } from "@/lib/integrations";
 import { readiness } from "@/lib/engine/ghl-map";
 import { formatDateTime } from "@/lib/dates";
+import { sentToday } from "@/lib/chat-progress";
+import { DAILY_CAP, WARN_AT } from "@/lib/engine/chat";
 
 import { coachDisconnectGhlAction, replayContactSyncAction } from "@/lib/actions/social";
 import { replayCandidates } from "@/lib/queries/contact-sync";
@@ -28,6 +30,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     db.query.socialConnections.findMany({ where: eq(schema.socialConnections.workspaceId, v.workspace.id) }),
   ]);
   const connOf = new Map(conns.map((c) => [c.userId, c]));
+  const chatSent = await sentToday(v.workspace.id);
   const candidates = new Map(await Promise.all(members.map(async (m) => [m.userId, await replayCandidates(v.workspace.id, m.userId)] as const)));
   const { replay: replayRaw } = await searchParams;
   type Replay = { userId: string; mode: string; sent: number; failed: number; notes: string[] };
@@ -74,7 +77,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                   </label>
                 ) : (
                   <Field key={f.key} label={f.label} hint={f.secret && row?.config[f.key] ? "Saved. Leave blank to keep." : f.hint}>
-                    <input className="field" name={f.key} type={f.secret ? "password" : "text"} defaultValue={f.secret ? "" : (row?.config[f.key] ?? "")} placeholder={f.secret && row?.config[f.key] ? "••••••••" : f.hint} autoComplete="off" />
+                    <input className="field" name={f.key} type={f.secret ? "password" : "text"} defaultValue={f.secret ? "" : (row?.config[f.key] ?? "")} placeholder={f.secret && row?.config[f.key] ? "••••••••" : f.hint} autoComplete="off" pattern={f.pattern} title={f.pattern ? "Letters and digits only" : undefined} data-testid={`integration-${f.key}`} />
                   </Field>
                 ))}
                 <div className="flex flex-wrap items-center gap-2">
@@ -95,6 +98,16 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                   </form>
                 ) : null}
               </div>
+              {p === "community_loyalty" ? (
+                <Disclosure summary={<span className="text-xs text-ink-3 underline">Web chat: what your bot needs</span>} className="mt-3">
+                  <div className="mt-2 space-y-2 text-xs text-ink-2" data-testid="chat-contract">
+                    <p>In the widget&apos;s settings, whitelist the root domain of this app (for helixos.evolveomega.com that is <code>evolveomega.com</code>), or the bubble won&apos;t load.</p>
+                    <p>To link a chat to a member, your bot posts to <code>{appUrl}/api/chat-link/start</code> with the inbound secret as <code>x-helix-secret</code> and <code>{"{ \"user_ns\": \"...\", \"channel\": \"messenger\" }"}</code> (messenger, instagram, whatsapp, telegram or webchat). It gets back a one-time link to send the person; they confirm it here, signed in.</p>
+                    <p data-testid="chat-count" className={chatSent >= WARN_AT ? "font-semibold text-warn" : undefined}>Posted to your bot today: {chatSent} of {DAILY_CAP} (the platform&apos;s daily limit per workspace{chatSent >= WARN_AT ? "; getting close" : ""}).</p>
+                    <p>HelixOS then posts to your inbound webhook URL above, as JSON with an <code>x-helix-event</code> header: <code>link</code> and <code>unlink</code> (user_ns, channel, email, name, at), and <code>progress</code> (email, name, pathway_stage, goal, week_313, main_offer, reason, at). Your bot writes progress into these user fields: <code>helixos_pathway_stage</code>, <code>helixos_goal</code>, <code>helixos_week_313</code>, <code>helixos_main_offer</code>, <code>helixos_updated_at</code>. Never Body, keys or notes.</p>
+                  </div>
+                </Disclosure>
+              ) : null}
               {hook ? (
               <Disclosure summary={<span className="text-xs text-ink-3 underline">Inbound webhook</span>} className="mt-3">
                 <div className="mt-2 space-y-2 text-xs">
@@ -120,7 +133,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                     <p className="text-ink-3">A secret is set. It can&apos;t be shown again; rotate it if you need a new one.</p>
                   ) : null}
                   {p === "gohighlevel" ? <p className="text-ink-3">Marketplace-app webhooks signed with <code>x-ghl-signature</code> are verified with the app&apos;s public key (GHL_WEBHOOK_PUBLIC_KEY) instead of the secret; workflow webhooks use the header above.</p> : null}
-                  <p className="text-ink-3">{p === "community_loyalty" ? "Events: pass.installed (email or serial), points.earned (email, points, reason)." : "Events: contact.created, appointment.booked (email, full_name, startTime)."}</p>
+                  <p className="text-ink-3">{p === "community_loyalty" ? "Events: pass.installed (email or serial), points.earned (email, points, reason). The same secret authorises chat-link/start (web chat, above)." : "Events: contact.created, appointment.booked (email, full_name, startTime)."}</p>
                 </div>
               </Disclosure>
               ) : null}

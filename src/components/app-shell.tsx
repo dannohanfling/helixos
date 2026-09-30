@@ -11,8 +11,10 @@ import { BottomNav, SideNav } from "./nav";
 import { SubmitButton } from "@/components/submit-button";
 import { APP_VERSION } from "@/lib/version";
 import { SwitchBanner } from "@/components/switch-banner";
+import { ChatWidget } from "@/components/chat-widget";
+import type { ChatWidgetProps } from "@/lib/chat";
 
-export function AppShell({ viewer, points, streak, badges = {}, children }: { viewer: Viewer; points: number; streak: number; badges?: Record<string, number>; children: ReactNode }) {
+export function AppShell({ viewer, chat = null, points, streak, badges = {}, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; children: ReactNode }) {
   const tier = tierProgress(points);
   return (
     <div className="min-h-screen md:flex">
@@ -97,6 +99,8 @@ export function AppShell({ viewer, points, streak, badges = {}, children }: { vi
         </main>
       </div>
       <BottomNav role={viewer.role} badges={badges} />
+      {/* The coach's assistant (rev 241): null while switched into a client, or when the workspace hasn't set it up. */}
+      {chat ? <ChatWidget {...chat} /> : null}
     </div>
   );
 }

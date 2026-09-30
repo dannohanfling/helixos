@@ -81,6 +81,13 @@ export const memberships = sqliteTable(
      * look. On for clients the coach creates or imports, off for those who join themselves; the client changes it in Settings.
      */
     coachCanWork: integer("coach_can_work", { mode: "boolean" }).notNull().default(false),
+    /**
+     * "Let my coach's assistant know my progress" (Community Loyalty chat, rev 241): whether HelixOS posts a short progress
+     * snapshot (pathway stage, goal, this week's 3-1-3, main offer) to the coach's bot. On by default; the member's own switch.
+     */
+    chatProgressShare: integer("chat_progress_share", { mode: "boolean" }).notNull().default(true),
+    /** The last progress push for this member, so pushes come at most once an hour. */
+    lastChatPushAt: text("last_chat_push_at"),
     eoPassUrl: text("eo_pass_url"),
     /** The Evolve Omega pass on eLoyalty, three identifiers (src/lib/engine/eloyalty.ts): the customer id is the key; the serial is a cache that goes stale on reinstall; the pass type id addresses v1 writes. Filled by the creation call. */
     eoCustomerId: text("eo_customer_id"),
@@ -2404,6 +2411,35 @@ export const bodyShareEvents = sqliteTable(
 );
 export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
 
+/** The chat channels Community Loyalty links (rev 247): chat only. Email and SMS run through GoHighLevel and are never here. */
+export const CHAT_CHANNELS = ["messenger", "instagram", "whatsapp", "telegram", "webchat"] as const;
+
+/**
+ * "Tap to confirm it's you" (Community Loyalty chat, rev 241): a one-time link the coach's bot asks HelixOS for, so a chat on
+ * Messenger, Instagram or WhatsApp can be tied to the member's HelixOS account by the member, signed in, never by the bot.
+ * Only the token's sha256 is stored. A row becomes a linked chat when the member confirms it (userId set, linkedAt set) and
+ * stays as the record until they unlink it.
+ */
+export const chatLinks = sqliteTable(
+  "chat_links",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    /** The member who confirmed, once they have. Null while the link waits. */
+    userId: text("user_id"),
+    /** The Community Loyalty contact (user_ns) the chat belongs to. An id, not a secret. */
+    userNs: text("user_ns").notNull(),
+    channel: text("channel", { enum: CHAT_CHANNELS }).notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    linkedAt: text("linked_at"),
+    unlinkedAt: text("unlinked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("chat_links_token").on(t.tokenHash), index("chat_links_member").on(t.workspaceId, t.userId)],
+);
+
 /**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,
  * in plain words. The client sees the changes in Settings ("Changes by your coach"); the coach's client page shows the
@@ -2430,3 +2466,4 @@ export const coachChanges = sqliteTable(
   (t) => [index("coach_changes_client").on(t.clientMembershipId, t.createdAt)],
 );
 export type CoachChange = typeof coachChanges.$inferSelect;
+export type ChatLink = typeof chatLinks.$inferSelect;

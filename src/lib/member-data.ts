@@ -71,6 +71,7 @@ export const MEMBER_TABLES = {
   body_share_events: schema.bodyShareEvents,
   // What a coach changed while working in this member's HelixOS, and their switches in and out (rev 216).
   coach_changes: schema.coachChanges,
+  chat_links: schema.chatLinks,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 

@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { canEmailMember } from "@/lib/engine/email-gate";
 import { nowIso } from "@/lib/dates";
+import { queueProgress } from "@/lib/chat-progress";
 
 /** May HelixOS email this member automatically? The one check every automated sender makes (src/lib/engine/email-gate.ts). */
 export async function canEmail(membershipId: string): Promise<boolean> {
@@ -14,5 +15,8 @@ export async function canEmail(membershipId: string): Promise<boolean> {
 
 /** The first sign-in, recorded once: called next to every writeSession, all of which are the person signing in as themselves. */
 export async function markSignedIn(userId: string): Promise<void> {
-  await db.update(schema.users).set({ firstSignedInAt: nowIso() }).where(and(eq(schema.users.id, userId), isNull(schema.users.firstSignedInAt)));
+  const first = await db.update(schema.users).set({ firstSignedInAt: nowIso() }).where(and(eq(schema.users.id, userId), isNull(schema.users.firstSignedInAt))).returning({ id: schema.users.id });
+  if (!first.length) return;
+  // The first time only: the coach's assistant is told where a new member starts (rev 247, A7).
+  for (const m of await db.query.memberships.findMany({ where: eq(schema.memberships.userId, userId) })) queueProgress(m.workspaceId, userId, "first_sign_in");
 }

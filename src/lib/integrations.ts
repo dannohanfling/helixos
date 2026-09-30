@@ -17,7 +17,7 @@ export type Provider = (typeof PROVIDERS)[number];
 /** Cookie that carries a just-created inbound webhook secret to the Integrations page, once (10 minutes). */
 export const INBOUND_SECRET_COOKIE = "helix_inbound_secret";
 
-export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb: string; fields: { key: string; label: string; hint?: string; secret?: boolean; toggle?: boolean }[] }> = {
+export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb: string; fields: { key: string; label: string; hint?: string; secret?: boolean; toggle?: boolean; pattern?: string }[] }> = {
   // Not shown to coaches: Evolve Omega sets the pass up and holds its credentials (decision, 15 Sep). The vendor underneath
   // (the WalletPush instance at the loyalty host behind the Community Loyalty Mini-App) is named in code and the README only.
   walletpush: {
@@ -34,8 +34,14 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
   community_loyalty: {
     name: "Community Loyalty (uChat)",
     icon: "🤖",
-    blurb: "The chatbot platform. Its bot flows call the inbound webhook below when a pass is installed or points are earned inside the bot. HelixOS sends nothing to it: points and push messages go to WalletPush.",
-    fields: [],
+    blurb: "The chatbot platform. Its bot flows call the inbound webhook below when a pass is installed, points are earned, or a chat asks to be linked to a member. With web chat on, your assistant's chat bubble is on every member's HelixOS pages, signed in as them, and HelixOS posts each member's progress to your bot (never Body).",
+    fields: [
+      { key: "chatOn", label: "Web chat on", hint: "The chat bubble on every member's pages, never while you're switched into a client. Needs the widget id and secret below.", toggle: true },
+      { key: "chatWidgetId", label: "Web chat widget id", hint: "From the widget's script address: js/widget/<id>/float.js", pattern: "[a-z0-9]{6,40}" },
+      { key: "chatFlowNs", label: "Sub flow for HelixOS members", hint: "The flow the chat opens for a signed-in member (yours: Ask Danno (HelixOS)). Not the widget's default flow, which stays for site visitors.", pattern: "[a-z0-9]{4,40}" },
+      { key: "chatSecret", label: "Web chat secret key", secret: true, hint: "From the widget's settings. Signs who's signed in; it never leaves the server." },
+      { key: "chatWebhookUrl", label: "Your bot's inbound webhook URL", secret: true, hint: "Where HelixOS posts link, unlink and progress. Stored sealed, never shown again." },
+    ],
   },
   gohighlevel: {
     name: "Omnichannel Marketing System (GoHighLevel)",

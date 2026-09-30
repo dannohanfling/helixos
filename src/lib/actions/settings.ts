@@ -1,5 +1,6 @@
 "use server";
 
+import { queueProgress } from "@/lib/chat-progress";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -82,6 +83,7 @@ export async function updateGoalAction(formData: FormData): Promise<void> {
     await db.insert(schema.goals).values({ id: newId(), workspaceId, userId, title, target, actual: num(formData, "actual"), unit: str(formData, "unit") || "$", period: str(formData, "period") || "This month", primary: true });
   }
   await syncFieldTasks(workspaceId, userId);
+  queueProgress(workspaceId, userId, "goal_changed");
   refresh();
 }
 

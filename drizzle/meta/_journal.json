@@ -561,6 +561,13 @@
       "when": 1790717422752,
       "tag": "0079_switch_to_client",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1790732356890,
+      "tag": "0080_chat",
+      "breakpoints": true
     }
   ]
 }

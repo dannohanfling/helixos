@@ -66,6 +66,7 @@ const ROUTES: Record<string, Route> = {
   "/webinars/[id]/runsheet": { kind: "owned", table: "webinars" },
   "/join/[code]": { kind: "public", why: "the workspace invite code, entered before any session exists" },
   "/reset/[token]": { kind: "public", why: "a single-use password-reset token, its own secret" },
+  "/link-chat/[token]": { kind: "public", why: "a single-use chat-link token, its own secret; the page itself refuses a token from another workspace" },
   "/api/deck-images/[id]": { kind: "owned", table: "deckImages" },
   "/api/proofs/attachments/[id]": { kind: "owned", table: "proofAttachments" },
   "/api/webinars/[id]/deck": { kind: "owned", table: "webinars" },

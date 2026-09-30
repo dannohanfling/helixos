@@ -18,18 +18,24 @@ const blobApiSource = `${blobApi.origin}${blobApi.pathname.replace(/\/?$/, "/")}
  * inline-allowed; everything else is same-origin. Images may come from anywhere over HTTPS because posts preview remote media.
  * No `frame-ancestors` and no X-Frame-Options: the app may one day be embedded inside GoHighLevel.
  */
+// The coach's Community Loyalty chat widget (revs 241, 243) is the one third-party script: its own host, for the script, its
+// stylesheet, its chat frame and its connections. A host it loads beyond these shows up in the server log as `[csp] blocked`
+// (src/app/api/csp-report/route.ts) and is added here by name, never as a wildcard over the web.
+const chatHosts = "https://communityloyalty.io https://*.communityloyalty.io";
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline' ${chatHosts}${dev ? " 'unsafe-eval'" : ""}`,
+  `style-src 'self' 'unsafe-inline' ${chatHosts}`,
   "img-src 'self' data: blob: https:",
   "media-src 'self' https:",
-  "font-src 'self' data:",
-  `connect-src 'self' ${blobApiSource}${dev ? " ws: wss:" : ""}`,
+  `font-src 'self' data: ${chatHosts}`,
+  `connect-src 'self' ${blobApiSource} ${chatHosts} wss://communityloyalty.io wss://*.communityloyalty.io${dev ? " ws: wss:" : ""}`,
+  `frame-src 'self' ${chatHosts}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "upgrade-insecure-requests",
+  "report-uri /api/csp-report",
 ].join("; ");
 
 const securityHeaders = [

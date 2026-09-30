@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 19,
+    date: "2026-09-30",
+    title: "Chat with your coach's assistant",
+    lines: ["When your coach has set it up, their assistant's chat bubble is on every page, and it knows it's you. A conversation you start here can carry on in Messenger, Instagram or WhatsApp: the assistant sends a \"confirm it's you\" link, you tap it, and Settings lists the linked chat with Unlink.", "It gets your name and email, and never Body."],
+    audience: "everyone",
+  },
+  {
     n: 18,
     date: "2026-09-29",
     title: "Body is now HumanOS",

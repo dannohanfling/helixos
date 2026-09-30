@@ -22,19 +22,23 @@ import { SubmitButton } from "@/components/submit-button";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
 import { isWorkspaceOwner } from "@/lib/queries/body";
 import { setBodyBetaAction } from "@/lib/actions/body";
+import { linkedChats } from "@/lib/chat";
+import { setChatProgressShareAction, unlinkChatAction } from "@/lib/actions/chat";
+import { CHANNEL_LABELS } from "@/lib/engine/chat";
 
 export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string }> }) {
   const v = await requireViewer();
   // The storage figure counts rows; an object without a row (an upload that never finished recording) is reconciled away
   // here, the one place the workspace's holdings are looked at, so the figure and the store agree. After the response:
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam } = await searchParams;
+  const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   const savedKit = v.role === "coach" ? await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) }) : null;
   // A refused kit comes back as typed, so the person fixes the one pair named rather than typing thirteen fields again.
   const parseDraft = (raw: string | undefined): Partial<schema.BrandKit> | undefined => {
@@ -47,7 +51,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   };
   const attempted = parseDraft(draft);
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
-  const [goal, conn, ghlIntegration] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel")]);
+  const [goal, conn, ghlIntegration, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel"), linkedChats(v.workspace.id, v.user.id)]);
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   // Body ships dark (rev 195); the workspace owner alone can switch it on for themselves here (rev 209).
   const bodyOwner = await isWorkspaceOwner(v);
@@ -263,6 +267,38 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="mt-2 text-xs text-ink-3">Attachments on your proofs, in private storage.</p>
         </Card>
         {goalCard}
+        <Card id="linked-chats" title="Your coach's assistant">
+          {/* Community Loyalty chat (rev 241): the member's own switch on progress pushes, then the chats they confirmed as theirs. */}
+          {chatNote ? <p className="mb-2 text-sm text-good" data-testid="chat-note">{chatNote}</p> : null}
+          <form action={setChatProgressShareAction} className="flex flex-wrap items-center gap-3 text-sm" data-testid="chat-share" data-on={v.membership.chatProgressShare ? "1" : "0"}>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" name="chatProgressShare" defaultChecked={v.membership.chatProgressShare} data-testid="chat-share-toggle" /> Let my coach&apos;s assistant know my progress
+            </label>
+            <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="chat-share-save">
+              Save
+            </SubmitButton>
+          </form>
+          <p className="mb-3 mt-2 text-xs text-ink-3">When it&apos;s on, your coach&apos;s assistant gets your pathway stage, your goal, this week&apos;s 3-1-3 and your main offer, so it can help where you are. Never Body, keys or notes.</p>
+          <h3 className="text-sm font-semibold">Linked chats</h3>
+          {chats.length ? (
+            <ul className="divide-y text-sm" data-testid="linked-chats">
+              {chats.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-3 py-2" data-testid="linked-chat" data-channel={c.channel}>
+                  <span className="font-medium">{CHANNEL_LABELS[c.channel]}</span>
+                  <span className="text-xs text-ink-3">linked {formatDateTime(c.linkedAt!, v.tz)}</span>
+                  <form action={unlinkChatAction} className="ml-auto">
+                    <input type="hidden" name="id" value={c.id} />
+                    <SubmitButton className="text-xs text-ink-3 underline" pendingText="Unlinking…" data-testid="chat-unlink">
+                      Unlink
+                    </SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-ink-2" data-testid="linked-chats-empty">None yet. When your coach&apos;s assistant sends you a &quot;confirm it&apos;s you&quot; link in a chat, confirming it lists that chat here.</p>
+          )}
+        </Card>
         {v.role === "client" ? (
           <Card id="your-coach" title="Your coach">
             {/* Switch to client (rev 216): the member's own choice, and what their coach changed while working in here. */}

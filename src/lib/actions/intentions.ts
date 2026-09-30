@@ -1,5 +1,6 @@
 "use server";
 
+import { queueProgress } from "@/lib/chat-progress";
 import { and, eq, ne } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -62,6 +63,8 @@ export async function saveIntentionAction(formData: FormData): Promise<void> {
       .where(and(eq(schema.weeklyIntentions.id, existing.id), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.workspaceId, workspaceId)));
   } else {
     await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId, userId, weekOf: week, word: value.word, keyResults, initiative: value.initiative, tasks }).onConflictDoNothing();
+  // The coach's assistant learns the week (rev 241), after the response.
+  queueProgress(workspaceId, userId, "intention_set");
   }
   refresh();
   redirect(`${backTo(formData)}?weekSaved=1#week`);

@@ -40,10 +40,16 @@ async function memberByEmailOrSerial(workspaceId: string, email: string, serial:
 type Auth = { integ: schema.Integration; via: "secret" | "signature"; member?: schema.Membership };
 
 /** Resolves the workspace integration the call is for, or a 401 response. */
+/** The workspace integration a presented inbound secret belongs to, by its hash; the secret itself is never stored. */
+export async function integrationForSecret(provider: Provider, secret: string): Promise<schema.Integration | null> {
+  if (!secret) return null;
+  return (await db.query.integrations.findFirst({ where: and(eq(schema.integrations.provider, provider), eq(schema.integrations.inboundSecretHash, hashSecret(secret))) })) ?? null;
+}
+
 async function authenticate(provider: Provider, request: Request, raw: string, body: Body): Promise<Auth | Response> {
   const secret = request.headers.get("x-helix-secret") ?? "";
   if (secret) {
-    const integ = await db.query.integrations.findFirst({ where: and(eq(schema.integrations.provider, provider), eq(schema.integrations.inboundSecretHash, hashSecret(secret))) });
+    const integ = await integrationForSecret(provider, secret);
     if (!integ) return NextResponse.json({ error: "unknown secret" }, { status: 401 });
     return { integ, via: "secret" };
   }

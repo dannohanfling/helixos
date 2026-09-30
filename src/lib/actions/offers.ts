@@ -1,5 +1,6 @@
 "use server";
 
+import { queueProgress } from "@/lib/chat-progress";
 import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -20,12 +21,13 @@ export async function createOfferAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const id = newId();
   await db.insert(schema.offers).values({ id, workspaceId, userId, name: str(formData, "name") || "New offer", promise: opt(formData, "promise"), price: num(formData, "price") });
+  queueProgress(workspaceId, userId, "offer_changed");
   refresh();
   redirect(`/offers/${id}`);
 }
 
 export async function updateOfferAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { workspaceId, userId } = await ctx();
   const id = str(formData, "id");
   await own(id, userId);
   const steps = [1, 2, 3, 4, 5].map((i) => str(formData, `step${i}`)).filter(Boolean);
@@ -78,6 +80,7 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       notes: opt(formData, "notes"),
     })
     .where(eq(schema.offers.id, id));
+  queueProgress(workspaceId, userId, "offer_changed");
   refresh();
   const anchor = str(formData, "anchor");
   redirect(`/offers/${id}${anchor ? `#${anchor}` : ""}`);

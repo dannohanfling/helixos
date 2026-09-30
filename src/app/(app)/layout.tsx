@@ -10,6 +10,7 @@ import { voiceState } from "@/lib/queries/essence";
 import { intentionsDueFor } from "@/lib/queries/intentions";
 import { WHATS_NEW } from "@/content/whats-new";
 import { unseenCount } from "@/lib/engine/whats-new";
+import { chatWidgetProps } from "@/lib/chat";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
 export const dynamic = "force-dynamic";
@@ -18,10 +19,10 @@ export const metadata = { robots: { index: false, follow: false } };
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await requireViewer();
-  const [points, streak, voice, due] = await Promise.all([totalPoints(viewer.workspace.id, viewer.user.id), streakFor(viewer.workspace.id, viewer.user.id, viewer.today), voiceState(viewer.workspace.id, viewer.user.id), intentionsDueFor(viewer.workspace.id, viewer.user.id, viewer.today)]);
+  const [points, streak, voice, due, chat] = await Promise.all([totalPoints(viewer.workspace.id, viewer.user.id), streakFor(viewer.workspace.id, viewer.user.id, viewer.today), voiceState(viewer.workspace.id, viewer.user.id), intentionsDueFor(viewer.workspace.id, viewer.user.id, viewer.today), chatWidgetProps(viewer)]);
   const tier = tierFor(points);
   return (
-    <AppShell viewer={viewer} points={points} streak={streak.running} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen) }}>
+    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen) }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>

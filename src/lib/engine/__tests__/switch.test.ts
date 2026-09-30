@@ -47,7 +47,7 @@ describe("switch to client: no write escapes the gate", () => {
   // What is the client's own, refused while switched in View or Work (rev 236): account and consent, secrets, sends, their
   // streak, their points, their own words, erasing, and all of Body.
   const REFUSED = [
-    "updateProfileAction", "changePasswordAction", "setCoachCanWorkAction", "setBodyShareAction", "setBodyAiAction", "saveBodySettingsAction",
+    "updateProfileAction", "changePasswordAction", "setCoachCanWorkAction", "confirmChatLinkAction", "unlinkChatAction", "setChatProgressShareAction", "setBodyShareAction", "setBodyAiAction", "saveBodySettingsAction",
     "saveFathomKeyAction", "removeFathomKeyAction", "recheckFathomKeyAction", "harvestRecordingAction", "connectGhlAction", "disconnectGhlAction", "setGhlMappingAction", "refreshGhlAccountsAction", "syncPostStatusAction", "checkAllPostStatusAction", "markPassInstalledAction",
     "distributeAllAction", "pushLadderUpdateAction", "handOffLadderAction", "pushYourBotAction", "sendTestPushAction", "publishMagnetAction", "unpublishMagnetAction", "markPostedInGroupAction", "logMessageAction", "sendFaqAction", "recordShareAction",
     "morningCheckinAction", "eveningCloseAction", "repairStreakAction",

@@ -1,5 +1,6 @@
 "use server";
 
+import { queueProgress } from "@/lib/chat-progress";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -52,6 +53,7 @@ export async function reviewPathwayTaskAction(formData: FormData): Promise<void>
   if (decision === "verified") {
     const lib = await db.query.libraryTasks.findFirst({ where: eq(schema.libraryTasks.key, row.libraryTaskKey) });
     if (lib) await award({ workspaceId: row.workspaceId, userId: row.userId }, "pathway", lib.points, `Pathway: ${lib.name}`, lib.key);
+    queueProgress(row.workspaceId, row.userId, "pathway_verified");
   }
   refresh();
 }
