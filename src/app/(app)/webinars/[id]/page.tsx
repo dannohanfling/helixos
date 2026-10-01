@@ -1744,7 +1744,7 @@ function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirm
       ) : null}
       {fallbacks.emptyCount ? (
         <p className="mb-3 text-sm text-ink-2" data-testid="deck-slots">
-          {fallbacks.emptyCount} suggested {fallbacks.emptyCount === 1 ? "picture" : "pictures"} not added: each of these slides exports as text until you attach an image.
+          {fallbacks.emptyCount} suggested {fallbacks.emptyCount === 1 ? "picture" : "pictures"} not added: each of these slides exports with a red placeholder in the picture&apos;s frame until you attach an image.
         </p>
       ) : null}
       {fallbacks.reasons.length ? (

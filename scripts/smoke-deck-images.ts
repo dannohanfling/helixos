@@ -149,6 +149,43 @@ async function main() {
     const emptyBefore = Number((await slotsText()).match(/^(\d+)/)?.[1] ?? "0");
     const coverSlot = page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"]');
     if (!(await coverSlot.count())) throw new Error("the cover carries a photo slot on the Deck step");
+    if (!/red placeholder/.test(await slotsText())) throw new Error("the Deck step says an empty slot exports with a red placeholder (§2)");
+
+    // ── §2, before any picture: the empty cover slot exports as a dashed frame with red text saying what to add, read off the
+    //    XML and off LibreOffice's render (the red pixels span the frame). ──
+    const { default: JSZip } = await import("jszip");
+    const emptyRes = await page.request.get(`${base}/api/webinars/${webinar.id}/deck?format=pptx`);
+    const emptyBody = await emptyRes.body();
+    if (!emptyRes.ok()) throw new Error(`the deck exports with its slots empty: ${emptyRes.status()}`);
+    const emptyZip = await JSZip.loadAsync(emptyBody);
+    const emptyCover = await emptyZip.file("ppt/slides/slide1.xml")!.async("string");
+    if (/<p:pic>/.test(emptyCover)) throw new Error("no picture on the cover before one is attached");
+    if (!emptyCover.includes('<a:prstDash val="dash"/>') || !emptyCover.includes('<a:srgbClr val="D92D20"/>') || !emptyCover.includes("Add a photo: you or the person in this beat.")) throw new Error("the empty slot is a dashed frame with red text saying what to add");
+    const dashed = boxes(emptyCover).find((b) => within(b.cx / EMU, COVER_FRAME.w) && within(b.cy / EMU, COVER_FRAME.h) && within(b.x / EMU, COVER_FRAME.x) && within(b.y / EMU, COVER_FRAME.y));
+    if (!dashed) throw new Error(`the placeholder frame is the picture's frame: ${JSON.stringify(boxes(emptyCover))}`);
+    const RED = { r: 0xd9, g: 0x2d, b: 0x20 };
+    const dirEmpty = mkdtempSync(join(tmpdir(), "deck-empty-"));
+    writeFileSync(join(dirEmpty, "deck.pptx"), emptyBody);
+    await run("soffice", ["--headless", "--convert-to", "png", "--outdir", dirEmpty, join(dirEmpty, "deck.pptx")], { timeout: 120000, env: { ...process.env, HOME: dirEmpty } });
+    const emptyPng = readdirSync(dirEmpty).find((f) => f.endsWith(".png"));
+    if (!emptyPng) throw new Error("LibreOffice rendered the empty-slot cover to a PNG");
+    const { data: rpx, info: rinfo } = await sharp(readFileSync(join(dirEmpty, emptyPng))).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    let rMinX = rinfo.width, rMaxX = -1, rMinY = rinfo.height, rMaxY = -1, reds = 0;
+    for (let y = 0; y < rinfo.height; y++) {
+      for (let x = 0; x < rinfo.width; x++) {
+        const i = (y * rinfo.width + x) * 3;
+        if (Math.abs(rpx[i] - RED.r) < 40 && Math.abs(rpx[i + 1] - RED.g) < 40 && Math.abs(rpx[i + 2] - RED.b) < 40) {
+          reds++;
+          if (x < rMinX) rMinX = x;
+          if (x > rMaxX) rMaxX = x;
+          if (y < rMinY) rMinY = y;
+          if (y > rMaxY) rMaxY = y;
+        }
+      }
+    }
+    const redBox = { w: rMaxX - rMinX + 1, h: rMaxY - rMinY + 1 };
+    if (reds < 200 || !within(redBox.w / rinfo.width, COVER_FRAME.w / 10, 0.03) || !within(redBox.h / rinfo.height, COVER_FRAME.h / 5.625, 0.03)) throw new Error(`the render paints the red placeholder across the picture's frame: ${JSON.stringify(redBox)} of ${rinfo.width}×${rinfo.height}, ${reds} red px`);
+    console.log(`✓ §2: an empty slot exports as a dashed red frame with "Add a photo: …" in it, the picture's own frame on the XML and on the render (${redBox.w}×${redBox.h} px of ${rinfo.width}×${rinfo.height})`);
     await coverSlot.locator('[data-testid="deck-slot-picker"]').selectOption(photos[0].id);
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), coverSlot.locator('[data-testid="deck-slot-attach"]').click()]);
     await settle(page);
@@ -164,12 +201,12 @@ async function main() {
     const res = await page.request.get(`${base}/api/webinars/${webinar.id}/deck?format=pptx`);
     const body = await res.body();
     if (!res.ok() || body.subarray(0, 2).toString() !== "PK" || body.length < 5000) throw new Error(`the .pptx exports: ${res.status()} ${body.length} bytes`);
-    const { default: JSZip } = await import("jszip");
     const zip = await JSZip.loadAsync(body);
     const media = Object.keys(zip.files).filter((f) => /^ppt\/media\/image[-\d]+\.(png|jpe?g|gif|webp)$/.test(f));
     if (!media.length) throw new Error("the coach's picture is embedded in the file");
     const slide1 = await zip.file("ppt/slides/slide1.xml")!.async("string");
     if (!/<p:pic>/.test(slide1)) throw new Error("the cover slide carries the picture");
+    if (slide1.includes('<a:srgbClr val="D92D20"/>') || slide1.includes("Add a photo:")) throw new Error("once the slot is filled, the placeholder is gone and the picture sits in its frame");
     for (const b of boxes(slide1)) {
       if (b.x < 0 || b.y < 0 || b.x + b.cx > SLIDE_W + 1 || b.y + b.cy > SLIDE_H + 1) throw new Error(`a box on the cover runs off the slide: ${JSON.stringify(b)}`);
     }

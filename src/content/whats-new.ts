@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 42,
+    date: "2026-10-01",
+    title: "Empty picture slots show in red",
+    lines: ["A slide whose suggested picture you haven't added now exports with a dashed frame and red text saying what to add there (\"Add a photo: you or the person in this beat.\"), instead of quietly dropping to text. Attach the picture and it fills that same frame; nothing else on the slide moves. The Deck step lists the empty slots, as before."],
+    audience: "everyone",
+  },
+  {
     n: 41,
     date: "2026-10-01",
     title: "The month's thread, in the post's own shape",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -361,6 +361,23 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
       expect(f.y + f.h).toBeLessThanOrEqual(5.625);
       expect(f.x).toBeGreaterThan(TEXT_LEFT_ZONE.x + TEXT_LEFT_ZONE.w - 0.01); // the picture starts to the right of the text column
     }
+  });
+
+  it("an empty slot is a red placeholder in the picture's frame (§2): what to add, in the fixed red, never the accent; filled, the same frame carries the picture", () => {
+    const d = deckSlides(openCtx({ credibility_origin: undefined }), kit);
+    const empty = renderPlan(d);
+    const cover = empty[0];
+    expect(cover.imageFrame).toBeNull();
+    expect(cover.placeholderSlot).toEqual({ frame: slotFrame("cover"), text: "Add a photo: you or the person in this beat.", color: PLACEHOLDER_RED });
+    expect(PLACEHOLDER_RED).not.toBe(kit.accent);
+    // A slide with no suggested slot carries no placeholder.
+    expect(empty.filter((p) => !d.slides[p.n - 1].slot).every((p) => p.placeholderSlot === null)).toBe(true);
+    const filled = renderPlan(d, new Set([1]))[0];
+    expect(filled.placeholderSlot).toBeNull();
+    expect(filled.imageFrame).toEqual(slotFrame("cover"));
+    expect(placeholderLine({ key: "k", kind: "screenshot_callout", what: SLOT_WHAT.screenshot_callout })).toBe("Add a screenshot: with the number or line that matters circled.");
+    expect(placeholderLine({ key: "k", kind: "testimonial", what: SLOT_WHAT.testimonial })).toBe("Add the client's photo: beside their approved quote.");
+    expect(placeholderLine({ key: "k", kind: "diagram", what: SLOT_WHAT.diagram })).toBe("Add your own diagram of: this mechanism or framework.");
   });
 
   it("renderPlan draws no picture frame by default, and one only on the slides told to carry an image", () => {

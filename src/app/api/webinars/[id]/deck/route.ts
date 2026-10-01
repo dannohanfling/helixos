@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
-import { TEXT_LEFT_ZONE, deckSlides, outlineText, renderPlan, slotFrame, type Frame, type SlidePlan } from "@/lib/engine/deck";
+import { PLACEHOLDER_TEXT_SIZE, TEXT_LEFT_ZONE, deckSlides, outlineText, renderPlan, slotFrame, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
 import { contextFor } from "@/lib/queries/webinar";
 import { filledSlides, resolveDeckSlots } from "@/lib/queries/deck-slots";
@@ -13,7 +13,7 @@ import { confirmFor } from "@/lib/provenance";
 
 export const dynamic = "force-dynamic";
 
-/** The private object's bytes, or null when they can't be read (the slide then stays text). */
+/** The private object's bytes, or null when they can't be read (the slide then shows the slot's red placeholder). */
 async function readBytes(url: string): Promise<Buffer | null> {
   try {
     const res = await readProofObject(url);
@@ -58,7 +58,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   // The coach's pictures for the filled slots, each read once, made ready for its frame (turned upright, downscaled, re-encoded,
   // placed by its kind: a photo covers, evidence is contained whole; src/lib/engine/deck-fit.ts); an empty slot has no entry and
-  // its slide stays text. The owner's pictures, the same owner the deck's words resolve against.
+  // its slide shows the red placeholder (§2). The owner's pictures, the same owner the deck's words resolve against.
   const resolved = await resolveDeckSlots(w.id, deck, { workspaceId: w.workspaceId, userId: w.userId });
   const filled = filledSlides(resolved);
   const kindOf = new Map(deck.slides.map((s) => [s.n, s.kind]));
@@ -69,7 +69,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const bytes = await readOnce(r.image!.url);
     const prepared = bytes ? await prepareDeckImage(bytes, r.image!.kind, slotFrame(kindOf.get(r.slide) ?? "section")) : null;
     if (prepared) bySlide.set(r.slide, prepared);
-    else filled.delete(r.slide); // The bytes wouldn't read back or decode: draw the slide as text, not an empty frame.
+    else filled.delete(r.slide); // The bytes wouldn't read back or decode: the slide shows the slot's placeholder, never a broken picture.
   }));
   // The footer bar's logo, if the coach turned the bar on and has a logo in their library: their newest one, contained whole.
   let logo: PreparedImage | null = null;
@@ -108,7 +108,8 @@ type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; c
 function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chrome: Chrome) {
   const slide = pptx.addSlide();
   slide.background = { color: plan.background };
-  const frame = plan.imageFrame;
+  // A filled slot's frame, or the empty slot's: the text keeps the picture-slide layout either way (§2).
+  const frame = plan.imageFrame ?? plan.placeholderSlot?.frame ?? null;
   const cover = plan.boxes.some((b) => b.role === "cover-title");
   // With a picture, the text lives in the left column; without one, it keeps the full-width geometry.
   const zone = frame ? TEXT_LEFT_ZONE : { x: 0.5, w: 9 };
@@ -135,10 +136,22 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     if (footer) slide.addText(footer.text, { x: 0.5, y: 5.0, w: 9, h: 0.3, fontSize: footer.size, color: footer.color, fontFace: footer.face, align: "center", ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
   }
   // The picture in its frame: a photo cropped to fill it, evidence kept whole inside it; never stretched out of shape.
-  if (image && frame) drawImage(pptx, slide, image, frame, plan.background);
+  if (image && plan.imageFrame) drawImage(pptx, slide, image, plan.imageFrame, plan.background);
+  else if (plan.placeholderSlot) drawPlaceholder(pptx, slide, plan.placeholderSlot, chrome.body);
   for (const r of plan.rules) slide.addShape(pptx.ShapeType.line, { x: 0.5, y: r.y, w: frame ? zone.w : 9, h: 0, line: { color: r.color, width: 1.5 } });
   drawBars(pptx, slide, chrome, cover);
   if (plan.notes) slide.addNotes(plan.notes);
+}
+
+/**
+ * An empty picture slot (§2, Danno's decision): the frame the picture would take, a 1pt dashed outline and red text inside
+ * saying what to add, in the fixed placeholder red, never the brand accent. Filling the slot later puts the picture in this
+ * same frame and nothing else on the slide moves.
+ */
+function drawPlaceholder(pptx: PptxGenJS, slide: PptxGenJS.Slide, ph: PlaceholderSlot, face: string) {
+  const { frame } = ph;
+  slide.addShape(pptx.ShapeType.rect, { x: frame.x, y: frame.y, w: frame.w, h: frame.h, fill: { type: "none" }, line: { color: ph.color, width: 1, dashType: "dash" } });
+  slide.addText(ph.text, { x: frame.x + 0.25, y: frame.y + 0.25, w: frame.w - 0.5, h: frame.h - 0.5, fontSize: PLACEHOLDER_TEXT_SIZE, color: ph.color, fontFace: face, align: "center", valign: "middle" });
 }
 
 /**

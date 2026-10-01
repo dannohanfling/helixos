@@ -13,8 +13,15 @@ import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type ResolvedProof,
 export type DeckKit = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
 /** With no kit on the workspace: black on white, the accent a plain grey, and the export note says no brand was applied. */
 export const NEUTRAL_KIT: DeckKit = { name: "No brand kit", ground: "FFFFFF", ink: "111111", accent: "555555", muted: "555555", surface: "F2F2F2", displayFont: "Arial", bodyFont: "Arial", fontFallback: "Arial", bannedColors: [] };
-/** The one colour an unfilled slot is ever drawn in when the kit reserves none: unmissable, and named in the export note. */
+/** The one colour an unfilled [text] placeholder is ever drawn in when the kit reserves none: unmissable, and named in the export note. */
 export const PLACEHOLDER_FALLBACK = "FFF3A3";
+/**
+ * The red an empty picture slot is drawn in (deck visuals §2, Danno 1 Oct: "if there are empty slots, it will show in red text").
+ * Fixed, never the brand accent, so a client whose accent is red keeps the signal. 4.83:1 on white, 4.4:1 on a warm paper,
+ * 3.99:1 on the kit surface ECE9E5: large text (14pt) reads at every one of those.
+ */
+export const PLACEHOLDER_RED = "D92D20";
+export const PLACEHOLDER_TEXT_SIZE = 14;
 
 /**
  * A headline steps down a tier as it lengthens and is never cut. Characters → points. Past the floor the sentence moves to
@@ -32,7 +39,7 @@ export const BODY_SIZE = 18;
 export const EYEBROW_SIZE = 11;
 
 export type SlideKind = "cover" | "divider" | "recap" | "section" | "proof" | "evidence" | "story" | "offer" | "opening" | "reflection";
-/** A picture slot the deck suggests by rule from the slide's kind. The coach fills it from their image library; empty, it lists on the Deck step and the slide exports as text. Never on the price slide. */
+/** A picture slot the deck suggests by rule from the slide's kind. The coach fills it from their image library; empty, it lists on the Deck step and the slide exports with a red placeholder in the picture's frame (§2). Never on the price slide. */
 export type SlotKind = "photo" | "photo_pair" | "screenshot" | "screenshot_callout" | "proof_wall" | "testimonial" | "diagram";
 /** A testimonial slot carries the bank proof it belongs to, so its photo is that proof's own approved attachment and nothing else. */
 export type Slot = { key: string; kind: SlotKind; what: string; proofId?: string };
@@ -46,6 +53,29 @@ export const SLOT_WHAT: Record<SlotKind, string> = {
   testimonial: "The client's photo beside their approved quote.",
   diagram: "Your own diagram of this mechanism or framework.",
 };
+/**
+ * What an empty slot's placeholder says on the face (§2): what to add, from the slot's own instruction. "Add a photo: you or
+ * the person in this beat." Filling the slot later replaces the placeholder with the picture in the same frame.
+ */
+export function placeholderLine(slot: Slot): string {
+  const what = slot.what.trim().replace(/\.$/, "");
+  const strip = (lead: RegExp, prefix: string) => `${prefix}: ${what.replace(lead, "").trim()}.`;
+  switch (slot.kind) {
+    case "photo":
+      return strip(/^A photo of\s*/i, "Add a photo");
+    case "photo_pair":
+      return strip(/^Two photos side by side:\s*/i, "Add two photos side by side");
+    case "screenshot":
+    case "screenshot_callout":
+      return strip(/^A screenshot\s*/i, "Add a screenshot");
+    case "proof_wall":
+      return strip(/^A wall of\s*/i, "Add a wall of");
+    case "testimonial":
+      return strip(/^The client's photo\s*/i, "Add the client's photo");
+    case "diagram":
+      return strip(/^Your own diagram of\s*/i, "Add your own diagram of");
+  }
+}
 export type PlaceholderHit = { text: string; refuse: boolean; why: string };
 export type Slide = {
   n: number;
@@ -445,7 +475,9 @@ export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "
 export type Rule = { slide: number; color: string; y: number };
 /** A picture's frame in inches on the 10×5.625 slide. A photo fills it, cropped (cover); evidence sits whole inside it (contain); nothing is ever stretched (src/lib/engine/deck-fit.ts). */
 export type Frame = { x: number; y: number; w: number; h: number };
-export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; /** Where a filled picture sits, or null when the slide is text only. */ imageFrame: Frame | null };
+/** An empty picture slot on the face (§2): the frame the picture would take, a dashed outline and red text saying what to add. */
+export type PlaceholderSlot = { frame: Frame; text: string; color: string };
+export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
 
 /**
  * The frame a filled picture occupies, by the slide's kind. The cover's picture fills the right half; every content slide's
@@ -471,6 +503,7 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set()): S
   const hasInverse = Boolean(hex(k.inverseGround ?? "") && hex(k.inverseInk ?? ""));
   return d.slides.map((s) => {
     const imageFrame = withImage.has(s.n) ? slotFrame(s.kind) : null;
+    const placeholderSlot = !imageFrame && s.slot ? { frame: slotFrame(s.kind), text: placeholderLine(s.slot), color: PLACEHOLDER_RED } : null;
     const boxes: TextBox[] = [];
     const mark = (text: string) => placeholdersIn(text).length > 0;
     // The dark surfaces take the inverse pair when the kit has one; on it every letter is inverseInk, the one pair the kit checked.
@@ -489,7 +522,7 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set()): S
       }
       if (s.footer) boxes.push({ slide: s.n, role: "footer", text: s.footer, size: EYEBROW_SIZE, color: muted, fill: mark(s.footer) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: mark(s.footer) });
     }
-    return { n: s.n, background: dark ? hex(k.inverseGround!) : hex(k.ground), boxes, rules: s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }], notes: s.notes.join("\n"), imageFrame };
+    return { n: s.n, background: dark ? hex(k.inverseGround!) : hex(k.ground), boxes, rules: s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }], notes: s.notes.join("\n"), imageFrame, placeholderSlot };
   });
 }
 

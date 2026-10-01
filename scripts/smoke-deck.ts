@@ -80,9 +80,9 @@ async function main() {
     if (headlines.some((h) => /\[.*\]/.test(h))) throw new Error("a blank opening line is never a placeholder on a face");
     console.log(`✓ the blank line is listed, not shown: "${omitted}"`);
 
-    // Suggested pictures are counted (the cover's photo at least). Empty here, so every slide exports as text.
+    // Suggested pictures are counted (the cover's photo at least). Empty here, so each exports with a red placeholder (§2).
     const slots = (await page.locator('[data-testid="deck-slots"]').innerText()).trim();
-    if (!/suggested picture/.test(slots) || !/exports as text/.test(slots)) throw new Error(`the suggested pictures are counted and named, got "${slots}"`);
+    if (!/suggested picture/.test(slots) || !/exports with a red placeholder/.test(slots)) throw new Error(`the suggested pictures are counted and named, got "${slots}"`);
     console.log(`✓ suggested pictures counted: "${slots}"`);
 
     // ── No face carries how the deck was built (A), and one currency per deck (B). ──

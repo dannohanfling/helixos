@@ -13,7 +13,7 @@ describe("pickSlotImage: the rule for what a slot shows", () => {
     expect(pickSlotImage(photoSlot, { chosenImage: null })).toEqual({ image: null, why: null });
   });
 
-  it("a testimonial on a typed quote (no bank proof) stays text, and says so", () => {
+  it("a testimonial on a typed quote (no bank proof) shows a red placeholder, and says so", () => {
     const r = pickSlotImage(testimonial(undefined), {});
     expect(r.image).toBeNull();
     expect(r.why).toMatch(/approved proof from your bank/);
@@ -30,13 +30,13 @@ describe("pickSlotImage: the rule for what a slot shows", () => {
     expect(r.why).toMatch(/no longer approved/);
   });
 
-  it("an approved proof with no usable photo stays text, and says why", () => {
+  it("an approved proof with no usable photo shows a red placeholder, and says why", () => {
     const r = pickSlotImage(testimonial("p1"), { proof: { name: "Kate A.", status: "approved" }, proofPhoto: null });
     expect(r.image).toBeNull();
     expect(r.why).toMatch(/no usable photo/);
   });
 
-  it("a testimonial whose proof is gone stays text", () => {
+  it("a testimonial whose proof is gone shows a red placeholder", () => {
     const r = pickSlotImage(testimonial("p1"), { proof: null });
     expect(r.image).toBeNull();
     expect(r.why).toMatch(/is gone/);

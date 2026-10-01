@@ -23,7 +23,7 @@ export default async function ImagesPage() {
   const images = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), orderBy: (t, { desc }) => [desc(t.createdAt)] });
   return (
     <>
-      <PageHeader title="Images" subtitle="Your own photos, screenshots, proof images and logos, uploaded once and reused across every deck. A picture fills a suggested slot on the Deck step; a slot left empty exports as text." />
+      <PageHeader title="Images" subtitle="Your own photos, screenshots, proof images and logos, uploaded once and reused across every deck. A picture fills a suggested slot on the Deck step; a slot left empty exports with a red placeholder." />
       <div className="grid gap-4 lg:grid-cols-[1fr_1.6fr]">
         <Card title="Add an image">
           <DeckImageUpload workspaceId={v.workspace.id} userId={v.user.id} />

@@ -18,15 +18,15 @@ export type SlotInputs = {
 /**
  * The one picture a slot shows, or null and the reason it is empty. A testimonial is special: it never takes a library image,
  * only its own approved proof's photo, and a proof that is not approved (approval withdrawn) empties the slot with a reason the
- * Deck step shows. Every other slot takes the coach's chosen library image, or is quietly empty (the slide exports as text and
- * the count on the Deck step already says how many).
+ * Deck step shows. Every other slot takes the coach's chosen library image, or is quietly empty (the slide exports with a red
+ * placeholder in the picture's frame, §2, and the count on the Deck step says how many).
  */
 export function pickSlotImage(slot: Slot, inputs: SlotInputs): { image: SlotImage | null; why: string | null } {
   if (slot.kind === "testimonial") {
-    if (!slot.proofId) return { image: null, why: "A testimonial shows an approved proof from your bank with a photo; this one is a typed quote, so the slide stays text." };
-    if (!inputs.proof) return { image: null, why: "The proof behind this testimonial is gone, so the slide stays text." };
-    if (inputs.proof.status !== "approved") return { image: null, why: `“${inputs.proof.name}” is no longer approved, so its photo is off the slide and it exports as text.` };
-    if (!inputs.proofPhoto) return { image: null, why: `“${inputs.proof.name}” is approved but carries no usable photo, so the testimonial exports as text.` };
+    if (!slot.proofId) return { image: null, why: "A testimonial shows an approved proof from your bank with a photo; this one is a typed quote, so its frame shows a red placeholder." };
+    if (!inputs.proof) return { image: null, why: "The proof behind this testimonial is gone, so its frame shows a red placeholder." };
+    if (inputs.proof.status !== "approved") return { image: null, why: `“${inputs.proof.name}” is no longer approved, so its photo is off the slide and its frame shows a red placeholder.` };
+    if (!inputs.proofPhoto) return { image: null, why: `“${inputs.proof.name}” is approved but carries no usable photo, so its frame shows a red placeholder.` };
     return { image: { ...inputs.proofPhoto, source: "proof" }, why: null };
   }
   return inputs.chosenImage ? { image: { ...inputs.chosenImage, source: "library" }, why: null } : { image: null, why: null };
