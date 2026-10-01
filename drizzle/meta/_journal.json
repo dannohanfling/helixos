@@ -652,6 +652,13 @@
       "when": 1790888929095,
       "tag": "0092_month_graphic_coach_work",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "6",
+      "when": 1790891950138,
+      "tag": "0095_body_day_flags",
+      "breakpoints": true
     }
   ]
 }

@@ -20,6 +20,7 @@ export const FEATURES: Record<string, { label: string; tier: Tier }> = {
   lead_magnet: { label: "Lead magnet drafts", tier: "strong" },
   key_check: { label: "Key check", tier: "light" },
   meal_photo: { label: "HumanOS: a meal from a photo", tier: "light" },
+  body_week_summary: { label: "HumanOS: the week in a paragraph", tier: "light" },
 };
 
 export const MODELS: Record<AiProvider, Record<Tier, string>> = {

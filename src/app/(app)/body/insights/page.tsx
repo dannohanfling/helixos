@@ -112,7 +112,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
             </span>
           </label>
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" name="injury" value="1" defaultChecked={injury} /> Leave out days with an open injury
+            <input type="checkbox" name="injury" value="1" defaultChecked={injury} /> Leave out flagged days (an open injury, travelling, ill)
           </label>
           <div className="sm:col-span-2">
             <button type="submit" className="btn btn-humanos btn-sm" data-testid="insights-go">

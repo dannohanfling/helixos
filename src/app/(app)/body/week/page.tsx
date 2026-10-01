@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { Card, Stat } from "@/components/ui";
 import { HumanosHeader } from "@/components/body/humanos-header";
+import { WeekSummary } from "@/components/body/week-summary";
+import { summariseWeekAction } from "@/lib/actions/body";
+import { FLAG_ICON, isDayFlag } from "@/lib/engine/body-flags";
 import { addDays, formatDate, startOfWeek } from "@/lib/dates";
 import { MARK_ICON, fmtMacro } from "@/lib/engine/body";
 import { fmtMetric } from "@/lib/engine/body-scale";
@@ -117,6 +120,8 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
       />
 
       <RangePicker path="/body/week" bounds={rangeBounds("week", monday, v.today, { addDays, startOfWeek })} today={v.today} />
+      {/* Rev 237 phase 15: the week in a paragraph, only with the member's AI switch on (the action says so otherwise). */}
+      {w.settings.aiUse ? <WeekSummary action={summariseWeekAction} monday={monday} /> : null}
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">Nutrition</h2>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="week-nutrition" data-logged={n.daysLogged} data-in-band={n.daysInBand} data-judged={n.daysJudged}>
         <Stat label="Days logged" value={`${n.daysLogged} of ${n.daysPassed}`} sub={n.daysJudged ? <span data-testid="week-in-band">{n.daysInBand} of {n.daysJudged} finished days in band {MARK_ICON.in}</span> : "In band once a day with targets finishes"} />
@@ -163,6 +168,7 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
             <li key={d.date} className="flex flex-wrap items-center justify-between gap-2 py-1.5" data-testid="week-day" data-date={d.date}>
               <Link href={`/body?date=${d.date}`} className="hover:underline">
                 {formatDate(d.date, { weekday: "short", month: "short", day: "numeric" })} <span className="text-xs text-ink-3">{d.dayType ?? ""}</span>
+                {d.flag && isDayFlag(d.flag) ? <span className="ml-1" title={d.flag} data-testid="week-day-flag">{FLAG_ICON[d.flag]}</span> : null}
               </Link>
               <span className="tabular text-xs text-ink-2">{d.logged ? `${fmtMacro("cal", d.totals.cal)} cal · ${fmtMacro("p", d.totals.p)} P · ${fmtMacro("f", d.totals.f)} F${d.worst ? ` ${MARK_ICON[d.worst]}` : ""}` : "—"}</span>
             </li>

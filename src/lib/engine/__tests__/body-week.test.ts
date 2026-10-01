@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { daysBetween } from "@/lib/dates";
-import { change, coachBodyText, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
+import { WEEK_SUMMARY_TASK, change, coachBodyText, goalPace, nutritionWeek, weekNumbers, weighWeek, type WeekDay } from "@/lib/engine/body-week";
 
 const lift = { cal: { min: 1400, max: 1500 }, p: { min: 180, max: 200 }, f: { min: 55, max: 65 }, c: { min: 0, max: 5 } };
 const rest = { cal: { min: 1300, max: 1400 }, p: { min: 170, max: 190 }, f: { min: 50, max: 60 }, c: { min: 0, max: 5 } };
@@ -59,5 +59,24 @@ describe("the coach's Body column (rev 237 phase 12)", () => {
     expect(coachBodyText({ inBand: 0, judged: 0, lastWeighIn: "2026-10-01", sessions: 1 }, "2026-10-01", fmt, daysBetween).short).toBe("🎯 — · ⚖️ today · 🏋️ 1");
     expect(coachBodyText({ inBand: 0, judged: 0, lastWeighIn: "2026-09-30", sessions: 1 }, "2026-10-01", fmt, daysBetween).long).toBe("no days judged yet this week · weighed yesterday · 1 session this week");
     expect(coachBodyText({ inBand: 0, judged: 0, lastWeighIn: null, sessions: 0 }, "2026-10-01", fmt, daysBetween)).toEqual({ short: "🎯 — · ⚖️ — · 🏋️ 0", long: "no days judged yet this week · no weigh-in yet · 0 sessions this week" });
+  });
+});
+
+describe("the AI week summary (rev 237 phase 15): numbers only", () => {
+  it("phrases the week as lines of numbers with nothing named, and the task asks for one short paragraph", () => {
+    const n = { daysLogged: 5, daysPassed: 7, avgCal: 1450, avgP: 190, avgPFloor: 180, avgF: 58, avgFCeiling: 65, avgC: 4, daysJudged: 4, daysInBand: 3 };
+    const text = weekNumbers({ label: "2026-09-28 to 2026-10-04", nutrition: n, prevNutrition: { ...n, daysInBand: 2, daysJudged: 5 }, training: { sessions: 3, planned: 4, sets: 24, prs: 1 }, prevTraining: { sessions: 2, planned: 4, sets: 15, prs: 0 }, weigh: { avg: 150.4, days: 3 }, prevWeigh: { avg: 151.2, days: 2 }, weightUnit: "lb", sleepAvg: 7.2, habits: { due: 14, kept: 11 } });
+    expect(text.split("\n")).toEqual([
+      "Week: 2026-09-28 to 2026-10-04.",
+      "Days logged: 5 of 7; finished days in band: 3 of 4 (last week 2 of 5).",
+      "Averages on logged days: 1450 cal, 190 g protein (floor 180), 58 g fat (ceiling 65), 4 g carbs.",
+      "Training: 3 sessions of 4 planned, 24 sets, 1 PRs (last week 2 sessions, 15 sets).",
+      "Weight: average 150.4 lb over 3 days (last week 151.2 lb).",
+      "Sleep: 7.2 h a night on average.",
+      "Habits: 11 of 14 kept.",
+    ]);
+    expect(weekNumbers({ label: "w", nutrition: { ...n, avgCal: null, avgP: null, avgPFloor: null, avgF: null, avgFCeiling: null, avgC: null }, prevNutrition: n, training: { sessions: 0, planned: null, sets: 0, prs: 0 }, prevTraining: { sessions: 0, planned: null, sets: 0, prs: 0 }, weigh: { avg: null, days: 0 }, prevWeigh: { avg: null, days: 0 }, weightUnit: "kg", sleepAvg: null, habits: { due: 0, kept: 0 } })).toContain("Weight: no weigh-ins over 0 days.");
+    expect(WEEK_SUMMARY_TASK).toMatch(/week summary/i);
+    expect(WEEK_SUMMARY_TASK).toMatch(/Numbers only/);
   });
 });

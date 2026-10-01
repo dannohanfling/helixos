@@ -1,0 +1,1 @@
+ALTER TABLE `body_days` ADD `flag` text;

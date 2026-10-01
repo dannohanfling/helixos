@@ -2,7 +2,7 @@
  * Body reads. Every read of a Body table in the app is here (a unit test holds that), and every read of someone else's Body data
  * goes through bodyAccess first: a coach sees a client's Body only while the client's share switch is on (rev 179, privacy).
  */
-import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
@@ -153,6 +153,7 @@ export async function bodyDay(workspaceId: string, userId: string, date: string,
   const authorName = new Map(authors.map((a) => [a.id, a.name]));
   return {
     settings,
+    flag: override?.flag ?? null,
     dayTypes,
     dayType,
     overridden: !!override?.dayTypeId,
@@ -186,7 +187,7 @@ export async function todayBody(v: Viewer) {
   if (!d) return null;
   // The one-tap chips (B7, placed by rev 201): only the habits due today, done-type ones toggle in place, measured ones open Practices.
   const habits = hd.habits.filter((h) => h.due).slice(0, 8).map((h) => ({ id: h.id, name: h.name, kind: h.kind, kept: h.kept, valueText: h.valueText, streak: h.streak }));
-  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits };
+  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag };
 }
 
 /* ───────── B2, workouts (rev 182) ───────── */
@@ -496,7 +497,7 @@ export async function daysInRange(workspaceId: string, userId: string, from: str
     const bands = hasBands(typeBands) ? typeBands : null;
     const final = d < today;
     const marks = bands && list.length ? dayMarks(totals, bands, { floors: { cal: settings.calFloor, f: settings.fatFloor }, overOk: settings.overOk, final }) : null;
-    out.push({ date: d, dayType: t?.name ?? null, logged: list.length, totals, bands, final, worst: marks ? worstMark(marks) : null });
+    out.push({ date: d, dayType: t?.name ?? null, logged: list.length, totals, bands, final, worst: marks ? worstMark(marks) : null, flag: overrides.find((o) => o.date === d)?.flag ?? null });
   }
   return out;
 }
@@ -851,10 +852,16 @@ async function seriesFor(workspaceId: string, userId: string, key: string, from:
   return [];
 }
 
-/** The dates with an open injury inside the range, for the "leave out" option. Only their dates leave this function. */
-async function injuryDays(workspaceId: string, userId: string, from: string, to: string): Promise<Set<string>> {
-  const rows = await db.query.bodyHealth.findMany({ columns: { startedOn: true, resolvedOn: true }, where: and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId)) });
-  const out = new Set<string>();
+/**
+ * The dates to leave out of Patterns when asked: an open injury's days (the health log; only their dates leave this function)
+ * and every day marked travelling or ill (rev 237 phase 15).
+ */
+async function flaggedDays(workspaceId: string, userId: string, from: string, to: string): Promise<Set<string>> {
+  const [rows, marked] = await Promise.all([
+    db.query.bodyHealth.findMany({ columns: { startedOn: true, resolvedOn: true }, where: and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId)) }),
+    db.query.bodyDays.findMany({ columns: { date: true }, where: and(and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId)), isNotNull(schema.bodyDays.flag), gte(schema.bodyDays.date, from), lte(schema.bodyDays.date, to)) }),
+  ]);
+  const out = new Set<string>(marked.map((m) => m.date));
   for (const r of rows) for (const d of rangeDays(r.startedOn > from ? r.startedOn : from, r.resolvedOn && r.resolvedOn < to ? r.resolvedOn : to)) out.add(d);
   return out;
 }
@@ -871,7 +878,7 @@ export async function correlate(workspaceId: string, userId: string, today: stri
   const window = [4, 8, 12].includes(input.window) ? input.window : 8;
   const to = today;
   const from = addDays(startOfWeek(today), -7 * (window - 1));
-  const [a, b, excluded] = await Promise.all([seriesFor(workspaceId, userId, A.key, addDays(from, -lag), to, today, tz), seriesFor(workspaceId, userId, B.key, from, to, today, tz), input.excludeFlagged ? injuryDays(workspaceId, userId, from, to) : Promise.resolve(new Set<string>())]);
+  const [a, b, excluded] = await Promise.all([seriesFor(workspaceId, userId, A.key, addDays(from, -lag), to, today, tz), seriesFor(workspaceId, userId, B.key, from, to, today, tz), input.excludeFlagged ? flaggedDays(workspaceId, userId, from, to) : Promise.resolve(new Set<string>())]);
   const pairs = pairUp(a, b, { lag, grain: input.grain, foldA: A.fold as Fold, foldB: B.fold as Fold, exclude: excluded, addDays, startOfWeek });
   const read = verdict(pairs, A.label, B.label, input.grain === "weekly" ? "weeks" : "days");
   return { a: A, b: B, lag, window, grain: input.grain, from, to, seriesA: a.filter((p) => p.date >= from), seriesB: b, pairs, excluded: excluded.size, verdict: read, metrics };

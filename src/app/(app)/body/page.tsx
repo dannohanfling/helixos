@@ -11,9 +11,10 @@ import { LogFoodForm } from "@/components/body/unit-inputs";
 import { loggableUnits } from "@/lib/engine/body-units";
 import { bodyDay, latestComposition, recentDays, requireBodyEnabled } from "@/lib/queries/body";
 import { fmtMetric } from "@/lib/engine/body-scale";
-import { deleteEntryAction, logFoodAction, logMealAction, logPhotoAction, mealPhotoAction, setBodyAiAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
+import { deleteEntryAction, logFoodAction, logMealAction, logPhotoAction, mealPhotoAction, setBodyAiAction, setBodyDayFlagAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
+import { DAY_FLAGS, FLAG_LABEL, flagText } from "@/lib/engine/body-flags";
 import { PhotoForm } from "@/components/body/photo-form";
-import { photoReady } from "@/lib/body-photo";
+import { photoReady } from "@/lib/body-ai";
 
 export const metadata = { title: "HumanOS · Log" };
 
@@ -241,6 +242,11 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
             }
             action={d.worst && d.entries.length ? <Badge tone={d.worst === "in" || d.worst === "over_ok" || d.worst === "open" ? "good" : "warn"}>{MARK_ICON[d.worst]} {d.final ? MARK_WORD[d.worst] : "so far"}</Badge> : null}
           >
+            {d.flag ? (
+              <p className="mb-3 text-sm text-ink-2" data-testid="body-day-flag">
+                {flagText(d.flag)} · this day can be left out of Patterns
+              </p>
+            ) : null}
             {d.dayType?.reminder ? (
               <p className="mb-3 rounded-lg bg-surface-2 p-2 text-sm" data-testid="body-reminder">
                 📌 {d.dayType.reminder}
@@ -252,8 +258,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
               {d.sodium ? <p className="text-xs text-ink-3" data-testid="body-sodium">Sodium: {Math.round(d.sodium).toLocaleString("en-US")} mg</p> : null}
               {d.bands ? <MarkKey /> : null}
             </div>
-            {d.dayTypes.length > 1 ? (
-            <Disclosure summary={<span className="text-xs text-ink-3 underline">Change this day&apos;s type</span>} className="mt-2">
+            <Disclosure summary={<span className="text-xs text-ink-3 underline">Change this day&apos;s type or mark it</span>} className="mt-2">
               <form action={setBodyDayTypeAction} className="flex flex-wrap items-end gap-2">
                 <input type="hidden" name="date" value={date} />
                 <select name="dayTypeId" className="field w-auto py-1 text-sm" defaultValue={d.overridden ? d.dayType?.id : ""} aria-label="Day type">
@@ -268,8 +273,25 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
                   Set
                 </SubmitButton>
               </form>
+              {/* Rev 237 phase 15: a day travelling or ill can be left out of Patterns. */}
+              <form action={setBodyDayFlagAction} className="mt-2 flex flex-wrap items-end gap-2" data-testid="body-day-flag-form">
+                <input type="hidden" name="date" value={date} />
+                <label className="text-xs text-ink-3">
+                  Mark this day
+                  <select name="flag" className="field w-auto py-1 text-sm" defaultValue={d.flag ?? ""} aria-label="Mark this day">
+                    <option value="">No mark</option>
+                    {DAY_FLAGS.map((f) => (
+                      <option key={f} value={f}>
+                        {FLAG_LABEL[f]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="body-day-flag-save">
+                  Mark
+                </SubmitButton>
+              </form>
             </Disclosure>
-            ) : null}
           </Card>
 
           <Card title={`Eaten · ${label}`}>

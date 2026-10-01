@@ -2414,6 +2414,8 @@ export const bodyDays = sqliteTable(
     dayTypeId: text("day_type_id"),
     /** B2 (rev 182): a rest day by choice. Training shows it as Off instead of offering a routine. */
     off: integer("off", { mode: "boolean" }).notNull().default(false),
+    /** Rev 237 phase 15 (revs 196/231): a day marked travelling or ill, left out of Patterns when asked; nothing else reads it. */
+    flag: text("flag", { enum: ["travel", "illness"] }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("body_days_member_date").on(t.workspaceId, t.userId, t.date)],

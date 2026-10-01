@@ -1,12 +1,14 @@
 /**
- * The meal photo's one AI call (rev 237 phase 14). This is the only HumanOS module that talks to src/lib/ai.ts, and it reads no
- * HumanOS table: the caller (the action) checks the member's AI switch and passes the image alone, so no HumanOS data goes to
- * the model from here (rev 219's rule: that path is bodyAiContext only). The photo is never stored or logged.
+ * HumanOS's AI calls (rev 237 phases 14 and 15): the meal photo and the week summary. This is the only HumanOS module that talks
+ * to src/lib/ai.ts, and it reads no HumanOS table: the caller (the action) checks the member's AI switch and passes the image or
+ * the numbers alone, so no HumanOS data goes to a model from here (rev 219's rule: that path is bodyAiContext only). The photo
+ * is never stored or logged; the summary is shown and not kept.
  */
 import { AiImageError, aiStatus, draft } from "@/lib/ai";
 import type { Viewer } from "@/lib/auth";
 import type { DraftImage } from "@/lib/engine/ai-request";
 import { PHOTO_TASK, PHOTO_USER, parsePhotoLines, type PhotoLine } from "@/lib/engine/body-photo";
+import { WEEK_SUMMARY_TASK } from "@/lib/engine/body-week";
 
 export type PlateRead = { lines: PhotoLine[]; note: string | null } | { problem: "model" | "no_answer" | "nothing" };
 
@@ -28,4 +30,9 @@ export async function readPlate(image: DraftImage): Promise<PlateRead> {
 export async function photoReady(v: Viewer): Promise<boolean> {
   const s = await aiStatus(v);
   return s.hasKey && !s.blocked;
+}
+
+/** One paragraph on the week from its numbers (the text the caller built with weekNumbers), with the task alone; null when AI didn't answer. */
+export async function summariseWeek(numbers: string): Promise<string | null> {
+  return draft(WEEK_SUMMARY_TASK, numbers, 600, { feature: "body_week_summary", essence: false });
 }

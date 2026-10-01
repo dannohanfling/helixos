@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 45,
+    date: "2026-10-01",
+    title: "HumanOS: mark a travel or sick day, and the week in a paragraph",
+    lines: ["On Log, under \"Change this day's type or mark it\", mark a day Travelling or Ill. Patterns can leave those days out, alongside days with an open injury, so a bad week away doesn't pass for a pattern.", "On This week, \"Summarise this week\" asks your own AI for one paragraph on the week's numbers (days in band, averages, sessions, weight, sleep, habits). It gets numbers only, never a food, a note or a photo, and the paragraph is shown, not saved. Only with \"Let AI use my HumanOS data\" on."],
+    audience: "everyone",
+  },
+  {
     n: 44,
     date: "2026-10-01",
     title: "Picture suggestions that name what to show",

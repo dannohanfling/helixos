@@ -16,7 +16,10 @@ import { convertQty, storedUnit } from "@/lib/engine/body-units";
 import { decodeFound, foodFromFound } from "@/lib/engine/body-find";
 import { photoItems, readPhotoLines, type PhotoLine } from "@/lib/engine/body-photo";
 import { IMAGE_MAX_BYTES, isImageType } from "@/lib/engine/ai-request";
-import { readPlate } from "@/lib/body-photo";
+import { readPlate, summariseWeek } from "@/lib/body-ai";
+import { isDayFlag } from "@/lib/engine/body-flags";
+import { weekNumbers } from "@/lib/engine/body-week";
+import { bodyWeek } from "@/lib/queries/body";
 import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { AirtableError, airtableProblem } from "@/lib/airtable";
@@ -282,6 +285,43 @@ export async function saveFoundFoodAction(formData: FormData): Promise<void> {
   if (have) await db.update(schema.bodyFoods).set({ ...food, archivedAt: null }).where(eq(schema.bodyFoods.id, have.id));
   else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
   redirect(`/body/foods/find?saved=${encodeURIComponent(food.name)}`);
+}
+
+/* ───────── Day flags and the week summary (rev 237 phase 15) ───────── */
+
+/** Mark a day travelling or ill, or clear the mark; the row keeps its day type and Off. Patterns can leave such days out. */
+export async function setBodyDayFlagAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
+  await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date)) return;
+  const raw = str(formData, "flag");
+  const flag = isDayFlag(raw) ? raw : null;
+  const existing = await db.query.bodyDays.findFirst({ where: and(and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId)), eq(schema.bodyDays.date, date)) });
+  if (existing) await db.update(schema.bodyDays).set({ flag }).where(eq(schema.bodyDays.id, existing.id));
+  else if (flag) await db.insert(schema.bodyDays).values({ id: newId(), workspaceId, userId, date, dayTypeId: null, off: false, flag });
+  refresh();
+}
+
+export type SummaryState = { error?: string; text?: string; monday?: string } | undefined;
+
+/**
+ * "Summarise this week" (rev 196, B10's rule): the week's numbers, as weekNumbers phrases them (never a food, a note or a photo),
+ * go to the member's own model with the task alone, only with their HumanOS AI switch on. Shown, not stored.
+ */
+export async function summariseWeekAction(_prev: SummaryState, f: FormData): Promise<SummaryState> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
+  const settings = await setUp(v);
+  const monday = str(f, "monday");
+  if (!DATE.test(monday)) return { error: "Pick a week first." };
+  if (!settings.aiUse) return { error: "Turn on \"Let AI use my HumanOS data\" in HumanOS settings first; the summary runs on your own AI key.", monday };
+  if (!(await allow(`body-summary:${userId}`, 10, 15 * 60000))) return { error: "That's a lot of summaries in a row. Wait 15 minutes and try again.", monday };
+  const w = await bodyWeek(workspaceId, userId, startOfWeek(monday), v.today);
+  if (!w) return { error: "Nothing to summarise yet.", monday };
+  const numbers = weekNumbers({ label: `${w.monday} to ${w.sunday}`, nutrition: w.nutrition, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weigh: { avg: w.weigh.avg, days: w.weigh.days }, prevWeigh: { avg: w.weigh.prevAvg, days: 0 }, weightUnit: w.settings.weightUnit, sleepAvg: w.sleep?.avg ?? null, habits: w.habits ?? { due: 0, kept: 0 } });
+  const text = await summariseWeek(numbers);
+  if (!text) return { error: "AI didn't answer: it needs your own key on Settings, under today's cap, and a model that answers.", monday };
+  return { text, monday };
 }
 
 /* ───────── A meal from a photo (rev 237 phase 14, B8) ───────── */

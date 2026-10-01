@@ -853,6 +853,33 @@ async function main() {
     if (/caus(ed|es|ing)\b/i.test((await client.locator("main").textContent()) ?? "")) throw new Error("the page never says caused");
     if ((await client.locator('[data-testid="pair-scatter"]').getAttribute("data-n")) !== String(expectedVerdict.n) || !(await client.locator('[data-testid="pair-timeline"]').count())) throw new Error("the scatter holds every pair and the timeline draws both");
     await noSideScroll(client, "/body/insights");
+    // Rev 237 phase 15: a day marked travelling joins the days Patterns leaves out when asked.
+    {
+      const { correlate: correlateQ } = await import("@/lib/queries/body");
+      const corrArgs = { a: "sleep_h", b: "callsBooked", lag: 1, window: 8, grain: "daily" as const, excludeFlagged: true };
+      const excludedBefore = (await correlateQ(mem.workspaceId, maya.id, today, mem.timezone || "UTC", corrArgs))!.excluded;
+      await client.goto(`${base}/body?date=${yesterday}`);
+      const openFlagFold = async () => {
+        const fold = client.locator('details:has([data-testid="body-day-flag-form"]) > summary');
+        await fold.waitFor({ timeout: 30000 });
+        if (!(await fold.evaluate((el) => (el.parentElement as HTMLDetailsElement).open))) await fold.click();
+        await client.locator('[data-testid="body-day-flag-form"] select[name="flag"]').waitFor({ timeout: 30000 });
+      };
+      await openFlagFold();
+      await client.locator('[data-testid="body-day-flag-form"] select[name="flag"]').selectOption("travel");
+      await press(client, '[data-testid="body-day-flag-save"]', async () => (await client.locator('[data-testid="body-day-flag"]').count()) > 0, "the day marked");
+      if (!(await client.locator('[data-testid="body-day-flag"]').innerText()).includes("Travelling")) throw new Error("the marked day says Travelling");
+      if ((await db.query.bodyDays.findFirst({ where: and(mine(schema.bodyDays), eq(schema.bodyDays.date, yesterday)) }))?.flag !== "travel") throw new Error("the mark is on the day's row");
+      const excludedAfter = (await correlateQ(mem.workspaceId, maya.id, today, mem.timezone || "UTC", corrArgs))!.excluded;
+      if (excludedAfter < excludedBefore + 1) throw new Error(`a marked day leaves Patterns when asked: ${excludedBefore} before, ${excludedAfter} after`);
+      await client.goto(`${base}/body/week`);
+      await client.locator('[data-testid="week-day-flag"]').first().waitFor({ timeout: 30000 });
+      await client.goto(`${base}/body?date=${yesterday}`);
+      await openFlagFold();
+      await client.locator('[data-testid="body-day-flag-form"] select[name="flag"]').selectOption("");
+      await press(client, '[data-testid="body-day-flag-save"]', async () => (await client.locator('[data-testid="body-day-flag"]').count()) === 0, "the mark cleared");
+      console.log(`✓ day flags: yesterday marked Travelling shows on Log and the week, leaves Patterns when asked (${excludedBefore} → ${excludedAfter} days left out), and clears again`);
+    }
     // A pair with too few days: the readout says so, hides r, and shows no scatter.
     await client.goto(`${base}/body/insights?a=sleep_score&b=posts&lag=0&window=4&grain=daily`);
     await client.locator('[data-testid="insights-verdict"]').waitFor({ timeout: 30000 });
@@ -1104,6 +1131,14 @@ async function main() {
         if (Math.abs(photoEntry.cal - totalsOf(wantItems).cal) > 0.5) throw new Error(`the entry's calories scale with the amount: ${photoEntry.cal} vs ${totalsOf(wantItems).cal}`);
         const usage = await db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.userId, maya.id), eq(schema.aiUsage.feature, "meal_photo")) });
         if (usage.length !== 1 || JSON.stringify(usage[0]).includes(png.toString("base64").slice(0, 20))) throw new Error("one usage row, feature meal_photo, with nothing of the photo in it");
+        // The week in a paragraph (phase 15): the numbers go, nothing named, and the mock's paragraph lands on the page.
+        await client.goto(`${base}/body/week`);
+        await press(client, '[data-testid="week-summary-button"]', async () => (await client.locator('[data-testid="week-summary-text"]').count()) > 0, "the week summarised");
+        if (!(await client.locator('[data-testid="week-summary-text"]').innerText()).includes("Mock AI week summary")) throw new Error("the summary on the page is the model's paragraph");
+        const lastSum = (await (await fetch("http://localhost:4020/__last")).json()) as { system: { text: string; cached: boolean }[]; images: number; user: string };
+        if (lastSum.images !== 0 || !lastSum.system.some((b) => /week summary/i.test(b.text)) || lastSum.system.some((b) => b.cached)) throw new Error("the summary call carries the task alone, no image, nothing cached");
+        if (!/Days logged: \d+ of \d+/.test(lastSum.user) || !/Training: \d+ sessions/.test(lastSum.user)) throw new Error(`the model gets the week's numbers: ${lastSum.user.slice(0, 200)}`);
+        if (lastSum.user.includes(MEALS[0].name) || lastSum.user.includes(fx("egg").name) || /photo|note/i.test(lastSum.user)) throw new Error("the model gets numbers only: no food, no note, no photo");
         // The entry leaves again, and so does the key, so the day's totals below are the ones the walk built by hand.
         await db.delete(schema.bodyEntries).where(eq(schema.bodyEntries.id, photoEntry.id));
         await db.delete(schema.aiCredentials).where(and(eq(schema.aiCredentials.workspaceId, mem.workspaceId), eq(schema.aiCredentials.userId, maya.id)));

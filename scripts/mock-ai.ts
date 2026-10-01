@@ -7,11 +7,13 @@ import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? 4020);
 /** The last request's system message, block by block, for a walk to prove the voice came first and was marked for caching. */
-let last: { system: { text: string; cached: boolean }[]; instructions: string | null; images: number; imageBytes: number } = { system: [], instructions: null, images: 0, imageBytes: 0 };
+let last: { system: { text: string; cached: boolean }[]; instructions: string | null; images: number; imageBytes: number; user: string } = { system: [], instructions: null, images: 0, imageBytes: 0, user: "" };
 /** Milliseconds to hold every reply, so a walk can see the status line while a call is in flight. */
 const delayMs = Number(process.argv[3] ?? process.env.MOCK_AI_DELAY_MS ?? 0);
 
 function reply(system: string, user: string): string {
+  // The week summary (rev 237 phase 15): a paragraph that quotes the first line of the numbers it was given.
+  if (/week summary/i.test(system)) return `Mock AI week summary: a steady week. ${user.split("\n")[0]} Keep the protein floor in sight and add one session next week.`;
   // The meal photo (rev 237 phase 14): foods and portions as JSON lines, for the member to check before anything is logged.
   if (/meal photo/i.test(system) && /"lines"/.test(system)) {
     return JSON.stringify({ lines: [{ name: "Grilled chicken breast", qty: 6, unit: "oz", cal: 280, p: 52, f: 6, c: 0 }, { name: "White rice", qty: 1, unit: "cup", cal: 205, p: 4.3, f: 0.4, c: 45 }, { name: "Steamed broccoli", qty: 1, unit: "cup", cal: 55, p: 3.7, f: 0.6, c: 11 }], note: "Portions are a guess from the plate; adjust before logging." });
@@ -79,7 +81,7 @@ createServer((req, res) => {
       const images = blocks ? blocks.filter((b) => b.type === "image") : [];
       // The system message may be a string or an array of text blocks; a block with cache_control is the cached prefix.
       const sysBlocks = Array.isArray(body.system) ? (body.system as { text?: string; cache_control?: unknown }[]).map((b) => ({ text: String(b.text ?? ""), cached: Boolean(b.cache_control) })) : [{ text: String(body.system ?? ""), cached: false }];
-      last = { system: sysBlocks, instructions: null, images: images.length, imageBytes: images.reduce((n, b) => n + (b.source?.data?.length ?? 0), 0) };
+      last = { system: sysBlocks, instructions: null, images: images.length, imageBytes: images.reduce((n, b) => n + (b.source?.data?.length ?? 0), 0), user: user.slice(0, 4000) };
       const systemText = sysBlocks.map((b) => b.text).join("\n\n");
       const text = reply(systemText, user);
       const cachedChars = sysBlocks.filter((b) => b.cached).reduce((n, b) => n + b.text.length, 0);
@@ -107,7 +109,7 @@ createServer((req, res) => {
       const parts = Array.isArray(body.input) ? (body.input as { content?: { type: string; text?: string; image_url?: string }[] }[]).flatMap((m) => m.content ?? []) : null;
       const inputText = parts ? parts.filter((p) => p.type === "input_text").map((p) => p.text ?? "").join("\n") : String(body.input ?? "");
       const inputImages = parts ? parts.filter((p) => p.type === "input_image") : [];
-      last = { system: [], instructions: String(body.instructions ?? ""), images: inputImages.length, imageBytes: inputImages.reduce((n, p) => n + (p.image_url?.length ?? 0), 0) };
+      last = { system: [], instructions: String(body.instructions ?? ""), images: inputImages.length, imageBytes: inputImages.reduce((n, p) => n + (p.image_url?.length ?? 0), 0), user: inputText.slice(0, 4000) };
       const text = reply(String(body.instructions ?? ""), inputText);
       return json(200, { id: "resp_mock", object: "response", model: body.model, status: "completed", output: [{ type: "message", id: "m1", role: "assistant", status: "completed", content: [{ type: "output_text", text, annotations: [] }] }], output_text: text, usage: { input_tokens: 120, input_tokens_details: { cached_tokens: 0 }, output_tokens: 40, total_tokens: 160 } });
     }
