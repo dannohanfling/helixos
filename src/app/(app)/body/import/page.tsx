@@ -3,6 +3,7 @@ import { requireViewer } from "@/lib/auth";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { requireBodyEnabled } from "@/lib/queries/body";
 import { HistoryForm } from "./history-form";
+import { existingHistory } from "@/lib/body-import";
 
 export const metadata = { title: "HumanOS · From Airtable" };
 // A base of a few hundred days reads several pages from Airtable; the dry run and Approve both run under this.
@@ -44,7 +45,7 @@ export default async function BodyImportPage({ searchParams }: { searchParams: P
         </p>
       ) : null}
       {/* A fresh form after each import: no old dry run left on screen. */}
-      <HistoryForm key={sp.at ?? "form"} />
+      <HistoryForm key={sp.at ?? "form"} ownHistory={(await existingHistory(v.workspace.id, v.user.id)).ownHistory ?? false} />
     </>
   );
 }

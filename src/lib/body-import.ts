@@ -4,7 +4,7 @@
  * read. Writes are matched so a re-run adds nothing twice: a weigh-in by its Journal row, a day by its date, an exercise or a
  * routine by its name.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { readTables, type BaseAccess } from "@/lib/airtable";
 import { HUMANOS_TABLES, humanosSource, readingIdFor, type Existing, type HistoryPlan, type HumanosSource } from "@/lib/engine/body-airtable";
@@ -27,6 +27,11 @@ export async function existingHistory(workspaceId: string, userId: string): Prom
     db.query.bodyDaily.findMany({ where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), eq(schema.bodyDaily.source, "airtable")), columns: { readingId: true } }),
     db.query.bodyDayTypes.findMany({ where: and(eq(schema.bodyDayTypes.workspaceId, workspaceId), eq(schema.bodyDayTypes.userId, userId)), columns: { id: true, name: true } }),
   ]);
+  // Rev 296: history that didn't come through this importer (the connector, the forms, a wearable) means the member's record is already here.
+  const [ownSessions, ownWeights] = await Promise.all([
+    db.query.bodySessions.findFirst({ where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), or(isNull(schema.bodySessions.note), ne(schema.bodySessions.note, "From Airtable"))), columns: { id: true } }),
+    db.query.bodyDaily.findFirst({ where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), eq(schema.bodyDaily.key, "weight"), ne(schema.bodyDaily.source, "airtable")), columns: { id: true } }),
+  ]);
   return {
     exercises: new Map(exercises.filter((e) => !e.archivedAt).map((e) => [lc(e.name), e.id])),
     routines: new Set(routines.map((r) => lc(r.name))),
@@ -34,12 +39,19 @@ export async function existingHistory(workspaceId: string, userId: string): Prom
     sessionDates: new Set(sessions.map((s) => s.date)),
     readingIds: new Set(daily.map((d) => d.readingId)),
     dayTypes: new Map(dayTypes.map((t) => [lc(t.name), t.id])),
+    ownHistory: !!(ownSessions || ownWeights),
   };
 }
 
 /** Write the approved plan: new exercises first (the rest name them), then routines, the days with their sets, and the weigh-ins. */
 export async function applyHistory(plan: HistoryPlan, existing: Existing, workspaceId: string, userId: string): Promise<{ written: number }> {
   let written = 0;
+  // Day types only (rev 296): each planned day takes its day type, already in or not; nothing else is written.
+  if (plan.dayTypesOnly) {
+    const only = plan.sessions.filter((s) => s.dayTypeId).map((s) => ({ id: newId(), workspaceId, userId, date: s.date, dayTypeId: s.dayTypeId!, off: false }));
+    for (let i = 0; i < only.length; i += 200) await db.insert(schema.bodyDays).values(only.slice(i, i + 200)).onConflictDoUpdate({ target: [schema.bodyDays.workspaceId, schema.bodyDays.userId, schema.bodyDays.date], set: { dayTypeId: sql`excluded.day_type_id`, off: false } });
+    return { written: only.length };
+  }
   const ids = new Map(existing.exercises);
   const exercises: (typeof schema.bodyExercises.$inferInsert)[] = [];
   for (const e of plan.exercises) {

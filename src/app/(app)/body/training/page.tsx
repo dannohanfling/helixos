@@ -111,7 +111,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
         title="Training"
         subtitle={t.dayType ? <span data-testid="training-day-type">{t.dayType.name}</span> : null}
         action={
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <Link href={`/body/training?date=${addDays(date, -1)}`} className="btn btn-ghost btn-sm" aria-label="Previous day">
               ←
             </Link>
@@ -121,6 +121,11 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
             <Link href={`/body/training?date=${addDays(date, 1)}`} className={`btn btn-ghost btn-sm ${date >= v.today ? "pointer-events-none opacity-40" : ""}`} aria-label="Next day">
               →
             </Link>
+            {/* Rev 296: a missed day is logged on its date; the picker jumps there (a GET, so the day is in the address). */}
+            <form method="get" action="/body/training" className="flex basis-full items-center gap-1 sm:basis-auto" data-testid="training-date-form">
+              <input type="date" name="date" className="field w-40 py-1 text-xs" defaultValue={date} max={v.today} aria-label="Go to a day" />
+              <button type="submit" className="btn btn-ghost btn-sm">Go</button>
+            </form>
           </div>
         }
       />

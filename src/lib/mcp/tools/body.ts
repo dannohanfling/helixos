@@ -277,7 +277,7 @@ export const bodyLogSet = defineTool({
     const t = await trainingDay(v.workspace.id, v.user.id, date);
     const x = t?.exercises.find((e) => e.exercise.id === exercise.id);
     const set = x?.today[x.today.length - 1];
-    return { text: `Logged ${exercise.name} ${fmtSet({ weight, unit: settings.weightUnit, reps }, settings.weightUnit, exercise.kind)}${x ? ` (set ${x.today.length}${x.target ? ` of ${x.target.sets} planned` : ""} ${date === v.today ? "today" : `on ${date}`})` : ""}${set?.pr ? ". A new PR!" : x?.pr ? `. PR stays ${x.pr.text}.` : "."}${session.completedAt ? " The session was finished; it's open again." : ""}`, data: { exercise: exercise.name, date, weight, unit: settings.weightUnit, reps, pr: !!set?.pr, setsToday: x?.today.length ?? 1 } };
+    return { text: `Logged ${exercise.name} ${fmtSet({ weight, unit: settings.weightUnit, reps }, settings.weightUnit, exercise.kind)}${x ? ` (set ${x.today.length}${x.target ? ` of ${x.target.sets} planned` : ""} ${date === v.today ? "today" : `on ${date}`})` : ""}${set?.pr ? ". A new PR!" : x?.pr ? (x.pr.date === date ? `. Today's PR stands at ${x.pr.text}.` : `. PR stays ${x.pr.text}.`) : "."}${session.completedAt ? " The session was finished; it's open again." : ""}`, data: { exercise: exercise.name, date, weight, unit: settings.weightUnit, reps, pr: !!set?.pr, setsToday: x?.today.length ?? 1 } };
   },
 });
 

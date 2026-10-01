@@ -252,7 +252,8 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
     const today = all.map((s, i) => ({ ...s, pr: flags[i] })).filter((s) => s.date === date);
     const before = all.filter((s) => s.date < date);
     const last = lastTime(before, date);
-    const pr = bestSet(before, unit);
+    // The PR as of this day, the day's own sets included (rev 293): a PR set today is today's PR, not last month's.
+    const pr = bestSet(all.filter((s) => s.date <= date), unit);
     return {
       exercise,
       target: routine?.lines.find((l) => l.exerciseId === id) ?? null,
@@ -638,6 +639,19 @@ export async function coachBodyColumn(v: Viewer, clients: { userId: string; toda
     out.set(c.userId, { ...cell, ...coachBodyText(cell, c.today, formatDate, daysBetween) });
   }
   return out;
+}
+
+/**
+ * The coach's day view (Danno, 1 Oct): the client's night and recovery for the day and their habits that day, read only after
+ * sharedClient said shared. Never the health log, which has no path to a coach.
+ */
+export async function coachDayExtras(workspaceId: string, userId: string, date: string, today: string) {
+  const [night, h] = await Promise.all([nights(workspaceId, userId, date, date), habitsDay(workspaceId, userId, date, today)]);
+  const n = night[0];
+  const sleep = n && (n.sleep_h != null || n.sleep_score != null || n.recovery != null)
+    ? { hours: n.sleep_h != null ? fmtHours(n.sleep_h) : null, score: n.sleep_score ?? null, recovery: n.recovery ?? null, strain: n.strain ?? null, rhr: n.rhr ?? null, hrv: n.hrv ?? null }
+    : null;
+  return { sleep, habits: h.habits.filter((x) => x.due || x.value != null).map((x) => ({ id: x.id, name: x.name, kept: x.kept, valueText: x.valueText, due: x.due })) };
 }
 
 /* ───────── Habits, sleep and the health log (rev 237 phase 8, B7) ───────── */

@@ -293,8 +293,8 @@ export function routinesFrom(src: HumanosSource): RoutinePlan[] {
 
 /* ── The plan ── */
 
-export type Existing = { exercises: Map<string, string>; routines: Set<string>; sessionDates: Set<string>; readingIds: Set<string>; /** The member's day types by name (lower-cased), so an imported day's routine can set its day type where one matches. */ dayTypes?: Map<string, string>; /** The member's routines by name, so an imported day links to its routine. */ routineIds?: Map<string, string> };
-export type HistoryOptions = { notes: boolean; from: string | null };
+export type Existing = { exercises: Map<string, string>; routines: Set<string>; sessionDates: Set<string>; readingIds: Set<string>; /** The member already has sessions or weigh-ins that didn't come from this importer (rev 296: Danno, through the connector), so the page opens in day-types-only mode. */ ownHistory?: boolean; /** The member's day types by name (lower-cased), so an imported day's routine can set its day type where one matches. */ dayTypes?: Map<string, string>; /** The member's routines by name, so an imported day links to its routine. */ routineIds?: Map<string, string> };
+export type HistoryOptions = { notes: boolean; from: string | null; /** Rev 296: write nothing but each day's day type from the Journal's routine, for a member whose history is already in. */ dayTypesOnly?: boolean };
 export type HistoryPlan = {
   weighIns: (WeighIn & { status: "new" | "have" })[];
   skippedWeighIns: SkippedWeighIn[];
@@ -302,6 +302,8 @@ export type HistoryPlan = {
   exercises: { name: string; status: "new" | "have" }[];
   routines: (RoutinePlan & { status: "new" | "have" })[];
   missing: string[];
+  /** Day types only (rev 296): the sessions are read for their dates and routines, and nothing else is planned. */
+  dayTypesOnly?: boolean;
 };
 export const readingIdFor = (recordId: string) => `airtable:${recordId}`;
 const lc = (s: string) => s.trim().toLowerCase();
@@ -319,10 +321,11 @@ export function buildHistoryPlan(src: HumanosSource, existing: Existing, opts: H
   for (const s of sessions) if (s.status === "new") for (const e of s.exercises) names.set(lc(e.name), e.name);
   for (const r of routines) if (r.status === "new") for (const i of r.items) names.set(lc(i.exerciseName), i.exerciseName);
   const exercises = [...names.values()].sort((a, b) => a.localeCompare(b)).map((name) => ({ name, status: existing.exercises.has(lc(name)) ? ("have" as const) : ("new" as const) }));
+  if (opts.dayTypesOnly) return { weighIns: [], skippedWeighIns: [], sessions, exercises: [], routines: [], missing: [], dayTypesOnly: true };
   return { weighIns, skippedWeighIns: w.skipped.filter((x) => !from || x.date >= from), sessions, exercises, routines, missing: [] };
 }
 
-export type HistorySummary = { weighIns: number; weighInsHave: number; sessions: number; sessionsHave: number; sets: number; exercises: number; routines: number; skipped: number; unread: number };
+export type HistorySummary = { weighIns: number; weighInsHave: number; sessions: number; sessionsHave: number; sets: number; exercises: number; routines: number; skipped: number; unread: number; /** Days whose day type the plan sets (every session with a routine that maps to one of the member's day types, already in or not). */ days: number };
 export function historySummary(p: HistoryPlan): HistorySummary {
   const fresh = p.sessions.filter((s) => s.status === "new");
   return {
@@ -335,6 +338,7 @@ export function historySummary(p: HistoryPlan): HistorySummary {
     routines: p.routines.filter((r) => r.status === "new").length,
     skipped: p.skippedWeighIns.length,
     unread: fresh.reduce((n, s) => n + s.unread, 0),
+    days: p.sessions.filter((s) => s.dayTypeId).length,
   };
 }
 

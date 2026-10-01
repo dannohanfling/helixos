@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 37,
+    date: "2026-10-01",
+    title: "HumanOS: a coach's day view with sleep and practices, and four small fixes",
+    lines: ["When a client shares HumanOS with you, their day now shows last night's sleep and recovery and the practices they kept, beside the meals and the workout. Their health log stays theirs.", "Training has a date picker to log a missed day on its date; a PR set today is today's PR in the day's summary and in Claude's answer; the routine form grows with Add rows; and the Airtable page offers a day-types-only import for a member whose history is already in."],
+    audience: "coach",
+  },
+  {
     n: 36,
     date: "2026-10-01",
     title: "Turn on HumanOS yourself",

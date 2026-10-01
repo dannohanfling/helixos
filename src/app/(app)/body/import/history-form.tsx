@@ -6,7 +6,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { Card, Disclosure, Stat } from "@/components/ui";
 import { fmtSetLine } from "@/lib/engine/body-airtable";
 
-const EMPTY = { base: "", token: "", from: "", notes: "1" };
+const EMPTY = { base: "", token: "", from: "", notes: "1", dayTypesOnly: "0" };
 type Fields = typeof EMPTY;
 
 /**
@@ -14,9 +14,9 @@ type Fields = typeof EMPTY;
  * into the address, not into the page the server sends back, not into the browser's saved form data. Change anything after a
  * dry run and Approve waits for a fresh one.
  */
-export function HistoryForm() {
+export function HistoryForm({ ownHistory = false }: { ownHistory?: boolean }) {
   const [state, action] = useActionState<HistoryState, FormData>(importHistoryAction, undefined);
-  const [f, setF] = useState<Fields>(EMPTY);
+  const [f, setF] = useState<Fields>({ ...EMPTY, dayTypesOnly: ownHistory ? "1" : "0" });
   const [dirty, setDirty] = useState(false);
   const [seen, setSeen] = useState(state);
   if (seen !== state) {
@@ -30,7 +30,7 @@ export function HistoryForm() {
   const bind = (k: keyof Fields) => ({ name: k, value: f[k], onChange: (e: { target: { value: string } }) => set(k, e.target.value) });
   const p = state?.preview;
   const s = p?.summary;
-  const canApprove = p && !dirty && (s!.weighIns + s!.sessions + s!.exercises + s!.routines > 0);
+  const canApprove = p && !dirty && (p.plan.dayTypesOnly ? s!.days > 0 : s!.weighIns + s!.sessions + s!.exercises + s!.routines > 0);
 
   return (
     <form action={action} className="space-y-4" data-testid="history-form" autoComplete="off">
@@ -51,8 +51,16 @@ export function HistoryForm() {
           </label>
           <label className="flex items-center gap-2 self-end text-sm">
             <input type="hidden" name="notes" value={f.notes} />
+            <input type="hidden" name="dayTypesOnly" value={f.dayTypesOnly} />
             <input type="checkbox" checked={f.notes === "1"} onChange={(e) => set("notes", e.target.checked ? "1" : "0")} data-testid="history-notes" />
             Read sets out of the Exercise Notes too (the words stay in Airtable)
+          </label>
+          <label className="flex items-start gap-2 text-sm" data-testid="history-day-types-label">
+            <input type="checkbox" checked={f.dayTypesOnly === "1"} onChange={(e) => set("dayTypesOnly", e.target.checked ? "1" : "0")} data-testid="history-day-types" className="mt-0.5" />
+            <span>
+              Day types only
+              <span className="block text-xs text-ink-3">{ownHistory ? "Your weigh-ins and workouts are already in HelixOS, so this is ticked: each day takes its day type from the Journal's routine, and nothing else is brought over (unticking it would double what's here)." : "Set each day's day type from the Journal's routine and bring nothing else over."}</span>
+            </span>
           </label>
         </div>
       </Card>
@@ -82,8 +90,9 @@ export function HistoryForm() {
       ) : null}
 
       {p && s ? (
-        <div className="space-y-4" data-testid="history-preview" data-weigh-ins={s.weighIns} data-sessions={s.sessions} data-sets={s.sets} data-exercises={s.exercises} data-routines={s.routines} data-skipped={s.skipped}>
+        <div className="space-y-4" data-testid="history-preview" data-days={s.days} data-weigh-ins={s.weighIns} data-sessions={s.sessions} data-sets={s.sets} data-exercises={s.exercises} data-routines={s.routines} data-skipped={s.skipped}>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {p.plan.dayTypesOnly ? <Stat label="Day types" value={String(s.days)} sub="days that take a day type; nothing else is written" /> : null}
             <Stat label="Weigh-ins" value={String(s.weighIns)} sub={`${s.weighInsHave ? `${s.weighInsHave} already in · ` : ""}${s.skipped ? `${s.skipped} estimated or carried forward, left out` : "one a day, the newest reading"}`} />
             <Stat label="Workouts" value={String(s.sessions)} sub={`${s.sets} sets${s.sessionsHave ? ` · ${s.sessionsHave} days already in` : ""}${s.unread ? ` · ${s.unread} line${s.unread === 1 ? "" : "s"} it couldn't read` : ""}`} />
             <Stat label="Exercises" value={String(s.exercises)} sub="new names; the rest match yours" />

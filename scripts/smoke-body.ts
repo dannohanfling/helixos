@@ -396,6 +396,17 @@ async function main() {
     const wantItems = ROUTINE.lines.map((l) => ({ exerciseId: exId(l.ex), sets: l.sets, reps: l.reps }));
     if (routine.dayTypeId !== types0[0].id || JSON.stringify(routine.items) !== JSON.stringify(wantItems)) throw new Error(`the routine saved as typed, on ${types0[0].name} days: ${JSON.stringify(routine)}`);
     await noSideScroll(client, "/body/training/routines");
+    // Rev 296: "Add rows" grows the new-routine form from six rows to eight; the Training date picker jumps to a past day.
+    await openDisclosure(client, "New routine", rForm);
+    const rowsBefore = await client.locator(`${rForm} select[name$="_exercise"]`).count();
+    await Promise.all([client.waitForURL(/rows=8/), client.locator(`${rForm} [data-testid="routine-add-rows"]`).click()]);
+    await openDisclosure(client, "New routine", rForm);
+    if (rowsBefore !== 6 || (await client.locator(`${rForm} select[name$="_exercise"]`).count()) !== 8) throw new Error(`Add rows takes the form from six rows to eight: ${rowsBefore} before`);
+    await client.goto(`${base}/body/training`);
+    await client.locator('[data-testid="training-date-form"] input[name="date"]').fill(addDays(today, -1));
+    await Promise.all([client.waitForURL(new RegExp(`date=${addDays(today, -1)}`)), client.locator('[data-testid="training-date-form"] button[type="submit"]').click()]);
+    if ((await client.locator('[data-testid="training-date"]').innerText()).trim() !== "Yesterday") throw new Error("the date picker lands on the day asked");
+    console.log("✓ Add rows grows the routine form; the date picker opens a past day on Training");
 
     const card = (name: string) => `[data-testid="training-exercise"][data-name="${name}"]`;
     const setsIn = (name: string) => client.locator(`${card(name)} [data-testid="training-set"]`);
@@ -999,7 +1010,14 @@ async function main() {
     const coachTraining = (await coach.locator('[data-testid="coach-training"]').textContent()) ?? "";
     if (!coachTraining.includes("Bench press") || !coachTraining.includes("190 × 5 🏆") || !coachTraining.includes("10 reps")) throw new Error(`the coach reads the day's workout, PR marked: "${coachTraining}"`);
     const coachPageText = (await coach.locator("main").textContent()) ?? "";
-    if (coachPageText.includes(injury) || coachPageText.includes("Health log") || coachPageText.includes("Breathwork")) throw new Error("the health log never reaches the coach, even while shared; habits stay the member's this phase");
+    if (coachPageText.includes(injury) || coachPageText.includes("Health log")) throw new Error("the health log never reaches the coach, even while shared");
+    // Danno (1 Oct): the coach's day view carries the client's night and habits while shared, read from the same query.
+    const { coachDayExtras } = await import("@/lib/queries/body");
+    const extras = await coachDayExtras(mem.workspaceId, maya.id, today, today);
+    if (!extras.sleep?.hours || !extras.habits.some((h) => h.name === "Breathwork" && h.kept)) throw new Error(`the query has today's night and Breathwork kept for the coach's view: ${JSON.stringify(extras)}`);
+    if (!(await coach.locator('[data-testid="coach-sleep"]').innerText()).includes(extras.sleep.hours)) throw new Error("the coach's day view shows the client's night while shared");
+    const coachHabits = await coach.locator('[data-testid="coach-habits"]').innerText();
+    if (!coachHabits.includes("Breathwork") || !coachHabits.includes("✓")) throw new Error(`the coach's day view shows the habits kept while shared: "${coachHabits}"`);
     const note = `Great day ${Date.now()}`;
     await fillExact(coach, '[data-testid="coach-body-comment"]', note);
     await press(coach, '[data-testid="coach-body-comment-send"]', async () => (await coach.locator('[data-testid="coach-body-comments"]').count()) > 0 && (await coach.locator('[data-testid="coach-body-comments"]').innerText()).includes(note), "the comment");
@@ -1063,6 +1081,13 @@ async function main() {
     const foodTool = await tool("body_log_food").handler(await viewerFor(), { food: "lean steak", qty: 100, unit: "g", slot: "Dinner", date: yesterday });
     const steakRow = (await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.date, yesterday)) })).find((e) => e.mealId === null && Math.abs(e.items[0].qty - 3.5274) < 0.01);
     if (!steakRow || !foodTool.text.includes("100 g")) throw new Error(`body_log_food converts grams to the food's ounces: ${foodTool.text}`);
+    // Rev 293: a set that ties today's PR says so, and the day's summary names today's PR; the extra set then goes so the counts below hold.
+    const tieTool = await tool("body_log_set").handler(await viewerFor(), { exercise: "bench", weight: 190, reps: 5 });
+    if (!tieTool.text.includes("Today's PR stands at 190 × 5")) throw new Error(`a second 190 × 5 today reads today's PR, not an older one: "${tieTool.text}"`);
+    const tieDay = await tool("body_training").handler(await viewerFor(), {});
+    if (!tieDay.text.includes("190 × 5") || /PR[^\n]*2026-0[1-8]/.test(tieDay.text)) throw new Error(`the day's summary names today's PR: "${tieDay.text.slice(0, 300)}"`);
+    const tieSet = (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, today)) })).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    await db.delete(schema.bodySets).where(eq(schema.bodySets.id, tieSet.id));
     const setTool = await tool("body_log_set").handler(await viewerFor(), { exercise: "bench", weight: 180, reps: 8, date: yesterday });
     if (!setTool.text.includes("180 × 8") || (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, yesterday)) })).length !== 3) throw new Error(`body_log_set adds a set to yesterday's session: ${setTool.text}`);
     const weighTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.2, bodyFat: 21.5, date: yesterday, time: "07:00" });
@@ -1132,7 +1157,8 @@ async function main() {
       for (const path of ["/body", "/body/foods", "/body/foods/find", "/body/pantry", "/body/shopping", "/body/training", "/body/training/routines", "/body/weight", "/body/week", "/body/sleep", "/body/practices", "/body/insights", "/body/settings"]) {
         await phone.goto(`${base}${path}`);
         await phone.locator("main").waitFor({ timeout: 30000 });
-        const cut = await phone.locator('main .truncate, main [class*="line-clamp"], main .text-ellipsis').count();
+        // A chart's tick labels (dates under the bars, main's shared chart) are not a member's own words; everything else wraps.
+        const cut = await phone.locator('main .truncate:not([data-tick]), main [class*="line-clamp"], main .text-ellipsis').count();
         if (cut) throw new Error(`${path} cuts text off with an ellipsis (${cut} places); a member's own words wrap instead`);
       }
       await phone.context().close();
@@ -1189,7 +1215,22 @@ async function main() {
         await press(client, '[data-testid="history-dry"]', async () => (await client.locator('[data-testid="history-preview"]').count()) > 0, "the dry run");
         return client.locator('[data-testid="history-preview"]');
       };
-      const pv = await dryRun();
+      // Rev 296: Maya logged her own sets, so "Day types only" is ticked by default; the full run below unticks it first.
+      await client.goto(`${base}/body/import`);
+      await client.locator('[data-testid="history-day-types"]').waitFor({ timeout: 30000 });
+      if (!(await client.locator('[data-testid="history-day-types"]').isChecked())) throw new Error("a member with their own history sees Day types only ticked");
+      const dryRunFull = dryRun;
+      const dryRun2 = async (dayTypesOnly: boolean) => {
+        await client.goto(`${base}/body/import`);
+        await client.locator('[data-testid="history-base"]').waitFor({ timeout: 30000 });
+        if ((await client.locator('[data-testid="history-day-types"]').isChecked()) !== dayTypesOnly) await client.locator('[data-testid="history-day-types"]').click();
+        await fillExact(client, '[data-testid="history-base"]', HUMANOS_BASE);
+        await fillExact(client, '[data-testid="history-token"]', HUMANOS_TOKEN);
+        await press(client, '[data-testid="history-dry"]', async () => (await client.locator('[data-testid="history-preview"]').count()) > 0, "the dry run");
+        return client.locator('[data-testid="history-preview"]');
+      };
+      void dryRunFull;
+      const pv = await dryRun2(false);
       for (const [attr, want] of [["data-weigh-ins", expected.weighIns], ["data-sessions", expected.sessions], ["data-sets", expected.sets], ["data-exercises", expected.exercises], ["data-routines", expected.routines], ["data-skipped", expected.skipped]] as const) if ((await pv.getAttribute(attr)) !== String(want)) throw new Error(`the dry run's ${attr} is the mapper's (${want}), got ${await pv.getAttribute(attr)}`);
       if ((await client.locator('[data-testid="history-session"]').count()) !== 4 || (await client.locator('[data-testid="history-session"][data-date="2026-09-26"]').textContent())?.includes("read from the notes") !== true || (await client.locator('[data-testid="history-session"][data-date="2026-04-10"]').count())) throw new Error("the dry run lists each day and says where its sets came from; the Off Day drafts never appear");
       if ((await client.locator('[data-testid="history-exercises"]').textContent())?.includes("Skullcrushers") !== true) throw new Error("a shouted exercise name comes over in title case");
@@ -1213,9 +1254,24 @@ async function main() {
       await client.locator('[data-testid="training-exercise"]').first().waitFor({ timeout: 30000 });
       if ((await client.locator('[data-testid="training-set"]').count()) !== 5) throw new Error("Training shows the imported day's five sets");
       // Again: everything already in, so Approve has nothing to do.
-      const again = await dryRun();
+      const again = await dryRun2(false);
       if ((await again.getAttribute("data-weigh-ins")) !== "0" || (await again.getAttribute("data-sessions")) !== "0" || (await again.getAttribute("data-exercises")) !== "0" || (await again.getAttribute("data-routines")) !== "0") throw new Error("a second run finds everything already in");
       if (!(await client.locator('[data-testid="history-approve"]').isDisabled())) throw new Error("with nothing new, Approve is shut");
+      // Day types only: with a day type named like the Journal's routine, the plan names the days that take it and nothing else; Approve writes just those.
+      const { newId: freshId } = await import("@/lib/ids");
+      const legType = { id: freshId(), workspaceId: mem.workspaceId, userId: maya.id, name: "Leg Day", order: 9 };
+      await db.insert(schema.bodyDayTypes).values(legType);
+      const onlyDays = await dryRun2(true);
+      const daysPlanned = Number(await onlyDays.getAttribute("data-days"));
+      if (!(daysPlanned > 0) || (await onlyDays.getAttribute("data-sessions")) !== "0" || (await onlyDays.getAttribute("data-weigh-ins")) !== "0" || (await onlyDays.getAttribute("data-exercises")) !== "0") throw new Error(`day types only plans days and nothing else: ${daysPlanned} days`);
+      const setsBeforeDays = (await db.query.bodySets.findMany({ where: mine(schema.bodySets) })).length;
+      await press(client, '[data-testid="history-approve"]', async () => new RegExp(`done=${daysPlanned}\\b`).test(client.url()), "day types written");
+      if ((await db.query.bodySets.findMany({ where: mine(schema.bodySets) })).length !== setsBeforeDays) throw new Error("day types only writes no sets");
+      const legDays = await db.query.bodyDays.findMany({ where: and(mine(schema.bodyDays), eq(schema.bodyDays.dayTypeId, legType.id)) });
+      if (legDays.length !== daysPlanned || !legDays.some((d) => d.date === "2026-09-26")) throw new Error(`the Leg Day sessions take the Leg Day day type: ${legDays.length} of ${daysPlanned}`);
+      // Back out the day type and its days, so the rest of the walk sees the library it built.
+      await db.delete(schema.bodyDays).where(and(mine(schema.bodyDays), eq(schema.bodyDays.dayTypeId, legType.id)));
+      await db.delete(schema.bodyDayTypes).where(eq(schema.bodyDayTypes.id, legType.id));
       const { methods, paths } = (await (await fetch(`http://localhost:${mockPort}/__methods`)).json()) as { methods: string[]; paths: string[] };
       if (methods.some((m) => m !== "GET")) throw new Error(`the import only reads: ${methods.join(",")}`);
       if (paths.some((x) => x.includes("tblHPASSWORDS001"))) throw new Error("the import never asks for the Password Bank's rows");

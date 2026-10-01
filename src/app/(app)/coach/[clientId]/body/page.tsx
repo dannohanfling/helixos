@@ -6,7 +6,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { CapsLine, EntriesBySlot, MacroTiles, MarkKey } from "@/components/body/day-parts";
 import { addDays, formatDate, formatDateTime } from "@/lib/dates";
 import { MARK_ICON, MARK_WORD } from "@/lib/engine/body";
-import { bodyDay, dayComposition, sharedClient, trainingDay } from "@/lib/queries/body";
+import { bodyDay, coachDayExtras, dayComposition, sharedClient, trainingDay } from "@/lib/queries/body";
 import { fmtMetric } from "@/lib/engine/body-scale";
 import { fmtSet } from "@/lib/engine/body-training";
 import { addBodyCommentAction } from "@/lib/actions/body";
@@ -39,7 +39,7 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
   const today = client.today;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
   // Read only after sharedClient said shared, like the day itself.
-  const [d, t, figure] = await Promise.all([bodyDay(v.workspace.id, client.userId, date, today), trainingDay(v.workspace.id, client.userId, date), dayComposition(v.workspace.id, client.userId, date)]);
+  const [d, t, figure, extras] = await Promise.all([bodyDay(v.workspace.id, client.userId, date, today), trainingDay(v.workspace.id, client.userId, date), dayComposition(v.workspace.id, client.userId, date), coachDayExtras(v.workspace.id, client.userId, date, today)]);
   if (!d) return null;
   const prev = addDays(date, -1);
   const next = addDays(date, 1);
@@ -107,6 +107,28 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
             </Card>
           ) : null}
         </div>
+        <div className="space-y-4">
+          {/* Sleep and habits (Danno, 1 Oct): shown while sharing is on, like the day; the health log never. */}
+          {extras.sleep ? (
+            <Card title="Sleep and recovery">
+              <p className="text-sm tabular text-ink-2" data-testid="coach-sleep">
+                {[extras.sleep.hours ? `🛌 ${extras.sleep.hours}` : null, extras.sleep.score != null ? `score ${extras.sleep.score}` : null, extras.sleep.recovery != null ? `recovery ${extras.sleep.recovery}%` : null, extras.sleep.strain != null ? `strain ${extras.sleep.strain}` : null, extras.sleep.rhr != null ? `${extras.sleep.rhr} bpm` : null, extras.sleep.hrv != null ? `HRV ${extras.sleep.hrv}` : null].filter(Boolean).join(" · ")}
+              </p>
+            </Card>
+          ) : null}
+          {extras.habits.length ? (
+            <Card title="Practices">
+              <ul className="space-y-0.5 text-sm" data-testid="coach-habits">
+                {extras.habits.map((h) => (
+                  <li key={h.id} className="flex flex-wrap items-center gap-2">
+                    <span className={h.kept ? "" : "text-ink-3"}>{h.kept ? "✓" : "○"}</span>
+                    <span className="break-words">{h.name}</span>
+                    {h.valueText ? <span className="tabular text-ink-3">{h.valueText}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
         <Card title="Comments on this day">
           {d.comments.length ? (
             <ul className="mb-3 space-y-2 text-sm" data-testid="coach-body-comments">
@@ -129,6 +151,7 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
             </SubmitButton>
           </form>
         </Card>
+        </div>
       </div>
     </>
   );

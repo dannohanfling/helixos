@@ -110,12 +110,12 @@ describe("Body's Airtable history (rev 237 phase 7)", () => {
   });
   it("the plan says new or already in, per weigh-in, day, exercise and routine, and the cut-off date narrows it", () => {
     const p = buildHistoryPlan(src, none, { notes: true, from: null });
-    expect(historySummary(p)).toEqual({ weighIns: 3, weighInsHave: 0, sessions: 5, sessionsHave: 0, sets: 20, exercises: 10, routines: 2, skipped: 1, unread: 1 });
+    expect(historySummary(p)).toEqual({ weighIns: 3, weighInsHave: 0, sessions: 5, sessionsHave: 0, sets: 20, exercises: 10, routines: 2, skipped: 1, unread: 1, days: 0 });
     expect(p.exercises.map((e) => e.name)).toEqual(["Back Squat", "Dumbbell Flat Press", "Lat Pulldown", "Leg Curl", "Leg Extension", "Leg Press", "Pushups", "Romanian Deadlift", "Skullcrushers", "Squats"]);
     expect(p.sessions.map((x) => x.dayTypeId)).toEqual([null, null, null, null, null]);
     const some: Existing = { exercises: new Map([["squats", "x1"], ["leg curl", "x2"]]), routines: new Set(["leg day"]), sessionDates: new Set(["2026-04-12", "2026-03-30", "2026-04-08", "2026-04-15"]), readingIds: new Set([readingIdFor("recOLD0000000001")]), dayTypes: new Map([["leg day", "dt1"]]) };
     const q = buildHistoryPlan(src, some, { notes: true, from: null });
-    expect(historySummary(q)).toEqual({ weighIns: 2, weighInsHave: 1, sessions: 1, sessionsHave: 4, sets: 8, exercises: 4, routines: 1, skipped: 1, unread: 1 });
+    expect(historySummary(q)).toEqual({ weighIns: 2, weighInsHave: 1, sessions: 1, sessionsHave: 4, sets: 8, exercises: 4, routines: 1, skipped: 1, unread: 1, days: 2 });
     // The imported day's routine names a day type the member has: the plan says which.
     expect(q.sessions.find((x) => x.date === "2026-09-26")?.dayTypeId).toBe("dt1");
     expect(q.exercises).toEqual([
@@ -128,5 +128,11 @@ describe("Body's Airtable history (rev 237 phase 7)", () => {
     const r = buildHistoryPlan(src, none, { notes: true, from: "2026-09-01" });
     expect(r.weighIns.map((w) => w.date)).toEqual(["2026-09-20"]);
     expect(r.sessions.map((s) => s.date)).toEqual(["2026-09-26"]);
+    // Day types only (rev 296): the sessions are read for their day types, already in or not; nothing else is planned.
+    const d = buildHistoryPlan(src, some, { notes: true, from: null, dayTypesOnly: true });
+    expect(d.dayTypesOnly).toBe(true);
+    expect([d.weighIns, d.skippedWeighIns, d.exercises, d.routines]).toEqual([[], [], [], []]);
+    expect(d.sessions.length).toBe(5);
+    expect(historySummary(d)).toMatchObject({ weighIns: 0, sessions: 1, sessionsHave: 4, exercises: 0, routines: 0, days: 2 });
   });
 });

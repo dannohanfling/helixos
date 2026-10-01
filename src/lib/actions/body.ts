@@ -757,7 +757,7 @@ async function prepareHistory(v: Viewer, workspaceId: string, userId: string, f:
   }
   if (read.missing.includes("journal")) return { error: "This base has no Journal table. Check the base id." };
   const existing = await existingHistory(workspaceId, userId);
-  const plan = buildHistoryPlan(read.source, existing, { notes: str(f, "notes") === "1", from: from || null });
+  const plan = buildHistoryPlan(read.source, existing, { notes: str(f, "notes") === "1", from: from || null, dayTypesOnly: str(f, "dayTypesOnly") === "1" });
   plan.missing = read.missing;
   const key = createHash("sha256").update(JSON.stringify([userId, plan])).digest("hex").slice(0, 32);
   return { plan, existing, preview: { key, summary: historySummary(plan), plan } };

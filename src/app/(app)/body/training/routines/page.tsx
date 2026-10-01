@@ -32,8 +32,9 @@ function ExerciseFields({ exercise }: { exercise?: schema.BodyExercise }) {
   );
 }
 
-function RoutineForm({ routine, lib, types }: { routine?: TrainingLibrary["routines"][number]; lib: TrainingLibrary; types: schema.BodyDayType[] }) {
-  const rows = Array.from({ length: Math.max(ROUTINE_ROWS, (routine?.items.length ?? 0) + 2) }, (_, i) => routine?.items[i] ?? null);
+function RoutineForm({ routine, lib, types, rowCount }: { routine?: TrainingLibrary["routines"][number]; lib: TrainingLibrary; types: schema.BodyDayType[]; rowCount: number }) {
+  // Rev 296: seven- and eight-exercise days are normal, so "Add rows" (?rows=) grows the form; it never shrinks below what a routine has.
+  const rows = Array.from({ length: Math.max(rowCount, (routine?.items.length ?? 0) + 2) }, (_, i) => routine?.items[i] ?? null);
   // A routine keeps an archived exercise it already has; the picker otherwise offers only live ones.
   const pick = (id?: string) => lib.exercises.concat(id && !lib.exercises.some((e) => e.id === id) && lib.byId.has(id) ? [lib.byId.get(id)!] : []);
   return (
@@ -75,6 +76,11 @@ function RoutineForm({ routine, lib, types }: { routine?: TrainingLibrary["routi
           <input name={`item_${i}_reps`} className="field py-1 text-sm" defaultValue={item?.reps ?? ""} maxLength={20} placeholder="8–10" aria-label={`Reps ${i + 1}`} />
         </div>
       ))}
+      {rows.length < 20 ? (
+        <Link href={`/body/training/routines?rows=${Math.min(20, rows.length + 2)}${routine ? `#routine-${routine.id}` : ""}`} className="text-xs text-ink-2 underline" data-testid="routine-add-rows">
+          + Add rows
+        </Link>
+      ) : null}
       <SubmitButton className="btn btn-humanos btn-sm" pendingText="Saving…">
         Save routine
       </SubmitButton>
@@ -82,10 +88,11 @@ function RoutineForm({ routine, lib, types }: { routine?: TrainingLibrary["routi
   );
 }
 
-export default async function TrainingRoutinesPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function TrainingRoutinesPage({ searchParams }: { searchParams: Promise<{ error?: string; rows?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
+  const rowCount = Math.min(20, Math.max(ROUTINE_ROWS, Number(sp.rows) || ROUTINE_ROWS));
   if (!(await bodySettingsFor(v.workspace.id, v.user.id))) redirect("/body");
   const [lib, types] = await Promise.all([trainingLibrary(v.workspace.id, v.user.id), dayTypesFor(v.workspace.id, v.user.id)]);
   const typeName = new Map(types.map((t) => [t.id, t.name]));
@@ -160,7 +167,7 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
                   </form>
                 </div>
                 <Disclosure summary={<span className="text-xs text-ink-3 underline">Edit</span>}>
-                  <RoutineForm routine={r} lib={lib} types={types} />
+                  <RoutineForm routine={r} lib={lib} types={types} rowCount={rowCount} />
                 </Disclosure>
               </li>
             ))}
@@ -169,7 +176,7 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
           <p className="text-sm text-ink-2">No routines yet.</p>
         )}
         <Disclosure summary={<span className="btn btn-soft btn-sm">＋ New routine</span>} className="mt-3" open={lib.exercises.length > 0 && !lib.routines.length}>
-          {lib.exercises.length ? <RoutineForm lib={lib} types={types} /> : <p className="text-sm text-ink-2">Add an exercise first.</p>}
+          {lib.exercises.length ? <RoutineForm lib={lib} types={types} rowCount={rowCount} /> : <p className="text-sm text-ink-2">Add an exercise first.</p>}
         </Disclosure>
       </Card>
     </>
