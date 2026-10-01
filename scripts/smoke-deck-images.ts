@@ -160,7 +160,7 @@ async function main() {
     const emptyZip = await JSZip.loadAsync(emptyBody);
     const emptyCover = await emptyZip.file("ppt/slides/slide1.xml")!.async("string");
     if (/<p:pic>/.test(emptyCover)) throw new Error("no picture on the cover before one is attached");
-    if (!emptyCover.includes('<a:prstDash val="dash"/>') || !emptyCover.includes('<a:srgbClr val="D92D20"/>') || !emptyCover.includes("Add a photo: you or the person in this beat.")) throw new Error("the empty slot is a dashed frame with red text saying what to add");
+    if (!emptyCover.includes('<a:prstDash val="dash"/>') || !emptyCover.includes('<a:srgbClr val="D92D20"/>') || !emptyCover.includes("Add a photo of you: on stage, or on a call.")) throw new Error("the empty slot is a dashed frame with red text saying what to add");
     const dashed = boxes(emptyCover).find((b) => within(b.cx / EMU, COVER_FRAME.w) && within(b.cy / EMU, COVER_FRAME.h) && within(b.x / EMU, COVER_FRAME.x) && within(b.y / EMU, COVER_FRAME.y));
     if (!dashed) throw new Error(`the placeholder frame is the picture's frame: ${JSON.stringify(boxes(emptyCover))}`);
     const RED = { r: 0xd9, g: 0x2d, b: 0x20 };
@@ -206,7 +206,7 @@ async function main() {
     if (!media.length) throw new Error("the coach's picture is embedded in the file");
     const slide1 = await zip.file("ppt/slides/slide1.xml")!.async("string");
     if (!/<p:pic>/.test(slide1)) throw new Error("the cover slide carries the picture");
-    if (slide1.includes('<a:srgbClr val="D92D20"/>') || slide1.includes("Add a photo:")) throw new Error("once the slot is filled, the placeholder is gone and the picture sits in its frame");
+    if (slide1.includes('<a:srgbClr val="D92D20"/>') || slide1.includes("Add a photo of you")) throw new Error("once the slot is filled, the placeholder is gone and the picture sits in its frame");
     for (const b of boxes(slide1)) {
       if (b.x < 0 || b.y < 0 || b.x + b.cx > SLIDE_W + 1 || b.y + b.cy > SLIDE_H + 1) throw new Error(`a box on the cover runs off the slide: ${JSON.stringify(b)}`);
     }

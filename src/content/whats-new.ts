@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 44,
+    date: "2026-10-01",
+    title: "Picture suggestions that name what to show",
+    lines: [
+      "The Deck step now suggests a picture from what the slide says: a line with a figure (\"602 comments on my post\", \"98.2% opened\", \"$114,400\") asks for a screenshot with that figure circled; a line naming your framework, system or funnel asks for your own diagram; before and after asks for the two photos; comments or DMs ask for a wall of them. A line that names nothing to show asks for nothing.",
+      "The cover asks for a photo of you on stage or on a call, each origin beat names its moment, and a story asks for the person it is about. Suggestions are spread out: never more than two picture slides in a row.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 43,
     date: "2026-10-01",
     title: "Slides say your words, never the wizard's labels",

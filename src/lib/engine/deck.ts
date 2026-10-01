@@ -8,6 +8,7 @@ import { formatPrice } from "./offer-score";
 import { FACE_CLASS_LABEL, cleanFace, currenciesIn, currencyConflicts, type FaceClass, type KeptOff } from "./deck-face";
 import { brandKitProblems, normaliseHex } from "./subject";
 import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type ResolvedProof, type SectionContext, type WebinarContext } from "./webinar-context";
+import { COVER_WHAT, STORY_WHAT, originWhat, slotForLine, spreadSlots } from "./deck-slot-rules";
 
 /** The brand as the renderer reads it. Null renders the neutral kit and says so. */
 export type DeckKit = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
@@ -54,27 +55,13 @@ export const SLOT_WHAT: Record<SlotKind, string> = {
   diagram: "Your own diagram of this mechanism or framework.",
 };
 /**
- * What an empty slot's placeholder says on the face (§2): what to add, from the slot's own instruction. "Add a photo: you or
- * the person in this beat." Filling the slot later replaces the placeholder with the picture in the same frame.
+ * What an empty slot's placeholder says on the face (§2): "Add " and the slot's own instruction, which since §3 names the thing
+ * to show ("Add a screenshot with “602 comments on my post” circled."). Filling the slot replaces the placeholder with the
+ * picture in the same frame.
  */
 export function placeholderLine(slot: Slot): string {
-  const what = slot.what.trim().replace(/\.$/, "");
-  const strip = (lead: RegExp, prefix: string) => `${prefix}: ${what.replace(lead, "").trim()}.`;
-  switch (slot.kind) {
-    case "photo":
-      return strip(/^A photo of\s*/i, "Add a photo");
-    case "photo_pair":
-      return strip(/^Two photos side by side:\s*/i, "Add two photos side by side");
-    case "screenshot":
-    case "screenshot_callout":
-      return strip(/^A screenshot\s*/i, "Add a screenshot");
-    case "proof_wall":
-      return strip(/^A wall of\s*/i, "Add a wall of");
-    case "testimonial":
-      return strip(/^The client's photo\s*/i, "Add the client's photo");
-    case "diagram":
-      return strip(/^Your own diagram of\s*/i, "Add your own diagram of");
-  }
+  const what = slot.what.trim();
+  return `Add ${what.charAt(0).toLowerCase()}${what.slice(1)}`;
 }
 export type PlaceholderHit = { text: string; refuse: boolean; why: string };
 export type Slide = {
@@ -272,7 +259,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   const stackOrder = c.sections.find(isOfferStack)?.order ?? Infinity;
   // The footer runs from the offer onward: every slide of a section at or after the Offer Stack.
   const footerFor = (s: SectionContext) => (offer?.ctaFooter && s.order >= stackOrder ? offer.ctaFooter : null);
-  slides.push({ keptOff: [], slot: { key: "cover:photo", kind: "photo", what: SLOT_WHAT.photo }, n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
+  slides.push({ keptOff: [], slot: { key: "cover:photo", kind: "photo", what: COVER_WHAT }, n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
   // The opening contract, before any content: each of the coach's own lines is one slide; a line the coach left empty is not a
   // slide (omitted, listed on the Deck step), never a placeholder on a face. The order is the reference deck's.
   const openingOmitted: string[] = [];
@@ -301,10 +288,20 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
       const footer = footerFor(s);
       // One key point per slide, each under the section's eyebrow: the builder's own rule, kept by the exporter. A section set to
       // reveal builds instead: the first point as the line, then the same line with each further point added beneath it.
-      const pointSlides = (kind: SlideKind, extraOnFirst: string[] = []) =>
-        points.forEach((p, i) => slides.push(slideOf(s.buildStyle === "reveal" ? { n: n++, kind, s, headline: points[0], body: points.slice(1, i + 1), extraNotes: i === 0 ? extraOnFirst : [], footer } : { n: n++, kind, s, headline: p, extraNotes: i === 0 ? extraOnFirst : [], footer })));
+      // A key point's picture is read off its words (§3, deck-slot-rules.ts): a figure asks for a screenshot with it circled,
+      // a mechanism for a diagram, and a line that names nothing to show asks for nothing. Never on a price slide (the offer).
+      const pointSlot = (p: string, i: number): Slot | null => {
+        if (kind_ === "offer") return null;
+        const r = slotForLine(p);
+        return r ? { key: `${s.sectionKey}:kp${i}:${r.kind}`, kind: r.kind, what: r.what } : null;
+      };
+      let kind_: SlideKind = "section";
+      const pointSlides = (kind: SlideKind, extraOnFirst: string[] = []) => {
+        kind_ = kind;
+        points.forEach((p, i) => slides.push(slideOf(s.buildStyle === "reveal" ? { n: n++, kind, s, headline: points[0], body: points.slice(1, i + 1), extraNotes: i === 0 ? extraOnFirst : [], footer, slot: i === 0 ? pointSlot(points[0], 0) : null } : { n: n++, kind, s, headline: p, extraNotes: i === 0 ? extraOnFirst : [], footer, slot: pointSlot(p, i) })));
+      };
       // The origin story's beats are the Credibility / Origin section's own slides, one each, before its key points.
-      if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer, slot: { key: `${s.sectionKey}:${b.key}:photo`, kind: "photo", what: SLOT_WHAT.photo } }));
+      if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer, slot: { key: `${s.sectionKey}:${b.key}:photo`, kind: "photo", what: originWhat(b.label) } }));
       if (isProofBlock(s)) {
         // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
         if (s.proof) slides.push({ ...slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial, proofId: s.proof.source === "bank" ? s.proof.id : undefined } }), proofKey: proofKeyOf(s.proof) });
@@ -321,7 +318,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
           const faces = beats.filter((b) => b.length <= HEADLINE_MAX_CHARS);
           const long = beats.filter((b) => b.length > HEADLINE_MAX_CHARS);
           faces.forEach((beat, i) =>
-            slides.push(slideOf({ n: n++, kind: "story", s, headline: beat, eyebrow: `${s.name} · story`, footer, extraNotes: [`Story: ${s.story!.name}`, ...(i === faces.length - 1 ? long.map((b) => `Beat too long for a face: ${b}`) : [])], slot: i === 0 ? { key: `${s.sectionKey}:photo`, kind: "photo", what: SLOT_WHAT.photo } : null }))
+            slides.push(slideOf({ n: n++, kind: "story", s, headline: beat, eyebrow: `${s.name} · story`, footer, extraNotes: [`Story: ${s.story!.name}`, ...(i === faces.length - 1 ? long.map((b) => `Beat too long for a face: ${b}`) : [])], slot: i === 0 ? { key: `${s.sectionKey}:photo`, kind: "photo", what: STORY_WHAT } : null }))
           );
           if (!faces.length) pointSlides("section", [`Story: ${s.story.name}`, ...long.map((b) => `Beat too long for a face: ${b}`)]);
         } else pointSlides("section");
@@ -445,6 +442,8 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   for (const p of kitProblems) refused.push(`Brand kit: ${p}`);
   if (!kitIn) warnings.push("No brand kit on this workspace: rendered black on white with no brand applied. Add the kit on Settings.");
   if (kitIn && !normaliseHex(kitIn.placeholder)) warnings.push(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
+  // The spread (§3): never more than two picture slots in a row; the cover and a testimonial are never dropped.
+  slides.splice(0, slides.length, ...spreadSlots(slides));
   return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, keptOff, repeats, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
 }
 

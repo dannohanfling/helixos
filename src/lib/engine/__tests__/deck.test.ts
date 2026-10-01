@@ -345,18 +345,27 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
     expect(offerSlides.filter((s) => s.headline !== offer.offer.name).every((s) => !s.inverse)).toBe(true);
   });
 
-  it("picture slots are suggested by rule from the slide kind, each with its fixed instruction, and never on the price slide", () => {
-    const d = deckSlides(openCtx({ credibility_origin: undefined }), kit);
+  it("picture slots are suggested by rule from the slide's words (§3), each naming what to show, never on the price slide, never three in a row", () => {
+    const d = deckSlides(ctx(base({ problem_frame: { keyPoints: "602 comments on my post in 48 hours\nMost leaders never name the drift." } }), [{ type: "vehicle", fromBelief: "a", toBelief: "b", proofId: "p1", storyAssetId: "s1" }]), kit);
     const slots = suggestedSlots(d);
     const kinds = new Set(slots.map((x) => x.slot.kind));
     expect(kinds.has("photo")).toBe(true); // cover and story
     expect(kinds.has("testimonial")).toBe(true); // the proof slide
-    expect(kinds.has("screenshot_callout")).toBe(false); // no evidence wired in this ctx
-    // The cover carries a photo slot; the price slide carries none.
-    expect(d.slides.find((s) => s.kind === "cover")!.slot?.kind).toBe("photo");
+    // A key point with a figure asks for a screenshot with it circled; a line that names nothing to show asks for nothing.
+    const figure = d.slides.find((s) => s.headline.startsWith("602 comments"))!;
+    expect(figure.slot).toEqual({ key: `${figure.sectionKey}:kp0:screenshot_callout`, kind: "screenshot_callout", what: "A screenshot with “602 comments on my post” circled." });
+    expect(d.slides.find((s) => s.headline === "Most leaders never name the drift.")!.slot).toBeNull();
+    // The cover carries a photo slot naming what to shoot; the price slide carries none.
+    expect(d.slides.find((s) => s.kind === "cover")!.slot).toEqual({ key: "cover:photo", kind: "photo", what: "A photo of you: on stage, or on a call." });
     expect(d.slides.filter((s) => s.kind === "offer").every((s) => s.slot === null)).toBe(true);
-    // Every slot's instruction is the fixed one for its kind, never generated.
-    for (const x of slots) expect(x.slot.what).toBe(SLOT_WHAT[x.slot.kind]);
+    // Every instruction names its subject, from a fixed lead and the slide's own words, never generated.
+    for (const x of slots) expect(x.slot.what).toMatch(/^(A photo of|A screenshot with|Your own diagram of|Two photos side by side|A wall of your real|The client's photo)/);
+    // Never three picture slots in a row.
+    let run = 0;
+    for (const s of d.slides) {
+      run = s.slot ? run + 1 : 0;
+      expect(run).toBeLessThanOrEqual(2);
+    }
   });
 
   it("a testimonial slot carries its bank proof's id, so its photo can only be that approved proof's own", () => {
@@ -379,16 +388,16 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
     const empty = renderPlan(d);
     const cover = empty[0];
     expect(cover.imageFrame).toBeNull();
-    expect(cover.placeholderSlot).toEqual({ frame: slotFrame("cover"), text: "Add a photo: you or the person in this beat.", color: PLACEHOLDER_RED });
+    expect(cover.placeholderSlot).toEqual({ frame: slotFrame("cover"), text: "Add a photo of you: on stage, or on a call.", color: PLACEHOLDER_RED });
     expect(PLACEHOLDER_RED).not.toBe(kit.accent);
     // A slide with no suggested slot carries no placeholder.
     expect(empty.filter((p) => !d.slides[p.n - 1].slot).every((p) => p.placeholderSlot === null)).toBe(true);
     const filled = renderPlan(d, new Set([1]))[0];
     expect(filled.placeholderSlot).toBeNull();
     expect(filled.imageFrame).toEqual(slotFrame("cover"));
-    expect(placeholderLine({ key: "k", kind: "screenshot_callout", what: SLOT_WHAT.screenshot_callout })).toBe("Add a screenshot: with the number or line that matters circled.");
-    expect(placeholderLine({ key: "k", kind: "testimonial", what: SLOT_WHAT.testimonial })).toBe("Add the client's photo: beside their approved quote.");
-    expect(placeholderLine({ key: "k", kind: "diagram", what: SLOT_WHAT.diagram })).toBe("Add your own diagram of: this mechanism or framework.");
+    expect(placeholderLine({ key: "k", kind: "screenshot_callout", what: "A screenshot with “602 comments on my post” circled." })).toBe("Add a screenshot with “602 comments on my post” circled.");
+    expect(placeholderLine({ key: "k", kind: "testimonial", what: SLOT_WHAT.testimonial })).toBe("Add the client's photo beside their approved quote.");
+    expect(placeholderLine({ key: "k", kind: "diagram", what: "Your own diagram of the system this slide names." })).toBe("Add your own diagram of the system this slide names.");
   });
 
   it("renderPlan draws no picture frame by default, and one only on the slides told to carry an image", () => {

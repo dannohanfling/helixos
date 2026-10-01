@@ -97,7 +97,9 @@ async function main() {
     const secs = await db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, webinarId) });
     const targets = secs.filter((x) => !/offer|q_a/.test(x.sectionKey)).sort((a, b) => a.order - b.order);
     if (targets.length < examples.length) throw new Error(`enough sections to carry one example each: ${targets.length} for ${examples.length}`);
-    for (const [i, ex] of examples.entries()) await db.update(schema.webinarSections).set({ keyPoints: `Line ${i + 1} the presenter says\n${ex}`, status: "drafted", origin: "coach" }).where(eq(schema.webinarSections.id, targets[i].id));
+    // The first section also carries a figure (§3): a key point that names a result asks for a screenshot with it circled.
+    const FIGURE_LINE = "602 comments on my post in 48 hours";
+    for (const [i, ex] of examples.entries()) await db.update(schema.webinarSections).set({ keyPoints: `Line ${i + 1} the presenter says\n${ex}${i === 0 ? `\n${FIGURE_LINE}` : ""}`, status: "drafted", origin: "coach" }).where(eq(schema.webinarSections.id, targets[i].id));
     const expectedKept = examples.flatMap((ex) => cleanFace(ex).kept.map((k) => k.text));
     await page.goto(`${wizardBase}?step=deck`);
     await page.locator('[data-testid="deck-kept-off"]').waitFor({ timeout: 20000 });
@@ -106,6 +108,17 @@ async function main() {
     for (const k of expectedKept) if (!keptLines.some((l) => l.includes(`“${k}”`))) throw new Error(`the Deck step names "${k}"`);
     const stepHeads = await page.locator('[data-testid="deck-slide"] [data-testid="deck-headline"]').allInnerTexts();
     for (const h of stepHeads) if (faceHits(h).length) throw new Error(`a Deck step headline carries ${faceHits(h).join(", ")}: "${h}"`);
+    // §3: the figure's slide asks for a screenshot with that figure circled; no three slides in a row ask for a picture.
+    const figureCard = page.locator('[data-testid="deck-slide"]', { has: page.locator(`[data-testid="deck-headline"]:text-is("${FIGURE_LINE}")`) });
+    const figureSlot = figureCard.locator('[data-testid="deck-slot"]');
+    if ((await figureSlot.getAttribute("data-kind")) !== "screenshot_callout" || !(await figureSlot.innerText()).includes("“602 comments on my post” circled")) throw new Error(`a key point with a figure asks for a screenshot with the figure circled: ${await figureSlot.innerText().catch(() => "no slot")}`);
+    const slotRuns = await page.locator('[data-testid="deck-slide"]').evaluateAll((cards) => cards.map((c) => Boolean(c.querySelector('[data-testid="deck-slot"]'))));
+    let run = 0;
+    for (const has of slotRuns) {
+      run = has ? run + 1 : 0;
+      if (run > 2) throw new Error("never three slides in a row ask for a picture");
+    }
+    console.log(`✓ §3: "${FIGURE_LINE}" asks for a screenshot with the figure circled; ${slotRuns.filter(Boolean).length} of ${slotRuns.length} slides ask for a picture, never three in a row`);
     console.log(`✓ the Deck step keeps ${expectedKept.length} lines off the slides, one per example in deck-face.ts, each named`);
 
     // The offer: the demo client's own, linked, and a line in the offer stack typed in a currency that is not the offer's.
