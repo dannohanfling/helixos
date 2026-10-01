@@ -34,7 +34,7 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
   community_loyalty: {
     name: "Community Loyalty (uChat)",
     icon: "🤖",
-    blurb: "The chatbot platform. Its bot flows call the inbound webhook below when a pass is installed, points are earned, or a chat asks to be linked to a member. With web chat on, your assistant's chat bubble is on every member's HelixOS pages, signed in as them, and HelixOS posts each member's progress to your bot (never Body).",
+    blurb: "The chatbot platform. Its bot flows call the inbound webhook below when a pass is installed, points are earned, or a chat asks to be linked to a member. With web chat on, your assistant's chat bubble is on every member's HelixOS pages, signed in as them, and HelixOS posts each member's progress to your bot (never HumanOS).",
     fields: [
       { key: "chatOn", label: "Web chat on", hint: "The chat bubble on every member's pages, never while you're switched into a client. Needs the widget id and secret below.", toggle: true },
       { key: "chatWidgetId", label: "Web chat widget id", hint: "From the widget's script address: js/widget/<id>/float.js", pattern: "[a-z0-9]{6,40}" },

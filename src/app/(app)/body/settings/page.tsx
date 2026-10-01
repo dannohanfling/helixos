@@ -285,16 +285,16 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
         {sp.whoop === "connected" ? <p className="mt-2 text-xs text-good" role="status" data-testid="whoop-just-connected">Connected. The last 30 days are in; Sleep and Training show them.</p> : sp.whoop === "synced" ? <p className="mt-2 text-xs text-good" role="status" data-testid="whoop-just-synced">Synced.</p> : null}
       </Card>
 
-      <Card className="mb-8" title="Download your Body data" id="download">
-        <p className="text-sm text-ink-2">One file with everything in Body: your targets and day types, foods, saved meals, every logged day, your coach&apos;s comments and your sharing log.</p>
+      <Card className="mb-8" title="Download your HumanOS data" id="download">
+        <p className="text-sm text-ink-2">One file with everything in HumanOS: your targets and day types, foods, saved meals, every logged day, your coach&apos;s comments and your sharing log.</p>
         <a href="/api/export?format=json&scope=body" className="btn btn-soft btn-sm mt-3" data-testid="body-export">
           Download
         </a>
       </Card>
 
       <section className="card border-danger p-4 sm:p-5" id="delete" data-testid="body-delete-card">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-danger">Delete all Body data</h2>
-        <p className="text-sm text-ink-2">This removes every Body row: targets, foods, meals, logged days, comments and your sharing log. It can&apos;t be undone, so download your data first if you might want it. The rest of your HelixOS is untouched.</p>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-danger">Delete all HumanOS data</h2>
+        <p className="text-sm text-ink-2">This removes every HumanOS row: targets, foods, meals, logged days, comments and your sharing log. It can&apos;t be undone, so download your data first if you might want it. The rest of your HelixOS is untouched.</p>
         <EraseBodyForm action={eraseBodyAction} />
       </section>
     </>

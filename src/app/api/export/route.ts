@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   }
   // Body is private to the member (rev 179): a coach's export of a client never includes it, whether or not it's shared.
   const allowed = userId === v.user.id ? EXPORT_TABLES : COACH_EXPORT_TABLES;
-  if (bodyOnly && userId !== v.user.id) return NextResponse.json({ error: "only the member can export their Body data" }, { status: 403 });
+  if (bodyOnly && userId !== v.user.id) return NextResponse.json({ error: "only the member can export their HumanOS data" }, { status: 403 });
   // Body ships dark (rev 195): for a member whose Body is off, the Body export doesn't exist.
   if (bodyOnly && !v.membership.bodyEnabled) return NextResponse.json({ error: "not found" }, { status: 404 });
   const stamp = new Date().toISOString().slice(0, 10);

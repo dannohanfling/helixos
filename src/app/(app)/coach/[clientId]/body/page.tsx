@@ -11,7 +11,7 @@ import { fmtMetric } from "@/lib/engine/body-scale";
 import { fmtSet } from "@/lib/engine/body-training";
 import { addBodyCommentAction } from "@/lib/actions/body";
 
-export const metadata = { title: "Client's Body" };
+export const metadata = { title: "Client's HumanOS" };
 
 /**
  * A coach's read-only view of one client's Body day, plus a comment on the day. Only while the client shares: otherwise this page
@@ -27,7 +27,7 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
   if (!client.shared) {
     return (
       <>
-        <PageHeader title="Body" action={<Link href={`/coach/${clientId}`} className="btn btn-ghost btn-sm">← Client</Link>} />
+        <PageHeader title="HumanOS" action={<Link href={`/coach/${clientId}`} className="btn btn-ghost btn-sm">← Client</Link>} />
         <Card>
           <p className="text-sm text-ink-2" data-testid="coach-body-private">
             🔒 This client&apos;s Body data is private. They can choose to share it with you from their Body settings.
@@ -47,7 +47,7 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
   return (
     <>
       <PageHeader
-        title={`${client.name.split(" ")[0]}'s Body`}
+        title={`${client.name.split(" ")[0]}'s HumanOS`}
         subtitle="Shared with you, read-only. You can leave a comment on a day."
         action={
           <div className="flex items-center gap-2 text-sm">

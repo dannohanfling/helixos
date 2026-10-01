@@ -384,7 +384,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
 
         <div className="space-y-4">
           {body ? (
-            <Card title="Body" action={<Link href={`/coach/${m.id}/body`} className="text-xs text-ink-2 hover:underline" data-testid="coach-body-link">Their days →</Link>}>
+            <Card title="HumanOS" action={<Link href={`/coach/${m.id}/body`} className="text-xs text-ink-2 hover:underline" data-testid="coach-body-link">Their days →</Link>}>
               <p className="mb-2 text-xs text-ink-3">Shared with you by {u.name.split(" ")[0]}: read-only, comments on a day.</p>
               <ul className="space-y-0.5 text-sm" data-testid="coach-body-days">
                 {body.days.map((d) => (

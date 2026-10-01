@@ -245,7 +245,7 @@ const short = (s: string, n = 60) => (s.length > n ? `${s.slice(0, n - 1)}…` :
 const macroText = (t: Macros) => MACROS.map((m) => `${fmtMacro(m, t[m])} ${MACRO_LABEL[m]}`).join(", ");
 
 export function formatBodyForAi(x: BodyAiInput): string {
-  const lines = [`Body data the member lets you use to support them (today is ${x.today}):`];
+  const lines = [`HumanOS data the member lets you use to support them (today is ${x.today}):`];
   if (x.dayTypes.length) lines.push(`Targets by day type: ${x.dayTypes.map((d) => `${short(d.name, 40)}: ${MACROS.filter((m) => d.bands[m]).map((m) => `${fmtBand(m, d.bands[m]!)} ${MACRO_LABEL[m]}`).join(", ") || "no targets yet"}`).join("; ")}.`);
   if (x.days.length) lines.push(`Last ${x.days.length} days: ${x.days.map((d) => `${d.date}${d.dayType ? ` (${short(d.dayType, 40)})` : ""}: ${d.logged ? macroText(d.totals) : "nothing logged"}`).join("; ")}.`);
   if (x.todayEntries.length) lines.push(`Eaten today: ${x.todayEntries.slice(0, 20).map((e) => `${short(e.slot, 20)}: ${short(e.name)} (${e.items.slice(0, 8).map((i) => `${i.qty} ${short(i.unit, 12)} ${short(i.name, 40)}`).join(", ")}) = ${macroText(e.totals)}`).join("; ")}.`);

@@ -29,7 +29,7 @@ import { disconnectWhoop, syncWhoop } from "@/lib/body-whoop";
 import { WhoopError, whoopProblem } from "@/lib/whoop";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { nowIso, startOfWeek } from "@/lib/dates";
-import { bodyAccess, bodySettingsFor, groupReadings, isWorkspaceOwner } from "@/lib/queries/body";
+import { bodyAccess, bodySettingsFor, groupReadings } from "@/lib/queries/body";
 import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,20 +48,41 @@ async function setUp(v: Viewer): Promise<schema.BodySettings> {
   return settings;
 }
 
-/* ───────── The owner's beta switch ───────── */
+/* ───────── The HumanOS switch (rev 320/322) ───────── */
+
+/** Every on and off of HumanOS itself is a share-events row of kind humanos: who it was for, and who flipped it, in the note. */
+async function logHumanos(workspaceId: string, userId: string, on: boolean, by: "member" | "coach", coachName?: string | null): Promise<void> {
+  await db.insert(schema.bodyShareEvents).values({ id: newId(), workspaceId, userId, shared: on, kind: "humanos" });
+  await logSync({ workspaceId, userId, provider: "account", direction: "in", event: on ? "humanos.on" : "humanos.off", status: "received", note: by === "member" ? `HumanOS switched ${on ? "on" : "off"} by the member on Settings` : `HumanOS switched on by their coach${coachName ? ` (${coachName})` : ""} on the coach view` });
+}
 
 /**
- * "Show Body (beta) for me" (rev 209, item 4): the workspace owner turns Body on or off for their own membership, from Settings,
- * because the flag script needs production's database. Nobody else can: not a client, not another coach, not for anyone else.
- * Every change is logged. Not behind the Body flag: it is the flag.
+ * "Turn on HumanOS" (rev 320/322): any member, for their own membership only, from Settings. Off hides the group and keeps every
+ * row; on shows it as it was. Never from a switched-in coach (the client's own choice), and never for anyone else. Not behind
+ * the HumanOS flag: it is the flag. The two consent switches (coach sharing, AI use) are untouched either way.
  */
-export async function setBodyBetaAction(formData: FormData): Promise<void> {
-  const v = await requireCoach();
-  if (!(await isWorkspaceOwner(v))) redirect("/settings");
+export async function setHumanosAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is the client's own switch. They turn it on from their Settings, or you can from the coach view when they've given you working access." });
   const on = str(formData, "on") === "1";
   if (on === v.membership.bodyEnabled) return refresh();
   await db.update(schema.memberships).set({ bodyEnabled: on }).where(and(eq(schema.memberships.id, v.membership.id), eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.userId, v.user.id)));
-  await logSync({ workspaceId: v.workspace.id, userId: v.user.id, provider: "account", direction: "in", event: on ? "body.beta_on" : "body.beta_off", status: "received", note: `Body (beta) switched ${on ? "on" : "off"} by the workspace owner on Settings` });
+  await logHumanos(v.workspace.id, v.user.id, on, "member");
+  refresh();
+}
+
+/**
+ * The coach's path (Danno, rev 322): a coach turns HumanOS on for a client in their own workspace, only while that client's
+ * "Let my coach work in my HelixOS" is on; never off (that stays the client's), never for a removed client, never from a
+ * switched-in session. Turning it on shares nothing: the client's coach-sharing and AI switches stay where they were.
+ */
+export async function setClientHumanosAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  if (v.switchedInto) redirect("/coach");
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, str(formData, "membershipId")), eq(schema.memberships.workspaceId, v.workspace.id)) });
+  if (!m || m.role !== "client" || m.removedAt || !m.coachCanWork) redirect("/coach?error=" + encodeURIComponent("HumanOS can be switched on only for a client who has given you working access."));
+  if (m!.bodyEnabled) return refresh();
+  await db.update(schema.memberships).set({ bodyEnabled: true }).where(and(eq(schema.memberships.id, m!.id), eq(schema.memberships.workspaceId, v.workspace.id)));
+  await logHumanos(v.workspace.id, m!.userId, true, "coach", v.user.name);
   refresh();
 }
 
@@ -73,7 +94,7 @@ export async function setBodyBetaAction(formData: FormData): Promise<void> {
  * checklist on /body. Once only.
  */
 export async function setupBodyAction(): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   enabled(v);
   if (await bodySettingsFor(workspaceId, userId)) redirect("/body");
   const everyDay = newId();
@@ -160,7 +181,7 @@ export async function setBodyAiAction(formData: FormData): Promise<void> {
 /* ───────── Day types ───────── */
 
 export async function saveDayTypeAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   await setUp(v);
   const id = str(formData, "id");
   const name = str(formData, "name").slice(0, 60);
@@ -186,7 +207,7 @@ export async function saveDayTypeAction(formData: FormData): Promise<void> {
 
 /** A day type goes; days set to it fall back to the pattern, and the pattern and refeed rule forget it. The last one stays. */
 export async function deleteDayTypeAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   const settings = await setUp(v);
   const id = str(formData, "id");
   const types = await db.query.bodyDayTypes.findMany({ where: and(eq(schema.bodyDayTypes.workspaceId, workspaceId), eq(schema.bodyDayTypes.userId, userId)) });
@@ -205,7 +226,7 @@ export async function deleteDayTypeAction(formData: FormData): Promise<void> {
 
 /** Set one date's day type by hand (a swapped lift day, an unplanned refeed), or clear it back to the pattern. */
 export async function setBodyDayTypeAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   await setUp(v);
   const date = str(formData, "date");
   if (!DATE.test(date)) return;
@@ -224,7 +245,7 @@ export async function setBodyDayTypeAction(formData: FormData): Promise<void> {
 /* ───────── Foods and meals ───────── */
 
 export async function saveFoodAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   await setUp(v);
   const id = str(formData, "id");
   const name = str(formData, "name").slice(0, 80);
@@ -249,7 +270,7 @@ export async function saveFoodAction(formData: FormData): Promise<void> {
  * doubled. Back to the Find page with its name.
  */
 export async function saveFoundFoodAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   const settings = await setUp(v);
   const found = decodeFound(str(formData, "found"));
   if (!found) throw back("/body/foods/find", "That result couldn't be read. Search again.");
@@ -262,7 +283,7 @@ export async function saveFoundFoodAction(formData: FormData): Promise<void> {
 
 /** Archived foods leave the picker; meals and past days that use them keep working. */
 export async function archiveFoodAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   await setUp(v);
   await db.update(schema.bodyFoods).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyFoods.id, str(formData, "id")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
   refresh();
@@ -270,7 +291,7 @@ export async function archiveFoodAction(formData: FormData): Promise<void> {
 
 /** A meal's items come as item_<n>_food / item_<n>_qty pairs; a blank food or a zero quantity drops the row. */
 export async function saveMealAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   await setUp(v);
   const id = str(formData, "id");
   const name = str(formData, "name").slice(0, 80);
@@ -291,7 +312,7 @@ export async function saveMealAction(formData: FormData): Promise<void> {
 }
 
 export async function archiveMealAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   await setUp(v);
   await db.update(schema.bodyMeals).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyMeals.id, str(formData, "id")), and(eq(schema.bodyMeals.workspaceId, workspaceId), eq(schema.bodyMeals.userId, userId))));
   refresh();
@@ -309,7 +330,7 @@ function logTarget(formData: FormData, slots: string[]) {
 
 /** One tap on a saved meal: its default quantities, or the adjusted ones (qty_<n>, per item in order) when opened. */
 export async function logMealAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   const settings = await setUp(v);
   const { date, slot } = logTarget(formData, settings.mealSlots);
   const meal = await db.query.bodyMeals.findFirst({ where: and(eq(schema.bodyMeals.id, str(formData, "mealId")), and(eq(schema.bodyMeals.workspaceId, workspaceId), eq(schema.bodyMeals.userId, userId))) });
@@ -330,7 +351,7 @@ export async function logMealAction(formData: FormData): Promise<void> {
 
 /** A food × a quantity. */
 export async function logFoodAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   const settings = await setUp(v);
   const { date, slot } = logTarget(formData, settings.mealSlots);
   const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
@@ -353,7 +374,7 @@ export async function logFoodAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteEntryAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
   await setUp(v);
   await db.delete(schema.bodyEntries).where(and(eq(schema.bodyEntries.id, str(formData, "id")), and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId))));
   refresh();
@@ -362,7 +383,7 @@ export async function deleteEntryAction(formData: FormData): Promise<void> {
 /* ───────── B2, workouts (rev 182) ───────── */
 
 const TRAINING = "/body/training";
-const R = "Body is never open from a client's HelixOS.";
+const R = "HumanOS is never open from a client's HelixOS.";
 const trainingAt = (date: string) => `${TRAINING}?date=${date}`;
 
 /** Add or rename an exercise. Weighted logs weight × reps; bodyweight logs reps, with any added weight. */

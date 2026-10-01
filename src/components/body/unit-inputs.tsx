@@ -131,7 +131,7 @@ export function EraseBodyForm({ action }: { action: (fd: FormData) => Promise<vo
         <span className="label">Type DELETE</span>
         <input name="confirm" className="field w-28 py-1 text-sm" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} data-testid="body-erase-confirm" />
       </label>
-      <ConfirmDelete what="all your Body data" undo="Your targets, foods, meals, logged days, comments and sharing log go for good." testId="body-erase" disabled={typed !== "DELETE"} className="btn btn-sm border border-danger text-danger" />
+      <ConfirmDelete what="all your HumanOS data" undo="Your targets, foods, meals, logged days, comments and sharing log go for good." testId="body-erase" disabled={typed !== "DELETE"} className="btn btn-sm border border-danger text-danger" />
     </form>
   );
 }

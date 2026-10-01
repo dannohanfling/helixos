@@ -123,7 +123,9 @@ async function main() {
     await client.locator('main a[href="/today"]').waitFor({ timeout: 30000 });
     if ((await client.locator("main a").count()) < 10) throw new Error("the More page lists the menu to read");
     if (await client.locator('a[href="/body"], a[href="/body/foods"]').count()) throw new Error("no Body entry anywhere in the menu while Body is off");
-    if (/HumanOS/.test((await client.locator("main").textContent()) ?? "")) throw new Error("no HumanOS section at all in the menu while Body is off");
+    // Rev 320: while it's off, the HumanOS section holds exactly one entry, the way to the switch, and nothing of its pages.
+    if ((await client.locator('main a[href="/settings#humanos"]').count()) !== 1) throw new Error("while HumanOS is off, the menu's HumanOS section is one 'Turn on HumanOS' entry");
+    if ((await client.locator('main a[href^="/body"]').count()) !== 0) throw new Error("no HumanOS page in the menu while it is off");
     await client.goto(`${base}/today`);
     await client.locator("main h1, main h2").first().waitFor({ timeout: 30000 });
     if (await client.locator('[data-testid="today-body"], [data-testid="today-humanos"]').count()) throw new Error("no Body line or Log a meal on Today while Body is off");
@@ -1123,6 +1125,20 @@ async function main() {
     if (aiLog !== 2 || aiEvents.length !== 2) throw new Error(`both AI changes are logged and shown: ${aiEvents.length} logged, ${aiLog} shown`);
     console.log("✓ AI use: off by default (no Body data), on gives today's numbers and meals but never the coach's comment, off again stops it on the next request; independent of coach sharing; both changes logged. MCP tools: the day, foods, a meal, a food in grams, a set and a weigh-in logged on yesterday, an unknown food refused with the names, an exercise's history, the trend; refused with the switch off");
 
+    // ── Nothing a member reads or picks is cut off (1 Oct rule): no truncation class on any HumanOS page at phone width. ──
+    {
+      const phone = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+      await login(phone, maya.email);
+      for (const path of ["/body", "/body/foods", "/body/foods/find", "/body/pantry", "/body/shopping", "/body/training", "/body/training/routines", "/body/weight", "/body/week", "/body/sleep", "/body/practices", "/body/insights", "/body/settings"]) {
+        await phone.goto(`${base}${path}`);
+        await phone.locator("main").waitFor({ timeout: 30000 });
+        const cut = await phone.locator('main .truncate, main [class*="line-clamp"], main .text-ellipsis').count();
+        if (cut) throw new Error(`${path} cuts text off with an ellipsis (${cut} places); a member's own words wrap instead`);
+      }
+      await phone.context().close();
+      console.log("✓ no cut-off: thirteen HumanOS pages at phone width carry no truncation class");
+    }
+
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
     if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
@@ -1226,39 +1242,43 @@ async function main() {
     if (!(await client.locator('[data-testid="body-erased"]').count())) throw new Error("the page says it's deleted");
     console.log("✓ the member's export holds their Body data alone; delete-all removes every Body row");
 
-    // ── The owner's beta switch (rev 209): the workspace owner turns Body on for themselves from Settings; nobody else sees it. ──
-    const coachUser = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
-    const coachMem = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUser.id), eq(schema.memberships.workspaceId, mem.workspaceId)) }))!;
-    const betaEvents = async () => (await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, coachUser.id), eq(schema.syncEvents.provider, "account")) })).filter((e) => e.event.startsWith("body.beta_"));
-    if (coachMem.bodyEnabled) throw new Error("the owner's Body starts off");
-    const onBefore = (await db.query.memberships.findMany({ where: eq(schema.memberships.bodyEnabled, true) })).map((m) => m.id).sort();
-    await coach.goto(`${base}/settings`);
-    await press(coach, '[data-testid="body-beta-toggle"]', async () => /: On/.test(await coach.locator('[data-testid="body-beta-state"]').innerText()), "the owner's Body on");
-    if (!(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachMem.id) }))!.bodyEnabled) throw new Error("the switch sets the owner's own membership");
-    const onAfter = (await db.query.memberships.findMany({ where: eq(schema.memberships.bodyEnabled, true) })).map((m) => m.id).sort();
-    if (JSON.stringify(onAfter) !== JSON.stringify([...onBefore, coachMem.id].sort())) throw new Error(`the switch touches no other membership: ${onBefore.length} on before, ${onAfter.length} after`);
-    await coach.goto(`${base}/more`);
-    await coach.locator('main a[href="/today"]').waitFor({ timeout: 30000 });
-    if (!(await coach.locator('main a[href="/body"]').count())) throw new Error("with the switch on, the owner's menu has Body");
-    await coach.goto(`${base}/settings`);
-    await press(coach, '[data-testid="body-beta-toggle"]', async () => /: Off/.test(await coach.locator('[data-testid="body-beta-state"]').innerText()), "the owner's Body off");
-    const logged = (await betaEvents()).map((e) => e.event).sort();
-    if (JSON.stringify(logged) !== JSON.stringify(["body.beta_off", "body.beta_on"])) throw new Error(`both switches are logged: ${JSON.stringify(logged)}`);
+    // ── The HumanOS switch (rev 320/322): the member's own, from Settings; the coach's path only with working access; both logged. ──
+    const humanosEvents = async () => (await db.query.bodyShareEvents.findMany({ where: and(mine(schema.bodyShareEvents), eq(schema.bodyShareEvents.kind, "humanos")) })).map((e) => (e.shared ? "on" : "off"));
+    const foodsBefore = (await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) })).length;
     await client.goto(`${base}/settings`);
-    await client.locator('main h1').first().waitFor({ timeout: 30000 });
-    if (await client.locator('[data-testid="body-beta-toggle"]').count()) throw new Error("a client never sees the beta switch");
-    // A second coach in the same workspace, joined after the owner: no switch either.
-    const { hashPassword } = await import("@/lib/password");
-    const { newId } = await import("@/lib/ids");
-    const second = { id: newId(), email: `second-coach-${Date.now()}@example.com` };
-    await db.insert(schema.users).values({ id: second.id, email: second.email, name: "Second Coach", passwordHash: await hashPassword("demo1234") });
-    await db.insert(schema.memberships).values({ id: newId(), workspaceId: mem.workspaceId, userId: second.id, role: "coach" });
-    const other = await (await browser.newContext()).newPage();
-    await login(other, second.email);
-    await other.goto(`${base}/settings`);
-    await other.locator('main h1').first().waitFor({ timeout: 30000 });
-    if (await other.locator('[data-testid="body-beta-toggle"]').count()) throw new Error("another coach never sees the beta switch");
-    console.log("✓ the beta switch: the owner turned Body on and off for themselves from Settings, both logged; no client and no second coach sees it");
+    await press(client, '[data-testid="humanos-toggle"]', async () => /: Off/.test(await client.locator('[data-testid="humanos-state"]').innerText()), "HumanOS off from Settings");
+    if ((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mem.id) }))!.bodyEnabled) throw new Error("the member's switch sets their own membership");
+    if ((await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) })).length !== foodsBefore) throw new Error("turning HumanOS off keeps every row");
+    await notFoundPage(client, "/body");
+    await client.goto(`${base}/more`);
+    await client.locator('main a[href="/today"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('main a[href="/body"]').count()) || !(await client.locator('main a[href="/settings#humanos"]').count())) throw new Error("with HumanOS off, the menu has no HumanOS pages and one 'Turn on HumanOS' entry");
+    // The coach's path: nothing on the roster while the client's working access is off; the control once it's on; the switch turns it on and shares nothing.
+    const coachUser = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+    await db.update(schema.memberships).set({ coachCanWork: false }).where(eq(schema.memberships.id, mem.id));
+    await coach.goto(`${base}/coach`);
+    await coach.locator('[data-testid="coach-body-cell"]').first().waitFor({ timeout: 30000 });
+    if (await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-humanos-on"]`).count()) throw new Error("no coach control without the client's working access");
+    await db.update(schema.memberships).set({ coachCanWork: true }).where(eq(schema.memberships.id, mem.id));
+    await coach.goto(`${base}/coach`);
+    await press(coach, `[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-humanos-on"]`, async () => !!(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mem.id) }))!.bodyEnabled, "the coach turned HumanOS on");
+    // The refreshed roster lands a beat after the action: wait for the control to go, then read the cell.
+    await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-humanos-on"]`).waitFor({ state: "detached", timeout: 30000 });
+    if ((await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"]`).innerText()).trim() !== "") throw new Error("turning HumanOS on for a client shares nothing: the cell stays blank until they share");
+    // Delete-all above removed the settings row; whatever is there, neither consent switch is on after the coach's switch.
+    const settingsNow = await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) });
+    if (settingsNow && (settingsNow.shareWithCoach || settingsNow.aiUse)) throw new Error("the two consent switches stay where the member left them");
+    await client.goto(`${base}/settings`);
+    if (!/: On/.test(await client.locator('[data-testid="humanos-state"]').innerText())) throw new Error("the member's Settings card says On after the coach's switch");
+    await client.goto(`${base}/body`);
+    await client.locator('[data-testid="body-start"], [data-testid="body-tiles"]').first().waitFor({ timeout: 30000 });
+    const loggedHumanos = await humanosEvents();
+    if (JSON.stringify(loggedHumanos) !== JSON.stringify(["off", "on"])) throw new Error(`both switches are logged as kind humanos: ${JSON.stringify(loggedHumanos)}`);
+    const accountEvents = (await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.userId, maya.id), eq(schema.syncEvents.provider, "account")) })).filter((e) => e.event.startsWith("humanos.")).map((e) => e.event).sort();
+    if (JSON.stringify(accountEvents) !== JSON.stringify(["humanos.off", "humanos.on"])) throw new Error(`the account log has both: ${JSON.stringify(accountEvents)}`);
+    if ((await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-humanos-on"]`).count())) throw new Error("no coach control once HumanOS is on");
+    void coachUser;
+    console.log("✓ the HumanOS switch: the member turned it off from Settings (rows kept, pages not found, one menu entry back to the switch); the coach's control appeared only with working access and turned it on, sharing nothing; both logged");
 
     if (errors.length) throw new Error(errors.join("\n"));
     console.log("Body walk passed.");

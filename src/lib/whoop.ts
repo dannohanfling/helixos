@@ -21,8 +21,8 @@ export class WhoopError extends Error {
 const SAYS: Record<WhoopProblem, string> = {
   not_configured: "WHOOP isn't set up on this server yet.",
   unreachable: "Couldn't reach WHOOP. Try again in a minute.",
-  denied: "WHOOP refused the connection. Connect again from Body settings.",
-  expired: "WHOOP's access has expired. Connect again from Body settings.",
+  denied: "WHOOP refused the connection. Connect again from HumanOS settings.",
+  expired: "WHOOP's access has expired. Connect again from HumanOS settings.",
   busy: "WHOOP asked us to slow down. Try again in a minute.",
   other: "WHOOP couldn't answer just now. Try again in a minute.",
 };

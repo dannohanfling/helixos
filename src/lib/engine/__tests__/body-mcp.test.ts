@@ -23,7 +23,7 @@ describe("Body's MCP tools (rev 237 phase 4)", () => {
     const src = read("src/lib/mcp/tools/body.ts");
     const handlers = src.match(/handler: async \(v(?:, input)?\)(?:: Promise<ToolResult>)? => \{\n\s+(?:const settings = )?await ready\(v\);/g) ?? [];
     expect(handlers).toHaveLength(19);
-    expect(src).toMatch(/if \(!\(await canAiUseBody\(v, v\.user\.id\)\)\) throw new Error\("Body's AI switch is off/);
+    expect(src).toMatch(/if \(!\(await canAiUseBody\(v, v\.user\.id\)\)\) throw new Error\("HumanOS's AI switch is off/);
     // The code, comments aside (the header says what it leaves out): no comment table, no photo, no injury reaches a tool.
     const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(code).not.toMatch(/bodyComments|comments|photo|injur|health_log|bodyHealth|healthLog|restrictedNow/i);

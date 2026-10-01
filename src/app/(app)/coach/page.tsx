@@ -18,6 +18,7 @@ import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
 import { coachBodyColumn } from "@/lib/queries/body";
+import { setClientHumanosAction } from "@/lib/actions/body";
 import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
 import { lateForMonth, monthOf } from "@/lib/engine/month-intentions";
@@ -154,7 +155,7 @@ export default async function CoachPage() {
                     <th className="py-2 pr-3">Client</th>
                     <th className="py-2 pr-3">Today</th>
                     <th className="py-2 pr-3">Streak</th>
-                    <th className="py-2 pr-3" title="Days in band this week · last weigh-in · sessions this week, for clients sharing Body with you">Body</th>
+                    <th className="py-2 pr-3" title="Days in band this week · last weigh-in · sessions this week, for clients sharing HumanOS with you">HumanOS</th>
                     <th className="py-2 pr-3">Tier</th>
                     <th className="py-2 pr-3 text-right">Pathway</th>
                     <th className="py-2 pr-3 text-right">Last active</th>
@@ -188,7 +189,17 @@ export default async function CoachPage() {
                       </td>
                       <td className="py-2 pr-3 tabular">🔥 {r.streak}</td>
                       <td className="py-2 pr-3 whitespace-nowrap text-xs tabular" data-testid="coach-body-cell" data-member={r.m.id} title={bodyOf.get(r.m.userId)?.long}>
-                        {bodyOf.get(r.m.userId) ? <Link href={`/coach/${r.m.id}/body`} className="text-ink-2 underline-offset-2 hover:underline">{bodyOf.get(r.m.userId)!.short}</Link> : null}
+                        {bodyOf.get(r.m.userId) ? (
+                          <Link href={`/coach/${r.m.id}/body`} className="text-ink-2 underline-offset-2 hover:underline">{bodyOf.get(r.m.userId)!.short}</Link>
+                        ) : !r.m.bodyEnabled && r.m.coachCanWork && !v.switchedInto ? (
+                          // Rev 322: a coach turns HumanOS on for a client who has given working access; off stays the client's own.
+                          <form action={setClientHumanosAction}>
+                            <input type="hidden" name="membershipId" value={r.m.id} />
+                            <SubmitButton className="btn btn-ghost btn-xs" pendingText="Turning on…" data-testid="coach-humanos-on" title="Switch HumanOS on for this client. It shares nothing with you; they choose that themselves.">
+                              Turn on HumanOS
+                            </SubmitButton>
+                          </form>
+                        ) : null}
                       </td>
                       <td className="py-2 pr-3">
                         {TIER_ICONS[r.tier.name]} {r.tier.name} <span className="text-xs text-ink-3 tabular">{r.pts.toLocaleString()}</span>

@@ -33,7 +33,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
           </p>
         ) : null}
         <Card title="Start">
-          <p className="mb-1 text-sm text-ink-2">Body starts empty and you fill it in: your daily targets, the foods you eat most, your go-to meals. A short checklist walks you through it.</p>
+          <p className="mb-1 text-sm text-ink-2">HumanOS starts empty and you fill it in: your daily targets, the foods you eat most, your go-to meals. A short checklist walks you through it.</p>
           <p className="mb-4 text-sm text-ink-2" data-testid="body-private-note">
             🔒 Your Body data is <b>private to you</b>. Your coach doesn&apos;t see it unless you switch on &quot;Let my coach see my Body data&quot; in Body settings, and it&apos;s never sent to AI.
           </p>
@@ -80,13 +80,13 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
       ) : null}
 
       {!(d.checklist.ai && d.checklist.targets && d.checklist.foods && d.checklist.logged) ? (
-        <Card className="mb-4" title="Fill in your Body">
+        <Card className="mb-4" title="Fill in your HumanOS">
           <div className="mb-3 rounded-lg border p-3" data-testid="body-step-ai" data-done={d.checklist.ai ? "1" : "0"}>
             <div className="flex items-start gap-2 text-sm">
               <span aria-hidden className="w-5 shrink-0">{d.checklist.ai ? "✅" : "①"}</span>
               <div className="min-w-0 flex-1">
                 <div className="font-medium">Choose whether AI can help you</div>
-                <p className="text-ink-2">With Yes, HelixOS&apos;s AI can use your Body numbers and short text (targets, what you logged, saved meals) to support you, on your own AI key. Never photos or notes. You can change it any time in Body settings.</p>
+                <p className="text-ink-2">With Yes, HelixOS&apos;s AI can use your HumanOS numbers and short text (targets, what you logged, saved meals) to support you, on your own AI key. Never photos or notes. You can change it any time in HumanOS settings.</p>
                 {d.checklist.ai ? (
                   <p className="mt-1 text-xs text-ink-3" data-testid="body-ai-answer">{d.settings.aiUse ? "You said Yes." : "You said Not now."}</p>
                 ) : (

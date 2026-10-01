@@ -17,7 +17,7 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   library: { label: "Library", line: "Search your library and assets." },
   webinars: { label: "Webinars", line: "Read your webinars and proofs." },
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },
-  body: { label: "Body", line: "Your Body numbers and meal log. Only with Body's own AI switch on, and never pre-ticked." },
+  body: { label: "HumanOS", line: "Your HumanOS numbers and meal log. Only with HumanOS's own AI switch on, and never pre-ticked." },
 };
 
 export const SCOPE_NAMES: readonly Scope[] = MCP_SCOPES;

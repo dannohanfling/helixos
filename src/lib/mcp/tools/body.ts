@@ -32,9 +32,9 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Body's own switch, again, then the member's settings: no settings means Body isn't set up, and every tool says so. */
 async function ready(v: Viewer): Promise<schema.BodySettings> {
-  if (!(await canAiUseBody(v, v.user.id))) throw new Error("Body's AI switch is off for this member, so Body tools do nothing. They can turn it on in Body settings.");
+  if (!(await canAiUseBody(v, v.user.id))) throw new Error("HumanOS's AI switch is off for this member, so HumanOS tools do nothing. They can turn it on in HumanOS settings.");
   const settings = await bodySettingsFor(v.workspace.id, v.user.id);
-  if (!settings) throw new Error("Body isn't set up for this member yet: they start it from the Log page.");
+  if (!settings) throw new Error("HumanOS isn't set up for this member yet: they start it from the Log page.");
   return settings;
 }
 
@@ -82,13 +82,13 @@ export const bodyToday = defineTool({
   name: "body_today",
   scope: "body",
   kind: "read",
-  description: "The member's Body day: the day type and its targets, what they've eaten with the totals and marks, what's left, which saved meals fit, caps and sodium, the latest weigh-in, and the day's workout. Today unless a date (YYYY-MM-DD) is given.",
+  description: "The member's HumanOS day: the day type and its targets, what they've eaten with the totals and marks, what's left, which saved meals fit, caps and sodium, the latest weigh-in, and the day's workout. Today unless a date (YYYY-MM-DD) is given.",
   input: { date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
   handler: async (v, input): Promise<ToolResult> => {
     const settings = await ready(v);
     const date = dayOf(v, input.date);
     const [d, t, figure] = await Promise.all([bodyDay(v.workspace.id, v.user.id, date, v.today), trainingDay(v.workspace.id, v.user.id, date), dayComposition(v.workspace.id, v.user.id, date)]);
-    if (!d) throw new Error("Body isn't set up for this member yet.");
+    if (!d) throw new Error("HumanOS isn't set up for this member yet.");
     const lines = [`${date === v.today ? "Today" : date}${d.dayType ? `, a ${d.dayType.name}` : ""}${d.dayType?.reminder ? ` (reminder: ${d.dayType.reminder})` : ""}.`];
     lines.push(d.bands ? `Targets: ${MACROS.filter((m) => d.bands![m]).map((m) => `${fmtBand(m, d.bands![m]!)} ${MACRO_LABEL[m]}`).join(", ")}.` : "No targets set for this day type yet.");
     lines.push(d.entries.length ? `Eaten: ${d.entries.map((e) => `${e.slot}: ${e.name} (${macroLine({ cal: e.cal, p: e.p, f: e.f, c: e.c })})`).join("; ")}.` : "Nothing logged yet.");
@@ -142,7 +142,7 @@ export const bodyWeighIns = defineTool({
     const byRange = { week: 7, month: 30, "90d": 90, year: 365 } as Record<string, number>;
     const days = typeof input.days === "number" ? Math.min(365, Math.max(7, Math.round(input.days))) : isRangeKey(input.range) ? byRange[input.range] : 30;
     const w = await weighIns(v.workspace.id, v.user.id, v.today, days);
-    if (!w) throw new Error("Body isn't set up for this member yet.");
+    if (!w) throw new Error("HumanOS isn't set up for this member yet.");
     if (!w.latest) return { text: "No weigh-ins logged yet.", data: { readings: [] } };
     const unit = w.unit;
     const cards = w.cards.filter((c) => c.stats.latest).map((c) => `${c.metric.label}: ${fmtMetric(c.metric.key, c.stats.latest!.value, unit)} (${c.stats.latest!.date})${c.stats.avg7 != null ? `, 7-day average ${fmtMetric(c.metric.key, c.stats.avg7, unit)}` : ""}${c.stats.change7 != null ? `, ${c.stats.change7 > 0 ? "+" : ""}${fmtMetric(c.metric.key, c.stats.change7, unit)} vs last week` : ""}${c.goal ? `, goal ${fmtMetric(c.metric.key, c.goal.target, unit)}${c.goal.by ? ` by ${c.goal.by}` : ""}` : ""}`);
@@ -165,7 +165,7 @@ export const bodyTraining = defineTool({
     if (!input.exercise && isRangeKey(input.range)) {
       const b = rangeBounds(input.range, typeof input.from === "string" ? input.from : null, v.today, { addDays, startOfWeek });
       const r = await trainingRange(v.workspace.id, v.user.id, b, v.today);
-      if (!r) throw new Error("Body isn't set up for this member yet.");
+      if (!r) throw new Error("HumanOS isn't set up for this member yet.");
       return { text: `${b.label}: ${r.sessions} sessions, ${r.sets} sets, ${r.prs} PR${r.prs === 1 ? "" : "s"}${r.routines.length ? `; ${r.routines.map((x) => `${x.name} × ${x.times}`).join(", ")}` : ""}. Sessions by week: ${r.perWeekSessions.map((w) => `${w.monday} ${w.value ?? 0}`).join(", ")}.`, data: { range: b, sessions: r.sessions, sets: r.sets, prs: r.prs, routines: r.routines, perWeek: r.perWeekSessions.map((w) => ({ monday: w.monday, sessions: w.value ?? 0, sets: r.perWeekSets.find((x) => x.monday === w.monday)?.value ?? 0 })) } };
     }
     await ready(v);
@@ -173,13 +173,13 @@ export const bodyTraining = defineTool({
       const lib = await trainingLibrary(v.workspace.id, v.user.id);
       const ex = byName("exercise", lib.exercises, input.exercise);
       const h = await exerciseHistory(v.workspace.id, v.user.id, ex.id);
-      if (!h) throw new Error("Body isn't set up for this member yet.");
+      if (!h) throw new Error("HumanOS isn't set up for this member yet.");
       const sessions = h.sessions.slice(0, 12).map((s) => `${s.date}: ${s.sets.map((x) => `${x.text}${x.pr ? " (PR)" : ""}`).join(", ")}`);
       return { text: `${ex.name}${h.pr ? `, PR ${h.pr.text} on ${h.pr.date}` : ", no sets yet"}.\n${sessions.join("\n")}`, data: { exercise: ex.name, kind: ex.kind, unit: h.unit, pr: h.pr, points: h.points, sessions: h.sessions.slice(0, 12) } };
     }
     const date = dayOf(v, input.date);
     const [t, weeks] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today)]);
-    if (!t) throw new Error("Body isn't set up for this member yet.");
+    if (!t) throw new Error("HumanOS isn't set up for this member yet.");
     const lines: string[] = [];
     if (t.off) lines.push(`${date === v.today ? "Today" : date} is marked Off.`);
     else if (t.session) lines.push(`${date === v.today ? "Today" : date}: ${t.routineName ?? "a workout"}${t.plan.plannedSets ? `, ${t.plan.doneSets} of ${t.plan.plannedSets} planned sets` : `, ${t.plan.doneSets} sets`}${t.completedAt ? `, finished${t.note ? ` ("${t.note}")` : ""}` : ""}.`);
@@ -331,7 +331,7 @@ export const bodyPantry = defineTool({
   handler: async (v): Promise<ToolResult> => {
     await ready(v);
     const p = await pantryView(v.workspace.id, v.user.id, v.today);
-    if (!p) throw new Error("Body isn't set up for this member yet.");
+    if (!p) throw new Error("HumanOS isn't set up for this member yet.");
     const lines: string[] = [];
     lines.push(p.soon.length ? `Use soon: ${p.soon.map((it) => `${it.food?.name ?? "a food"} ${it.qty} ${it.unit} ${it.state} (${it.days < 0 ? "past its date" : it.days === 0 ? "today" : it.days === 1 ? "tomorrow" : `${it.days} days`})`).join("; ")}.` : "Nothing to use soon.");
     lines.push(p.gaps.length ? `To buy: ${p.gaps.map((g) => `${g.short} ${g.unit} ${g.name} (${g.onHand} of ${g.par} on hand)`).join("; ")}.` : "Nothing below par.");
@@ -392,7 +392,7 @@ export const bodyWeekTool = defineTool({
     if (isRangeKey(input.range) && input.range !== "week") {
       const b = rangeBounds(input.range, typeof input.from === "string" ? input.from : null, v.today, { addDays, startOfWeek });
       const r = await bodyRange(v.workspace.id, v.user.id, b, v.today);
-      if (!r) throw new Error("Body isn't set up for this member yet.");
+      if (!r) throw new Error("HumanOS isn't set up for this member yet.");
       const u = settings.weightUnit;
       const n = r.nutrition;
       const num = (x: number | null, d = 1) => (x == null ? "—" : x.toLocaleString("en-US", { maximumFractionDigits: d }));
@@ -407,7 +407,7 @@ export const bodyWeekTool = defineTool({
     const asked = typeof input.date === "string" && DATE.test(input.date) ? startOfWeek(input.date) : startOfWeek(v.today);
     const monday = asked > startOfWeek(v.today) ? startOfWeek(v.today) : asked;
     const w = await bodyWeek(v.workspace.id, v.user.id, monday, v.today);
-    if (!w) throw new Error("Body isn't set up for this member yet.");
+    if (!w) throw new Error("HumanOS isn't set up for this member yet.");
     const u = settings.weightUnit;
     const n = w.nutrition;
     const num = (x: number | null, d = 1) => (x == null ? "—" : x.toLocaleString("en-US", { maximumFractionDigits: d }));
@@ -437,7 +437,7 @@ defineTool({
       return { text: r.summary.nights ? `${b.label}: ${fmtHours(r.summary.avg!)} a night over ${r.summary.nights} nights, ${r.summary.atFloor} at 7 h or more, ${r.under} under. By week: ${r.perWeek.map((w) => `${w.monday} ${w.value != null ? fmtHours(w.value) : "—"}`).join(", ")}.` : `${b.label}: no nights logged.`, data: { range: b, summary: r.summary, under: r.under, nights: r.nights, perWeek: r.perWeek } };
     }
     const s = await sleepView(v.workspace.id, v.user.id, v.today);
-    if (!s) throw new Error("Body isn't set up for this member yet.");
+    if (!s) throw new Error("HumanOS isn't set up for this member yet.");
     const lines = [s.last ? `Last night (${s.last.date}): ${s.last.text}${s.last.score != null ? `, score ${s.last.score}` : ""}.` : "No nights logged yet."];
     if (s.week.avg != null) lines.push(`This week: ${fmtHours(s.week.avg)} a night over ${s.week.nights} night${s.week.nights === 1 ? "" : "s"}, ${s.week.atFloor} at 7 h or more${s.prevWeek.avg != null ? `; last week ${fmtHours(s.prevWeek.avg)}` : ""}.`);
     if (s.recent.length) lines.push(`Nights: ${s.recent.map((n) => `${n.date} ${n.sleep_h != null ? fmtHours(n.sleep_h) : "—"}${n.sleep_score != null ? ` (${n.sleep_score})` : ""}`).join("; ")}.`);
@@ -558,7 +558,7 @@ defineTool({
   handler: async (v): Promise<ToolResult> => {
     await ready(v);
     const view = await shoppingView(v.workspace.id, v.user.id, v.today);
-    if (!view) throw new Error("Body isn't set up for this member yet.");
+    if (!view) throw new Error("HumanOS isn't set up for this member yet.");
     const plan = view.planned.length ? `Planned this week: ${view.planned.map((p) => `${p.meal.name} × ${p.times}`).join(", ")}.` : "Nothing planned this week yet (saved meals go on the plan on the Shopping page).";
     return { text: `${plan}\n${listSummary(view.list)}.\n${listText(view)}`, data: { monday: view.monday, planned: view.planned.map((p) => ({ meal: p.meal.name, times: p.times })), lines: view.list.lines } };
   },
@@ -573,7 +573,7 @@ defineTool({
   handler: async (v, input): Promise<ToolResult> => {
     await ready(v);
     const view0 = await shoppingView(v.workspace.id, v.user.id, v.today);
-    if (!view0) throw new Error("Body isn't set up for this member yet.");
+    if (!view0) throw new Error("HumanOS isn't set up for this member yet.");
     const skipNames = new Set((Array.isArray(input.skip) ? input.skip : []).map((x) => String(x).toLowerCase()));
     const skip = new Set(view0.foods.filter((f) => skipNames.has(f.name.toLowerCase())).map((f) => f.id));
     const view = skip.size ? (await shoppingView(v.workspace.id, v.user.id, v.today, skip))! : view0;

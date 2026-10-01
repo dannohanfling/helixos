@@ -198,7 +198,7 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
                 {p.foods.map((f) => (
                   <form key={f.id} action={setFoodParAction} className="flex items-center gap-2 text-sm" data-testid="pantry-par" data-food={f.name}>
                     <input type="hidden" name="foodId" value={f.id} />
-                    <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                    <span className="min-w-0 flex-1 break-words">{f.name}</span>
                     <input name="par" type="number" step="any" min={0} inputMode="decimal" className="field w-20 py-0.5 text-sm tabular" defaultValue={f.par ?? ""} placeholder="none" aria-label={`Par for ${f.name}`} />
                     <span className="w-10 text-xs text-ink-3">{f.unit}</span>
                     <SubmitButton className="btn btn-ghost btn-xs" pendingText="…">

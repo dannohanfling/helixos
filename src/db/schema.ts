@@ -2425,8 +2425,8 @@ export const bodyShareEvents = sqliteTable(
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
     shared: integer("shared", { mode: "boolean" }).notNull(),
-    /** Which switch: coach sharing, or AI use (rev 219). */
-    kind: text("kind", { enum: ["coach", "ai"] }).notNull().default("coach"),
+    /** Which switch: coach sharing, AI use (rev 219), or HumanOS itself (rev 320: the member's, or their coach's with working access). */
+    kind: text("kind", { enum: ["coach", "ai", "humanos"] }).notNull().default("coach"),
     createdAt: createdAt(),
   },
   (t) => [index("body_share_events_member").on(t.workspaceId, t.userId)],

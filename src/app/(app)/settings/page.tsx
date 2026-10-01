@@ -20,8 +20,7 @@ import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 import { SubmitButton } from "@/components/submit-button";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
-import { isWorkspaceOwner } from "@/lib/queries/body";
-import { setBodyBetaAction } from "@/lib/actions/body";
+import { setHumanosAction } from "@/lib/actions/body";
 import { linkedChats } from "@/lib/chat";
 import { setChatProgressShareAction, unlinkChatAction } from "@/lib/actions/chat";
 import { CHANNEL_LABELS } from "@/lib/engine/chat";
@@ -58,8 +57,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const [goal, conn, ghlIntegration, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel"), linkedChats(v.workspace.id, v.user.id)]);
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
-  // Body ships dark (rev 195); the workspace owner alone can switch it on for themselves here (rev 209).
-  const bodyOwner = await isWorkspaceOwner(v);
   const goalCard = (
     <Card id="goal" title="Your one goal">
       <form action={updateGoalAction} className="space-y-3">
@@ -252,6 +249,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </SubmitButton>
           </form>
         </Card>
+        {/* HumanOS (rev 320/322): the member's own switch, off by default. Off hides the group and keeps the data; on shows it as it was. */}
+        <Card id="humanos" title="HumanOS">
+          <p className="text-sm text-ink-2">Food, training, sleep, practices and weigh-ins, in your HelixOS. Everything in it is private to you by default; sharing with your coach is a separate switch inside HumanOS settings, and so is letting AI use it.</p>
+          <form action={setHumanosAction} className="mt-3 flex flex-wrap items-center gap-3" data-testid="humanos-form">
+            <input type="hidden" name="on" value={v.membership.bodyEnabled ? "0" : "1"} />
+            <span className="text-sm font-medium" data-testid="humanos-state">
+              HumanOS: {v.membership.bodyEnabled ? "On" : "Off"}
+            </span>
+            <SubmitButton className={`btn btn-sm ${v.membership.bodyEnabled ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="humanos-toggle" disabled={!!v.switchedInto}>
+              {v.membership.bodyEnabled ? "Turn off" : "Turn on HumanOS"}
+            </SubmitButton>
+            {v.membership.bodyEnabled ? <Link href="/body" className="text-xs underline">Open HumanOS →</Link> : null}
+          </form>
+          <p className="mt-2 text-xs text-ink-3">{v.membership.bodyEnabled ? "Turning it off hides HumanOS and keeps everything you logged; turn it back on and it's all still there." : "Nothing is deleted when it's off, and nothing is shared when it's on."}</p>
+        </Card>
         <Card title="Your data">
           <p className="text-sm text-ink-2">Everything you&apos;ve put into HelixOS belongs to you. Download it any time; it&apos;s the same file you&apos;d get when you leave.</p>
           <div className="mt-3 flex flex-wrap gap-2 text-sm">
@@ -316,7 +328,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               Save
             </SubmitButton>
           </form>
-          <p className="mb-3 mt-2 text-xs text-ink-3">When it&apos;s on, your coach&apos;s assistant gets your pathway stage, your goal, this week&apos;s 3-1-3 and your main offer, so it can help where you are. Never Body, keys or notes.</p>
+          <p className="mb-3 mt-2 text-xs text-ink-3">When it&apos;s on, your coach&apos;s assistant gets your pathway stage, your goal, this week&apos;s 3-1-3 and your main offer, so it can help where you are. Never HumanOS, keys or notes.</p>
           <h3 className="text-sm font-semibold">Linked chats</h3>
           {chats.length ? (
             <ul className="divide-y text-sm" data-testid="linked-chats">
@@ -348,7 +360,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 Save
               </SubmitButton>
             </form>
-            <p className="mt-2 text-xs text-ink-3">Your coach can always look at your HelixOS to help you. With this on, they can also set things up for you (offers, webinars, tasks, Essence, groups, content). They never see Body, send anything as you, or change your account.</p>
+            <p className="mt-2 text-xs text-ink-3">Your coach can always look at your HelixOS to help you. With this on, they can also set things up for you (offers, webinars, tasks, Essence, groups, content). They never see HumanOS, send anything as you, or change your account.</p>
             <h3 className="mt-3 text-sm font-semibold">Changes by your coach</h3>
             {changesList}
           </Card>
@@ -472,20 +484,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </div>
               </div>
             </Card>
-            {bodyOwner ? (
-              <Card id="body-beta" title="Body (beta)">
-                <p className="text-sm text-ink-2">Nutrition targets and meal logging, for you only while it&apos;s in beta. Nobody else in the workspace sees it, and your Body data stays private to you.</p>
-                <form action={setBodyBetaAction} className="mt-3 flex flex-wrap items-center gap-3">
-                  <input type="hidden" name="on" value={v.membership.bodyEnabled ? "0" : "1"} />
-                  <span className="text-sm font-medium" data-testid="body-beta-state">
-                    Show Body (beta) for me: {v.membership.bodyEnabled ? "On" : "Off"}
-                  </span>
-                  <SubmitButton className={`btn btn-sm ${v.membership.bodyEnabled ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="body-beta-toggle">
-                    {v.membership.bodyEnabled ? "Switch off" : "Switch on"}
-                  </SubmitButton>
-                </form>
-              </Card>
-            ) : null}
           </>
         ) : null}
       </div>

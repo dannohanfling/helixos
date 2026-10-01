@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 36,
+    date: "2026-10-01",
+    title: "Turn on HumanOS yourself",
+    lines: ["Settings has a HumanOS card with one switch: turn it on and the HumanOS section (Log, Nutrition, Training, Sleep, Practices) appears in your menu, with everything in it private to you. Turn it off and it hides again; nothing is deleted. While it's off, the menu shows one entry that takes you to the switch.", "Your coach can turn it on for you from their coach view when you've given them working access in Settings; it shares nothing with them, and sharing stays your own choice inside HumanOS settings.", "Everywhere you read, the name is HumanOS now; your pages and links are unchanged."],
+    audience: "everyone",
+  },
+  {
     n: 35,
     date: "2026-10-01",
     title: "HumanOS: find a food by name or barcode",
@@ -21,15 +28,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
   {
     n: 34,
     date: "2026-10-01",
-    title: "Coach view: a Body column",
-    lines: ["The client table has a Body column for clients who share their Body data with you: days in band this week, their last weigh-in, and sessions this week, linking to their days. Clients who don't share show nothing there, the same as clients without Body."],
+    title: "Coach view: a HumanOS column",
+    lines: ["The client table has a HumanOS column for clients who share their HumanOS data with you: days in band this week, their last weigh-in, and sessions this week, linking to their days. Clients who don't share show nothing there, the same as clients without HumanOS."],
     audience: "coach",
   },
   {
     n: 33,
     date: "2026-10-01",
     title: "HumanOS: WHOOP",
-    lines: ["Connect WHOOP from Body settings and it fills Sleep (hours and score), recovery, strain, resting heart rate and HRV, and brings every workout by its sport with its minutes, strain and heart rate onto Training. A sport that is one of your habits (sauna, stretching, walking, yoga…) ticks it for the day; what you logged by hand stays.", "WHOOP sends changes as they happen, and Sync now pulls the last 30 days. The connection is yours alone: Disconnect removes it, and your coach never sees any of it unless you share the rest."],
+    lines: ["Connect WHOOP from HumanOS settings and it fills Sleep (hours and score), recovery, strain, resting heart rate and HRV, and brings every workout by its sport with its minutes, strain and heart rate onto Training. A sport that is one of your habits (sauna, stretching, walking, yoga…) ticks it for the day; what you logged by hand stays.", "WHOOP sends changes as they happen, and Sync now pulls the last 30 days. The connection is yours alone: Disconnect removes it, and your coach never sees any of it unless you share the rest."],
     audience: "coach",
   },
   {
@@ -64,7 +71,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     n: 28,
     date: "2026-09-30",
     title: "HumanOS: your history from Airtable",
-    lines: ["A \"From Airtable\" page (from Weigh-ins, Training and Body settings) brings your HumanOS base over: every weigh-in as one reading a day, your routines, and your workouts as sets, from the Exercises rows where a day has them and from the working-set lines of your Exercise Notes where it doesn't.", "Paste the base id and a read-only token, see the dry run day by day, then Approve. The token is used for that run only and kept nowhere; the notes' words stay in Airtable. Run it again any time: nothing lands twice."],
+    lines: ["A \"From Airtable\" page (from Weigh-ins, Training and HumanOS settings) brings your HumanOS base over: every weigh-in as one reading a day, your routines, and your workouts as sets, from the Exercises rows where a day has them and from the working-set lines of your Exercise Notes where it doesn't.", "Paste the base id and a read-only token, see the dry run day by day, then Approve. The token is used for that run only and kept nowhere; the notes' words stay in Airtable. Run it again any time: nothing lands twice."],
     audience: "coach",
   },
   {
@@ -92,7 +99,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     n: 24,
     date: "2026-09-30",
     title: "HumanOS in Claude",
-    lines: ["With Body's AI switch on and the Body area ticked when you connect HelixOS to Claude, Claude can read your day (targets, what you've eaten, what's left and what fits), your foods, your weigh-ins and your training.", "It can also log for you: a saved meal or a food, a set, a weigh-in. Never your photos, injuries or what your coach wrote."],
+    lines: ["With HumanOS's AI switch on and the HumanOS area ticked when you connect HelixOS to Claude, Claude can read your day (targets, what you've eaten, what's left and what fits), your foods, your weigh-ins and your training.", "It can also log for you: a saved meal or a food, a set, a weigh-in. Never your photos, injuries or what your coach wrote."],
     audience: "coach",
   },
   {
@@ -127,21 +134,21 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     n: 19,
     date: "2026-09-30",
     title: "Chat with your coach's assistant",
-    lines: ["When your coach has set it up, their assistant's chat bubble is on every page, and it knows it's you. A conversation you start here can carry on in Messenger, Instagram or WhatsApp: the assistant sends a \"confirm it's you\" link, you tap it, and Settings lists the linked chat with Unlink.", "It gets your name and email, and never Body."],
+    lines: ["When your coach has set it up, their assistant's chat bubble is on every page, and it knows it's you. A conversation you start here can carry on in Messenger, Instagram or WhatsApp: the assistant sends a \"confirm it's you\" link, you tap it, and Settings lists the linked chat with Unlink.", "It gets your name and email, and never HumanOS."],
     audience: "everyone",
   },
   {
     n: 18,
     date: "2026-09-29",
     title: "Body is now HumanOS",
-    lines: ["HumanOS has its own section in the menu: Log for today's meals and Nutrition for your foods and saved meals. A gear on every HumanOS page opens its settings.", "Log leads with what's left (\"62 g protein to go · 14 g fat left\"), puts your saved meals and recent foods first, and Today has a Log a meal button. Old Body links still work."],
+    lines: ["HumanOS has its own section in the menu: Log for today's meals and Nutrition for your foods and saved meals. A gear on every HumanOS page opens its settings.", "Log leads with what's left (\"62 g protein to go · 14 g fat left\"), puts your saved meals and recent foods first, and Today has a Log a meal button. Old links still work."],
     audience: "coach",
   },
   {
     n: 17,
     date: "2026-09-29",
     title: "Let your coach set things up for you",
-    lines: ["In Settings, \"Let my coach work in my HelixOS\" lets your coach set up offers, webinars, tasks and more for you. It's your choice, and you can switch it off any time.", "Everything they change is listed under \"Changes by your coach\". They never see Body, send anything as you, or change your account."],
+    lines: ["In Settings, \"Let my coach work in my HelixOS\" lets your coach set up offers, webinars, tasks and more for you. It's your choice, and you can switch it off any time.", "Everything they change is listed under \"Changes by your coach\". They never see HumanOS, send anything as you, or change your account."],
     audience: "everyone",
   },
   {
@@ -154,22 +161,22 @@ export const WHATS_NEW: WhatsNewEntry[] = [
   {
     n: 15,
     date: "2026-09-29",
-    title: "Body: pick units from a list, and sodium on foods",
-    lines: ["A food's \"per\" unit is picked from a list (oz, g, cup, slice and more), or Other for anything else. Log a food in another unit of the same kind, such as grams for a food counted in ounces, and it converts.", "Foods take sodium and a tag for caps, and your day shows its sodium. Download and delete-all are now two separate boxes in Body settings."],
+    title: "HumanOS: pick units from a list, and sodium on foods",
+    lines: ["A food's \"per\" unit is picked from a list (oz, g, cup, slice and more), or Other for anything else. Log a food in another unit of the same kind, such as grams for a food counted in ounces, and it converts.", "Foods take sodium and a tag for caps, and your day shows its sodium. Download and delete-all are now two separate boxes in HumanOS settings."],
     audience: "coach",
   },
   {
     n: 14,
     date: "2026-09-29",
-    title: "Body: choose whether AI can help you",
-    lines: ["The first step of Body asks whether HelixOS's AI may use your Body numbers (targets, what you logged, your saved meals) to support you. Yes or Not now; it stays off unless you say Yes.", "Never your photos or notes, and always on your own AI key. You can change it any time in Body settings, and every change is logged."],
+    title: "HumanOS: choose whether AI can help you",
+    lines: ["The first step of HumanOS asks whether HelixOS's AI may use your HumanOS numbers (targets, what you logged, your saved meals) to support you. Yes or Not now; it stays off unless you say Yes.", "Never your photos or notes, and always on your own AI key. You can change it any time in HumanOS settings, and every change is logged."],
     audience: "coach",
   },
   {
     n: 13,
     date: "2026-09-29",
-    title: "Body (beta), just for you for now",
-    lines: ["Nutrition targets and fast meal logging: day types with their own bands, your foods and saved meals, a mark on each macro, and \"What fits tonight?\".", "Switch it on in Settings under Body (beta). It starts empty, with a short checklist to fill it in. Your Body data is private: nobody else sees it unless you share it."],
+    title: "HumanOS (beta), just for you for now",
+    lines: ["Nutrition targets and fast meal logging: day types with their own bands, your foods and saved meals, a mark on each macro, and \"What fits tonight?\".", "Switch it on in Settings under HumanOS (beta). It starts empty, with a short checklist to fill it in. Your HumanOS data is private: nobody else sees it unless you share it."],
     audience: "coach",
     version: "b9ed9be",
   },

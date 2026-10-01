@@ -230,16 +230,26 @@ describe("Body ships dark: a member without the flag sees none of it (rev 195)",
     const actions = [...src.matchAll(/export async function (\w+Action)\([^)]*\)[^{]*\{([\s\S]*?)\n\}/g)].map((m) => ({ name: m[1], body: m[2] }));
     expect(actions.length).toBeGreaterThanOrEqual(15);
     const gated = (b: string) => /await setUp\(v\)|\n  enabled\(v\);|bodyAccess\(v, /.test(b);
-    expect(actions.filter((a) => !gated(a.body)).map((a) => a.name).sort()).toEqual(["eraseBodyAction", "setBodyBetaAction"]);
+    expect(actions.filter((a) => !gated(a.body)).map((a) => a.name).sort()).toEqual(["eraseBodyAction", "setClientHumanosAction", "setHumanosAction"]);
   });
-  it("the beta switch (rev 209) is the workspace owner's, for their own membership only, and logged", () => {
+  it("the HumanOS switch (rev 320/322) is the member's own, for their own membership only; the coach's path needs working access, is on-only, and both are logged", () => {
     const src = read("src/lib/actions/body.ts");
-    const beta = src.slice(src.indexOf("export async function setBodyBetaAction"), src.indexOf("/* ───────── Setup ───────── */"));
-    expect(beta).toMatch(/const v = await requireCoach\(\);\n  if \(!\(await isWorkspaceOwner\(v\)\)\) redirect/);
-    expect(beta).toMatch(/\.where\(and\(eq\(schema\.memberships\.id, v\.membership\.id\)/);
-    expect(beta).not.toMatch(/formData, "(id|membershipId|userId)"/);
-    expect(beta).toMatch(/await logSync\(/);
-    expect(read("src/app/(app)/settings/page.tsx")).toMatch(/\{bodyOwner \? \(/);
+    const section = src.slice(src.indexOf("/* ───────── The HumanOS switch"), src.indexOf("/* ───────── Setup ───────── */"));
+    const member = section.slice(section.indexOf("export async function setHumanosAction"), section.indexOf("export async function setClientHumanosAction"));
+    expect(member).toMatch(/await ctx\(\{ whileSwitched: "refuse"/);
+    expect(member).toMatch(/\.where\(and\(eq\(schema\.memberships\.id, v\.membership\.id\), eq\(schema\.memberships\.workspaceId, v\.workspace\.id\)/);
+    expect(member).not.toMatch(/formData, "(id|membershipId|userId)"/);
+    const coach = section.slice(section.indexOf("export async function setClientHumanosAction"));
+    expect(coach).toMatch(/const v = await requireCoach\(\);\n  if \(v\.switchedInto\) redirect/);
+    expect(coach).toMatch(/eq\(schema\.memberships\.workspaceId, v\.workspace\.id\)/);
+    expect(coach).toMatch(/!m\.coachCanWork\) redirect/);
+    expect(coach).toMatch(/set\(\{ bodyEnabled: true \}\)/);
+    expect(coach).not.toMatch(/bodyEnabled: false|bodyEnabled: on/);
+    expect(section.match(/await logHumanos\(/g)).toHaveLength(2);
+    expect(section).toMatch(/kind: "humanos"/);
+    expect(section).not.toMatch(/shareWithCoach|aiUse/);
+    expect(read("src/app/(app)/settings/page.tsx")).toMatch(/data-testid="humanos-toggle"/);
+    expect(read("src/app/(app)/coach/page.tsx")).toMatch(/!r\.m\.bodyEnabled && r\.m\.coachCanWork && !v\.switchedInto/);
   });
 });
 
@@ -337,5 +347,49 @@ describe("the unit dropdown (rev 229)", async () => {
     expect(loggableUnits("tbsp")).toEqual(["fl oz", "ml", "cup", "tbsp", "tsp"]);
     expect(loggableUnits("slice")).toEqual(["slice"]);
     expect(loggableUnits("egg white")).toEqual(["egg white"]);
+  });
+});
+
+describe("the product is called HumanOS (rev 324)", () => {
+  it("no member-, coach- or Claude-facing string says Body as a product name; the person's own body stays a noun", () => {
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
+    const listFiles = (dir: string): string[] => walk(join(process.cwd(), dir)).filter((f) => /\.tsx?$/.test(f) && !f.includes("__tests__")).map((f) => f.slice(process.cwd().length + 1));
+    const files = [
+      ...listFiles("src/app/(app)/body"),
+      ...listFiles("src/components/body"),
+      ...listFiles("src/app/(app)/coach"),
+      "src/app/(app)/settings/page.tsx",
+      "src/app/(app)/today/page.tsx",
+      "src/app/(app)/integrations/page.tsx",
+      "src/app/(app)/oauth/authorize/page.tsx",
+      "src/app/api/export/route.ts",
+      "src/content/whats-new.ts",
+      "src/components/nav-groups.ts",
+      "src/lib/engine/mcp.ts",
+      "src/lib/mcp/server.ts",
+      "src/lib/mcp/tools/body.ts",
+      "src/lib/actions/body.ts",
+      "src/lib/queries/body.ts",
+      "src/lib/whoop.ts",
+      "src/lib/instacart.ts",
+      "src/lib/food-search.ts",
+      "src/lib/integrations.ts",
+      ...listFiles("src/lib/engine").filter((f) => /\/body[^/]*\.ts$/.test(f)),
+    ];
+    const noun = /Body (fat|water|face|is now HumanOS)|Body[A-Z]|group: "Body"|"Body" \|/;
+    const offenders: string[] = [];
+    for (const f of files) {
+      const lines = readFileSync(f, "utf8").split("\n");
+      lines.forEach((line, i) => {
+        const t = line.trim();
+        if (/^(\/\/|\*|\/\*)/.test(t) || /^import .* from /.test(t)) return;
+        // Only what is shown: string literals and JSX text; identifiers never count.
+        if (noun.test(line)) return;
+        for (const m of line.matchAll(/"[^"\n]*"|'[^'\n]*'|`[^`\n]*`|>[^<\n]*</g)) {
+          if (/\bBody\b/.test(m[0])) offenders.push(`${f}:${i + 1}: ${m[0].slice(0, 80)}`);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 });
