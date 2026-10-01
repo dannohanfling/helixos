@@ -624,6 +624,13 @@
       "when": 1790816453444,
       "tag": "0088_body_habits",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1790823768322,
+      "tag": "0089_body_shopping",
+      "breakpoints": true
     }
   ]
 }

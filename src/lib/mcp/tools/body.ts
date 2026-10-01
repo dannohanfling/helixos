@@ -16,8 +16,10 @@ import { fmtSet } from "@/lib/engine/body-training";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
-import { bodyDay, bodyLibrary, bodySettingsFor, bodyWeek, canAiUseBody, correlate, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { bodyDay, bodyLibrary, bodySettingsFor, bodyWeek, canAiUseBody, correlate, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
 import { PRESETS } from "@/lib/engine/body-correlate";
+import { instacartLines, listSummary } from "@/lib/engine/body-shopping";
+import { InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
 import { fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
 import { fmtHours, parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { startOfWeek } from "@/lib/dates";
@@ -503,5 +505,53 @@ defineTool({
     const r = await correlate(v.workspace.id, v.user.id, v.today, v.tz, { a: A.key, b: B.key, lag: Number(input.lag ?? 0), window: Number(input.window ?? 8), grain, excludeFlagged: false });
     if (!r) throw new Error("Unknown metric.");
     return { text: `${r.verdict.words} Window ${r.window} weeks, ${grain}${r.lag ? `, B read ${r.lag} day${r.lag === 1 ? "" : "s"} after A` : ""}. Moving together is not a cause.`, data: { a: A.key, b: B.key, lag: r.lag, window: r.window, grain, r: r.verdict.r, n: r.verdict.n, early: r.verdict.early, kind: r.verdict.kind, pairs: r.pairs } };
+  },
+});
+
+/* ── Phase 10: the shopping list, and the push to Instacart, which only ever returns a link (rev 251). ── */
+
+const listText = (view: NonNullable<Awaited<ReturnType<typeof shoppingView>>>) => (view.list.lines.length ? view.list.sections.map((s) => `${s.label}: ${s.lines.map((l) => `${l.name} ${l.toBuy} ${l.unit}${l.why === "par" ? " (below par)" : l.why === "both" ? " (plan and par)" : ""}`).join(", ")}`).join("\n") : "Nothing to buy: the week's plan is covered by the shelf and nothing is below par.");
+
+defineTool({
+  name: "body_shopping_list",
+  scope: "body",
+  kind: "read",
+  description: "The member's shopping list this week: the saved meals planned (times each), minus what's on the shelf, plus staples below par, grouped by store section with how much to buy in the food's unit.",
+  input: {},
+  handler: async (v): Promise<ToolResult> => {
+    await ready(v);
+    const view = await shoppingView(v.workspace.id, v.user.id, v.today);
+    if (!view) throw new Error("Body isn't set up for this member yet.");
+    const plan = view.planned.length ? `Planned this week: ${view.planned.map((p) => `${p.meal.name} × ${p.times}`).join(", ")}.` : "Nothing planned this week yet (saved meals go on the plan on the Shopping page).";
+    return { text: `${plan}\n${listSummary(view.list)}.\n${listText(view)}`, data: { monday: view.monday, planned: view.planned.map((p) => ({ meal: p.meal.name, times: p.times })), lines: view.list.lines } };
+  },
+});
+
+defineTool({
+  name: "push_to_instacart_cart",
+  scope: "body",
+  kind: "write",
+  description: "Send the member's shopping list to Instacart as a shopping-list page and return its link. Ask the member to confirm first, every time. On that page they pick the store, review, add to cart and pay in Instacart themselves; HelixOS never places or pays for an order. Pass confirm: true after they say yes.",
+  input: { confirm: z.boolean().describe("true only after the member confirmed sending this list"), skip: z.array(z.string()).optional().describe("Food names to leave off") },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const view0 = await shoppingView(v.workspace.id, v.user.id, v.today);
+    if (!view0) throw new Error("Body isn't set up for this member yet.");
+    const skipNames = new Set((Array.isArray(input.skip) ? input.skip : []).map((x) => String(x).toLowerCase()));
+    const skip = new Set(view0.foods.filter((f) => skipNames.has(f.name.toLowerCase())).map((f) => f.id));
+    const view = skip.size ? (await shoppingView(v.workspace.id, v.user.id, v.today, skip))! : view0;
+    if (!view.list.lines.length) return { text: "Nothing to send: the list is empty.", data: { sent: false } };
+    if (input.confirm !== true) return { text: `Not sent. The list is ${listSummary(view.list)}:\n${listText(view)}\nAsk the member to confirm, then call again with confirm: true.`, data: { sent: false, lines: view.list.lines } };
+    const lines = instacartLines(view.list.lines);
+    const logged = lines.map((l) => ({ name: l.name, qty: l.quantity, unit: l.unit }));
+    try {
+      const link = await createShoppingListLink("HelixOS shopping list", lines, null);
+      await db.insert(schema.bodyOrders).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, lines: logged, link, status: "link", note: null });
+      return { text: `Sent ${lines.length} line${lines.length === 1 ? "" : "s"}. Open the link to pick the store, review and pay in Instacart; HelixOS placed nothing: ${link}`, data: { sent: true, link, lines: logged } };
+    } catch (e) {
+      if (!(e instanceof InstacartError)) throw e;
+      await db.insert(schema.bodyOrders).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, lines: logged, link: null, status: "failed", note: e.problem });
+      throw new Error(instacartProblem(e));
+    }
   },
 });

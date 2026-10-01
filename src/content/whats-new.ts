@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 31,
+    date: "2026-10-01",
+    title: "HumanOS: the shopping list and Instacart",
+    lines: ["From Pantry, a Shopping list: pick the saved meals you'll eat this week and how many times, and the list is what they need minus what's on your shelf, plus any staple below its par level, grouped by store section (set on each food). Mark a line bought and it lands on the shelf.", "Push to Instacart turns the list into an Instacart shopping-list page and gives you the link: you pick the store, review, add to cart and pay in Instacart yourself. HelixOS never places or pays for an order. Every push is logged. Claude can read the list and, once you confirm, send it the same way."],
+    audience: "coach",
+  },
+  {
     n: 30,
     date: "2026-10-01",
     title: "HumanOS: Patterns",

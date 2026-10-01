@@ -21,8 +21,11 @@ import { buildHistoryPlan, historySummary, type Existing, type HistoryPlan, type
 import { allow } from "@/lib/rate-limit";
 import { daysFrom } from "@/lib/engine/body-habits";
 import { parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
+import { instacartLines } from "@/lib/engine/body-shopping";
+import { InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
+import { shoppingView } from "@/lib/queries/body";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
-import { nowIso } from "@/lib/dates";
+import { nowIso, startOfWeek } from "@/lib/dates";
 import { bodyAccess, bodySettingsFor, groupReadings, isWorkspaceOwner } from "@/lib/queries/body";
 import { logSync } from "@/lib/integrations";
 
@@ -229,7 +232,7 @@ export async function saveFoodAction(formData: FormData): Promise<void> {
   // Pantry (phase 5, rev 251): the nutrition's basis (cooked unless said raw), a par level, and an entered cooked yield in %.
   const yieldPct = optNum(formData, "yieldPct");
   const par = optNum(formData, "par");
-  const food = { name, unit, cal: num(formData, "cal"), p: num(formData, "p"), f: num(formData, "f"), c: num(formData, "c"), sodium: num(formData, "sodium"), capTag: opt(formData, "capTag")?.toLowerCase().slice(0, 30) ?? null, basis: str(formData, "basis") === "raw" ? ("raw" as const) : ("cooked" as const), par: par != null && par > 0 ? par : null, cookedYield: yieldPct != null && yieldPct >= 10 && yieldPct <= 150 ? Math.round(yieldPct) / 100 : null };
+  const food = { name, unit, cal: num(formData, "cal"), p: num(formData, "p"), f: num(formData, "f"), c: num(formData, "c"), sodium: num(formData, "sodium"), capTag: opt(formData, "capTag")?.toLowerCase().slice(0, 30) ?? null, basis: str(formData, "basis") === "raw" ? ("raw" as const) : ("cooked" as const), section: (schema.FOOD_SECTIONS as readonly string[]).includes(str(formData, "section")) ? (str(formData, "section") as schema.FoodSection) : null, par: par != null && par > 0 ? par : null, cookedYield: yieldPct != null && yieldPct >= 10 && yieldPct <= 150 ? Math.round(yieldPct) / 100 : null };
   if ([food.cal, food.p, food.f, food.c, food.sodium].some((n) => n < 0)) back("/body/foods", `${name}: macros can't be negative.`);
   if (yieldPct != null && (yieldPct < 10 || yieldPct > 150)) back("/body/foods", `${name}: a cooked yield is between 10% and 150%.`);
   if (id) await db.update(schema.bodyFoods).set(food).where(and(eq(schema.bodyFoods.id, id), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
@@ -665,6 +668,8 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
+    db.delete(schema.bodyOrders).where(and(eq(schema.bodyOrders.workspaceId, workspaceId), eq(schema.bodyOrders.userId, userId))),
+    db.delete(schema.bodyPlan).where(and(eq(schema.bodyPlan.workspaceId, workspaceId), eq(schema.bodyPlan.userId, userId))),
     db.delete(schema.bodyHealth).where(and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId))),
     db.delete(schema.bodyHabitLogs).where(and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId))),
     db.delete(schema.bodyHabits).where(and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId))),
@@ -874,4 +879,64 @@ export async function deleteHealthAction(formData: FormData): Promise<void> {
   await db.delete(schema.bodyHealth).where(and(eq(schema.bodyHealth.id, str(formData, "id")), and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId))));
   refresh();
   redirect(HEALTH);
+}
+
+/* ── Shopping and Instacart (rev 237 phase 10). ── */
+
+const SHOPPING = "/body/shopping";
+
+/** This week's plan: a saved meal so many times; 0 takes it off. */
+export async function setPlanAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const mealId = str(formData, "mealId");
+  const meal = await db.query.bodyMeals.findFirst({ where: and(eq(schema.bodyMeals.id, mealId), and(eq(schema.bodyMeals.workspaceId, workspaceId), eq(schema.bodyMeals.userId, userId))) });
+  if (!meal) back(SHOPPING, "Pick one of your saved meals.");
+  const times = Math.max(0, Math.min(21, Math.round(optNum(formData, "times") ?? 1)));
+  const monday = startOfWeek(v.today);
+  const own = and(and(eq(schema.bodyPlan.workspaceId, workspaceId), eq(schema.bodyPlan.userId, userId)), and(eq(schema.bodyPlan.monday, monday), eq(schema.bodyPlan.mealId, mealId)));
+  await db.delete(schema.bodyPlan).where(own);
+  if (times > 0) await db.insert(schema.bodyPlan).values({ id: newId(), workspaceId, userId, monday, mealId, times });
+  refresh();
+  redirect(SHOPPING);
+}
+
+/** Bought: the line goes on the shelf as the food's basis, in the fridge, bought today. */
+export async function boughtAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
+  if (!food) throw back(SHOPPING, "Pick a food.");
+  const qty = optNum(formData, "qty");
+  if (qty == null || qty <= 0) throw back(SHOPPING, `How much ${food.name.toLowerCase()}?`);
+  await db.insert(schema.bodyPantry).values({ id: newId(), workspaceId, userId, foodId: food.id, qty, unit: food.unit, state: food.basis, location: "fridge", boughtOn: v.today, useBy: null });
+  refresh();
+  redirect(SHOPPING);
+}
+
+/**
+ * Push to Instacart: the list as shown (less any lines dropped on the page) becomes a shopping-list page, and its link is logged
+ * as an order with status "link". The member opens it, picks the store, reviews and pays in Instacart. HelixOS places nothing.
+ */
+export async function pushInstacartAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const skip = new Set(str(formData, "skip").split(",").filter(Boolean));
+  const view = await shoppingView(workspaceId, userId, v.today, skip);
+  if (!view || !view.list.lines.length) throw back(SHOPPING, "Nothing on the list to send.");
+  const lines = instacartLines(view.list.lines);
+  const logged = lines.map((l) => ({ name: l.name, qty: l.quantity, unit: l.unit }));
+  try {
+    const link = await createShoppingListLink("HelixOS shopping list", lines, null);
+    const id = newId();
+    await db.insert(schema.bodyOrders).values({ id, workspaceId, userId, lines: logged, link, status: "link", note: null });
+    refresh();
+    redirect(`${SHOPPING}?pushed=${id}`);
+  } catch (e) {
+    if (e instanceof InstacartError) {
+      await db.insert(schema.bodyOrders).values({ id: newId(), workspaceId, userId, lines: logged, link: null, status: "failed", note: e.problem });
+      throw back(SHOPPING, instacartProblem(e));
+    }
+    throw e;
+  }
 }

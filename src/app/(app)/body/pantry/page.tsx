@@ -175,7 +175,7 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
         </Card>
 
         <div className="space-y-4">
-          <Card title="To buy" id="shopping">
+          <Card title="To buy" id="shopping" action={<Link href="/body/shopping" className="text-xs text-ink-2 hover:underline" data-testid="pantry-shopping-link">Shopping list →</Link>}>
             {p.gaps.length ? (
               <ul className="space-y-1 text-sm" data-testid="pantry-gaps">
                 {p.gaps.map((g) => (

@@ -33,6 +33,8 @@ main() {
     OPENALEX_API_KEY="${OPENALEX_API_KEY:-test-key}" \
     UCHAT_BASE_URL="${UCHAT_BASE_URL:-http://localhost:4060}" \
     AIRTABLE_API_URL="${AIRTABLE_API_URL:-http://localhost:4070}" \
+    INSTACART_API_URL="${INSTACART_API_URL:-http://localhost:4071}" \
+    INSTACART_API_KEY="${INSTACART_API_KEY:-test-instacart-key}" \
     BLOB_READ_WRITE_TOKEN="${BLOB_READ_WRITE_TOKEN:-vercel_blob_rw_TESTSTORE_testsecret}" \
     PROOF_BLOB_READ_WRITE_TOKEN="${PROOF_BLOB_READ_WRITE_TOKEN:-vercel_blob_rw_PROOFSTORE_testsecret}" \
     VERCEL_BLOB_API_URL="${VERCEL_BLOB_API_URL:-http://localhost:4050}" \

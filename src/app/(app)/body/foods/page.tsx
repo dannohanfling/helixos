@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { FOOD_SECTIONS } from "@/db/schema";
+import { SECTION_LABEL } from "@/lib/engine/body-shopping";
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { Card, Disclosure } from "@/components/ui";
@@ -40,6 +42,17 @@ function FoodFields({ food, preferred, tags }: { food?: schema.BodyFood; preferr
       <label className="col-span-2 sm:col-span-3">
         <span className="label">Tag (for caps, e.g. cheese)</span>
         <input name="capTag" className="field py-1 text-sm" defaultValue={food?.capTag ?? ""} maxLength={30} list="body-cap-tags" placeholder="none" />
+      </label>
+      <label className="col-span-2">
+        <span className="label">Store section</span>
+        <select name="section" className="field py-1 text-sm" defaultValue={food?.section ?? ""} data-testid="food-section">
+          <option value="">other</option>
+          {FOOD_SECTIONS.filter((x) => x !== "other").map((x) => (
+            <option key={x} value={x}>
+              {SECTION_LABEL[x]}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="col-span-2">
         <span className="label">Nutrition is per</span>

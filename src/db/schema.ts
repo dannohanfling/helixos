@@ -2310,6 +2310,10 @@ export const bodyDayTypes = sqliteTable(
 );
 export type BodyDayType = typeof bodyDayTypes.$inferSelect;
 
+/** Store sections the shopping list groups by (rev 237 phase 10). */
+export const FOOD_SECTIONS = ["produce", "meat", "dairy", "pantry", "frozen", "other"] as const;
+export type FoodSection = (typeof FOOD_SECTIONS)[number];
+
 /** A food, per unit (1 oz, 1 egg, 1 scoop): calories, protein, fat, carbs, and an optional cap tag (cheese). */
 export const bodyFoods = sqliteTable(
   "body_foods",
@@ -2332,6 +2336,8 @@ export const bodyFoods = sqliteTable(
     par: real("par"),
     /** The member's entered cooked ÷ raw factor; the median of their weighings (body_yields) stands in when blank. */
     cookedYield: real("cooked_yield"),
+    /** Shopping (rev 237 phase 10): the store section the list groups by; null reads as other. */
+    section: text("section", { enum: FOOD_SECTIONS }),
     archivedAt: text("archived_at"),
     createdAt: createdAt(),
   },
@@ -2775,6 +2781,46 @@ export const bodyHealth = sqliteTable(
   (t) => [index("body_health_member").on(t.workspaceId, t.userId)],
 );
 export type BodyHealth = typeof bodyHealth.$inferSelect;
+
+/* ── Shopping and Instacart (rev 237 phase 10, migration 0089). ── */
+
+/** The week's plan the shopping list starts from: a saved meal, how many times this week (Monday-keyed). */
+export const bodyPlan = sqliteTable(
+  "body_plan",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    monday: text("monday").notNull(),
+    mealId: text("meal_id").notNull(),
+    times: integer("times").notNull().default(1),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_plan_member_week_meal").on(t.workspaceId, t.userId, t.monday, t.mealId)],
+);
+export type BodyPlanRow = typeof bodyPlan.$inferSelect;
+
+export type BodyOrderLine = { name: string; qty: number; unit: string };
+/**
+ * Every push to Instacart (rev 232's log): the lines sent, the shopping-list link that came back, and a status. Today the last step
+ * creates the link and stops ("link"); auto-ordering later adds pending, placed and cancelled without rework. HelixOS never
+ * places or pays for an order, and nothing of a payment is ever here.
+ */
+export const bodyOrders = sqliteTable(
+  "body_orders",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    lines: text("lines", { mode: "json" }).$type<BodyOrderLine[]>().notNull().default([]),
+    link: text("link"),
+    status: text("status", { enum: ["link", "failed", "pending", "placed", "cancelled"] }).notNull().default("link"),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_orders_member").on(t.workspaceId, t.userId)],
+);
+export type BodyOrder = typeof bodyOrders.$inferSelect;
 
 /**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,

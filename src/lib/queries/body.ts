@@ -12,6 +12,7 @@ import { fmtHabitValue, habitsWeek, kept, dueOn, streak, weekDots, type Dot } fr
 import { fmtHours, isRecoveryKey, sleepAverages, sleepWeek, type Night, type RecoveryKey } from "@/lib/engine/body-recovery";
 import { weekday } from "@/lib/dates";
 import { METRIC_DEFS, habitKey, isHabitKey, pairUp, verdict, type Fold, type Grain, type MetricDef, type Point } from "@/lib/engine/body-correlate";
+import { shoppingList, type ShopFood } from "@/lib/engine/body-shopping";
 import { change, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, weekTally, type WeightUnit } from "@/lib/engine/body-training";
@@ -826,3 +827,27 @@ export async function correlate(workspaceId: string, userId: string, today: stri
   return { a: A, b: B, lag, window, grain: input.grain, from, to, seriesA: a.filter((p) => p.date >= from), seriesB: b, pairs, excluded: excluded.size, verdict: read, metrics };
 }
 export type CorrelateView = NonNullable<Awaited<ReturnType<typeof correlate>>>;
+
+/* ───────── Shopping and Instacart (rev 237 phase 10) ───────── */
+
+/** The week's plan, the list it gives with the shelf and the par levels, and the log of pushes. `skip` drops foods for this view only. */
+export async function shoppingView(workspaceId: string, userId: string, today: string, skip: Set<string> = new Set()) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const monday = startOfWeek(today);
+  const [library, plan, items, orders] = await Promise.all([
+    bodyLibrary(workspaceId, userId),
+    db.query.bodyPlan.findMany({ where: and(and(eq(schema.bodyPlan.workspaceId, workspaceId), eq(schema.bodyPlan.userId, userId)), eq(schema.bodyPlan.monday, monday)) }),
+    db.query.bodyPantry.findMany({ where: and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId)) }),
+    db.query.bodyOrders.findMany({ where: and(eq(schema.bodyOrders.workspaceId, workspaceId), eq(schema.bodyOrders.userId, userId)), orderBy: desc(schema.bodyOrders.createdAt), limit: 10 }),
+  ]);
+  const meals = library.meals.filter((m) => !m.archivedAt);
+  const planned = plan.flatMap((p) => {
+    const m = meals.find((x) => x.id === p.mealId);
+    return m ? [{ meal: m, times: p.times }] : [];
+  });
+  const foods: ShopFood[] = library.foods.map((f) => ({ id: f.id, name: f.name, unit: f.unit, basis: f.basis, par: f.par, cookedYield: f.cookedYield, section: f.section }));
+  const list = shoppingList(foods, planned.map((p) => ({ times: p.times, lines: p.meal.lines.map((l) => ({ foodId: l.food.id, qty: l.qty })) })), items, skip);
+  return { settings, monday, meals, planned, list, orders, foods: library.foods };
+}
+export type ShoppingView = NonNullable<Awaited<ReturnType<typeof shoppingView>>>;
