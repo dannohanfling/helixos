@@ -80,9 +80,10 @@ export const memberships = sqliteTable(
     bodyEnabled: integer("body_enabled", { mode: "boolean" }).notNull().default(false),
     /**
      * "Let my coach work in my HelixOS" (rev 216): whether a coach switched into this client may create and edit, not only
-     * look. On for clients the coach creates or imports, off for those who join themselves; the client changes it in Settings.
+     * look. On by default for every new client, every tier (Danno, 1 Oct: some clients cannot find things, and he sets them up);
+     * the client turns it off in Settings, and the roster marks who has.
      */
-    coachCanWork: integer("coach_can_work", { mode: "boolean" }).notNull().default(false),
+    coachCanWork: integer("coach_can_work", { mode: "boolean" }).notNull().default(true),
     /**
      * "Let my coach's assistant know my progress" (Community Loyalty chat, rev 241): whether HelixOS posts a short progress
      * snapshot (pathway stage, goal, this week's 3-1-3, main offer) to the coach's bot. On by default; the member's own switch.
@@ -477,6 +478,9 @@ export const communitySettings = sqliteTable(
     monthTime: text("month_time").notNull().default("08:00"),
     monthText: text("month_text"),
     monthNotify: integer("month_notify", { mode: "boolean" }).notNull().default(true),
+    /** The graphic each post carries (rev 328: every monthly post ends with a 540 by 540 image): a deck_images row of the coach's, copied to the public store when the post is sent. */
+    monthImageId: text("month_image_id"),
+    mondayImageId: text("monday_image_id"),
     /** Who the posts come from: the community member contact id of a team member (Danno's own community profile, 28 Sep live test), and the name shown. Never a client. */
     postAsId: text("post_as_id"),
     postAsName: text("post_as_name"),
@@ -519,6 +523,10 @@ export const communityPosts = sqliteTable(
     error: text("error"),
     /** What the last read-back found (the planner's own status word, or its answer when the read failed), for the coach and for us. */
     checkNote: text("check_note"),
+    /** The graphic sent with the post: the library image it came from, and the public copy's key and URL the planner was given. */
+    imageId: text("image_id"),
+    imageKey: text("image_key"),
+    imageUrl: text("image_url"),
     /** Whether this post asked the community to notify every member (the Monday post's setting when it was sent; never a test). */
     notifyAll: integer("notify_all", { mode: "boolean" }).notNull().default(false),
     /** What GoHighLevel shows the post as from, when it says (the test post settles whether a team user is accepted). */

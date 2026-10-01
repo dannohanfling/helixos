@@ -94,6 +94,18 @@ describe("switch to client: no write escapes the gate", () => {
   });
 });
 
+describe("coach working access on by default (Danno, 1 Oct): the 0092 backfill for every coach-created client", () => {
+  it("flips coach_can_work on for every client with emails off from the import, signed in or not, never a self-joined one, and logs each", () => {
+    const sql = readFileSync(join(SRC, "..", "drizzle", "0092_month_graphic_coach_work.sql"), "utf8");
+    expect(sql).toMatch(/ALTER TABLE `memberships` ALTER COLUMN "coach_can_work" TO "coach_can_work" integer NOT NULL DEFAULT true|`coach_can_work` integer DEFAULT true NOT NULL/);
+    const rule = /`role` = 'client' AND (m\.)?`coach_can_work` = 0 AND (m\.)?`emails_enabled` = 0 AND (m\.)?`removed_at` IS NULL/g;
+    expect(sql.match(rule)?.length).toBe(2);
+    expect(sql).not.toMatch(/first_signed_in_at/);
+    expect(sql).toMatch(/'account', 'in', 'coach_work\.on'/);
+    expect(sql.indexOf("INSERT INTO `sync_events`")).toBeLessThan(sql.indexOf("UPDATE `memberships`"));
+  });
+});
+
 describe("switch to client: the backfill for clients the coach created (rev 275)", () => {
   it("flips coach_can_work on only for a client with emails off from the import who has never signed in, and logs each one", () => {
     const sql = readFileSync(join(SRC, "..", "drizzle", "0087_coach_work_backfill.sql"), "utf8");

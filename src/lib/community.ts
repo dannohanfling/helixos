@@ -11,6 +11,8 @@ import { newId } from "@/lib/ids";
 import { nowIso, nowWallInTz, todayInTz } from "@/lib/dates";
 import { connectionFor, createPost, getPost, listPostsIn } from "@/lib/ghl";
 import { logSync } from "@/lib/integrations";
+import { readProofObject } from "@/lib/proof-storage";
+import { putPublicMagnet } from "@/lib/storage";
 import { redactSecrets } from "@/lib/engine/redact";
 import { HOLD_REASON, TEST_TITLE, UNKNOWN_REASON, communityDetails, communityHtml, mondayTestText, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, monthDue, monthShareTarget, monthShareText, monthTestText, monthText, monthTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
 
@@ -27,8 +29,35 @@ export async function coachTz(s: CommunitySettings): Promise<string> {
 
 type Sent = { ok: true; ghlPostId: string | null } | { ok: false; error: string; hold: boolean };
 
+/**
+ * The post's graphic (rev 328: every monthly post ends with a 540 by 540 image), from the coach's Images library. The library
+ * is the private store, which the Social Planner can't read, so the picked image is copied once to the public store under a
+ * community/ key when the post is sent, and that URL goes in the planner's media field; the row keeps the key and URL. A copy
+ * that fails (the store not set, the image gone) never stops the post: it goes without the graphic, and the row says so.
+ */
+async function graphicFor(s: CommunitySettings, row: CommunityPost): Promise<{ media: { url: string; type: string }[]; note: string | null }> {
+  if (!row.imageId) return { media: [], note: null };
+  if (row.imageUrl) return { media: [{ url: row.imageUrl, type: "image/png" }], note: null };
+  const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, row.imageId), eq(schema.deckImages.workspaceId, s.workspaceId)) });
+  if (!img) return { media: [], note: "The graphic picked for this post is no longer in the Images library, so it went without one." };
+  try {
+    const res = await readProofObject(img.blobUrl);
+    if (!res.ok) throw new Error(`read ${res.status}`);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const ext = img.mime === "image/jpeg" ? "jpg" : img.mime === "image/webp" ? "webp" : img.mime === "image/gif" ? "gif" : "png";
+    const period = row.monthOf ?? row.weekOf ?? "test";
+    const stored = await putPublicMagnet(s.workspaceId, "community", `${row.kind}-${period}.${ext}`, bytes, img.mime);
+    if (!stored.url) throw new Error("no url");
+    await db.update(schema.communityPosts).set({ imageKey: stored.key, imageUrl: stored.url, updatedAt: nowIso() }).where(eq(schema.communityPosts.id, row.id));
+    return { media: [{ url: stored.url, type: img.mime }], note: null };
+  } catch (e) {
+    console.error("[community] graphic copy failed", JSON.stringify({ postId: row.id, detail: redactSecrets(e instanceof Error ? `${e.name}: ${e.message}` : String(e)).slice(0, 200) }));
+    return { media: [], note: "The graphic couldn't be copied for the planner (is the file store set up?), so the post went without it." };
+  }
+}
+
 /** One post to the community channel, from the team user. Says what went wrong in the coach's words, and whether it was a hold. */
-async function send(s: CommunitySettings, title: string, body: string, notify: boolean, mentionEveryone: boolean): Promise<Sent> {
+async function send(s: CommunitySettings, title: string, body: string, notify: boolean, mentionEveryone: boolean, media: { url: string; type: string }[] = []): Promise<Sent> {
   if (!s.channelAccountId) return { ok: false, error: "Pick the community channel first.", hold: false };
   const conn = await connectionFor(s.coachUserId);
   if (!conn) return { ok: false, error: "Connect GoHighLevel on Settings → Publishing first.", hold: false };
@@ -39,7 +68,7 @@ async function send(s: CommunitySettings, title: string, body: string, notify: b
   const coach = await db.query.users.findFirst({ where: eq(schema.users.id, s.coachUserId) });
   const postAs = { id: postAsId, name: s.postAsName?.trim() || coach?.name || "HelixOS" };
   // The community shows HTML (rev 169): the plain text the coach wrote goes out with its paragraphs and line breaks kept.
-  const r = await createPost(conn, { accountId: s.channelAccountId, summary: communityHtml(body, { mentionEveryone }), type: "post", scheduleDate: null, community: { details: communityDetails(s.channelAccountId, title, postAs, notify), userId: postAsId } });
+  const r = await createPost(conn, { accountId: s.channelAccountId, summary: communityHtml(body, { mentionEveryone }), type: "post", scheduleDate: null, media, community: { details: communityDetails(s.channelAccountId, title, postAs, notify), userId: postAsId } });
   if (r.ok) return { ok: true, ghlPostId: r.data.id };
   const fail = r as { error: string; status?: number; detail?: string };
   const hold = isAccountHold(fail);
@@ -56,8 +85,10 @@ async function sendRow(s: CommunitySettings, row: CommunityPost, title: string, 
   // Only a real post (Monday's or the month's) ever notifies, and only as the row says (set when it was claimed): a test never does.
   // @everyone as a real mention on the real posts only (rev 203); a test keeps it as words. Independent of the notify flag.
   const real = row.kind !== "test";
-  const r = await send(s, title, body, real && row.notifyAll, real);
+  const graphic = await graphicFor(s, row);
+  const r = await send(s, title, body, real && row.notifyAll, real, graphic.media);
   const now = nowIso();
+  if (graphic.note) await db.update(schema.communityPosts).set({ checkNote: graphic.note, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
   const period = row.kind === "month" ? { monthOf: row.monthOf ?? undefined } : { weekOf: row.weekOf ?? undefined };
   if (r.ok) {
     await db.update(schema.communityPosts).set({ ghlPostId: r.ghlPostId, error: null, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
@@ -83,7 +114,7 @@ export async function postMonday(s: CommunitySettings, weekOf: string, opts: { r
   const now = nowIso();
   const [claimed] = await db
     .update(schema.communityPosts)
-    .set({ status: "sent", sentAt: now, error: null, accountId: s.channelAccountId, title, notifyAll: s.mondayNotify, updatedAt: now })
+    .set({ status: "sent", sentAt: now, error: null, accountId: s.channelAccountId, title, notifyAll: s.mondayNotify, imageId: s.mondayImageId, updatedAt: now })
     .where(and(eq(schema.communityPosts.workspaceId, s.workspaceId), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, weekOf), inArray(schema.communityPosts.status, [...claimable])))
     .returning();
   if (!claimed) return { ok: false, error: "That week's post has already gone out, or was skipped." };
@@ -105,7 +136,7 @@ export async function postMonth(s: CommunitySettings, monthOf: string, opts: { r
   const now = nowIso();
   const [claimed] = await db
     .update(schema.communityPosts)
-    .set({ status: "sent", sentAt: now, error: null, accountId: s.channelAccountId, title, notifyAll: s.monthNotify, updatedAt: now })
+    .set({ status: "sent", sentAt: now, error: null, accountId: s.channelAccountId, title, notifyAll: s.monthNotify, imageId: s.monthImageId, updatedAt: now })
     .where(and(eq(schema.communityPosts.workspaceId, s.workspaceId), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, monthOf), inArray(schema.communityPosts.status, [...claimable])))
     .returning();
   if (!claimed) return { ok: false, error: "That month's post has already gone out, or was skipped." };
@@ -125,7 +156,9 @@ export async function postTest(s: CommunitySettings, opts: { mondayTitle?: strin
   const id = newId();
   const title = opts.mondayTitle ? `Test: ${opts.mondayTitle}` : opts.monthTitle ? `Test: ${opts.monthTitle}` : TEST_TITLE;
   const text = opts.mondayTitle ? mondayTestText(mondayText(s.mondayText), now) : opts.monthTitle ? monthTestText(monthText(s.monthText), now) : testText(now);
-  await db.insert(schema.communityPosts).values({ id, workspaceId: s.workspaceId, coachUserId: s.coachUserId, kind: "test", title, body: text, accountId: s.channelAccountId, status: "sent", sentAt: now, notifyAll: false });
+  // A Monday or month text test carries that post's graphic too, so the coach sees the whole post as it will go out.
+  const imageId = opts.mondayTitle ? s.mondayImageId : opts.monthTitle ? s.monthImageId : null;
+  await db.insert(schema.communityPosts).values({ id, workspaceId: s.workspaceId, coachUserId: s.coachUserId, kind: "test", title, body: text, accountId: s.channelAccountId, status: "sent", sentAt: now, notifyAll: false, imageId });
   const row = (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, id) }))!;
   if (s.pausedReason) {
     await db.update(schema.communityPosts).set({ status: "failed", error: s.pausedReason }).where(eq(schema.communityPosts.id, id));

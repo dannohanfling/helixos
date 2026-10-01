@@ -35,10 +35,12 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
   const monthTime = s?.monthTime ?? DEFAULT_POST_TIME;
   const nextMonthOf = upcomingMonth(v.today, nowTime, monthTime);
   const thisMonthOf = v.today.slice(0, 7);
-  const [posts, scopes, clients] = await Promise.all([
+  const [posts, scopes, clients, library] = await Promise.all([
     db.query.communityPosts.findMany({ where: eq(schema.communityPosts.workspaceId, v.workspace.id), orderBy: [desc(schema.communityPosts.createdAt)], limit: 60 }),
     conn?.manualToken ? probeCommunityScopes(conn) : Promise.resolve([]),
     db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client"), isNull(schema.memberships.removedAt)) }),
+    // The coach's own Images library, for the graphic each post carries (rev 328).
+    db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), orderBy: [desc(schema.deckImages.createdAt)] }),
   ]);
   const mondays = posts.filter((p) => p.kind === "monday");
   const months = posts.filter((p) => p.kind === "month");
@@ -151,6 +153,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                 <textarea className="field mt-1" name="mondayText" rows={6} defaultValue={mondayText(s?.mondayText)} data-testid="community-text" />
                 <span className="mt-1 block text-xs text-ink-3">The title is set each week: &ldquo;{mondayTitle(next)}&rdquo;.</span>
               </label>
+              <GraphicPicker name="mondayImageId" label="Graphic for the Monday post (optional)" value={s?.mondayImageId ?? null} library={library} testid="community-monday-image" />
               {/* The first-of-the-month post (1 Oct): the same channel and Posted as, its own switch, time and text. */}
               <fieldset className="min-w-0 space-y-3 rounded-lg border p-3" data-testid="community-month-setup">
                 <legend className="px-1 text-sm font-semibold">The first of the month</legend>
@@ -171,6 +174,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                   <textarea className="field mt-1" name="monthText" rows={8} defaultValue={monthText(s?.monthText)} data-testid="community-month-text" />
                   <span className="mt-1 block text-xs text-ink-3">The title is set each month: &ldquo;{monthTitle(nextMonthOf)}&rdquo;.</span>
                 </label>
+                <GraphicPicker name="monthImageId" label="Graphic for the month post" value={s?.monthImageId ?? null} library={library} testid="community-month-image" />
               </fieldset>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block text-sm font-medium">
@@ -385,6 +389,29 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
   );
 }
 
+/**
+ * The graphic a post goes out with (rev 328): one of the coach's own library images, square for the community. The library
+ * is on the Images page; the planner gets a public copy when the post is sent.
+ */
+function GraphicPicker({ name, label, value, library, testid }: { name: string; label: string; value: string | null; library: { id: string; caption: string | null; kind: string; width: number; height: number }[]; testid: string }) {
+  return (
+    <label className="block text-sm font-medium">
+      {label}
+      <select className="field mt-1" name={name} defaultValue={value ?? ""} data-testid={testid}>
+        <option value="">No graphic</option>
+        {library.map((img) => (
+          <option key={img.id} value={img.id}>
+            {img.caption ? img.caption : img.kind} · {img.kind} · {img.width}×{img.height}
+          </option>
+        ))}
+      </select>
+      <span className="mt-1 block text-xs text-ink-3">
+        A square image (540 by 540) from your <Link className="underline" href="/images">Images</Link> library, sent at the bottom of the post. Make the month&apos;s in Canva and add it there first.
+      </span>
+    </label>
+  );
+}
+
 /** One post: its title, status, reason, who it showed as, its ids and link, and a Check again while it's on its way. */
 function PostLine({ p, tz, testid }: { p: CommunityPost; tz: string; testid?: string }) {
   return (
@@ -399,6 +426,11 @@ function PostLine({ p, tz, testid }: { p: CommunityPost; tz: string; testid?: st
         {p.authorShown ? <span data-testid="community-author">Shown as {p.authorShown}. </span> : null}
         {p.notifyAll ? <span data-testid="community-notified">Asked to notify all members. </span> : null}
         {p.ghlPostId ? <span>Planner id {p.ghlPostId}. </span> : null}
+        {p.imageUrl ? (
+          <a className="underline" href={p.imageUrl} target="_blank" rel="noreferrer" data-testid="community-post-graphic">
+            With its graphic.{" "}
+          </a>
+        ) : null}
         {p.platformPostId ? <span data-testid="community-platform-id">Community id {p.platformPostId}. </span> : null}
         {p.link ? (
           <a className="underline" href={p.link} target="_blank" rel="noreferrer" data-testid="community-post-link">

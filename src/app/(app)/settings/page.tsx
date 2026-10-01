@@ -359,6 +359,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="coach-work-save">
                 Save
               </SubmitButton>
+              {v.membership.programTier === "Luxe" ? <span className="text-xs text-ink-3" data-testid="coach-work-luxe">As part of Luxe, your coach works in your HelixOS with you.</span> : null}
             </form>
             <p className="mt-2 text-xs text-ink-3">Your coach can always look at your HelixOS to help you. With this on, they can also set things up for you (offers, webinars, tasks, Essence, groups, content). They never see HumanOS, send anything as you, or change your account.</p>
             <h3 className="mt-3 text-sm font-semibold">Changes by your coach</h3>

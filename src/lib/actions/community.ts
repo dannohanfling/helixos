@@ -60,6 +60,16 @@ export async function saveCommunitySettingsAction(formData: FormData): Promise<v
   if (monthBody.length > TEXT_MAX) back("setup", { error: "The month text is longer than the community allows." });
   const monthOn = formData.get("monthOn") === "on";
   if (monthOn && !channel) back("setup", { error: "Pick the channel before turning the month post on." });
+  // The graphics (rev 328): an image from the coach's own Images library, or none.
+  const library = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)) });
+  const pickImage = (field: string): string | null => {
+    const id = str(formData, field).trim();
+    if (!id) return null;
+    if (!library.some((i) => i.id === id)) back("setup", { error: "Pick the graphic from your own Images library." });
+    return id;
+  };
+  const monthImageId = pickImage("monthImageId");
+  const mondayImageId = pickImage("mondayImageId");
   await db
     .update(schema.communitySettings)
     .set({
@@ -75,6 +85,8 @@ export async function saveCommunitySettingsAction(formData: FormData): Promise<v
       monthNotify: formData.get("monthNotify") === "on",
       monthTime: monthTime!,
       monthText: monthBody && monthBody !== DEFAULT_MONTH_TEXT ? monthBody : null,
+      monthImageId,
+      mondayImageId,
       postAsId: opt(formData, "postAsId"),
       postAsName: opt(formData, "postAsName"),
       // The pattern is the chosen channel's own (each channel's address has its own slug); the other channels' are kept.

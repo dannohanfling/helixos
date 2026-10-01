@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 41,
+    date: "2026-10-01",
+    title: "The month's thread, in the post's own shape",
+    lines: [
+      "Share your month copies your eleven answers numbered the way the month's post numbers its questions, so your comment reads like the post. The month post's title is now \"Set Your Intentions November 2026\".",
+      "Coaches: the month post (and the Monday one) can carry a graphic from your Images library, picked under Setup on Community posts; a square 540 by 540 image is sent at the bottom of the post. New clients start with \"Let my coach work in my HelixOS\" on, every tier, and can turn it off in Settings; the roster marks who has.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 40,
     date: "2026-10-01",
     title: "Deck pictures keep their shape",

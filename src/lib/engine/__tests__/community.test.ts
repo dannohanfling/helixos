@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MONDAY_TEXT, DEFAULT_MONTH_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, monthDue, monthShareRef, monthShareText, monthShareTarget, monthTestText, monthText, monthTitle, nextMonth, normalTime, postLink, upcomingMonth, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink, communityHtml, plainOf, mondayTestText, EVERYONE_MENTION } from "../community";
+import { DEFAULT_MONDAY_TEXT, DEFAULT_MONTH_TEXT, SHARE_POINTS, emojiNumeral, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, monthDue, monthShareRef, monthShareText, monthShareTarget, monthTestText, monthText, monthTitle, nextMonth, normalTime, postLink, upcomingMonth, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink, communityHtml, plainOf, mondayTestText, EVERYONE_MENTION } from "../community";
 import { MONTH_QUESTIONS } from "../month-intentions";
 
 describe("the first-of-the-month post (1 Oct)", () => {
   it("is titled the way Danno titles it", () => {
-    expect(monthTitle("2026-10")).toBe("Set Your October Intentions");
-    expect(monthTitle("2026-11")).toBe("Set Your November Intentions");
+    expect(monthTitle("2026-10")).toBe("Set Your Intentions October 2026");
+    expect(monthTitle("2027-01")).toBe("Set Your Intentions January 2027");
   });
   it("is due on the 1st only, from the coach's month time until the day ends", () => {
     expect(monthDue("2026-11-01", "07:59", "08:00")).toBe(false);
@@ -24,8 +24,13 @@ describe("the first-of-the-month post (1 Oct)", () => {
   it("uses the eleven questions as the default text until the coach writes their own", () => {
     expect(monthText(null)).toBe(DEFAULT_MONTH_TEXT);
     expect(monthText(" Mine ")).toBe("Mine");
-    for (const q of MONTH_QUESTIONS) expect(DEFAULT_MONTH_TEXT).toContain(q.q);
-    expect(DEFAULT_MONTH_TEXT).toContain("@everyone");
+    // The October post's shape (rev 328): emoji numerals, the seasons spelled inline, @everyone last.
+    for (const [i, q] of MONTH_QUESTIONS.entries()) expect(DEFAULT_MONTH_TEXT).toContain(`${emojiNumeral(i + 1)} ${q.key === "personalSeason" || q.key === "businessSeason" ? q.q.replace("?", "") : q.q}`);
+    expect(DEFAULT_MONTH_TEXT).toContain("(self, wealth, relationships, or spirituality)");
+    expect(DEFAULT_MONTH_TEXT).toContain("(marketing, sales, fulfillment, or maybe operations)");
+    expect(DEFAULT_MONTH_TEXT.trim().endsWith("@everyone")).toBe(true);
+    expect(emojiNumeral(1)).toBe("1\uFE0F\u20E3");
+    expect(emojiNumeral(11)).toBe("1\uFE0F\u20E31\uFE0F\u20E3");
     expect(monthTestText("Text", "2026-10-01T08:00:00.000Z")).toContain("A test of the month text from HelixOS, sent 2026-10-01 08:00 UTC");
   });
   it("shares the eleven answers, question by question, revenue included as Danno asked", () => {
@@ -43,7 +48,9 @@ describe("the first-of-the-month post (1 Oct)", () => {
         "Plan: Two offers a week",
         "Most proud of last month: Launched",
         "At the end of the month, proud of: Kept every promise",
-      ].join("\n\n"),
+      ]
+        .map((a, i) => `${emojiNumeral(i + 1)} ${a}`)
+        .join("\n"),
     );
     expect(monthShareRef("2026-11")).toBe("share:month:2026-11");
   });

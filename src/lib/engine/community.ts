@@ -20,17 +20,29 @@ export const testText = (sentAtIso: string): string => `A test from HelixOS, to 
 
 /* ───────── The first-of-the-month post (1 Oct, Danno's priority 1) ───────── */
 
+/** 1️⃣ to 1️⃣1️⃣: the emoji numerals the October post numbers its questions with (rev 328). */
+export const emojiNumeral = (n: number): string => String(n).split("").map((d) => `${d}\uFE0F\u20E3`).join("");
+/** The seasons spelled inline in the question, as the October post has them. */
+const MONTH_QUESTION_LINES = MONTH_QUESTIONS.map((q, i) => {
+  const text = q.key === "personalSeason" ? "What personal season are you in? (self, wealth, relationships, or spirituality)" : q.key === "businessSeason" ? "What season is your business in? (marketing, sales, fulfillment, or maybe operations)" : q.q;
+  return `${emojiNumeral(i + 1)} ${text}`;
+});
 /**
- * The month post's default text until the coach edits it: a short intro and the eleven questions, in Danno's order (the same
- * eleven the month form asks). Danno pastes his approved wording over it on the Community posts page.
+ * The month post's default text until the coach edits it, in the shape of Danno's October post (rev 328, read off the live
+ * thread): a two-line opener, the eleven questions numbered with emoji numerals and the seasons spelled inline, four short
+ * paragraphs on why planning the month matters, then @everyone. Danno pastes his own wording over it on the Community posts page.
  */
 export const DEFAULT_MONTH_TEXT = [
-  "A new month. Before the week-by-week work, let's set the month on purpose. Answer the eleven below and share them here, so we can hold each other to them and check in with you through the month. @everyone",
-  MONTH_QUESTIONS.map((q, i) => `${i + 1}. ${q.q}`).join("\n"),
+  "A new month, a fresh page.\nBefore the week-by-week work starts, let's set the whole month on purpose.",
+  MONTH_QUESTION_LINES.join("\n"),
+  "Why plan the month? Because a month is long enough to move something real, and short enough to stay honest about it.",
+  "The word you choose becomes the lens for every decision you make this month, and the fear you name loses half its grip the moment it is written down.",
+  "A revenue goal with a why behind it, and a plan to reach it, turns hope into a schedule.",
+  "Post your eleven answers below so we can hold you to them and cheer you on through the month. @everyone",
 ].join("\n\n");
 const monthName = (monthOf: string): string => new Date(`${monthOf}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
-/** "Set Your October Intentions": the title pattern Danno uses. */
-export const monthTitle = (monthOf: string): string => `Set Your ${monthName(monthOf)} Intentions`;
+/** "Set Your Intentions October 2026": the title pattern of Danno's live post (rev 328), month and year, no dates. */
+export const monthTitle = (monthOf: string): string => `Set Your Intentions ${monthName(monthOf)} ${monthOf.slice(0, 4)}`;
 /** The month after ("2026-12" → "2027-01"). */
 export function nextMonth(monthOf: string): string {
   const y = Number(monthOf.slice(0, 4));
@@ -183,11 +195,11 @@ export function shareText(week: { word: string; keyResults: { text: string }[]; 
 /** Points for sharing the month's eleven answers to the month's thread (1 Oct): the same, once per month. */
 export const monthShareRef = (monthOf: string): string => `share:month:${monthOf}`;
 /**
- * The member's month as a ready-made comment: the eleven answers, question by question, in the shape the week uses. Danno
- * asked for all eleven (1 Oct), the revenue goal included; the member sees exactly what they paste.
+ * The member's month as a ready-made comment: the eleven answers in the post's own numbered shape (rev 328), one per line,
+ * the revenue goal included (Danno, rev 346: it is set together on the call, so it can be public).
  */
 export function monthShareText(m: { word: string; personalSeason: string; fear: string; habit: string; skill: string; impact: string; businessSeason: string; revenueGoal: number; revenueWhy: string; plan: string; proudLast: string; proudEnd: string }): string {
-  return [
+  const answers = [
     `My word: ${m.word.trim()}`,
     `Personal season: ${seasonLabel(m.personalSeason)}`,
     `Fear or limiting belief to overcome: ${m.fear.trim()}`,
@@ -199,7 +211,8 @@ export function monthShareText(m: { word: string; personalSeason: string; fear: 
     `Plan: ${m.plan.trim()}`,
     `Most proud of last month: ${m.proudLast.trim()}`,
     `At the end of the month, proud of: ${m.proudEnd.trim()}`,
-  ].join("\n\n");
+  ];
+  return answers.map((a, i) => `${emojiNumeral(i + 1)} ${a}`).join("\n");
 }
 /** Where the month's share goes: this month's post, once it's out with its link. Never an older month's post. */
 export function monthShareTarget(post: { monthOf: string | null; status: string; link: string | null } | null | undefined, monthOf: string): { link: string } | { reason: string } {

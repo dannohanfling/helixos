@@ -17,6 +17,9 @@ import { chromium, type Page } from "@playwright/test";
 const base = process.argv[2] ?? "http://localhost:3000";
 const mockPort = 4012;
 const mock = `http://localhost:${mockPort}`;
+/** The file store stand-in (scripts/mock-blob.ts), for the graphic a post carries (rev 328): the dev server points both stores at it. */
+const blobPort = 4050;
+const PROOF_TOKEN = process.env.PROOF_BLOB_READ_WRITE_TOKEN ?? "vercel_blob_rw_PROOFSTORE_testsecret";
 const LOC = "loc_community";
 
 async function submit(page: Page, selector: string) {
@@ -52,13 +55,15 @@ async function cron(page: Page) {
 
 async function main() {
   const { db, schema } = await import("@/db");
-  const { and, eq } = await import("drizzle-orm");
+  const { and, desc, eq } = await import("drizzle-orm");
   const { addDays, nowWallInTz, startOfWeek, todayInTz } = await import("@/lib/dates");
   const { HOLD_REASON, TEST_TITLE, mondayDue, mondayTitle, upcomingWeek, DEFAULT_MONDAY_TEXT, communityHtml } = await import("@/lib/engine/community");
   const { newId } = await import("@/lib/ids");
 
   const child = spawn("npx", ["tsx", "scripts/mock-ghl.ts", String(mockPort)], { stdio: "ignore", detached: true });
+  const blob = spawn("npx", ["tsx", "scripts/mock-blob.ts", String(blobPort)], { stdio: "ignore", detached: true });
   await new Promise((r) => setTimeout(r, 2500));
+  await fetch(`http://localhost:${blobPort}/__reset`).catch(() => null);
   await fetch(`${mock}/__reset`, { method: "POST", headers: { Authorization: `Bearer pit-${LOC}`, Version: "2021-07-28" } }).catch(() => null);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -415,7 +420,7 @@ async function main() {
     // ── 8. The first of the month (1 Oct): its own switch, time and text; the month text as a test; next month's own text,
     //       skipped and back on; a month posted by hand takes its link; a failed month is posted once with Post now; the
     //       member's share from the month card copies the eleven answers; the coach's counts. ──
-    const { DEFAULT_MONTH_TEXT, monthShareText, monthTitle, upcomingMonth } = await import("@/lib/engine/community");
+    const { DEFAULT_MONTH_TEXT, emojiNumeral, monthShareText, monthTitle, upcomingMonth } = await import("@/lib/engine/community");
     const thisMonth = today.slice(0, 7);
     const lastMonth = thisMonth.slice(5, 7) === "01" ? `${Number(thisMonth.slice(0, 4)) - 1}-12` : `${thisMonth.slice(0, 4)}-${String(Number(thisMonth.slice(5, 7)) - 1).padStart(2, "0")}`;
     await page.goto(`${base}/coach/community?view=month#setup`);
@@ -430,9 +435,38 @@ async function main() {
     const nextM = upcomingMonth(today, nowWallInTz(tz).slice(11, 16), "00:00");
     await submit(page, '[data-testid="community-test-month"]');
     const monthTest = (await mockPosts()).find((p) => (p.communityPostDetails as Details | undefined)?.title === `Test: ${monthTitle(nextM)}`);
-    if (!monthTest || !String(monthTest.summary).startsWith(communityHtml(DEFAULT_MONTH_TEXT)) || !String(monthTest.summary).includes("1. What is one word")) throw new Error(`the month text goes out as a test under next month's title, with the eleven questions: ${String(monthTest?.summary).slice(0, 200)}`);
+    if (!monthTest || !String(monthTest.summary).startsWith(communityHtml(DEFAULT_MONTH_TEXT)) || !String(monthTest.summary).includes(`${emojiNumeral(1)} What is one word`) || !String(monthTest.summary).includes("(self, wealth, relationships, or spirituality)")) throw new Error(`the month text goes out as a test under next month's title, with the eleven questions in the October post's shape: ${String(monthTest?.summary).slice(0, 200)}`);
     if ((monthTest.communityPostDetails as Details).notifyAllGroupMembers !== false || String(monthTest.summary).includes("data-mention-type")) throw new Error("the month-text test never notifies and keeps @everyone as words");
+    if (!/^Set Your Intentions [A-Z][a-z]+ \d{4}$/.test(monthTitle(nextM))) throw new Error(`the month title is Danno's pattern, month and year: ${monthTitle(nextM)}`);
     console.log(`✓ the first of the month: its own switch, time and text under Setup, on by the coach; the month text as a test under "${monthTitle(nextM)}", never notifying`);
+
+    // The graphic (rev 328): a square image from the coach's Images library, picked beside the month text; the planner gets a
+    // public copy of it with the post (the library is the private store, which GoHighLevel can't read).
+    const { default: sharp } = await import("sharp");
+    const square = await sharp({ create: { width: 540, height: 540, channels: 3, background: { r: 200, g: 170, b: 60 } } }).png().toBuffer();
+    const graphicKey = `deck/${ws.id}/${coach.id}/${newId()}.png`;
+    const put = await fetch(`http://localhost:${blobPort}/?pathname=${encodeURIComponent(graphicKey)}`, { method: "PUT", headers: { authorization: `Bearer ${PROOF_TOKEN}`, "x-vercel-blob-access": "private", "x-content-type": "image/png" }, body: square });
+    if (!put.ok) throw new Error(`the walk's graphic lands in the private store: ${put.status}`);
+    const graphicUrl = ((await put.json()) as { url: string }).url;
+    const graphicId = newId();
+    await db.delete(schema.deckImages).where(eq(schema.deckImages.userId, coach.id));
+    await db.insert(schema.deckImages).values({ id: graphicId, workspaceId: ws.id, userId: coach.id, kind: "photo", blobKey: graphicKey, blobUrl: graphicUrl, mime: "image/png", width: 540, height: 540, caption: "October graphic" });
+    await page.goto(`${base}/coach/community?view=graphic#setup`);
+    const imageOptions = await page.locator('[data-testid="community-month-image"] option').evaluateAll((els) => els.map((e) => `${(e as HTMLOptionElement).value}:${e.textContent}`));
+    if (!imageOptions.some((o) => o.startsWith(`${graphicId}:`) && o.includes("October graphic") && o.includes("540×540"))) throw new Error(`the picker lists the coach's library with caption, kind and size: ${imageOptions.join(" | ")}`);
+    await page.locator('[data-testid="community-month-image"]').selectOption(graphicId);
+    await submit(page, '[data-testid="community-save"]');
+    if ((await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!.monthImageId !== graphicId) throw new Error("the month's graphic is saved");
+    await submit(page, '[data-testid="community-test-month"]');
+    const tests = (await mockPosts()).filter((p) => (p.communityPostDetails as Details | undefined)?.title === `Test: ${monthTitle(nextM)}`);
+    const withGraphic = tests[tests.length - 1];
+    const media = (withGraphic?.media ?? []) as { url: string; type: string }[];
+    if (media.length !== 1 || media[0].type !== "image/png" || !media[0].url.startsWith(`http://localhost:${blobPort}/public/magnets/community/`)) throw new Error(`the test post carries the graphic as the planner's media, a public copy under community/: ${JSON.stringify(media)}`);
+    const served = await fetch(media[0].url);
+    if (!served.ok || (await served.arrayBuffer()).byteLength !== square.length) throw new Error("the public copy serves the graphic's bytes without a token");
+    const testRow = (await db.query.communityPosts.findMany({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.kind, "test")), orderBy: [desc(schema.communityPosts.createdAt)], limit: 1 }))[0];
+    if (testRow.imageId !== graphicId || testRow.imageUrl !== media[0].url || !testRow.imageKey?.startsWith("public/magnets/community/")) throw new Error(`the row keeps the graphic, its public key and URL: ${JSON.stringify({ imageId: testRow.imageId, imageKey: testRow.imageKey, imageUrl: testRow.imageUrl })}`);
+    console.log("✓ the month's graphic: picked from the coach's Images library beside the month text, copied once to the public store and sent as the planner's media; the row keeps the key and URL");
 
     const monthCard = page.locator('[data-testid="community-month-next"]');
     if ((await monthCard.getAttribute("data-month")) !== nextM || (await page.locator('[data-testid="community-month-next-title"]').innerText()).trim() !== monthTitle(nextM)) throw new Error(`next month is ${nextM}, titled with its month`);
@@ -472,6 +506,7 @@ async function main() {
     await submit(page, `[data-testid="community-month-row"][data-month="${lastMonth}"] [data-testid="community-month-retry"]`);
     const sentMonth = await titled(monthTitle(lastMonth));
     if (sentMonth.length !== 1 || sentMonth[0].summary !== communityHtml(DEFAULT_MONTH_TEXT, { mentionEveryone: true }) || !String(sentMonth[0].summary).includes('data-mention-type="broadcast"') || !(sentMonth[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that month once, with the month text and the tag, to the Intentions channel");
+    if (((sentMonth[0].media ?? []) as { url: string }[]).length !== 1 || !(await monthRow(lastMonth))!.imageUrl) throw new Error("the real month post goes out with its graphic, and the row keeps the URL");
     if ((sentMonth[0].communityPostDetails as Details).notifyAllGroupMembers !== true) throw new Error("the month post notifies all members, as its setting says by default");
     await cron(page);
     const lastRowM = (await monthRow(lastMonth))!;
@@ -498,7 +533,7 @@ async function main() {
     if (!(await noteM.innerText()).includes("Copied! On the post, tap Add a comment, paste, and press Post.") || !(await noteM.innerText()).includes(`+${SHARE_POINTS} points`)) throw new Error(`the member is told it's copied and what to do: ${await noteM.innerText()}`);
     const mayaMonthRow = (await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.userId, maya.id), eq(schema.monthlyIntentions.month, mayaMonth)) }))!;
     const clipM = await page.evaluate(() => navigator.clipboard.readText());
-    if (clipM !== monthShareText(mayaMonthRow) || !clipM.includes("My word: Rooted") || !clipM.includes("Revenue goal: $10,000. To hire help.") || clipM.includes("Consistent")) throw new Error(`the comment is the month's eleven answers, revenue included, nothing weekly: ${clipM}`);
+    if (clipM !== monthShareText(mayaMonthRow) || !clipM.startsWith(`${emojiNumeral(1)} My word: Rooted`) || !clipM.includes(`${emojiNumeral(8)} Revenue goal: $10,000. To hire help.`) || clipM.includes("Consistent")) throw new Error(`the comment is the month's eleven answers in the post's numbered shape, revenue included, nothing weekly: ${clipM}`);
     if ((await scored()).length !== 2 || (await scored()).every((r) => r.refId !== `share:month:${mayaMonth}`)) throw new Error("the first month tap scores 15, under its own reference");
     await page.reload();
     const againM = page.locator('[data-testid="month-share"] [data-testid="share-to-thread"][data-shared="yes"]');
@@ -528,10 +563,12 @@ async function main() {
     console.log("Community smoke passed");
   } finally {
     await browser.close();
-    try {
-      process.kill(-child.pid!);
-    } catch {
-      /* already gone */
+    for (const p of [child, blob]) {
+      try {
+        process.kill(-p.pid!);
+      } catch {
+        /* already gone */
+      }
     }
   }
 }

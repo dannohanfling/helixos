@@ -222,6 +222,8 @@ export default async function CoachPage() {
                       </td>
                       <td className="py-2 text-right text-xs">
                         <form action={setClientPassAction} className="flex items-center justify-end gap-1">
+                          {/* Who has turned coach working access off (on by default since 1 Oct): the one mark, nothing beside anyone else. */}
+                          {!r.m.coachCanWork ? <span title="Turned off coach working access" className="text-ink-3" data-testid="coach-work-off">⊘</span> : null}
                           <input type="hidden" name="membershipId" value={r.m.id} />
                           <select className="field w-auto py-1 text-xs" name="programTier" defaultValue={r.m.programTier}>
                             {["Accelerator", "Academy", "Elite", "Luxe"].map((t) => (
