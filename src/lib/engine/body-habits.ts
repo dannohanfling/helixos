@@ -5,7 +5,7 @@
  */
 import type { HabitKind } from "@/db/schema";
 
-export type HabitLike = { id: string; name: string; kind: HabitKind; unit: string | null; target: number | null; days: number[] };
+export type HabitLike = { id: string; name: string; kind: HabitKind; unit: string | null; target: number | null; days: number[]; /** The day it was added: a habit is never due before it existed (phase 10b). */ since?: string | null };
 export type HabitLogLike = { habitId: string; date: string; value: number };
 
 /** The starter list (rev 196), in its order. A member adds any of these in one tap, or their own. */
@@ -29,8 +29,8 @@ export const STARTER_HABITS: { name: string; kind: HabitKind; unit?: string; tar
 export const KIND_LABEL: Record<HabitKind, string> = { done: "done or not", minutes: "minutes", count: "a count", amount: "an amount" };
 export const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
-/** Due on this date: every day when no days are set, else when the weekday (0 = Sunday) is one of them. */
-export const dueOn = (h: Pick<HabitLike, "days">, weekdayOf: number): boolean => !h.days.length || h.days.includes(weekdayOf);
+/** Due on this date: every day when no days are set, else when the weekday (0 = Sunday) is one of them; never before the habit existed. */
+export const dueOn = (h: Pick<HabitLike, "days" | "since">, weekdayOf: number, date?: string): boolean => (!h.since || !date || date >= h.since) && (!h.days.length || h.days.includes(weekdayOf));
 
 /** Kept: a done habit with a 1; a measured one at its target, or above zero when it has none. */
 export function kept(h: Pick<HabitLike, "kind" | "target">, value: number | null | undefined): boolean {
@@ -64,7 +64,8 @@ export function streak(h: HabitLike, logs: HabitLogLike[], today: string, dates:
   let n = 0;
   for (let back = 0; back < 400; back++) {
     const d = dates.addDays(today, -back);
-    if (!dueOn(h, dates.weekday(d))) continue;
+    if (h.since && d < h.since) break;
+    if (!dueOn(h, dates.weekday(d), d)) continue;
     if (kept(h, value.get(d))) {
       n++;
       continue;
@@ -83,7 +84,7 @@ export function weekDots(h: HabitLike, logs: HabitLogLike[], monday: string, tod
   const value = new Map(logs.filter((l) => l.habitId === h.id).map((l) => [l.date, l.value]));
   return Array.from({ length: 7 }, (_, i) => {
     const d = dates.addDays(monday, i);
-    if (!dueOn(h, dates.weekday(d))) return "off";
+    if (!dueOn(h, dates.weekday(d), d)) return "off";
     if (kept(h, value.get(d))) return "kept";
     if (d > today) return "ahead";
     return d === today ? "today" : "missed";
@@ -97,7 +98,7 @@ export function habitsWeek(habits: HabitLike[], logs: HabitLogLike[], from: stri
   let k = 0;
   for (let d = from; d <= to; d = dates.addDays(d, 1)) {
     for (const h of habits) {
-      if (!dueOn(h, dates.weekday(d))) continue;
+      if (!dueOn(h, dates.weekday(d), d)) continue;
       due++;
       if (kept(h, value.get(`${h.id}|${d}`))) k++;
     }

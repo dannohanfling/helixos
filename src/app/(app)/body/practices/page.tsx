@@ -7,7 +7,11 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { archiveHabitAction, logHabitAction, saveHabitAction } from "@/lib/actions/body";
 import { formatDate } from "@/lib/dates";
 import { DAY_LETTERS, KIND_LABEL, STARTER_HABITS, fmtDays, fmtTarget, type Dot } from "@/lib/engine/body-habits";
-import { bodySettingsFor, habitsDay, requireBodyEnabled, type HabitsDayView } from "@/lib/queries/body";
+import { bodySettingsFor, habitsDay, habitsRange, requireBodyEnabled, type HabitsDayView } from "@/lib/queries/body";
+import { StreakCalendar } from "@/components/charts";
+import { RangePicker } from "@/components/body/range-picker";
+import { isRangeKey, monthLabelFor, rangeBounds, rateText } from "@/lib/engine/body-range";
+import { addDays, startOfWeek } from "@/lib/dates";
 import { HABIT_KINDS } from "@/db/schema";
 
 export const metadata = { title: "HumanOS · Practices" };
@@ -120,7 +124,7 @@ function HabitForm({ h }: { h?: Habit }) {
   );
 }
 
-export default async function PracticesPage({ searchParams }: { searchParams: Promise<{ date?: string; error?: string }> }) {
+export default async function PracticesPage({ searchParams }: { searchParams: Promise<{ date?: string; error?: string; range?: string; from?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
@@ -133,6 +137,9 @@ export default async function PracticesPage({ searchParams }: { searchParams: Pr
   const have = new Set(hd.habits.map((h) => h.name.toLowerCase()));
   const starters = STARTER_HABITS.filter((s) => !have.has(s.name.toLowerCase()));
   const keptToday = due.filter((h) => h.kept).length;
+  // Longer views (phase 10b): kept days per habit as a heat strip, the best run and the kept rate, over a month, 90 days or a year.
+  const b = rangeBounds(isRangeKey(sp.range) ? sp.range : "month", sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : null, v.today, { addDays, startOfWeek });
+  const r = hd.habits.length ? await habitsRange(v.workspace.id, v.user.id, b, v.today) : null;
 
   return (
     <>
@@ -210,6 +217,31 @@ export default async function PracticesPage({ searchParams }: { searchParams: Pr
           </div>
         </Disclosure>
       </Card>
+
+      {r ? (
+        <Card title="Over the range" className="mb-4" id="range">
+          <RangePicker path="/body/practices" bounds={b} today={v.today} />
+          <p className="mb-3 text-sm" data-testid="habits-range" data-kept={r.kept} data-due={r.due}>
+            {r.due ? <><span className="font-medium">{rateText(r.kept, r.due)}</span> kept across every habit.</> : "Nothing due in this range yet."}
+          </p>
+          <ul className="space-y-3">
+            {r.habits.map((h) => (
+              <li key={h.id} data-testid="habit-range" data-name={h.name} data-kept={h.kept} data-due={h.due} data-best={h.best}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                  <span className="font-medium">{h.name}</span>
+                  <span className="text-xs text-ink-2">
+                    {rateText(h.kept, h.due)}
+                    {h.best ? ` · best run ${h.best} day${h.best === 1 ? "" : "s"}` : ""}
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <StreakCalendar weeks={h.weeks} rows={7} tone="humanos" labelFor={monthLabelFor(h.weeks.map((w) => w.monday), (d) => formatDate(d, { month: "short" }))} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {hd.habits.length ? (
         <Card title="Edit" className="mb-8">

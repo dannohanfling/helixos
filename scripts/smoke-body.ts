@@ -789,6 +789,53 @@ async function main() {
     if ((await client.locator('[data-testid="insights-grain"]').inputValue()) !== "weekly") throw new Error("weight reads weekly unless asked otherwise");
     console.log(`✓ patterns: sleep → calls booked the next day reads as the engine's ${expectedVerdict.words}; too few pairs say so; weight defaults to weekly; never a cause`);
 
+    // ── Longer views (phase 10b): the week page over a month and 90 days against the range query's own numbers; Sleep and
+    // Practices over the range; an exercise's history over a year. ──
+    const { bodyRange: rangeOf, sleepRange: sleepOver, habitsRange: habitsOver } = await import("@/lib/queries/body");
+    const { rangeBounds: boundsOf } = await import("@/lib/engine/body-range");
+    const b90 = boundsOf("90d", null, today, { addDays, startOfWeek: mondayOf });
+    const rq = (await rangeOf(mem.workspaceId, maya.id, b90, today))!;
+    await client.goto(`${base}/body/week`);
+    await client.locator('[data-testid="range-90d"]').click();
+    await client.waitForURL(/range=90d/);
+    await client.locator('[data-testid="range-training"]').waitFor({ timeout: 30000 });
+    const rt = client.locator('[data-testid="range-training"]');
+    if ((await rt.getAttribute("data-sessions")) !== String(rq.training.sessions) || (await rt.getAttribute("data-sets")) !== String(rq.training.sets) || (await rt.getAttribute("data-prs")) !== String(rq.training.prs) || rq.training.sessions < 2) throw new Error(`the 90-day training tiles are the query's (${rq.training.sessions} sessions, ${rq.training.sets} sets, ${rq.training.prs} PRs)`);
+    const rr = client.locator('[data-testid="range-rest"]');
+    if ((await rr.getAttribute("data-sleep-nights")) !== String(rq.sleep.summary.nights) || (await rr.getAttribute("data-habits-kept")) !== String(rq.habits.kept) || (await rr.getAttribute("data-habits-due")) !== String(rq.habits.due) || (await rr.getAttribute("data-weigh-days")) !== String(rq.weigh.days)) throw new Error("the 90-day weight, sleep and habit tiles are the query's");
+    if (!((await client.locator('[data-testid="range-routines"]').textContent()) ?? "").includes(ROUTINE.name)) throw new Error("the routines that ran are named with their count");
+    if ((await client.locator('[data-testid="range-picker"]').getAttribute("data-from")) !== b90.from) throw new Error("the picker carries the range's bounds");
+    await noSideScroll(client, "/body/week?range=90d");
+    // Month: the page steps back a month and names it.
+    await client.locator('[data-testid="range-month"]').click();
+    await client.waitForURL(/range=month/);
+    await client.locator('[data-testid="range-label"]').waitFor({ timeout: 30000 });
+    await client.locator('a[aria-label="Earlier"]').click();
+    await client.waitForURL(/from=/);
+    await client.locator('[data-testid="range-label"]').waitFor({ timeout: 30000 });
+    const prevMonth = boundsOf("month", addDays(`${today.slice(0, 7)}-01`, -1), today, { addDays, startOfWeek: mondayOf });
+    if ((await client.locator('[data-testid="range-label"]').textContent()) !== prevMonth.label) throw new Error(`stepping back names last month (${prevMonth.label}): ${await client.locator('[data-testid="range-label"]').textContent()}`);
+    // Sleep over 90 days: the nights seeded above, as the engine counts them.
+    const sr = await sleepOver(mem.workspaceId, maya.id, b90);
+    await client.goto(`${base}/body/sleep?range=90d`);
+    await client.locator('[data-testid="sleep-range"]').waitFor({ timeout: 30000 });
+    const sl = client.locator('[data-testid="sleep-range"]');
+    if ((await sl.getAttribute("data-nights")) !== String(sr.summary.nights) || (await sl.getAttribute("data-avg")) !== String(sr.summary.avg) || (await sl.getAttribute("data-under")) !== String(sr.under) || sr.summary.nights < 30) throw new Error(`Sleep over 90 days is the query's: ${sr.summary.nights} nights, ${sr.summary.avg} a night, ${sr.under} under`);
+    // Practices over the month: kept of due per habit, with Breathwork's best run of four or more.
+    const bm = boundsOf("month", null, today, { addDays, startOfWeek: mondayOf });
+    const hr = await habitsOver(mem.workspaceId, maya.id, bm, today);
+    await client.goto(`${base}/body/practices?range=month`);
+    await client.locator('[data-testid="habits-range"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="habits-range"]').getAttribute("data-kept")) !== String(hr.kept) || (await client.locator('[data-testid="habits-range"]').getAttribute("data-due")) !== String(hr.due)) throw new Error("Practices over the month carries the query's kept of due");
+    const bh = hr.habits.find((h) => h.name === "Breathwork")!;
+    if ((await client.locator('[data-testid="habit-range"][data-name="Breathwork"]').getAttribute("data-best")) !== String(bh.best)) throw new Error(`Breathwork's best run is the query's (${bh.best})`);
+    await noSideScroll(client, "/body/practices?range=month");
+    // An exercise over a year: every session in the list, the span marked.
+    await client.goto(`${base}/body/training/${bench.id}?range=365`);
+    await client.locator('[data-testid="exercise-range"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="exercise-range"]').getAttribute("data-range")) !== "365" || Number(await client.locator('[data-testid="exercise-range"]').getAttribute("data-sessions")) < 2) throw new Error("the exercise's history reads over a year");
+    console.log(`✓ longer views: 90 days on the week page carries the query's ${rq.training.sessions} sessions, ${rq.training.sets} sets and ${rq.training.prs} PRs, ${rq.sleep.summary.nights} nights and ${rq.habits.kept} of ${rq.habits.due} habits kept; a month steps back to ${prevMonth.label}; Sleep and Practices read over the range; the exercise over a year`);
+
     // ── Private: the coach sees nothing, and a coach's export never has Body. ──
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("the client page shows no Body card while private");
@@ -894,6 +941,12 @@ async function main() {
     // A night was logged through a tool above, so the pairs grew by one since the page's check: the shape is what's fixed.
     if (!corrTool.text.includes("Sleep hours and Calls booked moved together") || !/r 0\.\d\d, \d+ paired days, early signal/.test(corrTool.text) || !corrTool.text.includes("B read 1 day after A") || corrTool.text.includes(injury)) throw new Error(`body_correlation gives the readout in the engine's words: ${corrTool.text}`);
     const corrList = await tool("body_correlation").handler(await viewerFor(), {});
+    const weekRange = await tool("body_week").handler(await viewerFor(), { range: "90d" });
+    if (!weekRange.text.startsWith("90 days to") || !weekRange.text.includes(`Training: ${rq.training.sessions} sessions`) || !weekRange.text.includes("Habits:")) throw new Error(`body_week over 90 days gives the range's rollup: ${weekRange.text}`);
+    const sleepRangeTool = await tool("body_sleep").handler(await viewerFor(), { range: "month" });
+    if (!sleepRangeTool.text.includes("a night over")) throw new Error(`body_sleep over a month: ${sleepRangeTool.text}`);
+    const habitsRangeTool = await tool("body_habits").handler(await viewerFor(), { range: "90d" });
+    if (!habitsRangeTool.text.includes("Breathwork:")) throw new Error(`body_habits over 90 days: ${habitsRangeTool.text}`);
     const listTool = await tool("body_shopping_list").handler(await viewerFor(), {});
     if (!listTool.text.includes(`${MEALS[0].name} × 2`)) throw new Error(`body_shopping_list reads the plan and the list: ${listTool.text}`);
     const notSent = await tool("push_to_instacart_cart").handler(await viewerFor(), { confirm: false });

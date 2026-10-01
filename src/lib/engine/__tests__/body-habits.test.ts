@@ -32,6 +32,12 @@ describe("habits (B7, rev 237 phase 8)", () => {
     expect(daysFrom([5, 1, 3, 3])).toEqual([1, 3, 5]);
     expect(fmtDays([1, 3, 5])).toBe("Mon, Wed, Fri");
     expect(fmtDays([])).toBe("every day");
+    // Never due before it existed (phase 10b), so a 90-day view of a new habit isn't 90 gaps.
+    const young = { ...done, since: "2026-09-30" };
+    expect(dueOn(young, 1, "2026-09-28")).toBe(false);
+    expect(dueOn(young, 3, "2026-09-30")).toBe(true);
+    expect(habitsWeek([young], [log("h1", "2026-09-30"), log("h1", "2026-10-01")], "2026-09-28", "2026-10-01", dates)).toEqual({ due: 2, kept: 2 });
+    expect(streak(young, [log("h1", "2026-09-30"), log("h1", "2026-10-01")], "2026-10-01", dates)).toBe(2);
   });
   it("the streak counts back from today, lets today stand open, forgives one miss a calendar week and ends on the second", () => {
     // Today Thursday 2026-10-01. Kept Mon 28, Tue 29; missed Wed 30; today not yet logged → 2.

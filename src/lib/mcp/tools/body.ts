@@ -16,8 +16,10 @@ import { fmtSet } from "@/lib/engine/body-training";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
-import { bodyDay, bodyLibrary, bodySettingsFor, bodyWeek, canAiUseBody, correlate, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
 import { PRESETS } from "@/lib/engine/body-correlate";
+import { isRangeKey, rangeBounds, rateText } from "@/lib/engine/body-range";
+import { addDays } from "@/lib/dates";
 import { instacartLines, listSummary } from "@/lib/engine/body-shopping";
 import { InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
 import { fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
@@ -132,10 +134,11 @@ export const bodyWeighIns = defineTool({
   scope: "body",
   kind: "read",
   description: "Weigh-ins: the latest figure, the 7-day average and its change against last week, the goal, and the recent readings. The day's figure is its lowest reading, kept whole.",
-  input: { days: z.number().int().min(7).max(365).optional().describe("How many days back for the trend; 30 when left out") },
+  input: { days: z.number().int().min(7).max(365).optional().describe("How many days back for the trend; 30 when left out"), range: z.enum(["week", "month", "90d", "year"]).optional().describe("Instead of days: a week (7), a month (30), 90 days or a year") },
   handler: async (v, input): Promise<ToolResult> => {
     await ready(v);
-    const days = typeof input.days === "number" ? Math.min(365, Math.max(7, Math.round(input.days))) : 30;
+    const byRange = { week: 7, month: 30, "90d": 90, year: 365 } as Record<string, number>;
+    const days = typeof input.days === "number" ? Math.min(365, Math.max(7, Math.round(input.days))) : isRangeKey(input.range) ? byRange[input.range] : 30;
     const w = await weighIns(v.workspace.id, v.user.id, v.today, days);
     if (!w) throw new Error("Body isn't set up for this member yet.");
     if (!w.latest) return { text: "No weigh-ins logged yet.", data: { readings: [] } };
@@ -154,8 +157,15 @@ export const bodyTraining = defineTool({
   scope: "body",
   kind: "read",
   description: "Training: the day's workout against its plan with last time and the PR beside each exercise, and this week's tally; or, with an exercise name, that exercise's history and PR.",
-  input: { exercise: z.string().optional().describe("An exercise name for its history; leave out for the day"), date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  input: { exercise: z.string().optional().describe("An exercise name for its history; leave out for the day"), date: z.string().optional().describe("YYYY-MM-DD; today when left out"), range: z.enum(["week", "month", "90d", "year"]).optional().describe("With no exercise: training over that span instead of a day (sessions, sets, PRs, routines, per week)"), from: z.string().optional() },
   handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    if (!input.exercise && isRangeKey(input.range)) {
+      const b = rangeBounds(input.range, typeof input.from === "string" ? input.from : null, v.today, { addDays, startOfWeek });
+      const r = await trainingRange(v.workspace.id, v.user.id, b, v.today);
+      if (!r) throw new Error("Body isn't set up for this member yet.");
+      return { text: `${b.label}: ${r.sessions} sessions, ${r.sets} sets, ${r.prs} PR${r.prs === 1 ? "" : "s"}${r.routines.length ? `; ${r.routines.map((x) => `${x.name} × ${x.times}`).join(", ")}` : ""}. Sessions by week: ${r.perWeekSessions.map((w) => `${w.monday} ${w.value ?? 0}`).join(", ")}.`, data: { range: b, sessions: r.sessions, sets: r.sets, prs: r.prs, routines: r.routines, perWeek: r.perWeekSessions.map((w) => ({ monday: w.monday, sessions: w.value ?? 0, sets: r.perWeekSets.find((x) => x.monday === w.monday)?.value ?? 0 })) } };
+    }
     await ready(v);
     if (typeof input.exercise === "string" && input.exercise.trim()) {
       const lib = await trainingLibrary(v.workspace.id, v.user.id);
@@ -373,10 +383,25 @@ export const bodyWeekTool = defineTool({
   name: "body_week",
   scope: "body",
   kind: "read",
-  description: "The week's rollup, this week unless a date in another week is given: days logged and in band, average calories, protein against its floor and fat against its ceiling, sessions of those planned, sets and PRs, the average weight and its change against last week, and how the weight goal is pacing.",
-  input: { date: z.string().optional().describe("YYYY-MM-DD in the week wanted; this week when left out") },
+  description: "The rollup: this week unless told otherwise. range \"month\", \"90d\" or \"year\" (with an optional from, YYYY-MM-DD) gives the same figures over that span: days logged and in band, average calories, protein against its floor and fat against its ceiling, sessions, sets and PRs, the routines that ran, weight and body fat change, sleep a night and habits kept. For a week: the average weight against last week and how the weight goal is pacing.",
+  input: { date: z.string().optional().describe("YYYY-MM-DD in the week wanted; this week when left out"), range: z.enum(["week", "month", "90d", "year"]).optional(), from: z.string().optional().describe("YYYY-MM-DD: the month's day, or the last day of the 90-day or year span") },
   handler: async (v, input): Promise<ToolResult> => {
     const settings = await ready(v);
+    if (isRangeKey(input.range) && input.range !== "week") {
+      const b = rangeBounds(input.range, typeof input.from === "string" ? input.from : null, v.today, { addDays, startOfWeek });
+      const r = await bodyRange(v.workspace.id, v.user.id, b, v.today);
+      if (!r) throw new Error("Body isn't set up for this member yet.");
+      const u = settings.weightUnit;
+      const n = r.nutrition;
+      const num = (x: number | null, d = 1) => (x == null ? "—" : x.toLocaleString("en-US", { maximumFractionDigits: d }));
+      const lines = [`${b.label} (${b.from} to ${b.to}).`];
+      lines.push(`Nutrition: ${n.daysLogged} of ${n.daysPassed} days logged${n.daysJudged ? `, ${n.daysInBand} of ${n.daysJudged} finished days in band` : ""}; average ${num(n.avgCal, 0)} cal, ${num(n.avgP)} g protein, ${num(n.avgF)} g fat, ${num(n.avgC)} g carbs.`);
+      lines.push(`Training: ${r.training.sessions} sessions, ${r.training.sets} sets, ${r.training.prs} PR${r.training.prs === 1 ? "" : "s"}${r.training.routines.length ? `; routines: ${r.training.routines.map((x) => `${x.name} × ${x.times}`).join(", ")}` : ""}; by week: ${r.training.perWeekSessions.map((w) => `${w.monday} ${w.value ?? 0}`).join(", ")}.`);
+      lines.push(r.weigh.last?.values.weight != null ? `Weight: ${fmtMetric("weight", r.weigh.last.values.weight, u)} on ${r.weigh.last.date}${r.weigh.change.weight != null ? `, ${r.weigh.change.weight > 0 ? "+" : ""}${fmtMetric("weight", r.weigh.change.weight, u)} over the range` : ""}${r.weigh.last.values.bf != null ? `, body fat ${fmtMetric("bf", r.weigh.last.values.bf, u)}${r.weigh.change.bf != null ? ` (${r.weigh.change.bf > 0 ? "+" : ""}${r.weigh.change.bf}%)` : ""}` : ""} over ${r.weigh.days} weigh-ins.` : "Weight: no weigh-ins in this range.");
+      lines.push(r.sleep.summary.nights ? `Sleep: ${fmtHours(r.sleep.summary.avg!)} a night over ${r.sleep.summary.nights} nights, ${r.sleep.summary.atFloor} at 7 h or more.` : "Sleep: no nights logged.");
+      lines.push(r.habits.due ? `Habits: ${rateText(r.habits.kept, r.habits.due)} kept; ${r.habits.habits.map((h) => `${h.name} ${rateText(h.kept, h.due)}${h.best ? `, best run ${h.best}` : ""}`).join("; ")}.` : "Habits: none due.");
+      return { text: lines.join("\n"), data: { range: b, nutrition: n, training: { sessions: r.training.sessions, sets: r.training.sets, prs: r.training.prs, routines: r.training.routines, perWeek: r.training.perWeekSessions }, weight: { unit: u, days: r.weigh.days, change: r.weigh.change, last: r.weigh.last?.values ?? null }, sleep: r.sleep.summary, habits: { kept: r.habits.kept, due: r.habits.due, byHabit: r.habits.habits.map((h) => ({ name: h.name, kept: h.kept, due: h.due, best: h.best })) } } };
+    }
     const asked = typeof input.date === "string" && DATE.test(input.date) ? startOfWeek(input.date) : startOfWeek(v.today);
     const monday = asked > startOfWeek(v.today) ? startOfWeek(v.today) : asked;
     const w = await bodyWeek(v.workspace.id, v.user.id, monday, v.today);
@@ -400,10 +425,15 @@ defineTool({
   name: "body_sleep",
   scope: "body",
   kind: "read",
-  description: "The member's sleep: last night's hours and score, this week's average against last week's and the nights at 7 hours or more, and the last 14 nights. Nothing else of their health.",
-  input: {},
-  handler: async (v): Promise<ToolResult> => {
+  description: "The member's sleep: last night's hours and score, this week's average against last week's and the nights at 7 hours or more, and the last 14 nights. With range (\"month\", \"90d\", \"year\") and an optional from: the nights over that span, the average, nights at 7 h and under, by week. Nothing else of their health.",
+  input: { range: z.enum(["week", "month", "90d", "year"]).optional(), from: z.string().optional() },
+  handler: async (v, input): Promise<ToolResult> => {
     await ready(v);
+    if (isRangeKey(input.range)) {
+      const b = rangeBounds(input.range, typeof input.from === "string" ? input.from : null, v.today, { addDays, startOfWeek });
+      const r = await sleepRange(v.workspace.id, v.user.id, b);
+      return { text: r.summary.nights ? `${b.label}: ${fmtHours(r.summary.avg!)} a night over ${r.summary.nights} nights, ${r.summary.atFloor} at 7 h or more, ${r.under} under. By week: ${r.perWeek.map((w) => `${w.monday} ${w.value != null ? fmtHours(w.value) : "—"}`).join(", ")}.` : `${b.label}: no nights logged.`, data: { range: b, summary: r.summary, under: r.under, nights: r.nights, perWeek: r.perWeek } };
+    }
     const s = await sleepView(v.workspace.id, v.user.id, v.today);
     if (!s) throw new Error("Body isn't set up for this member yet.");
     const lines = [s.last ? `Last night (${s.last.date}): ${s.last.text}${s.last.score != null ? `, score ${s.last.score}` : ""}.` : "No nights logged yet."];
@@ -439,10 +469,15 @@ defineTool({
   name: "body_habits",
   scope: "body",
   kind: "read",
-  description: "The member's habits on a day (today unless a date is given): each with its kind, target and days, whether it's due and kept, today's value, its streak, and the week's tally.",
-  input: { date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  description: "The member's habits on a day (today unless a date is given): each with its kind, target and days, whether it's due and kept, today's value, its streak, and the week's tally. With range (\"month\", \"90d\", \"year\") and an optional from: kept of due per habit over that span, the kept rate and the best run.",
+  input: { date: z.string().optional().describe("YYYY-MM-DD; today when left out"), range: z.enum(["week", "month", "90d", "year"]).optional(), from: z.string().optional() },
   handler: async (v, input): Promise<ToolResult> => {
     await ready(v);
+    if (isRangeKey(input.range)) {
+      const b = rangeBounds(input.range, typeof input.from === "string" ? input.from : null, v.today, { addDays, startOfWeek });
+      const r = await habitsRange(v.workspace.id, v.user.id, b, v.today);
+      return { text: r.habits.length ? `${b.label}: ${rateText(r.kept, r.due)} kept across every habit.\n${r.habits.map((h) => `${h.name}: ${rateText(h.kept, h.due)}${h.best ? `, best run ${h.best} day${h.best === 1 ? "" : "s"}` : ""}`).join("\n")}` : "No habits yet.", data: { range: b, kept: r.kept, due: r.due, habits: r.habits.map((h) => ({ name: h.name, kept: h.kept, due: h.due, best: h.best })) } };
+    }
     const date = dayOf(v, input.date);
     const hd = await habitsDay(v.workspace.id, v.user.id, date, v.today);
     if (!hd.habits.length) return { text: "No habits yet. They pick from the starter list or add their own on Practices.", data: { habits: [], week: hd.week } };
@@ -463,7 +498,7 @@ defineTool({
   handler: async (v, input): Promise<ToolResult> => {
     await ready(v);
     const date = dayOf(v, input.date);
-    const h = byName("habit", await habitsFor(v.workspace.id, v.user.id), String(input.habit ?? ""));
+    const h = byName("habit", await habitsFor(v.workspace.id, v.user.id, { today: v.today }), String(input.habit ?? ""));
     let value: number | null;
     if (h.kind === "done") value = input.done === false ? null : 1;
     else {

@@ -7,27 +7,83 @@ import { addDays, formatDate, startOfWeek } from "@/lib/dates";
 import { MARK_ICON, fmtMacro } from "@/lib/engine/body";
 import { fmtMetric } from "@/lib/engine/body-scale";
 import { fmtHours } from "@/lib/engine/body-recovery";
-import { bodyWeek, requireBodyEnabled } from "@/lib/queries/body";
+import { bodyRange, bodyWeek, requireBodyEnabled } from "@/lib/queries/body";
+import { BarChart, StreakCalendar } from "@/components/charts";
+import { RangePicker } from "@/components/body/range-picker";
+import { isRangeKey, monthLabelFor, rangeBounds, rateText } from "@/lib/engine/body-range";
 
 export const metadata = { title: "HumanOS · This week" };
 
 /** "+1.2" / "−0.8" beside a number, muted when nothing changed; nothing when last week has no figure. */
-function Delta({ value, unit = "", better }: { value: number | null; unit?: string; better?: "down" | "up" }) {
+function Delta({ value, unit = "", better, vs = "vs last week" }: { value: number | null; unit?: string; better?: "down" | "up"; vs?: string }) {
   if (value == null) return null;
   const tone = value === 0 || !better ? "text-ink-3" : (better === "down" ? value < 0 : value > 0) ? "text-good" : "text-warn";
   return (
     <span className={`text-xs ${tone}`} data-testid="week-delta">
       {value > 0 ? "▲ +" : value < 0 ? "▼ −" : "= "}
       {Math.abs(value).toLocaleString("en-US", { maximumFractionDigits: 1 })}
-      {unit} vs last week
+      {unit} {vs}
     </span>
   );
 }
 
-export default async function BodyWeekPage({ searchParams }: { searchParams: Promise<{ week?: string }> }) {
+/** The same tiles over a month, 90 days or a year (phase 10b), with per-week bars, the routines that ran and the calendar strip. */
+async function RangeView({ v, range, from }: { v: Awaited<ReturnType<typeof requireViewer>>; range: "month" | "90d" | "year"; from: string | null }) {
+  const dates = { addDays, startOfWeek };
+  const b = rangeBounds(range, from, v.today, dates);
+  const r = await bodyRange(v.workspace.id, v.user.id, b, v.today);
+  if (!r) redirect("/body");
+  const unit = r.settings.weightUnit;
+  const n = r.nutrition;
+  const mondays = r.training.weeks.map((w) => w.monday);
+  const label = monthLabelFor(mondays, (d) => formatDate(d, { month: "short" }));
+  return (
+    <>
+      <HumanosHeader title={b.label} subtitle={`${formatDate(b.from, { month: "short", day: "numeric", year: "numeric" })} to ${formatDate(b.to, { month: "short", day: "numeric", year: "numeric" })}. Averages over the days with something logged.`} />
+      <RangePicker path="/body/week" bounds={b} today={v.today} />
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">Nutrition</h2>
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="range-nutrition" data-logged={n.daysLogged} data-in-band={n.daysInBand}>
+        <Stat label="Days logged" value={`${n.daysLogged} of ${n.daysPassed}`} sub={n.daysJudged ? `${n.daysInBand} of ${n.daysJudged} finished days in band` : "In band once a day with targets finishes"} />
+        <Stat label="Calories a day" value={n.avgCal != null ? fmtMacro("cal", n.avgCal) : "—"} sub={<Delta value={n.avgCal != null && r.prevNutrition.avgCal != null ? Math.round(n.avgCal - r.prevNutrition.avgCal) : null} vs="vs the span before" />} />
+        <Stat label="Protein a day" value={n.avgP != null ? `${fmtMacro("p", n.avgP)} g` : "—"} sub={n.avgPFloor != null ? `floor ${fmtMacro("p", n.avgPFloor)} g` : ""} />
+        <Stat label="Fat a day" value={n.avgF != null ? `${fmtMacro("f", n.avgF)} g` : "—"} sub={n.avgFCeiling != null ? `ceiling ${fmtMacro("f", n.avgFCeiling)} g` : ""} />
+      </div>
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">Training</h2>
+      <div className="mb-3 grid grid-cols-3 gap-3" data-testid="range-training" data-sessions={r.training.sessions} data-sets={r.training.sets} data-prs={r.training.prs}>
+        <Stat label="Sessions" value={String(r.training.sessions)} sub={`${r.training.perWeekSessions.length} week${r.training.perWeekSessions.length === 1 ? "" : "s"}`} />
+        <Stat label="Sets" value={String(r.training.sets)} sub={r.training.sessions ? `${Math.round(r.training.sets / r.training.sessions)} a session` : ""} />
+        <Stat label="PRs" value={String(r.training.prs)} sub={r.training.prs ? "🏆" : "set in this range"} />
+      </div>
+      <Card className="mb-4" title="Sessions a week">
+        <BarChart data={r.training.perWeekSessions.map((w, i, all) => ({ label: all.length > 8 && i % 2 ? "" : formatDate(w.monday, { month: "short", day: "numeric" }), value: w.value ?? 0, sub: `${r.training.perWeekSets.find((x) => x.monday === w.monday)?.value ?? 0} sets` }))} valueLabel="sessions" height={120} />
+        <div className="mt-3">
+          <StreakCalendar weeks={r.training.weeks} rows={7} tone="humanos" labelFor={label} />
+        </div>
+        {r.training.routines.length ? (
+          <p className="mt-2 text-xs text-ink-2" data-testid="range-routines">
+            {r.training.routines.map((x) => `${x.name} × ${x.times}`).join(" · ")}
+          </p>
+        ) : null}
+      </Card>
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">Weight, sleep and practices</h2>
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="range-rest" data-weigh-days={r.weigh.days} data-sleep-nights={r.sleep.summary.nights} data-habits-kept={r.habits.kept} data-habits-due={r.habits.due}>
+        <Stat label="Weight" value={r.weigh.last?.values.weight != null ? fmtMetric("weight", r.weigh.last.values.weight, unit) : "—"} sub={r.weigh.change.weight != null ? <span>{r.weigh.days} weigh-ins · <Delta value={unit === "kg" ? Math.round((r.weigh.change.weight / 2.20462) * 10) / 10 : r.weigh.change.weight} unit={` ${unit}`} vs="over the range" /></span> : `${r.weigh.days} weigh-in${r.weigh.days === 1 ? "" : "s"}`} />
+        <Stat label="Body fat" value={r.weigh.last?.values.bf != null ? fmtMetric("bf", r.weigh.last.values.bf, unit) : "—"} sub={r.weigh.change.bf != null ? <Delta value={r.weigh.change.bf} unit="%" better="down" vs="over the range" /> : ""} />
+        <Stat label="Sleep a night" value={r.sleep.summary.avg != null ? fmtHours(r.sleep.summary.avg) : "—"} sub={r.sleep.summary.nights ? `${r.sleep.summary.atFloor} of ${r.sleep.summary.nights} nights at 7 h` : "Log nights on Sleep"} />
+        <Stat label="Habits kept" value={r.habits.due ? rateText(r.habits.kept, r.habits.due) : "—"} sub={r.habits.habits.length ? `${r.habits.habits.length} habit${r.habits.habits.length === 1 ? "" : "s"}` : "Pick habits on Practices"} />
+      </div>
+      <p className="mb-8 text-xs text-ink-2">
+        <Link href={`/body/sleep?range=${range}${from ? `&from=${from}` : ""}`} className="underline">Sleep over this range</Link> · <Link href={`/body/practices?range=${range}${from ? `&from=${from}` : ""}`} className="underline">Practices over this range</Link> · <Link href="/body/weight?range=90" className="underline">Weigh-ins</Link>
+      </p>
+    </>
+  );
+}
+
+export default async function BodyWeekPage({ searchParams }: { searchParams: Promise<{ week?: string; range?: string; from?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
+  if (isRangeKey(sp.range) && sp.range !== "week") return <RangeView v={v} range={sp.range} from={sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : null} />;
   const asked = sp.week && /^\d{4}-\d{2}-\d{2}$/.test(sp.week) ? startOfWeek(sp.week) : startOfWeek(v.today);
   const monday = asked > startOfWeek(v.today) ? startOfWeek(v.today) : asked;
   const w = await bodyWeek(v.workspace.id, v.user.id, monday, v.today);
@@ -60,6 +116,7 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
         }
       />
 
+      <RangePicker path="/body/week" bounds={rangeBounds("week", monday, v.today, { addDays, startOfWeek })} today={v.today} />
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">Nutrition</h2>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="week-nutrition" data-logged={n.daysLogged} data-in-band={n.daysInBand} data-judged={n.daysJudged}>
         <Stat label="Days logged" value={`${n.daysLogged} of ${n.daysPassed}`} sub={n.daysJudged ? <span data-testid="week-in-band">{n.daysInBand} of {n.daysJudged} finished days in band {MARK_ICON.in}</span> : "In band once a day with targets finishes"} />

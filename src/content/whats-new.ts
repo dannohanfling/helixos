@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 32,
+    date: "2026-10-01",
+    title: "HumanOS: the longer view",
+    lines: ["One range picker on the week page, Sleep and Practices: Week, Month, 90 days or a Year, stepped back and forward, and bookmarkable. Past a week, the week page shows the same tiles over the range with sessions a week as bars, the calendar of trained days, which routines ran how often, PRs set in the range, weight and body fat change, sleep a night and habits kept.", "Sleep gets its nights as a bar strip with the average, nights at 7 h and under, by week. Practices gets kept days per habit as a heat strip with the kept rate and the best run. An exercise's history reads over 90 days, a year or all. Claude's tools take the same range."],
+    audience: "coach",
+  },
+  {
     n: 31,
     date: "2026-10-01",
     title: "HumanOS: the shopping list and Instacart",

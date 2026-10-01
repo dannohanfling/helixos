@@ -8,16 +8,23 @@ import { TrendLine } from "@/components/body/trend-line";
 import { deleteSleepAction, logSleepAction } from "@/lib/actions/body";
 import { formatDate } from "@/lib/dates";
 import { fmtHours } from "@/lib/engine/body-recovery";
-import { requireBodyEnabled, sleepView } from "@/lib/queries/body";
+import { requireBodyEnabled, sleepRange, sleepView } from "@/lib/queries/body";
+import { BarChart } from "@/components/charts";
+import { RangePicker } from "@/components/body/range-picker";
+import { isRangeKey, rangeBounds } from "@/lib/engine/body-range";
+import { addDays, startOfWeek } from "@/lib/dates";
 
 export const metadata = { title: "HumanOS · Sleep" };
 
-export default async function SleepPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function SleepPage({ searchParams }: { searchParams: Promise<{ error?: string; range?: string; from?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
   const s = await sleepView(v.workspace.id, v.user.id, v.today);
   if (!s) redirect("/body");
+  // Longer views (phase 10b): the range's nights as a bar strip, with the average, nights under 7 h and the per-week average.
+  const b = rangeBounds(isRangeKey(sp.range) ? sp.range : "month", sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : null, v.today, { addDays, startOfWeek });
+  const r = await sleepRange(v.workspace.id, v.user.id, b);
   const delta = s.week.avg != null && s.prevWeek.avg != null ? Math.round((s.week.avg - s.prevWeek.avg) * 10) / 10 : null;
 
   return (
@@ -63,6 +70,21 @@ export default async function SleepPage({ searchParams }: { searchParams: Promis
           </SubmitButton>
         </form>
         <p className="mt-2 text-[11px] text-ink-3">A night logged twice keeps the later entry. A wearable fills these in on its own once connected.</p>
+      </Card>
+
+      <Card title="Over the range" className="mb-4" id="range">
+        <RangePicker path="/body/sleep" bounds={b} today={v.today} />
+        <p className="mb-2 text-sm" data-testid="sleep-range" data-nights={r.summary.nights} data-avg={r.summary.avg ?? ""} data-under={r.under}>
+          {r.summary.nights ? (
+            <>
+              <span className="font-medium">{fmtHours(r.summary.avg!)} a night</span> over {r.summary.nights} night{r.summary.nights === 1 ? "" : "s"} · {r.summary.atFloor} at 7 h or more · {r.under} under
+            </>
+          ) : (
+            "No nights logged in this range."
+          )}
+        </p>
+        {r.nights.length ? <BarChart data={r.nights.map((n, i, all) => ({ label: all.length > 10 && i % Math.ceil(all.length / 8) ? "" : n.date.slice(5), value: n.hours, sub: `${n.date}: ${fmtHours(n.hours)}` }))} valueLabel="hours" height={120} /> : null}
+        {r.perWeek.length > 1 ? <p className="mt-2 text-xs text-ink-3">By week: {r.perWeek.map((w) => `${formatDate(w.monday, { month: "short", day: "numeric" })} ${w.value != null ? fmtHours(w.value) : "—"}`).join(" · ")}</p> : null}
       </Card>
 
       <Card title="30 nights" className="mb-4">
