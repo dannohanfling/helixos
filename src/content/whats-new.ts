@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 43,
+    date: "2026-10-01",
+    title: "Slides say your words, never the wizard's labels",
+    lines: [
+      "No slide carries a section or act label any more (\"Case Study · Vehicle\", \"Act 1 · Vehicle · recap\", \"A moment before we go on\"). A divider says the belief's own shift, a recap repeats the act's lines under it, and the section name sits in the speaker notes where you find your place.",
+      "A story is told, not titled: its bank title goes to the notes and the story runs as beats, one sentence per slide, with the picture slot on the first beat.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 42,
     date: "2026-10-01",
     title: "Empty picture slots show in red",

@@ -145,7 +145,19 @@ async function main() {
     const named = new Set(faceLines.flatMap(currenciesIn));
     const foreign = [...named].filter((c) => c !== other && c !== "$");
     if (!named.has(other) || foreign.length) throw new Error(`every currency on a face is the offer's ${other}: named ${[...named].join(", ")}`);
-    const notes = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")))).map(unxml).join("\n");
+    // §9 (Danno, 1 Oct): no wizard label on any face. Every face is read against the engine's own labels and the record's
+    // section names; and every slide after the cover carries its section name in its notes, where the coach finds their place.
+    const { FACE_LABELS_NEVER } = await import("@/lib/engine/deck");
+    const sectionNames = secs.map((x) => x.name).filter((n): n is string => Boolean(n));
+    const labelHits = (line: string) => [...FACE_LABELS_NEVER, ...sectionNames].filter((l) => line.includes(l));
+    const labelled = faceLines.filter((l) => labelHits(l).length);
+    if (labelled.length) throw new Error(`a face carries a wizard label: ${labelled.map((l) => `"${l}" (${labelHits(l).join(", ")})`).join("; ")}`);
+    const noteFiles = Object.keys(zip.files).filter((f) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(f)).sort((a, b) => Number(a.match(/\d+/)![0]) - Number(b.match(/\d+/)![0]));
+    const perSlideNotes = await Promise.all(noteFiles.map(async (f) => unxml(await zip.file(f)!.async("string"))));
+    const unplaced = perSlideNotes.slice(1).filter((n) => !n.includes("Section: "));
+    if (noteFiles.length < slideFiles.length || unplaced.length) throw new Error(`every slide after the cover names its section in the notes: ${unplaced.length} of ${perSlideNotes.length - 1} don't`);
+    console.log(`✓ §9: no face among ${faceLines.length} lines carries a section or act label (${sectionNames.length} section names, ${FACE_LABELS_NEVER.length} of the deck's own); ${perSlideNotes.length - 1} slides name their section in the notes`);
+    const notes = perSlideNotes.join("\n");
     const inNotes = expectedKept.filter((k) => notes.includes(k));
     if (inNotes.length !== expectedKept.length) throw new Error(`every kept-off line is in the speaker notes: ${inNotes.length} of ${expectedKept.length}`);
     console.log(`✓ the .pptx: ${faceLines.length} lines on ${slideFiles.length} faces, none from any class in deck-face.ts; every currency named is ${other}; all ${expectedKept.length} kept-off lines are in the notes`);

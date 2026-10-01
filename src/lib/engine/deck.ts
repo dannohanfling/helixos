@@ -228,7 +228,8 @@ function slideOf(i: SlideInput): Slide {
   const tier = headlineTier(headlineIn);
   const headline = tier.overflow ? (s?.name ?? "") : headlineIn;
   const finalBody = tier.overflow ? [headlineIn, ...body] : body;
-  const notes = [s ? `Section: ${s.name}` : "", direction(kind, finalBody) ? `Visual direction: ${direction(kind, finalBody)}` : "", s?.deliveryNote ? `Delivery: ${s.deliveryNote}` : "", ...(i.extraNotes ?? []), ...keptOff.map(notOnFace)].filter(Boolean);
+  // The section name is in the notes, never on the face (§9): the record's section, or the deck's own label for a slide without one.
+  const notes = [s ? `Section: ${s.name}` : i.eyebrow ? `Section: ${i.eyebrow}` : "", direction(kind, finalBody) ? `Visual direction: ${direction(kind, finalBody)}` : "", s?.deliveryNote ? `Delivery: ${s.deliveryNote}` : "", ...(i.extraNotes ?? []), ...keptOff.map(notOnFace)].filter(Boolean);
   const footer = foot?.face || null;
   // The footer is the offer's line on a price slide: a hole in it refuses as clause (b) does, on every slide it sits on.
   const placeholders = [...placeholderHits(kind, [headline, ...finalBody]), ...(footer ? placeholderHits("offer", [footer]) : [])].filter((h, idx, all) => all.findIndex((x) => x.text === h.text) === idx);
@@ -288,8 +289,12 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   openSlide("Permission to be direct", c.opening.permissionLine);
   for (const act of c.acts) {
     const belief = act.sections.find((s) => s.belief)?.belief ?? null;
-    // A divider opens each belief act: the act's label the wizard already holds, and the shift it makes, from the record.
-    if (BELIEF_ACTS.has(act.key)) slides.push(slideOf({ n: n++, kind: "divider", s: null, headline: act.label, body: belief ? [`From: ${belief.from}`, `To: ${belief.to}`] : [], eyebrow: act.label, act: act.key, inverse: true }));
+    // A divider opens each belief act (§9, Danno 1 Oct: "the headliners calling them out shouldn't be on there"): never the wizard's
+    // act label on the face. Its headline is the belief's own shift, the "To:" line, with the "From:" line under it; an act with
+    // no belief row has no shift to announce, so no divider (its first key point is said once, on its own slide, not twice).
+    // The act's name goes to the notes, where the coach finds their place.
+    const shift = belief?.to?.trim() || belief?.from?.trim() || null;
+    if (BELIEF_ACTS.has(act.key) && shift) slides.push(slideOf({ n: n++, kind: "divider", s: null, headline: shift, body: belief?.to?.trim() && belief.from?.trim() ? [`From: ${belief.from.trim()}`] : [], eyebrow: act.label, act: act.key, inverse: true }));
     for (const s of act.sections) {
       if (s.status === "omitted") continue;
       const points = s.keyPoints;
@@ -308,8 +313,18 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
         continue;
       }
       if (isCaseStudy(s)) {
-        if (s.story) slides.push(slideOf({ n: n++, kind: "story", s, headline: s.story.name, body: sentencesOf(s.story.body).slice(0, 3), footer, slot: { key: `${s.sectionKey}:photo`, kind: "photo", what: SLOT_WHAT.photo } }));
-        else pointSlides("section");
+        // A story is told on the slide, never titled (§9): the bank's title is the coach's filing label and goes to the notes;
+        // the story runs as beats, one sentence per slide, the picture slot on the first beat only. A beat too long for a face
+        // (past the longest headline tier) goes to the notes of the beat before it, never shortened and never invented.
+        if (s.story) {
+          const beats = sentencesOf(s.story.body);
+          const faces = beats.filter((b) => b.length <= HEADLINE_MAX_CHARS);
+          const long = beats.filter((b) => b.length > HEADLINE_MAX_CHARS);
+          faces.forEach((beat, i) =>
+            slides.push(slideOf({ n: n++, kind: "story", s, headline: beat, eyebrow: `${s.name} · story`, footer, extraNotes: [`Story: ${s.story!.name}`, ...(i === faces.length - 1 ? long.map((b) => `Beat too long for a face: ${b}`) : [])], slot: i === 0 ? { key: `${s.sectionKey}:photo`, kind: "photo", what: SLOT_WHAT.photo } : null }))
+          );
+          if (!faces.length) pointSlides("section", [`Story: ${s.story.name}`, ...long.map((b) => `Beat too long for a face: ${b}`)]);
+        } else pointSlides("section");
         continue;
       }
       if (isOfferStack(s)) {
@@ -331,7 +346,9 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     // A recap closes each belief act: the first line of every section that has one. Nothing new on it. "Has one" means a line that
     // can stand on a face: a section whose first key point is kept off (deck-face.ts) is quoted by its next, or not at all.
     const lines = act.sections.filter((s) => s.status !== "omitted").map((s) => s.keyPoints.map((p) => cleanFace(p).face).find(Boolean)).filter((l): l is string => Boolean(l));
-    if (BELIEF_ACTS.has(act.key) && lines.length) slides.push(slideOf({ n: n++, kind: "recap", s: null, headline: `${act.label} · recap`, body: lines.slice(0, 6), eyebrow: act.label, act: act.key }));
+    // Its headline is the act's own line (the belief's "To:", else the first line), never "Act 1 · Vehicle · recap" (§9).
+    const recapHead = belief?.to?.trim() || lines[0];
+    if (BELIEF_ACTS.has(act.key) && lines.length) slides.push(slideOf({ n: n++, kind: "recap", s: null, headline: recapHead, body: lines.filter((l) => l !== recapHead).slice(0, 6), eyebrow: act.label, act: act.key }));
   }
   // Each proof once (22 Sep: Kate A. on slides 20 and 22, Rachael C. on 21 and 36). A proof's home is its Proof Block slide, the
   // first in deck order; with none, the first line that quotes it. Any later appearance, a second Proof Block slide or a key
@@ -477,6 +494,8 @@ export type Rule = { slide: number; color: string; y: number };
 export type Frame = { x: number; y: number; w: number; h: number };
 /** An empty picture slot on the face (§2): the frame the picture would take, a dashed outline and red text saying what to add. */
 export type PlaceholderSlot = { frame: Frame; text: string; color: string };
+/** Every label of the deck's own that may never reach a face (§9): the act names, the deck's section-less eyebrows, and the words of a label. The walk reads every face against this list and the record's section names. */
+export const FACE_LABELS_NEVER = [...Object.values(ACT_LABEL), "Act 1", "Act 2", "Act 3", "Opening ·", "What you'll leave with", "Who it is for", "Stay to the end", "A moment before we go on", "· recap", "· story", "Vehicle Story", "Internal Story", "External Story"];
 export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
 
 /**
@@ -514,7 +533,7 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set()): S
       boxes.push({ slide: s.n, role: "cover-title", text: s.headline, size: s.headlineSize, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
       boxes.push({ slide: s.n, role: "cover-presenter", text: s.body[0] ?? "", size: BODY_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
     } else {
-      boxes.push({ slide: s.n, role: "eyebrow", text: s.eyebrow, size: EYEBROW_SIZE, color: muted, fill: null, face: k.displayFont, bold: false, italic: false, bullet: false, placeholder: false });
+      // No eyebrow on any face (§9, Danno): the section and act names live in the notes and on the Deck step. The accent rule stays.
       boxes.push({ slide: s.n, role: "headline", text: s.headline, size: s.headlineSize, color: ink, fill: mark(s.headline) ? placeholderColor : null, face: s.kind === "proof" && k.quoteFont ? k.quoteFont : k.displayFont, bold: s.kind !== "proof", italic: s.kind === "proof", bullet: false, placeholder: mark(s.headline) });
       for (const line of s.body) {
         const attribution = s.kind === "proof" && line.startsWith("— ");
