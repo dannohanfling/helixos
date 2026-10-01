@@ -6,7 +6,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
-import { requireBodyEnabled, restrictedNow, trainingDay, trainingWeeks, type TrainingDayView } from "@/lib/queries/body";
+import { activitiesOn, requireBodyEnabled, restrictedNow, trainingDay, trainingWeeks, type TrainingDayView } from "@/lib/queries/body";
 import { deleteSetAction, finishSessionAction, logSetAction, reopenSessionAction, setDayOffAction, startSessionAction } from "@/lib/actions/body";
 
 export const metadata = { title: "HumanOS · Training" };
@@ -88,7 +88,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
   requireBodyEnabled(v);
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= v.today ? sp.date : v.today;
-  const [t, weeks, restricted] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), restrictedNow(v.workspace.id, v.user.id, v.today)]);
+  const [t, weeks, restricted, activities] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), restrictedNow(v.workspace.id, v.user.id, v.today), activitiesOn(v.workspace.id, v.user.id, date)]);
   if (!t) {
     return (
       <>
@@ -124,6 +124,18 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
           </div>
         }
       />
+      {activities.length ? (
+        /* WHOOP (phase 11): the day's recorded workouts; a lifting one sits with the session rather than beside it. */
+        <ul className="-mt-2 mb-3 flex flex-wrap gap-2 text-xs" data-testid="training-activities" data-count={activities.length}>
+          {activities.map((a) => (
+            <li key={a.id} className="rounded-full bg-surface-2 px-2.5 py-1 text-ink-2" data-testid="training-activity" data-sport={a.sport}>
+              ⌚ {a.sport} · {Math.round(a.minutes)} min
+              {a.strain != null ? ` · strain ${a.strain}` : ""}
+              {a.avgHr != null ? ` · ${a.avgHr} bpm` : ""}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <p className="-mt-3 mb-4 flex flex-wrap gap-3 text-xs text-ink-2">
         <Link href="/body/training/routines" className="hover:underline">
           Routines

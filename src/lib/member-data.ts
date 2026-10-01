@@ -87,6 +87,9 @@ export const MEMBER_TABLES = {
   // Shopping and Instacart (rev 237 phase 10): the week's plan and the log of every push.
   body_plan: schema.bodyPlan,
   body_orders: schema.bodyOrders,
+  // WHOOP (rev 237 phase 11): the connection (tokens sealed) and every recorded workout.
+  body_devices: schema.bodyDevices,
+  body_activities: schema.bodyActivities,
   // What a coach changed while working in this member's HelixOS, and their switches in and out (rev 216).
   coach_changes: schema.coachChanges,
   chat_links: schema.chatLinks,
@@ -97,7 +100,7 @@ export const MEMBER_TABLES = {
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 
 /** The Body tables: in the member's own export and in deletion, never in a coach's export of a client, shared or not. */
-export const BODY_LABELS = new Set<MemberLabel>(["body_settings", "body_day_types", "body_foods", "body_meals", "body_entries", "body_days", "body_comments", "body_share_events", "body_exercises", "body_routines", "body_sessions", "body_sets", "body_daily", "body_goals", "body_pantry", "body_yields", "body_habits", "body_habit_logs", "body_health", "body_plan", "body_orders"]);
+export const BODY_LABELS = new Set<MemberLabel>(["body_settings", "body_day_types", "body_foods", "body_meals", "body_entries", "body_days", "body_comments", "body_share_events", "body_exercises", "body_routines", "body_sessions", "body_sets", "body_daily", "body_goals", "body_pantry", "body_yields", "body_habits", "body_habit_logs", "body_health", "body_plan", "body_orders", "body_devices", "body_activities"]);
 
 /** No owner column of their own: each row belongs to whoever owns its parent. Listed parents before children. */
 export const CHILD_TABLES = [
@@ -162,6 +165,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash"]);
+export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);

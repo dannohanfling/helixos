@@ -2822,6 +2822,57 @@ export const bodyOrders = sqliteTable(
 );
 export type BodyOrder = typeof bodyOrders.$inferSelect;
 
+/* ── Devices: WHOOP (B6, rev 237 phase 11, migration 0090). ── */
+
+/**
+ * A member's connected device: one row per provider, the OAuth tokens sealed at rest (src/lib/crypto.ts), never logged or shown.
+ * Disconnect deletes the row. Body table: the member's export and delete-all, never a coach's export.
+ */
+export const bodyDevices = sqliteTable(
+  "body_devices",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    provider: text("provider", { enum: ["whoop"] }).notNull().default("whoop"),
+    /** The provider's id for this member, so a webhook finds them without a token. */
+    providerUserId: text("provider_user_id"),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    expiresAt: text("expires_at"),
+    scopes: text("scopes"),
+    connectedAt: text("connected_at"),
+    lastSyncAt: text("last_sync_at"),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_devices_member_provider").on(t.workspaceId, t.userId, t.provider), index("body_devices_provider_user").on(t.provider, t.providerUserId)],
+);
+export type BodyDevice = typeof bodyDevices.$inferSelect;
+
+/** A workout the device recorded, by its sport: when, how long, strain and heart rate. One row per provider id; replaced when updated. */
+export const bodyActivities = sqliteTable(
+  "body_activities",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    provider: text("provider", { enum: ["whoop"] }).notNull().default("whoop"),
+    providerId: text("provider_id").notNull(),
+    date: text("date").notNull(),
+    sport: text("sport").notNull(),
+    startedAt: text("started_at"),
+    endedAt: text("ended_at"),
+    minutes: real("minutes").notNull().default(0),
+    strain: real("strain"),
+    avgHr: integer("avg_hr"),
+    maxHr: integer("max_hr"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_activities_member_provider_id").on(t.workspaceId, t.userId, t.provider, t.providerId), index("body_activities_member_date").on(t.workspaceId, t.userId, t.date)],
+);
+export type BodyActivity = typeof bodyActivities.$inferSelect;
+
 /**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,
  * in plain words. The client sees the changes in Settings ("Changes by your coach"); the coach's client page shows the

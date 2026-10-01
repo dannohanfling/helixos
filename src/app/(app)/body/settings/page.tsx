@@ -7,8 +7,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { MACROS, MACRO_NAME, nextRefeed } from "@/lib/engine/body";
-import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory } from "@/lib/queries/body";
-import { deleteDayTypeAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, setBodyAiAction, setBodyShareAction } from "@/lib/actions/body";
+import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory, whoopStatus } from "@/lib/queries/body";
+import { deleteDayTypeAction, disconnectWhoopAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, setBodyAiAction, setBodyShareAction, syncWhoopAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
 import { EraseBodyForm } from "@/components/body/unit-inputs";
 
@@ -49,11 +49,12 @@ function DayTypeFields({ t }: { t?: schema.BodyDayType }) {
   );
 }
 
-export default async function BodySettingsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function BodySettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; whoop?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
   const s = await bodySettingsFor(v.workspace.id, v.user.id);
+  const whoop = await whoopStatus(v.workspace.id, v.user.id);
   if (!s) redirect("/body");
   const [types, history] = await Promise.all([dayTypesFor(v.workspace.id, v.user.id), shareHistory(v.workspace.id, v.user.id)]);
   const refeedNext = nextRefeed(v.today, { dayTypeId: s.refeedDayTypeId, anchor: s.refeedAnchor, everyDays: s.refeedEveryDays });
@@ -253,6 +254,35 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
         <Link href="/body/import" className="btn btn-soft btn-sm mt-3" data-testid="body-import-link">
           Bring it over
         </Link>
+      </Card>
+
+      <Card className="mb-4" title="Devices" id="devices">
+        <p className="text-sm text-ink-2">WHOOP fills Sleep (hours and score), recovery, strain, resting heart rate and HRV, and every workout by its sport; a sport that is one of your habits ticks it for the day. The connection is yours: Disconnect removes it, and what was pulled stays.</p>
+        {whoop ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm" data-testid="whoop-connected" data-known={whoop.known ? "1" : "0"}>
+            <span>
+              <span className="font-medium">WHOOP connected</span>
+              {whoop.connectedAt ? <span className="text-ink-3"> · since {formatDate(whoop.connectedAt.slice(0, 10))}</span> : null}
+              {whoop.lastSyncAt ? <span className="text-ink-3"> · synced {formatDateTime(whoop.lastSyncAt, v.tz)}</span> : null}
+              {whoop.lastError ? <span className="text-warn"> · last sync didn&apos;t finish</span> : null}
+            </span>
+            <form action={syncWhoopAction}>
+              <SubmitButton className="btn btn-soft btn-sm" pendingText="Syncing…" data-testid="whoop-sync">
+                Sync now
+              </SubmitButton>
+            </form>
+            <form action={disconnectWhoopAction}>
+              <SubmitButton className="btn btn-ghost btn-sm text-ink-3" pendingText="…" data-testid="whoop-disconnect">
+                Disconnect
+              </SubmitButton>
+            </form>
+          </div>
+        ) : (
+          <a href="/api/body/whoop/start" className="btn btn-humanos btn-sm mt-3" data-testid="whoop-connect">
+            Connect WHOOP
+          </a>
+        )}
+        {sp.whoop === "connected" ? <p className="mt-2 text-xs text-good" role="status" data-testid="whoop-just-connected">Connected. The last 30 days are in; Sleep and Training show them.</p> : sp.whoop === "synced" ? <p className="mt-2 text-xs text-good" role="status" data-testid="whoop-just-synced">Synced.</p> : null}
       </Card>
 
       <Card className="mb-8" title="Download your Body data" id="download">

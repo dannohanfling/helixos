@@ -35,6 +35,10 @@ main() {
     AIRTABLE_API_URL="${AIRTABLE_API_URL:-http://localhost:4070}" \
     INSTACART_API_URL="${INSTACART_API_URL:-http://localhost:4071}" \
     INSTACART_API_KEY="${INSTACART_API_KEY:-test-instacart-key}" \
+    WHOOP_API_URL="${WHOOP_API_URL:-http://localhost:4072}" \
+    WHOOP_AUTH_URL="${WHOOP_AUTH_URL:-http://localhost:4072/oauth/oauth2}" \
+    WHOOP_CLIENT_ID="${WHOOP_CLIENT_ID:-test-whoop-client}" \
+    WHOOP_CLIENT_SECRET="${WHOOP_CLIENT_SECRET:-test-whoop-secret}" \
     BLOB_READ_WRITE_TOKEN="${BLOB_READ_WRITE_TOKEN:-vercel_blob_rw_TESTSTORE_testsecret}" \
     PROOF_BLOB_READ_WRITE_TOKEN="${PROOF_BLOB_READ_WRITE_TOKEN:-vercel_blob_rw_PROOFSTORE_testsecret}" \
     VERCEL_BLOB_API_URL="${VERCEL_BLOB_API_URL:-http://localhost:4050}" \

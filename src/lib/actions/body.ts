@@ -24,6 +24,8 @@ import { parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-r
 import { instacartLines } from "@/lib/engine/body-shopping";
 import { InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
 import { shoppingView } from "@/lib/queries/body";
+import { disconnectWhoop, syncWhoop } from "@/lib/body-whoop";
+import { WhoopError, whoopProblem } from "@/lib/whoop";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { nowIso, startOfWeek } from "@/lib/dates";
 import { bodyAccess, bodySettingsFor, groupReadings, isWorkspaceOwner } from "@/lib/queries/body";
@@ -668,6 +670,8 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
+    db.delete(schema.bodyActivities).where(and(eq(schema.bodyActivities.workspaceId, workspaceId), eq(schema.bodyActivities.userId, userId))),
+    db.delete(schema.bodyDevices).where(and(eq(schema.bodyDevices.workspaceId, workspaceId), eq(schema.bodyDevices.userId, userId))),
     db.delete(schema.bodyOrders).where(and(eq(schema.bodyOrders.workspaceId, workspaceId), eq(schema.bodyOrders.userId, userId))),
     db.delete(schema.bodyPlan).where(and(eq(schema.bodyPlan.workspaceId, workspaceId), eq(schema.bodyPlan.userId, userId))),
     db.delete(schema.bodyHealth).where(and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId))),
@@ -939,4 +943,30 @@ export async function pushInstacartAction(formData: FormData): Promise<void> {
     }
     throw e;
   }
+}
+
+/* ── WHOOP (B6, rev 237 phase 11). Connect is a GET to /api/body/whoop/start; these are the rest. ── */
+
+const DEVICES = "/body/settings#devices";
+
+/** Disconnect deletes the row, tokens and all. What was pulled stays. */
+export async function disconnectWhoopAction(): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await disconnectWhoop(workspaceId, userId);
+  refresh();
+  redirect(DEVICES);
+}
+
+/** Sync now: the last 30 days pulled again. */
+export async function syncWhoopAction(): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  try {
+    await syncWhoop(workspaceId, userId, v.tz, 30);
+  } catch (e) {
+    throw back("/body/settings", e instanceof WhoopError ? whoopProblem(e) : "WHOOP couldn't answer just now.");
+  }
+  refresh();
+  redirect(`${DEVICES.replace("#devices", "")}?whoop=synced#devices`);
 }

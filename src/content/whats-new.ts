@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 33,
+    date: "2026-10-01",
+    title: "HumanOS: WHOOP",
+    lines: ["Connect WHOOP from Body settings and it fills Sleep (hours and score), recovery, strain, resting heart rate and HRV, and brings every workout by its sport with its minutes, strain and heart rate onto Training. A sport that is one of your habits (sauna, stretching, walking, yoga…) ticks it for the day; what you logged by hand stays.", "WHOOP sends changes as they happen, and Sync now pulls the last 30 days. The connection is yours alone: Disconnect removes it, and your coach never sees any of it unless you share the rest."],
+    audience: "coach",
+  },
+  {
     n: 32,
     date: "2026-10-01",
     title: "HumanOS: the longer view",

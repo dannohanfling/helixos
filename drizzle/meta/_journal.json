@@ -631,6 +631,13 @@
       "when": 1790823768322,
       "tag": "0089_body_shopping",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1790829731068,
+      "tag": "0090_body_devices",
+      "breakpoints": true
     }
   ]
 }

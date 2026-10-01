@@ -971,3 +971,16 @@ export async function bodyRange(workspaceId: string, userId: string, b: Bounds, 
   return { settings, bounds: b, nutrition: nutritionWeek(days.map(asWeekDay)), prevNutrition: nutritionWeek(prevDays.map(asWeekDay)), training: training!, weigh, sleep, habits };
 }
 export type BodyRangeView = NonNullable<Awaited<ReturnType<typeof bodyRange>>>;
+
+/* ───────── WHOOP (rev 237 phase 11) ───────── */
+
+/** The member's WHOOP connection for Body settings: connected when, last sync, last error; never a token. */
+export async function whoopStatus(workspaceId: string, userId: string) {
+  const d = await db.query.bodyDevices.findFirst({ columns: { connectedAt: true, lastSyncAt: true, lastError: true, providerUserId: true }, where: and(and(eq(schema.bodyDevices.workspaceId, workspaceId), eq(schema.bodyDevices.userId, userId)), eq(schema.bodyDevices.provider, "whoop")) });
+  return d ? { connectedAt: d.connectedAt, lastSyncAt: d.lastSyncAt, lastError: d.lastError, known: !!d.providerUserId } : null;
+}
+
+/** The device's workouts on a day, for Training: sport, minutes, strain, heart rate. */
+export async function activitiesOn(workspaceId: string, userId: string, date: string) {
+  return db.query.bodyActivities.findMany({ where: and(eq(schema.bodyActivities.workspaceId, workspaceId), eq(schema.bodyActivities.userId, userId), eq(schema.bodyActivities.date, date)), orderBy: asc(schema.bodyActivities.startedAt) });
+}

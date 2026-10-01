@@ -836,6 +836,67 @@ async function main() {
     if ((await client.locator('[data-testid="exercise-range"]').getAttribute("data-range")) !== "365" || Number(await client.locator('[data-testid="exercise-range"]').getAttribute("data-sessions")) < 2) throw new Error("the exercise's history reads over a year");
     console.log(`✓ longer views: 90 days on the week page carries the query's ${rq.training.sessions} sessions, ${rq.training.sets} sets and ${rq.training.prs} PRs, ${rq.sleep.summary.nights} nights and ${rq.habits.kept} of ${rq.habits.due} habits kept; a month steps back to ${prevMonth.label}; Sleep and Practices read over the range; the exercise over a year`);
 
+    // ── WHOOP (phase 11): connect through the mock's OAuth, the pull lands nights, recovery, strain and workouts as the engine maps
+    // them, a sauna workout ticks the Sauna habit, Training shows the day's activities, a signed webhook is handled and a bad one
+    // refused, Sync now, then Disconnect removes the row and keeps what was pulled. ──
+    const { sleepRows: nightRowsOf, activityRow: activityOf } = await import("@/lib/engine/body-whoop");
+    const { todayInTz: dateInTz } = await import("@/lib/dates");
+    const whoopMock = spawnMock("npx", ["tsx", "scripts/mock-whoop.ts", "4072"], { stdio: "ignore", detached: true });
+    try {
+      for (let i = 0; i < 100; i++) {
+        try {
+          await fetch("http://localhost:4072/__calls");
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
+      const memberTz = mem.timezone || (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }))!.timezone;
+      const whoopRecords = (await (await fetch("http://localhost:4072/__records")).json()) as { sleep: Parameters<typeof nightRowsOf>[0][]; workout: Parameters<typeof activityOf>[0][] };
+      const inTz = (iso: string) => dateInTz(memberTz, new Date(iso));
+      const sauna = (await db.query.bodyHabits.findMany({ where: mine(schema.bodyHabits) })).find((h) => h.name === "Sauna") ?? null;
+      if (!sauna) await db.insert(schema.bodyHabits).values({ id: freshId(), workspaceId: mem.workspaceId, userId: maya.id, name: "Sauna", kind: "minutes", target: 15, days: [], order: 9 });
+      const saunaHabit = (await db.query.bodyHabits.findMany({ where: mine(schema.bodyHabits) })).find((h) => h.name === "Sauna")!;
+      await client.goto(`${base}/body/settings`);
+      await client.locator('[data-testid="whoop-connect"]').waitFor({ timeout: 30000 });
+      await client.locator('[data-testid="whoop-connect"]').click();
+      await client.waitForURL(/whoop=connected/, { timeout: 30000 });
+      await client.locator('[data-testid="whoop-connected"]').waitFor({ timeout: 30000 });
+      if ((await client.locator('[data-testid="whoop-connected"]').getAttribute("data-known")) !== "1") throw new Error("the member's WHOOP id is read on connect");
+      const device = (await db.query.bodyDevices.findMany({ where: mine(schema.bodyDevices) }))[0];
+      if (!device || !device.accessToken?.startsWith("enc:v1:") || !device.refreshToken?.startsWith("enc:v1:") || device.providerUserId !== "4242" || !device.lastSyncAt) throw new Error("the device row holds sealed tokens, the WHOOP id and the first sync");
+      const whoopRows = await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.source, "whoop")) });
+      const night1 = nightRowsOf(whoopRecords.sleep[0], inTz, () => null);
+      const hoursRow = whoopRows.find((r) => r.readingId === "whoop:sleep:slp-1" && r.key === "sleep_h");
+      if (!hoursRow || hoursRow.value !== night1[0].value || hoursRow.date !== night1[0].date) throw new Error(`the night lands as the engine maps it (${JSON.stringify(night1[0])}): ${JSON.stringify(hoursRow)}`);
+      if (whoopRows.some((r) => r.readingId.startsWith("whoop:sleep:nap"))) throw new Error("a nap never lands");
+      if ((await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.readingId, `sleep:${night1[0].date}`)) })).length) throw new Error("the manual night of that date gives way to WHOOP's");
+      for (const [key, value] of [["recovery", 67], ["rhr", 51], ["hrv", 72], ["strain", 8.2]] as const) if (!whoopRows.some((r) => r.key === key && r.value === value)) throw new Error(`${key} ${value} lands from the pull`);
+      const acts = await db.query.bodyActivities.findMany({ where: mine(schema.bodyActivities) });
+      const liftExpected = activityOf(whoopRecords.workout[0], inTz)!;
+      if (acts.length !== 3 || !acts.some((a) => a.sport === "Weightlifting" && a.minutes === liftExpected.minutes && a.strain === 10.1 && a.avgHr === 118 && a.date === liftExpected.date)) throw new Error(`three workouts land by sport with minutes, strain and heart rate: ${JSON.stringify(acts.map((a) => [a.sport, a.minutes, a.date]))}`);
+      const saunaLog = await db.query.bodyHabitLogs.findFirst({ where: eq(schema.bodyHabitLogs.habitId, saunaHabit.id) });
+      if (!saunaLog || saunaLog.value !== 18 || saunaLog.source !== "whoop") throw new Error("the sauna workout ticks the Sauna habit with its minutes, source whoop");
+      await client.goto(`${base}/body/training?date=${liftExpected.date}`);
+      await client.locator('[data-testid="training-activities"]').waitFor({ timeout: 30000 });
+      if ((await client.locator('[data-testid="training-activity"]').count()) !== 2 || !(await client.locator('[data-testid="training-activity"][data-sport="Weightlifting"]').count())) throw new Error("Training shows the day's two recorded workouts");
+      // A signed webhook for the walk's workout is handled; the same with a wrong secret is refused.
+      const hook = async (badSecret: boolean) => (await (await fetch("http://localhost:4072/__webhook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: `${base}/api/webhooks/whoop`, event: { user_id: 4242, id: "wk-walk", type: "workout.updated" }, badSecret }) })).json()) as { status: number; body: string };
+      const good = await hook(false);
+      const bad = await hook(true);
+      if (good.status !== 200 || !good.body.includes('"handled":true') || bad.status !== 401) throw new Error(`a signed webhook is handled (${good.status} ${good.body}) and a bad signature refused (${bad.status})`);
+      await client.goto(`${base}/body/settings`);
+      await press(client, '[data-testid="whoop-sync"]', async () => /whoop=synced/.test(client.url()), "synced");
+      await client.locator('[data-testid="whoop-disconnect"]').waitFor({ timeout: 30000 });
+      await press(client, '[data-testid="whoop-disconnect"]', async () => (await client.locator('[data-testid="whoop-connect"]').count()) > 0, "disconnected");
+      if ((await db.query.bodyDevices.findMany({ where: mine(schema.bodyDevices) })).length || (await db.query.bodyActivities.findMany({ where: mine(schema.bodyActivities) })).length !== 3) throw new Error("Disconnect removes the row and keeps what was pulled");
+      const { calls: whoopCalls } = (await (await fetch("http://localhost:4072/__calls")).json()) as { calls: { method: string; path: string }[] };
+      if (!whoopCalls.some((c) => c.path === "/oauth/oauth2/token" && c.method === "POST") || !whoopCalls.some((c) => c.path === "/developer/v2/activity/workout/wk-walk")) throw new Error("the code was exchanged and the webhook's one workout fetched");
+      console.log(`✓ WHOOP: connected through the mock, tokens sealed and the WHOOP id read; the pull landed ${night1[0].value} h on ${night1[0].date} (the manual night giving way), recovery 67, RHR 51, HRV 72, strain 8.2 and three workouts by sport; the sauna ticked its habit (18 min, whoop); Training shows the day's workouts; a signed webhook handled, a bad one refused; Sync now; Disconnect removed the row and kept the data`);
+    } finally {
+      if (whoopMock.pid) process.kill(-whoopMock.pid);
+    }
+
     // ── Private: the coach sees nothing, and a coach's export never has Body. ──
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("the client page shows no Body card while private");
@@ -893,7 +954,10 @@ async function main() {
     if (aiText.includes(note)) throw new Error("the coach's comment never goes to AI");
     if (!aiText.includes("Latest weigh-in") || !aiText.includes("150.4 lb")) throw new Error(`with the switch on, AI gets the latest weigh-in: ${aiText}`);
     if (!aiText.includes(`${ROUTINE.name}: Bench press 190 × 5`) || !aiText.includes("Bench press 185 × 5, 185 × 5")) throw new Error(`with the switch on, AI gets the week's workouts: ${aiText}`);
-    if (!aiText.includes("Sleep: ") || !aiText.includes("8 h") || !aiText.includes("Habits: ") || !aiText.includes("Breathwork ✓")) throw new Error(`with the switch on, AI gets last night's sleep and the habits kept: ${aiText}`);
+    // WHOOP's pull (above) replaced the hand-logged night, so the night expected is whatever the sleep query holds now.
+    const { sleepView: sleepNow } = await import("@/lib/queries/body");
+    const lastNight = (await sleepNow(mem.workspaceId, maya.id, today))!.last!.text;
+    if (!aiText.includes("Sleep: ") || !aiText.includes(lastNight) || !aiText.includes("Habits: ") || !aiText.includes("Breathwork ✓")) throw new Error(`with the switch on, AI gets last night's sleep and the habits kept: ${aiText}`);
     if (aiText.includes(injury) || /injur|health log/i.test(aiText)) throw new Error("the health log never goes to AI");
     // Another viewer (the coach) never gets it, switch or not.
     const theCoach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
@@ -927,13 +991,13 @@ async function main() {
     if (!trainTool.text.includes("PR 190 × 5")) throw new Error(`body_training gives an exercise's history: ${trainTool.text}`);
     const wiTool = await tool("body_weigh_ins").handler(await viewerFor(), {});
     if (!wiTool.text.includes("7-day average") || !wiTool.text.includes("150.4 lb")) throw new Error(`body_weigh_ins gives the trend: ${wiTool.text}`);
-    if (!todayTool.text.includes("Habits: 2 of") || todayTool.text.includes(injury)) throw new Error(`body_today carries the habits kept, never the health log: ${todayTool.text}`);
+    if (!/Habits: \d+ of \d+ kept/.test(todayTool.text) || todayTool.text.includes(injury)) throw new Error(`body_today carries the habits kept, never the health log: ${todayTool.text}`);
     const habitsTool = await tool("body_habits").handler(await viewerFor(), {});
     if (!habitsTool.text.includes("Breathwork") || !habitsTool.text.includes("streak 4") || !habitsTool.text.includes("Meditation (10 min a day): kept")) throw new Error(`body_habits reads the day's habits with streaks: ${habitsTool.text}`);
     const habitTool = await tool("body_log_habit").handler(await viewerFor(), { habit: "evening", value: 7000, date: yesterday });
     if (!habitTool.text.includes("7000 steps")) throw new Error(`body_log_habit logs a measured habit by name: ${habitTool.text}`);
     const sleepTool = await tool("body_sleep").handler(await viewerFor(), {});
-    if (!sleepTool.text.includes("8 h") || !sleepTool.text.includes("This week")) throw new Error(`body_sleep gives last night and the week: ${sleepTool.text}`);
+    if (!sleepTool.text.includes(lastNight) || !sleepTool.text.includes("This week")) throw new Error(`body_sleep gives last night and the week: ${sleepTool.text}`);
     const sleepLog = await tool("body_log_sleep").handler(await viewerFor(), { hours: "7:15", date: addDays(today, -2) });
     if (!sleepLog.text.includes("7 h 15 min")) throw new Error(`body_log_sleep takes a time: ${sleepLog.text}`);
     for (const txt of [habitsTool.text, habitTool.text, sleepTool.text, sleepLog.text]) if (txt.includes(injury)) throw new Error("no tool carries the health log");
@@ -984,8 +1048,9 @@ async function main() {
     if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
     if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
     if (!(own.body_pantry ?? []).length || (own.body_yields ?? []).length !== 1) throw new Error("the member's Body export has their pantry and weighings");
-    if ((own.body_habits ?? []).length !== 3 || !(own.body_habit_logs ?? []).length || (own.body_health ?? []).length !== 1) throw new Error("the member's Body export has their habits, their logs and their health log");
+    if ((own.body_habits ?? []).length !== 4 || !(own.body_habit_logs ?? []).length || (own.body_health ?? []).length !== 1) throw new Error("the member's Body export has their habits (the Sauna one WHOOP ticks among them), their logs and their health log");
     if ((own.body_plan ?? []).length !== 1 || (own.body_orders ?? []).length !== 2) throw new Error("the member's Body export has this week's plan and the pushes");
+    if ((own.body_activities ?? []).length !== 3 || (own.body_devices ?? []).length !== 0 || JSON.stringify(own).includes("enc:v1:") || JSON.stringify(own).includes("whoop-access")) throw new Error("the member's Body export has the device's workouts and never a token");
     if ((own.body_entries ?? []).length !== 6 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // ── The Airtable history (B5, rev 237 phase 7): the synthetic HumanOS base through the page. The dry run's numbers are the
     // mapper's own; Approve writes them; a second run finds everything already in; the mock saw GETs alone and never the
