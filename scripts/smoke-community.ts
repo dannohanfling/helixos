@@ -175,6 +175,8 @@ async function main() {
     await page.locator('[data-testid="community-post-as-id"]').fill("contact_danno");
     await submit(page, '[data-testid="community-save"]');
     await submit(page, '[data-testid="community-resume"]');
+    // The refreshed page lands a beat after the action's response (1 Oct, under a loaded gate): wait for the banner to go.
+    for (let i = 0; i < 50 && (await page.locator('[data-testid="community-paused"]').count()); i++) await page.waitForTimeout(100);
     if (await page.locator('[data-testid="community-paused"]').count()) throw new Error("Resume clears the hold");
     console.log("✓ an account on hold stops posting, says why, and the hourly job doesn't retry; Resume clears it");
 

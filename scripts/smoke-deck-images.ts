@@ -16,8 +16,16 @@ import { chromium, type Page } from "@playwright/test";
 const base = process.argv[2] ?? "http://localhost:3000";
 const blobPort = 4050;
 const run = promisify(execFile);
-// A real 1×1 PNG: the coach's own upload, the smallest that still sniffs and measures as an image.
-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+// The coach's uploads, made here at known sizes and flat colours so the file and the render can be read back against them
+// (deck visuals §1): a wide photo (2:1), a wider screenshot (3:1) and a logo (3:1). The photo's blue is scanned for in the render.
+const PHOTO_PX = { width: 1600, height: 800 };
+const SHOT_PX = { width: 1200, height: 400 };
+const LOGO_PX = { width: 300, height: 100 };
+const PHOTO_RGB = { r: 46, g: 134, b: 222 };
+/** A picture frame on the slide, inches (the engine's slotFrame for the cover; read back here, never retyped elsewhere). */
+const COVER_FRAME = { x: 5.2, y: 0.9, w: 4.3, h: 3.85 };
+const LOGO_BOX = { w: 0.9, h: 0.24 };
+const within = (a: number, b: number, tol = 0.01) => Math.abs(a - b) / b <= tol;
 // Construction language that must never reach a speaker note: how the deck is built in code, not what the presenter says.
 const CONSTRUCTION = ["renderPlan", "deckSlides", "SlidePlan", "TextBox", "slotFrame", "imageFrame", "data-testid", "placeholder colour", "the slot", "SLOT_WHAT", "pptxgenjs", "EMU"];
 const EMU = 914400;
@@ -65,6 +73,11 @@ async function main() {
       await db.delete(schema.webinars).where(inArray(schema.webinars.id, priorWebinars.map((w) => w.id)));
     }
     await db.delete(schema.deckImages).where(eq(schema.deckImages.userId, user.id));
+    const { default: sharp } = await import("sharp");
+    const flat = (px: { width: number; height: number }, rgb: { r: number; g: number; b: number }) => sharp({ create: { ...px, channels: 3, background: rgb } }).png().toBuffer();
+    const PHOTO = await flat(PHOTO_PX, PHOTO_RGB);
+    const SHOT = await flat(SHOT_PX, { r: 255, g: 106, b: 0 });
+    const LOGO = await flat(LOGO_PX, { r: 30, g: 160, b: 80 });
 
     // ── The library: a photo needs no consent; a screenshot does. ──
     await page.goto(`${base}/images`);
@@ -72,7 +85,7 @@ async function main() {
       await page.goto(`${base}/images`);
       await settle(page);
       await page.locator('[data-testid="deck-image-file"]').waitFor({ state: "attached" });
-      await page.setInputFiles('[data-testid="deck-image-file"]', { name: `${kind}.png`, mimeType: "image/png", buffer: PNG });
+      await page.setInputFiles('[data-testid="deck-image-file"]', { name: `${kind}.png`, mimeType: "image/png", buffer: kind === "photo" ? PHOTO : kind === "screenshot" ? SHOT : LOGO });
       await page.selectOption('[data-testid="deck-image-kind"]', kind);
       if (opts.caption) await page.fill('[data-testid="deck-image-caption"]', opts.caption);
       if (opts.consentName) await page.fill('[data-testid="deck-image-consent-name"]', opts.consentName);
@@ -84,7 +97,7 @@ async function main() {
     await page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/images"), { timeout: 20000 }).catch(() => {});
     await settle(page);
     const photos = await imagesOf("photo");
-    if (photos.length !== 1 || photos[0].consentTick || photos[0].mime !== "image/png" || photos[0].width !== 1) throw new Error(`a photo is stored with no consent, sniffed and measured: ${JSON.stringify(photos[0])}`);
+    if (photos.length !== 1 || photos[0].consentTick || photos[0].mime !== "image/png" || photos[0].width !== PHOTO_PX.width || photos[0].height !== PHOTO_PX.height) throw new Error(`a photo is stored with no consent, sniffed and measured: ${JSON.stringify(photos[0])}`);
     if (!photos[0].blobKey.startsWith(`deck/${wsId}/${user.id}/`)) throw new Error(`the key is the coach's own deck folder: ${photos[0].blobKey}`);
     console.log("✓ a photo joins the library on its own token, read back and sniffed, no consent asked");
 
@@ -162,6 +175,64 @@ async function main() {
     }
     console.log(`✓ the .pptx embeds the picture (${media[0]}); every picture and text box on the cover sits inside the slide`);
 
+    // ── Deck visuals §1, read off the XML: every placed picture's drawn box has the ratio of what it shows (its crop box when
+    //    covered, its whole self when contained), within 1%; the bytes are downscaled and re-encoded; one media file per picture. ──
+    type Pic = { slide: string; media: string; cx: number; cy: number; crop: { l: number; r: number; t: number; b: number } | null };
+    const picsIn = async (z: InstanceType<typeof JSZip>): Promise<Pic[]> => {
+      const out: Pic[] = [];
+      for (const f of Object.keys(z.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))) {
+        const xml = await z.file(f)!.async("string");
+        const rels = await z.file(f.replace("slides/", "slides/_rels/") + ".rels")!.async("string");
+        const target = (rId: string) => rels.match(new RegExp(`Id="${rId}"[^>]*Target="\\.\\./media/([^"]+)"`))?.[1] ?? rels.match(new RegExp(`Target="\\.\\./media/([^"]+)"[^>]*Id="${rId}"`))?.[1] ?? "";
+        const re = /<p:pic>([\s\S]*?)<\/p:pic>/g;
+        for (let m = re.exec(xml); m; m = re.exec(xml)) {
+          const pic = m[1];
+          const rId = pic.match(/r:embed="(rId\d+)"/)![1];
+          const ext = pic.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/)!;
+          const sr = pic.match(/<a:srcRect l="(-?\d+)" r="(-?\d+)" t="(-?\d+)" b="(-?\d+)"\/>/);
+          out.push({ slide: f, media: `ppt/media/${target(rId)}`, cx: Number(ext[1]), cy: Number(ext[2]), crop: sr ? { l: Number(sr[1]) / 1e5, r: Number(sr[2]) / 1e5, t: Number(sr[3]) / 1e5, b: Number(sr[4]) / 1e5 } : null });
+        }
+      }
+      return out;
+    };
+    const nativeOf = async (z: InstanceType<typeof JSZip>, name: string) => {
+      const buf = await z.file(name)!.async("nodebuffer");
+      const meta = await sharp(buf).metadata();
+      return { width: meta.width!, height: meta.height!, format: meta.format!, bytes: buf.length };
+    };
+    const checkPics = async (z: InstanceType<typeof JSZip>, label: string) => {
+      const pics = await picsIn(z);
+      if (!pics.length) throw new Error(`${label}: there are pictures to check`);
+      for (const p of pics) {
+        const n = await nativeOf(z, p.media);
+        const shown = p.crop ? { w: n.width * (1 - p.crop.l - p.crop.r), h: n.height * (1 - p.crop.t - p.crop.b) } : { w: n.width, h: n.height };
+        if (p.crop && (p.crop.l < 0 || p.crop.r < 0 || p.crop.t < 0 || p.crop.b < 0)) throw new Error(`${label}: a crop never pads (negative srcRect) on ${p.slide}: ${JSON.stringify(p.crop)}`);
+        if (!within(p.cx / p.cy, shown.w / shown.h)) throw new Error(`${label}: the drawn box on ${p.slide} (${(p.cx / p.cy).toFixed(3)}) must have the ratio of what it shows (${(shown.w / shown.h).toFixed(3)}, ${p.crop ? "cropped" : "whole"}): never stretched`);
+      }
+      return pics;
+    };
+    const pics1 = await checkPics(zip, "photo on the cover");
+    const coverPic = pics1.find((p) => p.slide === "ppt/slides/slide1.xml")!;
+    const coverNative = await nativeOf(zip, coverPic.media);
+    // A photo covers its frame: the box is the frame, the crop is left and right only (a 2:1 photo in a 1.12:1 frame), centred.
+    if (!within(coverPic.cx / EMU, COVER_FRAME.w) || !within(coverPic.cy / EMU, COVER_FRAME.h)) throw new Error(`the photo fills the cover's frame: ${coverPic.cx / EMU} by ${coverPic.cy / EMU} in`);
+    if (!coverPic.crop || coverPic.crop.l <= 0 || coverPic.crop.l !== coverPic.crop.r || coverPic.crop.t !== 0 || coverPic.crop.b !== 0) throw new Error(`a wide photo is cropped equally left and right, never top and bottom: ${JSON.stringify(coverPic.crop)}`);
+    // The bytes: a photo goes in as a JPEG, downscaled to cover twice the frame's 96 dpi size (826 by 739 px), never enlarged.
+    const coverPlan = { w: Math.round(COVER_FRAME.w * 96 * 2), h: Math.round(COVER_FRAME.h * 96 * 2) };
+    if (coverNative.format !== "jpeg" || coverNative.height !== coverPlan.h || coverNative.width !== Math.round((coverPlan.h * PHOTO_PX.width) / PHOTO_PX.height)) throw new Error(`the photo is embedded as a JPEG downscaled to cover ${coverPlan.w}×${coverPlan.h}: ${JSON.stringify(coverNative)}`);
+    // The logo (3:1) sits whole inside its 0.9 by 0.24 in box, never stretched, as a PNG; on every content slide, and one media file for all of them.
+    const logoPics = pics1.filter((p) => p.slide !== "ppt/slides/slide1.xml");
+    const contentSlideCount = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).length - 1;
+    if (logoPics.length !== contentSlideCount || logoPics.length < 2) throw new Error(`the logo is on every one of the ${contentSlideCount} content slides: ${logoPics.length}`);
+    for (const p of logoPics) {
+      if (p.crop || !within(p.cx / p.cy, LOGO_PX.width / LOGO_PX.height) || p.cx / EMU > LOGO_BOX.w + 1e-3 || p.cy / EMU > LOGO_BOX.h + 1e-3) throw new Error(`the logo is contained whole inside its box: ${JSON.stringify(p)}`);
+    }
+    const logoNative = await nativeOf(zip, logoPics[0].media);
+    if (logoNative.format !== "png" || new Set(logoPics.map((p) => p.media)).size !== 1) throw new Error(`the logo is one PNG media file shared by every slide: ${JSON.stringify([...new Set(logoPics.map((p) => p.media))])}`);
+    if (media.length !== 2) throw new Error(`two pictures placed means two media files in the zip, whatever the slide count: ${media.join(", ")}`);
+    if (body.length > 3 * 1024 * 1024) throw new Error(`the deck stays small: ${body.length} bytes`);
+    console.log(`✓ §1 off the XML: the photo covers the cover's frame, cropped left and right only, as a ${coverNative.width}×${coverNative.height} JPEG; the logo is whole in its box on ${logoPics.length} slides as one PNG; ${media.length} media files, ${Math.round(body.length / 1024)}KB`);
+
     // The footer bar the webinar turned on: the workspace name is drawn on a content slide, and the logo is a second embedded image.
     const contentSlides = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide[2-9]\d*\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")))).join("\n");
     if (!contentSlides.includes(workspace.name)) throw new Error("the footer bar draws the workspace name on the content slides");
@@ -188,6 +259,48 @@ async function main() {
     if (pdf.subarray(0, 5).toString() !== "%PDF-" || pdf.length < 5000) throw new Error(`the render is a real PDF: ${pdf.length} bytes`);
     if (!/\/Subtype\s*\/Image/.test(pdf.toString("latin1"))) throw new Error("the rendered PDF carries the picture as an image, so LibreOffice drew it inside its frame");
     console.log(`✓ LibreOffice opened the .pptx and rendered it to a ${Math.round(pdf.length / 1024)}KB PDF that carries the picture`);
+    // §1 off the render: the cover as LibreOffice draws it (its PNG export is the first slide). The photo's flat blue is found
+    // by its pixels; the painted box has the frame's ratio and width, within 2%: cropped to the frame, not squeezed into it.
+    await run("soffice", ["--headless", "--convert-to", "png", "--outdir", dir, pptxPath], { timeout: 120000, env: { ...process.env, HOME: dir } });
+    const pngName = readdirSync(dir).find((f) => f.endsWith(".png"));
+    if (!pngName) throw new Error("LibreOffice rendered the cover to a PNG");
+    const { data: px, info } = await sharp(readFileSync(join(dir, pngName))).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    let minX = info.width, maxX = -1, minY = info.height, maxY = -1, hits = 0;
+    for (let y = 0; y < info.height; y++) {
+      for (let x = 0; x < info.width; x++) {
+        const i = (y * info.width + x) * 3;
+        if (Math.abs(px[i] - PHOTO_RGB.r) < 24 && Math.abs(px[i + 1] - PHOTO_RGB.g) < 24 && Math.abs(px[i + 2] - PHOTO_RGB.b) < 24) {
+          hits++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    const painted = { w: maxX - minX + 1, h: maxY - minY + 1 };
+    if (hits < 1000 || !within(painted.w / painted.h, COVER_FRAME.w / COVER_FRAME.h, 0.02) || !within(painted.w / info.width, COVER_FRAME.w / 10, 0.02)) throw new Error(`the rendered cover paints the photo in its frame's shape (${(COVER_FRAME.w / COVER_FRAME.h).toFixed(3)}, ${(COVER_FRAME.w / 10).toFixed(3)} of the width): ${painted.w}×${painted.h} of ${info.width}×${info.height}, ${hits} px`);
+    console.log(`✓ §1 off the render: LibreOffice paints the photo at ${painted.w}×${painted.h} px of a ${info.width}-wide cover, the frame's own shape`);
+
+    // ── A screenshot on the same slot is contained: whole, its own 3:1 ratio, the frame's full width, no crop. ──
+    await page.goto(`${base}/webinars/${webinar.id}?step=deck`);
+    const coverSlot2 = page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"]');
+    await coverSlot2.locator('[data-testid="deck-slot-clear"]').waitFor({ timeout: 20000 });
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), coverSlot2.locator('[data-testid="deck-slot-clear"]').click()]);
+    await settle(page);
+    await page.goto(`${base}/webinars/${webinar.id}?step=deck`);
+    await coverSlot2.locator('[data-testid="deck-slot-picker"]').waitFor({ timeout: 20000 });
+    await coverSlot2.locator('[data-testid="deck-slot-picker"]').selectOption(shots[0].id);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), coverSlot2.locator('[data-testid="deck-slot-attach"]').click()]);
+    await settle(page);
+    const res2 = await page.request.get(`${base}/api/webinars/${webinar.id}/deck?format=pptx`);
+    const zip2 = await JSZip.loadAsync(await res2.body());
+    const pics2 = await checkPics(zip2, "screenshot on the cover");
+    const shotPic = pics2.find((p) => p.slide === "ppt/slides/slide1.xml")!;
+    const shotNative = await nativeOf(zip2, shotPic.media);
+    if (shotPic.crop || !within(shotPic.cx / EMU, COVER_FRAME.w) || !within(shotPic.cx / shotPic.cy, SHOT_PX.width / SHOT_PX.height) || shotPic.cy > shotPic.cx) throw new Error(`a screenshot is contained whole at its own ratio across the frame's width, never cropped: ${JSON.stringify(shotPic)}`);
+    if (shotNative.format !== "png" || shotNative.width !== Math.round(COVER_FRAME.w * 96 * 2) || shotNative.width >= SHOT_PX.width) throw new Error(`a screenshot stays a PNG, downscaled to fit twice the frame's 96 dpi width: ${JSON.stringify(shotNative)}`);
+    console.log(`✓ §1 contain: a screenshot on the cover is whole at 3:1 across the frame's width, no crop, a ${shotNative.width}×${shotNative.height} PNG`);
 
     // ── A testimonial slot: only an approved proof's photo; withdrawing approval empties it, with the reason on the step. ──
     const testimonial = await db.query.deckSlots.findFirst({ where: eq(schema.deckSlots.webinarId, webinar.id) }); // any; the reason path is what we assert

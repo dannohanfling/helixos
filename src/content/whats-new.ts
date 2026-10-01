@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 40,
+    date: "2026-10-01",
+    title: "Deck pictures keep their shape",
+    lines: [
+      "A photo on a slide now fills its frame and is cropped to it, never squeezed or stretched; a screenshot, proof image or logo is shown whole at its own shape inside the frame, so the number in it is never cut off. Nothing is drawn larger than the picture really is.",
+      "The file is smaller: pictures are downscaled to what a slide needs and a photo is saved as a JPEG, and a picture used on several slides (your logo on every slide) is stored once.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 39,
     date: "2026-10-01",
     title: "HumanOS: log a meal from a photo",

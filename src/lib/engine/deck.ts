@@ -443,14 +443,15 @@ export function suggestedSlots(d: DeckResult): { slide: number; section: string;
 export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean };
 /** A rule drawn in the accent: the one thing the accent draws besides a fill. Never under text. */
 export type Rule = { slide: number; color: string; y: number };
-/** A picture's frame in inches on the 10×5.625 slide. The renderer crops the image to fill it (cover), never stretches it. */
+/** A picture's frame in inches on the 10×5.625 slide. A photo fills it, cropped (cover); evidence sits whole inside it (contain); nothing is ever stretched (src/lib/engine/deck-fit.ts). */
 export type Frame = { x: number; y: number; w: number; h: number };
 export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; /** Where a filled picture sits, or null when the slide is text only. */ imageFrame: Frame | null };
 
 /**
- * The frame a filled picture occupies, by the slide's kind. The cover's photo fills the right half; every content slide's
+ * The frame a filled picture occupies, by the slide's kind. The cover's picture fills the right half; every content slide's
  * picture sits in a right-hand column, and the text moves to a left column that never overlaps it. One frame per slot: a
- * before/after is one image the coach composes, a proof wall is one image, so nothing here needs two boxes.
+ * before/after is one image the coach composes, a proof wall is one image, so nothing here needs two boxes. How the picture
+ * sits inside the frame (covered or contained, by its kind) is the fit engine's call.
  */
 export function slotFrame(kind: SlideKind): Frame {
   return kind === "cover" ? { x: 5.2, y: 0.9, w: 4.3, h: 3.85 } : { x: 5.35, y: 1.05, w: 4.15, h: 3.5 };

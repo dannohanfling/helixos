@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
-import { TEXT_LEFT_ZONE, deckSlides, outlineText, renderPlan, type Frame, type SlidePlan } from "@/lib/engine/deck";
+import { TEXT_LEFT_ZONE, deckSlides, outlineText, renderPlan, slotFrame, type Frame, type SlidePlan } from "@/lib/engine/deck";
+import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
 import { contextFor } from "@/lib/queries/webinar";
 import { filledSlides, resolveDeckSlots } from "@/lib/queries/deck-slots";
 import { readProofObject } from "@/lib/proof-storage";
@@ -12,17 +13,18 @@ import { confirmFor } from "@/lib/provenance";
 
 export const dynamic = "force-dynamic";
 
-/** The private object as a data URL the .pptx can embed, or null when the bytes can't be read (the slide then stays text). */
-async function dataUrl(url: string, mime: string): Promise<string | null> {
+/** The private object's bytes, or null when they can't be read (the slide then stays text). */
+async function readBytes(url: string): Promise<Buffer | null> {
   try {
     const res = await readProofObject(url);
     if (!res.ok) return null;
-    const b64 = Buffer.from(await res.arrayBuffer()).toString("base64");
-    return `data:${mime};base64,${b64}`;
+    return Buffer.from(await res.arrayBuffer());
   } catch {
     return null;
   }
 }
+/** The footer bar's logo box, right of the band. */
+const LOGO_BOX = { x: 9.0, y: 5.35, w: 0.9, h: 0.24 };
 
 /**
  * GET /api/webinars/{id}/deck?format=pptx|txt
@@ -54,21 +56,27 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return new Response(outlineText(w.title, deck), { headers: { "content-type": "text/plain; charset=utf-8", "content-disposition": `attachment; filename="${slug}-deck-outline.txt"`, "cache-control": "no-store" } });
   }
 
-  // The coach's pictures for the filled slots, fetched once each as data URLs; an empty slot has no entry and its slide stays text.
-  // The owner's pictures, the same owner the deck's words resolve against.
+  // The coach's pictures for the filled slots, each read once, made ready for its frame (turned upright, downscaled, re-encoded,
+  // placed by its kind: a photo covers, evidence is contained whole; src/lib/engine/deck-fit.ts); an empty slot has no entry and
+  // its slide stays text. The owner's pictures, the same owner the deck's words resolve against.
   const resolved = await resolveDeckSlots(w.id, deck, { workspaceId: w.workspaceId, userId: w.userId });
   const filled = filledSlides(resolved);
-  const bySlide = new Map<number, string>();
+  const kindOf = new Map(deck.slides.map((s) => [s.n, s.kind]));
+  const bySlide = new Map<number, PreparedImage>();
+  const bytesByUrl = new Map<string, Promise<Buffer | null>>();
+  const readOnce = (url: string) => bytesByUrl.get(url) ?? bytesByUrl.set(url, readBytes(url)).get(url)!;
   await Promise.all(resolved.filter((r) => r.image).map(async (r) => {
-    const src = await dataUrl(r.image!.url, r.image!.mime);
-    if (src) bySlide.set(r.slide, src);
-    else filled.delete(r.slide); // The bytes wouldn't read back: draw the slide as text, not an empty frame.
+    const bytes = await readOnce(r.image!.url);
+    const prepared = bytes ? await prepareDeckImage(bytes, r.image!.kind, slotFrame(kindOf.get(r.slide) ?? "section")) : null;
+    if (prepared) bySlide.set(r.slide, prepared);
+    else filled.delete(r.slide); // The bytes wouldn't read back or decode: draw the slide as text, not an empty frame.
   }));
-  // The footer bar's logo, if the coach turned the bar on and has a logo in their library: their newest one.
-  let logoUrl: string | null = null;
+  // The footer bar's logo, if the coach turned the bar on and has a logo in their library: their newest one, contained whole.
+  let logo: PreparedImage | null = null;
   if (deck.footerBar) {
-    const logo = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] });
-    if (logo) logoUrl = await dataUrl(logo.blobUrl, logo.mime);
+    const row = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] });
+    const bytes = row ? await readOnce(row.blobUrl) : null;
+    logo = bytes ? await prepareDeckImage(bytes, "logo", LOGO_BOX) : null;
   }
 
   const { default: PptxGenJS } = await import("pptxgenjs");
@@ -79,9 +87,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   pptx.subject = w.title;
   pptx.author = context.presenter;
   pptx.company = v.workspace.name;
-  const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: v.workspace.name, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logoUrl };
+  const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: v.workspace.name, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo };
   for (const plan of renderPlan(deck, filled)) draw(pptx, plan, bySlide.get(plan.n) ?? null, chrome);
-  const buffer = (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
+  // The same picture on several slides (and the logo on every content slide) is one media file in the finished zip.
+  const { file: buffer } = await dedupeDeckMedia((await pptx.write({ outputType: "nodebuffer" })) as Buffer);
   return new Response(new Uint8Array(buffer), {
     headers: { "content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "content-disposition": `attachment; filename="${slug}-deck.pptx"`, "cache-control": "no-store" },
   });
@@ -89,14 +98,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 const normalise = (v: string): string => (v ?? "").replace(/^#/, "").toUpperCase();
 
-type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; company: string; muted: string; surface: string; accent: string; body: string; logoUrl: string | null };
+type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; company: string; muted: string; surface: string; accent: string; body: string; logo: PreparedImage | null };
 
 /**
  * One slide from its plan: a mapping, nothing decided here. Every colour and face is the plan's. A filled slot's picture is
  * cropped to its frame (cover: it fills the frame and any overflow is cropped, never stretched), and the text moves to the left
  * column so it never overlaps the picture. The optional footer and CTA bars sit at the very bottom, off by default.
  */
-function draw(pptx: PptxGenJS, plan: SlidePlan, image: string | null, chrome: Chrome) {
+function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chrome: Chrome) {
   const slide = pptx.addSlide();
   slide.background = { color: plan.background };
   const frame = plan.imageFrame;
@@ -125,16 +134,29 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: string | null, chrome: Ch
     }
     if (footer) slide.addText(footer.text, { x: 0.5, y: 5.0, w: 9, h: 0.3, fontSize: footer.size, color: footer.color, fontFace: footer.face, align: "center", ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
   }
-  // The picture, cropped to fill its frame: it never leaves the frame and it is never stretched out of shape.
-  if (image && frame) drawImage(slide, image, frame);
+  // The picture in its frame: a photo cropped to fill it, evidence kept whole inside it; never stretched out of shape.
+  if (image && frame) drawImage(pptx, slide, image, frame, plan.background);
   for (const r of plan.rules) slide.addShape(pptx.ShapeType.line, { x: 0.5, y: r.y, w: frame ? zone.w : 9, h: 0, line: { color: r.color, width: 1.5 } });
   drawBars(pptx, slide, chrome, cover);
   if (plan.notes) slide.addNotes(plan.notes);
 }
 
-/** A picture in its frame, filled and cropped (cover) so it sits inside the frame at the image's own aspect, never squashed. */
-function drawImage(slide: PptxGenJS.Slide, data: string, frame: Frame) {
-  slide.addImage({ data, x: frame.x, y: frame.y, w: frame.w, h: frame.h, sizing: { type: "cover", w: frame.w, h: frame.h } });
+/**
+ * A picture in its frame, as the fit engine placed it. Cover: the box is the frame and the file carries a srcRect that crops
+ * the excess equally both sides (pptxgenjs computes it from the image's own ratio, given as w/h, against the frame given as
+ * the sizing box). Contain: the box is the picture's own ratio, centred, with the slide's ground behind the bare part of the
+ * frame, no crop. The ratio of what is drawn always equals the ratio of what is shown, which the walk reads back from the XML.
+ */
+function drawImage(pptx: PptxGenJS, slide: PptxGenJS.Slide, image: PreparedImage, frame: Frame, ground: string) {
+  const { placement } = image;
+  if (placement.mode === "cover" && placement.crop) {
+    const w = frame.w;
+    const h = (frame.w * image.height) / image.width;
+    slide.addImage({ data: image.data, x: frame.x, y: frame.y, w, h, sizing: { type: "cover", w: frame.w, h: frame.h } });
+    return;
+  }
+  if (placement.pads) slide.addShape(pptx.ShapeType.rect, { x: frame.x, y: frame.y, w: frame.w, h: frame.h, fill: { color: ground }, line: { color: ground, width: 0 } });
+  slide.addImage({ data: image.data, x: placement.box.x, y: placement.box.y, w: placement.box.w, h: placement.box.h });
 }
 
 /**
@@ -147,7 +169,8 @@ function drawBars(pptx: PptxGenJS, slide: PptxGenJS.Slide, chrome: Chrome, cover
   if (chrome.footerBar) {
     slide.addShape(pptx.ShapeType.rect, { x: 0, y: bandY, w: 10, h: 0.3, fill: { color: chrome.surface } });
     slide.addText(chrome.company, { x: 0.4, y: bandY, w: 5, h: 0.3, fontSize: 9, color: chrome.muted, fontFace: chrome.body, valign: "middle" });
-    if (chrome.logoUrl) slide.addImage({ data: chrome.logoUrl, x: 9.0, y: bandY + 0.03, w: 0.9, h: 0.24, sizing: { type: "contain", w: 0.9, h: 0.24 } });
+    // The logo whole at its own ratio inside its box, never stretched; a small one at its own size.
+    if (chrome.logo) slide.addImage({ data: chrome.logo.data, x: chrome.logo.placement.box.x, y: chrome.logo.placement.box.y, w: chrome.logo.placement.box.w, h: chrome.logo.placement.box.h });
   }
   if (chrome.ctaBar && chrome.ctaFooter) {
     slide.addText(chrome.ctaFooter, { x: 2.5, y: bandY, w: 5, h: 0.3, fontSize: 10, bold: true, color: chrome.accent, fontFace: chrome.body, align: "center", valign: "middle" });

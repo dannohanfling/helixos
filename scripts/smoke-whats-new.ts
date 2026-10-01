@@ -33,7 +33,7 @@ async function main() {
     const newestCoachEntry = Math.max(...WHATS_NEW.filter((e) => e.audience === "coach").map((e) => e.n));
     const coachSeen = Math.min(newestSeenable(WHATS_NEW, "coach") - 2, newestCoachEntry - 1);
     const coachNew = WHATS_NEW.filter((e) => e.n > coachSeen).map((e) => e.n).sort();
-    if (!WHATS_NEW.some((e) => e.n > coachSeen && e.audience === "coach")) throw new Error("the walk needs a coach entry among the newest two");
+    if (!WHATS_NEW.some((e) => e.n > coachSeen && e.audience === "coach") || !WHATS_NEW.some((e) => e.n > coachSeen && e.audience === "everyone")) throw new Error("the walk needs a coach entry and an everyone entry among what the coach hasn't seen");
     await db.update(schema.memberships).set({ whatsNewSeen: coachSeen }).where(eq(schema.memberships.userId, coach.id));
 
     const context = await browser.newContext({ viewport: { width: 1300, height: 950 } });

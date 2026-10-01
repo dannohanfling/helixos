@@ -48,7 +48,7 @@ async function sniffFile(file: File): Promise<{ sniffed: Sniffed | null; error: 
  * later, never demanded at the moment the client is least willing to write a sentence. Progress is real; an upload that dies
  * because the tab went to the background says so, rather than leaving the client thinking their testimonial is saved.
  */
-export function ProofUpload({ proofId, workspaceId, enabled, why, full, quotaLine }: { proofId: string; workspaceId: string; enabled: boolean; why?: string; /** Why no more can be added, or null: the quota line already on screen, or the count. */ full: string | null; quotaLine: string }) {
+export function ProofUpload({ proofId, workspaceId, enabled, why, full, quotaLine, approved = false }: { proofId: string; workspaceId: string; enabled: boolean; why?: string; /** An approved proof takes a person's file only with their permission recorded now (the hint says so instead of "later"). */ approved?: boolean; /** Why no more can be added, or null: the quota line already on screen, or the count. */ full: string | null; quotaLine: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [sniffed, setSniffed] = useState<Sniffed | null>(null);
   const [showsAResult, setShowsAResult] = useState<"" | "yes" | "no">("");
@@ -177,7 +177,7 @@ export function ProofUpload({ proofId, workspaceId, enabled, why, full, quotaLin
                   <input type="checkbox" checked={consentTick} onChange={(e) => setConsentTick(e.currentTarget.checked)} data-testid="consent-tick" />
                   <span>{likenessSentence(consentName, kind)}</span>
                 </label>
-                <p className="text-xs text-ink-3">You can record this later, but the proof can&apos;t be approved until it is.</p>
+                <p className="text-xs text-ink-3">{approved ? "This proof is already approved, so their permission has to be recorded now: tick the sentence with their name, or the file is refused." : "You can record this later, but the proof can\u2019t be approved until it is."}</p>
               </div>
             ) : null}
           </fieldset>

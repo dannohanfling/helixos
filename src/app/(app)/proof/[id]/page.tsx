@@ -281,7 +281,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
               <p className="text-sm text-ink-3" data-testid="no-attachments">Nothing attached yet.</p>
             )}
             <div className="mt-3">
-              <ProofUpload proofId={p.id} workspaceId={v.workspace.id} enabled={storageOn} why={PROOF_STORAGE_UNCONFIGURED} full={storage.blocked ? storage.line : attachments.length >= MAX_PER_PROOF ? `This proof already carries ${MAX_PER_PROOF} files. Delete one you no longer need before adding another.` : null} quotaLine={storage.line} />
+              <ProofUpload proofId={p.id} workspaceId={v.workspace.id} enabled={storageOn} approved={p.status === "approved"} why={PROOF_STORAGE_UNCONFIGURED} full={storage.blocked ? storage.line : attachments.length >= MAX_PER_PROOF ? `This proof already carries ${MAX_PER_PROOF} files. Delete one you no longer need before adding another.` : null} quotaLine={storage.line} />
             </div>
           </Card>
           <Card title="Copy with attribution">
