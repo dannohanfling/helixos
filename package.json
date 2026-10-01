@@ -26,6 +26,7 @@
     "@libsql/client": "^0.18.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "@vercel/blob": "^2.8.0",
+    "@zxing/browser": "^0.2.1",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",

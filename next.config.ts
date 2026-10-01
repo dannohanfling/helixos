@@ -62,7 +62,12 @@ const build = buildInfo(process.env, new Date(), () => {
 const nextConfig: NextConfig = {
   env: { HELIX_BUILD_DATE: build.date, HELIX_BUILD_SHA: build.sha },
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    // Find a food (Body, rev 237 phase 13) scans a barcode with the camera on that one page, and nowhere else.
+    const cameraHere = securityHeaders.map((h) => (h.key === "Permissions-Policy" ? { ...h, value: h.value.replace("camera=()", "camera=(self)") } : h));
+    return [
+      { source: "/body/foods/find", headers: cameraHere },
+      { source: "/((?!body/foods/find$).*)", headers: securityHeaders },
+    ];
   },
 };
 

@@ -16,6 +16,8 @@ import { fmtSet } from "@/lib/engine/body-training";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
+import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
+import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
 import { bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
 import { PRESETS } from "@/lib/engine/body-correlate";
 import { isRangeKey, rangeBounds, rateText } from "@/lib/engine/body-range";
@@ -587,6 +589,31 @@ defineTool({
       if (!(e instanceof InstacartError)) throw e;
       await db.insert(schema.bodyOrders).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, lines: logged, link: null, status: "failed", note: e.problem });
       throw new Error(instacartProblem(e));
+    }
+  },
+});
+
+defineTool({
+  name: "body_find_food",
+  scope: "body",
+  kind: "read",
+  description: "Look a food up for the member: by words in the USDA food database, or by barcode in Open Food Facts. Returns each match's calories, protein, fat, carbs and sodium per 100 g and per the member's own unit. Nothing is saved: the member saves a result from the Find page on Nutrition.",
+  input: { query: z.string().optional().describe("Words to search, e.g. 'chicken breast raw'"), barcode: z.string().optional().describe("The digits under a product's barcode") },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const code = input.barcode ? readBarcode(String(input.barcode)) : null;
+    if (input.barcode && !code) throw new Error("A barcode is 8 to 14 digits.");
+    const q = String(input.query ?? "").trim();
+    if (!code && !q) throw new Error("Give words to search, or a barcode.");
+    try {
+      const found = code ? [await lookupBarcode(code)] : await searchFoods(q, 8);
+      if (!found.length) return { text: `Nothing matched "${q}".`, data: { results: [] } };
+      const unit = settings.foodUnit;
+      const lines = found.map((f) => `${f.name}${f.brand ? ` (${f.brand})` : ""}: ${fmtPer100(f.per100)}`);
+      return { text: `${lines.join("\n")}\nTo keep one, the member saves it from Nutrition → Find a food (it lands per ${unit}).`, data: { results: found.map((f) => ({ source: f.source, ref: f.ref, name: f.name, brand: f.brand, per100: f.per100, perUnit: { unit, ...perUnit(f.per100, unit) } })) } };
+    } catch (e) {
+      if (e instanceof FoodSearchError) throw new Error(foodSearchProblem(e));
+      throw e;
     }
   },
 });

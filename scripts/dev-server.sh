@@ -39,6 +39,9 @@ main() {
     WHOOP_AUTH_URL="${WHOOP_AUTH_URL:-http://localhost:4072/oauth/oauth2}" \
     WHOOP_CLIENT_ID="${WHOOP_CLIENT_ID:-test-whoop-client}" \
     WHOOP_CLIENT_SECRET="${WHOOP_CLIENT_SECRET:-test-whoop-secret}" \
+    USDA_API_URL="${USDA_API_URL:-http://localhost:4073/fdc/v1}" \
+    USDA_API_KEY="${USDA_API_KEY:-test-usda-key}" \
+    OFF_API_URL="${OFF_API_URL:-http://localhost:4073/off/api/v2}" \
     BLOB_READ_WRITE_TOKEN="${BLOB_READ_WRITE_TOKEN:-vercel_blob_rw_TESTSTORE_testsecret}" \
     PROOF_BLOB_READ_WRITE_TOKEN="${PROOF_BLOB_READ_WRITE_TOKEN:-vercel_blob_rw_PROOFSTORE_testsecret}" \
     VERCEL_BLOB_API_URL="${VERCEL_BLOB_API_URL:-http://localhost:4050}" \

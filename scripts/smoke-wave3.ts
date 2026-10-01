@@ -103,12 +103,6 @@ async function main() {
   await page.goto(`${base}/pathway?view=all`);
   await expectText(page, "Simple view", "whole map toggle");
 
-  // Numbers targets
-  await page.goto(`${base}/numbers`);
-  await expectText(page, "targets", "numbers month");
-  await expectText(page, "Webinar funnel", "numbers optional groups");
-  await shot(page, "x08-numbers-targets");
-
   // Today close optional groups
   await page.goto(`${base}/today`);
   await page.locator('summary:has-text("Edit today")').click().catch(() => null);
@@ -119,6 +113,12 @@ async function main() {
   await page.fill('input[name="webinarRegs"]', "7");
   await submit(page, 'button:has-text("Close the day")');
   await expectText(page, "Day closed", "close with optional groups");
+
+  // Numbers targets: after the close above, so the month has funnel numbers on any date (the seed's logs can all sit in last month on the 1st).
+  await page.goto(`${base}/numbers`);
+  await expectText(page, "targets", "numbers month");
+  await expectText(page, "Webinar funnel", "numbers optional groups");
+  await shot(page, "x08-numbers-targets");
 
   // Courses
   await page.goto(`${base}/courses`);

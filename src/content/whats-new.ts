@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 35,
+    date: "2026-10-01",
+    title: "HumanOS: find a food by name or barcode",
+    lines: ["Nutrition has a Find a food page: search the USDA food database by name, or look a product up by the number under its barcode (or scan it with your phone's camera). Each result shows its calories, protein, fat, carbs and sodium per 100 g, and Save to my foods adds it per your own unit, with the store section and raw/cooked basis guessed for you to fix. Nothing saves until you press Save."],
+    audience: "coach",
+  },
+  {
     n: 34,
     date: "2026-10-01",
     title: "Coach view: a Body column",

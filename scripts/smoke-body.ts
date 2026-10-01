@@ -226,6 +226,67 @@ async function main() {
       const f = foods.find((x) => x.name === fx(key).name);
       if (!f || f.cal !== fx(key).cal || f.p !== fx(key).p || f.f !== fx(key).f || f.c !== fx(key).c || f.unit !== storedUnit(fx(key).unit)) throw new Error(`${fx(key).name} saved as typed: ${JSON.stringify(f)}`);
     }
+    // ── Find a food (rev 237 phase 13, B8): by name against the USDA mock, by barcode against the Open Food Facts mock. ──
+    {
+      const { fromOff, fromUsda, foodFromFound, fmtPer100 } = await import("@/lib/engine/body-find");
+      const { records: foodRecords } = await import("../scripts/fixtures/foods");
+      const { spawn: spawnFoods } = await import("node:child_process");
+      const foodsMock = spawnFoods("npx", ["tsx", "scripts/mock-foods.ts", "4073"], { stdio: "ignore", detached: true });
+      try {
+        for (let i = 0; i < 100; i++) {
+          try {
+            await fetch("http://localhost:4073/__calls");
+            break;
+          } catch {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
+        await client.locator('[data-testid="find-food-link"]').click();
+        await client.waitForURL(/\/body\/foods\/find/);
+        if (await client.locator('[data-testid="find-no-key"]').count()) throw new Error("with a USDA key on the server, the page doesn't say search is unset");
+        await fillExact(client, '[data-testid="find-search"] input[name="q"]', "chicken breast");
+        await Promise.all([client.waitForURL(/q=chicken\+breast/), client.locator('[data-testid="find-search"] button[type="submit"]').click()]);
+        const expectedHits = foodRecords.usda.filter((f) => f.description.toLowerCase().includes("chicken") && f.description.toLowerCase().includes("breast")).map((f) => fromUsda(f)!);
+        const hitNames = await client.locator('[data-testid="find-result-name"]').allInnerTexts();
+        if (JSON.stringify(hitNames) !== JSON.stringify(expectedHits.map((f) => f.name))) throw new Error(`the results are the mock's matches, in its order: ${JSON.stringify(hitNames)}`);
+        if ((await client.locator('[data-testid="find-result-per100"]').first().innerText()) !== fmtPer100(expectedHits[0].per100)) throw new Error("each result shows its figures per 100 g");
+        const foodUnit = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!.foodUnit;
+        const wantSaved = foodFromFound(expectedHits[0], foodUnit);
+        await Promise.all([client.waitForURL(/saved=/), client.locator('[data-testid="find-save"]').first().click()]);
+        await client.locator('[data-testid="find-saved"]').waitFor();
+        const savedFood = await db.query.bodyFoods.findFirst({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, wantSaved.name)) });
+        if (!savedFood || savedFood.unit !== foodUnit || savedFood.cal !== wantSaved.cal || savedFood.p !== wantSaved.p || savedFood.f !== wantSaved.f || savedFood.c !== wantSaved.c || savedFood.sodium !== wantSaved.sodium || savedFood.basis !== "raw" || savedFood.section !== "meat") throw new Error(`the saved food is per ${foodUnit}, basis raw, section meat: ${JSON.stringify(savedFood)}`);
+        // The same Save again updates, never doubles.
+        await client.goBack();
+        await client.locator('[data-testid="find-save"]').first().waitFor();
+        await Promise.all([client.waitForURL(/saved=/), client.locator('[data-testid="find-save"]').first().click()]);
+        if ((await db.query.bodyFoods.findMany({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, wantSaved.name)) })).length !== 1) throw new Error("saving the same result twice keeps one food");
+        // By barcode, typed: the product, saved per the unit; an unknown code says not found; letters are refused before any call.
+        const product = foodRecords.off[0];
+        await client.goto(`${base}/body/foods/find`);
+        await fillExact(client, '[data-testid="find-barcode"] input[name="code"]', product.code);
+        await Promise.all([client.waitForURL(/code=/), client.locator('[data-testid="find-barcode"] button[type="submit"]').click()]);
+        const wantOff = fromOff(product, product.code)!;
+        if ((await client.locator('[data-testid="find-result-name"]').allInnerTexts()).join() !== wantOff.name) throw new Error("a barcode shows its one product");
+        await Promise.all([client.waitForURL(/saved=/), client.locator('[data-testid="find-save"]').first().click()]);
+        const savedOff = await db.query.bodyFoods.findFirst({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, foodFromFound(wantOff, foodUnit).name)) });
+        if (!savedOff || savedOff.section !== "dairy" || savedOff.cal !== foodFromFound(wantOff, foodUnit).cal) throw new Error(`the product saved per ${foodUnit}, section dairy: ${JSON.stringify(savedOff)}`);
+        await client.goto(`${base}/body/foods/find?code=99999999999`);
+        if (!/No product with that barcode/.test(await client.locator('[data-testid="find-error"]').innerText())) throw new Error("an unknown barcode says not found");
+        await client.goto(`${base}/body/foods/find?code=abc`);
+        if (!/8 to 14 digits/.test(await client.locator('[data-testid="find-error"]').innerText())) throw new Error("letters are refused as a barcode");
+        if (!(await client.locator('[data-testid="scan-start"]').count()) || (await client.locator('[data-testid="scan-video"]').count())) throw new Error("the scanner waits behind its button; no camera opens on load");
+        const { calls: foodCalls } = (await (await fetch("http://localhost:4073/__calls")).json()) as { calls: { path: string }[] };
+        if (foodCalls.filter((c) => c.path === "/fdc/v1/foods/search").length !== 1 || foodCalls.filter((c) => c.path.startsWith("/off/")).length !== 2) throw new Error(`one USDA search and two barcode lookups went out, and the refused code none: ${JSON.stringify(foodCalls)}`);
+        await noSideScroll(client, "/body/foods/find?q=chicken+breast");
+        console.log(`✓ find a food: "${expectedHits[0].name}" and "${wantOff.name}" saved from the mocks per ${foodUnit}, once each; not-found and bad codes refused; the scanner loads only on press`);
+        // The two found foods leave again, so the rest of the walk sees the library it built by hand.
+        await db.delete(schema.bodyFoods).where(and(mine(schema.bodyFoods), inArray(schema.bodyFoods.name, [wantSaved.name, foodFromFound(wantOff, foodUnit).name])));
+      } finally {
+        if (foodsMock.pid) process.kill(-foodsMock.pid);
+      }
+      await client.goto(`${base}/body/foods`);
+    }
     const mealRows = () => client.locator('[data-testid="body-meal-list"] > li').count();
     for (const meal of MEALS) {
       const form = client.locator('[data-testid="body-new-meal"]');

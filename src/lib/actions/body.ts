@@ -13,6 +13,7 @@ import { requireCoach, type Viewer } from "@/lib/auth";
 import { MACROS, entryItem, totalsOf, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
 import { convertQty, storedUnit } from "@/lib/engine/body-units";
+import { decodeFound, foodFromFound } from "@/lib/engine/body-find";
 import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { AirtableError, airtableProblem } from "@/lib/airtable";
@@ -240,6 +241,23 @@ export async function saveFoodAction(formData: FormData): Promise<void> {
   if (id) await db.update(schema.bodyFoods).set(food).where(and(eq(schema.bodyFoods.id, id), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
   else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
   refresh();
+}
+
+/**
+ * Save a found food (rev 237 phase 13): the result the member pressed Save on, carried through the form and read back whole,
+ * written per their own food unit with the section and basis guessed. A food of the same name already there is updated, not
+ * doubled. Back to the Find page with its name.
+ */
+export async function saveFoundFoodAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Body is never open from a client's HelixOS." });
+  const settings = await setUp(v);
+  const found = decodeFound(str(formData, "found"));
+  if (!found) throw back("/body/foods/find", "That result couldn't be read. Search again.");
+  const food = foodFromFound(found, settings.foodUnit);
+  const have = await db.query.bodyFoods.findFirst({ where: and(and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId)), eq(schema.bodyFoods.name, food.name)) });
+  if (have) await db.update(schema.bodyFoods).set({ ...food, archivedAt: null }).where(eq(schema.bodyFoods.id, have.id));
+  else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
+  redirect(`/body/foods/find?saved=${encodeURIComponent(food.name)}`);
 }
 
 /** Archived foods leave the picker; meals and past days that use them keep working. */

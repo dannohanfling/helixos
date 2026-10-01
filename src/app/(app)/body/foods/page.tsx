@@ -91,7 +91,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <HumanosHeader title="Nutrition" subtitle="Your foods per unit, and saved meals you log in one tap." action={<span className="flex gap-2"><Link href="/body/pantry" className="btn btn-ghost btn-sm" data-testid="pantry-link">Pantry →</Link><Link href="/body" className="btn btn-ghost btn-sm">← Log</Link></span>} />
+      <HumanosHeader title="Nutrition" subtitle="Your foods per unit, and saved meals you log in one tap." action={<span className="flex gap-2"><Link href="/body/foods/find" className="btn btn-ghost btn-sm" data-testid="find-food-link">Find a food →</Link><Link href="/body/pantry" className="btn btn-ghost btn-sm" data-testid="pantry-link">Pantry →</Link><Link href="/body" className="btn btn-ghost btn-sm">← Log</Link></span>} />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
           {sp.error}

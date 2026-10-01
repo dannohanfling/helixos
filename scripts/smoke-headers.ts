@@ -17,7 +17,7 @@ function routedPages(dir: string, prefix = ""): string[] {
   return out.sort();
 }
 // The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
-const PAGES_CLIENT = ["/today", "/intentions", "/connect", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings", "/whats-new"];
+const PAGES_CLIENT = ["/today", "/intentions", "/connect", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/offers", "/pathway", "/courses", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings", "/whats-new"];
 const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/office-hours", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {
@@ -42,6 +42,10 @@ async function main() {
       const res = await page.goto(`${base}${p}`, { waitUntil: "networkidle" });
       // No violations on a page that did not load is no finding: every page must answer 200 before its console counts.
       if (!res || res.status() !== 200) throw new Error(`${p} answered ${res?.status() ?? "nothing"}; a page that did not load cannot be checked`);
+      // The camera is allowed on Find a food alone (Body, rev 237 phase 13), where a barcode is scanned; every other page says none.
+      const policy = res.headers()["permissions-policy"] ?? "";
+      const wantCamera = p === "/body/foods/find" ? "camera=(self)" : "camera=()";
+      if (!policy.includes(wantCamera)) throw new Error(`${p}: Permissions-Policy "${policy}" should carry ${wantCamera}`);
       visited++;
       await page.waitForTimeout(300);
     }
