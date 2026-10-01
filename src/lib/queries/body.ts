@@ -11,6 +11,7 @@ import { belowPar, daysLeft, dueSoon, yieldFor } from "@/lib/engine/body-pantry"
 import { fmtHabitValue, habitsWeek, kept, dueOn, streak, weekDots, type Dot } from "@/lib/engine/body-habits";
 import { fmtHours, isRecoveryKey, sleepAverages, sleepWeek, type Night, type RecoveryKey } from "@/lib/engine/body-recovery";
 import { weekday } from "@/lib/dates";
+import { METRIC_DEFS, habitKey, isHabitKey, pairUp, verdict, type Fold, type Grain, type MetricDef, type Point } from "@/lib/engine/body-correlate";
 import { change, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, weekTally, type WeightUnit } from "@/lib/engine/body-training";
@@ -728,3 +729,100 @@ export async function recoveryForAi(workspaceId: string, userId: string, today: 
   const sleep = sv?.last ? `${sv.last.date}: ${sv.last.text}${sv.last.score != null ? `, score ${sv.last.score}` : ""}${sv.week.avg != null ? `; this week ${fmtHours(sv.week.avg)} a night over ${sv.week.nights} night${sv.week.nights === 1 ? "" : "s"}` : ""}` : null;
   return { habits, sleep };
 }
+
+/* ───────── The correlation explorer (B10, rev 237 phase 9) ───────── */
+
+export type InsightMetric = MetricDef;
+
+/** The metrics on offer for this member: the fixed list plus each of their habits. */
+export async function insightMetrics(workspaceId: string, userId: string): Promise<InsightMetric[]> {
+  const habits = await habitsFor(workspaceId, userId);
+  return [...METRIC_DEFS, ...habits.map((h): InsightMetric => ({ key: habitKey(h.name), label: `${h.name}${h.kind === "done" ? " (1 = kept)" : h.kind === "minutes" ? " (min)" : h.unit ? ` (${h.unit})` : ""}`, group: "Habits", fold: h.kind === "done" ? "sum" : "sum" }))];
+}
+
+/**
+ * One date-keyed series over a range. Body from its own tables, business from the member's own daily log and tasks: nothing
+ * crosses members. The health log is never a metric; its open ranges only serve the "leave out" option.
+ */
+async function seriesFor(workspaceId: string, userId: string, key: string, from: string, to: string, today: string, tz: string): Promise<Point[]> {
+  if (isHabitKey(key)) {
+    const habits = await habitsFor(workspaceId, userId);
+    const h = habits.find((x) => habitKey(x.name) === key);
+    if (!h) return [];
+    const logs = await db.query.bodyHabitLogs.findMany({ where: and(eq(schema.bodyHabitLogs.habitId, h.id), gte(schema.bodyHabitLogs.date, from), lte(schema.bodyHabitLogs.date, to)) });
+    const value = new Map(logs.map((l) => [l.date, l.value]));
+    // Every due day counts: a day without a log is a zero, so a skipped habit is data too.
+    return rangeDays(from, to).filter((d) => dueOn(h, weekday(d))).map((d) => ({ date: d, value: h.kind === "done" ? (kept(h, value.get(d)) ? 1 : 0) : (value.get(d) ?? 0) }));
+  }
+  if (key === "sleep_h" || key === "sleep_score") {
+    const rows = await db.query.bodyDaily.findMany({ where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), eq(schema.bodyDaily.key, key), gte(schema.bodyDaily.date, from), lte(schema.bodyDaily.date, to)) });
+    const byDate = new Map<string, number>();
+    for (const r of rows) byDate.set(r.date, r.value);
+    return [...byDate.entries()].map(([date, value]) => ({ date, value }));
+  }
+  if (key === "weight" || key === "bf") {
+    const readings = await scaleReadings(workspaceId, userId, from);
+    return dayFigures(readings).filter((f) => f.date <= to && f.values[key] != null).map((f) => ({ date: f.date, value: f.values[key]! }));
+  }
+  if (["cal", "p", "f", "c", "fatOver", "inBand", "offPlan"].includes(key)) {
+    const days = await daysInRange(workspaceId, userId, from, to, today);
+    return days.flatMap((d) => {
+      if (!d.logged) return [];
+      if (key === "fatOver") return d.bands?.f ? [{ date: d.date, value: Math.max(0, d.totals.f - d.bands.f.max) }] : [];
+      if (key === "inBand") return d.worst ? [{ date: d.date, value: d.worst === "in" || d.worst === "over_ok" ? 1 : 0 }] : [];
+      if (key === "offPlan") return d.worst ? [{ date: d.date, value: d.worst === "in" || d.worst === "over_ok" ? 0 : 1 }] : [];
+      return [{ date: d.date, value: d.totals[key as Macro] }];
+    });
+  }
+  if (key === "session" || key === "sets") {
+    const sets = await db.query.bodySets.findMany({ columns: { date: true }, where: and(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId)), gte(schema.bodySets.date, from), lte(schema.bodySets.date, to)) });
+    const count = new Map<string, number>();
+    for (const x of sets) count.set(x.date, (count.get(x.date) ?? 0) + 1);
+    return rangeDays(from, to).map((d) => ({ date: d, value: key === "session" ? (count.has(d) ? 1 : 0) : (count.get(d) ?? 0) }));
+  }
+  if (key === "tasksClosed") {
+    const done = await db.query.tasks.findMany({ columns: { completedAt: true }, where: and(and(eq(schema.tasks.workspaceId, workspaceId), eq(schema.tasks.userId, userId)), eq(schema.tasks.status, "done")) });
+    const count = new Map<string, number>();
+    for (const t of done) {
+      if (!t.completedAt) continue;
+      const d = todayInTz(tz, new Date(t.completedAt));
+      if (d >= from && d <= to) count.set(d, (count.get(d) ?? 0) + 1);
+    }
+    return rangeDays(from, to).map((d) => ({ date: d, value: count.get(d) ?? 0 }));
+  }
+  const biz = ["energy", "dmsStarted", "conversations", "callsBooked", "callsHeld", "posts", "offersMade", "newLeads", "cashCollected", "webinarRegs"] as const;
+  if ((biz as readonly string[]).includes(key)) {
+    const logs = await db.query.dailyLogs.findMany({ where: and(and(eq(schema.dailyLogs.workspaceId, workspaceId), eq(schema.dailyLogs.userId, userId)), gte(schema.dailyLogs.date, from), lte(schema.dailyLogs.date, to)) });
+    const k = key as (typeof biz)[number];
+    // Energy is a rating the member gives or doesn't; the counts are zero on a day with a log and nothing on a day without.
+    return logs.flatMap((l) => (k === "energy" ? (l.energy != null ? [{ date: l.date, value: l.energy }] : []) : [{ date: l.date, value: l[k] }]));
+  }
+  return [];
+}
+
+/** The dates with an open injury inside the range, for the "leave out" option. Only their dates leave this function. */
+async function injuryDays(workspaceId: string, userId: string, from: string, to: string): Promise<Set<string>> {
+  const rows = await db.query.bodyHealth.findMany({ columns: { startedOn: true, resolvedOn: true }, where: and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId)) });
+  const out = new Set<string>();
+  for (const r of rows) for (const d of rangeDays(r.startedOn > from ? r.startedOn : from, r.resolvedOn && r.resolvedOn < to ? r.resolvedOn : to)) out.add(d);
+  return out;
+}
+
+export type CorrelateInput = { a: string; b: string; lag: number; window: number; grain: Grain; excludeFlagged: boolean };
+
+/** The explorer's answer: both series over the window, the pairs, and the readout by the rules. Null when a metric is unknown. */
+export async function correlate(workspaceId: string, userId: string, today: string, tz: string, input: CorrelateInput) {
+  const metrics = await insightMetrics(workspaceId, userId);
+  const A = metrics.find((m) => m.key === input.a);
+  const B = metrics.find((m) => m.key === input.b);
+  if (!A || !B) return null;
+  const lag = Math.max(0, Math.min(3, Math.round(input.lag)));
+  const window = [4, 8, 12].includes(input.window) ? input.window : 8;
+  const to = today;
+  const from = addDays(startOfWeek(today), -7 * (window - 1));
+  const [a, b, excluded] = await Promise.all([seriesFor(workspaceId, userId, A.key, addDays(from, -lag), to, today, tz), seriesFor(workspaceId, userId, B.key, from, to, today, tz), input.excludeFlagged ? injuryDays(workspaceId, userId, from, to) : Promise.resolve(new Set<string>())]);
+  const pairs = pairUp(a, b, { lag, grain: input.grain, foldA: A.fold as Fold, foldB: B.fold as Fold, exclude: excluded, addDays, startOfWeek });
+  const read = verdict(pairs, A.label, B.label, input.grain === "weekly" ? "weeks" : "days");
+  return { a: A, b: B, lag, window, grain: input.grain, from, to, seriesA: a.filter((p) => p.date >= from), seriesB: b, pairs, excluded: excluded.size, verdict: read, metrics };
+}
+export type CorrelateView = NonNullable<Awaited<ReturnType<typeof correlate>>>;

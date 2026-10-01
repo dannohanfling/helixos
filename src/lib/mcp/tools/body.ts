@@ -16,7 +16,8 @@ import { fmtSet } from "@/lib/engine/body-training";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
-import { bodyDay, bodyLibrary, bodySettingsFor, bodyWeek, canAiUseBody, dayComposition, exerciseHistory, habitsDay, habitsFor, latestComposition, pantryView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { bodyDay, bodyLibrary, bodySettingsFor, bodyWeek, canAiUseBody, correlate, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { PRESETS } from "@/lib/engine/body-correlate";
 import { fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
 import { fmtHours, parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { startOfWeek } from "@/lib/dates";
@@ -475,5 +476,32 @@ defineTool({
     const mine = hd.habits.find((x) => x.id === h.id)!;
     const isKept = kept(h, value);
     return { text: `${h.name}: ${value == null ? "cleared" : `${h.kind === "done" ? "done" : fmtHabitValue(h, value)}${isKept ? " ✓" : h.target != null ? ` (target ${fmtHabitValue(h, h.target)})` : ""}`}${date === v.today ? "" : ` for ${date}`}${mine.streak ? `; streak ${mine.streak} day${mine.streak === 1 ? "" : "s"}` : ""}. ${hd.week.kept} of ${hd.week.due} kept this week.`, data: { date, habit: h.name, value, kept: isKept, streak: mine.streak, week: hd.week } };
+  },
+});
+
+/* ── Phase 9: the correlation explorer. Plain statistics; the readout's own words, never a cause. ── */
+
+defineTool({
+  name: "body_correlation",
+  scope: "body",
+  kind: "read",
+  description: "How two of the member's tracked numbers moved together: sleep, weight, calories, workouts, a habit, or a business number from their daily log (calls booked, cash collected, energy, tasks closed…). Pearson r with the number of paired days; nothing under 21 pairs. Give metric names, or leave both out for the preset list.",
+  input: {
+    a: z.string().optional().describe("Metric A, e.g. \"sleep hours\" or a habit's name"),
+    b: z.string().optional().describe("Metric B, e.g. \"calls booked\""),
+    lag: z.number().int().min(0).max(3).optional().describe("Days after A that B is read; 0 by default"),
+    window: z.number().int().optional().describe("4, 8 or 12 weeks; 8 by default"),
+    grain: z.enum(["daily", "weekly"]).optional(),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const metrics = await insightMetrics(v.workspace.id, v.user.id);
+    if (!input.a || !input.b) return { text: `Pick two metrics. Presets: ${PRESETS.map((p) => p.label).join("; ")}. Metrics: ${metrics.map((m) => m.label).join(", ")}.`, data: { presets: PRESETS, metrics: metrics.map((m) => ({ key: m.key, label: m.label, group: m.group })) } };
+    const A = byName("metric", metrics.map((m) => ({ ...m, name: m.label })), String(input.a));
+    const B = byName("metric", metrics.map((m) => ({ ...m, name: m.label })), String(input.b));
+    const grain = input.grain === "weekly" || input.grain === "daily" ? input.grain : A.weeklyByDefault || B.weeklyByDefault ? "weekly" : "daily";
+    const r = await correlate(v.workspace.id, v.user.id, v.today, v.tz, { a: A.key, b: B.key, lag: Number(input.lag ?? 0), window: Number(input.window ?? 8), grain, excludeFlagged: false });
+    if (!r) throw new Error("Unknown metric.");
+    return { text: `${r.verdict.words} Window ${r.window} weeks, ${grain}${r.lag ? `, B read ${r.lag} day${r.lag === 1 ? "" : "s"} after A` : ""}. Moving together is not a cause.`, data: { a: A.key, b: B.key, lag: r.lag, window: r.window, grain, r: r.verdict.r, n: r.verdict.n, early: r.verdict.early, kind: r.verdict.kind, pairs: r.pairs } };
   },
 });

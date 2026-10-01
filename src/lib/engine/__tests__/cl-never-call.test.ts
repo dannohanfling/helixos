@@ -49,11 +49,11 @@ describe("HelixOS never deletes a bot field", () => {
 });
 
 describe("every send shows that it is working", () => {
-  it("no plain submit button is left: each is the shared pending button, except the three filters that only change the address", () => {
+  it("no plain submit button is left: each is the shared pending button, except the four filters that only change the address", () => {
     const tsx = files(SRC).filter((f) => f.endsWith(".tsx") && !f.endsWith("components/submit-button.tsx"));
     const plain = tsx.flatMap((f) => (readFileSync(f, "utf8").match(/<button\b[^>]*type="submit"/g) ?? []).map((b) => `${f.slice(SRC.length)}: ${b.slice(0, 60)}`));
-    expect(plain.map((p) => p.split(":")[0]).sort()).toEqual(["/app/(app)/coach/move/page.tsx", "/app/(app)/library/page.tsx", "/app/(app)/socrates/questions/page.tsx"]);
-    for (const f of ["app/(app)/coach/move/page.tsx", "app/(app)/library/page.tsx", "app/(app)/socrates/questions/page.tsx"]) expect(readFileSync(join(SRC, f), "utf8")).toMatch(/<form[^>]*method="get"/);
+    expect(plain.map((p) => p.split(":")[0]).sort()).toEqual(["/app/(app)/body/insights/page.tsx", "/app/(app)/coach/move/page.tsx", "/app/(app)/library/page.tsx", "/app/(app)/socrates/questions/page.tsx"]);
+    for (const f of ["app/(app)/body/insights/page.tsx", "app/(app)/coach/move/page.tsx", "app/(app)/library/page.tsx", "app/(app)/socrates/questions/page.tsx"]) expect(readFileSync(join(SRC, f), "utf8")).toMatch(/<form[^>]*method="get"/);
     const pending = tsx.reduce((n, f) => n + (readFileSync(f, "utf8").match(/<SubmitButton\b/g) ?? []).length, 0);
     expect(pending).toBeGreaterThan(150);
   });

@@ -44,6 +44,9 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
         subtitle={`${formatDate(monday, { weekday: "short", month: "short", day: "numeric" })} to ${formatDate(w.sunday, { weekday: "short", month: "short", day: "numeric" })}. Averages over the days with something logged.`}
         action={
           <div className="flex items-center gap-2 text-sm">
+            <Link href="/body/insights" className="text-xs text-ink-2 hover:underline" data-testid="week-insights-link">
+              Patterns →
+            </Link>
             <Link href={`/body/week?week=${addDays(monday, -7)}`} className="btn btn-ghost btn-sm" aria-label="Previous week">
               ←
             </Link>

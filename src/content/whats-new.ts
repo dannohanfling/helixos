@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 30,
+    date: "2026-10-01",
+    title: "HumanOS: Patterns",
+    lines: ["From your week, a Patterns page: pick any two of your numbers (sleep, weight, calories, workouts, a habit, or a business number from your daily log such as calls booked or cash collected), with B read up to three days after A, over 4, 8 or 12 weeks, daily or weekly, and see them on one timeline, each pair as a dot, and an honest readout.", "The readout always gives r with the number of paired days, says nothing under 21, calls 21 to 41 an early signal, and names a pattern only when it holds in both halves of the range. Moving together is never called a cause. Seven presets to start, and Claude can ask the same question."],
+    audience: "coach",
+  },
+  {
     n: 29,
     date: "2026-10-01",
     title: "HumanOS: Sleep, Practices and the health log",

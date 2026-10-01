@@ -67,7 +67,7 @@ async function fillExact(page: Page, selector: string, value: string) {
 
 async function main() {
   const { db, schema } = await import("@/db");
-  const { and, eq, inArray } = await import("drizzle-orm");
+  const { and, eq, gte, inArray } = await import("drizzle-orm");
   const { PHASE2_V4 } = await import("../src/lib/engine/__tests__/fixtures/body-phase2v4");
   const { dayMarks, MACROS, fmtMacro, portionMacros, sumMacros } = await import("@/lib/engine/body");
   const { addDays, todayInTz } = await import("@/lib/dates");
@@ -676,6 +676,49 @@ async function main() {
     if ((await wr.getAttribute("data-habits-kept")) !== String(hdq.week.kept) || (await wr.getAttribute("data-habits-due")) !== String(hdq.week.due) || hdq.week.kept < 2 || (await wr.getAttribute("data-sleep-avg")) !== String(sw2.avg)) throw new Error(`the week's recovery tiles are the query's: habits ${hdq.week.kept} of ${hdq.week.due}, sleep ${sw2.avg}`);
     console.log(`✓ phase 8: two starters and an own habit added as typed; Breathwork's streak forgives yesterday (${wantStreak}); Meditation at 12 min kept; 2 of ${dueToday} today; Today's chips toggle and come back; sleep 7:30 with a score, an earlier 6 h, then 8 h replacing last night; the health log restricts Bench press on Training until resolved; the week's tiles carry habits and sleep`);
 
+    // ── Phase 9: the correlation explorer. Thirty nights of sleep and thirty daily logs seeded so that calls booked the next day
+    // track sleep; the page's readout is the engine's own r and n; a pair with too few days says so; the Claude tool answers alike. ──
+    const { pairUp, verdict: verdictOf } = await import("@/lib/engine/body-correlate");
+    const { startOfWeek: mondayOf } = await import("@/lib/dates");
+    const seededSleep: { date: string; value: number }[] = [];
+    const seededCalls: { date: string; value: number }[] = [];
+    for (let back = 33; back >= 3; back--) {
+      const d = addDays(today, -back);
+      const hours = 6 + ((back * 7) % 5) * 0.5; // 6 to 8 h, no pattern with the date
+      seededSleep.push({ date: d, value: hours });
+      seededCalls.push({ date: addDays(d, 1), value: Math.round((hours - 6) * 2) + (back % 2) }); // more calls the day after a longer night
+    }
+    await db.insert(schema.bodyDaily).values(seededSleep.map((n) => ({ id: freshId(), workspaceId: mem.workspaceId, userId: maya.id, date: n.date, key: "sleep_h", value: n.value, source: "manual" as const, readingId: `sleep:${n.date}`, time: null })));
+    for (const c of seededCalls) {
+      const have = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, c.date)) });
+      if (have) await db.update(schema.dailyLogs).set({ callsBooked: c.value }).where(eq(schema.dailyLogs.id, have.id));
+      else await db.insert(schema.dailyLogs).values({ id: freshId(), workspaceId: mem.workspaceId, userId: maya.id, date: c.date, callsBooked: c.value });
+    }
+    const windowFrom = addDays(mondayOf(today), -7 * 7);
+    const allSleep = (await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.key, "sleep_h"), gte(schema.bodyDaily.date, addDays(windowFrom, -1))) })).map((r) => ({ date: r.date, value: r.value }));
+    const allCalls = (await db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.userId, maya.id), gte(schema.dailyLogs.date, windowFrom)) })).map((l) => ({ date: l.date, value: l.callsBooked }));
+    const expectedPairs = pairUp(allSleep, allCalls, { lag: 1, grain: "daily", foldA: "mean", foldB: "sum", addDays, startOfWeek: mondayOf });
+    const expectedVerdict = verdictOf(expectedPairs, "Sleep hours", "Calls booked", "days");
+    if (expectedVerdict.kind !== "steady" || expectedVerdict.n < 21) throw new Error(`the seed gives a steady early signal: ${expectedVerdict.words}`);
+    await client.goto(`${base}/body/week`);
+    await client.locator('[data-testid="week-insights-link"]').click();
+    await client.waitForURL(/\/body\/insights/);
+    await client.locator('[data-testid="insights-verdict"]').waitFor({ timeout: 30000 });
+    const vd = client.locator('[data-testid="insights-verdict"]');
+    if ((await vd.getAttribute("data-kind")) !== "steady" || (await vd.getAttribute("data-r")) !== String(expectedVerdict.r) || (await vd.getAttribute("data-n")) !== String(expectedVerdict.n) || !((await vd.textContent()) ?? "").includes("moved together")) throw new Error(`the first preset's readout is the engine's (${expectedVerdict.words}): ${await vd.textContent()}`);
+    if (/caus(ed|es|ing)\b/i.test((await client.locator("main").textContent()) ?? "")) throw new Error("the page never says caused");
+    if ((await client.locator('[data-testid="pair-scatter"]').getAttribute("data-n")) !== String(expectedVerdict.n) || !(await client.locator('[data-testid="pair-timeline"]').count())) throw new Error("the scatter holds every pair and the timeline draws both");
+    await noSideScroll(client, "/body/insights");
+    // A pair with too few days: the readout says so, hides r, and shows no scatter.
+    await client.goto(`${base}/body/insights?a=sleep_score&b=posts&lag=0&window=4&grain=daily`);
+    await client.locator('[data-testid="insights-verdict"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="insights-verdict"]').getAttribute("data-kind")) !== "none" || (await client.locator('[data-testid="pair-scatter"]').count()) || !((await client.locator('[data-testid="insights-verdict"]').textContent()) ?? "").includes("Not enough data yet")) throw new Error("under 21 pairs: not enough data yet, no r, no scatter");
+    // Weight defaults to weekly grain (rev 231).
+    await client.goto(`${base}/body/insights?a=weight&b=cal`);
+    await client.locator('[data-testid="insights-grain"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="insights-grain"]').inputValue()) !== "weekly") throw new Error("weight reads weekly unless asked otherwise");
+    console.log(`✓ patterns: sleep → calls booked the next day reads as the engine's ${expectedVerdict.words}; too few pairs say so; weight defaults to weekly; never a cause`);
+
     // ── Private: the coach sees nothing, and a coach's export never has Body. ──
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("the client page shows no Body card while private");
@@ -777,6 +820,11 @@ async function main() {
     const sleepLog = await tool("body_log_sleep").handler(await viewerFor(), { hours: "7:15", date: addDays(today, -2) });
     if (!sleepLog.text.includes("7 h 15 min")) throw new Error(`body_log_sleep takes a time: ${sleepLog.text}`);
     for (const txt of [habitsTool.text, habitTool.text, sleepTool.text, sleepLog.text]) if (txt.includes(injury)) throw new Error("no tool carries the health log");
+    const corrTool = await tool("body_correlation").handler(await viewerFor(), { a: "sleep hours", b: "calls booked", lag: 1 });
+    // A night was logged through a tool above, so the pairs grew by one since the page's check: the shape is what's fixed.
+    if (!corrTool.text.includes("Sleep hours and Calls booked moved together") || !/r 0\.\d\d, \d+ paired days, early signal/.test(corrTool.text) || !corrTool.text.includes("B read 1 day after A") || corrTool.text.includes(injury)) throw new Error(`body_correlation gives the readout in the engine's words: ${corrTool.text}`);
+    const corrList = await tool("body_correlation").handler(await viewerFor(), {});
+    if (!corrList.text.includes("Presets:") || !corrList.text.includes("Breathwork")) throw new Error("without metrics, the tool lists the presets and the member's metrics, habits included");
     await press(client, '[data-testid="body-ai-toggle"]', async () => /: Off/.test(await client.locator('[data-testid="body-ai-state"]').innerText()), "AI use off");
     if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("switching it off stops it on the next request");
     const offAnswer = await tool("body_today").handler(await viewerFor(), {}).then(() => "answered", (e: Error) => e.message);
