@@ -2,17 +2,20 @@
  * A stand-in for the Airtable REST API for the import walk. `npx tsx scripts/mock-airtable.ts 4070`, then run the app with
  * AIRTABLE_API_URL=http://localhost:4070. It serves the synthetic bases in scripts/fixtures/airtable-client.ts, one token per base
  * as Danno set them up (27 Sep): `pat-source-good` reads the source base, `pat-fallback-good` the fallback; any other token is 401,
- * a good token on the other base is 403. Only GET answers. `POST /__edit` renames the first task, so a walk can change the base
+ * a good token on the other base is 403; `pat-humanos-good` reads the synthetic HumanOS base of scripts/fixtures/airtable-humanos.ts. Only GET answers. `POST /__edit` renames the first task, so a walk can change the base
  * between a dry run and Approve; `GET /__methods` lists every method and path it was sent, so a walk can prove the import only read,
  * and never asked for the people tables' rows.
  */
 import { createServer } from "node:http";
 import { V1_BASE, V1_TABLES, V2_BASE, V2_TABLES, type FixtureTable } from "./fixtures/airtable-client";
+import { HUMANOS_BASE, HUMANOS_TABLES, HUMANOS_TOKEN } from "./fixtures/airtable-humanos";
 
 const port = Number(process.argv[2] ?? 4070);
 const bases: Record<string, { token: string; tables: FixtureTable[] }> = {
   [V2_BASE]: { token: "pat-source-good", tables: structuredClone(V2_TABLES) },
   [V1_BASE]: { token: "pat-fallback-good", tables: structuredClone(V1_TABLES) },
+  // Body's HumanOS history (rev 237 phase 7): a third base, its own token.
+  [HUMANOS_BASE]: { token: HUMANOS_TOKEN, tables: structuredClone(HUMANOS_TABLES) },
 };
 const methods: string[] = [];
 const paths: string[] = [];

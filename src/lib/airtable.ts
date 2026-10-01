@@ -103,3 +103,14 @@ export async function readSource(source: BaseAccess, fallback: BaseAccess | null
   const v1 = fallback ? await read(fallback.token.trim(), "fallback", fallback.baseId.trim(), V1_TABLES) : { found: {}, missing: [] };
   return { source: { v2: v2.found, v1: v1.found, names: v2.names }, missing: [...v2.missing, ...v1.missing.map((m) => `${m} (fallback base)`)] };
 }
+
+/**
+ * A few of a base's tables by key, for Body's HumanOS history (rev 237 phase 7): the same GET-only reader, one token, the rows of
+ * the tables asked for and nothing else of the base.
+ */
+export async function readTables(access: BaseAccess, wanted: string[]): Promise<{ found: Record<string, SourceTable | undefined>; missing: string[] }> {
+  if (!BASE_ID.test(access.baseId.trim())) throw new AirtableError("base_id", "source");
+  if (!access.token.trim()) throw new AirtableError("no_token", "source");
+  const r = await read(access.token.trim(), "source", access.baseId.trim(), wanted);
+  return { found: r.found, missing: r.missing };
+}

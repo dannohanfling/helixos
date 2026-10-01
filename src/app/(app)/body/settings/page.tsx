@@ -248,6 +248,13 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
         </form>
       </Card>
 
+      <Card className="mb-4" title="From Airtable" id="airtable">
+        <p className="text-sm text-ink-2">Your HumanOS base&apos;s weigh-ins, routines and workouts, brought over with a read-only token you paste for that run only.</p>
+        <Link href="/body/import" className="btn btn-soft btn-sm mt-3" data-testid="body-import-link">
+          Bring it over
+        </Link>
+      </Card>
+
       <Card className="mb-8" title="Download your Body data" id="download">
         <p className="text-sm text-ink-2">One file with everything in Body: your targets and day types, foods, saved meals, every logged day, your coach&apos;s comments and your sharing log.</p>
         <a href="/api/export?format=json&scope=body" className="btn btn-soft btn-sm mt-3" data-testid="body-export">

@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 28,
+    date: "2026-09-30",
+    title: "HumanOS: your history from Airtable",
+    lines: ["A \"From Airtable\" page (from Weigh-ins, Training and Body settings) brings your HumanOS base over: every weigh-in as one reading a day, your routines, and your workouts as sets, from the Exercises rows where a day has them and from the working-set lines of your Exercise Notes where it doesn't.", "Paste the base id and a read-only token, see the dry run day by day, then Approve. The token is used for that run only and kept nowhere; the notes' words stay in Airtable. Run it again any time: nothing lands twice."],
+    audience: "coach",
+  },
+  {
     n: 27,
     date: "2026-09-30",
     title: "HumanOS: your week",

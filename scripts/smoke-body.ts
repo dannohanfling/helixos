@@ -67,7 +67,7 @@ async function fillExact(page: Page, selector: string, value: string) {
 
 async function main() {
   const { db, schema } = await import("@/db");
-  const { and, eq } = await import("drizzle-orm");
+  const { and, eq, inArray } = await import("drizzle-orm");
   const { PHASE2_V4 } = await import("../src/lib/engine/__tests__/fixtures/body-phase2v4");
   const { dayMarks, MACROS, fmtMacro, portionMacros, sumMacros } = await import("@/lib/engine/body");
   const { addDays, todayInTz } = await import("@/lib/dates");
@@ -678,6 +678,85 @@ async function main() {
     if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
     if (!(own.body_pantry ?? []).length || (own.body_yields ?? []).length !== 1) throw new Error("the member's Body export has their pantry and weighings");
     if ((own.body_entries ?? []).length !== 6 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
+    // ── The Airtable history (B5, rev 237 phase 7): the synthetic HumanOS base through the page. The dry run's numbers are the
+    // mapper's own; Approve writes them; a second run finds everything already in; the mock saw GETs alone and never the
+    // Password Bank; the token never comes back in a response. ──
+    const { HUMANOS_BASE, HUMANOS_TABLES, HUMANOS_TOKEN } = await import("./fixtures/airtable-humanos");
+    const { buildHistoryPlan, historySummary, readingIdFor } = await import("@/lib/engine/body-airtable");
+    const { tableKey } = await import("@/lib/engine/airtable-import");
+    const { spawn } = await import("node:child_process");
+    const mockPort = 4070;
+    const mock = spawn("npx", ["tsx", "scripts/mock-airtable.ts", String(mockPort)], { stdio: "ignore", detached: true });
+    try {
+      for (let i = 0; i < 100; i++) {
+        try {
+          await fetch(`http://localhost:${mockPort}/__methods`);
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
+      const fixture = Object.fromEntries(HUMANOS_TABLES.map((t) => [tableKey(t.name), t.records]));
+      const lc = (x: string) => x.trim().toLowerCase();
+      const existing = {
+        exercises: new Map((await db.query.bodyExercises.findMany({ where: eq(schema.bodyExercises.userId, maya.id) })).filter((e) => !e.archivedAt).map((e) => [lc(e.name), e.id])),
+        routines: new Set((await db.query.bodyRoutines.findMany({ where: eq(schema.bodyRoutines.userId, maya.id) })).map((r) => lc(r.name))),
+        sessionDates: new Set((await db.query.bodySessions.findMany({ where: eq(schema.bodySessions.userId, maya.id) })).map((x) => x.date)),
+        readingIds: new Set<string>(),
+      };
+      const expected = historySummary(buildHistoryPlan({ journal: fixture.journal, exercises: fixture.exercises, routines: fixture.routines }, existing, { notes: true, from: null }));
+      if (expected.weighIns !== 3 || expected.sessions !== 2 || expected.skipped !== 1 || expected.unread !== 1 || expected.routines !== 2) throw new Error(`the fixture gives three weigh-ins, two workouts, two routines, one carried-forward day and one unread line: ${JSON.stringify(expected)}`);
+      const echoed: string[] = [];
+      client.on("response", async (r) => {
+        if (r.request().method() !== "POST") return;
+        if ((await r.text().catch(() => "")).includes(HUMANOS_TOKEN)) echoed.push(r.url());
+      });
+      const dryRun = async () => {
+        await client.goto(`${base}/body/import`);
+        await client.locator('[data-testid="history-base"]').waitFor({ timeout: 30000 });
+        await fillExact(client, '[data-testid="history-base"]', HUMANOS_BASE);
+        await fillExact(client, '[data-testid="history-token"]', HUMANOS_TOKEN);
+        await press(client, '[data-testid="history-dry"]', async () => (await client.locator('[data-testid="history-preview"]').count()) > 0, "the dry run");
+        return client.locator('[data-testid="history-preview"]');
+      };
+      const pv = await dryRun();
+      for (const [attr, want] of [["data-weigh-ins", expected.weighIns], ["data-sessions", expected.sessions], ["data-sets", expected.sets], ["data-exercises", expected.exercises], ["data-routines", expected.routines], ["data-skipped", expected.skipped]] as const) if ((await pv.getAttribute(attr)) !== String(want)) throw new Error(`the dry run's ${attr} is the mapper's (${want}), got ${await pv.getAttribute(attr)}`);
+      if ((await client.locator('[data-testid="history-session"]').count()) !== 2 || (await client.locator('[data-testid="history-session"][data-date="2026-09-26"]').textContent())?.includes("read from the notes") !== true) throw new Error("the dry run lists each day and says where its sets came from");
+      if ((await client.locator('[data-testid="history-exercises"]').textContent())?.includes("Skullcrushers") !== true) throw new Error("a shouted exercise name comes over in title case");
+      await noSideScroll(client, "/body/import with a dry run");
+      await press(client, '[data-testid="history-approve"]', async () => /\/body\/import\?done=/.test(client.url()), "the import done");
+      await client.locator('[data-testid="history-done"]').waitFor({ timeout: 30000 });
+      const daily = await db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.userId, maya.id), eq(schema.bodyDaily.source, "airtable")) });
+      const readings = new Set(daily.map((d) => d.readingId));
+      if (readings.size !== 3 || readings.has(readingIdFor("recHW00000000004"))) throw new Error(`three weigh-ins land, the carried-forward day never: ${[...readings].join(", ")}`);
+      const at = (rec: string, key: string) => daily.find((d) => d.readingId === readingIdFor(rec) && d.key === key)?.value;
+      if (at("recHW00000000002", "weight") !== 170.6 || at("recHW00000000002", "bf") !== 21.9) throw new Error("on a day with two generations the newer wins");
+      if (at("recHW00000000001", "bf") !== 22.3 || at("recHW00000000001", "smm_pct") !== 49.8) throw new Error("the oldest generation's fractions land as percents");
+      const imported = await db.query.bodySessions.findMany({ where: and(eq(schema.bodySessions.userId, maya.id), inArray(schema.bodySessions.date, ["2026-04-12", "2026-09-26"])) });
+      if (imported.length !== 2 || imported.some((x) => !x.completedAt) || imported.find((x) => x.date === "2026-09-26")?.routineName !== "Leg Day") throw new Error("both days land as finished workouts with the routine's name");
+      const setsOn = async (date: string) => (await db.query.bodySets.findMany({ where: and(eq(schema.bodySets.userId, maya.id), eq(schema.bodySets.date, date)) })).length;
+      if ((await setsOn("2026-04-12")) !== 4 || (await setsOn("2026-09-26")) !== 5) throw new Error("the Exercises rows give the spring day its four sets; the notes give the autumn day its five");
+      const legDay = await db.query.bodyRoutines.findFirst({ where: and(eq(schema.bodyRoutines.userId, maya.id), eq(schema.bodyRoutines.name, "Leg Day")) });
+      if (!legDay || legDay.items.length !== 2) throw new Error("the routine lands with its two exercises");
+      await client.goto(`${base}/body/training?date=2026-09-26`);
+      await client.locator('[data-testid="training-exercise"]').first().waitFor({ timeout: 30000 });
+      if ((await client.locator('[data-testid="training-set"]').count()) !== 5) throw new Error("Training shows the imported day's five sets");
+      // Again: everything already in, so Approve has nothing to do.
+      const again = await dryRun();
+      if ((await again.getAttribute("data-weigh-ins")) !== "0" || (await again.getAttribute("data-sessions")) !== "0" || (await again.getAttribute("data-exercises")) !== "0" || (await again.getAttribute("data-routines")) !== "0") throw new Error("a second run finds everything already in");
+      if (!(await client.locator('[data-testid="history-approve"]').isDisabled())) throw new Error("with nothing new, Approve is shut");
+      const { methods, paths } = (await (await fetch(`http://localhost:${mockPort}/__methods`)).json()) as { methods: string[]; paths: string[] };
+      if (methods.some((m) => m !== "GET")) throw new Error(`the import only reads: ${methods.join(",")}`);
+      if (paths.some((x) => x.includes("tblHPASSWORDS001"))) throw new Error("the import never asks for the Password Bank's rows");
+      if (!paths.some((x) => x.includes("tblHJOURNAL00001"))) throw new Error("the import read the Journal");
+      if (echoed.length) throw new Error(`the token never comes back in a response: ${echoed.join(", ")}`);
+      console.log("✓ Airtable history: the dry run's numbers are the mapper's; three weigh-ins (the newer generation winning a shared day, fractions as percents, a carried-forward day left out), two workouts (rows and notes) with nine sets, two routines and six exercises landed; a second run finds it all already in; the mock saw GETs alone, never the Password Bank; the token never came back");
+    } finally {
+      if (mock.pid) process.kill(-mock.pid);
+    }
+    await client.goto(`${base}/body/settings`);
+    await client.locator("#download").waitFor({ timeout: 30000 });
+
     // Download and Delete are two separate cards (rev 230); the confirm stays shut until DELETE is typed exactly.
     if (!(await client.locator('#download [data-testid="body-export"]').count()) || (await client.locator('#download [data-testid="body-erase"]').count()) || !(await client.locator('[data-testid="body-delete-card"] [data-testid="body-erase"]').count())) throw new Error("Download and Delete sit in separate cards");
     await noSideScroll(client, "/body/settings with its data cards");

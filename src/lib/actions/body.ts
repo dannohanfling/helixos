@@ -4,6 +4,7 @@
  * Body writes (rev 179). Every write is the signed-in member's own, keyed by their workspace and user id, except a coach's day
  * comment, which needs the member's share switch on at the moment it's written. No Body value is ever logged.
  */
+import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -14,6 +15,10 @@ import { newId } from "@/lib/ids";
 import { convertQty, storedUnit } from "@/lib/engine/body-units";
 import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
+import { AirtableError, airtableProblem } from "@/lib/airtable";
+import { applyHistory, existingHistory, readHumanos } from "@/lib/body-import";
+import { buildHistoryPlan, historySummary, type Existing, type HistoryPlan, type HistorySummary } from "@/lib/engine/body-airtable";
+import { allow } from "@/lib/rate-limit";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { nowIso } from "@/lib/dates";
 import { bodyAccess, bodySettingsFor, groupReadings, isWorkspaceOwner } from "@/lib/queries/body";
@@ -677,4 +682,46 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   ]);
   refresh();
   redirect("/body?erased=1");
+}
+
+/* ── The Airtable history (B5, rev 237 phase 7): dry run, then Approve; the token lives in the form for that run only. ── */
+
+const IMPORT = "/body/import";
+/** What the page shows after a dry run. No token is ever in here. */
+export type HistoryPreview = { key: string; summary: HistorySummary; plan: HistoryPlan };
+export type HistoryState = { error?: string; changed?: boolean; preview?: HistoryPreview } | undefined;
+
+async function prepareHistory(v: Viewer, workspaceId: string, userId: string, f: FormData): Promise<{ error: string } | { plan: HistoryPlan; existing: Existing; preview: HistoryPreview }> {
+  if (!(await allow(`body-import:${userId}`, 30, 15 * 60000))) return { error: "That's a lot of runs in a row. Wait 15 minutes and try again." };
+  const from = str(f, "from");
+  if (from && !DATE.test(from)) return { error: "The start date is a date, like 2026-01-01, or empty." };
+  let read: Awaited<ReturnType<typeof readHumanos>>;
+  try {
+    read = await readHumanos({ baseId: str(f, "base"), token: str(f, "token") });
+  } catch (e) {
+    if (e instanceof AirtableError) return { error: airtableProblem(e).replace(/^Source base: /, "") };
+    return { error: "Couldn't read the base. Nothing was imported; try again in a minute." };
+  }
+  if (read.missing.includes("journal")) return { error: "This base has no Journal table. Check the base id." };
+  const existing = await existingHistory(workspaceId, userId);
+  const plan = buildHistoryPlan(read.source, existing, { notes: str(f, "notes") === "1", from: from || null });
+  plan.missing = read.missing;
+  const key = createHash("sha256").update(JSON.stringify([userId, plan])).digest("hex").slice(0, 32);
+  return { plan, existing, preview: { key, summary: historySummary(plan), plan } };
+}
+
+/**
+ * The member's own HumanOS history from Airtable: the dry run reads and maps, Approve reads again and writes only if the plan is
+ * the one they saw. The token is used inside this call and kept nowhere.
+ */
+export async function importHistoryAction(_prev: HistoryState, f: FormData): Promise<HistoryState> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const r = await prepareHistory(v, workspaceId, userId, f);
+  if ("error" in r) return { error: r.error };
+  if (str(f, "intent") !== "approve") return { preview: r.preview };
+  if (r.preview.key !== str(f, "key")) return { changed: true, preview: r.preview };
+  const { written } = await applyHistory(r.plan, r.existing, workspaceId, userId);
+  refresh();
+  redirect(`${IMPORT}?done=${written}&at=${Date.now()}`);
 }

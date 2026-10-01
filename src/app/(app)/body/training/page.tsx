@@ -87,7 +87,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
   if (!t) {
     return (
       <>
-        <HumanosHeader title="Training" gear={false} />
+        <HumanosHeader title="Training" gear={false} action={<Link href="/body/import" className="text-xs text-ink-2 hover:underline">From Airtable</Link>} />
         <Card>
           <p className="text-sm text-ink-2">
             Set up HumanOS first. <Link href="/body" className="font-medium underline">Go to Log →</Link>

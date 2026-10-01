@@ -87,7 +87,7 @@ export default async function WeighInsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <HumanosHeader title="Weigh-ins" subtitle="Your weight and what the scale says with it. The day's figure is its lowest reading, kept whole." action={<Link href="/body" className="btn btn-ghost btn-sm">← Log</Link>} />
+      <HumanosHeader title="Weigh-ins" subtitle="Your weight and what the scale says with it. The day's figure is its lowest reading, kept whole." action={<span className="flex items-center gap-2"><Link href="/body/import" className="text-xs text-ink-2 hover:underline" data-testid="weight-import-link">From Airtable</Link><Link href="/body" className="btn btn-ghost btn-sm">← Log</Link></span>} />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
           {sp.error}
