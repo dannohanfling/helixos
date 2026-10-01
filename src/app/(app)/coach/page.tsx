@@ -17,6 +17,7 @@ import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_DEGRADE_AT, EVI
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
+import { coachBodyColumn } from "@/lib/queries/body";
 import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
 import { lateForMonth, monthOf } from "@/lib/engine/month-intentions";
@@ -124,6 +125,8 @@ export default async function CoachPage() {
   const changedSince = await Promise.all(withBots.map((m) => (m.clApiToken ? changedSinceLastPush(m) : null)));
   const changedOf = new Map(withBots.map((m, i) => [m.id, changedSince[i]]));
   const myBot = v.membership;
+  // Body (rev 237 phase 12): a cell only for clients who share it with the coach; blank for the rest, private or off alike.
+  const bodyOf = await coachBodyColumn(v, rows.map((r) => ({ userId: r.m.userId, today: theirToday(r.m) })));
 
   return (
     <>
@@ -151,6 +154,7 @@ export default async function CoachPage() {
                     <th className="py-2 pr-3">Client</th>
                     <th className="py-2 pr-3">Today</th>
                     <th className="py-2 pr-3">Streak</th>
+                    <th className="py-2 pr-3" title="Days in band this week · last weigh-in · sessions this week, for clients sharing Body with you">Body</th>
                     <th className="py-2 pr-3">Tier</th>
                     <th className="py-2 pr-3 text-right">Pathway</th>
                     <th className="py-2 pr-3 text-right">Last active</th>
@@ -183,6 +187,9 @@ export default async function CoachPage() {
                         <span title="Locked in">{r.todayLocked ? "☀️" : "○"}</span> <span title="Closed">{r.todayClosed ? "🌙" : "○"}</span>
                       </td>
                       <td className="py-2 pr-3 tabular">🔥 {r.streak}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-xs tabular" data-testid="coach-body-cell" data-member={r.m.id} title={bodyOf.get(r.m.userId)?.long}>
+                        {bodyOf.get(r.m.userId) ? <Link href={`/coach/${r.m.id}/body`} className="text-ink-2 underline-offset-2 hover:underline">{bodyOf.get(r.m.userId)!.short}</Link> : null}
+                      </td>
                       <td className="py-2 pr-3">
                         {TIER_ICONS[r.tier.name]} {r.tier.name} <span className="text-xs text-ink-3 tabular">{r.pts.toLocaleString()}</span>
                       </td>

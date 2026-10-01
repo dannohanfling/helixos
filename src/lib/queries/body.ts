@@ -14,7 +14,7 @@ import { weekday } from "@/lib/dates";
 import { METRIC_DEFS, habitKey, isHabitKey, pairUp, verdict, type Fold, type Grain, type MetricDef, type Point } from "@/lib/engine/body-correlate";
 import { shoppingList, type ShopFood } from "@/lib/engine/body-shopping";
 import { calendarWeeks, perWeek, type Bounds } from "@/lib/engine/body-range";
-import { change, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
+import { change, coachBodyText, goalPace, nutritionWeek, weighWeek, type CoachBodyCell, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, weekTally, type WeightUnit } from "@/lib/engine/body-training";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
@@ -614,6 +614,30 @@ export async function coachBodySummary(v: Viewer, memberUserId: string, today: s
   if ((await bodyAccess(v, memberUserId)) !== "coach") return null;
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.userId, memberUserId)) });
   return { membershipId: m!.id, days: await recentDays(v.workspace.id, memberUserId, today) };
+}
+
+/**
+ * The coach's client table (rev 237 phase 12): one Body cell per client who shares with this coach, by user id; nothing for the
+ * rest, so the table can't tell a private client from one with Body off. Each by the client's own week and today: days in band
+ * of the days judged so far, the last weigh-in, sessions so far. Never the health log, never habits.
+ */
+export async function coachBodyColumn(v: Viewer, clients: { userId: string; today: string }[]): Promise<Map<string, CoachBodyCell & { short: string; long: string }>> {
+  const out = new Map<string, CoachBodyCell & { short: string; long: string }>();
+  if (v.role !== "coach" || v.switchedInto) return out;
+  for (const c of clients) {
+    if ((await bodyAccess(v, c.userId)) !== "coach") continue;
+    const monday = startOfWeek(c.today);
+    const [days, sets, readings] = await Promise.all([
+      daysInRange(v.workspace.id, c.userId, monday, c.today, c.today),
+      db.query.bodySets.findMany({ columns: { date: true }, where: and(eq(schema.bodySets.workspaceId, v.workspace.id), eq(schema.bodySets.userId, c.userId), gte(schema.bodySets.date, monday), lte(schema.bodySets.date, c.today)) }),
+      scaleReadings(v.workspace.id, c.userId, addDays(c.today, -400)),
+    ]);
+    const n = nutritionWeek(days.map((d) => ({ date: d.date, logged: d.logged, totals: d.totals, bands: d.bands, worst: d.worst, final: d.final })));
+    const weighed = dayFigures(readings).filter((f) => f.values.weight != null && f.date <= c.today);
+    const cell = { inBand: n.daysInBand, judged: n.daysJudged, lastWeighIn: weighed.at(-1)?.date ?? null, sessions: new Set(sets.map((s) => s.date)).size };
+    out.set(c.userId, { ...cell, ...coachBodyText(cell, c.today, formatDate, daysBetween) });
+  }
+  return out;
 }
 
 /* ───────── Habits, sleep and the health log (rev 237 phase 8, B7) ───────── */

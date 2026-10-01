@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { daysBetween } from "@/lib/dates";
-import { change, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
+import { change, coachBodyText, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
 
 const lift = { cal: { min: 1400, max: 1500 }, p: { min: 180, max: 200 }, f: { min: 55, max: 65 }, c: { min: 0, max: 5 } };
 const rest = { cal: { min: 1300, max: 1400 }, p: { min: 170, max: 190 }, f: { min: 50, max: 60 }, c: { min: 0, max: 5 } };
@@ -45,5 +45,19 @@ describe("the weekly rollup: weight and goal pace", () => {
     expect(goalPace({ target: 175, by: "2026-12-01" }, 175.0, 175.3, 175.3, "2026-09-30", daysBetween)!.onPace).toBe(true);
     expect(goalPace(null, 175.0, null, null, "2026-09-30", daysBetween)).toBeNull();
     expect(goalPace({ target: 170, by: null }, null, null, null, "2026-09-30", daysBetween)).toBeNull();
+  });
+});
+
+describe("the coach's Body column (rev 237 phase 12)", () => {
+  const fmt = (d: string) => `d${d.slice(5)}`;
+  it("says days in band, the last weigh-in and the sessions, short and long", () => {
+    const t = coachBodyText({ inBand: 3, judged: 4, lastWeighIn: "2026-09-28", sessions: 2 }, "2026-10-01", fmt, daysBetween);
+    expect(t.short).toBe("🎯 3/4 · ⚖️ d09-28 · 🏋️ 2");
+    expect(t.long).toBe("3 of 4 days in band this week · last weigh-in d09-28 · 2 sessions this week");
+  });
+  it("says today or yesterday for a fresh weigh-in, and a dash with nothing judged or weighed", () => {
+    expect(coachBodyText({ inBand: 0, judged: 0, lastWeighIn: "2026-10-01", sessions: 1 }, "2026-10-01", fmt, daysBetween).short).toBe("🎯 — · ⚖️ today · 🏋️ 1");
+    expect(coachBodyText({ inBand: 0, judged: 0, lastWeighIn: "2026-09-30", sessions: 1 }, "2026-10-01", fmt, daysBetween).long).toBe("no days judged yet this week · weighed yesterday · 1 session this week");
+    expect(coachBodyText({ inBand: 0, judged: 0, lastWeighIn: null, sessions: 0 }, "2026-10-01", fmt, daysBetween)).toEqual({ short: "🎯 — · ⚖️ — · 🏋️ 0", long: "no days judged yet this week · no weigh-in yet · 0 sessions this week" });
   });
 });

@@ -904,11 +904,28 @@ async function main() {
     if (!(await coach.locator('[data-testid="coach-body-private"]').count()) || (await coach.locator('[data-testid="body-tiles"]').count())) throw new Error("the coach's Body view says private and shows nothing");
     const coachDump = (await (await coach.request.get(`${base}/api/export?format=json&user=${maya.id}`)).json()) as Record<string, unknown>;
     if (Object.keys(coachDump).some((k) => k.startsWith("body_"))) throw new Error("a coach's export of a client carries no Body section");
-    console.log("✓ private: no Body card, the coach's view says private, and the coach's export has no Body section");
+    // The coach's client table (rev 237 phase 12): the Body cell is there and empty while private.
+    const bodyCell = async () => (await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"]`).innerText()).trim();
+    await coach.goto(`${base}/coach`);
+    if ((await bodyCell()) !== "") throw new Error(`the client table's Body cell is blank while private: "${await bodyCell()}"`);
+    console.log("✓ private: no Body card, a blank Body cell on the client table, the coach's view says private, and the coach's export has no Body section");
 
     // ── Shared: read-only for the coach, plus a comment the client sees. ──
     await client.goto(`${base}/body/settings`);
     await press(client, '[data-testid="body-share-toggle"]', async () => /: On/.test(await client.locator('[data-testid="body-share-state"]').innerText()), "sharing on");
+    // The Body cell (phase 12) reads what the query says for this client: days in band, the last weigh-in, sessions this week.
+    const { coachBodyColumn } = await import("@/lib/queries/body");
+    const coachUser0 = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+    const coachMem0 = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUser0.id), eq(schema.memberships.workspaceId, mem.workspaceId)) }))!;
+    const coachWs = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }))!;
+    const asCoach = { user: coachUser0, workspace: coachWs, membership: coachMem0, role: "coach" as const, tz: coachMem0.timezone || coachWs.timezone, today, hour: 12, actor: coachUser0, switchedInto: null };
+    const expectedCell = (await coachBodyColumn(asCoach, [{ userId: maya.id, today }])).get(maya.id);
+    if (!expectedCell || expectedCell.judged < 1 || !expectedCell.lastWeighIn || expectedCell.sessions < 1) throw new Error(`the query has a cell with judged days, a weigh-in and sessions for a sharing client: ${JSON.stringify(expectedCell)}`);
+    await coach.goto(`${base}/coach`);
+    if ((await bodyCell()) !== expectedCell.short) throw new Error(`the client table's Body cell reads "${await bodyCell()}", the query says "${expectedCell.short}"`);
+    await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] a`).click();
+    await coach.waitForURL(/\/body/);
+    if (!(await coach.locator('[data-testid="body-tile-cal"]').count())) throw new Error("the Body cell links to the client's days");
     await coach.goto(`${base}/coach/${mem.id}`);
     await coach.locator('[data-testid="coach-body-link"]').click();
     await coach.waitForURL(/\/body/);
@@ -934,6 +951,8 @@ async function main() {
     if (!(await coach.locator('[data-testid="coach-body-private"]').count()) || (await coach.locator('[data-testid="body-tiles"]').count())) throw new Error("revoking hides the client's Body from the coach again");
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("revoking removes the Body card");
+    await coach.goto(`${base}/coach`);
+    if ((await bodyCell()) !== "") throw new Error(`revoking blanks the client table's Body cell: "${await bodyCell()}"`);
     const events = await db.query.bodyShareEvents.findMany({ where: mine(schema.bodyShareEvents) });
     if (events.length !== 2 || events.filter((e) => e.shared).length !== 1) throw new Error(`both changes are logged: ${events.length}`);
     if ((await client.locator('[data-testid="body-share-log"] li').count()) !== 2) throw new Error("the member sees both changes in the sharing log");

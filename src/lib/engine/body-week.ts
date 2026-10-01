@@ -85,3 +85,22 @@ export function goalPace(goal: { target: number; by: string | null } | null, lat
   else if (needPerWeek != null && actualPerWeek != null) onPace = needPerWeek < 0 ? actualPerWeek <= needPerWeek : actualPerWeek >= needPerWeek;
   return { target: goal.target, by: goal.by, toGo, weeksLeft, needPerWeek, actualPerWeek, onPace };
 }
+
+/* ───────── The coach's Body column (rev 237 phase 12) ───────── */
+
+/** One client's cell: days in band of the days judged so far this week, the last weigh-in date, sessions so far this week. */
+export type CoachBodyCell = { inBand: number; judged: number; lastWeighIn: string | null; sessions: number };
+
+/**
+ * The cell's words, short for the table and long for its title: "🎯 3/4 · ⚖️ Sep 28 · 🏋️ 2". A week with nothing judged yet
+ * (Monday, or nothing logged) says so rather than 0/0; a weigh-in today or yesterday says that rather than the date.
+ */
+export function coachBodyText(c: CoachBodyCell, today: string, fmtDate: (d: string) => string, daysBetween: (a: string, b: string) => number): { short: string; long: string } {
+  const weigh = c.lastWeighIn == null ? null : daysBetween(c.lastWeighIn, today);
+  const weighShort = weigh == null ? "—" : weigh === 0 ? "today" : weigh === 1 ? "yesterday" : fmtDate(c.lastWeighIn!);
+  const weighLong = weigh == null ? "no weigh-in yet" : weigh === 0 ? "weighed today" : weigh === 1 ? "weighed yesterday" : `last weigh-in ${fmtDate(c.lastWeighIn!)}`;
+  return {
+    short: `🎯 ${c.judged ? `${c.inBand}/${c.judged}` : "—"} · ⚖️ ${weighShort} · 🏋️ ${c.sessions}`,
+    long: `${c.judged ? `${c.inBand} of ${c.judged} days in band this week` : "no days judged yet this week"} · ${weighLong} · ${c.sessions === 1 ? "1 session" : `${c.sessions} sessions`} this week`,
+  };
+}

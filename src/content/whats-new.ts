@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 34,
+    date: "2026-10-01",
+    title: "Coach view: a Body column",
+    lines: ["The client table has a Body column for clients who share their Body data with you: days in band this week, their last weigh-in, and sessions this week, linking to their days. Clients who don't share show nothing there, the same as clients without Body."],
+    audience: "coach",
+  },
+  {
     n: 33,
     date: "2026-10-01",
     title: "HumanOS: WHOOP",
