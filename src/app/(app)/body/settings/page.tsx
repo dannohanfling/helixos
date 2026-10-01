@@ -70,7 +70,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
 
       <Card className="mb-4" title="Sharing" id="share">
         <p className="text-sm text-ink-2">
-          Your Body data is private by default. Switched on, your coach can <b>read</b> your days and leave a comment on a day, nothing else: no edits, no exports, no AI. You can switch it off any time, and every change is logged below.
+          Your Body data is private by default. Switched on, your coach can <b>read</b> your days and leave a comment on a day, nothing else: no edits, no exports, no AI. Your health log and photos stay yours alone either way. You can switch it off any time, and every change is logged below.
         </p>
         <form action={setBodyShareAction} className="mt-3 flex flex-wrap items-center gap-3">
           <input type="hidden" name="shared" value={s.shareWithCoach ? "0" : "1"} />

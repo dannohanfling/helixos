@@ -2707,6 +2707,75 @@ export const bodyYields = sqliteTable(
 );
 export type BodyYield = typeof bodyYields.$inferSelect;
 
+/* ── Habits and the health log (rev 237 phase 8, B7, migration 0089). Sleep needs no table: its numbers are body_daily keys. ── */
+
+/** What a habit counts in: done or not, minutes, a count, or an amount in its unit. */
+export const HABIT_KINDS = ["done", "minutes", "count", "amount"] as const;
+export type HabitKind = (typeof HABIT_KINDS)[number];
+
+/** A habit from the starter list or the member's own: its kind, an optional daily target, and the weekdays it applies (empty = every day). */
+export const bodyHabits = sqliteTable(
+  "body_habits",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: HABIT_KINDS }).notNull().default("done"),
+    unit: text("unit"),
+    target: real("target"),
+    days: text("days", { mode: "json" }).$type<number[]>().notNull().default([]),
+    order: integer("order").notNull().default(0),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_habits_member").on(t.workspaceId, t.userId)],
+);
+export type BodyHabit = typeof bodyHabits.$inferSelect;
+
+export const HABIT_SOURCES = ["manual", "whoop"] as const;
+/** One habit's value on one day (1 for done); at most one row per habit and day. */
+export const bodyHabitLogs = sqliteTable(
+  "body_habit_logs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    habitId: text("habit_id").notNull(),
+    date: text("date").notNull(),
+    value: real("value").notNull(),
+    source: text("source", { enum: HABIT_SOURCES }).notNull().default("manual"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_habit_logs_habit_date").on(t.habitId, t.date), index("body_habit_logs_member_date").on(t.workspaceId, t.userId, t.date)],
+);
+export type BodyHabitLog = typeof bodyHabitLogs.$inferSelect;
+
+export const HEALTH_SIDES = ["left", "right", "both"] as const;
+/**
+ * The health log (revs 231 and 251): one row per injury, the member's alone. Never shown to the coach even while sharing is on,
+ * never in AI features, MCP tools or any export to the coach; in the member's own export and delete-all like the rest of Body.
+ */
+export const bodyHealth = sqliteTable(
+  "body_health",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    title: text("title").notNull(),
+    side: text("side", { enum: HEALTH_SIDES }),
+    startedOn: text("started_on").notNull(),
+    resolvedOn: text("resolved_on"),
+    /** Affected movements, in the member's words ("overhead pressing"). */
+    movements: text("movements"),
+    /** Exercises to leave out while it's open, marked on Training. */
+    restricted: text("restricted", { mode: "json" }).$type<string[]>().notNull().default([]),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_health_member").on(t.workspaceId, t.userId)],
+);
+export type BodyHealth = typeof bodyHealth.$inferSelect;
+
 /**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,
  * in plain words. The client sees the changes in Settings ("Changes by your coach"); the coach's client page shows the

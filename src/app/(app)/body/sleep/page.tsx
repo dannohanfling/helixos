@@ -1,0 +1,104 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { requireViewer } from "@/lib/auth";
+import { Card, Stat } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
+import { HumanosHeader } from "@/components/body/humanos-header";
+import { TrendLine } from "@/components/body/trend-line";
+import { deleteSleepAction, logSleepAction } from "@/lib/actions/body";
+import { formatDate } from "@/lib/dates";
+import { fmtHours } from "@/lib/engine/body-recovery";
+import { requireBodyEnabled, sleepView } from "@/lib/queries/body";
+
+export const metadata = { title: "HumanOS · Sleep" };
+
+export default async function SleepPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const v = await requireViewer();
+  requireBodyEnabled(v);
+  const sp = await searchParams;
+  const s = await sleepView(v.workspace.id, v.user.id, v.today);
+  if (!s) redirect("/body");
+  const delta = s.week.avg != null && s.prevWeek.avg != null ? Math.round((s.week.avg - s.prevWeek.avg) * 10) / 10 : null;
+
+  return (
+    <>
+      <HumanosHeader
+        title="Sleep"
+        subtitle="Last night and the week. A night belongs to the morning it ends on; 7 hours is the floor the week counts against."
+        action={
+          <Link href="/body/week" className="text-xs text-ink-2 hover:underline">
+            This week →
+          </Link>
+        }
+      />
+      {sp.error ? (
+        <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
+          {sp.error}
+        </p>
+      ) : null}
+
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="sleep-stats" data-last={s.last?.hours ?? ""} data-avg={s.week.avg ?? ""} data-nights={s.week.nights} data-floor={s.week.atFloor}>
+        <Stat label="Last night" value={s.last ? fmtHours(s.last.hours) : "—"} sub={s.last ? `${formatDate(s.last.date, { weekday: "short", month: "short", day: "numeric" })}${s.last.score != null ? ` · score ${s.last.score}` : ""}` : "Nothing logged yet"} />
+        <Stat label="This week" value={s.week.avg != null ? `${fmtHours(s.week.avg)} a night` : "—"} sub={delta != null ? <span className={`text-xs ${delta === 0 ? "text-ink-3" : delta > 0 ? "text-good" : "text-warn"}`}>{delta > 0 ? "▲ +" : delta < 0 ? "▼ −" : "= "}{Math.abs(delta)} h vs last week</span> : `${s.week.nights} night${s.week.nights === 1 ? "" : "s"} logged`} />
+        <Stat label="At 7 h or more" value={s.week.nights ? `${s.week.atFloor} of ${s.week.nights}` : "—"} sub="nights this week" />
+        <Stat label="Last week" value={s.prevWeek.avg != null ? `${fmtHours(s.prevWeek.avg)} a night` : "—"} sub={`${s.prevWeek.nights} night${s.prevWeek.nights === 1 ? "" : "s"}`} />
+      </div>
+
+      <Card title="Log a night" className="mb-4" id="log">
+        <form action={logSleepAction} className="flex flex-wrap items-end gap-2" data-testid="sleep-form">
+          <label className="w-40">
+            <span className="label">Morning of</span>
+            <input name="date" type="date" className="field" defaultValue={v.today} max={v.today} data-testid="sleep-date" />
+          </label>
+          <label className="w-28">
+            <span className="label">Hours</span>
+            <input name="hours" className="field tabular" required placeholder="7:30" inputMode="decimal" data-testid="sleep-hours" />
+          </label>
+          <label className="w-24">
+            <span className="label">Score (opt.)</span>
+            <input name="score" type="number" min={0} max={100} className="field tabular" placeholder="—" data-testid="sleep-score" />
+          </label>
+          <SubmitButton className="btn btn-humanos btn-sm" pendingText="Saving…" data-testid="sleep-save">
+            Save
+          </SubmitButton>
+        </form>
+        <p className="mt-2 text-[11px] text-ink-3">A night logged twice keeps the later entry. A wearable fills these in on its own once connected.</p>
+      </Card>
+
+      <Card title="30 nights" className="mb-4">
+        <TrendLine points={s.trend.map((n) => ({ date: n.date, value: n.hours, label: fmtHours(n.hours) }))} unit="h" name="Hours slept" average={s.averages} goal={7} few="The chart starts with a second night." />
+      </Card>
+
+      <Card title="Recent nights" className="mb-8">
+        {s.recent.length ? (
+          <ul className="divide-y text-sm" data-testid="sleep-nights">
+            {s.recent.map((n) => (
+              <li key={n.date} className="flex items-center justify-between gap-2 py-1.5" data-testid="sleep-night" data-date={n.date}>
+                <span>
+                  {formatDate(n.date, { weekday: "short", month: "short", day: "numeric" })}
+                  <span className="tabular text-ink-2">
+                    {" "}
+                    · {n.sleep_h != null ? fmtHours(n.sleep_h) : "—"}
+                    {n.sleep_score != null ? ` · score ${n.sleep_score}` : ""}
+                    {n.recovery != null ? ` · recovery ${n.recovery}%` : ""}
+                    {n.strain != null ? ` · strain ${n.strain}` : ""}
+                  </span>
+                </span>
+                {n.sleep_h != null ? (
+                  <form action={deleteSleepAction}>
+                    <input type="hidden" name="date" value={n.date} />
+                    <SubmitButton className="text-ink-3 hover:text-danger" pendingText="…" aria-label={`Delete the night of ${n.date}`} data-testid="sleep-delete">
+                      ✕
+                    </SubmitButton>
+                  </form>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-ink-3">No nights yet.</p>
+        )}
+      </Card>
+    </>
+  );
+}

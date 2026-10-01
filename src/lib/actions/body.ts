@@ -19,6 +19,8 @@ import { AirtableError, airtableProblem } from "@/lib/airtable";
 import { applyHistory, existingHistory, readHumanos } from "@/lib/body-import";
 import { buildHistoryPlan, historySummary, type Existing, type HistoryPlan, type HistorySummary } from "@/lib/engine/body-airtable";
 import { allow } from "@/lib/rate-limit";
+import { daysFrom } from "@/lib/engine/body-habits";
+import { parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { nowIso } from "@/lib/dates";
 import { bodyAccess, bodySettingsFor, groupReadings, isWorkspaceOwner } from "@/lib/queries/body";
@@ -663,6 +665,9 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
+    db.delete(schema.bodyHealth).where(and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId))),
+    db.delete(schema.bodyHabitLogs).where(and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId))),
+    db.delete(schema.bodyHabits).where(and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId))),
     db.delete(schema.bodyPantry).where(and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId))),
     db.delete(schema.bodyYields).where(and(eq(schema.bodyYields.workspaceId, workspaceId), eq(schema.bodyYields.userId, userId))),
     db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId))),
@@ -724,4 +729,149 @@ export async function importHistoryAction(_prev: HistoryState, f: FormData): Pro
   const { written } = await applyHistory(r.plan, r.existing, workspaceId, userId);
   refresh();
   redirect(`${IMPORT}?done=${written}&at=${Date.now()}`);
+}
+
+/* ── Habits, sleep and the health log (rev 237 phase 8, B7). ── */
+
+const PRACTICES = "/body/practices";
+const SLEEP = "/body/sleep";
+const HEALTH = "/body/training/health";
+/** Where a one-tap chip goes back to: a local path on this site, else Practices. */
+const backTo = (f: FormData, fallback: string) => {
+  const b = str(f, "back");
+  return /^\/[a-z0-9/_#?=&.-]*$/i.test(b) ? b : fallback;
+};
+
+/** Add or edit a habit: from the starter list (name, kind, unit, target posted by the chip) or the member's own words. */
+export async function saveHabitAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const id = str(formData, "id");
+  const name = str(formData, "name").slice(0, 60);
+  if (!name) back(PRACTICES, "A habit needs a name.");
+  const kindRaw = str(formData, "kind");
+  const kind = (schema.HABIT_KINDS as readonly string[]).includes(kindRaw) ? (kindRaw as schema.HabitKind) : "done";
+  const unit = kind === "amount" ? str(formData, "unit").slice(0, 12) || null : kind === "count" ? str(formData, "unit").slice(0, 12) || null : null;
+  const t = optNum(formData, "target");
+  const target = kind === "done" || t == null || t <= 0 ? null : t;
+  const days = daysFrom([0, 1, 2, 3, 4, 5, 6].filter((d) => formData.get(`d${d}`) === "1" || formData.get(`d${d}`) === "on"));
+  const own = and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId));
+  if (id) await db.update(schema.bodyHabits).set({ name, kind, unit, target, days }).where(and(eq(schema.bodyHabits.id, id), own));
+  else {
+    const have = await db.query.bodyHabits.findMany({ columns: { id: true, name: true, archivedAt: true }, where: own });
+    const same = have.find((h) => h.name.toLowerCase() === name.toLowerCase());
+    // Adding a name already there brings it back rather than doubling it.
+    if (same) await db.update(schema.bodyHabits).set({ archivedAt: null, kind, unit, target, days }).where(and(eq(schema.bodyHabits.id, same.id), own));
+    else await db.insert(schema.bodyHabits).values({ id: newId(), workspaceId, userId, name, kind, unit, target, days, order: have.length });
+  }
+  refresh();
+  redirect(PRACTICES);
+}
+
+/** An archived habit leaves the page; its logs stay for the record and the export. */
+export async function archiveHabitAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.update(schema.bodyHabits).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyHabits.id, str(formData, "id")), and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId))));
+  refresh();
+  redirect(PRACTICES);
+}
+
+/**
+ * One tap: a done habit toggles (value 1, or the row removed); a measured one takes the number typed. Today or a past day, never
+ * the future. Goes back where the chip was (Today or Practices).
+ */
+export async function logHabitAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const to = backTo(formData, PRACTICES);
+  const date = str(formData, "date") || v.today;
+  if (!DATE.test(date) || date > v.today) back(to, "That day isn't open yet.");
+  const habit = await db.query.bodyHabits.findFirst({ where: and(eq(schema.bodyHabits.id, str(formData, "habitId")), and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId))) });
+  if (!habit) throw back(to, "Pick a habit.");
+  const existing = await db.query.bodyHabitLogs.findFirst({ where: and(eq(schema.bodyHabitLogs.habitId, habit.id), eq(schema.bodyHabitLogs.date, date)) });
+  let value: number | null;
+  if (habit.kind === "done") value = str(formData, "value") === "0" || (str(formData, "value") === "" && existing) ? null : 1;
+  else {
+    const n = optNum(formData, "value");
+    if (n == null) throw back(to, `How much ${habit.name.toLowerCase()}? Give a number.`);
+    value = n > 0 && n < 1_000_000 ? n : null;
+  }
+  if (existing) await db.delete(schema.bodyHabitLogs).where(and(eq(schema.bodyHabitLogs.id, existing.id), and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId))));
+  if (value != null) await db.insert(schema.bodyHabitLogs).values({ id: newId(), workspaceId, userId, habitId: habit.id, date, value, source: "manual" });
+  refresh();
+  redirect(to);
+}
+
+/** A night's sleep: hours (7:30 or 7.5) and an optional score, on the morning it ended; logging a night again replaces it. */
+export async function logSleepAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date") || v.today;
+  if (!DATE.test(date) || date > v.today) back(SLEEP, "That night hasn't happened yet.");
+  const hours = parseHours(str(formData, "hours"));
+  if (hours == null || !recoveryInRange("sleep_h", hours)) throw back(SLEEP, "Hours slept: give a time like 7:30 or 7.5.");
+  const score = optNum(formData, "score");
+  if (score != null && !recoveryInRange("sleep_score", score)) back(SLEEP, "A sleep score is 0 to 100.");
+  const readingId = sleepReadingId(date);
+  const own = and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId));
+  await db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.readingId, readingId), own));
+  const rows = [{ id: newId(), workspaceId, userId, date, key: "sleep_h", value: Math.round(hours * 100) / 100, source: "manual" as const, readingId, time: null }];
+  if (score != null) rows.push({ id: newId(), workspaceId, userId, date, key: "sleep_score", value: Math.round(score), source: "manual", readingId, time: null });
+  await db.insert(schema.bodyDaily).values(rows);
+  refresh();
+  redirect(SLEEP);
+}
+
+export async function deleteSleepAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date)) return;
+  await db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.readingId, sleepReadingId(date)), and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId))));
+  refresh();
+}
+
+/** The health log (revs 231, 251): an injury with its start, side, the movements it affects and the exercises to leave out. Member-only. */
+export async function saveHealthAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const id = str(formData, "id");
+  const title = str(formData, "title").slice(0, 80);
+  if (!title) back(HEALTH, "Say what it is, in a few words.");
+  const startedOn = str(formData, "startedOn") || v.today;
+  if (!DATE.test(startedOn) || startedOn > v.today) back(HEALTH, "The start is a date, today or before.");
+  const resolvedRaw = str(formData, "resolvedOn");
+  const resolvedOn = resolvedRaw && DATE.test(resolvedRaw) && resolvedRaw >= startedOn ? resolvedRaw : null;
+  const sideRaw = str(formData, "side");
+  const side = (schema.HEALTH_SIDES as readonly string[]).includes(sideRaw) ? (sideRaw as (typeof schema.HEALTH_SIDES)[number]) : null;
+  const movements = str(formData, "movements").slice(0, 200) || null;
+  const mine = await db.query.bodyExercises.findMany({ columns: { id: true }, where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)) });
+  const ok = new Set(mine.map((e) => e.id));
+  const restricted = formData.getAll("restricted").map(String).filter((x) => ok.has(x));
+  const own = and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId));
+  if (id) await db.update(schema.bodyHealth).set({ title, side, startedOn, resolvedOn, movements, restricted }).where(and(eq(schema.bodyHealth.id, id), own));
+  else await db.insert(schema.bodyHealth).values({ id: newId(), workspaceId, userId, title, side, startedOn, resolvedOn, movements, restricted });
+  refresh();
+  redirect(HEALTH);
+}
+
+/** Resolved on a date (today unless given): its restrictions lift; the entry stays in the log. */
+export async function resolveHealthAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const on = str(formData, "resolvedOn") || v.today;
+  if (!DATE.test(on)) back(HEALTH, "The resolved day is a date.");
+  const reopen = str(formData, "reopen") === "1";
+  await db.update(schema.bodyHealth).set({ resolvedOn: reopen ? null : on }).where(and(eq(schema.bodyHealth.id, str(formData, "id")), and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId))));
+  refresh();
+  redirect(HEALTH);
+}
+
+export async function deleteHealthAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.delete(schema.bodyHealth).where(and(eq(schema.bodyHealth.id, str(formData, "id")), and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId))));
+  refresh();
+  redirect(HEALTH);
 }

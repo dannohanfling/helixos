@@ -25,6 +25,7 @@ import { db, schema } from "@/db";
 import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
 import { todayBody } from "@/lib/queries/body";
+import { logHabitAction } from "@/lib/actions/body";
 
 export const metadata = { title: "Today" };
 
@@ -420,6 +421,31 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               <Link href="/body#log" className="btn btn-humanos btn-sm" data-testid="today-log-meal">
                 Log a meal
               </Link>
+              {body.habits.length ? (
+                /* B7 habits (rev 196), placed by rev 201: one row of one-tap chips inside this same card, below the line. */
+                <div className="flex w-full flex-wrap items-center gap-1.5" data-testid="today-habits" data-kept={body.habits.filter((h) => h.kept).length} data-due={body.habits.length}>
+                  {body.habits.map((h) =>
+                    h.kind === "done" ? (
+                      <form key={h.id} action={logHabitAction}>
+                        <input type="hidden" name="habitId" value={h.id} />
+                        <input type="hidden" name="back" value="/today" />
+                        <input type="hidden" name="value" value={h.kept ? "0" : "1"} />
+                        <SubmitButton className={`btn btn-xs ${h.kept ? "btn-humanos" : "btn-soft"}`} pendingText="…" aria-pressed={h.kept} data-testid="today-habit" data-name={h.name} data-kept={h.kept ? "1" : "0"}>
+                          {h.kept ? "✓ " : ""}
+                          {h.name}
+                          {h.streak ? <span className="ml-1 text-[10px] opacity-80">🔥{h.streak}</span> : null}
+                        </SubmitButton>
+                      </form>
+                    ) : (
+                      <Link key={h.id} href="/body/practices" className={`btn btn-xs ${h.kept ? "btn-humanos" : "btn-soft"}`} data-testid="today-habit" data-name={h.name} data-kept={h.kept ? "1" : "0"}>
+                        {h.kept ? "✓ " : ""}
+                        {h.name}
+                        {h.valueText && !h.kept ? <span className="ml-1 text-[10px] opacity-80">{h.valueText}</span> : null}
+                      </Link>
+                    ),
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
           {d.pathwayNext ? (

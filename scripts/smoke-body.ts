@@ -576,6 +576,106 @@ async function main() {
 
 
 
+    // ── Phase 8 (B7): habits from the starter list and the member's own, one tap, the streak that forgives one miss a week, the
+    // chips on Today; sleep logged and replaced; the health log, marked on Training, resolved, reopened; the week's tiles. ──
+    const { streak: streakOf } = await import("@/lib/engine/body-habits");
+    const { sleepWeek } = await import("@/lib/engine/body-recovery");
+    const { weekday } = await import("@/lib/dates");
+    const { habitsDay } = await import("@/lib/queries/body");
+    const { newId: freshId } = await import("@/lib/ids");
+    await client.goto(`${base}/body/practices`);
+    await client.locator('[data-testid="habit-starters"]').waitFor({ timeout: 30000 });
+    if (!(await client.locator('[data-testid="habits-empty"]').count())) throw new Error("Practices starts empty, with the starter list");
+    if ((await client.locator('[data-testid="habit-starter"]').count()) !== 14) throw new Error("the starter list has its fourteen");
+    await press(client, '[data-testid="habit-starter"][data-name="Breathwork"]', async () => (await client.locator('[data-testid="habit"][data-name="Breathwork"]').count()) > 0, "Breathwork added");
+    await press(client, '[data-testid="habit-starter"][data-name="Meditation"]', async () => (await client.locator('[data-testid="habit"][data-name="Meditation"]').count()) > 0, "Meditation added");
+    if ((await client.locator('[data-testid="habit-starter"]').count()) !== 12) throw new Error("an added starter leaves the list");
+    await client.locator("summary", { hasText: "Your own" }).click();
+    await fillExact(client, '[data-testid="habit-new-form"] input[name="name"]', "Evening walk");
+    await client.locator('[data-testid="habit-new-form"] select[name="kind"]').selectOption("count");
+    await fillExact(client, '[data-testid="habit-new-form"] input[name="target"]', "6000");
+    await fillExact(client, '[data-testid="habit-new-form"] input[name="unit"]', "steps");
+    for (const d of [1, 2, 3, 4, 5]) await client.locator(`[data-testid="habit-new-form"] input[name="d${d}"]`).check();
+    await press(client, '[data-testid="habit-add-own"]', async () => (await client.locator('[data-testid="habit"][data-name="Evening walk"]').count()) > 0, "the member's own habit added");
+    const habits = await db.query.bodyHabits.findMany({ where: mine(schema.bodyHabits) });
+    const walkHabit = habits.find((h) => h.name === "Evening walk")!;
+    const breath = habits.find((h) => h.name === "Breathwork")!;
+    const med = habits.find((h) => h.name === "Meditation")!;
+    if (habits.length !== 3 || walkHabit.kind !== "count" || walkHabit.target !== 6000 || walkHabit.unit !== "steps" || JSON.stringify(walkHabit.days) !== "[1,2,3,4,5]" || med.kind !== "minutes" || med.target !== 10) throw new Error("the habits land as typed: kind, target, unit and days");
+    // Three days kept before yesterday, yesterday missed: the streak forgives the one miss and counts four with today.
+    await db.insert(schema.bodyHabitLogs).values([2, 3, 4].map((n) => ({ id: freshId(), workspaceId: mem.workspaceId, userId: maya.id, habitId: breath.id, date: addDays(today, -n), value: 1, source: "manual" as const })));
+    await client.goto(`${base}/body/practices`);
+    await client.locator('[data-testid="habit"][data-name="Breathwork"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="habit"][data-name="Breathwork"] [data-testid="habit-tap"]', async () => (await client.locator('[data-testid="habit"][data-name="Breathwork"]').getAttribute("data-kept")) === "1", "Breathwork kept");
+    const logsNow = await db.query.bodyHabitLogs.findMany({ where: mine(schema.bodyHabitLogs) });
+    const wantStreak = streakOf(breath, logsNow, today, { addDays, weekday, startOfWeek });
+    if (wantStreak !== 4 || (await client.locator('[data-testid="habit"][data-name="Breathwork"]').getAttribute("data-streak")) !== "4") throw new Error(`the streak forgives yesterday and counts the three days before plus today: engine ${wantStreak}, page ${await client.locator('[data-testid="habit"][data-name="Breathwork"]').getAttribute("data-streak")}`);
+    await fillExact(client, '[data-testid="habit"][data-name="Meditation"] [data-testid="habit-value"]', "12");
+    await press(client, '[data-testid="habit"][data-name="Meditation"] [data-testid="habit-log"]', async () => (await client.locator('[data-testid="habit"][data-name="Meditation"]').getAttribute("data-kept")) === "1", "Meditation 12 min");
+    const dueToday = [1, 2, 3, 4, 5].includes(weekday(today)) ? 3 : 2;
+    const sum = client.locator('[data-testid="practices-summary"]');
+    if ((await sum.getAttribute("data-kept")) !== "2" || (await sum.getAttribute("data-due")) !== String(dueToday)) throw new Error(`2 of ${dueToday} kept today: ${await sum.getAttribute("data-kept")} of ${await sum.getAttribute("data-due")}`);
+    if ((await client.locator('[data-testid="habit"][data-name="Breathwork"] [data-testid="habit-dots"]').getAttribute("data-kept")) === "0") throw new Error("the week's dots show the kept days");
+    await noSideScroll(client, "/body/practices");
+    // Today: the chips, one tap off and on again, back on Today each time.
+    await client.goto(`${base}/today`);
+    await client.locator('[data-testid="today-habits"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="today-habit"][data-name="Breathwork"]').getAttribute("data-kept")) !== "1" || (await client.locator('[data-testid="today-habit"]').count()) !== dueToday) throw new Error("Today's chips are the habits due today, Breathwork kept");
+    await press(client, '[data-testid="today-habit"][data-name="Breathwork"]', async () => (await client.locator('[data-testid="today-habit"][data-name="Breathwork"]').getAttribute("data-kept")) === "0", "the chip untapped");
+    await press(client, '[data-testid="today-habit"][data-name="Breathwork"]', async () => (await client.locator('[data-testid="today-habit"][data-name="Breathwork"]').getAttribute("data-kept")) === "1", "the chip tapped again");
+    if (!/\/today/.test(client.url())) throw new Error("the chip comes back to Today");
+    // Sleep: last night, then an earlier night, then last night logged again replaces it.
+    await client.goto(`${base}/body/sleep`);
+    await client.locator('[data-testid="sleep-form"]').waitFor({ timeout: 30000 });
+    await fillExact(client, '[data-testid="sleep-hours"]', "7:30");
+    await fillExact(client, '[data-testid="sleep-score"]', "82");
+    await press(client, '[data-testid="sleep-save"]', async () => (await client.locator('[data-testid="sleep-stats"]').getAttribute("data-last")) === "7.5", "last night 7 h 30 min");
+    await client.locator('[data-testid="sleep-date"]').fill(yesterday);
+    await fillExact(client, '[data-testid="sleep-hours"]', "6");
+    await press(client, '[data-testid="sleep-save"]', async () => (await client.locator('[data-testid="sleep-night"]').count()) === 2, "two nights");
+    const sw = sleepWeek([{ date: today, hours: 7.5 }, { date: yesterday, hours: 6 }].filter((n) => n.date >= startOfWeek(today)));
+    const st = client.locator('[data-testid="sleep-stats"]');
+    if ((await st.getAttribute("data-avg")) !== String(sw.avg) || (await st.getAttribute("data-nights")) !== String(sw.nights) || (await st.getAttribute("data-floor")) !== String(sw.atFloor)) throw new Error(`the week's sleep tiles are the engine's (${JSON.stringify(sw)})`);
+    await client.locator('[data-testid="sleep-date"]').fill(today);
+    await fillExact(client, '[data-testid="sleep-hours"]', "8");
+    await press(client, '[data-testid="sleep-save"]', async () => (await client.locator('[data-testid="sleep-stats"]').getAttribute("data-last")) === "8", "last night replaced");
+    const sleepRows = await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.date, today), inArray(schema.bodyDaily.key, ["sleep_h", "sleep_score"])) });
+    if (sleepRows.length !== 1 || sleepRows[0].value !== 8) throw new Error("a night logged again replaces its rows (the score went with it)");
+    await noSideScroll(client, "/body/sleep");
+    // The health log: an injury restricting Bench press, marked on Training; resolved, the mark lifts; reopened for the checks below.
+    const bench = (await db.query.bodyExercises.findMany({ where: mine(schema.bodyExercises) })).find((e) => e.name === "Bench press")!;
+    const injury = "Left shoulder, sharp overhead";
+    await client.goto(`${base}/body/training/health`);
+    await client.locator('[data-testid="health-form"]').waitFor({ timeout: 30000 });
+    if (!(await client.locator('[data-testid="health-none"]').count())) throw new Error("the health log starts empty");
+    await fillExact(client, '[data-testid="health-title"]', injury);
+    await client.locator('[data-testid="health-form"] select[name="side"]').selectOption("left");
+    await client.locator(`[data-testid="health-form"] input[name="restricted"][value="${bench.id}"]`).check();
+    await press(client, '[data-testid="health-add"]', async () => (await client.locator('[data-testid="health-entry"][data-open="1"]').count()) === 1, "the entry added");
+    if (!((await client.locator('[data-testid="health-restricted"]').textContent()) ?? "").includes("Bench press")) throw new Error("the entry names the exercise it leaves out");
+    await client.goto(`${base}/body/training`);
+    await client.locator('[data-testid="training-health-link"]').waitFor({ timeout: 30000 });
+    const benchCard = client.locator('[data-testid="training-exercise"][data-name="Bench press"]');
+    if ((await benchCard.count()) ? (await benchCard.getAttribute("data-restricted")) !== "1" || !((await client.locator('[data-testid="training-restricted"]').textContent()) ?? "").includes(injury) : !(await client.locator('option', { hasText: "⚠ Bench press" }).count())) throw new Error("Training marks the restricted exercise while the injury is open");
+    await client.goto(`${base}/body/training/health`);
+    await client.locator('[data-testid="health-resolve"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="health-resolve"]', async () => (await client.locator('[data-testid="health-entry"][data-open="0"]').count()) === 1, "resolved");
+    await client.goto(`${base}/body/training`);
+    await client.locator('[data-testid="training-health-link"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="training-restricted"]').count()) || (await client.locator("option", { hasText: "⚠" }).count())) throw new Error("a resolved injury lifts its mark");
+    await client.goto(`${base}/body/training/health`);
+    await client.locator('[data-testid="health-reopen"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="health-reopen"]', async () => (await client.locator('[data-testid="health-entry"][data-open="1"]').count()) === 1, "reopened");
+    await noSideScroll(client, "/body/training/health");
+    // The week's tiles carry the query's own habit tally and the engine's sleep average.
+    const hdq = await habitsDay(mem.workspaceId, maya.id, today, today);
+    await client.goto(`${base}/body/week`);
+    await client.locator('[data-testid="week-recovery"]').waitFor({ timeout: 30000 });
+    const wr = client.locator('[data-testid="week-recovery"]');
+    const sw2 = sleepWeek([{ date: today, hours: 8 }, { date: yesterday, hours: 6 }].filter((n) => n.date >= startOfWeek(today)));
+    if ((await wr.getAttribute("data-habits-kept")) !== String(hdq.week.kept) || (await wr.getAttribute("data-habits-due")) !== String(hdq.week.due) || hdq.week.kept < 2 || (await wr.getAttribute("data-sleep-avg")) !== String(sw2.avg)) throw new Error(`the week's recovery tiles are the query's: habits ${hdq.week.kept} of ${hdq.week.due}, sleep ${sw2.avg}`);
+    console.log(`✓ phase 8: two starters and an own habit added as typed; Breathwork's streak forgives yesterday (${wantStreak}); Meditation at 12 min kept; 2 of ${dueToday} today; Today's chips toggle and come back; sleep 7:30 with a score, an earlier 6 h, then 8 h replacing last night; the health log restricts Bench press on Training until resolved; the week's tiles carry habits and sleep`);
+
     // ── Private: the coach sees nothing, and a coach's export never has Body. ──
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("the client page shows no Body card while private");
@@ -597,6 +697,8 @@ async function main() {
     if (!((await coach.locator('[data-testid="coach-composition"]').textContent()) ?? "").includes("150.4 lb")) throw new Error("the coach reads the day's weigh-in while shared");
     const coachTraining = (await coach.locator('[data-testid="coach-training"]').textContent()) ?? "";
     if (!coachTraining.includes("Bench press") || !coachTraining.includes("190 × 5 🏆") || !coachTraining.includes("10 reps")) throw new Error(`the coach reads the day's workout, PR marked: "${coachTraining}"`);
+    const coachPageText = (await coach.locator("main").textContent()) ?? "";
+    if (coachPageText.includes(injury) || coachPageText.includes("Health log") || coachPageText.includes("Breathwork")) throw new Error("the health log never reaches the coach, even while shared; habits stay the member's this phase");
     const note = `Great day ${Date.now()}`;
     await fillExact(coach, '[data-testid="coach-body-comment"]', note);
     await press(coach, '[data-testid="coach-body-comment-send"]', async () => (await coach.locator('[data-testid="coach-body-comments"]').count()) > 0 && (await coach.locator('[data-testid="coach-body-comments"]').innerText()).includes(note), "the comment");
@@ -631,6 +733,8 @@ async function main() {
     if (aiText.includes(note)) throw new Error("the coach's comment never goes to AI");
     if (!aiText.includes("Latest weigh-in") || !aiText.includes("150.4 lb")) throw new Error(`with the switch on, AI gets the latest weigh-in: ${aiText}`);
     if (!aiText.includes(`${ROUTINE.name}: Bench press 190 × 5`) || !aiText.includes("Bench press 185 × 5, 185 × 5")) throw new Error(`with the switch on, AI gets the week's workouts: ${aiText}`);
+    if (!aiText.includes("Sleep: ") || !aiText.includes("8 h") || !aiText.includes("Habits: ") || !aiText.includes("Breathwork ✓")) throw new Error(`with the switch on, AI gets last night's sleep and the habits kept: ${aiText}`);
+    if (aiText.includes(injury) || /injur|health log/i.test(aiText)) throw new Error("the health log never goes to AI");
     // Another viewer (the coach) never gets it, switch or not.
     const theCoach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     const coachViewer = { ...(await viewerFor()), user: theCoach, actor: theCoach, role: "coach" as const };
@@ -663,6 +767,16 @@ async function main() {
     if (!trainTool.text.includes("PR 190 × 5")) throw new Error(`body_training gives an exercise's history: ${trainTool.text}`);
     const wiTool = await tool("body_weigh_ins").handler(await viewerFor(), {});
     if (!wiTool.text.includes("7-day average") || !wiTool.text.includes("150.4 lb")) throw new Error(`body_weigh_ins gives the trend: ${wiTool.text}`);
+    if (!todayTool.text.includes("Habits: 2 of") || todayTool.text.includes(injury)) throw new Error(`body_today carries the habits kept, never the health log: ${todayTool.text}`);
+    const habitsTool = await tool("body_habits").handler(await viewerFor(), {});
+    if (!habitsTool.text.includes("Breathwork") || !habitsTool.text.includes("streak 4") || !habitsTool.text.includes("Meditation (10 min a day): kept")) throw new Error(`body_habits reads the day's habits with streaks: ${habitsTool.text}`);
+    const habitTool = await tool("body_log_habit").handler(await viewerFor(), { habit: "evening", value: 7000, date: yesterday });
+    if (!habitTool.text.includes("7000 steps")) throw new Error(`body_log_habit logs a measured habit by name: ${habitTool.text}`);
+    const sleepTool = await tool("body_sleep").handler(await viewerFor(), {});
+    if (!sleepTool.text.includes("8 h") || !sleepTool.text.includes("This week")) throw new Error(`body_sleep gives last night and the week: ${sleepTool.text}`);
+    const sleepLog = await tool("body_log_sleep").handler(await viewerFor(), { hours: "7:15", date: addDays(today, -2) });
+    if (!sleepLog.text.includes("7 h 15 min")) throw new Error(`body_log_sleep takes a time: ${sleepLog.text}`);
+    for (const txt of [habitsTool.text, habitTool.text, sleepTool.text, sleepLog.text]) if (txt.includes(injury)) throw new Error("no tool carries the health log");
     await press(client, '[data-testid="body-ai-toggle"]', async () => /: Off/.test(await client.locator('[data-testid="body-ai-state"]').innerText()), "AI use off");
     if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("switching it off stops it on the next request");
     const offAnswer = await tool("body_today").handler(await viewerFor(), {}).then(() => "answered", (e: Error) => e.message);
@@ -677,6 +791,7 @@ async function main() {
     if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
     if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
     if (!(own.body_pantry ?? []).length || (own.body_yields ?? []).length !== 1) throw new Error("the member's Body export has their pantry and weighings");
+    if ((own.body_habits ?? []).length !== 3 || !(own.body_habit_logs ?? []).length || (own.body_health ?? []).length !== 1) throw new Error("the member's Body export has their habits, their logs and their health log");
     if ((own.body_entries ?? []).length !== 6 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // ── The Airtable history (B5, rev 237 phase 7): the synthetic HumanOS base through the page. The dry run's numbers are the
     // mapper's own; Approve writes them; a second run finds everything already in; the mock saw GETs alone and never the

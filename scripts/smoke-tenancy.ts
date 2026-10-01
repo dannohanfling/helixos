@@ -171,7 +171,26 @@ async function main() {
     }
     return e;
   };
-  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise()]);
+  // Phase 8: B owns a private habit and a health-log entry; A's actions on their ids must leave both untouched.
+  const ensureHabit = async () => {
+    let h = await db.query.bodyHabits.findFirst({ where: eq(schema.bodyHabits.userId, B.id) });
+    if (!h) {
+      const id = newId();
+      await db.insert(schema.bodyHabits).values({ id, workspaceId: ws, userId: B.id, name: "B's Private Habit", kind: "done" });
+      h = (await db.query.bodyHabits.findFirst({ where: eq(schema.bodyHabits.id, id) }))!;
+    }
+    return h;
+  };
+  const ensureHealth = async () => {
+    let h = await db.query.bodyHealth.findFirst({ where: eq(schema.bodyHealth.userId, B.id) });
+    if (!h) {
+      const id = newId();
+      await db.insert(schema.bodyHealth).values({ id, workspaceId: ws, userId: B.id, title: "B's Private Injury", startedOn: "2026-09-01" });
+      h = (await db.query.bodyHealth.findFirst({ where: eq(schema.bodyHealth.id, id) }))!;
+    }
+    return h;
+  };
+  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth()]);
 
   // One B-owned id per table the routes name, so the walk can substitute B's id into A's request.
   const first = async <T>(q: Promise<T | undefined>): Promise<T> => {
@@ -196,6 +215,8 @@ async function main() {
     deckImages: (await ensureDeckImage()).id,
     bodyExercises: (await ensureExercise()).id,
     bodySets: (await first(db.query.bodySets.findFirst({ where: eq(schema.bodySets.userId, B.id) }))).id,
+    bodyHabits: (await ensureHabit()).id,
+    bodyHealth: (await ensureHealth()).id,
   };
   // B's private words, per table, that must never appear in a response to A.
   const bWord: Record<string, string> = {
@@ -203,6 +224,7 @@ async function main() {
     webinars: (await first(db.query.webinars.findFirst({ where: eq(schema.webinars.userId, B.id) }))).title,
     offers: (await first(db.query.offers.findFirst({ where: eq(schema.offers.userId, B.id) }))).name,
     bodyExercises: (await ensureExercise()).name,
+    bodyHealth: (await ensureHealth()).title,
   };
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
@@ -294,6 +316,12 @@ async function main() {
       { action: "saveExerciseAction", idField: "id", table: "bodyExercises", extra: { name: "HACKED", kind: "bodyweight" } },
       { action: "archiveExerciseAction", idField: "id", table: "bodyExercises" },
       { action: "deleteSetAction", idField: "id", table: "bodySets" },
+      { action: "saveHabitAction", idField: "id", table: "bodyHabits", extra: { name: "HACKED", kind: "done" } },
+      { action: "archiveHabitAction", idField: "id", table: "bodyHabits" },
+      { action: "logHabitAction", idField: "habitId", table: "bodyHabits", extra: { value: "1" } },
+      { action: "saveHealthAction", idField: "id", table: "bodyHealth", extra: { title: "HACKED", startedOn: "2026-09-01" } },
+      { action: "resolveHealthAction", idField: "id", table: "bodyHealth" },
+      { action: "deleteHealthAction", idField: "id", table: "bodyHealth" },
     ];
     const readers = {
       contentItems: async () => JSON.stringify(await db.query.contentItems.findFirst({ where: eq(schema.contentItems.id, bId.contentItems) })),
@@ -307,6 +335,8 @@ async function main() {
       libraryPosts: async () => JSON.stringify(await db.query.libraryPosts.findFirst({ where: eq(schema.libraryPosts.id, bId.libraryPosts) })),
       bodyExercises: async () => JSON.stringify(await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.id, bId.bodyExercises) })),
       bodySets: async () => JSON.stringify(await db.query.bodySets.findFirst({ where: eq(schema.bodySets.id, bId.bodySets) })),
+      bodyHabits: async () => JSON.stringify([await db.query.bodyHabits.findFirst({ where: eq(schema.bodyHabits.id, bId.bodyHabits) }), await db.query.bodyHabitLogs.findMany({ where: eq(schema.bodyHabitLogs.habitId, bId.bodyHabits) })]),
+      bodyHealth: async () => JSON.stringify(await db.query.bodyHealth.findFirst({ where: eq(schema.bodyHealth.id, bId.bodyHealth) })),
     };
     let actionProbed = 0;
     for (const p of probes) {

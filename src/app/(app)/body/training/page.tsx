@@ -6,16 +6,21 @@ import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
-import { requireBodyEnabled, trainingDay, trainingWeeks, type TrainingDayView } from "@/lib/queries/body";
+import { requireBodyEnabled, restrictedNow, trainingDay, trainingWeeks, type TrainingDayView } from "@/lib/queries/body";
 import { deleteSetAction, finishSessionAction, logSetAction, reopenSessionAction, setDayOffAction, startSessionAction } from "@/lib/actions/body";
 
 export const metadata = { title: "HumanOS · Training" };
 
 /** One exercise in today's workout: target, PR, last time, today's sets, and the next set's form, thumb-sized. */
-function ExerciseCard({ x, date, unit }: { x: TrainingDayView["exercises"][number]; date: string; unit: string }) {
+function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exercises"][number]; date: string; unit: string; restricted?: string }) {
   const bw = x.exercise.kind === "bodyweight";
   return (
-    <section className="card p-4" data-testid="training-exercise" data-name={x.exercise.name}>
+    <section className="card p-4" data-testid="training-exercise" data-name={x.exercise.name} data-restricted={restricted ? "1" : "0"}>
+      {restricted ? (
+        <p className="mb-1 text-xs text-warn" data-testid="training-restricted">
+          ⚠ On your health log while {restricted} is open. <Link href="/body/training/health" className="underline">Health log</Link>
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <Link href={`/body/training/${x.exercise.id}`} className="font-semibold hover:underline">
           {x.exercise.name}
@@ -83,11 +88,11 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
   requireBodyEnabled(v);
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= v.today ? sp.date : v.today;
-  const [t, weeks] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today)]);
+  const [t, weeks, restricted] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), restrictedNow(v.workspace.id, v.user.id, v.today)]);
   if (!t) {
     return (
       <>
-        <HumanosHeader title="Training" gear={false} action={<Link href="/body/import" className="text-xs text-ink-2 hover:underline">From Airtable</Link>} />
+        <HumanosHeader title="Training" gear={false} action={<span className="flex items-center gap-3"><Link href="/body/training/health" className="text-xs text-ink-2 hover:underline" data-testid="training-health-link">Health log</Link><Link href="/body/import" className="text-xs text-ink-2 hover:underline">From Airtable</Link></span>} />
         <Card>
           <p className="text-sm text-ink-2">
             Set up HumanOS first. <Link href="/body" className="font-medium underline">Go to Log →</Link>
@@ -119,6 +124,17 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
           </div>
         }
       />
+      <p className="-mt-3 mb-4 flex flex-wrap gap-3 text-xs text-ink-2">
+        <Link href="/body/training/routines" className="hover:underline">
+          Routines
+        </Link>
+        <Link href="/body/training/health" className="hover:underline" data-testid="training-health-link">
+          Health log
+        </Link>
+        <Link href="/body/import" className="hover:underline">
+          From Airtable
+        </Link>
+      </p>
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
           {sp.error}
@@ -248,7 +264,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
       {!t.off && (t.session || t.library.exercises.length) ? (
         <div className="mt-4 space-y-3">
           {t.exercises.map((x) => (
-            <ExerciseCard key={x.exercise.id} x={x} date={date} unit={t.unit} />
+            <ExerciseCard key={x.exercise.id} x={x} date={date} unit={t.unit} restricted={restricted.get(x.exercise.id)} />
           ))}
           {others.length ? (
             <Card title={t.exercises.length ? "Another exercise" : "Log an exercise"}>
@@ -262,7 +278,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
                     </option>
                     {others.map((e) => (
                       <option key={e.id} value={e.id}>
-                        {e.name}
+                        {restricted.has(e.id) ? `⚠ ${e.name}` : e.name}
                       </option>
                     ))}
                   </select>

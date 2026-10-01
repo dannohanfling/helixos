@@ -80,6 +80,10 @@ export const MEMBER_TABLES = {
   // Pantry (rev 237 phase 5).
   body_pantry: schema.bodyPantry,
   body_yields: schema.bodyYields,
+  // Habits and the health log (rev 237 phase 8). The health log is the member's alone even while sharing is on (rev 251).
+  body_habits: schema.bodyHabits,
+  body_habit_logs: schema.bodyHabitLogs,
+  body_health: schema.bodyHealth,
   // What a coach changed while working in this member's HelixOS, and their switches in and out (rev 216).
   coach_changes: schema.coachChanges,
   chat_links: schema.chatLinks,
@@ -90,7 +94,7 @@ export const MEMBER_TABLES = {
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 
 /** The Body tables: in the member's own export and in deletion, never in a coach's export of a client, shared or not. */
-export const BODY_LABELS = new Set<MemberLabel>(["body_settings", "body_day_types", "body_foods", "body_meals", "body_entries", "body_days", "body_comments", "body_share_events", "body_exercises", "body_routines", "body_sessions", "body_sets", "body_daily", "body_goals", "body_pantry", "body_yields"]);
+export const BODY_LABELS = new Set<MemberLabel>(["body_settings", "body_day_types", "body_foods", "body_meals", "body_entries", "body_days", "body_comments", "body_share_events", "body_exercises", "body_routines", "body_sessions", "body_sets", "body_daily", "body_goals", "body_pantry", "body_yields", "body_habits", "body_habit_logs", "body_health"]);
 
 /** No owner column of their own: each row belongs to whoever owns its parent. Listed parents before children. */
 export const CHILD_TABLES = [

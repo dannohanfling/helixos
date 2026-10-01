@@ -236,6 +236,9 @@ export type BodyAiInput = {
   training?: { date: string; routine: string | null; lines: string[]; off: boolean }[];
   /** Body composition: the latest day's figure in words, and the 7-day average weight. */
   weighIn?: { date: string; text: string; avg7: string | null } | null;
+  /** Phase 8: habits kept and today's state, and the last night's sleep, each already in words. Never the health log. */
+  habits?: string | null;
+  sleep?: string | null;
 };
 
 const short = (s: string, n = 60) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -248,6 +251,8 @@ export function formatBodyForAi(x: BodyAiInput): string {
   if (x.todayEntries.length) lines.push(`Eaten today: ${x.todayEntries.slice(0, 20).map((e) => `${short(e.slot, 20)}: ${short(e.name)} (${e.items.slice(0, 8).map((i) => `${i.qty} ${short(i.unit, 12)} ${short(i.name, 40)}`).join(", ")}) = ${macroText(e.totals)}`).join("; ")}.`);
   if (x.meals.length) lines.push(`Saved meals: ${x.meals.slice(0, 30).map((m) => short(m)).join(", ")}.`);
   if (x.weighIn) lines.push(`Latest weigh-in, ${x.weighIn.date}: ${short(x.weighIn.text, 200)}${x.weighIn.avg7 ? `; 7-day average weight ${x.weighIn.avg7}` : ""}.`);
+  if (x.sleep) lines.push(`Sleep: ${short(x.sleep, 200)}.`);
+  if (x.habits) lines.push(`Habits: ${short(x.habits, 400)}.`);
   if (x.training?.length) lines.push(`Training, last ${x.training.length} entries: ${x.training.slice(0, 10).map((t) => (t.off ? `${t.date}: Off` : `${t.date}${t.routine ? ` ${short(t.routine, 40)}` : ""}: ${t.lines.slice(0, 12).map((l) => short(l, 80)).join("; ") || "started, no sets"}`)).join(" | ")}.`);
   return lines.join("\n");
 }

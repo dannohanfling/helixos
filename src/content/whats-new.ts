@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 29,
+    date: "2026-10-01",
+    title: "HumanOS: Sleep, Practices and the health log",
+    lines: ["Two more HumanOS pages, so the menu reaches its five. Practices: habits from a starter list or your own (done, minutes, a count or an amount), a daily target and the days it applies, one tap to log, a streak that forgives one missed day a week, and the week's dots; the ones due today sit as one-tap chips on Today. Sleep: last night's hours and an optional score, the week against last, nights at 7 h, a 30-night trend.", "Under Training, a health log: an injury, since when, which side, the movements it affects and the exercises to leave out, which Training then marks. It is yours alone: never your coach, even while you share the rest; never AI or Claude; never in anything sent to them. Sleep and habits kept join your week, the AI's numbers, and Claude's tools."],
+    audience: "coach",
+  },
+  {
     n: 28,
     date: "2026-09-30",
     title: "HumanOS: your history from Airtable",

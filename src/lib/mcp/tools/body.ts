@@ -16,7 +16,9 @@ import { fmtSet } from "@/lib/engine/body-training";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
-import { bodyDay, bodyLibrary, bodySettingsFor, bodyWeek, canAiUseBody, dayComposition, exerciseHistory, latestComposition, pantryView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { bodyDay, bodyLibrary, bodySettingsFor, bodyWeek, canAiUseBody, dayComposition, exerciseHistory, habitsDay, habitsFor, latestComposition, pantryView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
+import { fmtHours, parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { startOfWeek } from "@/lib/dates";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -94,6 +96,9 @@ export const bodyToday = defineTool({
     if (t?.off) lines.push("Training: marked Off.");
     else if (t?.session) lines.push(`Training: ${t.routineName ?? "a workout"}${t.plan.plannedSets ? `, ${t.plan.doneSets} of ${t.plan.plannedSets} planned sets` : `, ${t.plan.doneSets} sets`}${t.completedAt ? ", finished" : ""}: ${t.exercises.filter((x) => x.today.length).map((x) => `${x.exercise.name} ${x.today.map((s) => fmtSet(s, t.unit, x.exercise.kind)).join(", ")}`).join("; ") || "no sets yet"}.`);
     else if (t?.suggested) lines.push(`Training: ${t.suggested.name} is on the plan for this day type, not started.`);
+    const hd = await habitsDay(v.workspace.id, v.user.id, date, v.today);
+    const due = hd.habits.filter((h) => h.due);
+    if (due.length) lines.push(`Habits: ${due.filter((h) => h.kept).length} of ${due.length} kept (${due.map((h) => `${h.name} ${h.kept ? "✓" : h.value != null ? `${h.valueText} so far` : "not yet"}`).join(", ")}).`);
     return {
       text: lines.join("\n"),
       data: { date, dayType: d.dayType?.name ?? null, bands: d.bands, totals: d.totals, marks: d.marks, left: d.left, entries: d.entries.map((e) => ({ slot: e.slot, name: e.name, cal: e.cal, p: e.p, f: e.f, c: e.c })), fits: d.fits.map((f) => f.name), sodium: d.sodium, weighIn: latest ? { date: latest.date, values: latest.values } : null, training: t ? { off: t.off, routine: t.routineName, finished: !!t.completedAt, plan: t.plan } : null },
@@ -382,5 +387,93 @@ export const bodyWeekTool = defineTool({
     lines.push(w.weigh.avg != null ? `Weight: average ${fmtMetric("weight", w.weigh.avg, u)} over ${w.weigh.days} weigh-in${w.weigh.days === 1 ? "" : "s"}${w.weigh.change != null ? `, ${w.weigh.change > 0 ? "+" : ""}${fmtMetric("weight", w.weigh.change, u)} vs last week` : ""}.` : "Weight: no weigh-ins this week.");
     if (w.pace) lines.push(`Goal: ${fmtMetric("weight", w.pace.target, u)}${w.pace.by ? ` by ${w.pace.by}` : ""}, ${fmtMetric("weight", Math.abs(w.pace.toGo), u)} to go${w.pace.needPerWeek != null ? `, needs ${fmtMetric("weight", Math.abs(w.pace.needPerWeek), u)} a week` : ""}${w.pace.actualPerWeek != null ? `, doing ${w.pace.actualPerWeek > 0 ? "+" : "-"}${fmtMetric("weight", Math.abs(w.pace.actualPerWeek), u)} a week` : ""}: ${w.pace.onPace == null ? "pace unknown yet" : w.pace.onPace ? "on pace" : "behind"}.`);
     return { text: lines.join("\n"), data: { monday, sunday: w.sunday, nutrition: n, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weight: { unit: u, avg: w.weigh.avg, days: w.weigh.days, change: w.weigh.change }, pace: w.pace } };
+  },
+});
+
+
+/* ── Phase 8: sleep and habits. Never the health log (rev 251): no tool reads that table. ── */
+
+defineTool({
+  name: "body_sleep",
+  scope: "body",
+  kind: "read",
+  description: "The member's sleep: last night's hours and score, this week's average against last week's and the nights at 7 hours or more, and the last 14 nights. Nothing else of their health.",
+  input: {},
+  handler: async (v): Promise<ToolResult> => {
+    await ready(v);
+    const s = await sleepView(v.workspace.id, v.user.id, v.today);
+    if (!s) throw new Error("Body isn't set up for this member yet.");
+    const lines = [s.last ? `Last night (${s.last.date}): ${s.last.text}${s.last.score != null ? `, score ${s.last.score}` : ""}.` : "No nights logged yet."];
+    if (s.week.avg != null) lines.push(`This week: ${fmtHours(s.week.avg)} a night over ${s.week.nights} night${s.week.nights === 1 ? "" : "s"}, ${s.week.atFloor} at 7 h or more${s.prevWeek.avg != null ? `; last week ${fmtHours(s.prevWeek.avg)}` : ""}.`);
+    if (s.recent.length) lines.push(`Nights: ${s.recent.map((n) => `${n.date} ${n.sleep_h != null ? fmtHours(n.sleep_h) : "—"}${n.sleep_score != null ? ` (${n.sleep_score})` : ""}`).join("; ")}.`);
+    return { text: lines.join("\n"), data: { last: s.last, week: s.week, prevWeek: s.prevWeek, nights: s.recent } };
+  },
+});
+
+defineTool({
+  name: "body_log_sleep",
+  scope: "body",
+  kind: "write",
+  description: "Log a night's sleep: hours (7.5 or \"7:30\") and an optional score 0–100, on the morning it ended (today unless a date is given). Logging a night again replaces it.",
+  input: { hours: z.union([z.number(), z.string()]).describe("Hours slept: 7.5 or \"7:30\""), score: z.number().min(0).max(100).optional(), date: z.string().optional().describe("YYYY-MM-DD, the morning the night ended; today when left out") },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const date = dayOf(v, input.date);
+    const hours = typeof input.hours === "number" && Number.isFinite(input.hours) ? input.hours : parseHours(String(input.hours ?? ""));
+    if (hours == null || !recoveryInRange("sleep_h", hours)) throw new Error("Hours slept: give a number of hours like 7.5, or a time like 7:30.");
+    const readingId = sleepReadingId(date);
+    await db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.readingId, readingId), and(eq(schema.bodyDaily.workspaceId, v.workspace.id), eq(schema.bodyDaily.userId, v.user.id))));
+    const rows = [{ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, key: "sleep_h", value: Math.round(hours * 100) / 100, source: "manual" as const, readingId, time: null }];
+    const score = input.score == null ? null : Number(input.score);
+    if (score != null && (!Number.isFinite(score) || !recoveryInRange("sleep_score", score))) throw new Error("A sleep score is 0 to 100.");
+    if (score != null) rows.push({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, key: "sleep_score", value: Math.round(score), source: "manual", readingId, time: null });
+    await db.insert(schema.bodyDaily).values(rows);
+    return { text: `Logged ${fmtHours(hours)}${score != null ? `, score ${Math.round(score)}` : ""} for the night ending ${date === v.today ? "this morning" : date}.`, data: { date, hours: rows[0].value, score } };
+  },
+});
+
+defineTool({
+  name: "body_habits",
+  scope: "body",
+  kind: "read",
+  description: "The member's habits on a day (today unless a date is given): each with its kind, target and days, whether it's due and kept, today's value, its streak, and the week's tally.",
+  input: { date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const date = dayOf(v, input.date);
+    const hd = await habitsDay(v.workspace.id, v.user.id, date, v.today);
+    if (!hd.habits.length) return { text: "No habits yet. They pick from the starter list or add their own on Practices.", data: { habits: [], week: hd.week } };
+    const line = (h: (typeof hd.habits)[number]) => `${h.name} (${fmtTarget(h) || h.kind}${h.days.length ? `, ${fmtDays(h.days)}` : ""}): ${!h.due ? "not due" : h.kept ? "kept" : h.value != null ? `${h.valueText} so far` : "not yet"}${h.streak ? `, streak ${h.streak}` : ""}`;
+    return {
+      text: `${date === v.today ? "Today" : date}: ${hd.habits.filter((h) => h.due && h.kept).length} of ${hd.habits.filter((h) => h.due).length} kept; this week ${hd.week.kept} of ${hd.week.due}.\n${hd.habits.map(line).join("\n")}`,
+      data: { date, week: hd.week, habits: hd.habits.map((h) => ({ name: h.name, kind: h.kind, unit: h.unit, target: h.target, days: h.days, due: h.due, kept: h.kept, value: h.value, streak: h.streak })) },
+    };
+  },
+});
+
+defineTool({
+  name: "body_log_habit",
+  scope: "body",
+  kind: "write",
+  description: "Log a habit by name: a done-or-not habit is ticked (or unticked with done: false); a minutes, count or amount habit takes a value. Today unless a date is given. Positive framing: the reply says what's kept, never what's missed.",
+  input: { habit: z.string().describe("The habit's name, as on Practices"), value: z.number().optional().describe("Minutes, count or amount; not needed for a done-or-not habit"), done: z.boolean().optional().describe("For a done-or-not habit: false unticks it"), date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const date = dayOf(v, input.date);
+    const h = byName("habit", await habitsFor(v.workspace.id, v.user.id), String(input.habit ?? ""));
+    let value: number | null;
+    if (h.kind === "done") value = input.done === false ? null : 1;
+    else {
+      const n = input.value == null ? NaN : Number(input.value);
+      if (!Number.isFinite(n)) throw new Error(`${h.name} counts ${h.kind === "minutes" ? "minutes" : (h.unit ?? "a number")}: give the value.`);
+      value = n > 0 && n < 1_000_000 ? n : null;
+    }
+    const own = and(eq(schema.bodyHabitLogs.workspaceId, v.workspace.id), eq(schema.bodyHabitLogs.userId, v.user.id));
+    await db.delete(schema.bodyHabitLogs).where(and(and(eq(schema.bodyHabitLogs.habitId, h.id), eq(schema.bodyHabitLogs.date, date)), own));
+    if (value != null) await db.insert(schema.bodyHabitLogs).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, habitId: h.id, date, value, source: "manual" });
+    const hd = await habitsDay(v.workspace.id, v.user.id, date, v.today);
+    const mine = hd.habits.find((x) => x.id === h.id)!;
+    const isKept = kept(h, value);
+    return { text: `${h.name}: ${value == null ? "cleared" : `${h.kind === "done" ? "done" : fmtHabitValue(h, value)}${isKept ? " ✓" : h.target != null ? ` (target ${fmtHabitValue(h, h.target)})` : ""}`}${date === v.today ? "" : ` for ${date}`}${mine.streak ? `; streak ${mine.streak} day${mine.streak === 1 ? "" : "s"}` : ""}. ${hd.week.kept} of ${hd.week.due} kept this week.`, data: { date, habit: h.name, value, kept: isKept, streak: mine.streak, week: hd.week } };
   },
 });

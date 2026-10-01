@@ -8,6 +8,9 @@ import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { addDays, daysBetween, formatDate, rangeDays, startOfWeek, todayInTz } from "@/lib/dates";
 import { belowPar, daysLeft, dueSoon, yieldFor } from "@/lib/engine/body-pantry";
+import { fmtHabitValue, habitsWeek, kept, dueOn, streak, weekDots, type Dot } from "@/lib/engine/body-habits";
+import { fmtHours, isRecoveryKey, sleepAverages, sleepWeek, type Night, type RecoveryKey } from "@/lib/engine/body-recovery";
+import { weekday } from "@/lib/dates";
 import { change, goalPace, nutritionWeek, weighWeek, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, weekTally, type WeightUnit } from "@/lib/engine/body-training";
@@ -176,9 +179,11 @@ export type BodyDayView = NonNullable<Awaited<ReturnType<typeof bodyDay>>>;
  */
 export async function todayBody(v: Viewer) {
   if (!v.membership.bodyEnabled) return null;
-  const d = await bodyDay(v.workspace.id, v.user.id, v.today, v.today);
+  const [d, hd] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), habitsDay(v.workspace.id, v.user.id, v.today, v.today)]);
   if (!d) return null;
-  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null };
+  // The one-tap chips (B7, placed by rev 201): only the habits due today, done-type ones toggle in place, measured ones open Practices.
+  const habits = hd.habits.filter((h) => h.due).slice(0, 8).map((h) => ({ id: h.id, name: h.name, kind: h.kind, kept: h.kept, valueText: h.valueText, streak: h.streak }));
+  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits };
 }
 
 /* ───────── B2, workouts (rev 182) ───────── */
@@ -527,13 +532,14 @@ export async function bodyWeek(workspaceId: string, userId: string, monday: stri
   const sunday = addDays(monday, 6);
   const to = sunday < today ? sunday : today;
   const prevMonday = addDays(monday, -7);
-  const [days, prevDays, training, prevTraining, readings, goals] = await Promise.all([
+  const [days, prevDays, training, prevTraining, readings, goals, recovery] = await Promise.all([
     daysInRange(workspaceId, userId, monday, to, today),
     daysInRange(workspaceId, userId, prevMonday, addDays(monday, -1), today),
     trainingWeek(workspaceId, userId, monday, settings),
     trainingWeek(workspaceId, userId, prevMonday, settings),
     scaleReadings(workspaceId, userId, addDays(today, -40) < prevMonday ? addDays(today, -40) : prevMonday),
     db.query.bodyGoals.findMany({ where: and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)) }),
+    recoveryWeek(workspaceId, userId, monday, today),
   ]);
   const asWeekDay = (d: (typeof days)[number]): WeekDay => ({ date: d.date, logged: d.logged, totals: d.totals, bands: d.bands, worst: d.worst, final: d.final });
   const figures = dayFigures(readings).filter((f) => f.values.weight != null && f.date <= today).map((f) => ({ date: f.date, weight: f.values.weight! }));
@@ -555,6 +561,8 @@ export async function bodyWeek(workspaceId: string, userId: string, monday: stri
     prevTraining,
     weigh: { ...weigh, prevAvg: prevWeigh.avg, change: change(weigh.avg, prevWeigh.avg), latest },
     pace,
+    sleep: recovery.sleep,
+    habits: recovery.habits,
   };
 }
 export type BodyWeekView = NonNullable<Awaited<ReturnType<typeof bodyWeek>>>;
@@ -580,7 +588,7 @@ export async function bodyAiContext(v: Viewer): Promise<string | null> {
   if (!(await canAiUseBody(v, v.user.id))) return null;
   const [d, recent, types, training] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), recentDays(v.workspace.id, v.user.id, v.today), dayTypesFor(v.workspace.id, v.user.id), recentTraining(v.workspace.id, v.user.id, v.today)]);
   if (!d) return null;
-  const weighIn = await weighInsForAi(v.workspace.id, v.user.id, v.today, d.settings.weightUnit);
+  const [weighIn, recovery] = await Promise.all([weighInsForAi(v.workspace.id, v.user.id, v.today, d.settings.weightUnit), recoveryForAi(v.workspace.id, v.user.id, v.today)]);
   return formatBodyForAi({
     today: v.today,
     dayTypes: types.map((t) => ({ name: t.name, bands: bandsOf(t) })),
@@ -589,6 +597,8 @@ export async function bodyAiContext(v: Viewer): Promise<string | null> {
     meals: d.library.meals.map((m) => m.name),
     training,
     weighIn,
+    habits: recovery.habits,
+    sleep: recovery.sleep,
   });
 }
 
@@ -603,3 +613,118 @@ export async function coachBodySummary(v: Viewer, memberUserId: string, today: s
   return { membershipId: m!.id, days: await recentDays(v.workspace.id, memberUserId, today) };
 }
 
+/* ───────── Habits, sleep and the health log (rev 237 phase 8, B7) ───────── */
+
+const habitDates = { addDays, weekday, startOfWeek };
+
+export async function habitsFor(workspaceId: string, userId: string, opts: { archived?: boolean } = {}) {
+  const rows = await db.query.bodyHabits.findMany({ where: and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId)), orderBy: [asc(schema.bodyHabits.order), asc(schema.bodyHabits.createdAt)] });
+  return opts.archived ? rows : rows.filter((h) => !h.archivedAt);
+}
+
+/**
+ * The member's habits on a day: each with its value that day, whether it's due and kept, its streak (counted back from today) and
+ * the week's dots; plus the week's tally so far. Positive framing is the page's job; this is the arithmetic.
+ */
+export async function habitsDay(workspaceId: string, userId: string, date: string, today: string) {
+  const habits = await habitsFor(workspaceId, userId);
+  if (!habits.length) return { habits: [], week: { due: 0, kept: 0 }, monday: startOfWeek(date) };
+  const logs = await db.query.bodyHabitLogs.findMany({ where: and(and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId)), gte(schema.bodyHabitLogs.date, addDays(today, -400))) });
+  const monday = startOfWeek(date);
+  const sunday = addDays(monday, 6);
+  return {
+    monday,
+    habits: habits.map((h) => {
+      const value = logs.find((l) => l.habitId === h.id && l.date === date)?.value ?? null;
+      return { ...h, value, due: dueOn(h, weekday(date)), kept: kept(h, value), streak: streak(h, logs, today, habitDates), dots: weekDots(h, logs, monday, today, habitDates) as Dot[], valueText: value != null ? fmtHabitValue(h, value) : "" };
+    }),
+    week: habitsWeek(habits, logs, monday, sunday < today ? sunday : today > sunday ? sunday : today, habitDates),
+  };
+}
+export type HabitsDayView = Awaited<ReturnType<typeof habitsDay>>;
+
+/** Due and kept over a Monday-to-date span, for the week page. */
+async function habitsSpan(workspaceId: string, userId: string, from: string, to: string) {
+  const habits = await habitsFor(workspaceId, userId);
+  if (!habits.length || to < from) return { due: 0, kept: 0 };
+  const logs = await db.query.bodyHabitLogs.findMany({ where: and(and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId)), gte(schema.bodyHabitLogs.date, from), lte(schema.bodyHabitLogs.date, to)) });
+  return habitsWeek(habits, logs, from, to, habitDates);
+}
+
+/** The nights on record, oldest first: hours and the optional score, from the manual rows and any wearable's. */
+async function nights(workspaceId: string, userId: string, from: string, to: string) {
+  const rows = await db.query.bodyDaily.findMany({ where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), inArray(schema.bodyDaily.key, ["sleep_h", "sleep_score", "recovery", "strain", "rhr", "hrv"]), gte(schema.bodyDaily.date, from), lte(schema.bodyDaily.date, to)), orderBy: asc(schema.bodyDaily.date) });
+  const byDate = new Map<string, Partial<Record<RecoveryKey, number>> & { date: string }>();
+  for (const r of rows) {
+    if (!isRecoveryKey(r.key)) continue;
+    const d = byDate.get(r.date) ?? { date: r.date };
+    d[r.key] = r.value;
+    byDate.set(r.date, d);
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** The Sleep page: the last night, this week against last, the trend over 30 nights, and the last 14 nights to edit. */
+export async function sleepView(workspaceId: string, userId: string, today: string) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const all = await nights(workspaceId, userId, addDays(today, -90), today);
+  const slept = all.filter((n): n is typeof n & { sleep_h: number } => n.sleep_h != null);
+  const asNight = (n: { date: string; sleep_h: number }): Night => ({ date: n.date, hours: n.sleep_h });
+  const monday = startOfWeek(today);
+  const inSpan = (from: string, to: string) => slept.filter((n) => n.date >= from && n.date <= to).map(asNight);
+  const trend = slept.filter((n) => n.date >= addDays(today, -30)).map(asNight);
+  const last = slept[slept.length - 1] ?? null;
+  return {
+    settings,
+    last: last ? { date: last.date, hours: last.sleep_h, text: fmtHours(last.sleep_h), score: last.sleep_score ?? null } : null,
+    week: sleepWeek(inSpan(monday, today)),
+    prevWeek: sleepWeek(inSpan(addDays(monday, -7), addDays(monday, -1))),
+    trend,
+    averages: sleepAverages(trend, daysBetween),
+    recent: [...all].reverse().slice(0, 14),
+  };
+}
+export type SleepView = NonNullable<Awaited<ReturnType<typeof sleepView>>>;
+
+/** The health log, open first (newest start first), each restricted exercise named. The member's alone: no coach path reads this. */
+export async function healthLog(workspaceId: string, userId: string, today: string) {
+  const [rows, exercises] = await Promise.all([
+    db.query.bodyHealth.findMany({ where: and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId)), orderBy: desc(schema.bodyHealth.startedOn) }),
+    db.query.bodyExercises.findMany({ where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)) }),
+  ]);
+  const name = new Map(exercises.map((e) => [e.id, e.name]));
+  const isOpen = (r: schema.BodyHealth) => !r.resolvedOn || r.resolvedOn > today;
+  const shaped = rows.map((r) => ({ ...r, open: isOpen(r), restrictedNames: r.restricted.map((id) => name.get(id)).filter((n): n is string => !!n) }));
+  return { open: shaped.filter((r) => r.open), resolved: shaped.filter((r) => !r.open), exercises: exercises.filter((e) => !e.archivedAt) };
+}
+
+/** Exercises an open injury restricts today, each with the injury's title: Training marks them. Member-only, like the log. */
+export async function restrictedNow(workspaceId: string, userId: string, today: string): Promise<Map<string, string>> {
+  const rows = await db.query.bodyHealth.findMany({ where: and(and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId)), isNull(schema.bodyHealth.resolvedOn)) });
+  const later = await db.query.bodyHealth.findMany({ where: and(and(eq(schema.bodyHealth.workspaceId, workspaceId), eq(schema.bodyHealth.userId, userId)), gte(schema.bodyHealth.resolvedOn, addDays(today, 1))) });
+  const out = new Map<string, string>();
+  for (const r of [...rows, ...later]) for (const id of r.restricted) if (!out.has(id)) out.set(id, r.title);
+  return out;
+}
+
+/** Sleep and habits for the week page (rev 237 phase 6 said they'd join): this week against last. */
+export async function recoveryWeek(workspaceId: string, userId: string, monday: string, today: string) {
+  const sunday = addDays(monday, 6);
+  const to = sunday < today ? sunday : today;
+  const prevMonday = addDays(monday, -7);
+  const [thisN, prevN, habits, prevHabits] = await Promise.all([nights(workspaceId, userId, monday, to), nights(workspaceId, userId, prevMonday, addDays(monday, -1)), habitsSpan(workspaceId, userId, monday, to), habitsSpan(workspaceId, userId, prevMonday, addDays(monday, -1))]);
+  const asNights = (ns: Awaited<ReturnType<typeof nights>>): Night[] => ns.filter((n): n is typeof n & { sleep_h: number } => n.sleep_h != null).map((n) => ({ date: n.date, hours: n.sleep_h }));
+  const sleep = sleepWeek(asNights(thisN));
+  const prevSleep = sleepWeek(asNights(prevN));
+  return { sleep: { ...sleep, prevAvg: prevSleep.avg, change: change(sleep.avg, prevSleep.avg) }, habits: { ...habits, prevDue: prevHabits.due, prevKept: prevHabits.kept } };
+}
+
+/** Habits and sleep in words for the AI block (rev 219 allows both as numbers and short text). Never the health log. */
+export async function recoveryForAi(workspaceId: string, userId: string, today: string): Promise<{ habits: string | null; sleep: string | null }> {
+  const [hd, sv] = await Promise.all([habitsDay(workspaceId, userId, today, today), sleepView(workspaceId, userId, today)]);
+  const due = hd.habits.filter((h) => h.due);
+  const habits = due.length ? `${hd.week.kept} of ${hd.week.due} kept this week; today: ${due.map((h) => `${h.name} ${h.kept ? "✓" : h.value != null ? `${h.valueText} so far` : "not yet"}${h.streak ? ` (streak ${h.streak})` : ""}`).join(", ")}` : null;
+  const sleep = sv?.last ? `${sv.last.date}: ${sv.last.text}${sv.last.score != null ? `, score ${sv.last.score}` : ""}${sv.week.avg != null ? `; this week ${fmtHours(sv.week.avg)} a night over ${sv.week.nights} night${sv.week.nights === 1 ? "" : "s"}` : ""}` : null;
+  return { habits, sleep };
+}

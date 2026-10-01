@@ -26,6 +26,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/body", label: "Log", icon: "🍽️", hint: "meals today", bodyOnly: true },
       { href: "/body/foods", label: "Nutrition", icon: "🥗", hint: "foods + meals", bodyOnly: true },
       { href: "/body/training", label: "Training", icon: "🏋️", hint: "sets + PRs", bodyOnly: true },
+      { href: "/body/sleep", label: "Sleep", icon: "🛌", hint: "last night", bodyOnly: true },
+      { href: "/body/practices", label: "Practices", icon: "🧘", hint: "habits + streaks", bodyOnly: true },
     ],
   },
   {

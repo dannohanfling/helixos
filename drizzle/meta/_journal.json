@@ -617,6 +617,13 @@
       "when": 1790811388815,
       "tag": "0087_coach_work_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "6",
+      "when": 1790816453444,
+      "tag": "0088_body_habits",
+      "breakpoints": true
     }
   ]
 }

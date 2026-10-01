@@ -6,6 +6,7 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { addDays, formatDate, startOfWeek } from "@/lib/dates";
 import { MARK_ICON, fmtMacro } from "@/lib/engine/body";
 import { fmtMetric } from "@/lib/engine/body-scale";
+import { fmtHours } from "@/lib/engine/body-recovery";
 import { bodyWeek, requireBodyEnabled } from "@/lib/queries/body";
 
 export const metadata = { title: "HumanOS · This week" };
@@ -90,6 +91,12 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
         ) : null}
       </div>
 
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-2">Sleep and practices</h2>
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="week-recovery" data-sleep-avg={w.sleep.avg ?? ""} data-sleep-nights={w.sleep.nights} data-habits-kept={w.habits.kept} data-habits-due={w.habits.due}>
+        <Stat label="Sleep a night" value={w.sleep.avg != null ? fmtHours(w.sleep.avg) : "—"} sub={w.sleep.avg != null ? <span>{w.sleep.atFloor} of {w.sleep.nights} at 7 h · <Delta value={w.sleep.change} unit=" h" better="up" /></span> : "Log nights on Sleep"} />
+        <Stat label="Habits kept" value={w.habits.due ? `${w.habits.kept} of ${w.habits.due}` : "—"} sub={w.habits.due ? <Delta value={w.habits.prevDue ? Math.round((w.habits.kept / w.habits.due) * 100) - Math.round((w.habits.prevKept / w.habits.prevDue) * 100) : null} unit="%" better="up" /> : "Pick habits on Practices"} />
+      </div>
+
       <Card title="The days">
         <ul className="divide-y text-sm" data-testid="week-days">
           {w.days.map((d) => (
@@ -101,7 +108,7 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[11px] text-ink-3">Off-plan meals, sleep and practice minutes join this page when those arrive.</p>
+        <p className="mt-2 text-[11px] text-ink-3">Off-plan meals join this page when they arrive.</p>
       </Card>
     </>
   );
