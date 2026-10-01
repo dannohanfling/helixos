@@ -7,6 +7,9 @@
  *  5. Next Monday's post: its own text for that week, skipped, and back on.
  *  6. A week that failed is posted with Post now, once: the hourly job and a second press never send it again. The week's
  *     3-1-3 count is on its row, and the link is built from the coach's pattern. On a Monday, the job posts this week's itself.
+ *  7. Share to the thread: this week's post only, copied, opened, 15 points once per week; the coach's counts.
+ *  8. The first of the month (1 Oct): its own switch, time and text; next month's own text; a month posted by hand takes its
+ *     link; a failed month is posted once with Post now; the member's share from the month card; the coach's counts.
  */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
@@ -352,7 +355,9 @@ async function main() {
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/intentions`);
     await page.locator('[data-testid="week-share"]').waitFor({ timeout: 20000 });
-    if (!(await page.locator('[data-testid="share-unavailable"]').innerText()).includes("isn't up yet") || (await page.locator('[data-testid="share-to-thread"]').count())) throw new Error("before this week's post is out, the button says so and opens nothing");
+    if (!(await page.locator('[data-testid="week-share"] [data-testid="share-unavailable"]').innerText()).includes("isn't up yet") || (await page.locator('[data-testid="share-to-thread"]').count())) throw new Error("before this week's post is out, the button says so and opens nothing");
+    // The month's share (1 Oct) says the same until this month's post is out (step 8 brings it out).
+    if (!(await page.locator('[data-testid="month-share"] [data-testid="share-unavailable"]').innerText()).includes("Check back after the 1st") || (await page.locator('[data-testid="month-thread"]').count())) throw new Error("before this month's post is out, the month's button says so, and there is no month thread link");
     if (await page.locator('[data-testid="week-thread"]').count()) throw new Error("no thread link before this week's post is published");
     await settle(page);
     const LINK = "https://academy.example.com/post?id=cm_share";
@@ -404,6 +409,118 @@ async function main() {
     const notSharedText = (await shareRow.locator('[data-testid="community-not-shared"]').textContent()) ?? "";
     if ((await shareRow.locator('[data-testid="community-week-shares"]').innerText()).trim() !== "1" || notSharedText.includes(maya.name) || !notSharedText.includes(jordan.name)) throw new Error(`the coach sees the week's shares and who hasn't shared: ${notSharedText}`);
     console.log("✓ the coach's log shows the week's shares and who hasn't shared yet");
+
+    // ── 8. The first of the month (1 Oct): its own switch, time and text; the month text as a test; next month's own text,
+    //       skipped and back on; a month posted by hand takes its link; a failed month is posted once with Post now; the
+    //       member's share from the month card copies the eleven answers; the coach's counts. ──
+    const { DEFAULT_MONTH_TEXT, monthShareText, monthTitle, upcomingMonth } = await import("@/lib/engine/community");
+    const thisMonth = today.slice(0, 7);
+    const lastMonth = thisMonth.slice(5, 7) === "01" ? `${Number(thisMonth.slice(0, 4)) - 1}-12` : `${thisMonth.slice(0, 4)}-${String(Number(thisMonth.slice(5, 7)) - 1).padStart(2, "0")}`;
+    await page.goto(`${base}/coach/community?view=month#setup`);
+    if (await page.locator('[data-testid="community-month-on"]').isChecked()) throw new Error("the month post starts off");
+    if (!(await page.locator('[data-testid="community-month-notify"]').isChecked())) throw new Error("Notify all members is on by default for the month post");
+    await page.locator('[data-testid="community-month-on"]').check();
+    await page.locator('[data-testid="community-month-time"]').fill("00:00");
+    await submit(page, '[data-testid="community-save"]');
+    await page.locator('[data-testid="community-saved"]').waitFor({ timeout: 20000 });
+    const sMonth = (await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!;
+    if (!sMonth.monthOn || sMonth.monthTime !== "00:00" || sMonth.monthText !== null || !sMonth.monthNotify) throw new Error(`the month post's own switch and time are saved, the default text kept as the default: ${JSON.stringify({ monthOn: sMonth.monthOn, monthTime: sMonth.monthTime, monthText: sMonth.monthText })}`);
+    const nextM = upcomingMonth(today, nowWallInTz(tz).slice(11, 16), "00:00");
+    await submit(page, '[data-testid="community-test-month"]');
+    const monthTest = (await mockPosts()).find((p) => (p.communityPostDetails as Details | undefined)?.title === `Test: ${monthTitle(nextM)}`);
+    if (!monthTest || !String(monthTest.summary).startsWith(communityHtml(DEFAULT_MONTH_TEXT)) || !String(monthTest.summary).includes("1. What is one word")) throw new Error(`the month text goes out as a test under next month's title, with the eleven questions: ${String(monthTest?.summary).slice(0, 200)}`);
+    if ((monthTest.communityPostDetails as Details).notifyAllGroupMembers !== false || String(monthTest.summary).includes("data-mention-type")) throw new Error("the month-text test never notifies and keeps @everyone as words");
+    console.log(`✓ the first of the month: its own switch, time and text under Setup, on by the coach; the month text as a test under "${monthTitle(nextM)}", never notifying`);
+
+    const monthCard = page.locator('[data-testid="community-month-next"]');
+    if ((await monthCard.getAttribute("data-month")) !== nextM || (await page.locator('[data-testid="community-month-next-title"]').innerText()).trim() !== monthTitle(nextM)) throw new Error(`next month is ${nextM}, titled with its month`);
+    const MONTH_TEXT = `That month's own words [walk ${Date.now()}]`;
+    await page.locator('[data-testid="community-month-next-body"]').fill(MONTH_TEXT);
+    await submit(page, '[data-testid="community-month-next-save"]');
+    const monthRow = (m: string) => db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, m)) });
+    if ((await monthRow(nextM))?.body !== MONTH_TEXT || (await monthRow(nextM))?.status !== "scheduled") throw new Error("that month keeps its own text");
+    await submit(page, '[data-testid="community-month-next-skip"]');
+    for (let i = 0; i < 50 && (await monthCard.getAttribute("data-state")) !== "skipped"; i++) await page.waitForTimeout(100);
+    if ((await monthRow(nextM))?.status !== "skipped" || (await monthCard.getAttribute("data-state")) !== "skipped") throw new Error("the month is skipped");
+    await submit(page, '[data-testid="community-month-next-unskip"]');
+    if ((await monthRow(nextM))?.status !== "scheduled") throw new Error("and back on");
+    console.log(`✓ next month (${nextM}): its own text for that 1st, skipped, and back on`);
+
+    // October's is Claude's hand post: this month's link, pasted, makes the row, published, so the members' share points at it.
+    const byHand = page.locator('[data-testid="community-month-by-hand"]');
+    if ((await byHand.getAttribute("data-month")) !== thisMonth) throw new Error("a month HelixOS didn't post offers to take its link");
+    const LINK_M = "https://academy.example.com/channels/intentions/posts/cccccccccccccccccccccccc";
+    await page.locator('[data-testid="community-month-link"]').fill(LINK_M);
+    await submit(page, '[data-testid="community-month-link-save"]');
+    const handMonth = (await monthRow(thisMonth))!;
+    if (handMonth.status !== "posted" || handMonth.link !== LINK_M || handMonth.platformPostId !== "cccccccccccccccccccccccc" || handMonth.title !== monthTitle(thisMonth)) throw new Error(`a pasted link makes this month's row, published: ${JSON.stringify(handMonth)}`);
+    await page.goto(`${base}/coach/community?view=month2#month`);
+    if (await page.locator('[data-testid="community-month-by-hand"]').count()) throw new Error("once this month's post is published, the paste box goes");
+    const handRowM = page.locator(`[data-testid="community-month-row"][data-month="${thisMonth}"]`);
+    if ((await handRowM.getAttribute("data-state")) !== "posted" || !/months set: 1 of \d+ · shared to the thread: 0/.test(await handRowM.locator('[data-testid="community-month-counts"]').innerText())) throw new Error("the month's row shows published with the month's counts");
+    // The job never posts a month that is already published, even on the 1st from the month's time.
+    const countM = (await mockPosts()).length;
+    await cron(page);
+    if ((await mockPosts()).length !== countM || (await monthRow(thisMonth))!.link !== LINK_M) throw new Error("the job leaves a month posted by hand alone");
+    console.log(`✓ a month posted by hand (${thisMonth}): its pasted link makes the row, published, with the month's counts; the job leaves it alone`);
+
+    // A failed month, posted once with Post now: the month text with @everyone as the tag, notifying, to the Intentions channel; read back as posted with its link.
+    await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "month", monthOf: lastMonth, title: monthTitle(lastMonth), status: "failed", error: "GoHighLevel didn't answer." });
+    await page.goto(`${base}/coach/community?view=month3#month`);
+    await submit(page, `[data-testid="community-month-row"][data-month="${lastMonth}"] [data-testid="community-month-retry"]`);
+    const sentMonth = await titled(monthTitle(lastMonth));
+    if (sentMonth.length !== 1 || sentMonth[0].summary !== communityHtml(DEFAULT_MONTH_TEXT, { mentionEveryone: true }) || !String(sentMonth[0].summary).includes('data-mention-type="broadcast"') || !(sentMonth[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that month once, with the month text and the tag, to the Intentions channel");
+    if ((sentMonth[0].communityPostDetails as Details).notifyAllGroupMembers !== true) throw new Error("the month post notifies all members, as its setting says by default");
+    await cron(page);
+    const lastRowM = (await monthRow(lastMonth))!;
+    if ((await titled(monthTitle(lastMonth))).length !== 1 || lastRowM.status !== "posted" || lastRowM.link !== `https://academy.example.com/channels/intentions/posts/${lastRowM.platformPostId}`) throw new Error("the job reads the month back as posted, with the link, and never sends it again");
+    console.log(`✓ a failed month (${lastMonth}) is posted once with Post now, notifying, with the tag; the job reads it back as posted with its link`);
+
+    // The member: the month card's share copies the eleven answers, revenue included (Danno, 1 Oct), opens this month's post, scores once.
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As a client")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/intentions`);
+    const monthShareBtn = page.locator('[data-testid="month-share"] [data-testid="share-to-thread"]');
+    await monthShareBtn.waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="month-thread"]').getAttribute("href")) !== LINK_M) throw new Error("once the month's post is published, This month's thread links to it");
+    if (!(await monthShareBtn.getAttribute("class"))?.includes("w-full") || (await monthShareBtn.innerText()).trim() !== "Share to the thread") throw new Error("the month's share is the full-width main button under the set month");
+    const [popupM] = await Promise.all([page.waitForEvent("popup"), monthShareBtn.click()]);
+    await popupM.waitForLoadState();
+    if (popupM.url() !== LINK_M) throw new Error(`the tap opens this month's post: ${popupM.url()}`);
+    await popupM.close();
+    const noteM = page.locator('[data-testid="month-share"] [data-testid="share-note"]');
+    await noteM.waitFor({ timeout: 20000 });
+    if (!(await noteM.innerText()).includes("Copied! On the post, tap Add a comment, paste, and press Post.") || !(await noteM.innerText()).includes(`+${SHARE_POINTS} points`)) throw new Error(`the member is told it's copied and what to do: ${await noteM.innerText()}`);
+    const mayaMonthRow = (await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.userId, maya.id), eq(schema.monthlyIntentions.month, mayaMonth)) }))!;
+    const clipM = await page.evaluate(() => navigator.clipboard.readText());
+    if (clipM !== monthShareText(mayaMonthRow) || !clipM.includes("My word: Rooted") || !clipM.includes("Revenue goal: $10,000. To hire help.") || clipM.includes("Consistent")) throw new Error(`the comment is the month's eleven answers, revenue included, nothing weekly: ${clipM}`);
+    if ((await scored()).length !== 2 || (await scored()).every((r) => r.refId !== `share:month:${mayaMonth}`)) throw new Error("the first month tap scores 15, under its own reference");
+    await page.reload();
+    const againM = page.locator('[data-testid="month-share"] [data-testid="share-to-thread"][data-shared="yes"]');
+    await againM.waitFor({ timeout: 20000 });
+    const [popupM2] = await Promise.all([page.waitForEvent("popup"), againM.click()]);
+    await popupM2.close();
+    await page.locator('[data-testid="month-share"] [data-testid="share-note"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="month-share"] [data-testid="share-note"]').innerText()).includes("points") || (await scored()).length !== 2) throw new Error("a second tap in the same month scores nothing");
+    console.log(`✓ Share to this month's thread: copies the eleven answers (revenue included, nothing weekly), opens this month's post, scores ${SHARE_POINTS} once for the month, then reads Shared ✓; This month's thread shows once the post is published`);
+
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As the coach")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/coach/community?view=month4#month`);
+    const sharedRowM = page.locator(`[data-testid="community-month-row"][data-month="${thisMonth}"]`);
+    await sharedRowM.waitFor({ timeout: 20000 });
+    const notSharedM = (await sharedRowM.locator('[data-testid="community-month-not-shared"]').textContent()) ?? "";
+    if ((await sharedRowM.locator('[data-testid="community-month-shares"]').innerText()).trim() !== "1" || notSharedM.includes(maya.name) || !notSharedM.includes(jordan.name)) throw new Error(`the coach sees the month's shares and who hasn't shared: ${notSharedM}`);
+    await page.goto(`${base}/coach`);
+    await page.locator('[data-testid="month-coach-shares"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="month-coach-shares"]').innerText()).trim() !== "1") throw new Error("the coach view's month card counts who has shared to the thread");
+    console.log("✓ the coach's month log and the coach view's month card show the month's shares and who hasn't shared yet");
 
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("Community smoke passed");

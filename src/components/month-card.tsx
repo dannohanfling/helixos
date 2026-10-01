@@ -4,7 +4,8 @@ import { BUSINESS_SEASONS, MONTH_QUESTIONS, PERSONAL_SEASONS, revenueLabel, seas
 import { monthLabel } from "@/lib/engine/feedback";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
-import type { Back } from "@/components/week-card";
+import type { Back, Share } from "@/components/week-card";
+import { ShareButton } from "@/components/share-button";
 import { DraftKeeper } from "@/components/draft-keeper";
 
 type Sp = { monthError?: string; monthSaved?: string };
@@ -90,7 +91,7 @@ export function MonthAnswers({ m }: { m: MonthlyIntention }) {
  * The monthly intention (handoff rev 129/130): "Set your month" with the eleven questions until it is set, then the answers with
  * an Edit. On Today only the setting form shows; once set, the full card lives on the Intentions page.
  */
-export function MonthCard({ m, month, sp, back = "/intentions", optional = false, owner }: { m: MonthlyIntention | null; month: string; sp: Sp; back?: Back; optional?: boolean; owner?: string }) {
+export function MonthCard({ m, month, sp, back = "/intentions", optional = false, owner, share = null }: { m: MonthlyIntention | null; month: string; sp: Sp; back?: Back; optional?: boolean; owner?: string; share?: Share | null }) {
   const notes = (
     <>
       {sp.monthError ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="month-error">{sp.monthError}</p> : null}
@@ -117,6 +118,13 @@ export function MonthCard({ m, month, sp, back = "/intentions", optional = false
         <div className="mt-3">
           <MonthAnswers m={m} />
         </div>
+        {/* Share to this month's thread (1 Oct): the same tap as the week's, with the eleven answers. */}
+        {share ? (
+          <div className="mt-4 rounded-lg border p-3" data-testid="month-share">
+            <p className="mb-2 text-sm font-medium">Post your month in this month&apos;s community thread: one tap copies your eleven answers and opens the post.</p>
+            <ShareButton {...share} scope="month" />
+          </div>
+        ) : null}
         <details className="mt-4">
           <summary className="cursor-pointer text-xs text-ink-3" data-testid="month-edit">Edit this month</summary>
           <div className="mt-3">

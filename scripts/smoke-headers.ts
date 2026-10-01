@@ -1,5 +1,5 @@
 /** Security headers walk: visits every main page as client and coach and fails on any Content-Security-Policy violation or page error the browser reports. Also prints the headers. */
-import { readdirSync, existsSync } from "node:fs";
+import { readdirSync, existsSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { chromium } from "@playwright/test";
@@ -24,6 +24,14 @@ async function main() {
   const routed = routedPages("src/app/(app)");
   const listed = [...new Set([...PAGES_CLIENT, ...PAGES_COACH])].sort();
   if (JSON.stringify(listed) !== JSON.stringify(routed)) throw new Error(`the walk's page lists drifted from src/app/(app): listed ${listed.length}, routed ${routed.length}; missing ${routed.filter((p) => !listed.includes(p)).join(", ") || "none"}; stale ${listed.filter((p) => !routed.includes(p)).join(", ") || "none"}`);
+  // This walk has the dev server compile every page there is. After the walks before it in the gate, that compile climbed
+  // past what the machine allows (1 Oct: the kernel killed the server at 13 GB, twice, mid-walk), while a fresh server with a
+  // clean cache walks all the pages in under 4 GB. So the walk starts from one, on the local server only.
+  if (base === "http://localhost:3000") {
+    execFileSync("scripts/dev-server.sh", ["stop"], { stdio: "pipe" });
+    rmSync(".next/dev", { recursive: true, force: true });
+    execFileSync("scripts/dev-server.sh", ["start"], { stdio: "pipe" });
+  }
   for (let i = 0; i < 40; i++) {
     const ok = await fetch(`${base}/login`).then((r) => r.ok).catch(() => false);
     if (ok) break;

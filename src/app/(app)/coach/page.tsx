@@ -112,6 +112,9 @@ export default async function CoachPage() {
   const monthRows = userIds.length ? await db.query.monthlyIntentions.findMany({ where: and(eq(schema.monthlyIntentions.workspaceId, wsId), inArray(schema.monthlyIntentions.userId, userIds)) }) : [];
   const monthRowOf = new Map(rows.map((r) => [r.m.id, monthRows.find((x) => x.userId === r.m.userId && x.month === monthOf(theirToday(r.m))) ?? null]));
   const monthSet = rows.filter((r) => monthRowOf.get(r.m.id));
+  // Who has shared their month to the community thread (1 Oct): each member's own month, as the Monday card counts the week.
+  const monthShares = userIds.length ? await db.query.communityShares.findMany({ where: and(eq(schema.communityShares.workspaceId, wsId), inArray(schema.communityShares.userId, userIds)) }) : [];
+  const monthShared = rows.filter((r) => monthShares.some((x) => x.userId === r.m.userId && x.monthOf === monthOf(theirToday(r.m)))).length;
   const monthLate = rows.filter((r) => !monthRowOf.get(r.m.id) && lateForMonth(theirToday(r.m)));
   // Which agent answers is chosen by name, not by typing an ai_agent_ns: the agents on each bot are read with that bot's own
   // saved token. A member with no token costs no call and gets the text box back.
@@ -449,7 +452,14 @@ export default async function CoachPage() {
               ))}
             </ul>
           </Card>
-          <Card title="This month's intentions" action={<span className="text-xs text-ink-3">{monthSet.length} of {rows.length} set</span>}>
+          <Card
+            title="This month's intentions"
+            action={
+              <span className="text-xs text-ink-3">
+                {monthSet.length} of {rows.length} set · shared to the thread: <span data-testid="month-coach-shares">{monthShared}</span>
+              </span>
+            }
+          >
             <ul className="space-y-1 text-sm" data-testid="month-coach">
               {rows.map((r) => {
                 const mi = monthRowOf.get(r.m.id);

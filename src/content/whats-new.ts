@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 38,
+    date: "2026-10-01",
+    title: "Share your month to the community thread",
+    lines: [
+      "Under your set month on Intentions, one tap copies your eleven answers and opens this month's post in the community, where you paste them as a comment under your own name. 15 points, once a month. \"This month's thread\" sits beside the heading once the post is up.",
+      "Coaches: the first-of-the-month post has its own switch, time and text on Community posts, beside the Monday one, and goes out on the 1st. A month you posted by hand takes its pasted link, so the share works for it too. The coach view's month card counts who has shared.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 37,
     date: "2026-10-01",
     title: "HumanOS: a coach's day view with sleep and practices, and four small fixes",

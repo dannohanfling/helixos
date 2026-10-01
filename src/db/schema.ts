@@ -472,6 +472,11 @@ export const communitySettings = sqliteTable(
     mondayText: text("monday_text"),
     /** "Notify all members" for the Monday post (rev 187): on unless the coach turns it off. Test posts never notify. */
     mondayNotify: integer("monday_notify", { mode: "boolean" }).notNull().default(true),
+    /** The first-of-the-month post (1 Oct, Danno's priority 1): on or off, its own time of day, its text (null = the default) and notify. */
+    monthOn: integer("month_on", { mode: "boolean" }).notNull().default(false),
+    monthTime: text("month_time").notNull().default("08:00"),
+    monthText: text("month_text"),
+    monthNotify: integer("month_notify", { mode: "boolean" }).notNull().default(true),
     /** Who the posts come from: the community member contact id of a team member (Danno's own community profile, 28 Sep live test), and the name shown. Never a client. */
     postAsId: text("post_as_id"),
     postAsName: text("post_as_name"),
@@ -488,16 +493,18 @@ export const communitySettings = sqliteTable(
 );
 export type CommunitySettings = typeof communitySettings.$inferSelect;
 
-/** Every post HelixOS sends to the community, with what happened to it: the coach's log. One Monday post per week, never two. */
+/** Every post HelixOS sends to the community, with what happened to it: the coach's log. One Monday post per week and one month post per month, never two. */
 export const communityPosts = sqliteTable(
   "community_posts",
   {
     id: id(),
     workspaceId: text("workspace_id").notNull(),
     coachUserId: text("coach_user_id").notNull(),
-    kind: text("kind", { enum: ["monday", "test"] }).notNull(),
+    kind: text("kind", { enum: ["monday", "month", "test"] }).notNull(),
     /** The Monday of the week it is for (monday posts only). */
     weekOf: text("week_of"),
+    /** The month it is for, "YYYY-MM" (month posts only). */
+    monthOf: text("month_of"),
     title: text("title").notNull(),
     /** Null on a Monday row means the coach's current text at the time it posts. */
     body: text("body"),
@@ -521,21 +528,25 @@ export const communityPosts = sqliteTable(
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("community_posts_week").on(t.workspaceId, t.kind, t.weekOf), index("community_posts_workspace").on(t.workspaceId, t.createdAt)],
+  (t) => [uniqueIndex("community_posts_week").on(t.workspaceId, t.kind, t.weekOf), uniqueIndex("community_posts_month").on(t.workspaceId, t.kind, t.monthOf), index("community_posts_workspace").on(t.workspaceId, t.createdAt)],
 );
 export type CommunityPost = typeof communityPosts.$inferSelect;
 
-/** "Share to the thread" taps: one per member per week, the week's points on the first. What the coach's card counts. */
+/**
+ * "Share to the thread" taps: one per member per week (the week's 3-1-3) and one per member per month (the month's eleven
+ * answers, 1 Oct), the points on the first of each. What the coach's cards count. A row has a week or a month, never both.
+ */
 export const communityShares = sqliteTable(
   "community_shares",
   {
     id: id(),
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
-    weekOf: text("week_of").notNull(),
+    weekOf: text("week_of"),
+    monthOf: text("month_of"),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("community_shares_member_week").on(t.workspaceId, t.userId, t.weekOf)],
+  (t) => [uniqueIndex("community_shares_member_week").on(t.workspaceId, t.userId, t.weekOf), uniqueIndex("community_shares_member_month").on(t.workspaceId, t.userId, t.monthOf)],
 );
 
 /* ───────────────────────── Weekly intention: the 3-1-3 (handoff rev 124) ───────────────────────── */

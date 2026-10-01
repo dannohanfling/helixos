@@ -1,5 +1,59 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MONDAY_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, normalTime, postLink, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink, communityHtml, plainOf, mondayTestText, EVERYONE_MENTION } from "../community";
+import { DEFAULT_MONDAY_TEXT, DEFAULT_MONTH_TEXT, SHARE_POINTS, failedReason, patternFor, pickPlannerPost, testText, TITLE_MAX, shareRef, shareTarget, shareText, communityDetails, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, monthDue, monthShareRef, monthShareText, monthShareTarget, monthTestText, monthText, monthTitle, nextMonth, normalTime, postLink, upcomingMonth, upcomingWeek, validLink, validPattern, postIdFromLink, patternFromLink, communityHtml, plainOf, mondayTestText, EVERYONE_MENTION } from "../community";
+import { MONTH_QUESTIONS } from "../month-intentions";
+
+describe("the first-of-the-month post (1 Oct)", () => {
+  it("is titled the way Danno titles it", () => {
+    expect(monthTitle("2026-10")).toBe("Set Your October Intentions");
+    expect(monthTitle("2026-11")).toBe("Set Your November Intentions");
+  });
+  it("is due on the 1st only, from the coach's month time until the day ends", () => {
+    expect(monthDue("2026-11-01", "07:59", "08:00")).toBe(false);
+    expect(monthDue("2026-11-01", "08:00", "08:00")).toBe(true);
+    expect(monthDue("2026-11-01", "23:59", "08:00")).toBe(true);
+    // A 1st missed is never posted later in the month by the job: the coach presses Post now.
+    expect(monthDue("2026-11-02", "09:00", "08:00")).toBe(false);
+  });
+  it("names the next month to preview: this month's until the 1st's time passes, then the one after", () => {
+    expect(upcomingMonth("2026-11-01", "07:00", "08:00")).toBe("2026-11");
+    expect(upcomingMonth("2026-11-01", "08:00", "08:00")).toBe("2026-12");
+    expect(upcomingMonth("2026-11-15", "12:00", "08:00")).toBe("2026-12");
+    expect(upcomingMonth("2026-12-15", "12:00", "08:00")).toBe("2027-01");
+    expect(nextMonth("2026-12")).toBe("2027-01");
+  });
+  it("uses the eleven questions as the default text until the coach writes their own", () => {
+    expect(monthText(null)).toBe(DEFAULT_MONTH_TEXT);
+    expect(monthText(" Mine ")).toBe("Mine");
+    for (const q of MONTH_QUESTIONS) expect(DEFAULT_MONTH_TEXT).toContain(q.q);
+    expect(DEFAULT_MONTH_TEXT).toContain("@everyone");
+    expect(monthTestText("Text", "2026-10-01T08:00:00.000Z")).toContain("A test of the month text from HelixOS, sent 2026-10-01 08:00 UTC");
+  });
+  it("shares the eleven answers, question by question, revenue included as Danno asked", () => {
+    const text = monthShareText({ word: " Rooted ", personalSeason: "wealth", fear: "Being seen", habit: "Walk daily", skill: "Selling", impact: "Ten clients served", businessSeason: "sales", revenueGoal: 10000, revenueWhy: "To hire help.", plan: "Two offers a week", proudLast: "Launched", proudEnd: "Kept every promise" });
+    expect(text).toBe(
+      [
+        "My word: Rooted",
+        "Personal season: Wealth",
+        "Fear or limiting belief to overcome: Being seen",
+        "Habit to start: Walk daily",
+        "Skill to develop: Selling",
+        "Impact: Ten clients served",
+        "Business season: Sales",
+        "Revenue goal: $10,000. To hire help.",
+        "Plan: Two offers a week",
+        "Most proud of last month: Launched",
+        "At the end of the month, proud of: Kept every promise",
+      ].join("\n\n"),
+    );
+    expect(monthShareRef("2026-11")).toBe("share:month:2026-11");
+  });
+  it("goes only to this month's post, once it's out with a link", () => {
+    expect(monthShareTarget(null, "2026-11")).toEqual({ reason: "This month's post isn't up yet. Check back after the 1st." });
+    expect(monthShareTarget({ monthOf: "2026-10", status: "posted", link: "https://x" }, "2026-11")).toEqual({ reason: "This month's post isn't up yet. Check back after the 1st." });
+    expect(monthShareTarget({ monthOf: "2026-11", status: "sent", link: null }, "2026-11")).toEqual({ reason: "This month's post isn't up yet. Check back later today." });
+    expect(monthShareTarget({ monthOf: "2026-11", status: "posted", link: "https://x" }, "2026-11")).toEqual({ link: "https://x" });
+  });
+});
 
 describe("the Monday post's title", () => {
   it("is the week's Monday to Sunday, month/day", () => {

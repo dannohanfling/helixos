@@ -3,6 +3,7 @@
  * Social Planner, from the team account. Pure: dates are "YYYY-MM-DD" in the coach's own time zone, times "HH:MM".
  */
 import { addDays, startOfWeek, weekday } from "@/lib/dates";
+import { MONTH_QUESTIONS, revenueLabel, seasonLabel } from "@/lib/engine/month-intentions";
 
 /** Danno's current Monday post, word for word: the default until the coach edits it. */
 export const DEFAULT_MONDAY_TEXT =
@@ -16,6 +17,37 @@ export const TEST_TITLE = "HelixOS test, please ignore";
 /** The Monday text sent as a test (rev 169), to see its layout in the test channel; its send time on a last line tells tests apart. */
 export const mondayTestText = (text: string, sentAtIso: string): string => `${text}\n\n(A test of the Monday text from HelixOS, sent ${sentAtIso.slice(0, 16).replace("T", " ")} UTC. Please ignore it; it will be deleted.)`;
 export const testText = (sentAtIso: string): string => `A test from HelixOS, to check the connection (sent ${sentAtIso.slice(0, 16).replace("T", " ")} UTC). Please ignore it; it will be deleted.`;
+
+/* ───────── The first-of-the-month post (1 Oct, Danno's priority 1) ───────── */
+
+/**
+ * The month post's default text until the coach edits it: a short intro and the eleven questions, in Danno's order (the same
+ * eleven the month form asks). Danno pastes his approved wording over it on the Community posts page.
+ */
+export const DEFAULT_MONTH_TEXT = [
+  "A new month. Before the week-by-week work, let's set the month on purpose. Answer the eleven below and share them here, so we can hold each other to them and check in with you through the month. @everyone",
+  MONTH_QUESTIONS.map((q, i) => `${i + 1}. ${q.q}`).join("\n"),
+].join("\n\n");
+const monthName = (monthOf: string): string => new Date(`${monthOf}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+/** "Set Your October Intentions": the title pattern Danno uses. */
+export const monthTitle = (monthOf: string): string => `Set Your ${monthName(monthOf)} Intentions`;
+/** The month after ("2026-12" → "2027-01"). */
+export function nextMonth(monthOf: string): string {
+  const y = Number(monthOf.slice(0, 4));
+  const m = Number(monthOf.slice(5, 7));
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+}
+/** The next month post's month: this month's while the 1st's post time hasn't passed, else next month's. */
+export function upcomingMonth(today: string, nowTime: string, postTime: string): string {
+  const month = today.slice(0, 7);
+  return today.slice(8, 10) === "01" && nowTime < postTime ? month : nextMonth(month);
+}
+/** Whether the month post is due now: on the 1st, from the coach's time until the day ends. A 1st missed is Post now, as a Monday is. */
+export const monthDue = (today: string, nowTime: string, postTime: string): boolean => today.slice(8, 10) === "01" && nowTime >= postTime;
+/** The coach's month text, or the default when it's empty. */
+export const monthText = (custom: string | null | undefined): string => (custom?.trim() ? custom.trim() : DEFAULT_MONTH_TEXT);
+/** The month text sent as a test, to see its layout in the test channel; its send time on a last line tells tests apart. */
+export const monthTestText = (text: string, sentAtIso: string): string => `${text}\n\n(A test of the month text from HelixOS, sent ${sentAtIso.slice(0, 16).replace("T", " ")} UTC. Please ignore it; it will be deleted.)`;
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 /** "Set Your Intentions 9/28-10/4": the week's Monday to its Sunday. */
@@ -146,6 +178,34 @@ export const shareRef = (weekOf: string): string => `share:${weekOf}`;
 export function shareText(week: { word: string; keyResults: { text: string }[]; initiative: string; tasks: { title: string }[] }): string {
   const list = (xs: string[]) => xs.filter((x) => x.trim()).map((x, i) => `${i + 1}. ${x.trim()}`).join("\n");
   return [`My word: ${week.word.trim()}`, `Key results:\n${list(week.keyResults.map((k) => k.text))}`, `Initiative: ${week.initiative.trim()}`, `Tasks:\n${list(week.tasks.map((t) => t.title))}`].join("\n\n");
+}
+
+/** Points for sharing the month's eleven answers to the month's thread (1 Oct): the same, once per month. */
+export const monthShareRef = (monthOf: string): string => `share:month:${monthOf}`;
+/**
+ * The member's month as a ready-made comment: the eleven answers, question by question, in the shape the week uses. Danno
+ * asked for all eleven (1 Oct), the revenue goal included; the member sees exactly what they paste.
+ */
+export function monthShareText(m: { word: string; personalSeason: string; fear: string; habit: string; skill: string; impact: string; businessSeason: string; revenueGoal: number; revenueWhy: string; plan: string; proudLast: string; proudEnd: string }): string {
+  return [
+    `My word: ${m.word.trim()}`,
+    `Personal season: ${seasonLabel(m.personalSeason)}`,
+    `Fear or limiting belief to overcome: ${m.fear.trim()}`,
+    `Habit to start: ${m.habit.trim()}`,
+    `Skill to develop: ${m.skill.trim()}`,
+    `Impact: ${m.impact.trim()}`,
+    `Business season: ${seasonLabel(m.businessSeason)}`,
+    `Revenue goal: ${revenueLabel(m.revenueGoal)}. ${m.revenueWhy.trim()}`,
+    `Plan: ${m.plan.trim()}`,
+    `Most proud of last month: ${m.proudLast.trim()}`,
+    `At the end of the month, proud of: ${m.proudEnd.trim()}`,
+  ].join("\n\n");
+}
+/** Where the month's share goes: this month's post, once it's out with its link. Never an older month's post. */
+export function monthShareTarget(post: { monthOf: string | null; status: string; link: string | null } | null | undefined, monthOf: string): { link: string } | { reason: string } {
+  if (!post || post.monthOf !== monthOf || post.status === "skipped") return { reason: "This month's post isn't up yet. Check back after the 1st." };
+  if (!post.link || (post.status !== "posted" && post.status !== "sent")) return { reason: "This month's post isn't up yet. Check back later today." };
+  return { link: post.link };
 }
 
 /**

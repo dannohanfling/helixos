@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -8,8 +8,8 @@ import { newId } from "@/lib/ids";
 import { nowIso, nowWallInTz } from "@/lib/dates";
 import { opt, str } from "@/lib/action-helpers";
 import { connectionFor, refreshAccounts } from "@/lib/ghl";
-import { checkPost, coachTz, postMonday, postTest, settingsFor } from "@/lib/community";
-import { DEFAULT_MONDAY_TEXT, TEXT_MAX, mondayTitle, normalTime, patternFromLink, postIdFromLink, upcomingWeek, validLink, validPattern } from "@/lib/engine/community";
+import { checkPost, coachTz, postMonday, postMonth, postTest, settingsFor } from "@/lib/community";
+import { DEFAULT_MONDAY_TEXT, DEFAULT_MONTH_TEXT, TEXT_MAX, mondayTitle, monthText, monthTitle, normalTime, patternFromLink, postIdFromLink, upcomingMonth, upcomingWeek, validLink, validPattern } from "@/lib/engine/community";
 
 /** Back to the community page, with a note or an error, at the part of the page it is about. */
 function back(anchor: string, note: { saved?: string; error?: string } = {}): never {
@@ -46,12 +46,20 @@ export async function saveCommunitySettingsAction(formData: FormData): Promise<v
   if (channel && !account) back("setup", { error: "Pick the channel from the list. If it isn't there, press Check again." });
   const time = normalTime(str(formData, "postTime") || "08:00");
   if (!time) back("setup", { error: "Write the time as hours and minutes, like 08:00." });
-  const text = str(formData, "mondayText").trim();
+  // A textarea sends Windows line ends; the text is kept and compared with plain ones.
+  const text = str(formData, "mondayText").replace(/\r\n?/g, "\n").trim();
   if (text.length > TEXT_MAX) back("setup", { error: "The Monday text is longer than the community allows." });
   const pattern = str(formData, "linkPattern").trim();
   if (pattern && !validPattern(pattern)) back("setup", { error: "The link pattern is a full https address with {postId} where the post's id goes." });
   const on = formData.get("mondayOn") === "on";
   if (on && !channel) back("setup", { error: "Pick the channel before turning the Monday post on." });
+  // The first-of-the-month post (1 Oct): its own switch, time and text, the same channel and Posted as.
+  const monthTime = normalTime(str(formData, "monthTime") || "08:00");
+  if (!monthTime) back("setup", { error: "Write the month post's time as hours and minutes, like 08:00." });
+  const monthBody = str(formData, "monthText").replace(/\r\n?/g, "\n").trim();
+  if (monthBody.length > TEXT_MAX) back("setup", { error: "The month text is longer than the community allows." });
+  const monthOn = formData.get("monthOn") === "on";
+  if (monthOn && !channel) back("setup", { error: "Pick the channel before turning the month post on." });
   await db
     .update(schema.communitySettings)
     .set({
@@ -63,6 +71,10 @@ export async function saveCommunitySettingsAction(formData: FormData): Promise<v
       postTime: time!,
       // The default text is kept as "not customised", so a later change to the default reaches a coach who never edited it.
       mondayText: text && text !== DEFAULT_MONDAY_TEXT ? text : null,
+      monthOn,
+      monthNotify: formData.get("monthNotify") === "on",
+      monthTime: monthTime!,
+      monthText: monthBody && monthBody !== DEFAULT_MONTH_TEXT ? monthBody : null,
       postAsId: opt(formData, "postAsId"),
       postAsName: opt(formData, "postAsName"),
       // The pattern is the chosen channel's own (each channel's address has its own slug); the other channels' are kept.
@@ -91,9 +103,10 @@ export async function sendCommunityTestAction(formData: FormData): Promise<void>
   const v = await requireCoach();
   const s = await settingsFor(v.workspace.id);
   if (!s?.channelAccountId) back("setup", { error: "Pick the channel and save before sending a test post." });
-  const monday = str(formData, "kind") === "monday";
-  const tz = monday ? await coachTz(s!) : "";
-  const row = await postTest(s!, monday ? { mondayTitle: mondayTitle(upcomingWeek(v.today, nowWallInTz(tz).slice(11, 16), s!.postTime)) } : {});
+  const kind = str(formData, "kind");
+  const tz = kind === "monday" || kind === "month" ? await coachTz(s!) : "";
+  const nowTime = tz ? nowWallInTz(tz).slice(11, 16) : "";
+  const row = await postTest(s!, kind === "monday" ? { mondayTitle: mondayTitle(upcomingWeek(v.today, nowTime, s!.postTime)) } : kind === "month" ? { monthTitle: monthTitle(upcomingMonth(v.today, nowTime, s!.monthTime)) } : {});
   back("test", row.status === "failed" ? { error: row.error ?? "The test post didn't go out." } : { saved: "Test post sent. Press Check again in a minute to see it published." });
 }
 
@@ -115,7 +128,7 @@ export async function saveNextMondayAction(formData: FormData): Promise<void> {
   const week = upcomingWeek(v.today, nowWallInTz(tz).slice(11, 16), s.postTime);
   if (str(formData, "weekOf") !== week) back("next", { error: "That week has changed since the page loaded. Look again." });
   const intent = str(formData, "intent");
-  const text = str(formData, "body").trim();
+  const text = str(formData, "body").replace(/\r\n?/g, "\n").trim();
   if (text.length > TEXT_MAX) back("next", { error: "The text is longer than the community allows." });
   await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: v.workspace.id, coachUserId: s.coachUserId, kind: "monday", weekOf: week, title: mondayTitle(week), status: "scheduled" }).onConflictDoNothing();
   const row = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, v.workspace.id), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, week)) });
@@ -130,11 +143,65 @@ export async function saveNextMondayAction(formData: FormData): Promise<void> {
   back("next", { saved: intent === "skip" ? "Skipped. Nothing goes out that Monday." : intent === "unskip" ? "Back on for that Monday." : "Saved for that Monday." });
 }
 
-/** Post now: a week whose post failed, or this week's when Monday passed without one. Never a week already sent or posted. */
+/**
+ * Next month's post before it goes out (1 Oct): its own text for that month, or skipped. Only a month that hasn't been sent
+ * can change. The same shape as next Monday's.
+ */
+export async function saveNextMonthAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const s = await settingsOrNew(v.workspace.id, v.user.id);
+  const tz = await coachTz(s);
+  const month = upcomingMonth(v.today, nowWallInTz(tz).slice(11, 16), s.monthTime);
+  if (str(formData, "monthOf") !== month) back("month", { error: "That month has changed since the page loaded. Look again." });
+  const intent = str(formData, "intent");
+  const text = str(formData, "body").replace(/\r\n?/g, "\n").trim();
+  if (text.length > TEXT_MAX) back("month", { error: "The text is longer than the community allows." });
+  await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: v.workspace.id, coachUserId: s.coachUserId, kind: "month", monthOf: month, title: monthTitle(month), status: "scheduled" }).onConflictDoNothing();
+  const row = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, v.workspace.id), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, month)) });
+  if (!row || !["scheduled", "skipped"].includes(row.status)) back("month", { error: "That month's post has already gone out." });
+  const set =
+    intent === "skip"
+      ? { status: "skipped" as const }
+      : intent === "unskip"
+        ? { status: "scheduled" as const }
+        : { body: text && text !== monthText(s.monthText) ? text : null };
+  await db.update(schema.communityPosts).set({ ...set, updatedAt: nowIso() }).where(and(eq(schema.communityPosts.id, row!.id), eq(schema.communityPosts.workspaceId, v.workspace.id)));
+  back("month", { saved: intent === "skip" ? "Skipped. Nothing goes out on that 1st." : intent === "unskip" ? "Back on for that month." : "Saved for that month." });
+}
+
+/**
+ * A month post the coach made by hand (1 Oct: October's is Claude's hand post, HelixOS posts from November): its link, pasted,
+ * makes that month's row, published, so the members' "Share to this month's thread" points at it. Only this month, and only
+ * while HelixOS hasn't sent that month's post itself; a row HelixOS sent takes its link on the log row instead.
+ */
+export async function setMonthLinkAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const s = await settingsOrNew(v.workspace.id, v.user.id);
+  const month = v.today.slice(0, 7);
+  if (str(formData, "monthOf") !== month) back("month", { error: "That month has changed since the page loaded. Look again." });
+  const link = str(formData, "link").trim();
+  if (!link || !validLink(link)) back("month", { error: "Paste the post's full https link." });
+  const now = nowIso();
+  await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: v.workspace.id, coachUserId: s.coachUserId, kind: "month", monthOf: month, title: monthTitle(month), status: "scheduled" }).onConflictDoNothing();
+  const [row] = await db
+    .update(schema.communityPosts)
+    .set({ status: "posted", link, platformPostId: postIdFromLink(link), postedAt: now, error: null, checkNote: "Posted by hand; the link was pasted.", updatedAt: now })
+    .where(and(eq(schema.communityPosts.workspaceId, v.workspace.id), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, month), inArray(schema.communityPosts.status, ["scheduled", "skipped", "failed"])))
+    .returning();
+  back("month", row ? { saved: `${monthTitle(month)} is marked published with that link. Members can share to it now.` } : { error: "HelixOS sent that month's post itself: paste the link on its row in the log." });
+}
+
+/** Post now: a week whose post failed, or this week's when Monday passed without one; the same for a month (1 Oct). Never one already sent or posted. */
 export async function postCommunityNowAction(formData: FormData): Promise<void> {
   const v = await requireCoach();
   const s = await settingsFor(v.workspace.id);
   if (!s?.channelAccountId) back("log", { error: "Pick the channel first." });
+  const monthOf = str(formData, "monthOf");
+  if (monthOf) {
+    if (!/^\d{4}-\d{2}$/.test(monthOf) || monthOf > v.today.slice(0, 7)) back("month", { error: "Only a month that has started can be posted now." });
+    const r = await postMonth(s!, monthOf, { retry: true });
+    back("month", r.ok ? { saved: `${monthTitle(monthOf)} sent.` } : { error: r.error ?? "It didn't go out." });
+  }
   const weekOf = str(formData, "weekOf");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(weekOf) || weekOf > v.today) back("log", { error: "Only a week that has started can be posted now." });
   const r = await postMonday(s!, weekOf, { retry: true });

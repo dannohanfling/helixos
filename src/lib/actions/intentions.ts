@@ -10,8 +10,8 @@ import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { hitTarget, readIntention, soundsLikeTask, targetOf, tasksDueOn, weekOf } from "@/lib/engine/intentions";
 import { monthOf, readMonthIntention } from "@/lib/engine/month-intentions";
-import { SHARE_POINTS, shareRef } from "@/lib/engine/community";
-import { shareFor } from "@/lib/community";
+import { SHARE_POINTS, monthShareRef, shareRef } from "@/lib/engine/community";
+import { monthShareFor, shareFor } from "@/lib/community";
 import { award } from "@/lib/queries/points";
 
 /** Where a form goes back to: the Intentions page or Today, and nothing else. */
@@ -148,5 +148,21 @@ export async function recordShareAction(): Promise<{ ok: boolean; points: number
   if (!share.link) return { ok: false, points: 0, error: share.reason ?? "This week's post isn't up yet." };
   await db.insert(schema.communityShares).values({ id: newId(), workspaceId, userId, weekOf: week.weekOf }).onConflictDoNothing();
   const scored = await award({ workspaceId, userId }, "community", SHARE_POINTS, "Shared your 3-1-3 in the community", shareRef(week.weekOf));
+  return { ok: true, points: scored ? SHARE_POINTS : 0 };
+}
+
+/**
+ * The tap on the month's "Share to this month's thread" (1 Oct): recorded once per month, with the points on the first tap.
+ * Only for the member's own current month, and only once this month's post is out. The comment itself is posted by the
+ * member, under their own name; HelixOS never posts it.
+ */
+export async function recordMonthShareAction(): Promise<{ ok: boolean; points: number; error?: string }> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
+  const m = await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, workspaceId), eq(schema.monthlyIntentions.userId, userId), eq(schema.monthlyIntentions.month, monthOf(v.today))) });
+  if (!m) return { ok: false, points: 0, error: "Set your month first." };
+  const share = await monthShareFor(workspaceId, userId, m);
+  if (!share.link) return { ok: false, points: 0, error: share.reason ?? "This month's post isn't up yet." };
+  await db.insert(schema.communityShares).values({ id: newId(), workspaceId, userId, monthOf: m.month }).onConflictDoNothing();
+  const scored = await award({ workspaceId, userId }, "community", SHARE_POINTS, "Shared your month in the community", monthShareRef(m.month));
   return { ok: true, points: scored ? SHARE_POINTS : 0 };
 }

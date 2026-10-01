@@ -4,8 +4,9 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { connectionFor, probeCommunityScopes } from "@/lib/ghl";
 import { coachTz, settingsFor } from "@/lib/community";
-import { checkCommunityPostAction, postCommunityNowAction, resolveCommunityPostAction, refreshCommunityChannelsAction, resumeCommunityAction, saveCommunitySettingsAction, saveNextMondayAction, sendCommunityTestAction, setCommunityLinkAction } from "@/lib/actions/community";
-import { DEFAULT_POST_TIME, mondayDue, mondayText, mondayTitle, upcomingWeek } from "@/lib/engine/community";
+import { checkCommunityPostAction, postCommunityNowAction, resolveCommunityPostAction, refreshCommunityChannelsAction, resumeCommunityAction, saveCommunitySettingsAction, saveNextMondayAction, saveNextMonthAction, sendCommunityTestAction, setCommunityLinkAction, setMonthLinkAction } from "@/lib/actions/community";
+import { DEFAULT_POST_TIME, mondayDue, mondayText, mondayTitle, monthDue, monthText, monthTitle, upcomingMonth, upcomingWeek } from "@/lib/engine/community";
+import { monthLabel } from "@/lib/engine/feedback";
 import { ChannelPattern } from "@/components/channel-pattern";
 import { formatDate, formatDateTime, nowWallInTz } from "@/lib/dates";
 import type { CommunityPost } from "@/db/schema";
@@ -20,7 +21,8 @@ const WORD = { scheduled: "scheduled", sent: "on its way", posted: "posted", fai
 /**
  * The coach's community connection (handoff revs 150 to 154): where and when the Monday post goes, a test post that shows the
  * real result, next Monday's post before it goes out (edit or skip), and every post HelixOS has sent, with its status, reason,
- * link and that week's numbers.
+ * link and that week's numbers. The first-of-the-month post (1 Oct) sits beside it: its own switch, time and text, next
+ * month's before it goes out, a pasted link for a month posted by hand, and its own log with the month's numbers.
  */
 export default async function CommunityPage({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string }> }) {
   const v = await requireCoach();
@@ -30,12 +32,22 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
   const nowTime = nowWallInTz(tz).slice(11, 16);
   const postTime = s?.postTime ?? DEFAULT_POST_TIME;
   const next = upcomingWeek(v.today, nowTime, postTime);
+  const monthTime = s?.monthTime ?? DEFAULT_POST_TIME;
+  const nextMonthOf = upcomingMonth(v.today, nowTime, monthTime);
+  const thisMonthOf = v.today.slice(0, 7);
   const [posts, scopes, clients] = await Promise.all([
     db.query.communityPosts.findMany({ where: eq(schema.communityPosts.workspaceId, v.workspace.id), orderBy: [desc(schema.communityPosts.createdAt)], limit: 60 }),
     conn?.manualToken ? probeCommunityScopes(conn) : Promise.resolve([]),
     db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client"), isNull(schema.memberships.removedAt)) }),
   ]);
   const mondays = posts.filter((p) => p.kind === "monday");
+  const months = posts.filter((p) => p.kind === "month");
+  const nextMonthRow = months.find((p) => p.monthOf === nextMonthOf);
+  const thisMonthRow = months.find((p) => p.monthOf === thisMonthOf) ?? null;
+  // This month's post is missing when the 1st's time has passed with nothing sent: Post now. A month HelixOS didn't send (off,
+  // skipped, or posted by hand, as October's is) can take a pasted link, so the members' share points at it.
+  const monthMissed = s?.channelAccountId && s.monthOn && monthDue(v.today, nowTime, monthTime) && (!thisMonthRow || thisMonthRow.status === "scheduled") ? thisMonthOf : null;
+  const monthByHand = !thisMonthRow || ["scheduled", "skipped", "failed"].includes(thisMonthRow.status);
   const tests = posts.filter((p) => p.kind === "test").slice(0, 3);
   const nextRow = mondays.find((p) => p.weekOf === next);
   // This week's post is missing when its Monday time has passed with nothing sent: the coach sees it and can post it now.
@@ -57,12 +69,26 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
     shareCounts.set(w, clients.filter((c) => sharedIds.has(c.userId)).length);
     notShared.set(w, clients.filter((c) => !sharedIds.has(c.userId)).map((c) => clientNames.get(c.userId) ?? "A member").sort());
   }
+  // Per month (1 Oct): how many members set their month, how many shared it to the thread, and who hasn't.
+  const monthSetCounts = new Map<string, number>();
+  const monthShareCounts = new Map<string, number>();
+  const monthNotShared = new Map<string, string[]>();
+  for (const m of [...new Set(months.filter((p) => p.monthOf && p.monthOf <= thisMonthOf).map((p) => p.monthOf!))]) {
+    const [rows, shares] = await Promise.all([
+      db.query.monthlyIntentions.findMany({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.month, m)) }),
+      db.query.communityShares.findMany({ where: and(eq(schema.communityShares.workspaceId, v.workspace.id), eq(schema.communityShares.monthOf, m)) }),
+    ]);
+    monthSetCounts.set(m, rows.filter((r) => clients.some((c) => c.userId === r.userId)).length);
+    const sharedIds = new Set(shares.map((x) => x.userId));
+    monthShareCounts.set(m, clients.filter((c) => sharedIds.has(c.userId)).length);
+    monthNotShared.set(m, clients.filter((c) => !sharedIds.has(c.userId)).map((c) => clientNames.get(c.userId) ?? "A member").sort());
+  }
   const channels = (conn?.accounts ?? []).slice().sort((a, b) => Number(b.platform === "community") - Number(a.platform === "community"));
   const missing = scopes.filter((x) => x.state === "missing");
 
   return (
     <>
-      <PageHeader title="Community posts" subtitle="The Monday 3-1-3 post in your GoHighLevel community, and what happened to each one." action={<Link href="/coach" className="btn btn-ghost btn-sm">Back</Link>} />
+      <PageHeader title="Community posts" subtitle="The Monday 3-1-3 post and the first-of-the-month post in your GoHighLevel community, and what happened to each one." action={<Link href="/coach" className="btn btn-ghost btn-sm">Back</Link>} />
       {sp.saved ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="community-saved">{sp.saved}</p> : null}
       {sp.error ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="community-error">{sp.error}</p> : null}
       {s?.pausedReason ? (
@@ -125,6 +151,27 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                 <textarea className="field mt-1" name="mondayText" rows={6} defaultValue={mondayText(s?.mondayText)} data-testid="community-text" />
                 <span className="mt-1 block text-xs text-ink-3">The title is set each week: &ldquo;{mondayTitle(next)}&rdquo;.</span>
               </label>
+              {/* The first-of-the-month post (1 Oct): the same channel and Posted as, its own switch, time and text. */}
+              <fieldset className="min-w-0 space-y-3 rounded-lg border p-3" data-testid="community-month-setup">
+                <legend className="px-1 text-sm font-semibold">The first of the month</legend>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="monthOn" defaultChecked={s?.monthOn ?? false} data-testid="community-month-on" /> Post the month&apos;s intentions on the 1st
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="monthNotify" defaultChecked={s?.monthNotify ?? true} data-testid="community-month-notify" /> Notify all members when it goes out
+                  </label>
+                  <label className="block text-sm font-medium">
+                    At ({tz})
+                    <input className="field mt-1" name="monthTime" defaultValue={monthTime} placeholder="08:00" data-testid="community-month-time" />
+                  </label>
+                </div>
+                <label className="block text-sm font-medium">
+                  The month text
+                  <textarea className="field mt-1" name="monthText" rows={8} defaultValue={monthText(s?.monthText)} data-testid="community-month-text" />
+                  <span className="mt-1 block text-xs text-ink-3">The title is set each month: &ldquo;{monthTitle(nextMonthOf)}&rdquo;.</span>
+                </label>
+              </fieldset>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block text-sm font-medium">
                   Posted as (community member contact ID)
@@ -167,6 +214,10 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
             <input type="hidden" name="kind" value="monday" />
             <SubmitButton className="btn btn-ghost btn-sm" pendingText="Sending…" data-testid="community-test-monday">Send the Monday text as a test</SubmitButton>
           </form>
+          <form action={sendCommunityTestAction}>
+            <input type="hidden" name="kind" value="month" />
+            <SubmitButton className="btn btn-ghost btn-sm" pendingText="Sending…" data-testid="community-test-month">Send the month text as a test</SubmitButton>
+          </form>
         </div>
         <p className="mt-2 text-xs text-ink-3">Tests go to the channel picked above and never notify anyone.</p>
         {tests.length ? (
@@ -199,6 +250,85 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
             </form>
           )}
         </div>
+      </Card>
+
+      <Card id="month" title={`First of the month: ${monthLabel(nextMonthOf)}`} className="mb-5" action={<Badge tone={nextMonthRow?.status === "skipped" ? "warn" : s?.monthOn ? "accent" : "neutral"}>{nextMonthRow?.status === "skipped" ? "skipped" : s?.monthOn ? `at ${monthTime}` : "off"}</Badge>}>
+        <div data-testid="community-month-next" data-month={nextMonthOf} data-state={nextMonthRow?.status ?? "scheduled"}>
+          <p className="text-sm font-semibold" data-testid="community-month-next-title">{monthTitle(nextMonthOf)}</p>
+          {nextMonthRow && !["scheduled", "skipped"].includes(nextMonthRow.status) ? (
+            <p className="mt-2 text-sm text-ink-2">It has gone out. See the log below.</p>
+          ) : (
+            <form action={saveNextMonthAction} className="mt-2 space-y-2">
+              <input type="hidden" name="monthOf" value={nextMonthOf} />
+              <textarea className="field" name="body" rows={8} defaultValue={nextMonthRow?.body ?? monthText(s?.monthText)} data-testid="community-month-next-body" />
+              <div className="flex flex-wrap gap-2">
+                <SubmitButton className="btn btn-ghost btn-sm" name="intent" value="save" pendingText="Saving…" data-testid="community-month-next-save">Save for that 1st</SubmitButton>
+                {nextMonthRow?.status === "skipped" ? (
+                  <SubmitButton className="btn btn-ghost btn-sm" name="intent" value="unskip" pendingText="Saving…" data-testid="community-month-next-unskip">Post it after all</SubmitButton>
+                ) : (
+                  <SubmitButton className="btn btn-ghost btn-sm" name="intent" value="skip" pendingText="Saving…" data-testid="community-month-next-skip">Skip that month</SubmitButton>
+                )}
+              </div>
+              {!s?.monthOn ? <p className="text-xs text-ink-3">The month post is off: turn it on under Setup.</p> : null}
+            </form>
+          )}
+        </div>
+        {monthMissed ? (
+          <div className="mt-3 rounded-lg bg-warn-soft p-2 text-sm" data-testid="community-month-missed">
+            {monthTitle(monthMissed)} hasn&apos;t gone out.
+            <form action={postCommunityNowAction} className="mt-2">
+              <input type="hidden" name="monthOf" value={monthMissed} />
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Posting…" data-testid="community-month-post-now">Post now</SubmitButton>
+            </form>
+          </div>
+        ) : null}
+        {/* A month posted by hand (October's, 1 Oct): its pasted link makes the row, published, so the members' share points at it. */}
+        {monthByHand ? (
+          <form action={setMonthLinkAction} className="mt-3 rounded-lg border p-3" data-testid="community-month-by-hand" data-month={thisMonthOf}>
+            <p className="mb-2 text-sm font-medium">Posted {monthLabel(thisMonthOf)}&apos;s yourself? Paste its link, and members can share their month to it.</p>
+            <input type="hidden" name="monthOf" value={thisMonthOf} />
+            <div className="flex flex-wrap items-center gap-2">
+              <input className="field max-w-md" name="link" placeholder="The post's link from the community" data-testid="community-month-link" />
+              <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…" data-testid="community-month-link-save">Save link</SubmitButton>
+            </div>
+          </form>
+        ) : null}
+        {months.filter((p) => p.status !== "scheduled" || (p.monthOf ?? "") < thisMonthOf).length ? (
+          <ul className="mt-4 divide-y text-sm" data-testid="community-month-log">
+            {months
+              .filter((p) => p.status !== "scheduled" || (p.monthOf ?? "") < thisMonthOf)
+              .map((p) => (
+                <li key={p.id} className="py-3" data-testid="community-month-row" data-month={p.monthOf ?? ""} data-state={p.status}>
+                  <PostLine p={p} tz={tz} />
+                  {p.monthOf && p.monthOf <= thisMonthOf ? (
+                    <div className="mt-1 text-xs text-ink-3">
+                      <p data-testid="community-month-counts">
+                        months set: {monthSetCounts.get(p.monthOf) ?? 0} of {clients.length} · shared to the thread: <span data-testid="community-month-shares">{monthShareCounts.get(p.monthOf) ?? 0}</span>
+                      </p>
+                      {(monthNotShared.get(p.monthOf) ?? []).length ? (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer">Not shared yet ({(monthNotShared.get(p.monthOf) ?? []).length})</summary>
+                          <p className="mt-1 text-ink-2" data-testid="community-month-not-shared">{(monthNotShared.get(p.monthOf) ?? []).join(", ")}</p>
+                        </details>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {p.status === "failed" ? (
+                    <form action={postCommunityNowAction} className="mt-2">
+                      <input type="hidden" name="monthOf" value={p.monthOf ?? ""} />
+                      <SubmitButton className="btn btn-ghost btn-sm" pendingText="Posting…" data-testid="community-month-retry">Post now</SubmitButton>
+                    </form>
+                  ) : null}
+                  <form action={setCommunityLinkAction} className="mt-2 flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="postId" value={p.id} />
+                    <input className="field max-w-md" name="link" defaultValue={p.link ?? ""} placeholder="Paste the post's link from the community" data-testid="community-month-row-link" />
+                    <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…" data-testid="community-month-row-link-save">Save link</SubmitButton>
+                    {p.status !== "posted" ? <span className="text-xs text-ink-3">If it&apos;s in the community, paste its link: that marks it published.</span> : null}
+                  </form>
+                </li>
+              ))}
+          </ul>
+        ) : null}
       </Card>
 
       <Card id="log" title="Every Monday post" action={<span className="text-xs text-ink-3">{clients.length} members</span>}>

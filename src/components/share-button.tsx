@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { recordShareAction } from "@/lib/actions/intentions";
+import { recordMonthShareAction, recordShareAction } from "@/lib/actions/intentions";
 
 /**
  * "Share to the thread" (piece 2): one tap copies the member's 3-1-3 as a ready-made comment and opens this week's Monday post,
@@ -9,7 +9,10 @@ import { recordShareAction } from "@/lib/actions/intentions";
  * allows a new tab from a tap), then the tap is recorded for the week's points. When this week's post isn't out yet, the
  * button says so and opens nothing: never an older week's post.
  */
-export function ShareButton({ text, link, reason, shared, compact = false }: { text: string; link: string | null; reason: string | null; shared: boolean; compact?: boolean }) {
+export function ShareButton({ text, link, reason, shared, compact = false, scope = "week" }: { text: string; link: string | null; reason: string | null; shared: boolean; compact?: boolean; scope?: "week" | "month" }) {
+  // The month's share (1 Oct) is the same tap: the eleven answers copied, this month's post opened, recorded once per month.
+  const record = scope === "month" ? recordMonthShareAction : recordShareAction;
+  const what = scope === "month" ? "your answers" : "your 3-1-3";
   const [note, setNote] = useState<{ text: string; good: boolean } | null>(null);
   const [done, setDone] = useState(shared);
   const [pending, start] = useTransition();
@@ -38,11 +41,11 @@ export function ShareButton({ text, link, reason, shared, compact = false }: { t
           window.open(link, "_blank", "noopener");
           start(async () => {
             const ok = copied ? await copied : false;
-            const r = await recordShareAction();
+            const r = await record();
             if (!r.ok) return setNote({ text: r.error ?? "That didn't work. Try again.", good: false });
             setDone(true);
             const points = r.points ? ` +${r.points} points.` : "";
-            setNote(ok ? { text: `Copied! On the post, tap Add a comment, paste, and press Post.${points}`, good: true } : { text: `Couldn't copy it here: select your 3-1-3 above and copy it. On the post, tap Add a comment, paste, and press Post.${points}`, good: false });
+            setNote(ok ? { text: `Copied! On the post, tap Add a comment, paste, and press Post.${points}`, good: true } : { text: `Couldn't copy it here: select ${what} above and copy it. On the post, tap Add a comment, paste, and press Post.${points}`, good: false });
           });
         }}
       >

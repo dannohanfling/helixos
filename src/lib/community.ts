@@ -12,7 +12,7 @@ import { nowIso, nowWallInTz, todayInTz } from "@/lib/dates";
 import { connectionFor, createPost, getPost, listPostsIn } from "@/lib/ghl";
 import { logSync } from "@/lib/integrations";
 import { redactSecrets } from "@/lib/engine/redact";
-import { HOLD_REASON, TEST_TITLE, UNKNOWN_REASON, communityDetails, communityHtml, mondayTestText, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
+import { HOLD_REASON, TEST_TITLE, UNKNOWN_REASON, communityDetails, communityHtml, mondayTestText, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, monthDue, monthShareTarget, monthShareText, monthTestText, monthText, monthTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
 
 export const settingsFor = (workspaceId: string) => db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, workspaceId) });
 
@@ -53,17 +53,19 @@ async function pauseForHold(s: CommunitySettings): Promise<void> {
 
 /** Sends a claimed row and records the outcome on it. */
 async function sendRow(s: CommunitySettings, row: CommunityPost, title: string, body: string): Promise<CommunityPost> {
-  // Only a Monday post ever notifies, and only as the row says (set when it was claimed): a test never does.
-  // @everyone as a real mention on the Monday post only (rev 203); a test keeps it as words. Independent of the notify flag.
-  const r = await send(s, title, body, row.kind === "monday" && row.notifyAll, row.kind === "monday");
+  // Only a real post (Monday's or the month's) ever notifies, and only as the row says (set when it was claimed): a test never does.
+  // @everyone as a real mention on the real posts only (rev 203); a test keeps it as words. Independent of the notify flag.
+  const real = row.kind !== "test";
+  const r = await send(s, title, body, real && row.notifyAll, real);
   const now = nowIso();
+  const period = row.kind === "month" ? { monthOf: row.monthOf ?? undefined } : { weekOf: row.weekOf ?? undefined };
   if (r.ok) {
     await db.update(schema.communityPosts).set({ ghlPostId: r.ghlPostId, error: null, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
-    await logSync({ workspaceId: s.workspaceId, userId: s.coachUserId, provider: "gohighlevel", direction: "out", event: `community.${row.kind}`, payload: { weekOf: row.weekOf, ghlPostId: r.ghlPostId ?? undefined }, status: "sent", note: `Sent to the community${r.ghlPostId ? ` · ${r.ghlPostId}` : ""}` });
+    await logSync({ workspaceId: s.workspaceId, userId: s.coachUserId, provider: "gohighlevel", direction: "out", event: `community.${row.kind}`, payload: { ...period, ghlPostId: r.ghlPostId ?? undefined }, status: "sent", note: `Sent to the community${r.ghlPostId ? ` · ${r.ghlPostId}` : ""}` });
   } else {
     if (r.hold) await pauseForHold(s);
     await db.update(schema.communityPosts).set({ status: "failed", error: r.error, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
-    await logSync({ workspaceId: s.workspaceId, userId: s.coachUserId, provider: "gohighlevel", direction: "out", event: `community.${row.kind}`, payload: { weekOf: row.weekOf }, status: "failed", note: r.error });
+    await logSync({ workspaceId: s.workspaceId, userId: s.coachUserId, provider: "gohighlevel", direction: "out", event: `community.${row.kind}`, payload: period, status: "failed", note: r.error });
   }
   return (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, row.id) }))!;
 }
@@ -92,15 +94,37 @@ export async function postMonday(s: CommunitySettings, weekOf: string, opts: { r
 }
 
 /**
+ * The month's post (1 Oct), sent once on the 1st: the same claim as the Monday post's, keyed by the month, with the coach's
+ * month text, notify and @everyone as the Monday post has them. `retry` lets Post now claim a failed month as well.
+ */
+export async function postMonth(s: CommunitySettings, monthOf: string, opts: { retry?: boolean } = {}): Promise<{ ok: boolean; row?: CommunityPost; error?: string }> {
+  if (s.pausedReason) return { ok: false, error: s.pausedReason };
+  const title = monthTitle(monthOf);
+  await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: s.workspaceId, coachUserId: s.coachUserId, kind: "month", monthOf, title, status: "scheduled" }).onConflictDoNothing();
+  const claimable = opts.retry ? (["scheduled", "failed"] as const) : (["scheduled"] as const);
+  const now = nowIso();
+  const [claimed] = await db
+    .update(schema.communityPosts)
+    .set({ status: "sent", sentAt: now, error: null, accountId: s.channelAccountId, title, notifyAll: s.monthNotify, updatedAt: now })
+    .where(and(eq(schema.communityPosts.workspaceId, s.workspaceId), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, monthOf), inArray(schema.communityPosts.status, [...claimable])))
+    .returning();
+  if (!claimed) return { ok: false, error: "That month's post has already gone out, or was skipped." };
+  const body = claimed.body ?? monthText(s.monthText);
+  await db.update(schema.communityPosts).set({ body }).where(eq(schema.communityPosts.id, claimed.id));
+  const row = await sendRow(s, { ...claimed, body }, title, body);
+  return { ok: row.status !== "failed", row, error: row.error ?? undefined };
+}
+
+/**
  * The coach's test post, to their chosen (test) channel: the run that settles who posts, and how a post's link is built. With
  * `mondayTitle`, it is the Monday text itself under that week's title (rev 169), to see its layout before the Monday post is
- * on. A test never notifies anyone, whatever the Monday post's setting.
+ * on; with `monthTitle`, the month text the same way. A test never notifies anyone, whatever the real posts' settings.
  */
-export async function postTest(s: CommunitySettings, opts: { mondayTitle?: string } = {}): Promise<CommunityPost> {
+export async function postTest(s: CommunitySettings, opts: { mondayTitle?: string; monthTitle?: string } = {}): Promise<CommunityPost> {
   const now = nowIso();
   const id = newId();
-  const title = opts.mondayTitle ? `Test: ${opts.mondayTitle}` : TEST_TITLE;
-  const text = opts.mondayTitle ? mondayTestText(mondayText(s.mondayText), now) : testText(now);
+  const title = opts.mondayTitle ? `Test: ${opts.mondayTitle}` : opts.monthTitle ? `Test: ${opts.monthTitle}` : TEST_TITLE;
+  const text = opts.mondayTitle ? mondayTestText(mondayText(s.mondayText), now) : opts.monthTitle ? monthTestText(monthText(s.monthText), now) : testText(now);
   await db.insert(schema.communityPosts).values({ id, workspaceId: s.workspaceId, coachUserId: s.coachUserId, kind: "test", title, body: text, accountId: s.channelAccountId, status: "sent", sentAt: now, notifyAll: false });
   const row = (await db.query.communityPosts.findFirst({ where: eq(schema.communityPosts.id, id) }))!;
   if (s.pausedReason) {
@@ -176,8 +200,9 @@ export async function checkPost(s: CommunitySettings, row: CommunityPost): Promi
 }
 
 /**
- * The hourly job's part: in each workspace whose Monday post is on, post the week's on Monday from the coach's time, once,
- * and read back every post still on its way. A workspace on hold is left alone until the coach presses Resume.
+ * The hourly job's part: in each workspace whose Monday post is on, post the week's on Monday from the coach's time, once;
+ * whose month post is on, post the month's on the 1st from its own time, once; and read back every post still on its way.
+ * A workspace on hold is left alone until the coach presses Resume.
  */
 export async function runCommunity(now: Date = new Date()): Promise<{ workspaceId: string; action: string; ok: boolean; note?: string }[]> {
   const out: { workspaceId: string; action: string; ok: boolean; note?: string }[] = [];
@@ -193,6 +218,19 @@ export async function runCommunity(now: Date = new Date()): Promise<{ workspaceI
           if (!week || week.status === "scheduled") {
             const r = await postMonday(s, today);
             out.push({ workspaceId: s.workspaceId, action: "monday", ok: r.ok, note: r.error });
+          }
+        }
+      }
+      if (s.monthOn && s.channelAccountId) {
+        const tz = await coachTz(s);
+        const today = todayInTz(tz, now);
+        const time = nowWallInTz(tz, now).slice(11, 16);
+        if (monthDue(today, time, s.monthTime)) {
+          const monthOf = today.slice(0, 7);
+          const month = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, s.workspaceId), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, monthOf)) });
+          if (!month || month.status === "scheduled") {
+            const r = await postMonth(s, monthOf);
+            out.push({ workspaceId: s.workspaceId, action: "month", ok: r.ok, note: r.error });
           }
         }
       }
@@ -227,5 +265,24 @@ export async function shareFor(workspaceId: string, userId: string, week: { week
  */
 export async function threadLinkFor(workspaceId: string, weekOf: string): Promise<string | null> {
   const post = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, workspaceId), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, weekOf)) });
+  return post?.status === "posted" && post.link ? post.link : null;
+}
+
+/**
+ * "Share to the thread" for the month (1 Oct): the member's eleven answers as a comment, where it goes (this month's post,
+ * never an older one), and whether they've already shared it this month.
+ */
+export async function monthShareFor(workspaceId: string, userId: string, m: Parameters<typeof monthShareText>[0] & { month: string }): Promise<{ text: string; monthOf: string; link: string | null; reason: string | null; shared: boolean }> {
+  const [post, shared] = await Promise.all([
+    db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, workspaceId), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, m.month)) }),
+    db.query.communityShares.findFirst({ where: and(eq(schema.communityShares.workspaceId, workspaceId), eq(schema.communityShares.userId, userId), eq(schema.communityShares.monthOf, m.month)) }),
+  ]);
+  const target = monthShareTarget(post, m.month);
+  return { text: monthShareText(m), monthOf: m.month, link: "link" in target ? target.link : null, reason: "reason" in target ? target.reason : null, shared: Boolean(shared) };
+}
+
+/** This month's thread, for anyone to open: the month post's link once it is published. Nothing (never a broken link) until then. */
+export async function monthThreadLinkFor(workspaceId: string, monthOf: string): Promise<string | null> {
+  const post = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, workspaceId), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, monthOf)) });
   return post?.status === "posted" && post.link ? post.link : null;
 }
