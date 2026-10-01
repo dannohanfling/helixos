@@ -180,9 +180,32 @@ const linked = (r: AirtableRecord, ...keys: string[]): string[] => {
   return Array.isArray(v) ? v.map((x) => (typeof x === "string" ? x : typeof x === "object" && x && "id" in x ? String((x as { id: unknown }).id) : "")).filter(Boolean) : [];
 };
 
-/** Every day with sets: from the Exercises rows linked to it when it has any, else from its notes (when asked). */
+/** "Working sets: 145 × 15, 145 × 15" in an Exercises row's Notes, when the row has no triple; a warm-up line stays out (Danno, 1 Oct). */
+export function setsFromRowNotes(notes: string): SetLine[] {
+  const out: SetLine[] = [];
+  for (const raw of notes.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || /warm/i.test(line)) continue;
+    const m = line.match(/^(?:working\s+sets?\s*:)?\s*(.+)$/i);
+    if (!m || !/^working/i.test(line)) continue;
+    for (const part of m[1].split(/\s*[,/;]\s*/)) {
+      const sets = readSetLine(part);
+      if (sets) out.push(...sets);
+    }
+  }
+  return out;
+}
+
+const sameSets = (a: SetLine[], b: SetLine[]) => a.length === b.length && a.every((x, i) => x.weight === b[i].weight && x.reps === b[i].reps);
+
+/**
+ * Every day with sets. Danno's rules (1 Oct): an Exercises row linked to more than two Journal days is a library row and gives no
+ * sets; one linked to two lands on the later day only; a Journal row typed Off Day is a draft and gives none; a day entered twice
+ * with the same lines takes them once. Where a day has rows, those win; else its notes, when asked.
+ */
 export function sessionsFrom(src: HumanosSource, opts: { notes: boolean }): SessionPlan[] {
   const dateOf = new Map<string, string>();
+  const offDay = new Set<string>();
   const routineOf = new Map<string, string | null>();
   const notesOf = new Map<string, string[]>();
   const routineName = new Map(src.routines.map((r) => [r.id, exerciseName(text(r, "name")) ?? option(text(r, "name"))]));
@@ -190,6 +213,10 @@ export function sessionsFrom(src: HumanosSource, opts: { notes: boolean }): Sess
     const date = text(r, "date");
     if (!DATE.test(date)) continue;
     dateOf.set(r.id, date);
+    if (/off day/i.test(text(r, "exercise type"))) {
+      offDay.add(r.id);
+      continue;
+    }
     const rn = linked(r, "routines").map((id) => routineName.get(id)).find(Boolean) ?? null;
     if (rn && !routineOf.get(date)) routineOf.set(date, rn);
     const n = text(r, "exercise notes");
@@ -198,19 +225,21 @@ export function sessionsFrom(src: HumanosSource, opts: { notes: boolean }): Sess
   const table = new Map<string, ExerciseSets[]>();
   for (const e of src.exercises) {
     const name = exerciseName(text(e, "exercise"));
+    if (!name) continue;
+    const days = linked(e, "journal").filter((jid) => dateOf.has(jid) && !offDay.has(jid));
+    if (!days.length || linked(e, "journal").length > 2) continue;
+    const date = days.map((jid) => dateOf.get(jid)!).sort().pop()!;
     const weight = num(e, "rep weight");
     const reps = num(e, "reps / set");
     const n = num(e, "sets");
-    if (!name || reps == null || n == null || reps < 1 || n < 1) continue;
-    for (const jid of linked(e, "journal")) {
-      const date = dateOf.get(jid);
-      if (!date) continue;
-      const day = table.get(date) ?? [];
-      const ex = day.find((x) => x.name.toLowerCase() === name.toLowerCase()) ?? { name, sets: [] };
-      if (!ex.sets.length) day.push(ex);
-      ex.sets.push(...Array.from({ length: Math.min(n, 20) }, () => ({ weight: weight != null && weight > 0 ? weight : null, reps: Math.min(reps, 500) })));
-      table.set(date, day);
-    }
+    const sets: SetLine[] = reps != null && n != null && reps >= 1 && n >= 1 ? Array.from({ length: Math.min(n, 20) }, () => ({ weight: weight != null && weight > 0 ? weight : null, reps: Math.min(reps, 500) })) : setsFromRowNotes(text(e, "notes"));
+    if (!sets.length) continue;
+    const day = table.get(date) ?? [];
+    const ex = day.find((x) => x.name.toLowerCase() === name.toLowerCase());
+    if (ex && sameSets(ex.sets, sets)) continue;
+    if (ex) ex.sets.push(...sets);
+    else day.push({ name, sets });
+    table.set(date, day);
   }
   const out: SessionPlan[] = [];
   const dates = new Set([...table.keys(), ...(opts.notes ? notesOf.keys() : [])]);
@@ -228,6 +257,7 @@ export function sessionsFrom(src: HumanosSource, opts: { notes: boolean }): Sess
       unread += p.unread;
       for (const e of p.exercises) {
         const have = merged.find((x) => x.name.toLowerCase() === e.name.toLowerCase());
+        if (have && sameSets(have.sets, e.sets)) continue;
         if (have) have.sets.push(...e.sets);
         else merged.push({ name: e.name, sets: [...e.sets] });
       }
@@ -263,12 +293,12 @@ export function routinesFrom(src: HumanosSource): RoutinePlan[] {
 
 /* ── The plan ── */
 
-export type Existing = { exercises: Map<string, string>; routines: Set<string>; sessionDates: Set<string>; readingIds: Set<string> };
+export type Existing = { exercises: Map<string, string>; routines: Set<string>; sessionDates: Set<string>; readingIds: Set<string>; /** The member's day types by name (lower-cased), so an imported day's routine can set its day type where one matches. */ dayTypes?: Map<string, string>; /** The member's routines by name, so an imported day links to its routine. */ routineIds?: Map<string, string> };
 export type HistoryOptions = { notes: boolean; from: string | null };
 export type HistoryPlan = {
   weighIns: (WeighIn & { status: "new" | "have" })[];
   skippedWeighIns: SkippedWeighIn[];
-  sessions: (SessionPlan & { status: "new" | "have" })[];
+  sessions: (SessionPlan & { status: "new" | "have"; dayTypeId: string | null })[];
   exercises: { name: string; status: "new" | "have" }[];
   routines: (RoutinePlan & { status: "new" | "have" })[];
   missing: string[];
@@ -283,7 +313,7 @@ export function buildHistoryPlan(src: HumanosSource, existing: Existing, opts: H
   const weighIns = w.weighIns.filter((x) => !from || x.date >= from).map((x) => ({ ...x, status: existing.readingIds.has(readingIdFor(x.recordId)) ? ("have" as const) : ("new" as const) }));
   const sessions = sessionsFrom(src, { notes: opts.notes })
     .filter((s) => !from || s.date >= from)
-    .map((s) => ({ ...s, status: existing.sessionDates.has(s.date) ? ("have" as const) : ("new" as const) }));
+    .map((s) => ({ ...s, status: existing.sessionDates.has(s.date) ? ("have" as const) : ("new" as const), dayTypeId: (s.routineName && existing.dayTypes?.get(lc(s.routineName))) || null }));
   const routines = routinesFrom(src).map((r) => ({ ...r, status: existing.routines.has(lc(r.name)) ? ("have" as const) : ("new" as const) }));
   const names = new Map<string, string>();
   for (const s of sessions) if (s.status === "new") for (const e of s.exercises) names.set(lc(e.name), e.name);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AirtableRecord } from "@/lib/engine/airtable-import";
-import { buildHistoryPlan, exerciseName, historySummary, parseNotes, readSetLine, readingIdFor, routinesFrom, sessionsFrom, weighInsFrom, type Existing } from "@/lib/engine/body-airtable";
+import { buildHistoryPlan, exerciseName, historySummary, parseNotes, readSetLine, readingIdFor, routinesFrom, sessionsFrom, setsFromRowNotes, weighInsFrom, type Existing } from "@/lib/engine/body-airtable";
 
 let n = 0;
 const rec = (fields: Record<string, unknown>, id = `rec${String(++n).padStart(14, "0")}`): AirtableRecord => ({ id, createdTime: "2026-04-01T00:00:00.000Z", fields });
@@ -17,12 +17,24 @@ const journal = [
   rec({ "📆 Date": "2026-04-12", "🏋️ Workouts": ["recEXB"] }, "recJ4120000000002"),
   rec({ "📆 Date": "2026-09-26", "🏋🏿 Routines": ["recRTL"], "🏋️ Exercise Notes": "🦵 SATURDAY LEGS (9/26) — FIRST LEG DAY IN 13 DAYS\n⚠️ Last legs was 9/13. Long gap.\n\nMEAL FRAMEWORK (Lift Day):\n• Shake within 90 min\n• Target ~1,460 / 200P / 50F\n\nWarm-Up\n• Bodyweight squats ×15\n• Leg Extension 60×10 (primer)\n\nWorking Session (3 sets per exercise, INTERMEDIATE — reload)\n\nBack Squat (⚠️ REDUCED from 135 — 13 days off)\nwarmup: 45×10, 95×8 — assess here\n• 125×8\n• 125×8\n• 125×8\n\nRomanian Deadlift (DB) — KEEP 2ND, this placement is why it stopped getting skipped\n• 45×10\n• 45×10\n• 45×10\n\nLeg Curl (STRICT FORM — hips planted, no body slide)\n• 85×10\n• 90×10\n• ninety by ten\n\n🚫 GUARDRAILS: NO 400 Leg Press, NO max squats.\n\nRecovery\n• Sauna 15-20 min\n• 130+ oz water + 1 LMNT\n" }, "recJ9260000000001"),
   rec({ "📆 Date": "2026-09-27", "🏋️ Exercise Notes": "😴 SUNDAY OFF (9/27) — not trained.\n" }, "recJ9270000000001"),
+  // Danno's rules (1 Oct): an Off Day placeholder row with drafts of the next day; a chest row linked to two days; a day entered twice.
+  rec({ "📆 Date": "2026-04-10", "💪 Exercise Type": ["😴 Off Day"], "🏋️ Workouts": ["recEXD2"] }, "recJ4100000000001"),
+  rec({ "📆 Date": "2026-04-15", "💪 Exercise Type": ["🤾‍♀️ Chest"], "🏋️ Workouts": ["recEXC2"] }, "recJ4150000000001"),
+  rec({ "📆 Date": "2026-03-30", "🏋️ Workouts": ["recEXR1"] }, "recJ3300000000001"),
+  rec({ "📆 Date": "2026-03-30", "🏋️ Workouts": ["recEXR2"] }, "recJ3300000000002"),
+  rec({ "📆 Date": "2026-04-08", "🏋️ Workouts": ["recEXN1"] }, "recJ4080000000001"),
 ];
 const exercises = [
   rec({ "🏋️ Exercise": "Squats", "🏋🏿 Rep Weight": 115, "💪 Reps / Set": 10, "🏆 Sets": 2, "📖 Journal": ["recJ4120000000001"] }, "recEXA"),
   rec({ "🏋️ Exercise": "Leg Press", "🏋🏿 Rep Weight": 300, "💪 Reps / Set": 15, "🏆 Sets": 2, "📖 Journal": ["recJ4120000000002"] }, "recEXB"),
   rec({ "🏋️ Exercise": "SKULLCRUSHERS", "💪 Reps / Set": 12, "🏆 Sets": 3 }, "recEXC"),
   rec({ "🏋️ Exercise": "Pushups" }, "recEXD"),
+  rec({ "🏋️ Exercise": "Leg Press", "🏋🏿 Rep Weight": 280, "💪 Reps / Set": 10, "🏆 Sets": 2, "📖 Journal": ["recJ4100000000001"] }, "recEXD2"),
+  rec({ "🏋️ Exercise": "Dumbbell Flat Press", "🏋🏿 Rep Weight": 65, "💪 Reps / Set": 10, "🏆 Sets": 3, "📖 Journal": ["recJ4120000000001", "recJ4150000000001"] }, "recEXC2"),
+  rec({ "🏋️ Exercise": "Lat Pulldown", "🏋🏿 Rep Weight": 105, "💪 Reps / Set": 10, "🏆 Sets": 3, "📖 Journal": ["recJ3300000000001"] }, "recEXR1"),
+  rec({ "🏋️ Exercise": "Lat Pulldown", "🏋🏿 Rep Weight": 105, "💪 Reps / Set": 10, "🏆 Sets": 3, "📖 Journal": ["recJ3300000000002"] }, "recEXR2"),
+  rec({ "🏋️ Exercise": "Leg Extension", "📝 Notes": "Warm-up: 60 × 12\nWorking sets: 145 × 15, 145 × 15", "📖 Journal": ["recJ4080000000001"] }, "recEXN1"),
+  rec({ "🏋️ Exercise": "Library Row", "🏋🏿 Rep Weight": 50, "💪 Reps / Set": 10, "🏆 Sets": 3, "📖 Journal": ["recJ4120000000001", "recJ4150000000001", "recJ3300000000001"] }, "recEXLIB"),
 ];
 const routines = [rec({ Name: "💪 Arm Day", "🏋️‍♂️ Exercises": ["recEXC", "recEXD", "recEXC"] }, "recRTA"), rec({ Name: "🦵 Leg Day", "🏋️‍♂️ Exercises": ["recEXA", "recEXB"] }, "recRTL"), rec({ Name: "Empty Day" }, "recRTE")];
 const src = { journal, exercises, routines };
@@ -76,14 +88,19 @@ describe("Body's Airtable history (rev 237 phase 7)", () => {
       { name: "Incline Dumbbell Press", sets: [{ weight: 55, reps: 10 }] },
     ]);
   });
-  it("sessions: a day's Exercises rows win over its notes, rows on two Journal rows of one day merge, the routine's name comes along; notes-only days only when asked", () => {
+  it("sessions: rows win over notes; two Journal rows of a day merge, the same lines once; a row on two days lands on the later; an Off Day row and a library row give none; working sets in a row's notes count; notes-only days only when asked", () => {
     const s = sessionsFrom(src, { notes: true });
     expect(s.map((x) => [x.date, x.from, x.routineName, x.exercises.map((e) => `${e.name}:${e.sets.length}`).join(",")])).toEqual([
+      ["2026-03-30", "table", null, "Lat Pulldown:3"],
+      ["2026-04-08", "table", null, "Leg Extension:2"],
       ["2026-04-12", "table", "Leg Day", "Squats:2,Leg Press:2"],
+      ["2026-04-15", "table", null, "Dumbbell Flat Press:3"],
       ["2026-09-26", "notes", "Leg Day", "Back Squat:3,Romanian Deadlift:3,Leg Curl:2"],
     ]);
-    expect(s[0].exercises[1].sets[0]).toEqual({ weight: 300, reps: 15 });
-    expect(sessionsFrom(src, { notes: false }).map((x) => x.date)).toEqual(["2026-04-12"]);
+    expect(s[2].exercises[1].sets[0]).toEqual({ weight: 300, reps: 15 });
+    expect(s[1].exercises[0].sets).toEqual([{ weight: 145, reps: 15 }, { weight: 145, reps: 15 }]);
+    expect(sessionsFrom(src, { notes: false }).map((x) => x.date)).toEqual(["2026-03-30", "2026-04-08", "2026-04-12", "2026-04-15"]);
+    expect(setsFromRowNotes("Warm-up: 60 × 12\nWorking sets: 145 × 15, 145 × 15 / 140 × 12")).toHaveLength(3);
   });
   it("routines: exercises in order without repeats, sets and reps from the row or 3 × 8–12; an empty routine is left out", () => {
     expect(routinesFrom(src)).toEqual([
@@ -93,11 +110,14 @@ describe("Body's Airtable history (rev 237 phase 7)", () => {
   });
   it("the plan says new or already in, per weigh-in, day, exercise and routine, and the cut-off date narrows it", () => {
     const p = buildHistoryPlan(src, none, { notes: true, from: null });
-    expect(historySummary(p)).toEqual({ weighIns: 3, weighInsHave: 0, sessions: 2, sessionsHave: 0, sets: 12, exercises: 7, routines: 2, skipped: 1, unread: 1 });
-    expect(p.exercises.map((e) => e.name)).toEqual(["Back Squat", "Leg Curl", "Leg Press", "Pushups", "Romanian Deadlift", "Skullcrushers", "Squats"]);
-    const some: Existing = { exercises: new Map([["squats", "x1"], ["leg curl", "x2"]]), routines: new Set(["leg day"]), sessionDates: new Set(["2026-04-12"]), readingIds: new Set([readingIdFor("recOLD0000000001")]) };
+    expect(historySummary(p)).toEqual({ weighIns: 3, weighInsHave: 0, sessions: 5, sessionsHave: 0, sets: 20, exercises: 10, routines: 2, skipped: 1, unread: 1 });
+    expect(p.exercises.map((e) => e.name)).toEqual(["Back Squat", "Dumbbell Flat Press", "Lat Pulldown", "Leg Curl", "Leg Extension", "Leg Press", "Pushups", "Romanian Deadlift", "Skullcrushers", "Squats"]);
+    expect(p.sessions.map((x) => x.dayTypeId)).toEqual([null, null, null, null, null]);
+    const some: Existing = { exercises: new Map([["squats", "x1"], ["leg curl", "x2"]]), routines: new Set(["leg day"]), sessionDates: new Set(["2026-04-12", "2026-03-30", "2026-04-08", "2026-04-15"]), readingIds: new Set([readingIdFor("recOLD0000000001")]), dayTypes: new Map([["leg day", "dt1"]]) };
     const q = buildHistoryPlan(src, some, { notes: true, from: null });
-    expect(historySummary(q)).toEqual({ weighIns: 2, weighInsHave: 1, sessions: 1, sessionsHave: 1, sets: 8, exercises: 4, routines: 1, skipped: 1, unread: 1 });
+    expect(historySummary(q)).toEqual({ weighIns: 2, weighInsHave: 1, sessions: 1, sessionsHave: 4, sets: 8, exercises: 4, routines: 1, skipped: 1, unread: 1 });
+    // The imported day's routine names a day type the member has: the plan says which.
+    expect(q.sessions.find((x) => x.date === "2026-09-26")?.dayTypeId).toBe("dt1");
     expect(q.exercises).toEqual([
       { name: "Back Squat", status: "new" },
       { name: "Leg Curl", status: "have" },

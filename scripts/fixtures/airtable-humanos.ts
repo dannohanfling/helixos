@@ -28,6 +28,11 @@ const journal: FixtureTable = {
     // A later day whose sets live only in the notes.
     rec({ "📆 Date": "2026-09-26", "🏋🏿 Routines": ["recHRT0000000002"], "🏋️ Exercise Notes": "🦵 SATURDAY LEGS (9/26) — a reload session\n\nMEAL FRAMEWORK (Lift Day):\n• Shake within 90 min\n\nWarm-Up\n• Bodyweight squats ×15\n\nWorking Session (3 sets per exercise)\n\nBack Squat (reduced)\nwarmup: 45×10\n• 125×8\n• 125×8\n• 125×8\n\nLeg Curl (STRICT FORM — hips planted)\n• 85×10\n• 90×10\n• ninety by ten\n\nRecovery\n• Sauna 15 min\n" }, "recHJ00000000003"),
     rec({ "📆 Date": "2026-09-27", "🏋️ Exercise Notes": "😴 SUNDAY OFF (9/27) — not trained.\n" }, "recHJ00000000004"),
+    // Danno's rules (1 Oct): an Off Day placeholder with a draft row (no sets), a chest row linked to two days (the later only), a day entered twice (once).
+    rec({ "📆 Date": "2026-04-10", "💪 Exercise Type": ["😴 Off Day"], "🏋️ Workouts": ["recHEX0000000005"] }, "recHJ00000000005"),
+    rec({ "📆 Date": "2026-04-15", "💪 Exercise Type": ["🤾‍♀️ Chest"], "🏋️ Workouts": ["recHEX0000000006"] }, "recHJ00000000006"),
+    rec({ "📆 Date": "2026-03-30", "🏋️ Workouts": ["recHEX0000000007"] }, "recHJ00000000007"),
+    rec({ "📆 Date": "2026-03-30", "🏋️ Workouts": ["recHEX0000000008"] }, "recHJ00000000008"),
   ],
 };
 
@@ -39,6 +44,10 @@ const exercises: FixtureTable = {
     rec({ "🏋️ Exercise": "Leg Press", "🏋🏿 Rep Weight": 300, "💪 Reps / Set": 15, "🏆 Sets": 2, "📖 Journal": ["recHJ00000000002"] }, "recHEX0000000002"),
     rec({ "🏋️ Exercise": "SKULLCRUSHERS", "💪 Reps / Set": 12, "🏆 Sets": 3 }, "recHEX0000000003"),
     rec({ "🏋️ Exercise": "Pushups" }, "recHEX0000000004"),
+    rec({ "🏋️ Exercise": "Leg Press", "🏋🏿 Rep Weight": 280, "💪 Reps / Set": 10, "🏆 Sets": 2, "📖 Journal": ["recHJ00000000005"] }, "recHEX0000000005"),
+    rec({ "🏋️ Exercise": "Dumbbell Flat Press", "🏋🏿 Rep Weight": 65, "💪 Reps / Set": 10, "🏆 Sets": 3, "📖 Journal": ["recHJ00000000001", "recHJ00000000006"] }, "recHEX0000000006"),
+    rec({ "🏋️ Exercise": "Lat Pulldown", "📝 Notes": "Warm-up: 60 × 12\nWorking sets: 105 × 10, 105 × 10", "📖 Journal": ["recHJ00000000007"] }, "recHEX0000000007"),
+    rec({ "🏋️ Exercise": "Lat Pulldown", "📝 Notes": "Working sets: 105 × 10, 105 × 10", "📖 Journal": ["recHJ00000000008"] }, "recHEX0000000008"),
   ],
 };
 

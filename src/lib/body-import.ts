@@ -4,7 +4,7 @@
  * read. Writes are matched so a re-run adds nothing twice: a weigh-in by its Journal row, a day by its date, an exercise or a
  * routine by its name.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { readTables, type BaseAccess } from "@/lib/airtable";
 import { HUMANOS_TABLES, humanosSource, readingIdFor, type Existing, type HistoryPlan, type HumanosSource } from "@/lib/engine/body-airtable";
@@ -20,17 +20,20 @@ const lc = (s: string) => s.trim().toLowerCase();
 
 /** What the member already holds, so the dry run says new or already in. */
 export async function existingHistory(workspaceId: string, userId: string): Promise<Existing> {
-  const [exercises, routines, sessions, daily] = await Promise.all([
+  const [exercises, routines, sessions, daily, dayTypes] = await Promise.all([
     db.query.bodyExercises.findMany({ where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)) }),
     db.query.bodyRoutines.findMany({ where: and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId)) }),
     db.query.bodySessions.findMany({ where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId)), columns: { date: true } }),
     db.query.bodyDaily.findMany({ where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), eq(schema.bodyDaily.source, "airtable")), columns: { readingId: true } }),
+    db.query.bodyDayTypes.findMany({ where: and(eq(schema.bodyDayTypes.workspaceId, workspaceId), eq(schema.bodyDayTypes.userId, userId)), columns: { id: true, name: true } }),
   ]);
   return {
     exercises: new Map(exercises.filter((e) => !e.archivedAt).map((e) => [lc(e.name), e.id])),
     routines: new Set(routines.map((r) => lc(r.name))),
+    routineIds: new Map(routines.filter((r) => !r.archivedAt).map((r) => [lc(r.name), r.id])),
     sessionDates: new Set(sessions.map((s) => s.date)),
     readingIds: new Set(daily.map((d) => d.readingId)),
+    dayTypes: new Map(dayTypes.map((t) => [lc(t.name), t.id])),
   };
 }
 
@@ -49,20 +52,27 @@ export async function applyHistory(plan: HistoryPlan, existing: Existing, worksp
   written += exercises.length;
 
   const routines: (typeof schema.bodyRoutines.$inferInsert)[] = [];
+  const routineIds = new Map(existing.routineIds ?? []);
   for (const r of plan.routines) {
     if (r.status !== "new" || existing.routines.has(lc(r.name))) continue;
     const items = r.items.map((i) => ({ exerciseId: ids.get(lc(i.exerciseName)) ?? "", sets: i.sets, reps: i.reps })).filter((i) => i.exerciseId);
-    if (items.length) routines.push({ id: newId(), workspaceId, userId, name: r.name.slice(0, 80), dayTypeId: null, items });
+    if (!items.length) continue;
+    const id = newId();
+    routineIds.set(lc(r.name), id);
+    routines.push({ id, workspaceId, userId, name: r.name.slice(0, 80), dayTypeId: null, items });
   }
   if (routines.length) await db.insert(schema.bodyRoutines).values(routines);
   written += routines.length;
 
   const sessions: (typeof schema.bodySessions.$inferInsert)[] = [];
   const sets: (typeof schema.bodySets.$inferInsert)[] = [];
+  const days: (typeof schema.bodyDays.$inferInsert)[] = [];
   for (const s of plan.sessions) {
     if (s.status !== "new" || existing.sessionDates.has(s.date)) continue;
     const sessionId = newId();
-    sessions.push({ id: sessionId, workspaceId, userId, date: s.date, routineId: null, routineName: s.routineName, completedAt: `${s.date}T12:00:00.000Z`, note: null });
+    // Marked as imported (Danno, 1 Oct): the note says so on Training; the day links to its routine and takes the matching day type.
+    sessions.push({ id: sessionId, workspaceId, userId, date: s.date, routineId: (s.routineName && routineIds.get(lc(s.routineName))) || null, routineName: s.routineName, completedAt: `${s.date}T12:00:00.000Z`, note: "From Airtable" });
+    if (s.dayTypeId) days.push({ id: newId(), workspaceId, userId, date: s.date, dayTypeId: s.dayTypeId, off: false });
     for (const e of s.exercises) {
       const exerciseId = ids.get(lc(e.name));
       if (!exerciseId) continue;
@@ -71,6 +81,7 @@ export async function applyHistory(plan: HistoryPlan, existing: Existing, worksp
   }
   for (let i = 0; i < sessions.length; i += 200) await db.insert(schema.bodySessions).values(sessions.slice(i, i + 200)).onConflictDoNothing({ target: [schema.bodySessions.workspaceId, schema.bodySessions.userId, schema.bodySessions.date] });
   for (let i = 0; i < sets.length; i += 400) await db.insert(schema.bodySets).values(sets.slice(i, i + 400));
+  for (let i = 0; i < days.length; i += 200) await db.insert(schema.bodyDays).values(days.slice(i, i + 200)).onConflictDoUpdate({ target: [schema.bodyDays.workspaceId, schema.bodyDays.userId, schema.bodyDays.date], set: { dayTypeId: sql`excluded.day_type_id`, off: false } });
   written += sessions.length + sets.length;
 
   const rows: (typeof schema.bodyDaily.$inferInsert)[] = [];

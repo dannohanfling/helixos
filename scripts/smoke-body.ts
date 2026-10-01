@@ -820,7 +820,7 @@ async function main() {
         readingIds: new Set<string>(),
       };
       const expected = historySummary(buildHistoryPlan({ journal: fixture.journal, exercises: fixture.exercises, routines: fixture.routines }, existing, { notes: true, from: null }));
-      if (expected.weighIns !== 3 || expected.sessions !== 2 || expected.skipped !== 1 || expected.unread !== 1 || expected.routines !== 2) throw new Error(`the fixture gives three weigh-ins, two workouts, two routines, one carried-forward day and one unread line: ${JSON.stringify(expected)}`);
+      if (expected.weighIns !== 3 || expected.sessions !== 4 || expected.sets !== 14 || expected.skipped !== 1 || expected.unread !== 1 || expected.routines !== 2) throw new Error(`the fixture gives three weigh-ins, four workouts with fourteen sets, two routines, one carried-forward day and one unread line: ${JSON.stringify(expected)}`);
       const echoed: string[] = [];
       client.on("response", async (r) => {
         if (r.request().method() !== "POST") return;
@@ -836,7 +836,7 @@ async function main() {
       };
       const pv = await dryRun();
       for (const [attr, want] of [["data-weigh-ins", expected.weighIns], ["data-sessions", expected.sessions], ["data-sets", expected.sets], ["data-exercises", expected.exercises], ["data-routines", expected.routines], ["data-skipped", expected.skipped]] as const) if ((await pv.getAttribute(attr)) !== String(want)) throw new Error(`the dry run's ${attr} is the mapper's (${want}), got ${await pv.getAttribute(attr)}`);
-      if ((await client.locator('[data-testid="history-session"]').count()) !== 2 || (await client.locator('[data-testid="history-session"][data-date="2026-09-26"]').textContent())?.includes("read from the notes") !== true) throw new Error("the dry run lists each day and says where its sets came from");
+      if ((await client.locator('[data-testid="history-session"]').count()) !== 4 || (await client.locator('[data-testid="history-session"][data-date="2026-09-26"]').textContent())?.includes("read from the notes") !== true || (await client.locator('[data-testid="history-session"][data-date="2026-04-10"]').count())) throw new Error("the dry run lists each day and says where its sets came from; the Off Day drafts never appear");
       if ((await client.locator('[data-testid="history-exercises"]').textContent())?.includes("Skullcrushers") !== true) throw new Error("a shouted exercise name comes over in title case");
       await noSideScroll(client, "/body/import with a dry run");
       await press(client, '[data-testid="history-approve"]', async () => /\/body\/import\?done=/.test(client.url()), "the import done");
@@ -847,12 +847,13 @@ async function main() {
       const at = (rec: string, key: string) => daily.find((d) => d.readingId === readingIdFor(rec) && d.key === key)?.value;
       if (at("recHW00000000002", "weight") !== 170.6 || at("recHW00000000002", "bf") !== 21.9) throw new Error("on a day with two generations the newer wins");
       if (at("recHW00000000001", "bf") !== 22.3 || at("recHW00000000001", "smm_pct") !== 49.8) throw new Error("the oldest generation's fractions land as percents");
-      const imported = await db.query.bodySessions.findMany({ where: and(eq(schema.bodySessions.userId, maya.id), inArray(schema.bodySessions.date, ["2026-04-12", "2026-09-26"])) });
-      if (imported.length !== 2 || imported.some((x) => !x.completedAt) || imported.find((x) => x.date === "2026-09-26")?.routineName !== "Leg Day") throw new Error("both days land as finished workouts with the routine's name");
-      const setsOn = async (date: string) => (await db.query.bodySets.findMany({ where: and(eq(schema.bodySets.userId, maya.id), eq(schema.bodySets.date, date)) })).length;
-      if ((await setsOn("2026-04-12")) !== 4 || (await setsOn("2026-09-26")) !== 5) throw new Error("the Exercises rows give the spring day its four sets; the notes give the autumn day its five");
+      const imported = await db.query.bodySessions.findMany({ where: and(eq(schema.bodySessions.userId, maya.id), inArray(schema.bodySessions.date, ["2026-03-30", "2026-04-10", "2026-04-12", "2026-04-15", "2026-09-26"])) });
       const legDay = await db.query.bodyRoutines.findFirst({ where: and(eq(schema.bodyRoutines.userId, maya.id), eq(schema.bodyRoutines.name, "Leg Day")) });
       if (!legDay || legDay.items.length !== 2) throw new Error("the routine lands with its two exercises");
+      const sept = imported.find((x) => x.date === "2026-09-26");
+      if (imported.length !== 4 || imported.some((x) => !x.completedAt || x.note !== "From Airtable") || sept?.routineName !== "Leg Day" || sept.routineId !== legDay.id) throw new Error("the four days land as finished workouts marked From Airtable, the September day linked to its routine; the Off Day draft never");
+      const setsOn = async (date: string) => (await db.query.bodySets.findMany({ where: and(eq(schema.bodySets.userId, maya.id), eq(schema.bodySets.date, date)) })).length;
+      if ((await setsOn("2026-04-12")) !== 4 || (await setsOn("2026-09-26")) !== 5 || (await setsOn("2026-04-15")) !== 3 || (await setsOn("2026-03-30")) !== 2 || (await setsOn("2026-04-10")) !== 0) throw new Error("the rows give the spring day four sets, the chest row lands on 15 Apr only, the twice-entered day once from its notes' working sets, the Off Day drafts never; the notes give the autumn day its five");
       await client.goto(`${base}/body/training?date=2026-09-26`);
       await client.locator('[data-testid="training-exercise"]').first().waitFor({ timeout: 30000 });
       if ((await client.locator('[data-testid="training-set"]').count()) !== 5) throw new Error("Training shows the imported day's five sets");
@@ -865,7 +866,7 @@ async function main() {
       if (paths.some((x) => x.includes("tblHPASSWORDS001"))) throw new Error("the import never asks for the Password Bank's rows");
       if (!paths.some((x) => x.includes("tblHJOURNAL00001"))) throw new Error("the import read the Journal");
       if (echoed.length) throw new Error(`the token never comes back in a response: ${echoed.join(", ")}`);
-      console.log("✓ Airtable history: the dry run's numbers are the mapper's; three weigh-ins (the newer generation winning a shared day, fractions as percents, a carried-forward day left out), two workouts (rows and notes) with nine sets, two routines and six exercises landed; a second run finds it all already in; the mock saw GETs alone, never the Password Bank; the token never came back");
+      console.log("✓ Airtable history: the dry run's numbers are the mapper's; three weigh-ins (the newer generation winning a shared day, fractions as percents, a carried-forward day left out), four workouts (rows, a row's working-set notes, the day's notes) with fourteen sets marked From Airtable, a chest row on 15 Apr only, a twice-entered day once, the Off Day drafts never, two routines and eight exercises; a second run finds it all already in; the mock saw GETs alone, never the Password Bank; the token never came back");
     } finally {
       if (mock.pid) process.kill(-mock.pid);
     }
