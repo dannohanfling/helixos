@@ -14,6 +14,9 @@ import { MACROS, entryItem, totalsOf, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
 import { convertQty, storedUnit } from "@/lib/engine/body-units";
 import { decodeFound, foodFromFound } from "@/lib/engine/body-find";
+import { photoItems, readPhotoLines, type PhotoLine } from "@/lib/engine/body-photo";
+import { IMAGE_MAX_BYTES, isImageType } from "@/lib/engine/ai-request";
+import { readPlate } from "@/lib/body-photo";
 import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { AirtableError, airtableProblem } from "@/lib/airtable";
@@ -279,6 +282,45 @@ export async function saveFoundFoodAction(formData: FormData): Promise<void> {
   if (have) await db.update(schema.bodyFoods).set({ ...food, archivedAt: null }).where(eq(schema.bodyFoods.id, have.id));
   else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
   redirect(`/body/foods/find?saved=${encodeURIComponent(food.name)}`);
+}
+
+/* ───────── A meal from a photo (rev 237 phase 14, B8) ───────── */
+
+export type PhotoState = { error?: string; lines?: PhotoLine[]; note?: string | null } | undefined;
+
+/**
+ * Read the plate: the photo (downsized on the phone, base64) goes to the member's own model with the task and nothing else
+ * (no Essence, feature meal_photo), and the lines come back for them to check. Nothing is logged here. The photo is never
+ * stored or logged, and only with the member's HumanOS AI switch on, like every other AI use of their numbers.
+ */
+export async function mealPhotoAction(_prev: PhotoState, f: FormData): Promise<PhotoState> {
+  const { v, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
+  const settings = await setUp(v);
+  if (!settings.aiUse) return { error: "Turn on \"Let AI use my HumanOS data\" in HumanOS settings first; the photo goes to your own AI key." };
+  if (!(await allow(`body-photo:${userId}`, 20, 15 * 60000))) return { error: "That's a lot of photos in a row. Wait 15 minutes and try again." };
+  const mediaType = str(f, "mediaType");
+  const data = str(f, "image").replace(/^data:[^,]*,/, "");
+  if (!isImageType(mediaType) || !data) return { error: "Pick a photo first (JPEG, PNG, WebP or GIF)." };
+  if ((data.length * 3) / 4 > IMAGE_MAX_BYTES) return { error: "That photo is too large even after shrinking. Try a closer shot." };
+  const read = await readPlate({ data, mediaType });
+  if ("problem" in read) {
+    if (read.problem === "model") return { error: "Your AI model can't read images. Pick one that can on Settings, or log the meal by hand." };
+    if (read.problem === "no_answer") return { error: "AI didn't answer: it needs your own key on Settings, under today's cap, and a model that answers. Log the meal by hand for now." };
+    return { error: "Nothing to log from that photo. Try a clearer shot, or log by hand." };
+  }
+  return { lines: read.lines, note: read.note };
+}
+
+/** Log the checked lines as one entry, "From a photo", with the member's quantities; nothing else is written. */
+export async function logPhotoAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
+  const settings = await setUp(v);
+  const { date, slot } = logTarget(formData, settings.mealSlots);
+  const lines = readPhotoLines((k) => str(formData, k));
+  if (!lines.length) back(`/body?date=${date}`, "Tick at least one line to log it.");
+  const items = photoItems(lines);
+  await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId, userId, date, slot, name: "From a photo", mealId: null, items, ...totalsOf(items) });
+  refresh();
 }
 
 /** Archived foods leave the picker; meals and past days that use them keep working. */

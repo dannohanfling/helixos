@@ -29,7 +29,9 @@ async function main() {
     const coach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     await db.update(schema.memberships).set({ whatsNewSeen: null }).where(eq(schema.memberships.userId, maya.id));
     // The coach last opened the page two entries ago: one coach entry and one everyone entry are new to them.
-    const coachSeen = newestSeenable(WHATS_NEW, "coach") - 2;
+    // At least two entries new, and the newest coach entry among them, whatever audience the entries above it have.
+    const newestCoachEntry = Math.max(...WHATS_NEW.filter((e) => e.audience === "coach").map((e) => e.n));
+    const coachSeen = Math.min(newestSeenable(WHATS_NEW, "coach") - 2, newestCoachEntry - 1);
     const coachNew = WHATS_NEW.filter((e) => e.n > coachSeen).map((e) => e.n).sort();
     if (!WHATS_NEW.some((e) => e.n > coachSeen && e.audience === "coach")) throw new Error("the walk needs a coach entry among the newest two");
     await db.update(schema.memberships).set({ whatsNewSeen: coachSeen }).where(eq(schema.memberships.userId, coach.id));

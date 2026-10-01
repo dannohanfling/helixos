@@ -11,7 +11,9 @@ import { LogFoodForm } from "@/components/body/unit-inputs";
 import { loggableUnits } from "@/lib/engine/body-units";
 import { bodyDay, latestComposition, recentDays, requireBodyEnabled } from "@/lib/queries/body";
 import { fmtMetric } from "@/lib/engine/body-scale";
-import { deleteEntryAction, logFoodAction, logMealAction, setBodyAiAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
+import { deleteEntryAction, logFoodAction, logMealAction, logPhotoAction, mealPhotoAction, setBodyAiAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
+import { PhotoForm } from "@/components/body/photo-form";
+import { photoReady } from "@/lib/body-photo";
 
 export const metadata = { title: "HumanOS · Log" };
 
@@ -22,6 +24,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= v.today ? sp.date : v.today;
   const d = await bodyDay(v.workspace.id, v.user.id, date, v.today);
+  const photoOk = d?.settings.aiUse ? await photoReady(v) : false;
 
   if (!d) {
     return (
@@ -210,6 +213,18 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
             ) : (
               <p className="text-sm text-ink-2">
                 No saved meals yet. <Link href="/body/foods#meals" className="underline">Save a go-to meal</Link> to log it in one tap, or log a food below.
+              </p>
+            )}
+            {/* A meal from a photo (phase 14): only with the member's AI switch on and a working key; otherwise one line says what it needs. */}
+            {photoOk ? (
+              <Disclosure summary={<span className="text-sm font-medium">📷 From a photo</span>} className="mt-3">
+                <div className="mt-2">
+                  <PhotoForm action={mealPhotoAction} logAction={logPhotoAction} date={date} slots={slots} defaultSlot={defaultSlot} />
+                </div>
+              </Disclosure>
+            ) : (
+              <p className="mt-3 text-xs text-ink-3" data-testid="body-photo-off">
+                📷 A meal from a photo needs {d.settings.aiUse ? "your own AI key on Settings (under today's cap)" : "\"Let AI use my HumanOS data\" on in HumanOS settings, and your own AI key"}.
               </p>
             )}
             {d.library.foods.length ? (

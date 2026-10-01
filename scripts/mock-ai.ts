@@ -7,11 +7,15 @@ import { createServer } from "node:http";
 
 const port = Number(process.argv[2] ?? 4020);
 /** The last request's system message, block by block, for a walk to prove the voice came first and was marked for caching. */
-let last: { system: { text: string; cached: boolean }[]; instructions: string | null } = { system: [], instructions: null };
+let last: { system: { text: string; cached: boolean }[]; instructions: string | null; images: number; imageBytes: number } = { system: [], instructions: null, images: 0, imageBytes: 0 };
 /** Milliseconds to hold every reply, so a walk can see the status line while a call is in flight. */
 const delayMs = Number(process.argv[3] ?? process.env.MOCK_AI_DELAY_MS ?? 0);
 
 function reply(system: string, user: string): string {
+  // The meal photo (rev 237 phase 14): foods and portions as JSON lines, for the member to check before anything is logged.
+  if (/meal photo/i.test(system) && /"lines"/.test(system)) {
+    return JSON.stringify({ lines: [{ name: "Grilled chicken breast", qty: 6, unit: "oz", cal: 280, p: 52, f: 6, c: 0 }, { name: "White rice", qty: 1, unit: "cup", cal: 205, p: 4.3, f: 0.4, c: 45 }, { name: "Steamed broccoli", qty: 1, unit: "cup", cal: 55, p: 3.7, f: 0.6, c: 11 }], note: "Portions are a guess from the plate; adjust before logging." });
+  }
   // The harvest prompt: one quote that is word for word in the transcript it was given, and one that is not, so the app's verbatim check is seen to drop it.
   if (/word for word/i.test(system) && /"quotes"/.test(system)) {
     const line = user.split("\n").find((l) => /three new clients/.test(l));
@@ -68,10 +72,14 @@ createServer((req, res) => {
       if (key === "sk-ant-nomodel") return json(404, { type: "error", error: { type: "not_found_error", message: `model: ${body.model}` } });
       if (key === "sk-ant-nobill") return json(400, { type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits." } });
       if (key !== "sk-ant-good") return json(401, { type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } });
-      const user = String((body.messages as { content: string }[] | undefined)?.[0]?.content ?? "");
+      // A user turn is a string, or blocks (text and images); the text is read, the images only counted, never kept.
+      const content = (body.messages as { content: unknown }[] | undefined)?.[0]?.content;
+      const blocks = Array.isArray(content) ? (content as { type: string; text?: string; source?: { data?: string } }[]) : null;
+      const user = blocks ? blocks.filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n") : String(content ?? "");
+      const images = blocks ? blocks.filter((b) => b.type === "image") : [];
       // The system message may be a string or an array of text blocks; a block with cache_control is the cached prefix.
       const sysBlocks = Array.isArray(body.system) ? (body.system as { text?: string; cache_control?: unknown }[]).map((b) => ({ text: String(b.text ?? ""), cached: Boolean(b.cache_control) })) : [{ text: String(body.system ?? ""), cached: false }];
-      last = { system: sysBlocks, instructions: null };
+      last = { system: sysBlocks, instructions: null, images: images.length, imageBytes: images.reduce((n, b) => n + (b.source?.data?.length ?? 0), 0) };
       const systemText = sysBlocks.map((b) => b.text).join("\n\n");
       const text = reply(systemText, user);
       const cachedChars = sysBlocks.filter((b) => b.cached).reduce((n, b) => n + b.text.length, 0);
@@ -96,8 +104,11 @@ createServer((req, res) => {
       if (auth === "sk-nomodel") return json(404, { error: { message: `The model \`${body.model}\` does not exist or you do not have access to it.`, type: "invalid_request_error", code: "model_not_found" } });
       if (auth === "sk-nobill") return json(429, { error: { message: "You exceeded your current quota, please check your plan and billing details.", type: "insufficient_quota", code: "insufficient_quota" } });
       if (auth !== "sk-good") return json(401, { error: { message: "Incorrect API key provided: sk-xxx.", type: "invalid_request_error", code: "invalid_api_key" } });
-      const text = reply(String(body.instructions ?? ""), String(body.input ?? ""));
-      last = { system: [], instructions: String(body.instructions ?? "") };
+      const parts = Array.isArray(body.input) ? (body.input as { content?: { type: string; text?: string; image_url?: string }[] }[]).flatMap((m) => m.content ?? []) : null;
+      const inputText = parts ? parts.filter((p) => p.type === "input_text").map((p) => p.text ?? "").join("\n") : String(body.input ?? "");
+      const inputImages = parts ? parts.filter((p) => p.type === "input_image") : [];
+      last = { system: [], instructions: String(body.instructions ?? ""), images: inputImages.length, imageBytes: inputImages.reduce((n, p) => n + (p.image_url?.length ?? 0), 0) };
+      const text = reply(String(body.instructions ?? ""), inputText);
       return json(200, { id: "resp_mock", object: "response", model: body.model, status: "completed", output: [{ type: "message", id: "m1", role: "assistant", status: "completed", content: [{ type: "output_text", text, annotations: [] }] }], output_text: text, usage: { input_tokens: 120, input_tokens_details: { cached_tokens: 0 }, output_tokens: 40, total_tokens: 160 } });
     }
     return json(404, { error: "not found" });

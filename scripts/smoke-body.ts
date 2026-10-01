@@ -1049,6 +1049,72 @@ async function main() {
     await client.goto(`${base}/body/settings`);
     await press(client, '[data-testid="body-ai-toggle"]', async () => /: On/.test(await client.locator('[data-testid="body-ai-state"]').innerText()), "AI use on");
     if (!/: Off/.test(await client.locator('[data-testid="body-share-state"]').innerText())) throw new Error("the AI switch is independent of coach sharing");
+    // ── A meal from a photo (rev 237 phase 14): the member's own key, the mock model's three lines, checked and logged. ──
+    {
+      const { seal } = await import("@/lib/crypto");
+      const { newId } = await import("@/lib/ids");
+      const { totalsOf } = await import("@/lib/engine/body");
+      const { spawn: spawnAi } = await import("node:child_process");
+      const aiMock = spawnAi("npx", ["tsx", "scripts/mock-ai.ts", "4020"], { stdio: "ignore", detached: true });
+      try {
+        for (let i = 0; i < 100; i++) {
+          try {
+            await fetch("http://localhost:4020/__last");
+            break;
+          } catch {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
+        await client.goto(`${base}/body`);
+        await client.locator('[data-testid="body-photo-off"]').waitFor({ timeout: 30000 });
+        if (!/AI key/.test(await client.locator('[data-testid="body-photo-off"]').innerText())) throw new Error("without a key, the Log page says the photo needs one");
+        // The key goes in through Settings, as a member's would (sealed by the server with its own secret), and is checked against the mock.
+        await db.delete(schema.aiCredentials).where(and(eq(schema.aiCredentials.workspaceId, mem.workspaceId), eq(schema.aiCredentials.userId, maya.id)));
+        await client.goto(`${base}/settings`);
+        await client.selectOption('select[name="provider"]', "anthropic");
+        await fillExact(client, 'input[name="key"]', "sk-ant-good");
+        await press(client, 'button:has-text("Connect and check"), button:has-text("Replace and check")', async () => !!(await db.query.aiCredentials.findFirst({ where: and(eq(schema.aiCredentials.workspaceId, mem.workspaceId), eq(schema.aiCredentials.userId, maya.id)) })), "the member's AI key saved");
+        void seal;
+        void newId;
+        await client.goto(`${base}/body`);
+        const photoFold = client.locator('details:has([data-testid="body-photo"]) > summary');
+        await photoFold.waitFor({ timeout: 30000 });
+        if (!(await photoFold.evaluate((el) => (el.parentElement as HTMLDetailsElement).open))) await photoFold.click();
+        await client.locator('[data-testid="body-photo-file"]').waitFor({ timeout: 30000 });
+        // A 2 × 2 PNG: enough for the phone-side shrink to produce a JPEG to send.
+        const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVQImWP4z8DAwMDAwPD//38GBgYAHiQEAhMtBaUAAAAASUVORK5CYII=", "base64");
+        await client.locator('[data-testid="body-photo-file"]').setInputFiles({ name: "plate.png", mimeType: "image/png", buffer: png });
+        await client.locator('[data-testid="body-photo-preview"]').waitFor({ timeout: 30000 });
+        await press(client, '[data-testid="body-photo-read"]', async () => (await client.locator('[data-testid="body-photo-line"]').count()) === 3, "the plate read");
+        const lastAi = (await (await fetch("http://localhost:4020/__last")).json()) as { system: { text: string; cached: boolean }[]; images: number; imageBytes: number };
+        if (lastAi.images !== 1 || !(lastAi.imageBytes > 100)) throw new Error(`the photo went to the model once: ${JSON.stringify({ images: lastAi.images, bytes: lastAi.imageBytes })}`);
+        if (lastAi.system.some((b) => /voice you write in/.test(b.text) || b.cached) || !lastAi.system.some((b) => /meal photo/.test(b.text))) throw new Error("the photo call carries the task alone: no Essence, nothing cached");
+        const { parsePhotoLines: parse, photoItems: itemsOf } = await import("@/lib/engine/body-photo");
+        const modelLines = parse(JSON.stringify({ lines: [{ name: "Grilled chicken breast", qty: 6, unit: "oz", cal: 280, p: 52, f: 6, c: 0 }, { name: "White rice", qty: 1, unit: "cup", cal: 205, p: 4.3, f: 0.4, c: 45 }, { name: "Steamed broccoli", qty: 1, unit: "cup", cal: 55, p: 3.7, f: 0.6, c: 11 }] })).lines;
+        const shown = await client.locator('[data-testid="body-photo-qty"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+        if (JSON.stringify(shown) !== JSON.stringify(modelLines.map((l) => String(l.qty)))) throw new Error(`the lines show the model's amounts: ${JSON.stringify(shown)}`);
+        // Eight ounces of the chicken, the broccoli unticked: the entry carries two lines, scaled from the model's portions.
+        await fillExact(client, '[data-testid="body-photo-line"] >> nth=0 >> [data-testid="body-photo-qty"]', "8");
+        await client.locator('[data-testid="body-photo-line"] >> nth=2 >> [data-testid="body-photo-use"]').uncheck();
+        const entriesBefore = (await db.query.bodyEntries.findMany({ where: mine(schema.bodyEntries) })).length;
+        await press(client, '[data-testid="body-photo-log"]', async () => (await db.query.bodyEntries.findMany({ where: mine(schema.bodyEntries) })).length === entriesBefore + 1, "the photo meal logged");
+        const photoEntry = (await db.query.bodyEntries.findMany({ where: and(mine(schema.bodyEntries), eq(schema.bodyEntries.name, "From a photo")) }))[0];
+        const wantItems = itemsOf([{ ...modelLines[0], qty: 8, cal: 373.3, p: 69.3, f: 8, c: 0 }, modelLines[1]]);
+        if (!photoEntry || photoEntry.date !== today || JSON.stringify(photoEntry.items.map((i) => [i.name, i.qty, i.unit])) !== JSON.stringify(wantItems.map((i) => [i.name, i.qty, i.unit]))) throw new Error(`the entry holds the two ticked lines with the typed amount: ${JSON.stringify(photoEntry?.items)}`);
+        if (Math.abs(photoEntry.cal - totalsOf(wantItems).cal) > 0.5) throw new Error(`the entry's calories scale with the amount: ${photoEntry.cal} vs ${totalsOf(wantItems).cal}`);
+        const usage = await db.query.aiUsage.findMany({ where: and(eq(schema.aiUsage.userId, maya.id), eq(schema.aiUsage.feature, "meal_photo")) });
+        if (usage.length !== 1 || JSON.stringify(usage[0]).includes(png.toString("base64").slice(0, 20))) throw new Error("one usage row, feature meal_photo, with nothing of the photo in it");
+        // The entry leaves again, and so does the key, so the day's totals below are the ones the walk built by hand.
+        await db.delete(schema.bodyEntries).where(eq(schema.bodyEntries.id, photoEntry.id));
+        await db.delete(schema.aiCredentials).where(and(eq(schema.aiCredentials.workspaceId, mem.workspaceId), eq(schema.aiCredentials.userId, maya.id)));
+        console.log("✓ a meal from a photo: the plate read by the member's own model (one image, no Essence), three lines shown, one amount changed and one line unticked, logged as one entry with scaled macros; the usage row names the feature and nothing of the photo");
+      } finally {
+        if (aiMock.pid) process.kill(-aiMock.pid);
+      }
+      // Back where the AI section left the client, for the switch-off press below.
+      await client.goto(`${base}/body/settings`);
+      await client.locator('[data-testid="body-ai-toggle"]').waitFor({ timeout: 30000 });
+    }
     const aiText = await bodyAiContext(await viewerFor());
     if (!aiText || !aiText.includes(MEALS[0].name) || !aiText.includes(`${fmtMacro("cal", totals.cal)} cal`)) throw new Error(`with the switch on, AI gets today's numbers and logged meals: ${aiText}`);
     if (aiText.includes(note)) throw new Error("the coach's comment never goes to AI");

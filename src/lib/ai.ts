@@ -17,6 +17,7 @@ import { newId } from "@/lib/ids";
 import { todayInTz } from "@/lib/dates";
 import { FEATURES, MODELS, estimateCost, explainAiError, modelFor, type AiProvider } from "@/lib/engine/ai-usage";
 import { assembleSystem, type SystemBlock } from "@/lib/engine/essence";
+import { anthropicUserContent, imageRefusal, openaiInput, type DraftImage } from "@/lib/engine/ai-request";
 import { essenceBlockFor } from "@/lib/queries/essence";
 
 export type AiStatus = { hasKey: boolean; provider: AiProvider | null; last4: string; lastError: string | null; callsToday: number; cap: number; exempt: boolean; blocked: boolean };
@@ -67,10 +68,11 @@ export async function hasAiKey(): Promise<boolean> {
 type Result = { text: string; inputTokens: number; outputTokens: number; cacheWriteTokens: number; cacheReadTokens: number };
 
 /** The Essence block carries a cache marker: it is the same prefix on every call, which is what prompt caching is for. */
-async function callAnthropic(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number): Promise<Result | null> {
+async function callAnthropic(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number, images?: DraftImage[]): Promise<Result | null> {
   const client = new Anthropic({ apiKey: key, baseURL: baseURL() });
   const blocks: Anthropic.TextBlockParam[] = system.map((b) => (b.cached ? { type: "text", text: b.text, cache_control: { type: "ephemeral" } } : { type: "text", text: b.text }));
-  const stream = client.messages.stream({ model, max_tokens: maxTokens, system: blocks, messages: [{ role: "user", content: user }] });
+  // With no images the user turn is the plain string it always was (rev 201: byte-for-byte); with images, their blocks then the text.
+  const stream = client.messages.stream({ model, max_tokens: maxTokens, system: blocks, messages: [{ role: "user", content: anthropicUserContent(user, images) as Anthropic.MessageParam["content"] }] });
   const message = await stream.finalMessage();
   if (message.stop_reason === "refusal") return null;
   const text = message.content
@@ -82,15 +84,22 @@ async function callAnthropic(key: string, model: string, system: SystemBlock[], 
 }
 
 /** OpenAI caches a repeated prefix on its own (no marker); the voice leads the instructions so that prefix is the Essence. */
-async function callOpenAI(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number): Promise<Result | null> {
+async function callOpenAI(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number, images?: DraftImage[]): Promise<Result | null> {
   const client = new OpenAI({ apiKey: key, baseURL: openaiBaseURL() });
-  const res = await client.responses.create({ model, instructions: system.map((b) => b.text).join("\n\n"), input: user, max_output_tokens: maxTokens });
+  const res = await client.responses.create({ model, instructions: system.map((b) => b.text).join("\n\n"), input: openaiInput(user, images) as OpenAI.Responses.ResponseInput | string, max_output_tokens: maxTokens });
   const text = (res.output_text ?? "").trim();
   const cached = res.usage?.input_tokens_details?.cached_tokens ?? 0;
   return { text, inputTokens: Math.max(0, (res.usage?.input_tokens ?? 0) - cached), outputTokens: res.usage?.output_tokens ?? 0, cacheWriteTokens: 0, cacheReadTokens: cached };
 }
 
-export type DraftOptions = { feature?: keyof typeof FEATURES | string };
+/**
+ * `images` (rev 201): sent to the model with the user text, never stored or logged, never in ai_usage or an error. `essence: false`
+ * keeps the client's Essence out of the system message (a HumanOS call needs no business voice, and the prompt stays small).
+ */
+export type DraftOptions = { feature?: keyof typeof FEATURES | string; images?: DraftImage[]; essence?: boolean };
+
+/** Thrown only by a call that carried images, when the member's model can't read them: a plain sentence for the page, never a silent null. */
+export class AiImageError extends Error {}
 
 /**
  * Drafts with the member's own key. `task` is the feature's instruction only: the system message is assembled here as the
@@ -108,12 +117,14 @@ export async function draft(task: string, user: string, maxTokens = 4000, opts: 
   if (!key) return null;
   const feature = opts.feature ?? "composer_polish";
   const model = modelFor(cred.provider, feature);
-  const system = assembleSystem(await essenceBlockFor(v.workspace.id, v.user.id), task).blocks;
+  const system = assembleSystem(opts.essence === false ? null : await essenceBlockFor(v.workspace.id, v.user.id), task).blocks;
   let r: Result | null = null;
   try {
-    r = cred.provider === "anthropic" ? await callAnthropic(key, model, system, user, maxTokens) : await callOpenAI(key, model, system, user, maxTokens);
+    r = cred.provider === "anthropic" ? await callAnthropic(key, model, system, user, maxTokens, opts.images) : await callOpenAI(key, model, system, user, maxTokens, opts.images);
   } catch (e) {
     const err = e as { status?: number; message?: string };
+    // An image the model can't take is said plainly to the caller (rev 201), with nothing of the image in it; the key stays fine.
+    if (opts.images?.length && imageRefusal(err.status, err.message ?? "")) throw new AiImageError("This model can't read images.");
     // A key that stops working is marked so the pages stop offering ✨ and the member sees why on Settings.
     const modelAccess = /does not exist or you do not have access|model_not_found|model.*not found/i.test(err.message ?? "") || (err.status === 404 && /model/i.test(err.message ?? ""));
     if (err.status === 401 || err.status === 402 || err.status === 403 || modelAccess) {

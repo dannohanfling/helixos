@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 39,
+    date: "2026-10-01",
+    title: "HumanOS: log a meal from a photo",
+    lines: ["On Log, \"From a photo\" takes a picture of your plate and your own AI names the foods and guesses the portions and macros. You check every line, fix the amounts, untick what isn't there, and press Log these. Nothing is logged before that, the photo is never kept, and it works only with \"Let AI use my HumanOS data\" on and your own AI key."],
+    audience: "everyone",
+  },
+  {
     n: 38,
     date: "2026-10-01",
     title: "Share your month to the community thread",
