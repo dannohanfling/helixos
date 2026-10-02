@@ -11,6 +11,7 @@ import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory, templat
 import { CoachSends } from "@/components/body/coach-sends";
 import { deleteDayTypeAction, disconnectWhoopAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, setBodyAiAction, setBodyShareAction, syncWhoopAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
+import { MEASURES, MEASURES_LABEL } from "@/lib/engine/body-measures";
 import { EraseBodyForm } from "@/components/body/unit-inputs";
 
 export const metadata = { title: "HumanOS · Settings" };
@@ -194,17 +195,13 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
               <input name="fatFloor" type="number" min={0} className="field py-1 text-sm tabular" defaultValue={s.fatFloor ?? ""} placeholder="none" />
             </label>
             <label>
-              <span className="label">Weight in</span>
-              <select name="weightUnit" className="field py-1 text-sm" defaultValue={s.weightUnit}>
-                <option value="lb">lb</option>
-                <option value="kg">kg</option>
-              </select>
-            </label>
-            <label>
-              <span className="label">Food weights in</span>
-              <select name="foodUnit" className="field py-1 text-sm" defaultValue={s.foodUnit}>
-                <option value="oz">oz</option>
-                <option value="g">g</option>
+              <span className="label">Measures</span>
+              <select name="measures" className="field py-1 text-sm" defaultValue={s.measures ?? "us"} data-testid="body-measures">
+                {MEASURES.map((m) => (
+                  <option key={m} value={m}>
+                    {MEASURES_LABEL[m]}
+                  </option>
+                ))}
               </select>
             </label>
           </div>

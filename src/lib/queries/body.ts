@@ -9,6 +9,7 @@ import type { Viewer } from "@/lib/auth";
 import { addDays, daysBetween, formatDate, rangeDays, startOfWeek, todayInTz } from "@/lib/dates";
 import { belowPar, daysLeft, dueSoon, yieldFor } from "@/lib/engine/body-pantry";
 import { fmtHabitValue, habitsWeek, kept, dueOn, streak, weekDots, type Dot } from "@/lib/engine/body-habits";
+import { habitShown, isMeasures, measuresOf, shownValue, unitsFor, type Measures } from "@/lib/engine/body-measures";
 import { bedtimeDrift, fmtHours, isRecoveryKey, RECOVERY, sleepAverages, sleepWeek, type Night, type RecoveryKey } from "@/lib/engine/body-recovery";
 import { weekday } from "@/lib/dates";
 import { METRIC_DEFS, habitKey, isHabitKey, pairUp, verdict, type Fold, type Grain, type MetricDef, type Point } from "@/lib/engine/body-correlate";
@@ -42,7 +43,17 @@ export async function workspaceOwnerId(workspaceId: string): Promise<string | nu
 export const isWorkspaceOwner = async (v: Viewer): Promise<boolean> => v.role === "coach" && (await workspaceOwnerId(v.workspace.id)) === v.membership.id;
 
 export async function bodySettingsFor(workspaceId: string, userId: string): Promise<schema.BodySettings | null> {
-  return (await db.query.bodySettings.findFirst({ where: and(eq(schema.bodySettings.workspaceId, workspaceId), eq(schema.bodySettings.userId, userId)) })) ?? null;
+  const s = (await db.query.bodySettings.findFirst({ where: and(eq(schema.bodySettings.workspaceId, workspaceId), eq(schema.bodySettings.userId, userId)) })) ?? null;
+  if (!s || isMeasures(s.measures)) return s;
+  // Metric or US (rev 424), once per member: an earlier kg or g reads as metric, else their time zone decides; the two units follow.
+  const [m, ws] = await Promise.all([
+    db.query.memberships.findFirst({ columns: { timezone: true }, where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)) }),
+    db.query.workspaces.findFirst({ columns: { timezone: true }, where: eq(schema.workspaces.id, workspaceId) }),
+  ]);
+  const measures = measuresOf(s, m?.timezone || ws?.timezone);
+  const units = unitsFor(measures);
+  await db.update(schema.bodySettings).set({ measures, ...units }).where(eq(schema.bodySettings.id, s.id));
+  return { ...s, measures, ...units };
 }
 
 /**
@@ -186,7 +197,7 @@ export async function todayBody(v: Viewer) {
   const [d, hd] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), habitsDay(v.workspace.id, v.user.id, v.today, v.today)]);
   if (!d) return null;
   // The one-tap chips (B7, placed by rev 201): only the habits due today, done-type ones toggle in place, measured ones open Practices.
-  const habits = hd.habits.filter((h) => h.due).slice(0, 8).map((h) => ({ id: h.id, name: h.name, kind: h.kind, kept: h.kept, valueText: h.valueText, streak: h.streak }));
+  const habits = hd.habits.filter((h) => h.due).slice(0, 8).map((h) => ({ id: h.id, name: h.name, kind: h.kind, kept: h.kept, valueText: h.valueText, streak: h.streak, difficulty: h.difficulty }));
   return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag };
 }
 
@@ -266,6 +277,7 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
     };
   });
   return {
+    measures: settings.measures,
     settings,
     unit,
     dayType,
@@ -679,8 +691,9 @@ export async function habitsFor(workspaceId: string, userId: string, opts: { arc
  * the week's dots; plus the week's tally so far. Positive framing is the page's job; this is the arithmetic.
  */
 export async function habitsDay(workspaceId: string, userId: string, date: string, today: string) {
-  const habits0 = await habitsFor(workspaceId, userId, { today });
+  const [habits0, settings] = await Promise.all([habitsFor(workspaceId, userId, { today }), bodySettingsFor(workspaceId, userId)]);
   if (!habits0.length) return { habits: [], week: { due: 0, kept: 0 }, monday: startOfWeek(date) };
+  const measures: Measures = isMeasures(settings?.measures) ? settings!.measures : "us";
   const logs = await db.query.bodyHabitLogs.findMany({ where: and(and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId)), gte(schema.bodyHabitLogs.date, addDays(today, -400))) });
   const habits = withSince(habits0, logs);
   const monday = startOfWeek(date);
@@ -689,7 +702,12 @@ export async function habitsDay(workspaceId: string, userId: string, date: strin
     monday,
     habits: habits.map((h) => {
       const value = logs.find((l) => l.habitId === h.id && l.date === date)?.value ?? null;
-      return { ...h, value, due: dueOn(h, weekday(date), date), kept: kept(h, value), streak: streak(h, logs, today, habitDates), dots: weekDots(h, logs, monday, today, habitDates) as Dot[], valueText: value != null ? fmtHabitValue(h, value) : "" };
+      // Kept, streaks and dots read the stored numbers; what is shown and typed is in the member's system (rev 424). The habit's own
+      // unit and target stay beside it for the edit form.
+      const s = habitShown(h.unit, h.target, measures);
+      const shown = { unit: s.unit, target: h.target != null ? shownValue(h.target, s) : null };
+      const shownVal = value != null && h.kind !== "done" ? shownValue(value, s) : value;
+      return { ...h, ownUnit: h.unit, ownTarget: h.target, ...shown, value: shownVal, due: dueOn(h, weekday(date), date), kept: kept(h, value), streak: streak(h, logs, today, habitDates), dots: weekDots(h, logs, monday, today, habitDates) as Dot[], valueText: shownVal != null ? fmtHabitValue({ ...h, ...shown }, shownVal) : "" };
     }),
     week: habitsWeek(habits, logs, monday, sunday < today ? sunday : today > sunday ? sunday : today, habitDates),
   };
@@ -984,6 +1002,8 @@ export async function sleepRange(workspaceId: string, userId: string, b: Bounds)
 /** Habits over a range: per habit the due and kept days, the kept rate, the best run inside the range, and its heat strip. */
 export async function habitsRange(workspaceId: string, userId: string, b: Bounds, today: string) {
   const habits0 = await habitsFor(workspaceId, userId, { today });
+  const rangeSettings = await bodySettingsFor(workspaceId, userId);
+  const rangeMeasures: Measures = isMeasures(rangeSettings?.measures) ? rangeSettings!.measures : "us";
   if (!habits0.length) return { habits: [], due: 0, kept: 0 };
   // The strip draws whole weeks, so the logs are read over them; due and kept count the range alone.
   const strip = stripBounds(b.from, b.to, rangeDates);
@@ -1020,7 +1040,7 @@ export async function habitsRange(workspaceId: string, userId: string, b: Bounds
         today,
         rangeDates,
         (date) => (!dueOn(h, weekday(date), date) ? 1 : kept(h, value.get(date)) ? 3 : 0),
-        (date) => `${formatDate(date, { weekday: "short", month: "short", day: "numeric" })}: ${!dueOn(h, weekday(date), date) ? "not due" : kept(h, value.get(date)) ? `kept${value.get(date) != null && h.kind !== "done" ? ` (${fmtHabitValue(h, value.get(date)!)})` : ""}` : date === today ? "today, not yet" : "a gap"}`,
+        (date) => `${formatDate(date, { weekday: "short", month: "short", day: "numeric" })}: ${!dueOn(h, weekday(date), date) ? "not due" : kept(h, value.get(date)) ? `kept${value.get(date) != null && h.kind !== "done" ? ` (${fmtHabitValue({ ...h, unit: habitShown(h.unit, h.target, rangeMeasures).unit }, shownValue(value.get(date)!, habitShown(h.unit, h.target, rangeMeasures)))})` : ""}` : date === today ? "today, not yet" : "a gap"}`,
         (date) => date === today && dueOn(h, weekday(date), date) && !kept(h, value.get(date)),
       ),
     };

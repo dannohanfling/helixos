@@ -801,6 +801,41 @@ async function main() {
     await press(client, 'dialog[open] [data-testid="confirm-delete-yes"]', async () => (await client.locator('[data-testid="habits-archived"]').count()) === 0 && (await client.locator('[data-testid="habit"][data-name="Stretching"]').count()) === 0, "Stretching deleted");
     if ((await db.query.bodyHabits.findMany({ where: mine(schema.bodyHabits) })).some((h) => h.id === stretch.id) || (await db.query.bodyHabitLogs.findMany({ where: eq(schema.bodyHabitLogs.habitId, stretch.id) })).length) throw new Error("Delete removes the habit and every log for good");
     console.log("✓ archived habits: the fold lists an archived habit with its logged day, Restore brings it back whole, Delete asks with the count and removes it and its log; Delete is offered only there");
+    // Metric or US with habit difficulty (Danno, rev 424; Joy, rev 431): the walk's member is in Los Angeles, so US first; switched to
+    // metric on Settings, water shows in litres and takes millilitres while the stored rows keep their own unit; back to US, nothing moved.
+    const settingsUs = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!;
+    if (settingsUs.measures !== "us" || settingsUs.weightUnit !== "lb") throw new Error(`a member in a US time zone reads as US: ${settingsUs.measures} ${settingsUs.weightUnit}`);
+    const waterId = freshId();
+    await db.insert(schema.bodyHabits).values({ id: waterId, workspaceId: mem.workspaceId, userId: maya.id, name: "Water", kind: "amount", unit: "oz", target: 130, days: [], order: 50 });
+    await db.update(schema.bodyHabits).set({ difficulty: "hard" }).where(and(mine(schema.bodyHabits), eq(schema.bodyHabits.name, "Breathwork")));
+    await client.goto(`${base}/body/settings`);
+    await client.locator('[data-testid="body-measures"]').selectOption("metric");
+    await press(client, '[data-testid="body-settings-save"]', async () => (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))?.measures === "metric", "metric saved");
+    const settingsMetric = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!;
+    if (settingsMetric.weightUnit !== "kg" || settingsMetric.foodUnit !== "g") throw new Error("the weight and food units follow metric");
+    await client.goto(`${base}/body/practices`);
+    const waterRow = client.locator('[data-testid="habit"][data-name="Water"]');
+    await waterRow.waitFor({ timeout: 30000 });
+    if (!(await waterRow.innerText()).includes("3.8 L a day")) throw new Error(`Water's 130 oz target reads in litres: ${await waterRow.innerText()}`);
+    if ((await client.locator('[data-testid="habit"][data-name="Breathwork"] [data-testid="habit-difficulty-mark"]').getAttribute("data-difficulty")) !== "hard") throw new Error("a hard habit carries its mark on Practices");
+    await fillExact(client, '[data-testid="habit"][data-name="Water"] [data-testid="habit-value"]', "0.5");
+    await press(client, '[data-testid="habit"][data-name="Water"] [data-testid="habit-log"]', async () => (await db.query.bodyHabitLogs.findMany({ where: eq(schema.bodyHabitLogs.habitId, waterId) })).length === 1, "half a litre of water");
+    const waterLog = (await db.query.bodyHabitLogs.findMany({ where: eq(schema.bodyHabitLogs.habitId, waterId) }))[0];
+    if (waterLog.value !== 16.91) throw new Error(`0.5 L typed is stored in the habit's own oz: ${waterLog.value}`);
+    await client.goto(`${base}/body/weight`);
+    if (!(await client.locator('[data-testid="trend-weight-stats"]').innerText()).includes(" kg")) throw new Error("weigh-ins read in kg once metric");
+    await client.goto(`${base}/today`);
+    if (!(await client.locator('[data-testid="today-habit"][data-name="Breathwork"] [data-testid="today-difficulty"]').count())) throw new Error("the Today chip carries the difficulty mark");
+    await client.goto(`${base}/body/settings`);
+    await client.locator('[data-testid="body-measures"]').selectOption("us");
+    await press(client, '[data-testid="body-settings-save"]', async () => (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))?.measures === "us", "back to US");
+    await client.goto(`${base}/body/practices`);
+    await waterRow.waitFor({ timeout: 30000 });
+    if (!(await waterRow.innerText()).includes("130 oz a day") || (await db.query.bodyHabitLogs.findMany({ where: eq(schema.bodyHabitLogs.habitId, waterId) }))[0].value !== 16.91) throw new Error("back in US, Water reads 130 oz and the stored log never moved");
+    await db.delete(schema.bodyHabitLogs).where(eq(schema.bodyHabitLogs.habitId, waterId));
+    await db.delete(schema.bodyHabits).where(eq(schema.bodyHabits.id, waterId));
+    await db.update(schema.bodyHabits).set({ difficulty: null }).where(and(mine(schema.bodyHabits), eq(schema.bodyHabits.name, "Breathwork")));
+    console.log("✓ measures: Los Angeles starts US; metric shows Water's 130 oz as 3.8 L, 0.5 L typed stores as 16.91 oz, weigh-ins in kg; back to US nothing moved; a hard habit marked on Practices and Today");
     // Sleep: last night, then an earlier night, then last night logged again replaces it.
     await client.goto(`${base}/body/sleep`);
     await client.locator('[data-testid="sleep-form"]').waitFor({ timeout: 30000 });

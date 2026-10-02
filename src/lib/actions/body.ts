@@ -19,6 +19,7 @@ import { IMAGE_MAX_BYTES, isImageType } from "@/lib/engine/ai-request";
 import { readPlate, summariseWeek } from "@/lib/body-ai";
 import { isDayFlag } from "@/lib/engine/body-flags";
 import { weekNumbers } from "@/lib/engine/body-week";
+import { habitShown, isMeasures, measuresFromZone, storedFromShown, unitsFor, type Measures } from "@/lib/engine/body-measures";
 import { checkinNote, checkinWeekOk, copyName, dayTypeTemplate, isTemplateKind, mealTemplate, routineTemplate, sameName, templateName, type TemplatePayload } from "@/lib/engine/body-templates";
 import { bodyWeek } from "@/lib/queries/body";
 import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
@@ -227,7 +228,7 @@ export async function setupBodyAction(): Promise<void> {
   if (await bodySettingsFor(workspaceId, userId)) redirect("/body");
   const everyDay = newId();
   await db.batch([
-    db.insert(schema.bodySettings).values({ id: newId(), workspaceId, userId, weekPattern: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), everyDay])) }),
+    db.insert(schema.bodySettings).values({ id: newId(), workspaceId, userId, measures: measuresFromZone(v.tz), ...unitsFor(measuresFromZone(v.tz)), weekPattern: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), everyDay])) }),
     db.insert(schema.bodyDayTypes).values({ id: everyDay, workspaceId, userId, name: "Every day", order: 0 }),
   ]);
   refresh();
@@ -258,8 +259,11 @@ export async function saveBodySettingsAction(formData: FormData): Promise<void> 
   await db
     .update(schema.bodySettings)
     .set({
-      weightUnit: str(formData, "weightUnit") === "kg" ? "kg" : "lb",
-      foodUnit: str(formData, "foodUnit") === "g" ? "g" : "oz",
+      // One setting, Metric or US (rev 424); the weight and food units follow it.
+      ...(() => {
+        const measures: Measures = isMeasures(str(formData, "measures")) ? (str(formData, "measures") as Measures) : (settings.measures as Measures | null) ?? "us";
+        return { measures, ...unitsFor(measures) };
+      })(),
       calFloor: optNum(formData, "calFloor"),
       fatFloor: optNum(formData, "fatFloor"),
       overOk: MACROS.filter((m) => formData.get(`overOk_${m}`) === "on") as Macro[],
@@ -1010,14 +1014,16 @@ export async function saveHabitAction(formData: FormData): Promise<void> {
   const t = optNum(formData, "target");
   const target = kind === "done" || t == null || t <= 0 ? null : t;
   const days = daysFrom([0, 1, 2, 3, 4, 5, 6].filter((d) => formData.get(`d${d}`) === "1" || formData.get(`d${d}`) === "on"));
+  const diff = str(formData, "difficulty");
+  const difficulty = diff === "easy" || diff === "medium" || diff === "hard" ? diff : null;
   const own = and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId));
-  if (id) await db.update(schema.bodyHabits).set({ name, kind, unit, target, days }).where(and(eq(schema.bodyHabits.id, id), own));
+  if (id) await db.update(schema.bodyHabits).set({ name, kind, unit, target, days, difficulty }).where(and(eq(schema.bodyHabits.id, id), own));
   else {
     const have = await db.query.bodyHabits.findMany({ columns: { id: true, name: true, archivedAt: true }, where: own });
     const same = have.find((h) => h.name.toLowerCase() === name.toLowerCase());
     // Adding a name already there brings it back rather than doubling it.
-    if (same) await db.update(schema.bodyHabits).set({ archivedAt: null, kind, unit, target, days }).where(and(eq(schema.bodyHabits.id, same.id), own));
-    else await db.insert(schema.bodyHabits).values({ id: newId(), workspaceId, userId, name, kind, unit, target, days, order: have.length });
+    if (same) await db.update(schema.bodyHabits).set({ archivedAt: null, kind, unit, target, days, difficulty }).where(and(eq(schema.bodyHabits.id, same.id), own));
+    else await db.insert(schema.bodyHabits).values({ id: newId(), workspaceId, userId, name, kind, unit, target, days, difficulty, order: have.length });
   }
   refresh();
   redirect(PRACTICES);
@@ -1071,7 +1077,10 @@ export async function logHabitAction(formData: FormData): Promise<void> {
   else {
     const n = optNum(formData, "value");
     if (n == null) throw back(to, `How much ${habit.name.toLowerCase()}? Give a number.`);
-    value = n > 0 && n < 1_000_000 ? n : null;
+    // Typed in the member's system (rev 424), stored in the habit's own unit, so a switch never rewrites a day.
+    const settings = await bodySettingsFor(workspaceId, userId);
+    const typed = storedFromShown(n, habitShown(habit.unit, habit.target, isMeasures(settings?.measures) ? settings!.measures : "us"));
+    value = typed > 0 && typed < 1_000_000 ? typed : null;
   }
   if (existing) await db.delete(schema.bodyHabitLogs).where(and(eq(schema.bodyHabitLogs.id, existing.id), and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId))));
   if (value != null) await db.insert(schema.bodyHabitLogs).values({ id: newId(), workspaceId, userId, habitId: habit.id, date, value, source: "manual" });

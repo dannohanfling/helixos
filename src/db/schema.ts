@@ -2395,6 +2395,8 @@ export const bodySettings = sqliteTable(
     aiAskedAt: text("ai_asked_at"),
     weightUnit: text("weight_unit", { enum: ["lb", "kg"] }).notNull().default("lb"),
     foodUnit: text("food_unit", { enum: ["oz", "g"] }).notNull().default("oz"),
+    /** Metric or US (rev 424): what HumanOS shows and takes. Null until first read, then set from the member's time zone; the two units above follow it. */
+    measures: text("measures", { enum: ["metric", "us"] }),
     calFloor: real("cal_floor"),
     fatFloor: real("fat_floor"),
     /** Macros where over the top of the band is harmless (🟢). */
@@ -2864,6 +2866,8 @@ export const bodyHabits = sqliteTable(
     target: real("target"),
     days: text("days", { mode: "json" }).$type<number[]>().notNull().default([]),
     order: integer("order").notNull().default(0),
+    /** Optional easy / medium / hard (Joy, rev 431): shown on the habit, no change to how it counts. */
+    difficulty: text("difficulty", { enum: ["easy", "medium", "hard"] }),
     archivedAt: text("archived_at"),
     createdAt: createdAt(),
   },

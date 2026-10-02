@@ -19,7 +19,8 @@ import { consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
 import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayTypesFor } from "@/lib/queries/body";
-import { fmtDistance, zonesText } from "@/lib/engine/body-whoop";
+import { zonesText } from "@/lib/engine/body-whoop";
+import { fmtDistanceIn, habitShown, isMeasures, storedFromShown, weightUnitWord } from "@/lib/engine/body-measures";
 import { PRESETS } from "@/lib/engine/body-correlate";
 import { isRangeKey, rangeBounds, rateText } from "@/lib/engine/body-range";
 import { addDays } from "@/lib/dates";
@@ -188,7 +189,7 @@ export const bodyTraining = defineTool({
     for (const x of t.exercises) lines.push(`${x.exercise.name}${x.target ? ` (plan ${x.target.sets} × ${x.target.reps || "?"})` : ""}: ${x.today.length ? x.today.map((s) => `${fmtSet(s, t.unit, x.exercise.kind)}${s.pr ? " (PR)" : ""}`).join(", ") : "no sets yet"}${x.last.length ? `; last time ${x.lastDate}: ${x.last.join(", ")}` : ""}${x.pr ? `; PR ${x.pr.text}` : ""}.`);
     if (weeks) lines.push(`This week: ${weeks.tally.done}${weeks.tally.planned != null ? ` of ${weeks.tally.planned}` : ""} session${weeks.tally.done === 1 && weeks.tally.planned == null ? "" : "s"}.`);
     // Phase 16b: the device's workouts that day, under the session.
-    if (activities.length) lines.push(`Recorded by the device: ${activities.map((a) => `${a.sport} ${Math.round(a.minutes)} min${a.strain != null ? `, strain ${a.strain}` : ""}${a.avgHr != null ? `, ${a.avgHr} bpm` : ""}${fmtDistance(a.distanceM) ? `, ${fmtDistance(a.distanceM)}` : ""}${zonesText(a.zones) ? `, zones ${zonesText(a.zones)}` : ""}`).join("; ")}.`);
+    if (activities.length) lines.push(`Recorded by the device: ${activities.map((a) => `${a.sport} ${Math.round(a.minutes)} min${a.strain != null ? `, strain ${a.strain}` : ""}${a.avgHr != null ? `, ${a.avgHr} bpm` : ""}${fmtDistanceIn(a.distanceM, isMeasures(t.measures) ? t.measures : "us") ? `, ${fmtDistanceIn(a.distanceM, isMeasures(t.measures) ? t.measures : "us")}` : ""}${zonesText(a.zones) ? `, zones ${zonesText(a.zones)}` : ""}`).join("; ")}.`);
     return { text: lines.join("\n"), data: { date, off: t.off, routine: t.routineName, finished: !!t.completedAt, plan: t.plan, exercises: t.exercises.map((x) => ({ name: x.exercise.name, kind: x.exercise.kind, target: x.target, today: x.today.map((s) => ({ weight: s.weight, unit: s.unit, reps: s.reps, pr: s.pr })), last: x.last, pr: x.pr })), week: weeks?.tally ?? null, activities: activities.map((a) => ({ sport: a.sport, minutes: a.minutes, strain: a.strain, avgHr: a.avgHr, maxHr: a.maxHr, distanceM: a.distanceM, zones: a.zones, underSession: !!a.sessionId })) } };
   },
 });
@@ -262,7 +263,7 @@ export const bodyLogSet = defineTool({
   scope: "body",
   kind: "write",
   description: "Log one set for an exercise by name: weight (in the member's unit) × reps, or reps alone for a bodyweight exercise (plus any weight added). Starts the day's session if none. Today unless a date is given. Answers with the set's place in the day and the PR.",
-  input: { exercise: z.string().describe("The exercise's name"), reps: z.number().int().min(1).max(1000), weight: z.number().positive().optional().describe("In the member's weight unit; left out for a bodyweight exercise with nothing added"), date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  input: { exercise: z.string().describe("The exercise's name"), reps: z.number().int().min(1).max(1000), weightUnit: z.string().optional().describe("kg or lb, when the member said the other one"), weight: z.number().positive().optional().describe("In the member's weight unit unless weightUnit says otherwise; left out for a bodyweight exercise with nothing added"), date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
   handler: async (v, input): Promise<ToolResult> => {
     const settings = await ready(v);
     const date = dayOf(v, input.date);
@@ -275,12 +276,13 @@ export const bodyLogSet = defineTool({
     if (exercise.kind === "weight" && weight == null) throw new Error(`${exercise.name} is logged as weight × reps: give the weight in ${settings.weightUnit}.`);
     await db.insert(schema.bodySessions).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, routineId: null, routineName: null }).onConflictDoNothing({ target: [schema.bodySessions.workspaceId, schema.bodySessions.userId, schema.bodySessions.date] });
     const session = (await db.query.bodySessions.findFirst({ where: and(eq(schema.bodySessions.workspaceId, v.workspace.id), eq(schema.bodySessions.userId, v.user.id), eq(schema.bodySessions.date, date)) }))!;
-    await db.insert(schema.bodySets).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, sessionId: session.id, exerciseId: exercise.id, date, weight, unit: settings.weightUnit, reps });
+    const setUnit = weightUnitWord(input.weightUnit) ?? settings.weightUnit;
+    await db.insert(schema.bodySets).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, sessionId: session.id, exerciseId: exercise.id, date, weight, unit: setUnit, reps });
     if (session.completedAt) await db.update(schema.bodySessions).set({ completedAt: null }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, v.workspace.id), eq(schema.bodySessions.userId, v.user.id))));
     const t = await trainingDay(v.workspace.id, v.user.id, date);
     const x = t?.exercises.find((e) => e.exercise.id === exercise.id);
     const set = x?.today[x.today.length - 1];
-    return { text: `Logged ${exercise.name} ${fmtSet({ weight, unit: settings.weightUnit, reps }, settings.weightUnit, exercise.kind)}${x ? ` (set ${x.today.length}${x.target ? ` of ${x.target.sets} planned` : ""} ${date === v.today ? "today" : `on ${date}`})` : ""}${set?.pr ? ". A new PR!" : x?.pr ? (x.pr.date === date ? `. Today's PR stands at ${x.pr.text}.` : `. PR stays ${x.pr.text}.`) : "."}${session.completedAt ? " The session was finished; it's open again." : ""}`, data: { exercise: exercise.name, date, weight, unit: settings.weightUnit, reps, pr: !!set?.pr, setsToday: x?.today.length ?? 1 } };
+    return { text: `Logged ${exercise.name} ${fmtSet({ weight, unit: setUnit, reps }, settings.weightUnit, exercise.kind)}${x ? ` (set ${x.today.length}${x.target ? ` of ${x.target.sets} planned` : ""} ${date === v.today ? "today" : `on ${date}`})` : ""}${set?.pr ? ". A new PR!" : x?.pr ? (x.pr.date === date ? `. Today's PR stands at ${x.pr.text}.` : `. PR stays ${x.pr.text}.`) : "."}${session.completedAt ? " The session was finished; it's open again." : ""}`, data: { exercise: exercise.name, date, weight, unit: settings.weightUnit, reps, pr: !!set?.pr, setsToday: x?.today.length ?? 1 } };
   },
 });
 
@@ -290,7 +292,8 @@ export const bodyLogWeighIn = defineTool({
   kind: "write",
   description: "Log a weigh-in: weight in the member's unit, body fat % if known, and any other scale numbers (skeletal muscle %, water %, visceral fat, BMR, metabolic age). Today unless a date is given; a time (HH:MM) if known. The day's figure is its lowest reading.",
   input: {
-    weight: z.number().positive().describe("In the member's weight unit"),
+    weight: z.number().positive().describe("In the member's weight unit unless weightUnit says otherwise"),
+    weightUnit: z.string().optional().describe("kg or lb, when the member said the other one (\"70 kg\")"),
     bodyFat: z.number().positive().optional().describe("Body fat %"),
     skeletalMuscle: z.number().positive().optional().describe("Skeletal muscle %"),
     water: z.number().positive().optional().describe("Body water %"),
@@ -310,7 +313,8 @@ export const bodyLogWeighIn = defineTool({
       if (raw == null) return [];
       const n = Number(raw);
       if (!Number.isFinite(n) || n <= 0) return [];
-      const value = storedValue(key, n, settings.weightUnit);
+      // Either unit is taken (rev 424): "70 kg" or "154 lb", whatever the member's own.
+      const value = storedValue(key, n, weightUnitWord(input.weightUnit) ?? settings.weightUnit);
       if (!inRange(key, value)) throw new Error(`${METRIC[key].label}: ${n} doesn't look right.`);
       return [{ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, key, value, source: "manual" as const, readingId, time }];
     });
@@ -501,15 +505,18 @@ defineTool({
   description: "Log a habit by name: a done-or-not habit is ticked (or unticked with done: false); a minutes, count or amount habit takes a value. Today unless a date is given. Positive framing: the reply says what's kept, never what's missed.",
   input: { habit: z.string().describe("The habit's name, as on Practices"), value: z.number().optional().describe("Minutes, count or amount; not needed for a done-or-not habit"), done: z.boolean().optional().describe("For a done-or-not habit: false unticks it"), date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
   handler: async (v, input): Promise<ToolResult> => {
-    await ready(v);
+    const settings = await ready(v);
     const date = dayOf(v, input.date);
     const h = byName("habit", await habitsFor(v.workspace.id, v.user.id, { today: v.today }), String(input.habit ?? ""));
+    // The value is in the member's own system (rev 424), as the page shows it; it is stored in the habit's own unit.
+    const shownAs = habitShown(h.unit, h.target, isMeasures(settings.measures) ? settings.measures : "us");
     let value: number | null;
     if (h.kind === "done") value = input.done === false ? null : 1;
     else {
       const n = input.value == null ? NaN : Number(input.value);
-      if (!Number.isFinite(n)) throw new Error(`${h.name} counts ${h.kind === "minutes" ? "minutes" : (h.unit ?? "a number")}: give the value.`);
-      value = n > 0 && n < 1_000_000 ? n : null;
+      if (!Number.isFinite(n)) throw new Error(`${h.name} counts ${h.kind === "minutes" ? "minutes" : (shownAs.unit ?? "a number")}: give the value.`);
+      const stored = h.kind === "minutes" ? n : storedFromShown(n, shownAs);
+      value = stored > 0 && stored < 1_000_000 ? stored : null;
     }
     const own = and(eq(schema.bodyHabitLogs.workspaceId, v.workspace.id), eq(schema.bodyHabitLogs.userId, v.user.id));
     await db.delete(schema.bodyHabitLogs).where(and(and(eq(schema.bodyHabitLogs.habitId, h.id), eq(schema.bodyHabitLogs.date, date)), own));
@@ -517,7 +524,7 @@ defineTool({
     const hd = await habitsDay(v.workspace.id, v.user.id, date, v.today);
     const mine = hd.habits.find((x) => x.id === h.id)!;
     const isKept = kept(h, value);
-    return { text: `${h.name}: ${value == null ? "cleared" : `${h.kind === "done" ? "done" : fmtHabitValue(h, value)}${isKept ? " ✓" : h.target != null ? ` (target ${fmtHabitValue(h, h.target)})` : ""}`}${date === v.today ? "" : ` for ${date}`}${mine.streak ? `; streak ${mine.streak} day${mine.streak === 1 ? "" : "s"}` : ""}. ${hd.week.kept} of ${hd.week.due} kept this week.`, data: { date, habit: h.name, value, kept: isKept, streak: mine.streak, week: hd.week } };
+    return { text: `${h.name}: ${value == null ? "cleared" : `${h.kind === "done" ? "done" : mine.valueText}${isKept ? " ✓" : mine.target != null ? ` (target ${fmtHabitValue(mine, mine.target)})` : ""}`}${date === v.today ? "" : ` for ${date}`}${mine.streak ? `; streak ${mine.streak} day${mine.streak === 1 ? "" : "s"}` : ""}. ${hd.week.kept} of ${hd.week.due} kept this week.`, data: { date, habit: h.name, value, kept: isKept, streak: mine.streak, week: hd.week } };
   },
 });
 
@@ -712,6 +719,7 @@ defineTool({
     unit: z.string().optional().describe("For a count or an amount: steps, oz, pages…"),
     target: z.number().positive().optional().describe("The daily target for minutes, a count or an amount"),
     days: z.array(z.number().int().min(0).max(6)).optional().describe("Weekdays it's due, 0 = Sunday; every day when left out"),
+    difficulty: z.enum(["easy", "medium", "hard"]).optional().describe("How hard it is for them, shown on the habit; it changes nothing about how it counts"),
   },
   handler: async (v, input): Promise<ToolResult> => {
     await ready(v);
@@ -728,8 +736,9 @@ defineTool({
     const have = await db.query.bodyHabits.findMany({ columns: { id: true, name: true, archivedAt: true }, where: own(schema.bodyHabits, v) });
     const same = sameName(have, name);
     if (same && !same.archivedAt) throw new Error(`"${same.name}" is already one of their habits. Log it with body_log_habit; changing it is done on Practices.`);
-    if (same) await db.update(schema.bodyHabits).set({ archivedAt: null, kind, unit, target, days }).where(eq(schema.bodyHabits.id, same.id));
-    else await db.insert(schema.bodyHabits).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, name, kind, unit, target, days, order: have.length });
+    const difficulty = input.difficulty === "easy" || input.difficulty === "medium" || input.difficulty === "hard" ? input.difficulty : null;
+    if (same) await db.update(schema.bodyHabits).set({ archivedAt: null, kind, unit, target, days, difficulty }).where(eq(schema.bodyHabits.id, same.id));
+    else await db.insert(schema.bodyHabits).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, name, kind, unit, target, days, difficulty, order: have.length });
     const habit = { name, kind, unit, target, days };
     return { text: `${same ? "Brought back" : "Added"} ${name}: ${fmtTarget(habit) || KIND_LABEL[kind]}, ${fmtDays(days)}${same ? " (its earlier logs are still there)" : ""}.`, data: { habit: { ...habit, restored: !!same } } };
   },

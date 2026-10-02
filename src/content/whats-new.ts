@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 64,
+    date: "2026-10-03",
+    title: "HumanOS: metric or US, and how hard a habit is",
+    lines: [
+      "HumanOS settings has one Measures choice, Metric (kg, g, ml, km) or US (lb, oz, fl oz, mi), first set from your time zone. Weight, food weights, water and other amount habits, and WHOOP's distances follow it, and Claude answers in it. Switching never changes anything you logged.",
+      "A habit can be marked easy, medium or hard; it shows as one to three dots beside it on Practices and Today, and changes nothing about how it counts.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 63,
     date: "2026-10-03",
     title: "HumanOS: food search fills USDA's blanks, and Instacart is coming soon",

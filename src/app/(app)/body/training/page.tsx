@@ -7,7 +7,8 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
 import { activitiesOn, requireBodyEnabled, restrictedNow, trainingDay, trainingWeeks, type TrainingDayView } from "@/lib/queries/body";
-import { fmtDistance, zonesText } from "@/lib/engine/body-whoop";
+import { zonesText } from "@/lib/engine/body-whoop";
+import { fmtDistanceIn, isMeasures } from "@/lib/engine/body-measures";
 import { deleteSetAction, finishSessionAction, logSetAction, reopenSessionAction, setDayOffAction, startSessionAction } from "@/lib/actions/body";
 
 export const metadata = { title: "HumanOS · Training" };
@@ -138,7 +139,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
               ⌚ {a.sport} · {Math.round(a.minutes)} min
               {a.strain != null ? ` · strain ${a.strain}` : ""}
               {a.avgHr != null ? ` · ${a.avgHr}${a.maxHr != null ? `–${a.maxHr}` : ""} bpm` : ""}
-              {fmtDistance(a.distanceM) ? ` · ${fmtDistance(a.distanceM)}` : ""}
+              {fmtDistanceIn(a.distanceM, isMeasures(t?.measures) ? t!.measures : "us") ? ` · ${fmtDistanceIn(a.distanceM, isMeasures(t?.measures) ? t!.measures : "us")}` : ""}
               {zonesText(a.zones) ? <span className="text-ink-3" data-testid="training-activity-zones"> · {zonesText(a.zones)}</span> : null}
             </li>
           ))}

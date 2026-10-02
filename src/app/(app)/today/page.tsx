@@ -434,6 +434,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                         <SubmitButton className={`btn btn-xs ${h.kept ? "btn-humanos" : "btn-soft"}`} pendingText="…" aria-pressed={h.kept} data-testid="today-habit" data-name={h.name} data-kept={h.kept ? "1" : "0"}>
                           {h.kept ? "✓ " : ""}
                           {h.name}
+                          {h.difficulty ? <span className="ml-1 text-[9px] opacity-70" title={h.difficulty} data-testid="today-difficulty">{"●".repeat(h.difficulty === "easy" ? 1 : h.difficulty === "medium" ? 2 : 3)}</span> : null}
                           {h.streak ? (
                             <span className={`ml-1 text-[10px] ${h.kept ? "opacity-80" : "opacity-60 grayscale"}`} title={h.kept ? undefined : "Not yet today"} data-testid="today-streak" data-kept={h.kept ? "1" : "0"}>
                               🔥{h.streak}
@@ -445,6 +446,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       <Link key={h.id} href="/body/practices" className={`btn btn-xs ${h.kept ? "btn-humanos" : "btn-soft"}`} data-testid="today-habit" data-name={h.name} data-kept={h.kept ? "1" : "0"}>
                         {h.kept ? "✓ " : ""}
                         {h.name}
+                        {h.difficulty ? <span className="ml-1 text-[9px] opacity-70" title={h.difficulty} data-testid="today-difficulty">{"●".repeat(h.difficulty === "easy" ? 1 : h.difficulty === "medium" ? 2 : 3)}</span> : null}
                         {h.valueText && !h.kept ? <span className="ml-1 text-[10px] opacity-80">{h.valueText}</span> : null}
                       </Link>
                     ),

@@ -32,6 +32,16 @@ function WeekDots({ dots }: { dots: Dot[] }) {
 
 type Habit = HabitsDayView["habits"][number];
 
+/** Easy, medium or hard (Joy, rev 431): one to three dots with the word as their title. Nothing about how it counts changes. */
+function DifficultyMark({ d }: { d: "easy" | "medium" | "hard" }) {
+  const n = d === "easy" ? 1 : d === "medium" ? 2 : 3;
+  return (
+    <span className="text-[10px] tracking-tight text-ink-3" title={`${d[0].toUpperCase()}${d.slice(1)}`} aria-label={`Difficulty: ${d}`} data-testid="habit-difficulty-mark" data-difficulty={d}>
+      {"●".repeat(n)}
+    </span>
+  );
+}
+
 /** One habit's row: the tap (or the number), the streak, the week. */
 function HabitRow({ h, date, today }: { h: Habit; date: string; today: string }) {
   return (
@@ -39,6 +49,7 @@ function HabitRow({ h, date, today }: { h: Habit; date: string; today: string })
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{h.name}</span>
+          {h.difficulty ? <DifficultyMark d={h.difficulty} /> : null}
           {h.streak ? (
             // Not yet logged today: the flame greys and says so, so a run carried from before never reads as done today (Danno, rev 364).
             <span className="text-xs text-ink-2" data-testid="habit-streak" data-kept={h.kept ? "1" : "0"}>
@@ -104,9 +115,18 @@ function HabitForm({ h }: { h?: Habit }) {
       <label className="block">
         <span className="label">Daily target (optional) and unit</span>
         <span className="flex gap-2">
-          <input name="target" type="number" step="any" min={0} inputMode="decimal" className="field tabular" defaultValue={h?.target ?? ""} placeholder="10" />
-          <input name="unit" className="field" maxLength={12} defaultValue={h?.unit ?? ""} placeholder="oz" />
+          <input name="target" type="number" step="any" min={0} inputMode="decimal" className="field tabular" defaultValue={h?.ownTarget ?? ""} placeholder="10" />
+          <input name="unit" className="field" maxLength={12} defaultValue={h?.ownUnit ?? ""} placeholder="oz" />
         </span>
+      </label>
+      <label className="block">
+        <span className="label">Difficulty (optional)</span>
+        <select name="difficulty" className="field" defaultValue={h?.difficulty ?? ""} data-testid="habit-difficulty">
+          <option value="">Not set</option>
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
       </label>
       <fieldset className="sm:col-span-2">
         <legend className="label">Days (none ticked = every day)</legend>
