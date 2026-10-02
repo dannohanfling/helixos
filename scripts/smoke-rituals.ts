@@ -195,8 +195,27 @@ async function main() {
     if (JSON.stringify(monthKept) !== JSON.stringify(MONTH_TEXT.map(([, t]) => t)) || (await page.locator('[data-testid="month-word"]').last().inputValue()) !== "Rooted and ready" || !(await page.locator('[data-testid="month-personalSeason-wealth"]').last().isChecked()) || !(await page.locator('[data-testid="month-businessSeason-sales"]').last().isChecked()) || (await page.locator('[data-testid="month-revenueGoal"]').last().inputValue()) !== "lots") throw new Error("a refused month keeps every typed answer");
     if (!(await page.locator('[data-testid="month-revenueGoal"]').last().evaluate((el) => el === document.activeElement && el.getAttribute("aria-invalid") === "true"))) throw new Error("the revenue goal is marked beside it and focused");
     await page.locator('[data-testid="month-revenueGoal"]').last().fill("$10,000");
+    // A save that never answers (3 Oct: a member lost his month's answers to a glitch): the connection drops as Save is pressed.
+    // The page says so and keeps the typing; a reload brings every answer back, marked as a save that didn't go through.
+    await page.waitForTimeout(500);
+    await page.route("**/intentions*", (route) => (route.request().method() === "POST" ? route.abort("connectionreset") : route.continue()));
+    await page.locator('[data-testid="month-save"]').last().click();
+    await page.locator('[data-testid="app-error"]').waitFor({ timeout: 20000 });
+    if (!(await page.locator('[data-testid="app-error"]').innerText()).includes("kept in this browser")) throw new Error("a failed save says plainly that the typing is kept");
+    await page.unroute("**/intentions*");
+    if (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) })) throw new Error("the dropped save wrote nothing");
+    await page.reload();
+    const failedNote = page.locator('[data-testid="month-form"] [data-testid="draft-restored"][data-kind="failed"]');
+    await failedNote.waitFor({ timeout: 20000 });
+    if (!(await failedNote.innerText()).includes("Your last save didn't go through")) throw new Error("the restored answers say the last save didn't go through");
+    const afterDrop = await Promise.all(MONTH_TEXT.map(async ([k]) => page.locator(`[data-testid="month-${k}"]`).last().inputValue()));
+    if (JSON.stringify(afterDrop) !== JSON.stringify(MONTH_TEXT.map(([, t]) => t)) || (await page.locator('[data-testid="month-revenueGoal"]').last().inputValue()) !== "$10,000" || !(await page.locator('[data-testid="month-personalSeason-wealth"]').last().isChecked())) throw new Error("after a dropped save and a reload, every answer is back as typed");
     await submit(page, '[data-testid="month-save"]');
     await page.locator('[data-testid="month-saved"]').waitFor({ timeout: 20000 });
+    // Saved: the draft is gone, so a later visit shows the answers from HelixOS and no draft line.
+    await page.reload();
+    await page.waitForTimeout(800);
+    if (await page.locator('[data-testid="draft-restored"]:visible').count()) throw new Error("once saved, no draft comes back");
     const mi = (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) }))!;
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="summary-month-word"]').waitFor({ timeout: 20000 });

@@ -12,7 +12,7 @@ type Sp = { monthError?: string; monthSaved?: string };
 const Q = Object.fromEntries(MONTH_QUESTIONS.map((q, i) => [q.key, `${i + 1}. ${q.q}`])) as Record<(typeof MONTH_QUESTIONS)[number]["key"], string>;
 
 /** The eleven questions, in Danno's order, empty to set the month or filled to edit it. All eleven are required. */
-function MonthForm({ m, back, owner }: { m: MonthlyIntention | null; back: Back; owner?: string }) {
+function MonthForm({ m, month, back, owner }: { m: MonthlyIntention | null; month: string; back: Back; owner?: string }) {
   const area = (name: keyof MonthlyIntention, label: string, rows = 2) => (
     <label className="block text-sm font-medium">
       {label}
@@ -34,7 +34,8 @@ function MonthForm({ m, back, owner }: { m: MonthlyIntention | null; back: Back;
   return (
     <form action={saveMonthIntentionAction} className="space-y-3" data-testid="month-form">
       <input type="hidden" name="back" value={back} />
-      {owner ? <DraftKeeper id={`month.${owner}.${m?.month ?? "new"}`} /> : null}
+      {/* Keyed by the month the answers are for, set or not: one month's draft never lands in the next month's form. */}
+      {owner ? <DraftKeeper id={`month.${owner}.${m?.month ?? month}`} legacyId={m ? undefined : `month.${owner}.new`} /> : null}
       <label className="block text-sm font-medium">
         {Q.word}
         <input className="field mt-1" name="word" defaultValue={m?.word ?? ""} placeholder="Grounded, or Show up daily" maxLength={60} data-testid="month-word" />
@@ -105,7 +106,7 @@ export function MonthCard({ m, month, sp, back = "/intentions", optional = false
           {notes}
           <p className="mb-3 text-sm text-ink-2">Eleven questions to start the month on purpose. Take your time with them.</p>
           {optional ? <p className="mb-3 text-xs text-ink-3" data-testid="month-optional">The month is asked for in its first week. It&apos;s optional now, and still worth doing.</p> : null}
-          <MonthForm m={null} back={back} owner={owner} />
+          <MonthForm m={null} month={month} back={back} owner={owner} />
         </Card>
       </section>
     );
@@ -128,7 +129,7 @@ export function MonthCard({ m, month, sp, back = "/intentions", optional = false
         <details className="mt-4">
           <summary className="cursor-pointer text-xs text-ink-3" data-testid="month-edit">Edit this month</summary>
           <div className="mt-3">
-            <MonthForm m={m} back={back} owner={owner} />
+            <MonthForm m={m} month={month} back={back} owner={owner} />
           </div>
         </details>
       </Card>

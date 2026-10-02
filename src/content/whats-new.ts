@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 67,
+    date: "2026-10-03",
+    title: "A save that doesn't go through no longer loses what you typed",
+    lines: [
+      "If a save fails (the connection drops, the page errors, or HelixOS updates while you're typing), your month's answers, your feedback, an Office Hours request, Essence or an offer come back the next time you open the page, with a line saying the last save didn't go through. Press Save again and you're done.",
+      "When something goes wrong on a page, you now see a plain message and a Reload button, with the menu still there, instead of a blank screen.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 66,
     date: "2026-10-03",
     title: "HumanOS: supplements, vitamins and prescriptions, with refills",

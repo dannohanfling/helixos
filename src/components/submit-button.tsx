@@ -60,6 +60,14 @@ function deliver(tries = 0): void {
   }
   if (pressedFor.label) window.dispatchEvent(new CustomEvent("helix:done", { detail: { key: pressedFor.key, label: pressedFor.label } }));
 }
+/**
+ * Whether a press is still waiting for its answer. The draft keeper leaves a just-sent draft alone while it is: the answer will
+ * either confirm the save (the draft goes) or bring a refusal (the typing is put back here). Only a send nobody answered, met
+ * again on a later page load, is restored as a save that didn't go through.
+ */
+export function sendInFlight(): boolean {
+  return Boolean(inflight && Date.now() - inflight.at < 60000);
+}
 /** The answer is in: deliver it once the page has taken it (React resets a form after its action; this runs after that). */
 function answered(): void {
   if (!inflight || inflight.delivering) return;
