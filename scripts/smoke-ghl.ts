@@ -32,10 +32,23 @@ async function submit(page: Page, selector: string) {
   await page.waitForTimeout(400);
 }
 async function saveConnection(page: Page, locationId: string, token: string, ghlUserId = "") {
-  await page.fill('input[name="locationId"]', locationId);
-  await page.fill('input[name="ghlUserId"]', ghlUserId);
-  await page.fill('input[name="manualToken"]', token);
-  await submit(page, 'button:has-text("Connect and check"), button:has-text("Save and check")');
+  // The card (rev 333): Connect opens the steps; the token and the Location ID are the two boxes; the user id is asked only after.
+  if (!(await page.locator('[data-testid="ghl-connected"]').count())) {
+    if (!(await page.locator('[data-testid="ghl-steps"][open]').count())) await page.click('[data-testid="ghl-connect-open"]');
+    await page.fill('[data-testid="ghl-location"]', locationId);
+    if (token) await page.fill('[data-testid="ghl-token"]', token);
+    await submit(page, '[data-testid="ghl-steps"] button:has-text("Connect")');
+  }
+  if (ghlUserId && (await page.locator('[data-testid="ghl-no-user"] input[name="ghlUserId"]').count())) {
+    await page.fill('[data-testid="ghl-no-user"] input[name="ghlUserId"]', ghlUserId);
+    await submit(page, '[data-testid="ghl-no-user"] button:has-text("Save")');
+  } else if ((ghlUserId || token) && (await page.locator('[data-testid="ghl-connected"]').count())) {
+    // Already connected with a user: a different user id or a new token goes through Reconnect.
+    await page.locator('[data-testid="ghl-reconnect"] > summary').click();
+    if (ghlUserId) await page.fill('[data-testid="ghl-reconnect-user"]', ghlUserId);
+    if (token) await page.fill('[data-testid="ghl-reconnect-token"]', token);
+    await submit(page, '[data-testid="ghl-reconnect"] button:has-text("Reconnect")');
+  }
 }
 
 async function main() {
@@ -107,19 +120,30 @@ async function main() {
     await page.click('button:has-text("As a client")');
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/settings`);
-    await expectText(page, "Private Integrations → Create new integration", "guidance shown");
-    await expectText(page, "socialplanner/post.write", "scopes listed");
+    await expectText(page, "Connect your GoHighLevel account so HelixOS can post for you", "one sentence and a Connect button");
+    if (await page.locator('[data-testid="ghl-token"]').isVisible()) throw new Error("the steps are behind Connect");
+    await page.click('[data-testid="ghl-connect-open"]');
+    await expectText(page, "Settings → Private Integrations", "the steps, one at a time");
+    if ((await page.locator('[data-testid="ghl-steps"]').innerText()).includes("socialplanner/post.write")) throw new Error("no scope name on screen until the fold is opened");
+    if (!(await page.locator('[data-testid="ghl-steps"] button:has-text("Copy the list")').count())) throw new Error("Copy the list puts the names on the clipboard");
+    await page.locator('[data-testid="ghl-steps"] summary:has-text("Read the list instead")').click();
     const listedScopes = await page.locator('[data-testid="ghl-scope-list"] li').evaluateAll((els) => els.map((e) => e.textContent?.trim()));
     if (listedScopes.length !== 17 || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
     await saveConnection(page, "loc_maya", "wrong-token");
-    await expectText(page, "rejected the token (401)", "bad token reason");
+    await expectText(page, "GoHighLevel didn't accept that token", "bad token reason, in plain words");
     await saveConnection(page, "loc_maya", "pit-noscope");
-    await expectText(page, "socialplanner/account.readonly was not granted (403)", "the missing scope is named");
+    await expectText(page, "The token is missing permissions: socialplanner/account.readonly", "the missing permission is named");
+    if (!(await page.locator('[data-testid="ghl-error"] button:has-text("Copy the list")').count())) throw new Error("Copy the list sits beside the missing-permissions reason");
     await saveConnection(page, "loc_other", "pit-loc_maya");
-    await expectText(page, "doesn't match this token", "wrong location reason");
+    await expectText(page, "That Location ID doesn't match this token", "wrong location reason, in plain words");
     await saveConnection(page, "loc_maya", "pit-loc_maya");
-    await expectText(page, "connected · 6 accounts", "valid token connected");
+    await page.locator('[data-testid="ghl-connected-badge"]').waitFor({ timeout: 15000 });
+    await expectText(page, "6 connected pages and profiles", "valid token connected");
+    if ((await page.locator('[data-testid="ghl-token"]').count()) || (await page.locator('[data-testid="ghl-connected"]').innerText()).includes("loc_maya")) throw new Error("connected: no token box and no ID on screen");
     await expectText(page, "0/5 channels will auto-publish", "auto-mapped, but nothing publishes without the user id");
+    if (!(await page.locator('[data-testid="ghl-no-user"]').count())) throw new Error("the user id is asked for only now, since GoHighLevel's answer did not carry it");
+    await page.locator('[data-testid="ghl-channels"] > summary').click();
+    await page.locator('[data-testid="ghl-channels"] details > summary').click();
     // Every account GoHighLevel returned is on the screen, id and all, so what an id is can be read off it
     const listed = await page.locator('[data-testid="ghl-accounts"] li').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-platform")}/${e.getAttribute("data-type")}`));
     if (listed.join(",") !== "facebook/page,facebook/group,instagram/business,linkedin/profile,linkedin/page,threads/profile") throw new Error(`the returned accounts are listed verbatim: ${listed.join(",")}`);
@@ -150,7 +174,7 @@ async function main() {
     await expectText(page, "0/5 channels will auto-publish", "readiness is nothing without the user id");
     // A user id GoHighLevel refuses: a 422 on the post, named as the user id where the post is, never as the location; the connection stays green
     await saveConnection(page, "loc_maya", "", "user_refused");
-    await expectText(page, "connected · 6 accounts", "a refused user id is still a connected token");
+    await expectText(page, "6 connected pages and profiles", "a refused user id is still a connected token");
     await page.goto(`${base}/content/compose`);
     await page.fill('input[placeholder^="Working title"]', "GHL with a refused user id");
     await page.fill('input[placeholder^="Hook"]', "Refused id.");
@@ -166,11 +190,12 @@ async function main() {
     if (/location ID/i.test(await page.locator("main").innerText())) throw new Error("a 422 on a post is never the location");
     await page.goto(`${base}/settings`);
     if (await page.locator('[data-testid="ghl-error"]').count()) throw new Error("a post's failure does not paint the connection red");
-    await expectText(page, "connected · 6 accounts", "still connected after a refused post");
+    await expectText(page, "6 connected pages and profiles", "still connected after a refused post");
     await saveConnection(page, "loc_maya", "", "JD8kLxeYM3FqbWLQXC4p");
-    await expectText(page, "connected · 6 accounts", "user id saved, still connected");
+    await expectText(page, "6 connected pages and profiles", "user id saved, still connected");
     await expectText(page, "4/5 channels will auto-publish", "with the user id, the four mapped channels publish");
     // Threads is mapped from the account the sub-account returned; a Facebook group has no map at all; the client's "don't" survives a re-check
+    if (!(await page.locator('select[name="map_threads"]').isVisible())) await page.locator('[data-testid="ghl-channels"] > summary').click();
     if ((await page.inputValue('select[name="map_threads"]')) !== "loc_maya_threads_1_profile") throw new Error("Threads auto-maps to the Threads profile");
     if (await page.locator('select[name="map_fb_group"]').count()) throw new Error("a Facebook group is not offered for publishing");
     if ((await page.inputValue('select[name="map_linkedin"]')) !== "") throw new Error("the client's don't-auto-publish survives a re-check");

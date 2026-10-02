@@ -176,6 +176,38 @@ async function main() {
   await mp.waitForURL(/\/today/);
   await mp.screenshot({ path: "screenshots/13-mobile-today-dark.png", fullPage: false });
   console.log("✓ 13-mobile-today-dark");
+  // Rev 334, no cut-off: a 120-character task title and a long key result render in full at phone width, wrapping, never clipped.
+  const LONG_TITLE = "Follow up with the twelve leads from Tuesday's webinar who asked about the payment plan and send each the recording link";
+  if (LONG_TITLE.length !== 120) throw new Error(`the walk's long title is ${LONG_TITLE.length} characters`);
+  await mp.goto(`${base}/tasks`);
+  await mp.click('summary:has-text("+ New task")');
+  await mp.fill('input[name="title"]', LONG_TITLE);
+  await Promise.all([mp.waitForResponse((r) => r.request().method() === "POST"), mp.locator('form:has(input[name="title"]) button[type="submit"]').first().click()]);
+  await mp.goto(`${base}/today`);
+  const longRow = mp.locator('[data-testid="task-row"]', { hasText: LONG_TITLE.slice(0, 40) }).first();
+  await longRow.waitFor({ timeout: 15000 });
+  const rowText = (await longRow.innerText()).replace(/\s+/g, " ");
+  const clipped = await longRow.evaluate((el) => {
+    const title = Array.from(el.querySelectorAll<HTMLElement>("div, span")).find((n) => (n.textContent ?? "").includes("payment plan") && n.children.length <= 1) ?? el;
+    const cs = getComputedStyle(title);
+    return { over: title.scrollWidth > title.clientWidth + 1, ellipsis: cs.textOverflow === "ellipsis" && cs.overflow === "hidden", lines: Math.round(title.getBoundingClientRect().height / parseFloat(cs.lineHeight || "16")) };
+  });
+  if (!rowText.includes(LONG_TITLE) || clipped.over || clipped.ellipsis || clipped.lines < 2) throw new Error(`a 120-character task title renders in full at 390 px, wrapping: ${JSON.stringify(clipped)}`);
+  const LONG_KR = "Book 12 discovery calls with people who watched the whole replay and asked a question in the group this week";
+  await mp.goto(`${base}/intentions`);
+  if (await mp.locator('[data-testid="week-edit"]').count()) await mp.click('[data-testid="week-edit"]');
+  await mp.fill('[data-testid="week-word"]', "Show up daily");
+  await mp.fill('[data-testid="week-kr1"]', LONG_KR);
+  await mp.fill('[data-testid="week-kr2"]', "20 replies to the replay DM");
+  await mp.fill('[data-testid="week-initiative"]', "Launch the replay funnel");
+  await mp.fill('[data-testid="week-task1"]', "Post once a day");
+  await mp.fill('[data-testid="week-task2"]', "DM ten replay watchers");
+  await Promise.all([mp.waitForResponse((r) => r.request().method() === "POST"), mp.click('[data-testid="week-save"]')]);
+  const kr = mp.locator('[data-testid="week-key-result"]', { hasText: "discovery calls" }).first();
+  await kr.waitFor({ timeout: 15000 });
+  const krClipped = await kr.evaluate((el) => ({ over: el.scrollWidth > el.clientWidth + 1, text: (el.textContent ?? "").replace(/\s+/g, " ") }));
+  if (!krClipped.text.includes(LONG_KR) || krClipped.over) throw new Error(`a long key result renders in full at 390 px: ${JSON.stringify(krClipped)}`);
+  console.log("✓ rev 334: a 120-character task title and a long key result render in full at phone width");
   await mobile.close();
 
   // Coach

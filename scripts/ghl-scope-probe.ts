@@ -15,7 +15,7 @@ const probes: { scope: string; method: "GET" | "POST"; path: string; body?: unkn
   { scope: "socialplanner/account.readonly", method: "GET", path: `/social-media-posting/${locationId}/accounts` },
   { scope: "socialplanner/post.readonly", method: "POST", path: `/social-media-posting/${locationId}/posts/list`, body: { type: "scheduled", skip: 0, limit: 1, fromDate: "2020-01-01T00:00:00.000Z", toDate: "2030-01-01T00:00:00.000Z", includeUsers: "false" } },
   { scope: "socialplanner/statistics.readonly", method: "POST", path: `/social-media-posting/statistics?locationId=${locationId}`, body: { accountIds: [] } },
-  { scope: "socialplanner/comment.readonly", method: "POST", path: `/social-media-posting/comments/facebook/list?locationId=${locationId}`, body: { originIds: ["probe"], skip: 0, limit: 1 } },
+  { scope: "socialplanner/comments.readonly", method: "POST", path: `/social-media-posting/comments/facebook/list?locationId=${locationId}`, body: { originIds: ["probe"], skip: 0, limit: 1 } },
   { scope: "medias.readonly", method: "GET", path: `/medias/files?altType=location&altId=${locationId}&sortBy=createdAt&sortOrder=desc&type=file&limit=1` },
   { scope: "emails/builder.readonly", method: "GET", path: `/emails/builder?locationId=${locationId}&limit=1` },
 ];

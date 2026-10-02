@@ -140,7 +140,7 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
             <Link key={s.stage.key} href={fullMap ? `/pathway?view=all&stage=${s.stage.key}` : `/pathway?stage=${s.stage.key}`} title={`${s.stage.name}: ${s.done}/${s.total}`} className={`flex min-w-[7.5rem] shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs transition hover:border-ink ${isCurrent ? "border-accent bg-accent-soft" : done ? "bg-good-soft" : "bg-surface opacity-70"}`}>
               <span className="text-base">{done ? "✅" : s.stage.icon}</span>
               <span className="min-w-0">
-                <span className="block truncate font-semibold">{s.stage.name}</span>
+                <span className="block break-words font-semibold">{s.stage.name}</span>
                 <span className="block text-[10px] text-ink-3">{s.done}/{s.total}</span>
               </span>
             </Link>

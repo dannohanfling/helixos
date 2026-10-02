@@ -74,7 +74,7 @@ export default async function EssencePage({ searchParams }: { searchParams: Prom
                 <li key={s.key}>
                   <Link href={`/essence?step=${s.key}`} className={`flex items-center gap-2 px-2 py-2 text-sm hover:bg-surface-2 ${s.key === current.key ? "bg-accent-soft" : ""}`} data-testid="essence-section" data-section={s.key} data-filled={filled ? "1" : "0"} data-optional={s.optional ? "1" : undefined}>
                     <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${filled ? "border-good bg-good text-white" : "border-line"}`}>{filled ? "✓" : i + 1}</span>
-                    <span className="min-w-0 flex-1 truncate">{s.title}</span>
+                    <span className="min-w-0 flex-1 break-words">{s.title}</span>
                     {s.optional ? <span className="text-[10px] uppercase tracking-wide text-ink-3">optional</span> : null}
                   </Link>
                 </li>

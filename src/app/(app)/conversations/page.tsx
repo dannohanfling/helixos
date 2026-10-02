@@ -32,13 +32,13 @@ function ContactRow({ c, today }: { c: Contact; today: string }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <Link href={`/conversations/${c.id}`} className="truncate font-medium hover:underline">
+          <Link href={`/conversations/${c.id}`} className="min-w-0 break-words font-medium hover:underline">
             {c.name}
           </Link>
           <Badge tone={STAGE_META[c.stage].tone}>{STAGE_META[c.stage].label}</Badge>
           {waiting ? <Badge tone="warn">waiting on you</Badge> : null}
         </div>
-        <div className="truncate text-xs text-ink-3">
+        <div className="break-words text-xs text-ink-3">
           {c.platform}
           {c.whatTheyreBuilding ? ` · ${c.whatTheyreBuilding}` : ""}
         </div>

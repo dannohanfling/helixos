@@ -100,12 +100,25 @@ async function main() {
     // ── 1. Before connecting, the page says where to connect. A token without the scopes is named. ──
     await page.goto(`${base}/coach/community`);
     await page.locator('[data-testid="community-no-connection"]').waitFor({ timeout: 20000 });
+    // The card (rev 333): Connect opens the steps with the token and the Location ID; the user id is asked once connected, or
+    // changed through Reconnect, which also takes a new token.
     const connect = async (token: string, ghlUserId: string) => {
       await page.goto(`${base}/settings`);
-      await page.fill('input[name="locationId"]', LOC);
-      await page.fill('input[name="ghlUserId"]', ghlUserId);
-      await page.fill('input[name="manualToken"]', token);
-      await submit(page, 'button:has-text("Connect and check"), button:has-text("Save and check")');
+      if (await page.locator('[data-testid="ghl-connected"]').count()) {
+        await page.locator('[data-testid="ghl-reconnect"] > summary').click();
+        await page.fill('[data-testid="ghl-reconnect-user"]', ghlUserId);
+        await page.fill('[data-testid="ghl-reconnect-token"]', token);
+        await submit(page, '[data-testid="ghl-reconnect"] button:has-text("Reconnect")');
+      } else {
+        if (!(await page.locator('[data-testid="ghl-steps"][open]').count())) await page.click('[data-testid="ghl-connect-open"]');
+        await page.fill('[data-testid="ghl-location"]', LOC);
+        await page.fill('[data-testid="ghl-token"]', token);
+        await submit(page, '[data-testid="ghl-steps"] button:has-text("Connect")');
+      }
+      if (await page.locator('[data-testid="ghl-no-user"] input[name="ghlUserId"]').count()) {
+        await page.fill('[data-testid="ghl-no-user"] input[name="ghlUserId"]', ghlUserId);
+        await submit(page, '[data-testid="ghl-no-user"] button:has-text("Save")');
+      }
     };
     await connect("pit-noscope", "user_danno");
     await page.goto(`${base}/coach/community`);

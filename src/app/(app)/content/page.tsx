@@ -139,7 +139,7 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
                         <div className="mb-1 text-[11px] font-semibold text-ink-2">{formatDate(day, { weekday: "short", day: "numeric" })}</div>
                         <div className="space-y-1">
                           {dayItems.map((i) => (
-                            <Link key={i.id} href={`/content/${i.id}`} className="block truncate rounded bg-surface px-1.5 py-1 text-[11px] hover:underline" title={i.title}>
+                            <Link key={i.id} href={`/content/${i.id}`} className="block break-words rounded bg-surface px-1.5 py-1 text-[11px] hover:underline" title={i.title}>
                               {STATUS_META[i.status].icon} {i.title}
                             </Link>
                           ))}

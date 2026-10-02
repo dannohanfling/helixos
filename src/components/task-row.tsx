@@ -35,7 +35,7 @@ export function TaskRow({ task, today, compact = false, origin }: { task: Task; 
   };
 
   return (
-    <div className={`group flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-surface-2 ${shown.done ? "opacity-60" : ""}`} data-testid="task-row" data-pending={pending ? "1" : "0"}>
+    <div className={`group flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg px-2 py-2 hover:bg-surface-2 ${shown.done ? "opacity-60" : ""}`} data-testid="task-row" data-pending={pending ? "1" : "0"}>
       <button
         type="button"
         aria-label={shown.done ? "Mark not done" : "Mark done"}
@@ -47,7 +47,7 @@ export function TaskRow({ task, today, compact = false, origin }: { task: Task; 
       >
         {pending ? <span className="spinner" aria-hidden="true" /> : shown.done ? "✓" : ""}
       </button>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[11rem] flex-1 basis-0">
         <div className={`text-sm font-medium ${shown.done ? "line-through" : ""}`}>
           {shown.focus && !shown.done ? <span className="mr-1 text-accent">★</span> : null}
           {task.title}
@@ -66,7 +66,7 @@ export function TaskRow({ task, today, compact = false, origin }: { task: Task; 
         </div>
       </div>
       {!shown.done ? (
-        <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition group-hover:opacity-100 focus-within:opacity-100" data-testid="task-controls">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 opacity-70 transition group-hover:opacity-100 focus-within:opacity-100" data-testid="task-controls">
           <button className="btn btn-ghost btn-xs task-control" type="button" disabled={pending} aria-busy={pending} title={shown.focus ? "Remove from top 3" : "Make it a top 3"} aria-label={shown.focus ? "Remove from top 3" : "Make it a top 3"} onClick={() => run({ focus: !shown.focus }, () => setFocusAction(fd({ on: shown.focus ? "0" : "1" })))}>
             {shown.focus ? "☆" : "★"}
             <span className="task-control-label">{shown.focus ? "Unstar" : "Top 3"}</span>

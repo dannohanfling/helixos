@@ -15,14 +15,14 @@ describe("what GoHighLevel's reply means, by the call that was made", () => {
     expect(explainGhl({ error: "x", status: 404, detail: "Post not found" }, "post")).not.toContain("location ID");
   });
   it("the location sentence is only ever said of the accounts call, where a 404 is exactly that", () => {
-    expect(explainGhl({ error: "x", status: 404, detail: "Location not found: loc_other" }, "accounts")).toContain("location ID doesn't match this token");
-    expect(explainGhl({ error: "x", status: 422, detail: "" }, "accounts")).toContain("location ID doesn't match this token");
+    expect(explainGhl({ error: "x", status: 404, detail: "Location not found: loc_other" }, "accounts")).toContain("Location ID doesn't match this token");
+    expect(explainGhl({ error: "x", status: 422, detail: "" }, "accounts")).toContain("Location ID doesn't match this token");
   });
   it("the token and scope reasons hold on every call; the vendor's words never reach the sentence", () => {
     for (const call of ["accounts", "post", "contact"] as const) {
-      expect(explainGhl({ error: "x", status: 401, detail: "Invalid JWT" }, call)).toContain("rejected the token (401)");
-      expect(explainGhl({ error: "x", status: 403, detail: "The token does not have access to this scope: socialplanner/post.write" }, call)).toContain("socialplanner/post.write was not granted (403)");
-      expect(explainGhl({ error: "x", status: 403, detail: "Forbidden" }, call)).toContain("missing Social Planner permissions (403)");
+      expect(explainGhl({ error: "x", status: 401, detail: "Invalid JWT" }, call)).toContain("didn't accept that token");
+      expect(explainGhl({ error: "x", status: 403, detail: "The token does not have access to this scope: socialplanner/post.write" }, call)).toContain("missing permissions: socialplanner/post.write");
+      expect(explainGhl({ error: "x", status: 403, detail: "Forbidden" }, call)).toContain("missing permissions. Edit the Private Integration");
       expect(explainGhl({ error: "x", status: 429, detail: "Too many requests" }, call)).toContain("429");
       const odd = explainGhl({ error: "x", status: 500, detail: "MongoServerError: E11000 duplicate key at /internal/path" }, call);
       expect(odd).not.toContain("Mongo");

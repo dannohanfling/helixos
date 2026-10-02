@@ -271,7 +271,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                     {l.rungs.map((r) => (
                       <li key={r.n} className={`flex items-start gap-2 p-2 text-sm ${r.postedAt ? "opacity-60" : next?.n === r.n ? "bg-surface-2" : ""}`} data-testid={`rung-${r.n}`}>
                         <span className="w-6 shrink-0 text-right font-semibold tabular">{r.n}.</span>
-                        <span className="min-w-0 flex-1 truncate">{r.body.split("\n")[0]}</span>
+                        <span className="min-w-0 flex-1 break-words">{r.body.split("\n")[0]}</span>
                         <CopyButton text={r.body} label="Copy" className="btn btn-ghost btn-xs" disabled={blocked} title={hold} />
                         <form action={markRungAction}>
                           <input type="hidden" name="id" value={l.id} />

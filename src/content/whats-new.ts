@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 59,
+    date: "2026-10-03",
+    title: "Connecting GoHighLevel is one button, and nothing gets cut off",
+    lines: [
+      "Settings → Publishing is now one sentence and a Connect button. Connect opens five plain steps (open Private Integrations, create one named HelixOS, Copy the list of permissions, paste the token, paste the Location ID); once connected the card shows a green Connected with your pages and channels, Check again, Disconnect and Reconnect, and never shows the token or IDs again. Errors say what happened in plain words.",
+      "Names and titles you pick or act on now wrap to a second line instead of ending in \"…\": conversations, the content calendar, the Essence steps, the pathway stages, the rewards log, the ladders and their rungs, the leaderboard.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 58,
     date: "2026-10-03",
     title: "The deck file is built on real layouts, in your theme",

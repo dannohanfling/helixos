@@ -10,7 +10,7 @@ describe("the one GoHighLevel scope list", () => {
   it("covers what the app calls now and within two releases, once each", () => {
     expect(new Set(REQUIRED_SCOPES).size).toBe(REQUIRED_SCOPES.length);
     for (const s of ["socialplanner/account.readonly", "socialplanner/post.readonly", "socialplanner/post.write", "contacts.write"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("now");
-    for (const s of ["socialplanner/statistics.readonly", "socialplanner/comment.readonly", "socialplanner/comment.write", "medias.write", "emails/builder.write", "locations/customFields.write", "locations/customFields.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("next");
+    for (const s of ["socialplanner/statistics.readonly", "socialplanner/comments.readonly", "socialplanner/comments.write", "medias.write", "emails/builder.write", "locations/customFields.write", "locations/customFields.readonly"]) expect(GHL_SCOPES.find((x) => x.scope === s)?.use).toBe("next");
     // Nothing this product will ever touch.
     for (const s of ["category", "tag", "csv", "watermark"]) expect(REQUIRED_SCOPES.some((x) => x.includes(s))).toBe(false);
   });
@@ -28,7 +28,7 @@ describe("the one GoHighLevel scope list", () => {
     expect(scopeNamedIn("The token does not have access to this scope: medias.write")).toBe("medias.write");
     expect(scopeNamedIn("The token does not have access to this scope: locations/customFields.write")).toBe("locations/customFields.write");
     expect(scopeNamedIn("Forbidden")).toBeNull();
-    expect(explainGhl({ error: "x", status: 403, detail: "The token does not have access to this scope: socialplanner/account.readonly" }, "accounts")).toBe("The token is valid but socialplanner/account.readonly was not granted (403). Edit the Private Integration in GoHighLevel, tick it, and paste the new token.");
-    expect(explainGhl({ error: "x", status: 403, detail: "Forbidden" }, "accounts")).toContain("every scope on the list");
+    expect(explainGhl({ error: "x", status: 403, detail: "The token does not have access to this scope: socialplanner/account.readonly" }, "accounts")).toBe("The token is missing permissions: socialplanner/account.readonly. Edit the Private Integration in GoHighLevel, tick it, and paste the new token.");
+    expect(explainGhl({ error: "x", status: 403, detail: "Forbidden" }, "accounts")).toContain("tick every permission on the list");
   });
 });

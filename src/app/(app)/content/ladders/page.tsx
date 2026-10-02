@@ -139,7 +139,7 @@ export default async function LaddersPage() {
                   const st = STATUS[l.status];
                   return (
                     <li key={l.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                      <Link href={`/content/ladders/${l.id}`} className="min-w-0 flex-1 truncate font-medium hover:underline">
+                      <Link href={`/content/ladders/${l.id}`} className="min-w-0 flex-1 break-words font-medium hover:underline">
                         {l.postName || l.topic}
                       </Link>
                       <Badge tone={st.tone}>{st.label}</Badge>
