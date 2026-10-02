@@ -144,6 +144,80 @@ async function main() {
     if ((await row.count()) !== 1 || (await row.getAttribute("data-scopes")) !== "today tasks" || !(await row.innerText()).includes("whoami")) throw new Error(`Settings lists the app with its scopes and last tool: ${await row.count()}`);
     console.log("✓ over the MCP route: initialize, the grant's tools (no dots), whoami as the member, the audit row, the app in Settings");
 
+    // ── 3b. The business tools (rev 380 steps 1 to 3): each called over the route as the member, each checked in the database. ──
+    {
+      const { and, desc } = await import("drizzle-orm");
+      type Called = { text: string; data: Record<string, unknown> | null; isError: boolean };
+      const callTool = async (name: string, args: Record<string, unknown>): Promise<Called> => {
+        const res = (await (await rpc(tok.access_token, "tools/call", { name, arguments: args })).json()) as { result?: { content?: { text: string }[]; isError?: boolean } };
+        const full = res.result?.content?.[0]?.text ?? "";
+        const cut = full.indexOf("\n\n{");
+        return { text: cut < 0 ? full : full.slice(0, cut), data: cut < 0 ? null : (JSON.parse(full.slice(cut + 2)) as Record<string, unknown>), isError: Boolean(res.result?.isError) };
+      };
+      const listed = new Set(names);
+      for (const n of ["tasks_list", "tasks_add", "tasks_complete", "tasks_uncomplete", "tasks_reschedule", "today_lockin", "today_lock_in", "today_close"]) if (!listed.has(n)) throw new Error(`a grant of today and tasks lists ${n}`);
+      if (names.some((n) => n.startsWith("body_"))) throw new Error("a grant without the body scope lists no HumanOS tool");
+      const today = /Today is (\d{4}-\d{2}-\d{2})/.exec(text)?.[1] ?? "";
+      if (!today) throw new Error(`whoami names today's date: ${text}`);
+      const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86400000).toISOString().slice(0, 10);
+      const taskNamed = (title: string) => db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, client.id), eq(schema.tasks.title, title)), orderBy: desc(schema.tasks.createdAt) });
+      const logToday = () => db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, client.id), eq(schema.dailyLogs.date, today)) });
+
+      const T1 = "Walk: send the replay to three leads";
+      let c = await callTool("tasks_add", { title: T1, category: "sales" });
+      const t1 = await taskNamed(T1);
+      if (c.isError || !t1 || t1.dueDate !== today || t1.status !== "today" || (c.data?.created as boolean) !== true) throw new Error(`tasks_add makes the task, due today: ${c.text}`);
+      c = await callTool("tasks_add", { title: T1 });
+      if ((c.data?.created as boolean) !== false || (await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, client.id), eq(schema.tasks.title, T1)) })).length !== 1) throw new Error(`the same title twice at once is one task, as on the page: ${c.text}`);
+      c = await callTool("tasks_list", {});
+      if (c.isError || !c.text.includes(T1) || !Array.isArray(c.data?.dueToday)) throw new Error(`tasks_list shows it among today's: ${c.text}`);
+
+      const before = await logToday();
+      const T2 = "Walk: a task said out loud";
+      c = await callTool("today_lock_in", { top3: ["send the replay", T2], energy: "Bright", commitment: "Three real conversations before noon" });
+      const log = await logToday();
+      const t2 = await taskNamed(T2);
+      const t1b = await taskNamed(T1);
+      if (c.isError || !log?.morningDoneAt || log.energy !== 4 || log.intention !== "Three real conversations before noon") throw new Error(`today_lock_in writes the day's log: ${c.text}`);
+      if (!t2 || t2.focusDate !== today || t2.urgency !== "top3" || t1b?.focusDate !== today) throw new Error(`the Top 3: the open task by its words, and a new one for the title that matched nothing: ${c.text}`);
+      if (before?.morningDoneAt ? !c.text.includes("it replaced") : !c.text.includes("+10 points")) throw new Error(`a first lock-in scores, a redo says what it replaced: ${c.text}`);
+      c = await callTool("today_lock_in", { top3: [T2], energy: 2 });
+      if (!c.text.includes("it replaced energy Bright") || !c.text.includes("No points this time") || (await taskNamed(T1))?.focusDate !== null) throw new Error(`a redo says what it replaced, scores nothing, and un-stars what it dropped: ${c.text}`);
+      c = await callTool("today_lockin", {});
+      if (c.isError || c.data?.lockedIn !== true || c.data?.energy !== "Slow" || !c.text.includes(T2)) throw new Error(`today_lockin reads the lock-in back: ${c.text}`);
+
+      c = await callTool("tasks_complete", { title: "said out loud" });
+      const done = await taskNamed(T2);
+      const ledger = await db.query.pointsLedger.findFirst({ where: and(eq(schema.pointsLedger.userId, client.id), eq(schema.pointsLedger.refId, done?.id ?? "")) });
+      if (c.isError || done?.status !== "done" || !ledger || !c.text.includes(`+${ledger.points} points`)) throw new Error(`tasks_complete ticks it and scores once: ${c.text}`);
+      c = await callTool("tasks_uncomplete", { title: T2 });
+      if (c.isError || (await taskNamed(T2))?.status !== "today") throw new Error(`tasks_uncomplete puts it back on today: ${c.text}`);
+      c = await callTool("tasks_complete", { title: T2 });
+      if (!c.text.includes("already scored") || (await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, client.id), eq(schema.pointsLedger.refId, done!.id)) })).length !== 1) throw new Error(`ticked again, it scores nothing more: ${c.text}`);
+      c = await callTool("tasks_reschedule", { title: T1 });
+      const moved = await taskNamed(T1);
+      if (c.isError || moved?.dueDate !== tomorrow || moved.status !== "upcoming") throw new Error(`tasks_reschedule moves it to tomorrow: ${c.text}`);
+      // Two open tasks carry the same words: the tool refuses and names both, never ticking either.
+      await callTool("tasks_add", { title: "Walk: a second task with the same words" });
+      c = await callTool("tasks_complete", { title: "Walk:" });
+      if (!c.isError || !/2 match it/.test(c.text) || !c.text.includes(T1) || (await taskNamed(T1))?.status === "done") throw new Error(`words that fit two tasks are refused with the titles to pick from: ${c.text}`);
+
+      const cashBefore = (await logToday())?.cashCollected ?? 0;
+      c = await callTool("today_close", { dms_started: 12, conversations: 5, cash_collected: cashBefore + 500, win: "Booked two calls by voice" });
+      const closed = await logToday();
+      if (c.isError || !closed?.eveningDoneAt || closed.dmsStarted !== 12 || closed.conversations !== 5 || closed.cashCollected !== cashBefore + 500 || closed.win !== "Booked two calls by voice") throw new Error(`today_close writes the close: ${c.text}`);
+      if (!/collected/.test(c.text) || !c.data?.month) throw new Error(`the close answers with the month's cash: ${c.text}`);
+      c = await callTool("today_close", { calls_booked: 2 });
+      const again = await logToday();
+      if (again?.dmsStarted !== 12 || again.callsBooked !== 2 || again.win !== "Booked two calls by voice" || !c.text.startsWith("Updated")) throw new Error(`a second close changes only what was said and keeps the rest: ${c.text}`);
+      const calls = await db.query.mcpCalls.findMany({ where: eq(schema.mcpCalls.userId, client.id) });
+      for (const n of ["tasks_add", "tasks_list", "today_lock_in", "today_lockin", "tasks_complete", "tasks_uncomplete", "tasks_reschedule", "today_close"]) if (!calls.some((a) => a.tool === n && a.ok)) throw new Error(`the audit log has ${n}`);
+      if (!calls.some((a) => a.tool === "tasks_complete" && !a.ok)) throw new Error("the refused call is in the audit log as not ok");
+      await page.goto(`${base}/today`);
+      await page.getByText(T2).first().waitFor({ timeout: 20000 });
+      console.log("✓ the business tools over the route: a task added (a double tap is one), listed, locked into the Top 3 by its words with a new one made, a redo saying what it replaced, ticked and scored once, un-ticked, moved, ambiguous words refused; the day closed and corrected; every call audited; Today shows it");
+    }
+
     // ── 4. Refresh rotation, reuse, Disconnect. ──
     r = await form({ grant_type: "refresh_token", refresh_token: tok.refresh_token, client_id: reg.client_id });
     if (r.status !== 200) throw new Error(`refresh: ${r.status} ${await r.text()}`);

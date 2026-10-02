@@ -1,151 +1,32 @@
 "use server";
 
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { POINTS, closeActivityPoints } from "@/lib/engine/points";
-import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
-import { closedDates, repairsUsed, todayActivity } from "@/lib/queries/daily";
+import { POINTS } from "@/lib/engine/points";
+import { closedDates, repairsUsed } from "@/lib/queries/daily";
+import { CLOSE_EXTRA, CLOSE_NUMBERS, CLOSE_TEXT, closeDay, lockIn, upsertLog, type Close } from "@/lib/daily-core";
 import { brokenStreak } from "@/lib/engine/streak";
 import { isWeekday } from "@/lib/dates";
-import { award } from "@/lib/queries/points";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 
-async function upsertLog(workspaceId: string, userId: string, date: string) {
-  const existing = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, userId), eq(schema.dailyLogs.date, date)) });
-  if (existing) return existing;
-  const id = newId();
-  await db.insert(schema.dailyLogs).values({ id, workspaceId, userId, date }).onConflictDoNothing();
-  return (await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, userId), eq(schema.dailyLogs.date, date)) }))!;
-}
-
 export async function morningCheckinAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
-  const today = v.today;
-  const log = await upsertLog(workspaceId, userId, today);
-  const energy = Math.min(5, Math.max(1, num(formData, "energy") || 3));
-  const intention = opt(formData, "intention");
-  const focusIds = formData.getAll("focus").map(String).filter(Boolean).slice(0, 3);
-
-  await db.update(schema.dailyLogs).set({ energy, intention, morningDoneAt: log.morningDoneAt ?? nowIso() }).where(eq(schema.dailyLogs.id, log.id));
-
-  // Reset today's open focus tasks (completed ones keep their star), then set the chosen ones.
-  await db
-    .update(schema.tasks)
-    .set({ focusDate: null })
-    .where(and(eq(schema.tasks.userId, userId), eq(schema.tasks.focusDate, today), ne(schema.tasks.status, "done")));
-  if (focusIds.length) {
-    await db
-      .update(schema.tasks)
-      .set({ focusDate: today, urgency: "top3", status: "today" })
-      .where(and(eq(schema.tasks.userId, userId), inArray(schema.tasks.id, focusIds)));
-  }
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
   const newFocus = str(formData, "newFocus");
-  // A redone lock-in (the browser keeps the typed text) or a double tap must not create the task twice: star the
-  // existing open task with that title instead.
-  const existing = newFocus ? await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, userId), ne(schema.tasks.status, "done"), sql`lower(${schema.tasks.title}) = lower(${newFocus})`) }) : undefined;
-  if (existing) {
-    // Typing an imported task still waiting for review is looking at it: it joins the member's list (30 Sep).
-    await db.update(schema.tasks).set({ focusDate: today, urgency: "top3", status: "today", reviewState: null }).where(eq(schema.tasks.id, existing.id));
-  } else if (newFocus) {
-    await db.insert(schema.tasks).values({
-      id: newId(),
-      workspaceId,
-      userId,
-      title: newFocus,
-      urgency: "top3",
-      status: "today",
-      dueDate: today,
-      focusDate: today,
-      points: POINTS.top3Task,
-    });
-  }
-  await award({ workspaceId, userId }, "checkin", POINTS.checkin, "Morning lock-in", today);
+  // The rules (the redo, a typed title finding the open task instead of a second one, the points) are in src/lib/daily-core.ts.
+  await lockIn(v, { energy: num(formData, "energy") || 3, intention: opt(formData, "intention"), focusIds: formData.getAll("focus").map(String).filter(Boolean).slice(0, 3), newTitles: newFocus ? [newFocus] : [] });
   refresh();
 }
 
 export async function eveningCloseAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
-  const today = v.today;
-  const log = await upsertLog(workspaceId, userId, today);
-  const numbers = {
-    dmsStarted: num(formData, "dmsStarted"),
-    conversations: num(formData, "conversations"),
-    callsBooked: num(formData, "callsBooked"),
-    callsHeld: num(formData, "callsHeld"),
-    posts: num(formData, "posts"),
-    offersMade: num(formData, "offersMade"),
-    newLeads: num(formData, "newLeads"),
-    cashCollected: num(formData, "cashCollected"),
-  };
-  // Optional groups. Left collapsed, they simply stay at zero.
-  const extra = {
-    webinarRegs: num(formData, "webinarRegs"),
-    webinarShows: num(formData, "webinarShows"),
-    replayViews: num(formData, "replayViews"),
-    applications: num(formData, "applications"),
-    proofPosts: num(formData, "proofPosts"),
-    ctaPosts: num(formData, "ctaPosts"),
-    beliefPosts: num(formData, "beliefPosts"),
-    storiesCreated: num(formData, "storiesCreated"),
-    referralAsks: num(formData, "referralAsks"),
-    revContent: num(formData, "revContent"),
-    revWebinar: num(formData, "revWebinar"),
-    revDm: num(formData, "revDm"),
-  };
-  const firstClose = !log.eveningDoneAt;
-  // Repaired days keep the running streak alive but never feed the weekly escalation: a missed weekday still drops it to day 1.
-  const closed = await closedDates(workspaceId, userId, { excludeRepaired: true });
-  const streakDay = firstClose ? weeklyStreakDay(closed, today) : log.streakDay;
-  const previousCash = log.cashCollected;
-
-  await db
-    .update(schema.dailyLogs)
-    .set({
-      ...numbers,
-      ...extra,
-      start: opt(formData, "start"),
-      stop: opt(formData, "stop"),
-      keep: opt(formData, "keep"),
-      win: opt(formData, "win"),
-      gratitude: opt(formData, "gratitude"),
-      eveningDoneAt: log.eveningDoneAt ?? nowIso(),
-      streakDay,
-    })
-    .where(eq(schema.dailyLogs.id, log.id));
-
-  if (firstClose) {
-    await award({ workspaceId, userId }, "close", POINTS.close, "Closed the day", today);
-    const bonus = streakBonus(streakDay);
-    if (bonus) await award({ workspaceId, userId }, "streak", bonus, `Streak day ${streakDay}`, today);
-  }
-  // Activity points follow the numbers on every save, first close or edit: the day's activity row is set to the new total
-  // (net of what the app already scored as it happened), so editing a close at 5pm scores exactly the difference.
-  const seen = await todayActivity(workspaceId, userId, today);
-  const activity = closeActivityPoints(numbers, { posts: seen.posts, dmsStarted: seen.dmsStarted, conversations: seen.conversations });
-  await setActivityPoints({ workspaceId, userId }, today, activity.total, activity.lines.map((l) => l.label).join(", "));
-  // Cash always moves the goal by the change, whether this is the first close or a correction.
-  const cashDelta = numbers.cashCollected - previousCash;
-  if (cashDelta !== 0) {
-    const goal = await db.query.goals.findFirst({ where: and(eq(schema.goals.userId, userId), eq(schema.goals.primary, true)) });
-    if (goal && goal.unit === "$") await db.update(schema.goals).set({ actual: Math.max(0, goal.actual + cashDelta) }).where(eq(schema.goals.id, goal.id));
-  }
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
+  // The form sends every field: optional groups left collapsed simply stay at zero, a blank line is cleared.
+  const input: Close = {};
+  for (const k of [...CLOSE_NUMBERS, ...CLOSE_EXTRA]) input[k] = num(formData, k);
+  for (const k of CLOSE_TEXT) input[k] = opt(formData, k);
+  await closeDay(v, input);
   refresh();
-}
-
-/** One ledger row per day for close activity, adjusted to the latest total. Zero total removes it. */
-async function setActivityPoints(ctx: { workspaceId: string; userId: string }, today: string, total: number, labels: string): Promise<void> {
-  const refId = `activity:${today}`;
-  const existing = await db.query.pointsLedger.findFirst({ where: and(eq(schema.pointsLedger.userId, ctx.userId), eq(schema.pointsLedger.type, "dm"), eq(schema.pointsLedger.refId, refId)) });
-  if (!total) {
-    if (existing) await db.delete(schema.pointsLedger).where(eq(schema.pointsLedger.id, existing.id));
-    return;
-  }
-  const reason = `Daily activity: ${labels}`;
-  if (existing) {
-    if (existing.points !== total) await db.update(schema.pointsLedger).set({ points: total, reason }).where(eq(schema.pointsLedger.id, existing.id));
-  } else await award(ctx, "dm", total, reason, refId);
 }
 
 /**

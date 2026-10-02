@@ -32,7 +32,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
         </div>
         <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm" start={2}>
           <li>Claude sends you here to sign in and tick what it may do. You&apos;re asked every time you connect.</li>
-          <li>Back in Claude, ask it something: &quot;who am I connected as?&quot; to start. Disconnect any time in <Link href="/settings#connected-apps" className="underline">Settings → Connected apps</Link>.</li>
+          <li>Back in Claude, ask it something: &quot;what&apos;s on my plate today?&quot;, &quot;lock in my day: call Jess, post the ladder, send the replay, energy Bright&quot;, or &quot;close my day: 12 DMs, 2 calls booked, $500 collected&quot;. Disconnect any time in <Link href="/settings#connected-apps" className="underline">Settings → Connected apps</Link>.</li>
         </ol>
       </Card>
       <Card className="mt-4" title="What each area means">
@@ -43,7 +43,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-ink-3">A connected app never sends, publishes or deletes anything, never reaches another member, and never sees your keys. This first release answers who you are; tools for each area follow.</p>
+        <p className="mt-3 text-xs text-ink-3">A connected app never sends, publishes or deletes anything, never reaches another member, and never sees your keys. Today and Tasks work from a chat now (your lock-in, your close, adding, ticking and moving tasks), and HumanOS when its own AI switch is on; more areas follow.</p>
       </Card>
     </>
   );

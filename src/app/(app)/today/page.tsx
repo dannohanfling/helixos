@@ -26,6 +26,7 @@ import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
 import { todayBody } from "@/lib/queries/body";
 import { logHabitAction } from "@/lib/actions/body";
+import { ENERGY_WORDS } from "@/lib/daily-core";
 
 export const metadata = { title: "Today" };
 
@@ -46,7 +47,7 @@ function greeting(hour: number, name: string): string {
   return `Evening, ${first}.`;
 }
 
-const ENERGY = ["", "Dragging", "Slow", "Steady", "Bright", "On fire"];
+const ENERGY = ["", ...ENERGY_WORDS];
 
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string }> }) {
   const v = await requireViewer();

@@ -9,8 +9,8 @@ export type Scope = (typeof MCP_SCOPES)[number];
 
 /** One scope per area, read and draft-write together (rev 247, B2). The line is what the consent screen says. */
 export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
-  today: { label: "Today", line: "What's on your Today: the lock-in, your top 3, tasks due, your streak and points." },
-  tasks: { label: "Tasks", line: "List your tasks, add one, mark one done." },
+  today: { label: "Today", line: "What's on your Today: the lock-in, your top 3, tasks due, your streak and points. Lock in your day and close it." },
+  tasks: { label: "Tasks", line: "List your tasks, add one, tick one off or back, move one to another day." },
   goals: { label: "Goals", line: "Read your goal and key results, update the numbers." },
   offers: { label: "Offers", line: "Read your offers; create and edit drafts. Never publish." },
   content: { label: "Content", line: "Read your content; draft new pieces for you to review." },

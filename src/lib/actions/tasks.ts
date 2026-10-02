@@ -2,87 +2,30 @@
 
 import { redirect } from "next/navigation";
 import { deletedTo } from "@/lib/deleted";
-import { and, eq, gte, isNotNull, ne, gt } from "drizzle-orm";
+import { and, eq, isNotNull, ne, gt } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { newId } from "@/lib/ids";
-import { addDays, nowIso } from "@/lib/dates";
-import { taskPoints } from "@/lib/engine/points";
-import { award } from "@/lib/queries/points";
+import { nowIso } from "@/lib/dates";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
-
-const URGENCY = ["top3", "high", "medium", "low"] as const;
-const CATEGORY = ["sales", "content", "community", "system", "admin", "fulfillment"] as const;
+import { addTask, ownTask, rescheduleTask, toggleTask } from "@/lib/tasks-core";
 
 export async function createTaskAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
-  const title = str(formData, "title");
-  if (!title) return;
-  const urgency = URGENCY.find((u) => u === str(formData, "urgency")) ?? "medium";
-  const category = CATEGORY.find((c) => c === str(formData, "category")) ?? "sales";
-  const dueDate = opt(formData, "dueDate") ?? v.today;
-  const repeat = num(formData, "repeatEveryDays") || null;
-  // A double tap on Add task is one task: the same title from the same person in the last 20 seconds is the same task.
-  const recent = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, userId), eq(schema.tasks.title, title), gte(schema.tasks.createdAt, new Date(Date.now() - 20_000).toISOString().replace("T", " ").slice(0, 19))) });
-  if (recent) {
-    refresh();
-    return;
-  }
-  await db.insert(schema.tasks).values({
-    id: newId(),
-    workspaceId,
-    userId,
-    title,
-    details: opt(formData, "details"),
-    urgency,
-    category,
-    dueDate,
-    status: dueDate <= v.today ? "today" : "upcoming",
-    focusDate: urgency === "top3" && dueDate === v.today ? v.today : null,
-    points: taskPoints(urgency),
-    repeatEveryDays: repeat,
-  });
+  const { v } = await ctx();
+  // The rules (the double-tap guard, the dates, the star for a Top 3 due today) are in src/lib/tasks-core.ts.
+  await addTask(v, { title: str(formData, "title"), details: opt(formData, "details"), urgency: str(formData, "urgency"), category: str(formData, "category"), dueDate: opt(formData, "dueDate"), repeatEveryDays: num(formData, "repeatEveryDays") || null });
   refresh();
 }
 
 export async function toggleTaskAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
-  const id = str(formData, "id");
-  const task = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.id, id), eq(schema.tasks.userId, userId)) });
+  const { v } = await ctx();
+  const task = await ownTask(v, str(formData, "id"));
   if (!task) return;
-  if (task.status === "done") {
-    await db.update(schema.tasks).set({ status: task.dueDate && task.dueDate <= v.today ? "today" : "upcoming", completedAt: null }).where(eq(schema.tasks.id, id));
-  } else {
-    await db.update(schema.tasks).set({ status: "done", completedAt: nowIso() }).where(eq(schema.tasks.id, id));
-    await award({ workspaceId, userId }, "task", taskPoints(task.urgency, task.points), `Task: ${task.title}`, task.id);
-    if (task.repeatEveryDays) {
-      await db.insert(schema.tasks).values({
-        id: newId(),
-        workspaceId,
-        userId,
-        title: task.title,
-        details: task.details,
-        urgency: task.urgency === "top3" ? "high" : task.urgency,
-        category: task.category,
-        dueDate: addDays(task.dueDate ?? v.today, task.repeatEveryDays),
-        status: "upcoming",
-        points: task.points,
-        repeatEveryDays: task.repeatEveryDays,
-        source: "repeat",
-        sourceRef: task.id,
-      });
-    }
-  }
+  await toggleTask(v, task);
   refresh();
 }
 
 export async function rescheduleTaskAction(formData: FormData): Promise<void> {
-  const { v, userId } = await ctx();
-  const id = str(formData, "id");
-  const dueDate = opt(formData, "dueDate") ?? addDays(v.today, 1);
-  await db
-    .update(schema.tasks)
-    .set({ dueDate, status: dueDate <= v.today ? "today" : "upcoming", focusDate: null })
-    .where(and(eq(schema.tasks.id, id), eq(schema.tasks.userId, userId)));
+  const { v } = await ctx();
+  await rescheduleTask(v, str(formData, "id"), opt(formData, "dueDate"));
   refresh();
 }
 

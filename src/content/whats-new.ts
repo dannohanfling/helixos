@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 62,
+    date: "2026-10-03",
+    title: "Run your day from a chat with Claude",
+    lines: [
+      "With HelixOS connected to Claude (Connect to Claude in the menu), you can now say what you'd tap: add a task, see what's due, tick one off, move it to tomorrow, lock in your Top 3 with your energy and the line you commit to, and close the day with your numbers and your win.",
+      "It follows the same rules as the Today and Tasks pages: points score once, a redone lock-in tells you what it replaced, and a close tells you the points and the month's cash against your goal. Nothing is ever deleted from a chat.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 61,
     date: "2026-10-03",
     title: "HumanOS: set it up by talking to Claude",
