@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
-import { PLACEHOLDER_TEXT_SIZE, TEXT_LEFT_ZONE, deckSlides, outlineText, renderPlan, slotFrame, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
+import { COVER_LOGO_BOX, LOGO_BOX, PLACEHOLDER_TEXT_SIZE, deckSlides, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
 import { pictureAltText } from "@/lib/engine/deck-slot";
 import { placeImage } from "@/lib/engine/deck-fit";
@@ -26,8 +26,6 @@ async function readBytes(url: string): Promise<Buffer | null> {
   }
 }
 /** The footer bar's logo box, right of the band; and the cover's, top left (§4). */
-const LOGO_BOX = { x: 9.0, y: 5.35, w: 0.9, h: 0.24 };
-const COVER_LOGO_BOX = { x: 0.5, y: 0.35, w: 1.8, h: 0.55 };
 
 /**
  * GET /api/webinars/{id}/deck?format=pptx|txt
@@ -126,41 +124,37 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     slide.addNotes(plan.notes);
     return;
   }
-  // A filled slot's frame, or the empty slot's: the text keeps the picture-slide layout either way (§2).
-  const frame = plan.imageFrame ?? plan.placeholderSlot?.frame ?? null;
+  // Every box's place comes from the plan's geometry (§6.4), the same the Deck step's thumbnail draws; nothing is placed here.
+  const g = slideGeometry(plan);
   const cover = plan.boxes.some((b) => b.role === "cover-title");
-  // With a picture, the text lives in the left column; without one, it keeps the full-width geometry.
-  const zone = frame ? TEXT_LEFT_ZONE : { x: 0.5, w: 9 };
-  const bodyZone = frame ? { x: TEXT_LEFT_ZONE.x + 0.2, w: TEXT_LEFT_ZONE.w - 0.2 } : { x: 0.7, w: 8.6 };
-
+  const at = (b: BoxGeometry) => ({ x: b.x, y: b.y, w: b.w, h: b.h, align: b.align, valign: b.valign });
   if (cover) {
     // The logo on the cover (§4), top left, contained whole in its box.
     if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: chrome.coverLogo.placement.box.x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h, altText: `${chrome.company} logo` });
     const title = plan.boxes.find((b) => b.role === "cover-title");
     const presenter = plan.boxes.find((b) => b.role === "cover-presenter");
-    if (title) slide.addText(title.text, frame ? { x: zone.x, y: 1.6, w: zone.w, h: 1.8, fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face, align: "left", valign: "middle" } : { x: 0.5, y: 1.5, w: 9, h: 1.6, fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face, align: "center", valign: "middle" });
-    if (presenter) slide.addText(presenter.text, frame ? { x: zone.x, y: 3.5, w: zone.w, h: 0.6, fontSize: presenter.size, color: presenter.color, fontFace: presenter.face, align: "left" } : { x: 0.5, y: 3.3, w: 9, h: 0.6, fontSize: presenter.size, color: presenter.color, fontFace: presenter.face, align: "center" });
+    if (title && g.boxes["cover-title"]) slide.addText(title.text, { ...at(g.boxes["cover-title"]), fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face });
+    if (presenter && g.boxes["cover-presenter"]) slide.addText(presenter.text, { ...at(g.boxes["cover-presenter"]), fontSize: presenter.size, color: presenter.color, fontFace: presenter.face });
   } else {
     const eyebrow = plan.boxes.find((b) => b.role === "eyebrow");
     const headline = plan.boxes.find((b) => b.role === "headline");
     const lines = plan.boxes.filter((b) => b.role === "body" || b.role === "attribution");
     const footer = plan.boxes.find((b) => b.role === "footer");
-    if (eyebrow) slide.addText(eyebrow.text, { x: zone.x, y: 0.25, w: zone.w, h: 0.4, fontSize: eyebrow.size, color: eyebrow.color, fontFace: eyebrow.face });
+    if (eyebrow && g.boxes.eyebrow) slide.addText(eyebrow.text, { ...at(g.boxes.eyebrow), fontSize: eyebrow.size, color: eyebrow.color, fontFace: eyebrow.face });
     // A statement (§4: one line, no body) sits vertically centred and large; a content headline sits at the top of its box.
-    if (headline && plan.layout === "statement") slide.addText(headline.text, { x: zone.x, y: 1.0, w: zone.w, h: 3.4, fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, valign: "middle", ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
-    else if (headline) slide.addText(headline.text, { x: zone.x, y: 0.8, w: zone.w, h: 1.5, fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, valign: "top", ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
-    if (lines.length) {
+    if (headline && g.boxes.headline) slide.addText(headline.text, { ...at(g.boxes.headline), fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
+    if (lines.length && g.body) {
       slide.addText(
         lines.map((b) => ({ text: b.text, options: { bullet: b.bullet, breakLine: true, fontSize: b.size, color: b.color, fontFace: b.face, ...(b.fill ? { highlight: b.fill } : {}) } })),
-        { x: bodyZone.x, y: 2.4, w: bodyZone.w, h: 2.4, valign: "top" },
+        { ...at(g.body) },
       );
     }
-    if (footer) slide.addText(footer.text, { x: 0.5, y: 5.0, w: 9, h: 0.3, fontSize: footer.size, color: footer.color, fontFace: footer.face, align: "center", ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
+    if (footer && g.boxes.footer) slide.addText(footer.text, { ...at(g.boxes.footer), fontSize: footer.size, color: footer.color, fontFace: footer.face, ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
   }
   // The picture in its frame: a photo cropped to fill it, evidence kept whole inside it; never stretched out of shape.
   if (image && plan.imageFrame) drawImage(pptx, slide, image, plan.imageFrame, plan.background);
   else if (plan.placeholderSlot) drawPlaceholder(pptx, slide, plan.placeholderSlot, chrome.body);
-  for (const r of plan.rules) slide.addShape(pptx.ShapeType.line, { x: 0.5, y: r.y, w: frame ? zone.w : 9, h: 0, line: { color: r.color, width: 1.5 } });
+  for (const r of plan.rules) slide.addShape(pptx.ShapeType.line, { x: g.rules.x, y: r.y, w: g.rules.w, h: 0, line: { color: r.color, width: 1.5 } });
   drawBars(pptx, slide, chrome, cover);
   if (plan.notes) slide.addNotes(plan.notes);
 }

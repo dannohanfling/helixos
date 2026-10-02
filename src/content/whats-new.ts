@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 56,
+    date: "2026-10-02",
+    title: "See the slides before you download",
+    lines: [
+      "The Deck step now shows every slide as the file lays it out: your colours and faces, the picture or the red placeholder in its frame, the footer band. Each box sits exactly where the export puts it.",
+      "A slide with a problem is marked: an empty picture slot, text past its box (measured in your browser, not guessed), or no logo. The line above the thumbnails counts them.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 55,
     date: "2026-10-02",
     title: "Pictures to gather: a shot list from day one",

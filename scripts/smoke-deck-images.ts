@@ -246,6 +246,24 @@ async function main() {
     const redBox = { w: rMaxX - rMinX + 1, h: rMaxY - rMinY + 1 };
     if (reds < 200 || !within(redBox.w / rinfo.width, COVER_FRAME.w / 10, 0.03) || !within(redBox.h / rinfo.height, COVER_FRAME.h / 5.625, 0.03)) throw new Error(`the render paints the red placeholder across the picture's frame: ${JSON.stringify(redBox)} of ${rinfo.width}×${rinfo.height}, ${reds} red px`);
     console.log(`✓ §2: an empty slot exports as a dashed red frame with "Add a photo: …" in it, the picture's own frame on the XML and on the render (${redBox.w}×${redBox.h} px of ${rinfo.width}×${rinfo.height})`);
+    // ── §6.4: the thumbnails on the Deck step are the plan the file is drawn from: one per slide, the empty cover marked with
+    //    its red placeholder text, the cover title's box where the XML puts it (within 1%), and overflow measured in the browser. ──
+    await page.goto(`${base}/webinars/${webinar.id}?step=deck`);
+    await page.locator('[data-testid="deck-thumbs-summary"]').waitFor({ timeout: 20000 });
+    const thumbCount = await page.locator('[data-testid="deck-thumb"]').count();
+    const cardCount = await page.locator('[data-testid="deck-slide"]').count();
+    if (thumbCount < cardCount || thumbCount === 0) throw new Error(`one thumbnail per slide (${thumbCount} thumbs, ${cardCount} slides)`);
+    const coverThumb = page.locator('[data-testid="deck-thumb"][data-n="1"]');
+    if ((await coverThumb.getAttribute("data-empty")) !== "1" || !(await coverThumb.locator('[data-testid="deck-thumb-placeholder"]').innerText()).includes("Add a photo of you")) throw new Error("the empty cover's thumbnail carries the red placeholder and is marked empty");
+    const titleBox = coverThumb.locator('[data-role="cover-title"]');
+    const want = { x: Number(await titleBox.getAttribute("data-x")), y: Number(await titleBox.getAttribute("data-y")), w: Number(await titleBox.getAttribute("data-w")), h: Number(await titleBox.getAttribute("data-h")) };
+    const xmlBoxes = boxes(emptyCover);
+    if (!xmlBoxes.some((b) => within(b.x / EMU, want.x, 0.01) && within(b.y / EMU, want.y, 0.01) && within(b.cx / EMU, want.w, 0.01) && within(b.cy / EMU, want.h, 0.01))) throw new Error(`the thumbnail's title box (${JSON.stringify(want)}) is one the file draws: ${JSON.stringify(xmlBoxes.map((b) => [b.x / EMU, b.y / EMU, b.cx / EMU, b.cy / EMU]))}`);
+    const summaryEl = page.locator('[data-testid="deck-thumbs-summary"]');
+    const flagged = await page.locator('[data-testid="deck-thumb"][data-overflow="1"]').count();
+    if (Number(await summaryEl.getAttribute("data-overflow")) !== flagged || Number(await summaryEl.getAttribute("data-empty")) < 1) throw new Error("the summary counts what the thumbnails mark");
+    console.log(`✓ §6.4: ${thumbCount} thumbnails drawn from the plan; the empty cover marked with its placeholder; the title box matches the file's; ${flagged} slides measured over their box in the browser`);
+
     // ── §6.3: "Pictures to gather" on Foundation: the cover's photo missing, the logo in (1 of 2). "I don't have this" drops the
     //    cover slot: the count falls to 1 of 1, the Deck step says so, the export carries no placeholder on the cover, and Today's
     //    action goes; Put back returns the slot, the placeholder and the Today action. ──
@@ -290,6 +308,11 @@ async function main() {
     const emptyAfter = Number((await slotsText()).match(/^(\d+)/)?.[1] ?? "0");
     if (emptyAfter !== emptyBefore - 1) throw new Error(`filling one slot drops the empty count by one, ${emptyBefore}→${emptyAfter}`);
     console.log(`✓ a picture attached to the cover slot; the empty-slot count fell ${emptyBefore}→${emptyAfter}`);
+    // §6.4: the thumbnail now shows the picture through the app's own route, and is no longer marked empty.
+    const coverThumbFilled = page.locator('[data-testid="deck-thumb"][data-n="1"]');
+    await coverThumbFilled.locator('[data-testid="deck-thumb-picture"]').waitFor({ timeout: 20000 });
+    if ((await coverThumbFilled.getAttribute("data-empty")) !== "0" || (await coverThumbFilled.locator('[data-testid="deck-thumb-picture"]').getAttribute("src")) !== `/api/deck-images/${photos[0].id}`) throw new Error("the filled cover's thumbnail shows the library picture through the app's route");
+    console.log("✓ §6.4: the filled cover's thumbnail shows the picture and loses its empty mark");
 
     // ── The .pptx: the picture inside its frame, no text box off the slide, no construction language in the notes. ──
     const res = await page.request.get(`${base}/api/webinars/${webinar.id}/deck?format=pptx`);

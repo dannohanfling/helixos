@@ -522,6 +522,39 @@ export function slotFrame(kind: SlideKind): Frame {
 /** With a picture on the right, the text lives in this left column; without one, boxes keep their full-width geometry. */
 export const TEXT_LEFT_ZONE = { x: 0.5, w: 4.5 };
 
+/** The footer bar's logo box and the cover's (§4), inches: the route and the thumbnail both place the logo here. */
+export const LOGO_BOX: Frame = { x: 9.0, y: 5.35, w: 0.9, h: 0.24 };
+export const COVER_LOGO_BOX: Frame = { x: 0.5, y: 0.35, w: 1.8, h: 0.55 };
+
+/** Where a text box sits on the 10 by 5.625 in slide, and how its text is set inside it. */
+export type BoxGeometry = Frame & { align: "left" | "center"; valign: "top" | "middle" };
+/** Every box's place on one slide (§6.4): the route draws from this and the Deck step's thumbnail draws the same, so the two cannot drift. */
+export type SlideGeometry = { boxes: Partial<Record<TextBox["role"], BoxGeometry>>; /** The body lines share one box. */ body: BoxGeometry | null; rules: { x: number; w: number } };
+
+/**
+ * The geometry of a planned slide. A filled slot's frame, or the empty slot's, puts the text in the left column; without one
+ * the boxes keep the full width. The cover sets its title and presenter centred on a bare cover and left beside a picture; a
+ * statement (§4) sits vertically centred and large; a content headline sits at the top of its box over the body's box.
+ */
+export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageFrame" | "placeholderSlot" | "pictureOnly">): SlideGeometry {
+  const frame = plan.imageFrame ?? plan.placeholderSlot?.frame ?? null;
+  const zone = frame ? TEXT_LEFT_ZONE : { x: 0.5, w: 9 };
+  const bodyZone = frame ? { x: TEXT_LEFT_ZONE.x + 0.2, w: TEXT_LEFT_ZONE.w - 0.2 } : { x: 0.7, w: 8.6 };
+  const boxes: SlideGeometry["boxes"] = {};
+  let body: BoxGeometry | null = null;
+  if (plan.pictureOnly) return { boxes, body, rules: { x: 0.5, w: 9 } };
+  if (plan.boxes.some((b) => b.role === "cover-title")) {
+    boxes["cover-title"] = frame ? { x: zone.x, y: 1.6, w: zone.w, h: 1.8, align: "left", valign: "middle" } : { x: 0.5, y: 1.5, w: 9, h: 1.6, align: "center", valign: "middle" };
+    boxes["cover-presenter"] = frame ? { x: zone.x, y: 3.5, w: zone.w, h: 0.6, align: "left", valign: "top" } : { x: 0.5, y: 3.3, w: 9, h: 0.6, align: "center", valign: "top" };
+  } else {
+    boxes.eyebrow = { x: zone.x, y: 0.25, w: zone.w, h: 0.4, align: "left", valign: "top" };
+    boxes.headline = plan.layout === "statement" ? { x: zone.x, y: 1.0, w: zone.w, h: 3.4, align: "left", valign: "middle" } : { x: zone.x, y: 0.8, w: zone.w, h: 1.5, align: "left", valign: "top" };
+    if (plan.boxes.some((b) => b.role === "body" || b.role === "attribution")) body = { x: bodyZone.x, y: 2.4, w: bodyZone.w, h: 2.4, align: "left", valign: "top" };
+    boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
+  }
+  return { boxes, body, rules: { x: 0.5, w: frame ? zone.w : 9 } };
+}
+
 /**
  * Every box the renderer will draw, with the kit's hex written verbatim: no tint, no derived shade. Text sits on ground only.
  * Accent draws rules and fills, never letters: every text box is ink or muted (both refused under 4.5:1 by the kit rules), and

@@ -54,9 +54,11 @@ import {
 } from "@/lib/engine/webinar";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, presenterOf } from "@/lib/queries/webinar";
-import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult } from "@/lib/engine/deck";
+import {HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry } from "@/lib/engine/deck";
 import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
-import { resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
+import { droppedSlides, filledSlides, resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
+import { DeckThumbs, type ThumbChrome, type ThumbSlide } from "@/components/deck-thumbs";
+import { fitModeFor } from "@/lib/engine/deck-fit";
 import { shotCountLine, shotList } from "@/lib/engine/shot-list";
 import {clearDeckSlotAction, setDeckSlotAction, dropDeckSlotAction, restoreDeckSlotAction } from "@/lib/actions/deck-images";
 import type { DeckImage } from "@/db/schema";
@@ -180,6 +182,33 @@ export default async function WebinarWizardPage({
     resolveDeckSlots(w.id, deck, { workspaceId: w.workspaceId, userId: w.userId }),
     db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId)), orderBy: (t, { desc }) => [desc(t.createdAt)] }),
   ]);
+
+  // The slides as the export lays them out (§6.4): the same plan and geometry the route draws, drawn by the browser.
+  const hasLogo = Boolean(brandKit?.logoImageId) || deckLibrary.some((i) => i.kind === "logo");
+  const logoId = brandKit?.logoImageId ?? deckLibrary.filter((i) => i.kind === "logo").sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0]?.id ?? null;
+  const imageBySlide = new Map(deckSlotsResolved.filter((r) => r.image).map((r) => [r.slide, r.image!]));
+  const labelBySlide = new Map(deck.slides.map((sl) => [sl.n, sl.section || "Cover"]));
+  const thumbs: ThumbSlide[] = renderPlan(deck, filledSlides(deckSlotsResolved), droppedSlides(deckSlotsResolved)).map((plan) => {
+    const img = imageBySlide.get(plan.n);
+    return {
+      plan,
+      geometry: slideGeometry(plan),
+      image: img && plan.imageFrame ? { url: img.source === "library" && img.id ? `/api/deck-images/${img.id}` : null, mode: fitModeFor(img.kind) } : null,
+      label: plan.pictureOnly ? `${labelBySlide.get(plan.n) ?? ""} · picture` : (labelBySlide.get(plan.n) ?? ""),
+    };
+  });
+  const thumbChrome: ThumbChrome = {
+    faces: { display: deck.kit.displayFont, body: deck.kit.bodyFont, quote: deck.kit.quoteFont ?? null, fallback: deck.kit.fontFallback },
+    footerBar: deck.footerBar,
+    ctaBar: deck.ctaBar,
+    ctaFooter: deck.ctaFooter,
+    company: w.footerBrand?.trim() || (deck.kitApplied ? deck.kit.name : v.workspace.name),
+    muted: deck.kit.muted.replace(/^#/, "").toUpperCase(),
+    surface: deck.kit.surface.replace(/^#/, "").toUpperCase(),
+    logoUrl: logoId ? `/api/deck-images/${logoId}` : null,
+    logoBox: LOGO_BOX,
+    coverLogoBox: COVER_LOGO_BOX,
+  };
   // The export's provenance gate, from the same sections the route reads; a confirm counts only for the drafts as they stand now.
   const exportGate = sectionGate(sections);
   const exportConfirm = exportGate && sp.confirmed ? await confirmFor(sp.confirmed, v.user.id, "deck_export", w.id) : null;
@@ -1336,7 +1365,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
+        <DeckStep presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} thumbs={thumbs} thumbChrome={thumbChrome} hasLogo={hasLogo} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
       ) : null}
 
       {step === "review" ? (
@@ -1668,7 +1697,7 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, owner, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter }: { webinarId: string; owner: { workspaceId: string; userId: string }; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
+function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter }: { webinarId: string; owner: { workspaceId: string; userId: string }; thumbs: ThumbSlide[]; thumbChrome: ThumbChrome; hasLogo: boolean; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
   const fallbacks = slotFallbacks(resolvedSlots);
   const bySlide = new Map(resolvedSlots.map((r) => [r.slide, r]));
@@ -1789,6 +1818,12 @@ function DeckStep({ webinarId, owner, deck, pace, resolvedSlots, library, gate, 
           {deck.placeholderCount} unfilled [placeholder]{deck.placeholderCount === 1 ? "" : "s"} across the deck, each drawn in {deck.kit.placeholder ?? "FFF3A3"} so it cannot be missed.
         </p>
       ) : null}
+      <details className="mb-4" open data-testid="deck-thumbs">
+        <summary className="cursor-pointer text-sm font-semibold">See the slides as the file lays them out</summary>
+        <div className="mt-2">
+          <DeckThumbs slides={thumbs} chrome={thumbChrome} hasLogo={hasLogo} />
+        </div>
+      </details>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {deck.slides.map((s) => (
           <div key={s.n} className={`rounded-lg border p-3 text-sm ${s.inverse ? "bg-surface-2" : ""}`} data-testid="deck-slide" data-kind={s.kind} data-section={s.sectionKey ?? ""}>

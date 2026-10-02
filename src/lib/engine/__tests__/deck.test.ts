@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -439,3 +439,29 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
     expect(plan[0].boxes.some((b) => b.role === "cover-title")).toBe(true);
   });
 });
+
+describe("§6.4: the boxes' geometry lives in the plan", () => {
+  const box = (role: "cover-title" | "cover-presenter" | "eyebrow" | "headline" | "body" | "footer") => ({ slide: 1, role, text: "x", size: 20, color: "111111", fill: null, face: "Arial", bold: false, italic: false, bullet: false, placeholder: false });
+  it("a bare cover centres its title; beside a picture the title sits in the left column", () => {
+    const bare = slideGeometry({ boxes: [box("cover-title"), box("cover-presenter")], layout: "cover", imageFrame: null, placeholderSlot: null, pictureOnly: false });
+    expect(bare.boxes["cover-title"]).toEqual({ x: 0.5, y: 1.5, w: 9, h: 1.6, align: "center", valign: "middle" });
+    expect(bare.rules).toEqual({ x: 0.5, w: 9 });
+    const beside = slideGeometry({ boxes: [box("cover-title")], layout: "cover", imageFrame: { x: 5.2, y: 0.9, w: 4.3, h: 3.85 }, placeholderSlot: null, pictureOnly: false });
+    expect(beside.boxes["cover-title"]).toEqual({ x: TEXT_LEFT_ZONE.x, y: 1.6, w: TEXT_LEFT_ZONE.w, h: 1.8, align: "left", valign: "middle" });
+    expect(beside.rules.w).toBe(TEXT_LEFT_ZONE.w);
+  });
+  it("a content slide: eyebrow, headline at the top, the body in its own box, the footer centred; a statement sits centred and tall; an empty slot narrows the text like a picture", () => {
+    const content = slideGeometry({ boxes: [box("eyebrow"), box("headline"), box("body"), box("footer")], layout: "content", imageFrame: null, placeholderSlot: null, pictureOnly: false });
+    expect(content.boxes.headline).toEqual({ x: 0.5, y: 0.8, w: 9, h: 1.5, align: "left", valign: "top" });
+    expect(content.body).toEqual({ x: 0.7, y: 2.4, w: 8.6, h: 2.4, align: "left", valign: "top" });
+    expect(content.boxes.footer).toEqual({ x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" });
+    const statement = slideGeometry({ boxes: [box("headline")], layout: "statement", imageFrame: null, placeholderSlot: null, pictureOnly: false });
+    expect(statement.boxes.headline).toEqual({ x: 0.5, y: 1.0, w: 9, h: 3.4, align: "left", valign: "middle" });
+    expect(statement.body).toBeNull();
+    const narrow = slideGeometry({ boxes: [box("headline"), box("body")], layout: "content", imageFrame: null, placeholderSlot: { frame: { x: 5.35, y: 1.05, w: 4.15, h: 3.5 }, text: "Add a photo", color: "D92D20" }, pictureOnly: false });
+    expect(narrow.boxes.headline?.w).toBe(TEXT_LEFT_ZONE.w);
+    expect(narrow.body?.x).toBe(TEXT_LEFT_ZONE.x + 0.2);
+    expect(slideGeometry({ boxes: [], layout: "content", imageFrame: { x: 1.5, y: 0.6, w: 7, h: 4.4 }, placeholderSlot: null, pictureOnly: true }).boxes).toEqual({});
+  });
+});
+
