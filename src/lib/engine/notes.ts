@@ -6,6 +6,8 @@
 export const TASK_SOURCES = {
   manual: "manual",
   coachCall: "coach_call",
+  /** A step from a recorded call (Recordings R1), made a task by the member's own tap. */
+  fathom: "fathom",
 } as const;
 export type TaskSource = (typeof TASK_SOURCES)[keyof typeof TASK_SOURCES];
 
@@ -37,5 +39,6 @@ export function parseTaskLines(text: string): string[] {
 /** How a task's origin reads to the client. Plain, dated, no coaching voice. */
 export function originLabel(source: string, date: string | null, formatDate: (d: string) => string): string | null {
   if (source === TASK_SOURCES.coachCall) return date ? `From your call on ${formatDate(date)}` : "From your call";
+  if (source === TASK_SOURCES.fathom) return date ? `From the recording on ${formatDate(date)}` : "From a recording";
   return null;
 }

@@ -41,7 +41,7 @@ function writeCollapsed(next: Record<string, boolean>) {
   listeners.forEach((l) => l());
 }
 
-export function SideNav({ role, passEnabled, bodyEnabled, badges = {} }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; badges?: Record<string, number> }) {
+export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, badges = {} }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; badges?: Record<string, number> }) {
   const pathname = usePathname();
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const collapsed = useMemo<Record<string, boolean>>(() => {
@@ -54,12 +54,12 @@ export function SideNav({ role, passEnabled, bodyEnabled, badges = {} }: { role:
   const toggle = (label: string) => writeCollapsed({ ...collapsed, [label]: !collapsed[label] });
   // The most specific item wins: on /body/foods that's Nutrition, not Log (/body) as well (a prefix match alone lit both).
   const activeHref = NAV_GROUPS.flatMap((g) => g.items)
-    .filter((n) => navVisible(n, { role, passEnabled, bodyEnabled }) && isActive(pathname, n.href))
+    .filter((n) => navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled }) && isActive(pathname, n.href))
     .reduce<string | null>((best, n) => (!best || n.href.length > best.length ? n.href : best), null);
   return (
     <nav className="space-y-2">
       {NAV_GROUPS.map((g) => {
-        const items = g.items.filter((n) => navVisible(n, { role, passEnabled, bodyEnabled }));
+        const items = g.items.filter((n) => navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled }));
         // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
         if (!items.length) return null;
         const activeItem = items.find((n) => n.href === activeHref);

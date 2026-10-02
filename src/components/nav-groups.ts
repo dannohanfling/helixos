@@ -1,7 +1,8 @@
 /** The navigation model, in a plain module so both client components and server pages can read it. */
 /** `line`: a one-line description shown under the label everywhere, for the two sections a client would otherwise confuse. `hint` shows on the More page only. */
 /** `bodyOnly`: shown only to a member whose HumanOS is switched on (rev 195, per member); `bodyOffOnly`: the one entry shown while it's off (rev 320), leading to the switch. */
-export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; hint?: string; line?: string };
+/** `recordingsOnly`: shown to a client only once a recording is published for them (Recordings R1). */
+export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -40,6 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/offers", label: "Offers", icon: "🎁", hint: "wizard" },
       { href: "/pathway", label: "Pathway", icon: "🛣️" },
       { href: "/courses", label: "Courses", icon: "📚" },
+      { href: "/recordings", label: "Recordings", icon: "🎥", line: "Your coaching calls", recordingsOnly: true },
       { href: "/doctrine", label: "Doctrine", icon: "🏛️", hint: "principles" },
       { href: "/essence", label: "Essence", icon: "🧬", hint: "your voice" },
       { href: "/proof", label: "Proof Bank", icon: "🏆", line: "Your clients' results" },
@@ -70,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach/community", label: "Community posts", icon: "📣", coachOnly: true, hint: "Monday 3-1-3" },
       { href: "/coach/move", label: "Move to a client", icon: "📦", coachOnly: true, hint: "your items to theirs" },
       { href: "/coach/import", label: "Import from Airtable", icon: "📥", coachOnly: true, hint: "a client's base into HelixOS" },
+      { href: "/coach/recordings", label: "Recordings", icon: "🎥", coachOnly: true, hint: "from Fathom" },
       { href: "/integrations", label: "Integrations", icon: "🔌", coachOnly: true },
       { href: "/whats-new", label: "What's new", icon: "✨", hint: "latest changes" },
       { href: "/connect", label: "Connect to Claude", icon: "🔌", hint: "HelixOS from a chat" },
@@ -80,6 +83,7 @@ export const NAV_GROUPS: NavGroup[] = [
 export const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
-export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean };
-export const navVisible = (n: NavItem, m: NavMember): boolean => (!n.coachOnly || m.role === "coach") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled);
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean };
+export const navVisible = (n: NavItem, m: NavMember): boolean =>
+  (!n.coachOnly || m.role === "coach") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 

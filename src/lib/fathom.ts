@@ -1,13 +1,17 @@
 /**
- * Fathom, with the client's own user-level API key. Two calls only: list recordings (titles and dates, never transcripts) and
- * read one transcript by the recording id a human chose. There is no sync, no batch and no background job in this file, and
- * nothing here may read a transcript the client did not point at.
- * Endpoints per Fathom's public API: GET /external/v1/meetings (X-Api-Key), GET /external/v1/recordings/{id}/transcript.
+ * Fathom. Two uses, two keys:
+ *  - a member's own key (fathom_connections): list their recordings (titles and dates, never transcripts) and read one transcript
+ *    by the recording id a human chose, for the testimonial harvest. No sync, no batch and no background job for that key.
+ *  - the workspace's key, the coach's (fathom_workspace_connections, Recordings R1): list meetings with their summaries and action
+ *    items since a date, register and remove the webhook Fathom calls, and read one transcript when a member asks for it.
+ * Endpoints per Fathom's public API: GET /external/v1/meetings (X-Api-Key), GET /external/v1/recordings/{id}/transcript,
+ * POST and DELETE /external/v1/webhooks.
  */
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open } from "@/lib/crypto";
 import type { TranscriptEntry } from "@/lib/engine/fathom";
+import type { RawMeeting } from "@/lib/engine/recordings";
 
 const DEFAULT_BASE = "https://api.fathom.ai";
 /** Development and smoke tests point at a mock. Never honoured in production. */
@@ -35,11 +39,11 @@ export function explainFathom(status: number | undefined, message: string): stri
   return `Fathom returned an error${status ? ` (${status})` : ""}. Try again in a minute.`;
 }
 
-async function call<T>(key: string, path: string): Promise<FathomResult<T>> {
+async function call<T>(key: string, path: string, init: { method?: "GET" | "POST" | "DELETE"; body?: unknown } = {}): Promise<FathomResult<T>> {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 20000);
-    const res = await fetch(`${fathomBase()}${path}`, { headers: { "X-Api-Key": key, Accept: "application/json" }, signal: ctrl.signal, cache: "no-store" });
+    const res = await fetch(`${fathomBase()}${path}`, { method: init.method ?? "GET", headers: { "X-Api-Key": key, Accept: "application/json", ...(init.body !== undefined ? { "content-type": "application/json" } : {}) }, body: init.body !== undefined ? JSON.stringify(init.body) : undefined, signal: ctrl.signal, cache: "no-store" });
     clearTimeout(t);
     const text = await res.text();
     let json: unknown = null;
@@ -53,14 +57,14 @@ async function call<T>(key: string, path: string): Promise<FathomResult<T>> {
       console.error("[fathom] upstream error", JSON.stringify({ status: res.status, body: msg.slice(0, 500) }));
       return { ok: false, error: explainFathom(res.status, msg), status: res.status };
     }
-    return { ok: true, data: json as T };
+    return { ok: true, data: (json ?? {}) as T };
   } catch (e) {
     console.error("[fathom] request failed", JSON.stringify({ message: (e instanceof Error ? e.message : String(e)).slice(0, 300) }));
     return { ok: false, error: explainFathom(undefined, e instanceof Error ? e.message : String(e)) };
   }
 }
 
-type RawMeeting = { recording_id?: number | string; title?: string; meeting_title?: string; share_url?: string; url?: string; created_at?: string; recording_start_time?: string; calendar_invitees?: { name?: string; email?: string }[] };
+
 type RawEntry = { speaker?: { display_name?: string; matched_calendar_invitee_email?: string | null }; text?: string; timestamp?: string | number };
 
 /** Titles, dates and who was on the call. No transcript is requested here, ever. */
@@ -89,6 +93,43 @@ export async function readTranscript(userId: string, key: string, recordingId: s
 export async function validateFathomKey(userId: string, key: string): Promise<FathomResult<number>> {
   const r = await listRecordings(userId, key);
   return r.ok ? { ok: true, data: r.data.recordings.length } : r;
+}
+
+/**
+ * Meetings with their summaries and action items (Recordings R1), one page at a time, newest first, optionally only those created
+ * after a moment. Transcripts are never asked for here: include_transcript is never sent, which the mock checks.
+ */
+export async function listMeetingsFull(paceKey: string, key: string, opts: { createdAfter?: string | null; cursor?: string | null } = {}): Promise<FathomResult<{ meetings: RawMeeting[]; nextCursor: string | null }>> {
+  await pace(paceKey);
+  const q = new URLSearchParams({ include_summary: "true", include_action_items: "true" });
+  if (opts.createdAfter) q.set("created_after", opts.createdAfter);
+  if (opts.cursor) q.set("cursor", opts.cursor);
+  const r = await call<{ items?: RawMeeting[]; next_cursor?: string | null }>(key, `/external/v1/meetings?${q.toString()}`);
+  if (!r.ok) return r;
+  return { ok: true, data: { meetings: r.data.items ?? [], nextCursor: r.data.next_cursor ?? null } };
+}
+
+/**
+ * Registers the webhook Fathom will call for the coach's own recordings, with the summary and action items in the payload and
+ * never the transcript. Fathom answers with the webhook's id and its signing secret, which the caller seals.
+ */
+export async function createWebhook(paceKey: string, key: string, destinationUrl: string): Promise<FathomResult<{ id: string; secret: string }>> {
+  await pace(paceKey);
+  const r = await call<{ id?: string | number; secret?: string }>(key, "/external/v1/webhooks", { method: "POST", body: { destination_url: destinationUrl, triggered_for: ["my_recordings"], include_summary: true, include_action_items: true, include_transcript: false, include_crm_matches: false } });
+  if (!r.ok) return r;
+  const id = String(r.data.id ?? "").trim();
+  const secret = String(r.data.secret ?? "").trim();
+  if (!id || !secret) return { ok: false, error: "Fathom created the webhook but didn't return its id and secret. Remove it in Fathom and try again." };
+  return { ok: true, data: { id, secret } };
+}
+
+export async function deleteWebhook(paceKey: string, key: string, webhookId: string): Promise<FathomResult<null>> {
+  if (!/^[\w-]+$/.test(webhookId)) return { ok: false, error: "That webhook id isn't valid." };
+  await pace(paceKey);
+  const r = await call<unknown>(key, `/external/v1/webhooks/${encodeURIComponent(webhookId)}`, { method: "DELETE" });
+  // Already gone counts as removed.
+  if (!r.ok && r.status !== 404) return r;
+  return { ok: true, data: null };
 }
 
 export async function fathomConnectionFor(workspaceId: string, userId: string) {

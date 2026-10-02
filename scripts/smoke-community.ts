@@ -22,6 +22,15 @@ const blobPort = 4050;
 const PROOF_TOKEN = process.env.PROOF_BLOB_READ_WRITE_TOKEN ?? "vercel_blob_rw_PROOFSTORE_testsecret";
 const LOC = "loc_community";
 
+/** A fill checked after typing (the walk conventions): one that lands mid-hydration inserts at the caret instead of replacing. */
+async function fillChecked(page: Page, selector: string, value: string) {
+  for (let i = 0; i < 6; i++) {
+    await page.locator(selector).fill(value);
+    if ((await page.locator(selector).inputValue()) === value) return;
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`could not set ${selector}`);
+}
 async function submit(page: Page, selector: string) {
   await page
     .locator(selector)
@@ -212,7 +221,7 @@ async function main() {
     const nextCard = page.locator('[data-testid="community-next"]');
     if ((await nextCard.getAttribute("data-week")) !== next || (await page.locator('[data-testid="community-next-title"]').innerText()).trim() !== mondayTitle(next)) throw new Error(`next Monday is ${next}, titled with its week`);
     const WEEK_TEXT = `This week's own words [walk ${Date.now()}]`;
-    await page.locator('[data-testid="community-next-body"]').fill(WEEK_TEXT);
+    await fillChecked(page, '[data-testid="community-next-body"]', WEEK_TEXT);
     await submit(page, '[data-testid="community-next-save"]');
     const nextRow = () => db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, next)) });
     if ((await nextRow())?.body !== WEEK_TEXT || (await nextRow())?.status !== "scheduled") throw new Error("that Monday keeps its own text");
@@ -487,7 +496,7 @@ async function main() {
     const monthCard = page.locator('[data-testid="community-month-next"]');
     if ((await monthCard.getAttribute("data-month")) !== nextM || (await page.locator('[data-testid="community-month-next-title"]').innerText()).trim() !== monthTitle(nextM)) throw new Error(`next month is ${nextM}, titled with its month`);
     const MONTH_TEXT = `That month's own words [walk ${Date.now()}]`;
-    await page.locator('[data-testid="community-month-next-body"]').fill(MONTH_TEXT);
+    await fillChecked(page, '[data-testid="community-month-next-body"]', MONTH_TEXT);
     await submit(page, '[data-testid="community-month-next-save"]');
     const monthRow = (m: string) => db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, ws.id), eq(schema.communityPosts.kind, "month"), eq(schema.communityPosts.monthOf, m)) });
     if ((await monthRow(nextM))?.body !== MONTH_TEXT || (await monthRow(nextM))?.status !== "scheduled") throw new Error("that month keeps its own text");
@@ -502,7 +511,7 @@ async function main() {
     const byHand = page.locator('[data-testid="community-month-by-hand"]');
     if ((await byHand.getAttribute("data-month")) !== thisMonth) throw new Error("a month HelixOS didn't post offers to take its link");
     const LINK_M = "https://academy.example.com/channels/intentions/posts/cccccccccccccccccccccccc";
-    await page.locator('[data-testid="community-month-link"]').fill(LINK_M);
+    await fillChecked(page, '[data-testid="community-month-link"]', LINK_M);
     await submit(page, '[data-testid="community-month-link-save"]');
     const handMonth = (await monthRow(thisMonth))!;
     if (handMonth.status !== "posted" || handMonth.link !== LINK_M || handMonth.platformPostId !== "cccccccccccccccccccccccc" || handMonth.title !== monthTitle(thisMonth)) throw new Error(`a pasted link makes this month's row, published: ${JSON.stringify(handMonth)}`);

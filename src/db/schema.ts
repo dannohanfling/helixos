@@ -1696,6 +1696,108 @@ export const fathomConnections = sqliteTable(
 );
 export type FathomConnection = typeof fathomConnections.$inferSelect;
 
+/* ───────────────────────── Recordings (Fathom, the coach's key) ───────────────────────── */
+
+/**
+ * The workspace's own Fathom connection (Recordings R1, revs 254 to 265): the coach's key, sealed, used for every recording the
+ * workspace shows its members. The per-member key in fathom_connections stays for the testimonial harvest and is never used here.
+ * `enabledAt` is the switch-on date: title matching applies only to recordings made after it; everything earlier is a draft.
+ * The webhook Fathom calls is registered from here; its signing secret is sealed because verifying a signature needs it back.
+ */
+export const fathomWorkspaceConnections = sqliteTable(
+  "fathom_workspace_connections",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    keyEncrypted: text("key_encrypted").notNull(),
+    last4: text("last4").notNull().default(""),
+    lastValidatedAt: text("last_validated_at"),
+    lastError: text("last_error"),
+    enabledAt: text("enabled_at").notNull(),
+    webhookId: text("webhook_id"),
+    webhookSecretEncrypted: text("webhook_secret_encrypted"),
+    webhookRegisteredAt: text("webhook_registered_at"),
+    lastSyncAt: text("last_sync_at"),
+    lastSyncNote: text("last_sync_note"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("fathom_workspace_connections_ws").on(t.workspaceId)],
+);
+export type FathomWorkspaceConnection = typeof fathomWorkspaceConnections.$inferSelect;
+
+export const RECORDING_SOURCES = ["webhook", "sync", "backfill"] as const;
+export const TITLE_MATCHES = ["exact", "close", "none"] as const;
+/** Who a published recording is for: every Accelerator and Academy member (and above), Academy members (and above), or the named members. */
+export const RECORDING_AUDIENCES = ["accelerator_academy", "academy", "members"] as const;
+export type RecordingAudience = (typeof RECORDING_AUDIENCES)[number];
+/** An action item as Fathom delivered it, kept whole: the text, its assignee as Fathom guessed them, and where in the call it was said. */
+export type RecordingActionItem = { description: string; completed: boolean; timestamp: string | null; playbackUrl: string | null; assigneeName: string | null; assigneeEmail: string | null };
+export type RecordingInvitee = { name: string | null; email: string | null };
+export type RecordingTranscriptEntry = { speaker: string; email: string | null; text: string; timestamp: string };
+
+/**
+ * One coaching call from Fathom, the coach's, shown to an audience once published. The summary and action items arrive with the
+ * meeting; the transcript is fetched only on request (View transcript) and then kept, so it is read from Fathom once.
+ */
+export const recordings = sqliteTable(
+  "recordings",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    fathomRecordingId: text("fathom_recording_id").notNull(),
+    title: text("title").notNull(),
+    /** The meeting's own address (fathom.video/calls/<id>) and the share link; Watch in Fathom opens the share link when there is one. */
+    url: text("url").notNull().default(""),
+    shareUrl: text("share_url"),
+    startedAt: text("started_at"),
+    endedAt: text("ended_at"),
+    summary: text("summary"),
+    actionItems: text("action_items", { mode: "json" }).$type<RecordingActionItem[]>().notNull().default([]),
+    invitees: text("invitees", { mode: "json" }).$type<RecordingInvitee[]>().notNull().default([]),
+    source: text("source", { enum: RECORDING_SOURCES }).notNull(),
+    titleMatch: text("title_match", { enum: TITLE_MATCHES }).notNull().default("none"),
+    /** A plain note for the coach beside a draft: "title didn't match", or why a recording stayed a draft. */
+    note: text("note"),
+    audience: text("audience", { enum: RECORDING_AUDIENCES }),
+    audienceUserIds: text("audience_user_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    status: text("status", { enum: ["draft", "published"] }).notNull().default("draft"),
+    publishedAt: text("published_at"),
+    publishedBy: text("published_by"),
+    transcript: text("transcript", { mode: "json" }).$type<RecordingTranscriptEntry[]>(),
+    transcriptFetchedAt: text("transcript_fetched_at"),
+    /** The coach's per-recording Hide transcript, for the odd sensitive call: members see no View transcript. */
+    transcriptHidden: integer("transcript_hidden", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("recordings_ws_fathom").on(t.workspaceId, t.fathomRecordingId), index("recordings_ws_status").on(t.workspaceId, t.status, t.startedAt)],
+);
+export type Recording = typeof recordings.$inferSelect;
+
+/**
+ * One action item on one member's plate: suggested when Fathom's assignee matched them (or the coach assigned it), accepted when
+ * it became their task (source fathom), dismissed when they let it go. The member's own row: exported and deleted with them.
+ */
+export const recordingSteps = sqliteTable(
+  "recording_steps",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    recordingId: text("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    /** The action item's position in the recording's list, so the row follows the item. */
+    itemIndex: integer("item_index").notNull(),
+    text: text("text").notNull(),
+    assigneeEmail: text("assignee_email"),
+    state: text("state", { enum: ["suggested", "accepted", "dismissed"] }).notNull().default("suggested"),
+    taskId: text("task_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("recording_steps_rec_user_item").on(t.recordingId, t.userId, t.itemIndex), index("recording_steps_user").on(t.userId, t.state)],
+);
+export type RecordingStep = typeof recordingSteps.$inferSelect;
+
 /** One row per AI call: who, which key, which feature, how many tokens, what it probably cost. */
 export const aiUsage = sqliteTable(
   "ai_usage",

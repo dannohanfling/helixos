@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 60,
+    date: "2026-10-03",
+    title: "Your coaching calls, inside HelixOS",
+    lines: [
+      "A new Recordings page lists the calls your coach has published for you: the title, the date, the program, Watch in Fathom, the summary and the action items. It appears in your menu once the first one is published for you. Each action item has one tap, Make this my task, which puts it on today's list as your own task; nothing is added without your tap.",
+      "View transcript fetches the words once from Fathom and keeps them, so everyone who can see the call reads it from HelixOS after that.",
+      "For coaches: connect your own Fathom key on Integrations and register the webhook. A call titled Evolve Omega Accelerator or Evolve Omega Academy publishes itself to its program; every other call waits as a draft on Recordings, where you publish it to a program or to named members with one tap, hide a transcript, or unpublish.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 59,
     date: "2026-10-03",
     title: "Connecting GoHighLevel is one button, and nothing gets cut off",

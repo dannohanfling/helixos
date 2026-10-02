@@ -39,10 +39,18 @@ export type TaskOrigin = { source: string; date: string | null };
 export async function taskOrigins(tasks: { id: string; source: string; sourceRef: string | null }[]): Promise<Map<string, TaskOrigin>> {
   const out = new Map<string, TaskOrigin>();
   const fromCalls = tasks.filter((t) => t.source === TASK_SOURCES.coachCall && t.sourceRef);
-  if (!fromCalls.length) return out;
-  const notes = await db.query.coachNotes.findMany({ where: inArray(schema.coachNotes.id, [...new Set(fromCalls.map((t) => t.sourceRef!))]) });
-  const dateOf = new Map(notes.map((n) => [n.id, n.date]));
-  for (const t of fromCalls) out.set(t.id, { source: t.source, date: dateOf.get(t.sourceRef!) ?? null });
+  if (fromCalls.length) {
+    const notes = await db.query.coachNotes.findMany({ where: inArray(schema.coachNotes.id, [...new Set(fromCalls.map((t) => t.sourceRef!))]) });
+    const dateOf = new Map(notes.map((n) => [n.id, n.date]));
+    for (const t of fromCalls) out.set(t.id, { source: t.source, date: dateOf.get(t.sourceRef!) ?? null });
+  }
+  // A step from a recorded call (Recordings R1): the recording's day, when Fathom gave one.
+  const fromRecordings = tasks.filter((t) => t.source === TASK_SOURCES.fathom && t.sourceRef);
+  if (fromRecordings.length) {
+    const recs = await db.query.recordings.findMany({ where: inArray(schema.recordings.id, [...new Set(fromRecordings.map((t) => t.sourceRef!))]) });
+    const dayOf = new Map(recs.map((r) => [r.id, r.startedAt ? r.startedAt.slice(0, 10) : null]));
+    for (const t of fromRecordings) out.set(t.id, { source: t.source, date: dayOf.get(t.sourceRef!) ?? null });
+  }
   return out;
 }
 

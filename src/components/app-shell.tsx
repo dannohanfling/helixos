@@ -14,7 +14,7 @@ import { SwitchBanner } from "@/components/switch-banner";
 import { ChatWidget } from "@/components/chat-widget";
 import type { ChatWidgetProps } from "@/lib/chat";
 
-export function AppShell({ viewer, chat = null, points, streak, badges = {}, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; children: ReactNode }) {
+export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; children: ReactNode }) {
   const tier = tierProgress(points);
   return (
     <div className="min-h-screen md:flex">
@@ -28,7 +28,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, chi
           </div>
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} badges={badges} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} badges={badges} />
         </div>
         <div className="mt-3 space-y-3 border-t px-5 pt-3">
           <div className="rounded-xl bg-surface-2 p-3 text-xs">

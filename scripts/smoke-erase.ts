@@ -87,7 +87,11 @@ async function main() {
     keys.push(attachKey, displayKey, deckKey, orphanKey, magnetKey);
     await db.insert(schema.files).values({ key: magnetKey, workspaceId: ws, contentType: "application/pdf", url: urls.magnet, size: 20, isPublic: true });
 
+    // A recording step hangs off a workspace recording (Recordings R1): one coach's recording for the step to point at.
+    const recordingId = newId();
+    await db.insert(schema.recordings).values({ id: recordingId, workspaceId: ws, fathomRecordingId: `erase-${who}-${RUN}`, title: `Erase recording ${who} ${RUN}`, source: "sync" });
     const special: Record<string, Record<string, unknown>> = {
+      recording_steps: { recordingId },
       pathway_progress: { libraryTaskKey: taskKey },
       lesson_progress: { lessonId },
       certification_submissions: { deliverableId },

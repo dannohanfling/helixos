@@ -18,10 +18,11 @@ import { replayCandidates } from "@/lib/queries/contact-sync";
 import { ConfirmButton } from "@/components/confirm-button";
 import { DISCONNECT_MESSAGE } from "@/lib/engine/ghl-scopes";
 import { SubmitButton } from "@/components/submit-button";
+import { FathomWorkspaceCard } from "@/components/fathom-workspace-card";
 
 export const metadata = { title: "Integrations" };
 
-export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ replay?: string }> }) {
+export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ replay?: string; fathom?: string; synced?: string }> }) {
   const v = await requireCoach();
   const [rows, events, members, conns] = await Promise.all([
     db.query.integrations.findMany({ where: eq(schema.integrations.workspaceId, v.workspace.id) }),
@@ -32,7 +33,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const connOf = new Map(conns.map((c) => [c.userId, c]));
   const chatSent = await sentToday(v.workspace.id);
   const candidates = new Map(await Promise.all(members.map(async (m) => [m.userId, await replayCandidates(v.workspace.id, m.userId)] as const)));
-  const { replay: replayRaw } = await searchParams;
+  const { replay: replayRaw, fathom: fathomNotice, synced } = await searchParams;
   type Replay = { userId: string; mode: string; sent: number; failed: number; notes: string[] };
   let replay: Replay | null = null;
   try {
@@ -140,6 +141,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             </Card>
           );
         })}
+        <FathomWorkspaceCard v={v} notice={fathomNotice} synced={synced} />
       </div>
 
       <Card className="mt-4" title="🚀 Client sub-accounts (Social Planner)" action={<span className="flex items-center gap-3 text-xs text-ink-3"><span>{conns.filter((c) => c.accounts.length && !c.lastError).length}/{members.length} connected</span><Link href="/integrations/planner-audit" className="underline" data-testid="planner-audit-link">Planner audit</Link></span>}>

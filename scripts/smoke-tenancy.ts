@@ -59,6 +59,7 @@ const ROUTES: Record<string, Route> = {
   "/magnets/[id]": { kind: "owned", table: "leadMagnets" },
   "/offers/[id]": { kind: "owned", table: "offers" },
   "/proof/[id]": { kind: "owned", table: "proofs" },
+  "/recordings/[id]": { kind: "owned", table: "recordings" },
   "/rewards/book/[claimId]": { kind: "owned", table: "rewardClaims" },
   "/socrates/scripts/[id]": { kind: "owned", table: "socratesScripts" },
   "/socrates/scripts/[id]/sheet": { kind: "owned", table: "socratesScripts" },
@@ -71,6 +72,7 @@ const ROUTES: Record<string, Route> = {
   "/body/training/[exerciseId]": { kind: "owned", table: "bodyExercises" },
   "/api/proofs/attachments/[id]": { kind: "owned", table: "proofAttachments" },
   "/api/webinars/[id]/deck": { kind: "owned", table: "webinars" },
+  "/api/webhooks/fathom/[connectionId]": { kind: "public", why: "Fathom's signed delivery for one workspace connection: POST only, verified against the connection's sealed secret, 401 unsigned; a GET answers 405 for every id" },
   "/files/[...key]": { kind: "public", why: "the public object store; a private proof file is served by /api/proofs/attachments/[id]" },
   "/g/[slug]": { kind: "public", why: "a lead magnet's public tracked link, read by strangers" },
   "/m/[slug]": { kind: "public", why: "a lead magnet's public hosted page, read by strangers" },
@@ -190,7 +192,17 @@ async function main() {
     }
     return h;
   };
-  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth()]);
+  // A recording published to B alone (Recordings R1): a workspace row whose audience names B, so to A it must read as missing.
+  const ensureRecording = async () => {
+    let r = (await db.query.recordings.findMany({ where: eq(schema.recordings.workspaceId, ws) })).find((x) => x.status === "published" && x.audience === "members" && x.audienceUserIds.includes(B.id) && !x.audienceUserIds.includes(A.id));
+    if (!r) {
+      const id = newId();
+      await db.insert(schema.recordings).values({ id, workspaceId: ws, fathomRecordingId: `tenancy-${id.slice(0, 8)}`, title: "B's Private One-to-one", url: "https://fathom.video/calls/1", summary: "B's private launch plan.", source: "sync", audience: "members", audienceUserIds: [B.id], status: "published", publishedAt: new Date().toISOString(), publishedBy: "tenancy" });
+      r = (await db.query.recordings.findFirst({ where: eq(schema.recordings.id, id) }))!;
+    }
+    return r;
+  };
+  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording()]);
 
   // One B-owned id per table the routes name, so the walk can substitute B's id into A's request.
   const first = async <T>(q: Promise<T | undefined>): Promise<T> => {
@@ -217,6 +229,7 @@ async function main() {
     bodySets: (await first(db.query.bodySets.findFirst({ where: eq(schema.bodySets.userId, B.id) }))).id,
     bodyHabits: (await ensureHabit()).id,
     bodyHealth: (await ensureHealth()).id,
+    recordings: (await ensureRecording()).id,
   };
   // B's private words, per table, that must never appear in a response to A.
   const bWord: Record<string, string> = {
@@ -225,6 +238,7 @@ async function main() {
     offers: (await first(db.query.offers.findFirst({ where: eq(schema.offers.userId, B.id) }))).name,
     bodyExercises: (await ensureExercise()).name,
     bodyHealth: (await ensureHealth()).title,
+    recordings: (await ensureRecording()).title,
   };
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });

@@ -10,6 +10,7 @@ import { unseenCount } from "@/lib/engine/whats-new";
 import { APP_VERSION } from "@/lib/version";
 import { PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { hasVisibleRecordings } from "@/lib/recordings";
 
 export const metadata = { title: "More" };
 
@@ -17,11 +18,12 @@ export default async function MorePage() {
   const v = await requireViewer();
   const due = (await intentionsDueFor(v.workspace.id, v.user.id, v.today)).length;
   const unseen = unseenCount(WHATS_NEW, v.role, v.membership.whatsNewSeen);
+  const recordingsEnabled = v.role === "client" && (await hasVisibleRecordings(v.workspace.id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role }));
   return (
     <>
       <PageHeader title="Everything" />
       <div className="space-y-4">
-        {NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled })) }))
+        {NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length)
           .map((g) => (

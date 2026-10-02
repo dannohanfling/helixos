@@ -99,6 +99,8 @@ export const MEMBER_TABLES = {
   connected_apps: schema.connectedApps,
   oauth_codes: schema.oauthCodes,
   mcp_calls: schema.mcpCalls,
+  // Recordings R1: a step from a recorded call on this member's plate (suggested, accepted as their task, or dismissed).
+  recording_steps: schema.recordingSteps,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 
@@ -141,6 +143,9 @@ export const WORKSPACE_TABLES = {
   files: schema.files,
   community_settings: schema.communitySettings,
   community_posts: schema.communityPosts,
+  // Recordings R1: the coach's calls, shown to an audience, and the workspace's Fathom connection (the coach's key).
+  recordings: schema.recordings,
+  fathom_workspace_connections: schema.fathomWorkspaceConnections,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */
@@ -168,6 +173,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash"]);
+export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash", "webhookSecretEncrypted"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);
