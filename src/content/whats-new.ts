@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 66,
+    date: "2026-10-03",
+    title: "HumanOS: supplements, vitamins and prescriptions, with refills",
+    lines: [
+      "Practices has a Supplements & meds page: what you take, the dose, how often and with or without food, and how many you have. It says when you'll run out, and for a prescription when the refill opens (\"12 days before you run out\", or once a share is used), how many repeats are left, and when the script expires.",
+      "Take chips sit on Today like your habits, with a line when something needs doing. Refilled adds a fill, Filled pill boxes moves days of doses into your boxes, and Count what's left fixes the number.",
+      "It's private like your health log: your coach sees it only if you switch that on here, and an AI reads it only with its own switch. HumanOS records what you enter; it never suggests a dose or checks interactions.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 64,
     date: "2026-10-03",
     title: "HumanOS: metric or US, and how hard a habit is",

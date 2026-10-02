@@ -836,6 +836,58 @@ async function main() {
     await db.delete(schema.bodyHabits).where(eq(schema.bodyHabits.id, waterId));
     await db.update(schema.bodyHabits).set({ difficulty: null }).where(and(mine(schema.bodyHabits), eq(schema.bodyHabits.name, "Breathwork")));
     console.log("✓ measures: Los Angeles starts US; metric shows Water's 130 oz as 3.8 L, 0.5 L typed stores as 16.91 oz, weigh-ins in kg; back to US nothing moved; a hard habit marked on Practices and Today");
+    // Supplements, vitamins and prescriptions (rev 424; Joy and Tom, rev 431): a script added through the form with its expiry from
+    // 12 months, a dose taken on the page and on Today, Tom's pill boxes, a count, a refill, then the script expired and the refill refused.
+    await client.goto(`${base}/body/practices`);
+    await client.locator('[data-testid="meds-link"]').click();
+    await client.waitForURL(/\/body\/practices\/meds/);
+    const medForm = client.locator('[data-testid="med-new-form"]');
+    await fillExact(client, '[data-testid="med-new-form"] input[name="name"]', "Metformin");
+    await medForm.locator('select[name="type"]').selectOption("prescription");
+    await fillExact(client, '[data-testid="med-new-form"] input[name="timesPerDay"]', "2");
+    await fillExact(client, '[data-testid="med-new-form"] input[name="onHand"]', "60");
+    await fillExact(client, '[data-testid="med-new-form"] input[name="supplyDays"]', "30");
+    await medForm.locator('input[name="lastFilledOn"]').fill(today);
+    await medForm.locator('input[name="issuedOn"]').fill(today);
+    await medForm.locator('select[name="expiryMonths"]').selectOption("12");
+    await fillExact(client, '[data-testid="med-new-form"] input[name="repeatsLeft"]', "3");
+    await press(client, '[data-testid="med-add"]', async () => (await client.locator('[data-testid="med"][data-name="Metformin"]').count()) > 0, "Metformin added");
+    const met = (await db.query.bodyMeds.findMany({ where: mine(schema.bodyMeds) })).find((m) => m.name === "Metformin")!;
+    const { expiryFrom: expiryOf } = await import("@/lib/engine/body-meds");
+    if (met.type !== "prescription" || met.timesPerDay !== 2 || met.onHand !== 60 || met.repeatsLeft !== 3 || met.expiresOn !== expiryOf(today, 12) || met.refillDays !== 12) throw new Error(`the script saved as typed, expiring 12 months from issue: ${JSON.stringify(met)}`);
+    if (!(await client.locator('[data-testid="med"][data-name="Metformin"] [data-testid="med-lines"]').innerText()).includes("Refill opens 12 days before you run out")) throw new Error("the refill window reads in Tom's words");
+    await press(client, '[data-testid="med-today"][data-name="Metformin"] [data-testid="med-take"][data-slot="1"]', async () => (await db.query.bodyMeds.findFirst({ where: eq(schema.bodyMeds.id, met.id) }))?.onHand === 59, "dose 1 taken");
+    await client.goto(`${base}/today`);
+    const medChips = client.locator('[data-testid="today-med"][data-name="Metformin"]');
+    if ((await medChips.count()) !== 2 || (await medChips.first().getAttribute("data-taken")) !== "1") throw new Error("Today carries a Take chip per dose, the first taken");
+    await client.goto(`${base}/body/practices/meds`);
+    await press(client, '[data-testid="med"][data-name="Metformin"] [data-testid="med-boxes"]', async () => (await db.query.bodyMeds.findFirst({ where: eq(schema.bodyMeds.id, met.id) }))?.boxedUntil === addDays(today, 13), "14 days of pill boxes");
+    const boxed = (await db.query.bodyMeds.findFirst({ where: eq(schema.bodyMeds.id, met.id) }))!;
+    if (boxed.onHand !== 31 || !(await client.locator('[data-testid="med-said"]').innerText()).includes("bottle 59 → 31")) throw new Error(`28 doses leave the bottle for the boxes and the page says so: ${boxed.onHand}`);
+    await fillExact(client, '[data-testid="med"][data-name="Metformin"] [data-testid="med-count-value"]', "40");
+    await press(client, '[data-testid="med"][data-name="Metformin"] [data-testid="med-count"]', async () => (await db.query.bodyMeds.findFirst({ where: eq(schema.bodyMeds.id, met.id) }))?.onHand === 40, "counted 40");
+    await press(client, '[data-testid="med"][data-name="Metformin"] [data-testid="med-refill"]', async () => (await db.query.bodyMeds.findFirst({ where: eq(schema.bodyMeds.id, met.id) }))?.repeatsLeft === 2, "refilled");
+    if ((await db.query.bodyMeds.findFirst({ where: eq(schema.bodyMeds.id, met.id) }))?.onHand !== 100) throw new Error("a refill adds a fill's supply (30 days at 2 a day)");
+    await db.update(schema.bodyMeds).set({ expiresOn: addDays(today, -1) }).where(eq(schema.bodyMeds.id, met.id));
+    await client.goto(`${base}/body/practices/meds`);
+    if (!(await client.locator('[data-testid="med"][data-name="Metformin"] [data-tone="stop"]').innerText()).includes("2 repeats left can't be used. Ask for a new script.")) throw new Error("an expired script says its repeats can't be used");
+    await press(client, '[data-testid="med"][data-name="Metformin"] [data-testid="med-refill"]', async () => (await client.locator('[data-testid="body-error"]').count()) > 0, "refill refused");
+    if (!(await client.locator('[data-testid="body-error"]').innerText()).includes("a refill needs a new script")) throw new Error("an expired script refuses a refill in words");
+    await client.goto(`${base}/today`);
+    if (!(await client.locator('[data-testid="today-med-line"]').first().innerText()).includes("Metformin: Script expired")) throw new Error("Today carries the line that needs doing");
+    // Private: no coach sees it and no AI reads it until the member's own switches say so.
+    const { coachMeds: coachMedsOf } = await import("@/lib/queries/body");
+    const coachUserM = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+    const coachMemM = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUserM.id), eq(schema.memberships.workspaceId, mem.workspaceId)) }))!;
+    const coachWsM = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }))!;
+    const asCoachM = { user: coachUserM, workspace: coachWsM, membership: coachMemM, role: "coach" as const, tz: coachWsM.timezone, today, hour: 12, actor: coachUserM, switchedInto: null };
+    if ((await coachMedsOf(asCoachM, maya.id, today)) !== null) throw new Error("the coach reads no meds while the member's switch is off");
+    const { allTools: allToolsM } = await import("@/lib/mcp/registry");
+    await import("@/lib/mcp/tools/index");
+    const medsTool = allToolsM().find((t) => t.name === "body_meds")!;
+    const refusedMeds = await medsTool.handler({ ...asCoachM, user: maya, membership: mem, role: "client" as const, actor: maya }, {}).then(() => "read", (e: Error) => e.message);
+    if (!/switch/i.test(refusedMeds)) throw new Error(`no AI reads the meds without the switches: ${refusedMeds}`);
+    console.log("✓ supplements & meds: a script added with its 12-month expiry; a dose taken on the page and shown on Today; 14 days of pill boxes 59 → 31; counted 40; refilled to 100 with 2 repeats left; expired, it says so and refuses a refill; private to coach and AI");
     // Sleep: last night, then an earlier night, then last night logged again replaces it.
     await client.goto(`${base}/body/sleep`);
     await client.locator('[data-testid="sleep-form"]').waitFor({ timeout: 30000 });
@@ -1391,7 +1443,7 @@ async function main() {
     {
       const phone = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
       await login(phone, maya.email);
-      for (const path of ["/body", "/body/foods", "/body/foods/find", "/body/pantry", "/body/shopping", "/body/training", "/body/training/routines", "/body/weight", "/body/week", "/body/sleep", "/body/practices", "/body/insights", "/body/settings"]) {
+      for (const path of ["/body", "/body/foods", "/body/foods/find", "/body/pantry", "/body/shopping", "/body/training", "/body/training/routines", "/body/weight", "/body/week", "/body/sleep", "/body/practices", "/body/practices/meds", "/body/insights", "/body/settings"]) {
         await phone.goto(`${base}${path}`);
         await phone.locator("main").waitFor({ timeout: 30000 });
         // A chart's tick labels (dates under the bars, main's shared chart) are not a member's own words; everything else wraps.

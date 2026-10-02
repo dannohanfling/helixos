@@ -20,6 +20,7 @@ import { readPlate, summariseWeek } from "@/lib/body-ai";
 import { isDayFlag } from "@/lib/engine/body-flags";
 import { weekNumbers } from "@/lib/engine/body-week";
 import { habitShown, isMeasures, measuresFromZone, storedFromShown, unitsFor, type Measures } from "@/lib/engine/body-measures";
+import { MED_TYPES, WITH_FOOD, expiryFrom, fillBoxes, refill, takesFromBottle, type MedType, type WithFood } from "@/lib/engine/body-meds";
 import { checkinNote, checkinWeekOk, copyName, dayTypeTemplate, isTemplateKind, mealTemplate, routineTemplate, sameName, templateName, type TemplatePayload } from "@/lib/engine/body-templates";
 import { bodyWeek } from "@/lib/queries/body";
 import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
@@ -36,7 +37,7 @@ import { shoppingView } from "@/lib/queries/body";
 import { disconnectWhoop, syncWhoop } from "@/lib/body-whoop";
 import { WhoopError, whoopProblem } from "@/lib/whoop";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
-import { nowIso, startOfWeek } from "@/lib/dates";
+import { addDays, daysBetween, nowIso, startOfWeek, weekday } from "@/lib/dates";
 import { bodyAccess, bodySettingsFor, groupReadings } from "@/lib/queries/body";
 import { logSync } from "@/lib/integrations";
 
@@ -918,6 +919,8 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
+    db.delete(schema.bodyMedLogs).where(and(eq(schema.bodyMedLogs.workspaceId, workspaceId), eq(schema.bodyMedLogs.userId, userId))),
+    db.delete(schema.bodyMeds).where(and(eq(schema.bodyMeds.workspaceId, workspaceId), eq(schema.bodyMeds.userId, userId))),
     db.delete(schema.bodyTemplateSends).where(and(eq(schema.bodyTemplateSends.workspaceId, workspaceId), eq(schema.bodyTemplateSends.userId, userId))),
     db.delete(schema.bodyCheckins).where(and(eq(schema.bodyCheckins.workspaceId, workspaceId), eq(schema.bodyCheckins.userId, userId))),
     db.delete(schema.bodyActivities).where(and(eq(schema.bodyActivities.workspaceId, workspaceId), eq(schema.bodyActivities.userId, userId))),
@@ -1036,6 +1039,152 @@ export async function archiveHabitAction(formData: FormData): Promise<void> {
   await db.update(schema.bodyHabits).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyHabits.id, str(formData, "id")), and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId))));
   refresh();
   redirect(PRACTICES);
+}
+
+/* ───────── Supplements, vitamins and prescriptions (rev 424; Joy and Tom, rev 431) ───────── */
+
+const MEDS = "/body/practices/meds";
+const ownMed = (workspaceId: string, userId: string, id: string) => and(eq(schema.bodyMeds.id, id), and(eq(schema.bodyMeds.workspaceId, workspaceId), eq(schema.bodyMeds.userId, userId)));
+const optInt = (f: FormData, k: string, lo: number, hi: number): number | null => {
+  const n = optNum(f, k);
+  return n == null ? null : Math.min(hi, Math.max(lo, Math.round(n)));
+};
+const optDate = (f: FormData, k: string): string | null => (DATE.test(str(f, k)) ? str(f, k) : null);
+
+/** Add or change one item: what it is, when it's taken, the supply, and for a script its dates, repeats and refill rule. */
+export async function saveMedAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const id = str(formData, "id");
+  const name = str(formData, "name").slice(0, 80);
+  if (!name) back(MEDS, "Give it a name.");
+  const type = (MED_TYPES as readonly string[]).includes(str(formData, "type")) ? (str(formData, "type") as MedType) : "supplement";
+  const withFood = (WITH_FOOD as readonly string[]).includes(str(formData, "withFood")) ? (str(formData, "withFood") as WithFood) : null;
+  const issuedOn = optDate(formData, "issuedOn");
+  const months = optInt(formData, "expiryMonths", 1, 24);
+  // An expiry typed wins; else 6 or 12 months from the issue date when picked (Joy).
+  const expiresOn = optDate(formData, "expiresOn") ?? (issuedOn && months ? expiryFrom(issuedOn, months) : null);
+  const scriptKind: "paper" | "electronic" | null = str(formData, "scriptKind") === "paper" ? "paper" : str(formData, "scriptKind") === "electronic" ? "electronic" : null;
+  const values = {
+    name,
+    type,
+    dose: opt(formData, "dose")?.slice(0, 60) ?? null,
+    howTaken: opt(formData, "howTaken")?.slice(0, 80) ?? null,
+    timesPerDay: optInt(formData, "timesPerDay", 0, 12) ?? 1,
+    days: daysFrom([0, 1, 2, 3, 4, 5, 6].filter((d) => formData.get(`d${d}`) === "1" || formData.get(`d${d}`) === "on")),
+    withFood,
+    note: opt(formData, "note")?.slice(0, 200) ?? null,
+    perDose: Math.max(0.25, Math.min(100, optNum(formData, "perDose") ?? 1)),
+    unitWord: opt(formData, "unitWord")?.slice(0, 20) ?? null,
+    onHand: (() => {
+      const n = optNum(formData, "onHand");
+      return n == null ? null : Math.max(0, Math.min(100000, n));
+    })(),
+    supplyDays: optInt(formData, "supplyDays", 1, 400),
+    repeatsLeft: type === "prescription" ? optInt(formData, "repeatsLeft", 0, 99) : null,
+    lastFilledOn: optDate(formData, "lastFilledOn"),
+    issuedOn: type === "prescription" ? issuedOn : null,
+    expiresOn: type === "prescription" ? expiresOn : null,
+    scriptKind: type === "prescription" ? scriptKind : null,
+    refillRule: str(formData, "refillRule") === "share_used" ? ("share_used" as const) : ("before_runout" as const),
+    refillDays: optInt(formData, "refillDays", 0, 60) ?? 12,
+    refillShare: optInt(formData, "refillShare", 1, 100) ?? 75,
+    remindDays: optInt(formData, "remindDays", 0, 60) ?? 5,
+    remindOn: str(formData, "remindOn") === "refill_open" ? ("refill_open" as const) : ("runout" as const),
+    pharmacy: type === "prescription" ? opt(formData, "pharmacy")?.slice(0, 80) ?? null : null,
+    prescriber: type === "prescription" ? opt(formData, "prescriber")?.slice(0, 80) ?? null : null,
+  };
+  if (id) await db.update(schema.bodyMeds).set(values).where(ownMed(workspaceId, userId, id));
+  else {
+    const have = await db.query.bodyMeds.findMany({ columns: { name: true, archivedAt: true }, where: and(eq(schema.bodyMeds.workspaceId, workspaceId), eq(schema.bodyMeds.userId, userId)) });
+    if (have.some((m) => !m.archivedAt && m.name.toLowerCase() === name.toLowerCase())) back(MEDS, `${name} is already on your list.`);
+    await db.insert(schema.bodyMeds).values({ id: newId(), workspaceId, userId, ...values });
+  }
+  refresh();
+  redirect(MEDS);
+}
+
+/** Archive: off the list and Today; the record and its taken days stay for the export. */
+export async function archiveMedAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.update(schema.bodyMeds).set({ archivedAt: nowIso() }).where(ownMed(workspaceId, userId, str(formData, "id")));
+  refresh();
+  redirect(MEDS);
+}
+
+/** Take (or un-take) one dose of the day; a dose from the bottle comes off the count, one from a filled box already did. */
+export async function takeMedAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const to = backTo(formData, MEDS);
+  const date = str(formData, "date") || v.today;
+  if (!DATE.test(date) || date > v.today) back(to, "That day isn't open yet.");
+  const med = await db.query.bodyMeds.findFirst({ where: ownMed(workspaceId, userId, str(formData, "medId")) });
+  if (!med) throw back(to, "Pick one from your list.");
+  const slot = Math.max(1, Math.min(12, Math.round(num(formData, "slot")) || 1));
+  const have = await db.query.bodyMedLogs.findFirst({ where: and(eq(schema.bodyMedLogs.medId, med.id), eq(schema.bodyMedLogs.date, date), eq(schema.bodyMedLogs.slot, slot)) });
+  const fromBottle = takesFromBottle(med, date) && med.onHand != null;
+  if (have) {
+    await db.delete(schema.bodyMedLogs).where(eq(schema.bodyMedLogs.id, have.id));
+    if (fromBottle) await db.update(schema.bodyMeds).set({ onHand: Math.round((med.onHand! + med.perDose) * 100) / 100 }).where(eq(schema.bodyMeds.id, med.id));
+  } else {
+    await db.insert(schema.bodyMedLogs).values({ id: newId(), workspaceId, userId, medId: med.id, date, slot });
+    if (fromBottle) await db.update(schema.bodyMeds).set({ onHand: Math.max(0, Math.round((med.onHand! - med.perDose) * 100) / 100) }).where(eq(schema.bodyMeds.id, med.id));
+  }
+  refresh();
+  redirect(to);
+}
+
+/** Refilled: a fill's supply (or the number typed) goes on the count, a repeat comes off; an expired script or none left refuses. */
+export async function refillMedAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const med = await db.query.bodyMeds.findFirst({ where: ownMed(workspaceId, userId, str(formData, "id")) });
+  if (!med) throw back(MEDS, "Pick one from your list.");
+  const r = refill(med, v.today, optNum(formData, "added"));
+  if (!r.ok) throw back(MEDS, r.why);
+  await db.update(schema.bodyMeds).set({ onHand: r.onHand, repeatsLeft: r.repeatsLeft, lastFilledOn: r.lastFilledOn }).where(eq(schema.bodyMeds.id, med.id));
+  refresh();
+  redirect(`${MEDS}?said=${encodeURIComponent(`${med.name}: +${r.added} on hand, now ${r.onHand}${r.repeatsLeft != null ? `; ${r.repeatsLeft} repeat${r.repeatsLeft === 1 ? "" : "s"} left` : ""}.`)}`);
+}
+
+/** Filled pill boxes (Tom): that many days of doses move from the bottle to the boxes. */
+export async function fillBoxesMedAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const med = await db.query.bodyMeds.findFirst({ where: ownMed(workspaceId, userId, str(formData, "id")) });
+  if (!med) throw back(MEDS, "Pick one from your list.");
+  const r = fillBoxes(med, num(formData, "days") || 14, v.today, { addDays, daysBetween, weekday });
+  if (!r.ok) throw back(MEDS, r.why);
+  await db.update(schema.bodyMeds).set({ onHand: r.onHand, boxedUntil: r.boxedUntil }).where(eq(schema.bodyMeds.id, med.id));
+  refresh();
+  redirect(`${MEDS}?said=${encodeURIComponent(`${med.name}: bottle ${med.onHand ?? 0} → ${r.onHand}; boxes cover to ${r.boxedUntil}.`)}`);
+}
+
+/** Count what's left: the bottle set to the number typed. */
+export async function countMedAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const med = await db.query.bodyMeds.findFirst({ where: ownMed(workspaceId, userId, str(formData, "id")) });
+  if (!med) throw back(MEDS, "Pick one from your list.");
+  const n = optNum(formData, "onHand");
+  if (n == null || n < 0) throw back(MEDS, "Type how many are left.");
+  await db.update(schema.bodyMeds).set({ onHand: Math.min(100000, n) }).where(eq(schema.bodyMeds.id, med.id));
+  refresh();
+  redirect(`${MEDS}?said=${encodeURIComponent(`${med.name}: bottle ${med.onHand ?? "—"} → ${n}.`)}`);
+}
+
+/** The area's own two switches: the coach sees it only with medsShare (and the day shared); an AI reads it only with medsAi. */
+export async function setMedsSwitchAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: R });
+  const settings = await setUp(v);
+  const which = str(formData, "which");
+  const on = str(formData, "on") === "1";
+  if (which === "share") await db.update(schema.bodySettings).set({ medsShare: on }).where(eq(schema.bodySettings.id, settings.id));
+  else if (which === "ai") await db.update(schema.bodySettings).set({ medsAi: on }).where(eq(schema.bodySettings.id, settings.id));
+  refresh();
+  redirect(MEDS);
 }
 
 /** Restore (rev 386): an archived habit comes back where it was, its logs and streak history untouched. */

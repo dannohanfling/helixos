@@ -18,9 +18,10 @@ import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
-import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayTypesFor } from "@/lib/queries/body";
+import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayTypesFor, medsView } from "@/lib/queries/body";
 import { zonesText } from "@/lib/engine/body-whoop";
 import { fmtDistanceIn, habitShown, isMeasures, storedFromShown, weightUnitWord } from "@/lib/engine/body-measures";
+import { fillBoxes, refill, takesFromBottle } from "@/lib/engine/body-meds";
 import { PRESETS } from "@/lib/engine/body-correlate";
 import { isRangeKey, rangeBounds, rateText } from "@/lib/engine/body-range";
 import { addDays } from "@/lib/dates";
@@ -849,5 +850,74 @@ defineTool({
       dayLine = `${date} now runs as ${t.name}${before ? ` (was set to ${before} by hand)` : " (was the week's pattern)"}.`;
     }
     return { text: [said.length ? `${t.name}: ${said.join("; ")}.` : "", dayLine].filter(Boolean).join("\n"), data: { dayType: t.name, bands: said, date } };
+  },
+});
+
+/* ───────── Supplements, vitamins and prescriptions (rev 424): only with the area's own AI switch on, beside HumanOS's. ───────── */
+
+async function medsReady(v: Viewer): Promise<schema.BodySettings> {
+  const settings = await ready(v);
+  if (!settings.medsAi) throw new Error("Supplements and meds are private to the member: their own switch for AI on the Supplements & meds page is off.");
+  return settings;
+}
+
+defineTool({
+  name: "body_meds",
+  scope: "body",
+  kind: "read",
+  description: "The member's supplements, vitamins and prescriptions: each with its dose, schedule, today's doses taken, the count on hand, when it runs out, when a refill opens, and for a script its repeats left and expiry. Only with the member's own switch for this area on. Records what they entered: no dose advice, no interaction checks.",
+  input: {},
+  handler: async (v): Promise<ToolResult> => {
+    await medsReady(v);
+    const { meds } = await medsView(v.workspace.id, v.user.id, v.today, v.today);
+    if (!meds.length) return { text: "Nothing on their supplements and meds list yet.", data: { meds: [] } };
+    const lines = meds.map((m) => `${m.name} (${m.type}${m.dose ? `, ${m.dose}` : ""}${m.timesPerDay ? `, ${m.timesPerDay}× a day` : ""}): ${m.due ? `${m.taken.length} of ${m.due} taken today` : "not due today"}${m.onHand != null ? `; ${m.onHand} on hand` : ""}${m.lines.length ? `; ${m.lines.map((l) => l.text).join("; ")}` : ""}.`);
+    return { text: lines.join("\n"), data: { meds: meds.map((m) => ({ name: m.name, type: m.type, dose: m.dose, timesPerDay: m.timesPerDay, takenToday: m.taken.length, dueToday: m.due, onHand: m.onHand, runsOut: m.runsOut, refillOpens: m.refillOpens, repeatsLeft: m.repeatsLeft, expiresOn: m.expiresOn, expired: m.expired })) } };
+  },
+});
+
+defineTool({
+  name: "body_log_med",
+  scope: "body",
+  kind: "write",
+  description: "On the member's supplements and meds list, by name: take today's next dose (action take), record a refill (refilled, with how many if not a fill's supply), fill pill boxes for some days (boxes, days), or set the count left (count, onHand). Says what changed. Only with the member's own switch for this area on; never gives dose advice.",
+  input: {
+    med: z.string().describe("The item's name"),
+    action: z.enum(["take", "refilled", "boxes", "count"]),
+    added: z.number().positive().optional().describe("For refilled: how many came, when not a fill's supply"),
+    days: z.number().int().min(1).max(120).optional().describe("For boxes: days of doses moved into the boxes (14 when left out)"),
+    onHand: z.number().min(0).optional().describe("For count: how many are left"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    await medsReady(v);
+    const { meds } = await medsView(v.workspace.id, v.user.id, v.today, v.today);
+    const m = byName("item", meds, String(input.med ?? ""));
+    const own = and(eq(schema.bodyMeds.id, m.id), and(eq(schema.bodyMeds.workspaceId, v.workspace.id), eq(schema.bodyMeds.userId, v.user.id)));
+    const dates = { addDays, daysBetween: (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000), weekday: (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay() };
+    if (input.action === "take") {
+      const slot = Array.from({ length: m.due }, (_, i) => i + 1).find((s) => !m.taken.includes(s));
+      if (!m.due) throw new Error(`${m.name} isn't due today.`);
+      if (!slot) return { text: `${m.name}: all ${m.due} of today's doses are already taken.`, data: { taken: m.taken.length } };
+      await db.insert(schema.bodyMedLogs).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, medId: m.id, date: v.today, slot });
+      const fromBottle = takesFromBottle(m, v.today) && m.onHand != null;
+      if (fromBottle) await db.update(schema.bodyMeds).set({ onHand: Math.max(0, Math.round((m.onHand! - m.perDose) * 100) / 100) }).where(own);
+      return { text: `${m.name}: dose ${slot} of ${m.due} taken today${fromBottle ? `; ${Math.max(0, Math.round((m.onHand! - m.perDose) * 100) / 100)} left` : ""}.`, data: { taken: slot } };
+    }
+    if (input.action === "refilled") {
+      const r = refill(m, v.today, input.added == null ? null : Number(input.added));
+      if (!r.ok) throw new Error(r.why);
+      await db.update(schema.bodyMeds).set({ onHand: r.onHand, repeatsLeft: r.repeatsLeft, lastFilledOn: r.lastFilledOn }).where(own);
+      return { text: `${m.name}: +${r.added}, now ${r.onHand} on hand (was ${m.onHand ?? 0})${r.repeatsLeft != null ? `; ${r.repeatsLeft} repeat${r.repeatsLeft === 1 ? "" : "s"} left` : ""}.`, data: { onHand: r.onHand, repeatsLeft: r.repeatsLeft } };
+    }
+    if (input.action === "boxes") {
+      const r = fillBoxes(m, input.days == null ? 14 : Number(input.days), v.today, dates);
+      if (!r.ok) throw new Error(r.why);
+      await db.update(schema.bodyMeds).set({ onHand: r.onHand, boxedUntil: r.boxedUntil }).where(own);
+      return { text: `${m.name}: bottle ${m.onHand ?? 0} → ${r.onHand}; boxes cover to ${r.boxedUntil}.`, data: { onHand: r.onHand, boxedUntil: r.boxedUntil } };
+    }
+    const n = input.onHand == null ? NaN : Number(input.onHand);
+    if (!Number.isFinite(n) || n < 0) throw new Error("Give how many are left.");
+    await db.update(schema.bodyMeds).set({ onHand: n }).where(own);
+    return { text: `${m.name}: count ${m.onHand ?? "not set"} → ${n}.`, data: { onHand: n } };
   },
 });

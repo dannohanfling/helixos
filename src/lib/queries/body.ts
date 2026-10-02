@@ -10,6 +10,7 @@ import { addDays, daysBetween, formatDate, rangeDays, startOfWeek, todayInTz } f
 import { belowPar, daysLeft, dueSoon, yieldFor } from "@/lib/engine/body-pantry";
 import { fmtHabitValue, habitsWeek, kept, dueOn, streak, weekDots, type Dot } from "@/lib/engine/body-habits";
 import { habitShown, isMeasures, measuresOf, shownValue, unitsFor, type Measures } from "@/lib/engine/body-measures";
+import { dosesOn, medLines, refillOpens, runsOut, scriptExpired, todayLine } from "@/lib/engine/body-meds";
 import { bedtimeDrift, fmtHours, isRecoveryKey, RECOVERY, sleepAverages, sleepWeek, type Night, type RecoveryKey } from "@/lib/engine/body-recovery";
 import { weekday } from "@/lib/dates";
 import { METRIC_DEFS, habitKey, isHabitKey, pairUp, verdict, type Fold, type Grain, type MetricDef, type Point } from "@/lib/engine/body-correlate";
@@ -194,11 +195,11 @@ export type BodyDayView = NonNullable<Awaited<ReturnType<typeof bodyDay>>>;
  */
 export async function todayBody(v: Viewer) {
   if (!v.membership.bodyEnabled) return null;
-  const [d, hd] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), habitsDay(v.workspace.id, v.user.id, v.today, v.today)]);
+  const [d, hd, meds] = await Promise.all([bodyDay(v.workspace.id, v.user.id, v.today, v.today), habitsDay(v.workspace.id, v.user.id, v.today, v.today), medsToday(v.workspace.id, v.user.id, v.today)]);
   if (!d) return null;
   // The one-tap chips (B7, placed by rev 201): only the habits due today, done-type ones toggle in place, measured ones open Practices.
   const habits = hd.habits.filter((h) => h.due).slice(0, 8).map((h) => ({ id: h.id, name: h.name, kind: h.kind, kept: h.kept, valueText: h.valueText, streak: h.streak, difficulty: h.difficulty }));
-  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag };
+  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag, meds };
 }
 
 /* ───────── B2, workouts (rev 182) ───────── */
@@ -1076,6 +1077,40 @@ export async function archivedHabits(workspaceId: string, userId: string) {
   const n = new Map<string, number>();
   for (const l of logs) n.set(l.habitId, (n.get(l.habitId) ?? 0) + 1);
   return rows.map((h) => ({ ...h, archivedAt: h.archivedAt!, loggedDays: n.get(h.id) ?? 0 })).sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
+}
+
+/* ───────── Supplements, vitamins and prescriptions (rev 424; Joy and Tom, rev 431) ───────── */
+
+const medDates = { addDays, daysBetween, weekday };
+/** The member's own meds (archived ones apart), each with its lines and the day's doses taken. Never reached from a coach path but `coachMeds`. */
+export async function medsView(workspaceId: string, userId: string, date: string, today: string) {
+  const [rows, logs] = await Promise.all([
+    db.query.bodyMeds.findMany({ where: and(eq(schema.bodyMeds.workspaceId, workspaceId), eq(schema.bodyMeds.userId, userId)), orderBy: asc(schema.bodyMeds.name) }),
+    db.query.bodyMedLogs.findMany({ where: and(and(eq(schema.bodyMedLogs.workspaceId, workspaceId), eq(schema.bodyMedLogs.userId, userId)), eq(schema.bodyMedLogs.date, date)) }),
+  ]);
+  const fmt = (d: string) => formatDate(d, { weekday: "short", month: "short", day: "numeric" });
+  const view = (m: schema.BodyMed) => {
+    const taken = logs.filter((l) => l.medId === m.id).map((l) => l.slot);
+    const due = dosesOn(m, weekday(date));
+    return { ...m, due, taken, lines: medLines(m, today, medDates, fmt), today: todayLine(m, today, medDates, fmt), runsOut: runsOut(m, today, medDates), refillOpens: refillOpens(m, today, medDates), expired: scriptExpired(m, today) };
+  };
+  return { meds: rows.filter((m) => !m.archivedAt).map(view), archived: rows.filter((m) => m.archivedAt) };
+}
+export type MedsView = Awaited<ReturnType<typeof medsView>>;
+
+/** Today's doses and the one line that needs doing, for the Today card: due doses not yet taken first. */
+export async function medsToday(workspaceId: string, userId: string, today: string) {
+  const v = await medsView(workspaceId, userId, today, today);
+  return v.meds.filter((m) => m.due > 0 || m.today).map((m) => ({ id: m.id, name: m.name, due: m.due, taken: m.taken, line: m.today }));
+}
+
+/** A client's meds for their coach: only while the client shares this area on its own switch, and the coach may read their day. */
+export async function coachMeds(v: Viewer, clientUserId: string, date: string) {
+  if ((await bodyAccess(v, clientUserId)) !== "coach") return null;
+  const s = await bodySettingsFor(v.workspace.id, clientUserId);
+  if (!s?.medsShare) return null;
+  const m = await medsView(v.workspace.id, clientUserId, date, date);
+  return m.meds.map((x) => ({ name: x.name, type: x.type, dose: x.dose, due: x.due, taken: x.taken.length }));
 }
 
 /* ───────── B9: coach templates and the weekly check-in ───────── */

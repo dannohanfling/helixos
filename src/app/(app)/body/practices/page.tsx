@@ -171,9 +171,14 @@ export default async function PracticesPage({ searchParams }: { searchParams: Pr
         title="Practices"
         subtitle={date === v.today ? `${keptToday} of ${due.length} kept today · ${hd.week.kept} of ${hd.week.due} this week` : `${formatDate(date, { weekday: "short", month: "short", day: "numeric" })} · ${keptToday} of ${due.length} kept`}
         action={
-          <Link href="/body/week" className="text-xs text-ink-2 hover:underline">
-            This week →
-          </Link>
+          <span className="flex flex-wrap items-center gap-3">
+            <Link href="/body/practices/meds" className="text-xs text-ink-2 hover:underline" data-testid="meds-link">
+              Supplements &amp; meds →
+            </Link>
+            <Link href="/body/week" className="text-xs text-ink-2 hover:underline">
+              This week →
+            </Link>
+          </span>
         }
       />
       {sp.error ? (

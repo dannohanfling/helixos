@@ -25,7 +25,7 @@ import { db, schema } from "@/db";
 import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
 import { todayBody } from "@/lib/queries/body";
-import { logHabitAction } from "@/lib/actions/body";
+import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { ENERGY_WORDS } from "@/lib/daily-core";
 
 export const metadata = { title: "Today" };
@@ -451,6 +451,32 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                       </Link>
                     ),
                   )}
+                </div>
+              ) : null}
+              {body.meds.length ? (
+                /* Supplements and meds (rev 424): a Take chip per dose due today, like habits, and the one line that needs doing. */
+                <div className="flex w-full flex-wrap items-center gap-1.5" data-testid="today-meds">
+                  {body.meds.flatMap((m) =>
+                    Array.from({ length: m.due }, (_, i) => i + 1).map((slot) => (
+                      <form key={`${m.id}:${slot}`} action={takeMedAction}>
+                        <input type="hidden" name="medId" value={m.id} />
+                        <input type="hidden" name="slot" value={slot} />
+                        <input type="hidden" name="back" value="/today" />
+                        <SubmitButton className={`btn btn-xs ${m.taken.includes(slot) ? "btn-humanos" : "btn-soft"}`} pendingText="…" aria-pressed={m.taken.includes(slot)} data-testid="today-med" data-name={m.name} data-taken={m.taken.includes(slot) ? "1" : "0"}>
+                          {m.taken.includes(slot) ? "✓ " : "💊 "}
+                          {m.name}
+                          {m.due > 1 ? ` ${slot}` : ""}
+                        </SubmitButton>
+                      </form>
+                    )),
+                  )}
+                  {body.meds
+                    .filter((m) => m.line)
+                    .map((m) => (
+                      <Link key={`${m.id}:line`} href="/body/practices/meds" className={`w-full text-xs hover:underline ${m.line!.tone === "stop" || m.line!.tone === "now" ? "text-danger" : "text-warn"}`} data-testid="today-med-line">
+                        {m.name}: {m.line!.text}
+                      </Link>
+                    ))}
                 </div>
               ) : null}
             </div>

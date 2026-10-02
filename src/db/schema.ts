@@ -2396,6 +2396,9 @@ export const bodySettings = sqliteTable(
     weightUnit: text("weight_unit", { enum: ["lb", "kg"] }).notNull().default("lb"),
     foodUnit: text("food_unit", { enum: ["oz", "g"] }).notNull().default("oz"),
     /** Metric or US (rev 424): what HumanOS shows and takes. Null until first read, then set from the member's time zone; the two units above follow it. */
+    /** Supplements and meds (rev 424): the coach sees them only with this on, apart from sharing the rest; an AI only with medsAi on too. */
+    medsShare: integer("meds_share", { mode: "boolean" }).notNull().default(false),
+    medsAi: integer("meds_ai", { mode: "boolean" }).notNull().default(false),
     measures: text("measures", { enum: ["metric", "us"] }),
     calFloor: real("cal_floor"),
     fatFloor: real("fat_floor"),
@@ -3053,6 +3056,65 @@ export const bodyCheckins = sqliteTable(
   (t) => [uniqueIndex("body_checkins_member_week").on(t.workspaceId, t.userId, t.monday)],
 );
 export type BodyCheckin = typeof bodyCheckins.$inferSelect;
+
+/**
+ * Supplements, vitamins and prescriptions (rev 424; Joy and Tom, rev 431): what the member takes and when, the supply on hand, and
+ * for a script its issue, expiry, repeats and refill rule. Private like the health log: never the coach unless the member shares
+ * this area on its own switch; never to an AI without its own tick. No dose advice, no interaction checks.
+ */
+export const bodyMeds = sqliteTable(
+  "body_meds",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    type: text("type", { enum: ["supplement", "vitamin", "prescription"] }).notNull().default("supplement"),
+    dose: text("dose"),
+    howTaken: text("how_taken"),
+    timesPerDay: integer("times_per_day").notNull().default(1),
+    days: text("days", { mode: "json" }).$type<number[]>().notNull().default([]),
+    withFood: text("with_food", { enum: ["with", "without", "either"] }),
+    note: text("note"),
+    perDose: real("per_dose").notNull().default(1),
+    unitWord: text("unit_word"),
+    onHand: real("on_hand"),
+    boxedUntil: text("boxed_until"),
+    supplyDays: integer("supply_days"),
+    repeatsLeft: integer("repeats_left"),
+    lastFilledOn: text("last_filled_on"),
+    issuedOn: text("issued_on"),
+    expiresOn: text("expires_on"),
+    scriptKind: text("script_kind", { enum: ["paper", "electronic"] }),
+    refillRule: text("refill_rule", { enum: ["before_runout", "share_used"] }).notNull().default("before_runout"),
+    refillDays: integer("refill_days").notNull().default(12),
+    refillShare: integer("refill_share").notNull().default(75),
+    remindDays: integer("remind_days").notNull().default(5),
+    remindOn: text("remind_on", { enum: ["runout", "refill_open"] }).notNull().default("runout"),
+    pharmacy: text("pharmacy"),
+    prescriber: text("prescriber"),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_meds_member").on(t.workspaceId, t.userId)],
+);
+export type BodyMed = typeof bodyMeds.$inferSelect;
+
+/** A dose taken: one row per med, date and dose of the day (1 to its times a day). */
+export const bodyMedLogs = sqliteTable(
+  "body_med_logs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    medId: text("med_id").notNull(),
+    date: text("date").notNull(),
+    slot: integer("slot").notNull().default(1),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_med_logs_dose").on(t.medId, t.date, t.slot), index("body_med_logs_member_date").on(t.workspaceId, t.userId, t.date)],
+);
+export type BodyMedLog = typeof bodyMedLogs.$inferSelect;
 
 /**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,
