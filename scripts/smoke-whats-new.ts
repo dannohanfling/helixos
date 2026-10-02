@@ -28,10 +28,12 @@ async function main() {
     const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
     const coach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     await db.update(schema.memberships).set({ whatsNewSeen: null }).where(eq(schema.memberships.userId, maya.id));
-    // The coach last opened the page two entries ago: one coach entry and one everyone entry are new to them.
-    // At least two entries new, and the newest coach entry among them, whatever audience the entries above it have.
+    // The coach last opened the page before the newest coach entry and the newest everyone entry, whichever is older: so both
+    // audiences are among what they haven't seen, whatever order the entries above have landed in (2 Oct: a coach entry on top
+    // with a gap below it left the everyone side empty).
     const newestCoachEntry = Math.max(...WHATS_NEW.filter((e) => e.audience === "coach").map((e) => e.n));
-    const coachSeen = Math.min(newestSeenable(WHATS_NEW, "coach") - 2, newestCoachEntry - 1);
+    const newestEveryoneEntry = Math.max(...WHATS_NEW.filter((e) => e.audience === "everyone").map((e) => e.n));
+    const coachSeen = Math.min(newestCoachEntry, newestEveryoneEntry, newestSeenable(WHATS_NEW, "coach")) - 1;
     const coachNew = WHATS_NEW.filter((e) => e.n > coachSeen).map((e) => e.n).sort();
     if (!WHATS_NEW.some((e) => e.n > coachSeen && e.audience === "coach") || !WHATS_NEW.some((e) => e.n > coachSeen && e.audience === "everyone")) throw new Error("the walk needs a coach entry and an everyone entry among what the coach hasn't seen");
     await db.update(schema.memberships).set({ whatsNewSeen: coachSeen }).where(eq(schema.memberships.userId, coach.id));

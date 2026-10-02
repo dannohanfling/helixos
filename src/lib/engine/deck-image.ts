@@ -19,8 +19,27 @@ export function deckKeyOwner(key: string): { workspaceId: string; userId: string
   return m ? { workspaceId: m[1], userId: m[2] } : null;
 }
 
-/** A screenshot or a proof image may show someone: it needs the tick and a name before it is stored. A photo or logo does not. */
+/** A screenshot or a proof image may show someone: it needs the tick and a name before it is stored. A photo, logo, graphic or diagram does not. */
 export const consentRequired = (kind: DeckImageKind): boolean => kind === "screenshot" || kind === "proof";
+
+/** The name stored when a screenshot or proof shows nobody (a logo, a chart, a screen with no one's details on it). */
+export const NO_PEOPLE = "No people in this";
+
+/**
+ * Whether the consent a kind asks for has been given: a photo, logo, graphic or diagram asks for none; a screenshot or proof
+ * takes either the tick with who is in it, or the word that nobody is in it (deck visuals brief §5).
+ */
+export function consentSatisfied(kind: DeckImageKind, tick: boolean, name: string, noPeople: boolean): boolean {
+  if (!consentRequired(kind)) return true;
+  if (noPeople) return true;
+  return tick && name.trim().length > 0;
+}
+
+/** What is stored for consent: nothing for a kind that asks none; the tick with the name, or with "No people in this", and when. */
+export function consentRecord(kind: DeckImageKind, name: string, noPeople: boolean, at: string): { consentTick: boolean; consentName: string | null; consentAt: string | null } {
+  if (!consentRequired(kind)) return { consentTick: false, consentName: null, consentAt: null };
+  return { consentTick: true, consentName: noPeople ? NO_PEOPLE : name.trim(), consentAt: at };
+}
 
 export type DeckSniffed = { mime: (typeof DECK_IMAGE_MIME)[number]; ext: string };
 

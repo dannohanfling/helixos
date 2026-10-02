@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DECK_IMAGE_MAX_BYTES, consentRequired, deckImageKey, deckImageRefusal, deckImageSniff, deckKeyOwner } from "../deck-image";
+import { DECK_IMAGE_MAX_BYTES, NO_PEOPLE, consentRecord, consentRequired, consentSatisfied, deckImageKey, deckImageRefusal, deckImageSniff, deckKeyOwner } from "../deck-image";
+import { DECK_IMAGE_KINDS } from "@/db/schema";
 
 const bytesOf = (...b: number[]) => new Uint8Array(b);
 const PNG = bytesOf(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0);
@@ -22,11 +23,30 @@ describe("deck image, the pure rules", () => {
     expect(deckKeyOwner("deck/ws1/u1/../other/x.png")).toBeNull(); // the file segment can hold no slash
   });
 
-  it("only a screenshot or a proof affirms consent; a photo or a logo does not", () => {
+  it("only a screenshot or a proof affirms consent; a photo, logo, graphic or diagram does not", () => {
     expect(consentRequired("screenshot")).toBe(true);
     expect(consentRequired("proof")).toBe(true);
     expect(consentRequired("photo")).toBe(false);
     expect(consentRequired("logo")).toBe(false);
+    expect(consentRequired("graphic")).toBe(false);
+    expect(consentRequired("diagram")).toBe(false);
+    expect(DECK_IMAGE_KINDS).toEqual(["photo", "screenshot", "proof", "logo", "graphic", "diagram"]);
+  });
+
+  it("§5: a screenshot is satisfied by the tick with a name, or by the word that no people are in it, never by the tick alone", () => {
+    expect(consentSatisfied("screenshot", true, "Dana R.", false)).toBe(true);
+    expect(consentSatisfied("screenshot", false, "", true)).toBe(true);
+    expect(consentSatisfied("screenshot", true, "  ", false)).toBe(false);
+    expect(consentSatisfied("screenshot", false, "Dana R.", false)).toBe(false);
+    expect(consentSatisfied("proof", false, "", false)).toBe(false);
+    expect(consentSatisfied("diagram", false, "", false)).toBe(true);
+    expect(consentSatisfied("graphic", false, "", false)).toBe(true);
+  });
+
+  it("§5: what is stored: nothing for a photo; the name, or No people in this, with the time, for a screenshot", () => {
+    expect(consentRecord("photo", "x", true, "2026-10-02T10:00:00.000Z")).toEqual({ consentTick: false, consentName: null, consentAt: null });
+    expect(consentRecord("screenshot", " Dana R. ", false, "2026-10-02T10:00:00.000Z")).toEqual({ consentTick: true, consentName: "Dana R.", consentAt: "2026-10-02T10:00:00.000Z" });
+    expect(consentRecord("proof", "ignored", true, "2026-10-02T10:00:00.000Z")).toEqual({ consentTick: true, consentName: NO_PEOPLE, consentAt: "2026-10-02T10:00:00.000Z" });
   });
 
   it("sniffs the four raster types by their bytes, not their name", () => {

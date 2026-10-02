@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 51,
+    date: "2026-10-02",
+    title: "Images: no people in this, graphics and diagrams, shown whole",
+    lines: [
+      "A screenshot or proof with nobody in it (a logo, a chart, a screen with no one's details) takes one tick, \"No people in this\", instead of a name. It is stored with the time, like the consent tick.",
+      "Two new kinds: Graphic / social post (a designed image) and Diagram (your own framework or mechanism). Both sit whole inside their frame on a slide, never cropped, and a graphic is never suggested for a slot, only chosen. The library shows a photo cropped to its card and everything else whole.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 50,
     date: "2026-10-02",
     title: "HumanOS: templates from your coach, and a weekly check-in you send in one tap",

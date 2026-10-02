@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { chromium, type Page } from "@playwright/test";
+import { NO_PEOPLE } from "@/lib/engine/deck-image";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const blobPort = 4050;
@@ -81,13 +82,16 @@ async function main() {
 
     // ── The library: a photo needs no consent; a screenshot does. ──
     await page.goto(`${base}/images`);
-    const addImage = async (kind: string, opts: { caption?: string; consentName?: string; consentTick?: boolean } = {}) => {
-      await page.goto(`${base}/images`);
-      await settle(page);
+    const addImage = async (kind: string, opts: { caption?: string; consentName?: string; consentTick?: boolean; noPeople?: boolean; stay?: boolean } = {}) => {
+      if (!opts.stay) {
+        await page.goto(`${base}/images`);
+        await settle(page);
+      }
       await page.locator('[data-testid="deck-image-file"]').waitFor({ state: "attached" });
-      await page.setInputFiles('[data-testid="deck-image-file"]', { name: `${kind}.png`, mimeType: "image/png", buffer: kind === "photo" ? PHOTO : kind === "screenshot" ? SHOT : LOGO });
+      await page.setInputFiles('[data-testid="deck-image-file"]', { name: `${kind}.png`, mimeType: "image/png", buffer: kind === "photo" ? PHOTO : kind === "screenshot" || kind === "diagram" ? SHOT : LOGO });
       await page.selectOption('[data-testid="deck-image-kind"]', kind);
       if (opts.caption) await page.fill('[data-testid="deck-image-caption"]', opts.caption);
+      if (opts.noPeople) await page.check('[data-testid="deck-image-no-people"]');
       if (opts.consentName) await page.fill('[data-testid="deck-image-consent-name"]', opts.consentName);
       if (opts.consentTick) await page.check('[data-testid="deck-image-consent-tick"]');
       await page.click('[data-testid="deck-image-send"]');
@@ -115,6 +119,35 @@ async function main() {
     const shots = await imagesOf("screenshot");
     if (shots.length !== 1 || !shots[0].consentTick || shots[0].consentName !== "Dana R." || !shots[0].consentAt) throw new Error(`a screenshot is kept with the tick, the name and the time: ${JSON.stringify(shots[0])}`);
     console.log("✓ a screenshot with the tick and a name is kept, consent stored with who and when");
+
+    // ── §5: a screenshot with nobody in it (a chart) takes "No people in this" instead of a name; the name and the tick are not
+    //    asked once it is ticked; it is stored as the consent name with the time. ──
+    await addImage("screenshot", { caption: "A chart", noPeople: true });
+    if (await page.locator('[data-testid="deck-image-consent-name"]').count()) throw new Error("with No people in this ticked, who's-in-it is not asked");
+    await page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/images"), { timeout: 20000 }).catch(() => {});
+    await settle(page);
+    const chart = (await imagesOf("screenshot")).find((s) => s.caption === "A chart");
+    if (!chart || !chart.consentTick || chart.consentName !== NO_PEOPLE || !chart.consentAt) throw new Error(`a screenshot with nobody in it is kept with "No people in this" and the time: ${JSON.stringify(chart)}`);
+    await page.goto(`${base}/images`);
+    await settle(page);
+    const chartCard = page.locator('[data-testid="library-image"][data-kind="screenshot"]').filter({ has: page.locator('[data-testid="library-image-caption"][value="A chart"]') });
+    if (!/No people in it, confirmed/.test(await chartCard.locator('[data-testid="library-image-consent"]').innerText())) throw new Error("the card says no people are in it, and when");
+    console.log("✓ §5: a screenshot with no people in it takes one tick instead of a name; stored as No people in this with the time, read back on its card");
+
+    // ── §5: a diagram kind exists (no consent asked); the new card appears in the list without a reload (the upload refreshes the
+    //    route after the record is written; the list is server-rendered, so there is no second source to race). Thumbnails: a
+    //    photo covers its card, everything else is shown whole. ──
+    const cardsBefore = await page.locator('[data-testid="library-image"]').count();
+    await addImage("diagram", { caption: "The three-step method", stay: true });
+    if (await page.locator('[data-testid="deck-image-consent"]').count()) throw new Error("a diagram asks for no consent");
+    await page.locator('[data-testid="library-image"][data-kind="diagram"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="library-image"]').count()) !== cardsBefore + 1) throw new Error("the diagram's card appears in the list without a reload");
+    if (page.url() !== `${base}/images`) throw new Error(`no navigation happened on Add to library: ${page.url()}`);
+    const diagrams = await imagesOf("diagram");
+    if (diagrams.length !== 1 || diagrams[0].consentTick) throw new Error(`a diagram is stored with no consent: ${JSON.stringify(diagrams[0])}`);
+    const thumbClass = async (kind: string) => (await page.locator(`[data-testid="library-image"][data-kind="${kind}"] [data-testid="library-image-thumb"]`).first().getAttribute("class")) ?? "";
+    if (!/object-cover/.test(await thumbClass("photo")) || !/object-contain/.test(await thumbClass("diagram")) || !/object-contain/.test(await thumbClass("screenshot"))) throw new Error("a photo's thumbnail covers its card; a diagram's and a screenshot's are shown whole");
+    console.log(`✓ §5: a diagram joins the library with no consent asked, its card appears with no reload (${cardsBefore}→${cardsBefore + 1}), shown whole; a photo's thumbnail covers`);
 
     // A logo, for the footer bar the webinar below turns on.
     await addImage("logo", { caption: "Wordmark" });

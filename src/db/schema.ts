@@ -1078,9 +1078,12 @@ export const webinarSections = sqliteTable(
 
 /**
  * The coach's own images for their decks: a private store (its own token, like the proof store), the database holding only
- * metadata. A screenshot or a proof image needs a recorded consent tick and name before it can be used. Reused across webinars.
+ * metadata. A screenshot or a proof image needs a recorded consent tick and name (or the word that nobody is in it) before it
+ * can be used. A graphic is a designed image (a social post, a quote card); a diagram is the coach's own drawing of a framework
+ * or mechanism; both are shown whole, never cropped, and a graphic is never suggested for a slot, only chosen. Reused across
+ * webinars.
  */
-export const DECK_IMAGE_KINDS = ["photo", "screenshot", "proof", "logo"] as const;
+export const DECK_IMAGE_KINDS = ["photo", "screenshot", "proof", "logo", "graphic", "diagram"] as const;
 export type DeckImageKind = (typeof DECK_IMAGE_KINDS)[number];
 export const deckImages = sqliteTable(
   "deck_images",
@@ -1095,7 +1098,7 @@ export const deckImages = sqliteTable(
     width: integer("width").notNull().default(0),
     height: integer("height").notNull().default(0),
     caption: text("caption"),
-    /** A screenshot or proof image affirms nobody's details are shown without consent: the tick, who ticked it, when. */
+    /** A screenshot or proof image affirms nobody's details are shown without consent: the tick, who is in it (or "No people in this"), when. */
     consentTick: integer("consent_tick", { mode: "boolean" }).notNull().default(false),
     consentName: text("consent_name"),
     consentAt: text("consent_at"),

@@ -8,7 +8,7 @@ import { DECK_IMAGE_KINDS, type DeckImageKind } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { consentRequired, deckImageRefusal, deckKeyOwner } from "@/lib/engine/deck-image";
+import { consentRecord, consentSatisfied, deckImageRefusal, deckKeyOwner } from "@/lib/engine/deck-image";
 import { redactUrls } from "@/lib/engine/storage-policy";
 import { imageDimensions } from "@/lib/proof-renditions";
 import { deleteProofObject, headProofObject, readProofObject } from "@/lib/proof-storage";
@@ -27,14 +27,14 @@ async function discard(url: string | null | undefined, why: string): Promise<voi
 export type RecordDeckImageResult = { ok: true; id: string } | { ok: false; error: string };
 const TRANSIENT = "Storage couldn't be read back just now. Nothing is saved. Try again in a minute.";
 
-type RecordInput = { key: string; kind: DeckImageKind; caption: string; consentTick: boolean; consentName: string };
+type RecordInput = { key: string; kind: DeckImageKind; caption: string; consentTick: boolean; consentName: string; noPeople: boolean };
 function parseInput(raw: unknown): RecordInput | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
   const key = typeof r.key === "string" ? r.key : "";
   const kind = typeof r.kind === "string" && (DECK_IMAGE_KINDS as readonly string[]).includes(r.kind) ? (r.kind as DeckImageKind) : null;
   if (!key || !kind) return null;
-  return { key, kind, caption: typeof r.caption === "string" ? r.caption.slice(0, 200) : "", consentTick: r.consentTick === true, consentName: typeof r.consentName === "string" ? r.consentName.slice(0, 120) : "" };
+  return { key, kind, caption: typeof r.caption === "string" ? r.caption.slice(0, 200) : "", consentTick: r.consentTick === true, consentName: typeof r.consentName === "string" ? r.consentName.slice(0, 120) : "", noPeople: r.noPeople === true };
 }
 
 /**
@@ -54,10 +54,11 @@ export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckIma
   const already = await db.query.deckImages.findFirst({ where: eq(schema.deckImages.blobKey, input.key) });
   if (already) return already.userId === userId ? { ok: true, id: already.id } : { ok: false, error: "That file is already in someone else's library." };
 
-  // A screenshot or proof needs the consent tick and a name before the bytes are ever read back, so a refusal costs nothing.
-  if (consentRequired(input.kind) && (!input.consentTick || !input.consentName.trim())) {
+  // A screenshot or proof needs the consent tick and a name, or the word that nobody is in it, before the bytes are ever read
+  // back, so a refusal costs nothing.
+  if (!consentSatisfied(input.kind, input.consentTick, input.consentName, input.noPeople)) {
     await discard((await headOrNull(input.key))?.url, "a missing consent tick");
-    return { ok: false, error: "Tick that you've hidden anyone's name, email or number who hasn't agreed to be shown, and write who's in it, before adding a screenshot or proof." };
+    return { ok: false, error: "Tick that you've hidden anyone's name, email or number who hasn't agreed to be shown and write who's in it, or tick that no people are in it, before adding a screenshot or proof." };
   }
 
   let object: { key: string; url: string; size: number };
@@ -92,7 +93,7 @@ export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckIma
   }
 
   const id = newId();
-  const consent = consentRequired(input.kind) ? { consentTick: true, consentName: input.consentName.trim(), consentAt: nowIso() } : { consentTick: false, consentName: null, consentAt: null };
+  const consent = consentRecord(input.kind, input.consentName, input.noPeople, nowIso());
   try {
     await db.insert(schema.deckImages).values({ id, workspaceId, userId, kind: input.kind, blobKey: object.key, blobUrl: object.url, mime: verdict.sniffed.mime, width, height, caption: input.caption.trim() || null, ...consent });
   } catch (e) {
