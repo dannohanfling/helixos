@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 58,
+    date: "2026-10-03",
+    title: "The deck file is built on real layouts, in your theme",
+    lines: [
+      "The exported .pptx now sits on one master with a layout per slide family (cover, content, statement, each with and without a picture, and the picture-only slide), with real title and body placeholders. Your kit's colours are the file's theme colours and your faces its theme fonts, so changing the accent or a font in PowerPoint, Keynote or Google Slides changes every slide at once, no per-slide edits.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 57,
     date: "2026-10-02",
     title: "A check before you download",

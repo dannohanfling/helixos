@@ -526,6 +526,26 @@ export const TEXT_LEFT_ZONE = { x: 0.5, w: 4.5 };
 export const LOGO_BOX: Frame = { x: 9.0, y: 5.35, w: 0.9, h: 0.24 };
 export const COVER_LOGO_BOX: Frame = { x: 0.5, y: 0.35, w: 1.8, h: 0.55 };
 
+/** The file's layouts (§6.6): one master, a layout per slide family, each with real placeholders where slideGeometry puts them. */
+export const SLIDE_MASTERS = ["COVER", "COVER_PICTURE", "CONTENT", "CONTENT_PICTURE", "STATEMENT", "STATEMENT_PICTURE", "PICTURE_ONLY"] as const;
+export type SlideMaster = (typeof SLIDE_MASTERS)[number];
+/** Which layout a planned slide sits on: its family, and whether a picture (or an empty slot's frame) narrows the text. */
+export function masterFor(plan: Pick<SlidePlan, "boxes" | "layout" | "imageFrame" | "placeholderSlot" | "pictureOnly">): SlideMaster {
+  if (plan.pictureOnly) return "PICTURE_ONLY";
+  const picture = Boolean(plan.imageFrame ?? plan.placeholderSlot);
+  const family = plan.boxes.some((b) => b.role === "cover-title") ? "COVER" : plan.layout === "statement" ? "STATEMENT" : "CONTENT";
+  return (picture ? `${family}_PICTURE` : family) as SlideMaster;
+}
+/** The geometry a layout's placeholders take: the same slideGeometry, over a plan of that family. */
+export function masterGeometry(master: SlideMaster): SlideGeometry {
+  const picture = master.endsWith("_PICTURE");
+  const family = master.replace("_PICTURE", "");
+  const box = (role: TextBox["role"]): TextBox => ({ slide: 0, role, text: "", size: 0, color: "", fill: null, face: "", bold: false, italic: false, bullet: false, placeholder: false });
+  if (master === "PICTURE_ONLY") return slideGeometry({ boxes: [], layout: "content", imageFrame: PICTURE_ONLY_FRAME, placeholderSlot: null, pictureOnly: true });
+  const boxes = family === "COVER" ? [box("cover-title"), box("cover-presenter")] : family === "STATEMENT" ? [box("eyebrow"), box("headline"), box("footer")] : [box("eyebrow"), box("headline"), box("body"), box("footer")];
+  return slideGeometry({ boxes, layout: family === "COVER" ? "cover" : family === "STATEMENT" ? "statement" : "content", imageFrame: picture ? slotFrame(family === "COVER" ? "cover" : "section") : null, placeholderSlot: null, pictureOnly: false });
+}
+
 /** Where a text box sits on the 10 by 5.625 in slide, and how its text is set inside it. */
 export type BoxGeometry = Frame & { align: "left" | "center"; valign: "top" | "middle" };
 /** Every box's place on one slide (§6.4): the route draws from this and the Deck step's thumbnail draws the same, so the two cannot drift. */

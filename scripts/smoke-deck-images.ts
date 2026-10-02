@@ -452,6 +452,51 @@ async function main() {
     if (hits < 1000 || !within(painted.w / painted.h, COVER_FRAME.w / COVER_FRAME.h, 0.02) || !within(painted.w / info.width, COVER_FRAME.w / 10, 0.02)) throw new Error(`the rendered cover paints the photo in its frame's shape (${(COVER_FRAME.w / COVER_FRAME.h).toFixed(3)}, ${(COVER_FRAME.w / 10).toFixed(3)} of the width): ${painted.w}×${painted.h} of ${info.width}×${info.height}, ${hits} px`);
     console.log(`✓ §1 off the render: LibreOffice paints the photo at ${painted.w}×${painted.h} px of a ${info.width}-wide cover, the frame's own shape`);
 
+    // ── §6.6: the file is built on real layouts with placeholders, in the kit's theme. The theme's accent is the kit's; every rule
+    //    on a content slide is a scheme colour; the theme fonts are the kit's faces and the runs name them as theme faces. Then the
+    //    acceptance: change the theme's accent in the file, re-render, and the rule on a content slide takes the new colour with no
+    //    per-slide edit. ──
+    const kitRow = await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, wsId) });
+    const kitAccent = (kitRow?.accent ?? "555555").replace(/^#/, "").toUpperCase();
+    const themeXml = await zip.file("ppt/theme/theme1.xml")!.async("string");
+    if (!themeXml.includes(`<a:accent1><a:srgbClr val="${kitAccent}"/></a:accent1>`)) throw new Error(`the theme's accent1 is the kit's accent (${kitAccent}): ${themeXml.match(/<a:accent1>.*?<\/a:accent1>/)?.[0]}`);
+    const slide2 = await zip.file("ppt/slides/slide2.xml")!.async("string");
+    if (!slide2.includes('<a:schemeClr val="accent1"/>') || slide2.includes(`<a:srgbClr val="${kitAccent}"/>`)) throw new Error("a content slide's rule is drawn in the theme's accent, not a literal");
+    if (!/<p:ph[^>]*type="title"/.test(slide2) || !/<p:ph[^>]*type="body"/.test(slide2)) throw new Error("a content slide's headline and body are real placeholders");
+    const layoutNames = Object.keys(zip.files).filter((f) => /^ppt\/slideLayouts\/slideLayout\d+\.xml$/.test(f));
+    if (layoutNames.length < 7) throw new Error(`a layout per slide family (${layoutNames.length} found)`);
+    if (!/typeface="\+mj-lt"/.test(slide2) && !/typeface="\+mn-lt"/.test(slide2)) throw new Error("the runs name the theme faces, so a theme font change follows");
+    const recoloured = await JSZip.loadAsync(await zip.generateAsync({ type: "nodebuffer" }));
+    recoloured.file("ppt/theme/theme1.xml", themeXml.replace(/<a:accent1>[\s\S]*?<\/a:accent1>/, '<a:accent1><a:srgbClr val="2255CC"/></a:accent1>'));
+    // LibreOffice's PNG export renders the first slide only: the second slide's parts take the first's place for the render.
+    const s1 = await recoloured.file("ppt/slides/slide1.xml")!.async("string");
+    const r1 = await recoloured.file("ppt/slides/_rels/slide1.xml.rels")!.async("string");
+    recoloured.file("ppt/slides/slide1.xml", await recoloured.file("ppt/slides/slide2.xml")!.async("string"));
+    recoloured.file("ppt/slides/_rels/slide1.xml.rels", await recoloured.file("ppt/slides/_rels/slide2.xml.rels")!.async("string"));
+    recoloured.file("ppt/slides/slide2.xml", s1);
+    recoloured.file("ppt/slides/_rels/slide2.xml.rels", r1);
+    const dirTheme = mkdtempSync(join(tmpdir(), "deck-theme-"));
+    writeFileSync(join(dirTheme, "deck.pptx"), await recoloured.generateAsync({ type: "nodebuffer", compression: "DEFLATE" }));
+    await run("soffice", ["--headless", "--convert-to", "png", "--outdir", dirTheme, join(dirTheme, "deck.pptx")], { timeout: 120000, env: { ...process.env, HOME: dirTheme } });
+    const themePng = readdirSync(dirTheme).find((f) => f.endsWith(".png"));
+    if (!themePng) throw new Error("LibreOffice rendered the recoloured file");
+    const { data: tpx } = await sharp(readFileSync(join(dirTheme, themePng))).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    // The rule sits at y = 0.68 in on every content slide (renderPlan): read its own rows, so the pictures' pixels cannot mislead.
+    const { info: tinfo } = await sharp(readFileSync(join(dirTheme, themePng))).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const near = (r: number, g: number, b: number, hex: string) => Math.abs(r - parseInt(hex.slice(0, 2), 16)) < 24 && Math.abs(g - parseInt(hex.slice(2, 4), 16)) < 24 && Math.abs(b - parseInt(hex.slice(4, 6), 16)) < 24;
+    const ruleY = Math.round((0.68 / 5.625) * tinfo.height);
+    let blue = 0;
+    let oldAccent = 0;
+    for (let y = ruleY - 2; y <= ruleY + 2; y++) {
+      for (let x = Math.round(tinfo.width * 0.06); x < Math.round(tinfo.width * 0.94); x++) {
+        const i = (y * tinfo.width + x) * 3;
+        if (near(tpx[i], tpx[i + 1], tpx[i + 2], "2255CC")) blue++;
+        else if (near(tpx[i], tpx[i + 1], tpx[i + 2], kitAccent)) oldAccent++;
+      }
+    }
+    if (blue < 200 || oldAccent > 0) throw new Error(`a theme accent change recolours the rule with no per-slide edit (rows ${ruleY - 2}..${ruleY + 2}): ${blue} px of the new accent, ${oldAccent} of the old (kit accent ${kitAccent})`);
+    console.log(`✓ §6.6: the file sits on ${layoutNames.length} layouts with real placeholders in the kit's theme; the theme's accent changed in the file recolours the content slide's rule (${blue} px) with no per-slide edit`);
+
     // ── A screenshot on the same slot is contained: whole, its own 3:1 ratio, the frame's full width, no crop. ──
     await page.goto(`${base}/webinars/${webinar.id}?step=deck`);
     const coverSlot2 = page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"]');

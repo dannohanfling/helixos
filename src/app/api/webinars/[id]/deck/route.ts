@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
-import { COVER_LOGO_BOX, LOGO_BOX, PLACEHOLDER_TEXT_SIZE, deckSlides, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
+import { COVER_LOGO_BOX, LOGO_BOX, PLACEHOLDER_TEXT_SIZE, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
+import { applyKitTheme } from "@/lib/deck-theme";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
 import { pictureAltText } from "@/lib/engine/deck-slot";
 import { placeImage } from "@/lib/engine/deck-fit";
@@ -92,13 +93,28 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   pptx.subject = w.title;
   pptx.author = context.presenter;
   pptx.company = v.workspace.name;
-  // The theme fonts are the kit's fallback face (§4): the format has no second typeface on a run, so a reader without a brand
-  // face falls to their app's substitute, but every box a reader adds in PowerPoint takes this face, not Calibri.
-  pptx.theme = { headFontFace: deck.kit.fontFallback, bodyFontFace: deck.kit.fontFallback };
+  // The theme fonts are the kit's own faces (§6.6; §4 had the fallback here): headings in the display face, body in the body
+  // face, so a box a reader adds takes the brand face, and a reader without it falls to their app's substitute (the fallback
+  // the kit names has no slot in the format; §4.3 says so to the client). The runs are rewritten to the theme faces after the
+  // file is written (applyKitTheme), so a theme font change follows everywhere.
+  pptx.theme = { headFontFace: deck.kit.displayFont, bodyFontFace: deck.kit.bodyFont };
+  // One master, a layout per slide family (§6.6), with real title, body and footer placeholders where the geometry puts them.
+  // The placeholders carry no size or colour of their own, so each slide's plan (tiers, fits, the kit's hex) is what is written.
+  for (const name of SLIDE_MASTERS) {
+    const g = masterGeometry(name);
+    const ph = (phName: string, type: "title" | "body", b: BoxGeometry | undefined) => (b ? [{ placeholder: { options: { name: phName, type, x: b.x, y: b.y, w: b.w, h: b.h, align: b.align, valign: b.valign }, text: "" } }] : []);
+    pptx.defineSlideMaster({
+      title: name,
+      background: { color: normalise(deck.kit.ground) },
+      objects: [...ph("title", "title", g.boxes["cover-title"] ?? g.boxes.headline), ...ph("presenter", "body", g.boxes["cover-presenter"]), ...ph("eyebrow", "body", g.boxes.eyebrow), ...ph("body", "body", g.body ?? undefined), ...ph("footer", "body", g.boxes.footer)],
+    });
+  }
   const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: brand, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo, coverLogo };
   for (const plan of renderPlan(deck, filled, droppedSlides(resolved))) draw(pptx, plan, bySlide.get(plan.n) ?? null, chrome);
   // The same picture on several slides (and the logo on every content slide) is one media file in the finished zip.
-  const { file: buffer } = await dedupeDeckMedia((await pptx.write({ outputType: "nodebuffer" })) as Buffer);
+  const written = (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
+  const themed = await applyKitTheme(written, { ground: deck.kit.ground, ink: deck.kit.ink, accent: deck.kit.accent, muted: deck.kit.muted, surface: deck.kit.surface, inverseGround: deck.kit.inverseGround, inverseInk: deck.kit.inverseInk, placeholder: deck.kit.placeholder, displayFont: deck.kit.displayFont, bodyFont: deck.kit.bodyFont });
+  const { file: buffer } = await dedupeDeckMedia(themed);
   return new Response(new Uint8Array(buffer), {
     headers: { "content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "content-disposition": `attachment; filename="${slug}-deck.pptx"`, "cache-control": "no-store" },
   });
@@ -114,7 +130,7 @@ type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; c
  * column so it never overlaps the picture. The optional footer and CTA bars sit at the very bottom, off by default.
  */
 function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chrome: Chrome) {
-  const slide = pptx.addSlide();
+  const slide = pptx.addSlide({ masterName: masterFor(plan) });
   slide.background = { color: plan.background };
   // A slide that carries only the picture of the slide before it (§4): the picture, or its placeholder, and nothing else.
   if (plan.pictureOnly) {
@@ -133,23 +149,23 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: chrome.coverLogo.placement.box.x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h, altText: `${chrome.company} logo` });
     const title = plan.boxes.find((b) => b.role === "cover-title");
     const presenter = plan.boxes.find((b) => b.role === "cover-presenter");
-    if (title && g.boxes["cover-title"]) slide.addText(title.text, { ...at(g.boxes["cover-title"]), fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face });
-    if (presenter && g.boxes["cover-presenter"]) slide.addText(presenter.text, { ...at(g.boxes["cover-presenter"]), fontSize: presenter.size, color: presenter.color, fontFace: presenter.face });
+    if (title && g.boxes["cover-title"]) slide.addText(title.text, { placeholder: "title", ...at(g.boxes["cover-title"]), fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face });
+    if (presenter && g.boxes["cover-presenter"]) slide.addText(presenter.text, { placeholder: "presenter", ...at(g.boxes["cover-presenter"]), fontSize: presenter.size, color: presenter.color, fontFace: presenter.face });
   } else {
     const eyebrow = plan.boxes.find((b) => b.role === "eyebrow");
     const headline = plan.boxes.find((b) => b.role === "headline");
     const lines = plan.boxes.filter((b) => b.role === "body" || b.role === "attribution");
     const footer = plan.boxes.find((b) => b.role === "footer");
-    if (eyebrow && g.boxes.eyebrow) slide.addText(eyebrow.text, { ...at(g.boxes.eyebrow), fontSize: eyebrow.size, color: eyebrow.color, fontFace: eyebrow.face });
+    if (eyebrow && g.boxes.eyebrow) slide.addText(eyebrow.text, { placeholder: "eyebrow", ...at(g.boxes.eyebrow), fontSize: eyebrow.size, color: eyebrow.color, fontFace: eyebrow.face });
     // A statement (§4: one line, no body) sits vertically centred and large; a content headline sits at the top of its box.
-    if (headline && g.boxes.headline) slide.addText(headline.text, { ...at(g.boxes.headline), fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
+    if (headline && g.boxes.headline) slide.addText(headline.text, { placeholder: "title", ...at(g.boxes.headline), fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
     if (lines.length && g.body) {
       slide.addText(
         lines.map((b) => ({ text: b.text, options: { bullet: b.bullet, breakLine: true, fontSize: b.size, color: b.color, fontFace: b.face, ...(b.fill ? { highlight: b.fill } : {}) } })),
-        { ...at(g.body) },
+        { placeholder: "body", ...at(g.body) },
       );
     }
-    if (footer && g.boxes.footer) slide.addText(footer.text, { ...at(g.boxes.footer), fontSize: footer.size, color: footer.color, fontFace: footer.face, ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
+    if (footer && g.boxes.footer) slide.addText(footer.text, { placeholder: "footer", ...at(g.boxes.footer), fontSize: footer.size, color: footer.color, fontFace: footer.face, ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
   }
   // The picture in its frame: a photo cropped to fill it, evidence kept whole inside it; never stretched out of shape.
   if (image && plan.imageFrame) drawImage(pptx, slide, image, plan.imageFrame, plan.background);

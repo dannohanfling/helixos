@@ -254,8 +254,15 @@ async function main() {
   // The kit on the file: its hex verbatim and its faces named; the proof slide's text from the record; no art direction on any face
   const faces = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")))).join("\n");
   const notes = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")))).join("\n");
-  for (const hex of ["FAF8F5", "6E6256", "DD2727", "FFF3A3"]) if (!faces.includes(hex)) throw new Error(`the kit's ${hex} is written verbatim on the slides`);
-  for (const face of ["Red Hat Display", "Helvetica Now Display", "Libre Baskerville"]) if (!faces.includes(face)) throw new Error(`the kit's face ${face} is named on the slides`);
+  // §6.6: the kit is the file's theme. Its hex sits verbatim in the theme's colour scheme and the slides reference the scheme
+  // (so a theme edit recolours every slide); its display and body faces are the theme fonts, named as such on the runs, and
+  // the quote face, which has no theme slot, is named on its slide.
+  const theme = await zip.file("ppt/theme/theme1.xml")!.async("string");
+  for (const hex of ["FAF8F5", "6E6256", "DD2727", "FFF3A3"]) if (!theme.includes(`<a:srgbClr val="${hex}"/>`)) throw new Error(`the kit's ${hex} is written verbatim in the file's theme`);
+  for (const hex of ["FAF8F5", "6E6256", "DD2727"]) if (faces.includes(`<a:srgbClr val="${hex}"/>`)) throw new Error(`the kit's ${hex} is a scheme colour on the slides, not a literal`);
+  if (!/<a:schemeClr val="accent1"\/>/.test(faces) || !/<a:schemeClr val="dk1"\/>/.test(faces)) throw new Error("the slides reference the theme's accent and ink");
+  if (!/<a:majorFont>\s*<a:latin typeface="Red Hat Display"/.test(theme) || !/<a:minorFont>\s*<a:latin typeface="Helvetica Now Display"/.test(theme)) throw new Error("the kit's display and body faces are the theme fonts");
+  if (!/typeface="\+mj-lt"/.test(faces) || !/typeface="\+mn-lt"/.test(faces) || !faces.includes("Libre Baskerville")) throw new Error("the runs name the theme faces; the quote face is named on its slide");
   if (/Visual/.test(faces)) throw new Error("no art direction on any face");
   if (!/Visual direction/.test(notes)) throw new Error("the art direction is in the speaker notes");
   if (!/discovery calls/.test(faces) || !/Priya N\./.test(faces)) throw new Error("the proof slide's text is the typed proof with its tick, as the record stores it");
