@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 61,
+    date: "2026-10-03",
+    title: "HumanOS: set it up by talking to Claude",
+    lines: [
+      "With HumanOS connected to Claude, you can now add a food (per its unit, with its macros), save a meal from your foods, add a habit (any of the starters by name, or your own), add an exercise and put it on a routine, and read or change your day types (a band, or which day type a date runs as), all by voice.",
+      "Anything already there is named back to you rather than doubled, a change says what it replaced, and nothing is ever deleted from Claude.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 60,
     date: "2026-10-03",
     title: "Your coaching calls, inside HelixOS",

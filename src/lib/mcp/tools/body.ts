@@ -10,22 +10,22 @@ import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { newId } from "@/lib/ids";
-import { MACROS, MACRO_LABEL, MARK_ICON, entryItem, fmtBand, fmtMacro, slotNow, totalsOf, type Macro, type Macros } from "@/lib/engine/body";
-import { convertQty, loggableUnits } from "@/lib/engine/body-units";
+import { MACROS, MACRO_LABEL, MARK_ICON, dayTypeIdFor, entryItem, fmtBand, fmtMacro, slotNow, totalsOf, type Macro, type Macros } from "@/lib/engine/body";
+import { convertQty, loggableUnits, storedUnit } from "@/lib/engine/body-units";
 import { fmtSet } from "@/lib/engine/body-training";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
-import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayTypesFor } from "@/lib/queries/body";
 import { fmtDistance, zonesText } from "@/lib/engine/body-whoop";
 import { PRESETS } from "@/lib/engine/body-correlate";
 import { isRangeKey, rangeBounds, rateText } from "@/lib/engine/body-range";
 import { addDays } from "@/lib/dates";
 import { instacartLines, listSummary } from "@/lib/engine/body-shopping";
 import { InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
-import { fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
+import { KIND_LABEL, STARTER_HABITS, daysFrom, fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
 import { fmtBedtime, fmtHours, fmtWake, parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { startOfWeek } from "@/lib/dates";
 
@@ -618,5 +618,225 @@ defineTool({
       if (e instanceof FoodSearchError) throw new Error(foodSearchProblem(e));
       throw e;
     }
+  },
+});
+
+/* ───────── Setting HumanOS up by voice (Danno, rev 417): foods, meals, habits, exercises, day types. Nothing deletes. ───────── */
+
+const BAND_MACROS = [["cal", "calMin", "calMax"], ["p", "pMin", "pMax"], ["f", "fMin", "fMax"], ["c", "cMin", "cMax"]] as const;
+const own = <T extends { workspaceId: unknown; userId: unknown }>(t: T, v: Viewer) => and(eq(t.workspaceId as never, v.workspace.id), eq(t.userId as never, v.user.id));
+const sameName = <T extends { name: string }>(list: T[], name: string) => list.find((x) => x.name.trim().toLowerCase() === name.trim().toLowerCase()) ?? null;
+type DayTypeRow = schema.BodyDayType;
+const bandsText = (t: DayTypeRow) => {
+  const parts = BAND_MACROS.flatMap(([m, lo, hi]) => (t[lo] != null && t[hi] != null ? [`${MACRO_LABEL[m]} ${fmtBand(m, { min: t[lo]!, max: t[hi]! })}`] : []));
+  return parts.length ? parts.join(", ") : "no bands yet";
+};
+
+defineTool({
+  name: "body_add_food",
+  scope: "body",
+  kind: "write",
+  description: "Add a food to the member's HumanOS, per one unit: name, unit (oz, g, lb, kg, fl oz, ml, cup, tbsp, tsp, each, slice, piece, scoop, serving, or any other word), calories, protein, fat and carbs per that unit, optional sodium (mg), cap tag, raw or cooked basis, and store section. A name already in their foods is refused and named back, never doubled.",
+  input: {
+    name: z.string().describe("The food's name"),
+    unit: z.string().describe("The 'per' unit: oz, g, lb, kg, fl oz, ml, cup, tbsp, tsp, each, slice, piece, scoop, serving, or another word"),
+    cal: z.number().min(0).describe("Calories per unit"),
+    p: z.number().min(0).describe("Protein grams per unit"),
+    f: z.number().min(0).describe("Fat grams per unit"),
+    c: z.number().min(0).describe("Carb grams per unit"),
+    sodium: z.number().min(0).optional().describe("Sodium mg per unit"),
+    capTag: z.string().optional().describe("A cap tag the member uses, e.g. 'cheese'"),
+    basis: z.enum(["cooked", "raw"]).optional().describe("Whether the numbers are for the food cooked (the default) or raw"),
+    section: z.enum(schema.FOOD_SECTIONS).optional().describe("Store section for the shopping list"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const name = String(input.name ?? "").trim().slice(0, 80);
+    const unit = storedUnit(String(input.unit ?? "")).slice(0, 30);
+    if (!name || !unit) throw new Error("A food needs a name and a unit.");
+    const nums = [input.cal, input.p, input.f, input.c, input.sodium ?? 0].map(Number);
+    if (nums.some((n) => !Number.isFinite(n) || n < 0)) throw new Error(`${name}: calories, macros and sodium are numbers of zero or more.`);
+    const foods = await db.query.bodyFoods.findMany({ where: own(schema.bodyFoods, v) });
+    const have = sameName(foods.filter((x) => !x.archivedAt), name);
+    if (have) throw new Error(`"${have.name}" is already one of their foods (per ${have.unit}: ${fmtMacro("cal", have.cal)} cal, ${fmtMacro("p", have.p)} P, ${fmtMacro("f", have.f)} F, ${fmtMacro("c", have.c)} C). Log it or use it in a meal as it is; changing it is done on Nutrition.`);
+    const food = { name, unit, cal: nums[0], p: nums[1], f: nums[2], c: nums[3], sodium: nums[4], capTag: typeof input.capTag === "string" && input.capTag.trim() ? input.capTag.trim().toLowerCase().slice(0, 30) : null, basis: input.basis === "raw" ? ("raw" as const) : ("cooked" as const), section: (schema.FOOD_SECTIONS as readonly string[]).includes(String(input.section)) ? (input.section as schema.FoodSection) : null };
+    // An archived food of the same name comes back with these numbers rather than a second row (as the form does for a found food).
+    const archived = sameName(foods.filter((x) => x.archivedAt), name);
+    if (archived) await db.update(schema.bodyFoods).set({ ...food, archivedAt: null }).where(eq(schema.bodyFoods.id, archived.id));
+    else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, ...food });
+    const line = `${name}, per ${unit}: ${fmtMacro("cal", food.cal)} cal, ${fmtMacro("p", food.p)} P, ${fmtMacro("f", food.f)} F, ${fmtMacro("c", food.c)} C${food.sodium ? `, ${food.sodium} mg sodium` : ""}${food.basis === "raw" ? ", raw" : ""}${food.capTag ? `, cap tag ${food.capTag}` : ""}${food.section ? `, ${food.section}` : ""}`;
+    return { text: `${archived ? "Brought back" : "Added"} ${line}.`, data: { food: { ...food, restored: !!archived } } };
+  },
+});
+
+defineTool({
+  name: "body_save_meal",
+  scope: "body",
+  kind: "write",
+  description: "Save a meal the member logs in one tap: a name, an optional usual slot, and lines of their own foods by name × quantity in each food's unit. Every food must already exist (add it first with body_add_food). Answers with the meal's totals. A meal name already saved is refused, never overwritten.",
+  input: {
+    name: z.string().describe("The meal's name"),
+    slot: z.string().optional().describe("The usual slot: Breakfast, Lunch, Dinner, Snack, or the member's own"),
+    lines: z.array(z.object({ food: z.string().describe("A food's name"), qty: z.number().positive().describe("Quantity in the food's own unit") })).min(1).max(20),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const name = String(input.name ?? "").trim().slice(0, 80);
+    if (!name) throw new Error("A meal needs a name.");
+    const lib = await bodyLibrary(v.workspace.id, v.user.id);
+    const have = sameName(lib.meals, name);
+    if (have) throw new Error(`"${have.name}" is already a saved meal. Log it with body_log_meal; changing it is done on Nutrition.`);
+    const lines = Array.isArray(input.lines) ? input.lines : [];
+    const picked = lines.map((l) => ({ food: byName("food", lib.foods, String(l.food ?? "")), qty: Number(l.qty) }));
+    if (!picked.length || picked.some((l) => !Number.isFinite(l.qty) || l.qty <= 0)) throw new Error(`${name}: give each line a food and a quantity above zero.`);
+    const slotWord = typeof input.slot === "string" ? input.slot.trim() : "";
+    const slotAsked = slotWord ? settings.mealSlots.find((x) => x.toLowerCase() === slotWord.toLowerCase()) ?? null : null;
+    if (slotWord && !slotAsked) throw new Error(`Their slots are ${settings.mealSlots.join(", ")}.`);
+    const items = picked.map((l) => ({ foodId: l.food.id, qty: Math.round(l.qty * 100) / 100 }));
+    await db.insert(schema.bodyMeals).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, name, slot: slotAsked, items });
+    const totals = totalsOf(picked.map((l) => entryItem(l.food, l.qty)));
+    return { text: `Saved "${name}"${slotAsked ? ` (${slotAsked})` : ""}: ${picked.map((l) => `${l.qty} ${l.food.unit} ${l.food.name}`).join(", ")}. Totals: ${macroLine(totals)}.`, data: { meal: { name, slot: slotAsked, lines: picked.map((l) => ({ food: l.food.name, qty: l.qty, unit: l.food.unit })), totals } } };
+  },
+});
+
+defineTool({
+  name: "body_add_habit",
+  scope: "body",
+  kind: "write",
+  description: "Add a habit to the member's Practices: one of the starters by name (Breathwork, Meditation, Pages read, Stretching, Sauna, Cold exposure, Walk / steps, Water, Electrolytes, Supplements, Sunlight, Journaling, Gratitude, No screens before bed) with its own kind and target, or their own with kind (done, minutes, count, amount), unit, target and days (0 = Sunday … 6 = Saturday; none = every day). A habit already active is refused; an archived one of that name comes back.",
+  input: {
+    name: z.string().describe("A starter's name, or the member's own"),
+    kind: z.enum(schema.HABIT_KINDS).optional().describe("done (a tick), minutes, count, or amount; a starter's own when left out"),
+    unit: z.string().optional().describe("For a count or an amount: steps, oz, pages…"),
+    target: z.number().positive().optional().describe("The daily target for minutes, a count or an amount"),
+    days: z.array(z.number().int().min(0).max(6)).optional().describe("Weekdays it's due, 0 = Sunday; every day when left out"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const asked = String(input.name ?? "").trim().slice(0, 60);
+    if (!asked) throw new Error("A habit needs a name.");
+    const starter = sameName(STARTER_HABITS, asked);
+    const name = starter?.name ?? asked;
+    const kind = (input.kind ?? starter?.kind ?? "done") as schema.HabitKind;
+    const unitRaw = typeof input.unit === "string" && input.unit.trim() ? input.unit.trim().slice(0, 12) : starter?.unit ?? null;
+    const unit = kind === "count" || kind === "amount" ? unitRaw : null;
+    const t = input.target != null ? Number(input.target) : starter?.target ?? null;
+    const target = kind === "done" || t == null || !(t > 0) ? null : t;
+    const days = daysFrom(Array.isArray(input.days) ? input.days.map(Number) : []);
+    const have = await db.query.bodyHabits.findMany({ columns: { id: true, name: true, archivedAt: true }, where: own(schema.bodyHabits, v) });
+    const same = sameName(have, name);
+    if (same && !same.archivedAt) throw new Error(`"${same.name}" is already one of their habits. Log it with body_log_habit; changing it is done on Practices.`);
+    if (same) await db.update(schema.bodyHabits).set({ archivedAt: null, kind, unit, target, days }).where(eq(schema.bodyHabits.id, same.id));
+    else await db.insert(schema.bodyHabits).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, name, kind, unit, target, days, order: have.length });
+    const habit = { name, kind, unit, target, days };
+    return { text: `${same ? "Brought back" : "Added"} ${name}: ${fmtTarget(habit) || KIND_LABEL[kind]}, ${fmtDays(days)}${same ? " (its earlier logs are still there)" : ""}.`, data: { habit: { ...habit, restored: !!same } } };
+  },
+});
+
+defineTool({
+  name: "body_add_exercise",
+  scope: "body",
+  kind: "write",
+  description: "Add an exercise to the member's Training: name and kind (weight, or bodyweight). With a routine named, it is also added to the end of that routine with sets (3 unless said) and reps. An exercise already there is not doubled: it is the one put on the routine, or refused when no routine is named.",
+  input: {
+    name: z.string().describe("The exercise's name"),
+    kind: z.enum(["weight", "bodyweight"]).optional().describe("weight (the default) or bodyweight"),
+    routine: z.string().optional().describe("A routine's name to add it to"),
+    sets: z.number().int().min(1).max(20).optional(),
+    reps: z.string().optional().describe("Reps as the member writes them: 8, 8-10, AMRAP"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const name = String(input.name ?? "").trim().slice(0, 80);
+    if (!name) throw new Error("An exercise needs a name.");
+    const lib = await trainingLibrary(v.workspace.id, v.user.id);
+    const routine = typeof input.routine === "string" && input.routine.trim() ? byName("routine", lib.routines, input.routine) : null;
+    const existing = sameName(lib.exercises, name);
+    if (existing && !routine) throw new Error(`"${existing.name}" is already one of their exercises. Name a routine to put it on, or log a set with body_log_set.`);
+    let exercise = existing;
+    if (!exercise) {
+      const id = newId();
+      await db.insert(schema.bodyExercises).values({ id, workspaceId: v.workspace.id, userId: v.user.id, name, kind: input.kind === "bodyweight" ? "bodyweight" : "weight" });
+      exercise = (await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.id, id) }))!;
+    }
+    let onRoutine = "";
+    if (routine) {
+      if (routine.items.length >= 20) throw new Error(`${routine.name} already has twenty exercises, the most.`);
+      if (routine.items.some((i) => i.exerciseId === exercise!.id)) throw new Error(`${exercise.name} is already on ${routine.name}.`);
+      const sets = Math.min(20, Math.max(1, Math.round(Number(input.sets ?? 3)) || 3));
+      const reps = typeof input.reps === "string" ? input.reps.trim().slice(0, 20) : "";
+      await db.update(schema.bodyRoutines).set({ items: [...routine.items, { exerciseId: exercise.id, sets, reps }] }).where(and(eq(schema.bodyRoutines.id, routine.id), own(schema.bodyRoutines, v)));
+      onRoutine = ` and put it on ${routine.name} as line ${routine.items.length + 1}: ${sets} × ${reps || "?"}`;
+    }
+    return { text: `${existing ? `Used ${exercise.name}` : `Added ${exercise.name} (${exercise.kind})`}${onRoutine}.`, data: { exercise: { name: exercise.name, kind: exercise.kind, created: !existing }, routine: routine ? routine.name : null } };
+  },
+});
+
+defineTool({
+  name: "body_day_types",
+  scope: "body",
+  kind: "read",
+  description: "The member's day types with each one's bands (calories, protein, fat, carbs as from–to) and reminder, which day type each weekday runs, and the day type of a date (today unless a date is given) and whether it was set by hand.",
+  input: { date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const date = typeof input.date === "string" && DATE.test(input.date) ? input.date : v.today;
+    const [types, day] = await Promise.all([dayTypesFor(v.workspace.id, v.user.id), db.query.bodyDays.findFirst({ where: and(own(schema.bodyDays, v), eq(schema.bodyDays.date, date)) })]);
+    const nameOf = new Map(types.map((t) => [t.id, t.name]));
+    const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const week = [1, 2, 3, 4, 5, 6, 0].map((d) => `${DAYS[d]} ${nameOf.get(settings.weekPattern[String(d) as keyof typeof settings.weekPattern] ?? "") ?? "—"}`);
+    const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
+    const typeId = dayTypeIdFor(date, settings.weekPattern, refeed, day?.dayTypeId ?? null);
+    const lines = types.map((t) => `${t.name}: ${bandsText(t)}${t.reminder ? ` · "${t.reminder}"` : ""}`);
+    return {
+      text: `${lines.join("\n")}\nWeek: ${week.join(", ")}.\n${date === v.today ? "Today" : date} is ${nameOf.get(typeId ?? "") ?? "no day type"}${day?.dayTypeId ? " (set by hand)" : ""}.`,
+      data: { dayTypes: types.map((t) => ({ name: t.name, bands: Object.fromEntries(BAND_MACROS.map(([m, lo, hi]) => [m, t[lo] != null && t[hi] != null ? { min: t[lo], max: t[hi] } : null])), reminder: t.reminder })), week: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [DAYS[d], nameOf.get(settings.weekPattern[String(d) as keyof typeof settings.weekPattern] ?? "") ?? null])), date, dayType: nameOf.get(typeId ?? "") ?? null, setByHand: !!day?.dayTypeId },
+    };
+  },
+});
+
+defineTool({
+  name: "body_set_day_type",
+  scope: "body",
+  kind: "write",
+  description: "Change one of the member's day types or one date. With bands: set a macro's band on a day type, from and to together (a band is both ends or neither; give min and max), and answers with what it replaced. With a date: run that date as the named day type (a swapped lift day, an unplanned refeed). Nothing is deleted; clearing a band or a date's hand-set type is done on the page.",
+  input: {
+    dayType: z.string().describe("The day type's name"),
+    bands: z.object({ cal: z.object({ min: z.number().min(0), max: z.number().min(0) }).optional(), p: z.object({ min: z.number().min(0), max: z.number().min(0) }).optional(), f: z.object({ min: z.number().min(0), max: z.number().min(0) }).optional(), c: z.object({ min: z.number().min(0), max: z.number().min(0) }).optional() }).optional().describe("Bands to set on this day type, each a from and a to"),
+    date: z.string().optional().describe("YYYY-MM-DD: run this date as the day type"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const types = await dayTypesFor(v.workspace.id, v.user.id);
+    const t = byName("day type", types, String(input.dayType ?? ""));
+    const bands = input.bands && typeof input.bands === "object" ? input.bands : {};
+    const asked = BAND_MACROS.filter(([m]) => (bands as Record<string, unknown>)[m] != null);
+    const date = typeof input.date === "string" && input.date.trim() ? input.date.trim() : null;
+    if (!asked.length && !date) throw new Error("Give bands to set, a date to run as this day type, or both.");
+    const said: string[] = [];
+    if (asked.length) {
+      const set: Partial<Record<(typeof BAND_MACROS)[number][1 | 2], number>> = {};
+      for (const [m, lo, hi] of asked) {
+        const b = (bands as Record<string, { min: number; max: number }>)[m];
+        const min = Number(b.min);
+        const max = Number(b.max);
+        if (!Number.isFinite(min) || !Number.isFinite(max)) throw new Error(`${t.name}: give ${MACRO_LABEL[m]} both a from and a to.`);
+        if (min < 0 || max < min) throw new Error(`${t.name}: ${MACRO_LABEL[m]}'s top can't be under its bottom.`);
+        set[lo] = min;
+        set[hi] = max;
+        said.push(`${MACRO_LABEL[m]} ${fmtBand(m, { min, max })} (was ${t[lo] != null && t[hi] != null ? fmtBand(m, { min: t[lo]!, max: t[hi]! }) : "no band"})`);
+      }
+      await db.update(schema.bodyDayTypes).set(set).where(and(eq(schema.bodyDayTypes.id, t.id), own(schema.bodyDayTypes, v)));
+    }
+    let dayLine = "";
+    if (date) {
+      if (!DATE.test(date)) throw new Error("A date is YYYY-MM-DD.");
+      const existing = await db.query.bodyDays.findFirst({ where: and(own(schema.bodyDays, v), eq(schema.bodyDays.date, date)) });
+      const before = existing?.dayTypeId ? types.find((x) => x.id === existing.dayTypeId)?.name ?? null : null;
+      if (existing) await db.update(schema.bodyDays).set({ dayTypeId: t.id }).where(eq(schema.bodyDays.id, existing.id));
+      else await db.insert(schema.bodyDays).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, dayTypeId: t.id });
+      dayLine = `${date} now runs as ${t.name}${before ? ` (was set to ${before} by hand)` : " (was the week's pattern)"}.`;
+    }
+    return { text: [said.length ? `${t.name}: ${said.join("; ")}.` : "", dayLine].filter(Boolean).join("\n"), data: { dayType: t.name, bands: said, date } };
   },
 });
