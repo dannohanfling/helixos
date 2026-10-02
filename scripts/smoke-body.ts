@@ -601,10 +601,40 @@ async function main() {
     await addToShelf(idOf("lean-steak"), "16", "raw", addDays(today, 2));
     await addToShelf(idOf("egg"), "12", "raw", addDays(today, 10));
     if (!((await client.locator('[data-testid="pantry-soon"]').textContent()) ?? "").includes(fx("lean-steak").name)) throw new Error("the steak, use by in two days, is to use soon");
+    // Par levels (rev 452): only foods that have one are listed; the rest are picked in "Add a par level".
+    if ((await client.locator('[data-testid="pantry-par"]').count()) !== 0) throw new Error("with no par levels set, none are listed");
     const steakPar = `[data-testid="pantry-par"][data-food="${fx("lean-steak").name}"]`;
-    if (!(await client.locator(`${steakPar} input[name="par"]`).isVisible())) await client.locator("summary", { hasText: "Par levels" }).click();
-    await fillExact(client, `${steakPar} input[name="par"]`, "24");
-    await press(client, `${steakPar} button[type="submit"]`, async () => (await client.locator('[data-testid="pantry-gap"]').count()) > 0, "the gap to buy");
+    const parAdd = client.locator('[data-testid="pantry-par-add"]');
+    if (!(await parAdd.isVisible())) await client.locator("summary", { hasText: "Add a par level" }).click();
+    await parAdd.locator('select[name="foodId"]').selectOption(idOf("lean-steak"));
+    await fillExact(client, '[data-testid="pantry-par-add-qty"]', "24");
+    await press(client, '[data-testid="pantry-par-add-save"]', async () => (await client.locator('[data-testid="pantry-gap"]').count()) > 0, "the gap to buy");
+    if ((await client.locator('[data-testid="pantry-par"]').count()) !== 1 || (await client.locator(`${steakPar} input[name="par"]`).inputValue()) !== "24") throw new Error("the steak's par level is listed, and only it");
+    if (await parAdd.locator(`option[value="${idOf("lean-steak")}"]`).count()) throw new Error("a food with a par level leaves the picker");
+    // The layout at desktop and phone width: a par food's name on one line, the shelf's Food select at full width, the Unit placeholder whole.
+    for (const width of [1280, 390]) {
+      await client.setViewportSize({ width, height: 900 });
+      if (!(await client.locator('[data-testid="pantry-add"]').isVisible())) await client.locator("summary", { hasText: "Add to the shelf" }).click();
+      const layout = await client.evaluate(() => {
+        const name = document.querySelector('[data-testid="pantry-par-name"]') as HTMLElement;
+        const lineHeight = parseFloat(getComputedStyle(name).lineHeight) || 20;
+        const form = document.querySelector('[data-testid="pantry-add"]') as HTMLElement;
+        const food = form.querySelector('select[name="foodId"]') as HTMLElement;
+        const unit = form.querySelector('[data-testid="pantry-unit"]') as HTMLInputElement;
+        const probe = document.createElement("span");
+        probe.style.font = getComputedStyle(unit).font;
+        probe.style.position = "absolute";
+        probe.style.whiteSpace = "nowrap";
+        probe.textContent = unit.placeholder;
+        document.body.appendChild(probe);
+        const placeholder = probe.getBoundingClientRect().width;
+        probe.remove();
+        const pad = parseFloat(getComputedStyle(unit).paddingLeft) + parseFloat(getComputedStyle(unit).paddingRight);
+        return { nameLines: Math.round(name.getBoundingClientRect().height / lineHeight), foodShare: food.getBoundingClientRect().width / form.getBoundingClientRect().width, unitFits: unit.clientWidth - pad >= placeholder };
+      });
+      if (layout.nameLines !== 1 || layout.foodShare < 0.95 || !layout.unitFits) throw new Error(`pantry layout at ${width}px: ${JSON.stringify(layout)}`);
+    }
+    await client.setViewportSize(PHONE);
     const gap = (await client.locator('[data-testid="pantry-gap"]').first().textContent()) ?? "";
     if (!gap.includes("8 oz") || !gap.includes("16 of 24")) throw new Error(`below par: 8 oz to buy with 16 of 24 on hand: "${gap}"`);
     const weighForm = client.locator('[data-testid="pantry-weigh"]');
@@ -633,7 +663,7 @@ async function main() {
     await fillExact(client, `${eggRow} [data-testid="pantry-use-qty"]`, "12");
     await press(client, `${eggRow} [data-testid="pantry-use"]`, async () => (await client.locator(eggRow).count()) === 0, "the eggs gone");
     await noSideScroll(client, "/body/pantry");
-    console.log("✓ pantry: 16 oz raw steak and 12 eggs on the shelf; the steak (use by in two days) to use soon on Pantry and Log; par 24 oz gives 8 oz to buy; 16 → 9.8 oz weighed learns a 61% yield; 8 oz logged raw lands as 4.88 oz cooked and the shelf keeps 8 oz raw; the eggs used up by hand");
+    console.log("✓ pantry: 16 oz raw steak and 12 eggs on the shelf; the steak (use by in two days) to use soon on Pantry and Log; par 24 oz set from Add a par level (only that food listed after) gives 8 oz to buy; names on one line and Food at full width at 1280 and 390px; 16 → 9.8 oz weighed learns a 61% yield; 8 oz logged raw lands as 4.88 oz cooked and the shelf keeps 8 oz raw; the eggs used up by hand");
     // ── Shopping and Instacart (phase 10): a meal planned twice, the list as the engine computes it from the shelf and the par
     // levels, a line bought onto the shelf, a line skipped, the push to the mock Instacart with the link back and the order logged. ──
     const { shoppingList: listOf } = await import("@/lib/engine/body-shopping");

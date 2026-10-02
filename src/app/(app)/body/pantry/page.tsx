@@ -31,6 +31,8 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
   const p = await pantryView(v.workspace.id, v.user.id, v.today);
   if (!p) redirect("/body");
   const massFoods = p.foods.filter((f) => unitGroup(f.unit) === "weight");
+  const withPar = p.foods.filter((f) => f.par);
+  const withoutPar = p.foods.filter((f) => !f.par);
 
   return (
     <>
@@ -111,7 +113,8 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
           <Disclosure summary={<span className="btn btn-soft btn-sm">＋ Add to the shelf</span>} className="mt-3" open={!p.items.length}>
             {p.foods.length ? (
               <form action={savePantryItemAction} className="flex flex-wrap items-end gap-2" data-testid="pantry-add">
-                <label className="w-full min-w-0 sm:w-auto sm:flex-1">
+                {/* Food takes its own full-width line so a long name never collapses it to its arrow (rev 452). */}
+                <label className="w-full">
                   <span className="label">Food</span>
                   <select name="foodId" className={big} required defaultValue="">
                     <option value="" disabled>
@@ -124,13 +127,13 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
                     ))}
                   </select>
                 </label>
-                <label className="w-20">
+                <label className="w-24">
                   <span className="label">How much</span>
                   <input name="qty" type="number" step="any" min={0} inputMode="decimal" className={big} required data-testid="pantry-qty" />
                 </label>
-                <label className="w-24">
+                <label className="w-40">
                   <span className="label">Unit</span>
-                  <input name="unit" className={big} placeholder="the food's" maxLength={30} list="pantry-units" data-testid="pantry-unit" />
+                  <input name="unit" className={big} placeholder="the food's unit" maxLength={30} list="pantry-units" data-testid="pantry-unit" />
                   <datalist id="pantry-units">
                     {[...new Set(p.foods.flatMap((f) => loggableUnits(f.unit)))].map((u) => (
                       <option key={u} value={u} />
@@ -192,22 +195,58 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
                 {p.foods.some((f) => f.par) ? "Everything with a par level is stocked." : "Give a food a par level below and it shows here when the shelf runs low."}
               </p>
             )}
-            <Disclosure summary={<span className="text-xs text-ink-3 underline">Par levels</span>} className="mt-3">
-              <p className="mb-2 text-xs text-ink-3">Keep at least this much on hand, in the food&apos;s unit. Blank clears it.</p>
-              <div className="space-y-1.5" data-testid="pantry-pars">
-                {p.foods.map((f) => (
-                  <form key={f.id} action={setFoodParAction} className="flex items-center gap-2 text-sm" data-testid="pantry-par" data-food={f.name}>
-                    <input type="hidden" name="foodId" value={f.id} />
-                    <span className="min-w-0 flex-1 break-words">{f.name}</span>
-                    <input name="par" type="number" step="any" min={0} inputMode="decimal" className="field w-20 py-0.5 text-sm tabular" defaultValue={f.par ?? ""} placeholder="none" aria-label={`Par for ${f.name}`} />
-                    <span className="w-10 text-xs text-ink-3">{f.unit}</span>
-                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="…">
-                      Save
-                    </SubmitButton>
-                  </form>
-                ))}
+            {/* Only the foods that have a par level are listed (a member can have dozens of foods); the rest are one pick away (rev 452).
+                The name takes its own line at full length and the box, unit and Save sit beside it, or under it when the card is narrow. */}
+            {withPar.length ? (
+              <div className="mt-3 border-t pt-2">
+                <p className="text-xs font-medium text-ink-2">Par levels</p>
+                <p className="mb-1.5 text-xs text-ink-3">Keep at least this much on hand, in the food&apos;s unit. Blank clears it.</p>
+                <div className="space-y-1.5" data-testid="pantry-pars">
+                  {withPar.map((f) => (
+                    <form key={f.id} action={setFoodParAction} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" data-testid="pantry-par" data-food={f.name}>
+                      <input type="hidden" name="foodId" value={f.id} />
+                      <span className="min-w-[12rem] flex-1" data-testid="pantry-par-name">
+                        {f.name}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <input name="par" type="number" step="any" min={0} inputMode="decimal" className="field w-20 py-0.5 text-sm tabular" defaultValue={f.par ?? ""} placeholder="none" aria-label={`Par for ${f.name}`} />
+                        <span className="text-xs whitespace-nowrap text-ink-3">{f.unit}</span>
+                        <SubmitButton className="btn btn-ghost btn-xs" pendingText="…">
+                          Save
+                        </SubmitButton>
+                      </span>
+                    </form>
+                  ))}
+                </div>
               </div>
-            </Disclosure>
+            ) : null}
+            {withoutPar.length ? (
+              <Disclosure summary={<span className="btn btn-soft btn-sm">＋ Add a par level</span>} className="mt-3">
+                <form action={setFoodParAction} className="flex flex-wrap items-end gap-2" data-testid="pantry-par-add">
+                  <label className="w-full">
+                    <span className="label">Food</span>
+                    <select name="foodId" className={big} required defaultValue="">
+                      <option value="" disabled>
+                        Pick a food (type to jump)…
+                      </option>
+                      {withoutPar.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name} (per {f.unit})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="w-28">
+                    <span className="label">Keep at least</span>
+                    <input name="par" type="number" step="any" min={0} inputMode="decimal" className={big} required data-testid="pantry-par-add-qty" />
+                  </label>
+                  <SubmitButton className="btn btn-humanos btn-sm" pendingText="Saving…" data-testid="pantry-par-add-save">
+                    Save
+                  </SubmitButton>
+                </form>
+                <p className="mt-1 text-xs text-ink-3">In the food&apos;s unit, shown beside its name.</p>
+              </Disclosure>
+            ) : null}
           </Card>
 
           <Card title="Cooked yields" id="yields">
@@ -238,7 +277,7 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
             {massFoods.length ? (
               <Disclosure summary={<span className="btn btn-soft btn-sm">＋ Add a weighing</span>} className="mt-3">
                 <form action={addYieldAction} className="flex flex-wrap items-end gap-2" data-testid="pantry-weigh">
-                  <label className="w-full min-w-0 sm:w-auto sm:flex-1">
+                  <label className="w-full">
                     <span className="label">Food</span>
                     <select name="foodId" className={big} required defaultValue="">
                       <option value="" disabled>

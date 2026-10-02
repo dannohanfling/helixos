@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 70,
+    date: "2026-10-03",
+    title: "HumanOS: an easier Pantry",
+    lines: [
+      "Par levels now list only the foods that have one, each name on one line with its amount beside it. To give another food a par level, use Add a par level and pick it from the list.",
+      "Add to the shelf gives the food its own full-width line, so long names are readable, and the unit box says what it wants in full.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 69,
     date: "2026-10-03",
     title: "Every morning starts clean",
