@@ -1305,12 +1305,89 @@ async function main() {
       console.log("✓ no cut-off: thirteen HumanOS pages at phone width carry no truncation class");
     }
 
+    // ── B9 (rev 237; revs 196, 200, 353): coach templates one way, and the weekly check-in with sharing off. ──
+    const coachUserB9 = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+    const coachMemB9 = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUserB9.id), eq(schema.memberships.workspaceId, mem.workspaceId)) }))!;
+    // The coach's own HumanOS, straight into the rows: a day type with bands, a food and a meal, two exercises (one the client also has) and a routine.
+    await db.update(schema.memberships).set({ bodyEnabled: true }).where(eq(schema.memberships.id, coachMemB9.id));
+    const cDay = freshId();
+    const cFood = freshId();
+    const cMeal = freshId();
+    const cBench = freshId();
+    const cRow = freshId();
+    const cRoutine = freshId();
+    const coachRows = <T extends object>(t: T) => ({ ...t, workspaceId: mem.workspaceId, userId: coachUserB9.id });
+    await db.insert(schema.bodySettings).values(coachRows({ id: freshId(), weekPattern: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), cDay])) }));
+    await db.insert(schema.bodyDayTypes).values(coachRows({ id: cDay, name: "Coach cut day", order: 0, calMin: 1600, calMax: 1800, pMin: 170, pMax: 200, reminder: "Water first." }));
+    await db.insert(schema.bodyFoods).values(coachRows({ id: cFood, name: "Coach oats", unit: "g", cal: 3.8, p: 0.13, f: 0.07, c: 0.66 }));
+    await db.insert(schema.bodyMeals).values(coachRows({ id: cMeal, name: "Coach breakfast", slot: "Breakfast", items: [{ foodId: cFood, qty: 80 }] }));
+    await db.insert(schema.bodyExercises).values([coachRows({ id: cBench, name: "Bench press", kind: "weight" as const }), coachRows({ id: cRow, name: "Coach row", kind: "weight" as const })]);
+    await db.insert(schema.bodyRoutines).values(coachRows({ id: cRoutine, name: "Coach push day", dayTypeId: null, items: [{ exerciseId: cBench, sets: 3, reps: "8" }, { exerciseId: cRow, sets: 3, reps: "10" }] }));
+    const clientFoodName = (await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) })).map((f) => f.name).find((n) => !n.startsWith("Coach"))!;
+    await coach.goto(`${base}/coach/${mem.id}`);
+    await coach.locator('[data-testid="template-form"]').waitFor({ timeout: 30000 });
+    for (const pick of [`day_type:${cDay}`, `meal:${cMeal}`, `routine:${cRoutine}`]) {
+      await coach.locator('[data-testid="template-pick"]').selectOption(pick);
+      await press(coach, '[data-testid="template-send"]', async () => /template=sent/.test(coach.url()) && (await coach.locator('[data-testid="template-just-sent"]').count()) > 0, `sent ${pick.split(":")[0]}`);
+      await coach.goto(`${base}/coach/${mem.id}`);
+      await coach.locator('[data-testid="template-form"]').waitFor({ timeout: 30000 });
+    }
+    const sendsB9 = await db.query.bodyTemplateSends.findMany({ where: mine(schema.bodyTemplateSends) });
+    const mealSend = sendsB9.find((s) => s.kind === "meal")!;
+    if (sendsB9.length !== 3 || sendsB9.some((s) => s.status !== "sent" || s.coachUserId !== coachUserB9.id) || !JSON.stringify(mealSend.payload).includes("Coach oats") || JSON.stringify(mealSend.payload).includes(cFood)) throw new Error(`three sends wait on the client as snapshots with the foods copied in by value: ${JSON.stringify(sendsB9.map((s) => [s.kind, s.status]))}`);
+    if ((await coach.locator('[data-testid="template-send-row"][data-status="sent"]').count()) !== 3) throw new Error("the coach's list shows the three waiting");
+    const coachClientText = (await coach.locator("main").textContent()) ?? "";
+    if (coachClientText.includes(clientFoodName) || (await coach.locator('[data-testid="coach-body-link"]').count())) throw new Error("sending a template reads nothing of the client's: no food of theirs, no Body card while private");
+    // The client: all three on Log; the day type taken on Settings, the routine on Routines (Bench press matched by name, Coach row made), the meal declined on Nutrition.
+    await client.goto(`${base}/body`);
+    await client.locator('[data-testid="coach-sends"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="coach-send"]').count()) !== 3) throw new Error("Log shows the three templates from the coach");
+    await client.goto(`${base}/body/settings`);
+    await client.locator('[data-testid="coach-send"][data-kind="day_type"]').waitFor({ timeout: 30000 });
+    if ((await client.locator('[data-testid="coach-send"]').count()) !== 1) throw new Error("Settings shows only the day type");
+    await press(client, '[data-testid="coach-send"][data-kind="day_type"] [data-testid="coach-send-accept"]', async () => (await client.locator('[data-testid="coach-send"]').count()) === 0, "day type accepted");
+    const takenDay = (await db.query.bodyDayTypes.findMany({ where: mine(schema.bodyDayTypes) })).find((t) => t.name === "Coach cut day");
+    if (!takenDay || takenDay.calMin !== 1600 || takenDay.reminder !== "Water first.") throw new Error("the accepted day type is the client's own copy with its bands and reminder");
+    const exercisesBefore = (await db.query.bodyExercises.findMany({ where: mine(schema.bodyExercises) })).length;
+    await client.goto(`${base}/body/training/routines`);
+    await client.locator('[data-testid="coach-send"][data-kind="routine"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="coach-send"][data-kind="routine"] [data-testid="coach-send-accept"]', async () => (await client.locator('[data-testid="coach-send"]').count()) === 0, "routine accepted");
+    const takenRoutine = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.name === "Coach push day");
+    const exercisesAfter = await db.query.bodyExercises.findMany({ where: mine(schema.bodyExercises) });
+    if (!takenRoutine || takenRoutine.items.length !== 2 || takenRoutine.items[0].exerciseId !== bench.id || exercisesAfter.length !== exercisesBefore + 1 || !exercisesAfter.some((e) => e.name === "Coach row")) throw new Error("the routine is copied: Bench press matched by name, Coach row made, two lines");
+    await client.goto(`${base}/body/foods`);
+    await client.locator('[data-testid="coach-send"][data-kind="meal"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="coach-send"][data-kind="meal"] [data-testid="coach-send-decline"]', async () => (await client.locator('[data-testid="coach-send"]').count()) === 0, "meal declined");
+    if ((await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) })).some((f) => f.name === "Coach oats") || (await db.query.bodyTemplateSends.findMany({ where: mine(schema.bodyTemplateSends) })).map((s) => s.status).sort().join() !== "accepted,accepted,declined") throw new Error("declining makes nothing; the three sends stand as accepted, accepted, declined");
+    await coach.goto(`${base}/coach/${mem.id}`);
+    if ((await coach.locator('[data-testid="template-send-row"][data-status="accepted"]').count()) !== 2 || (await coach.locator('[data-testid="template-send-row"][data-status="declined"]').count()) !== 1) throw new Error("the coach sees each send's standing");
+    // The weekly check-in, sharing off: the week's lines and a note go; the coach reads it on the client page and sees the mark on the roster.
+    await client.goto(`${base}/body/week`);
+    await client.locator('[data-testid="checkin-fold"] > summary').click();
+    await fillExact(client, '[data-testid="checkin-note-input"]', "Travel week, but I kept the protein up.");
+    await press(client, '[data-testid="checkin-send"]', async () => /checkin=sent/.test(client.url()) && (await client.locator('[data-testid="checkin-sent"]').count()) > 0, "check-in sent");
+    const checkinRow = (await db.query.bodyCheckins.findMany({ where: mine(schema.bodyCheckins) }))[0];
+    if (!checkinRow || checkinRow.monday !== mondayOf(today) || !checkinRow.lines.some((l) => l.startsWith("Days logged:")) || checkinRow.lines.some((l) => l.includes(clientFoodName)) || checkinRow.note !== "Travel week, but I kept the protein up.") throw new Error("the check-in is this week's numbers as lines, no food named, plus the note");
+    await coach.goto(`${base}/coach`);
+    if (!(await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-checkin-mark"]`).count())) throw new Error("the roster marks the week's check-in while the client's days stay private");
+    await coach.goto(`${base}/coach/${mem.id}`);
+    if ((await coach.locator('[data-testid="coach-checkin"]').count()) !== 1 || !(await coach.locator('[data-testid="coach-checkin-note"]').textContent())?.includes("kept the protein up") || (await coach.locator('[data-testid="coach-body-link"]').count())) throw new Error("the coach reads the sent check-in and still nothing else");
+    console.log("✓ B9: three templates sent from the coach's own library as snapshots, the client took the day type and the routine (Bench press matched, Coach row made) and declined the meal, the coach read nothing of theirs; the week's check-in went with sharing off, the coach read it and the roster marks it");
+
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
+    if ((own.body_template_sends ?? []).length !== 3 || (own.body_checkins ?? []).length !== 1) throw new Error("the member's Body export has the coach's sends and their check-in");
+    const coachDumpB9 = (await (await coach.request.get(`${base}/api/export?format=json&user=${maya.id}`)).json()) as Record<string, unknown>;
+    if (Object.keys(coachDumpB9).some((k) => k.startsWith("body_"))) throw new Error("a coach's export of a client carries no check-in or template");
+    // The member takes the check-in back; it goes for the coach too.
+    await client.goto(`${base}/body/week`);
+    await press(client, '[data-testid="checkin-delete"]', async () => (await client.locator('[data-testid="checkin-sent"]').count()) === 0, "check-in deleted");
+    await coach.goto(`${base}/coach/${mem.id}`);
+    if (await coach.locator('[data-testid="coach-checkin"]').count()) throw new Error("a deleted check-in is gone for the coach");
     if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
     // Phase 16b: the device's workouts on a day with no session made one, "From WHOOP"; how many depends on the member's clock against the mock's UTC dates.
     const fromWhoop = ((own.body_sessions ?? []) as { routineName: string | null }[]).filter((s) => s.routineName === "From WHOOP").length;
-    if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || fromWhoop > 2 || (own.body_sessions ?? []).length !== 2 + fromWhoop) throw new Error(`the member's Body export has their workouts (${(own.body_sessions ?? []).length} sessions, ${fromWhoop} from WHOOP)`);
+    if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 3 || (own.body_routines ?? []).length !== 2 || fromWhoop > 2 || (own.body_sessions ?? []).length !== 2 + fromWhoop) throw new Error(`the member's Body export has their workouts (${(own.body_sessions ?? []).length} sessions, ${fromWhoop} from WHOOP; B9 added Coach row and Coach push day)`);
     if (!(own.body_pantry ?? []).length || (own.body_yields ?? []).length !== 1) throw new Error("the member's Body export has their pantry and weighings");
     if ((own.body_habits ?? []).length !== 4 || !(own.body_habit_logs ?? []).length || (own.body_health ?? []).length !== 1) throw new Error("the member's Body export has their habits (the Sauna one WHOOP ticks among them), their logs and their health log");
     if ((own.body_plan ?? []).length !== 1 || (own.body_orders ?? []).length !== 2) throw new Error("the member's Body export has this week's plan and the pushes");

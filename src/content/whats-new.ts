@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 50,
+    date: "2026-10-02",
+    title: "HumanOS: templates from your coach, and a weekly check-in you send in one tap",
+    lines: [
+      "Your coach can send you a copy of one of their own day types, saved meals or routines. It waits under \"From your coach\" on Log and on the matching page; Accept makes it yours to edit (foods and exercises you don't have yet are added by name), Not now sets it aside. Your coach sees nothing of yours either way.",
+      "On This week, \"Send this week to your coach\" sends the week's numbers (days logged and in band, averages, sessions, sets, PRs, weight, sleep, habits) plus one note, whether or not your coach can see your days. Never a food, a day's note, a photo or your health log. One a week; sending again replaces it, Delete takes it back for your coach too.",
+      "Coaches: \"Send a template\" and \"Check-ins\" on each client's page, and a ✉️ on the roster for a client who sent this week's.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 49,
     date: "2026-10-02",
     title: "The brand kit on the deck: logo, brand line, fonts, fit",

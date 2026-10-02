@@ -2903,6 +2903,47 @@ export const bodyActivities = sqliteTable(
 export type BodyActivity = typeof bodyActivities.$inferSelect;
 
 /**
+ * B9 (rev 237): a coach's template, sent one way to a client as a snapshot of the coach's own day type, meal (with its foods) or
+ * routine (with its exercises). `userId` is the client, so it goes with their data; the coach reads nothing of the client's.
+ */
+export const TEMPLATE_SEND_STATUS = ["sent", "accepted", "declined"] as const;
+export const bodyTemplateSends = sqliteTable(
+  "body_template_sends",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    coachUserId: text("coach_user_id").notNull(),
+    coachName: text("coach_name").notNull(),
+    kind: text("kind", { enum: ["day_type", "meal", "routine"] }).notNull(),
+    name: text("name").notNull(),
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    status: text("status", { enum: TEMPLATE_SEND_STATUS }).notNull().default("sent"),
+    decidedAt: text("decided_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_template_sends_member").on(t.workspaceId, t.userId), index("body_template_sends_coach").on(t.workspaceId, t.coachUserId)],
+);
+export type BodyTemplateSend = typeof bodyTemplateSends.$inferSelect;
+
+/** B9: the member's weekly check-in, the week's numbers as lines plus one note, sent to the coach even with sharing off. One a week. */
+export const bodyCheckins = sqliteTable(
+  "body_checkins",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    monday: text("monday").notNull(),
+    lines: text("lines", { mode: "json" }).$type<string[]>().notNull().default([]),
+    note: text("note").notNull().default(""),
+    sentAt: text("sent_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_checkins_member_week").on(t.workspaceId, t.userId, t.monday)],
+);
+export type BodyCheckin = typeof bodyCheckins.$inferSelect;
+
+/**
  * "Switch to client" (rev 216): the coach's switches in and out, and every change made while working in a client's HelixOS,
  * in plain words. The client sees the changes in Settings ("Changes by your coach"); the coach's client page shows the
  * switches. Never the values themselves: which page, which item, what was done.

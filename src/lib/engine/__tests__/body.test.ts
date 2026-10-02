@@ -230,7 +230,7 @@ describe("Body ships dark: a member without the flag sees none of it (rev 195)",
     const actions = [...src.matchAll(/export async function (\w+Action)\([^)]*\)[^{]*\{([\s\S]*?)\n\}/g)].map((m) => ({ name: m[1], body: m[2] }));
     expect(actions.length).toBeGreaterThanOrEqual(15);
     const gated = (b: string) => /await setUp\(v\)|\n  enabled\(v\);|bodyAccess\(v, /.test(b);
-    expect(actions.filter((a) => !gated(a.body)).map((a) => a.name).sort()).toEqual(["eraseBodyAction", "setClientHumanosAction", "setHumanosAction"]);
+    expect(actions.filter((a) => !gated(a.body)).map((a) => a.name).sort()).toEqual(["eraseBodyAction", "sendTemplateAction", "setClientHumanosAction", "setHumanosAction"]);
   });
   it("the HumanOS switch (rev 320/322) is the member's own, for their own membership only; the coach's path needs working access, is on-only, and both are logged", () => {
     const src = read("src/lib/actions/body.ts");

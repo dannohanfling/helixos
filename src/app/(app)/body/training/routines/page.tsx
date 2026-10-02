@@ -6,7 +6,8 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { fmtTarget } from "@/lib/engine/body-training";
-import { bodySettingsFor, dayTypesFor, requireBodyEnabled, trainingLibrary, type TrainingLibrary } from "@/lib/queries/body";
+import { bodySettingsFor, dayTypesFor, requireBodyEnabled, trainingLibrary, type TrainingLibrary, templateSendsFor } from "@/lib/queries/body";
+import { CoachSends } from "@/components/body/coach-sends";
 import { archiveExerciseAction, archiveRoutineAction, saveExerciseAction, saveRoutineAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
 
@@ -94,7 +95,7 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
   const sp = await searchParams;
   const rowCount = Math.min(20, Math.max(ROUTINE_ROWS, Number(sp.rows) || ROUTINE_ROWS));
   if (!(await bodySettingsFor(v.workspace.id, v.user.id))) redirect("/body");
-  const [lib, types] = await Promise.all([trainingLibrary(v.workspace.id, v.user.id), dayTypesFor(v.workspace.id, v.user.id)]);
+  const [lib, types, sends] = await Promise.all([trainingLibrary(v.workspace.id, v.user.id), dayTypesFor(v.workspace.id, v.user.id), templateSendsFor(v.workspace.id, v.user.id, "routine")]);
   const typeName = new Map(types.map((t) => [t.id, t.name]));
 
   return (
@@ -148,6 +149,7 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
         </Disclosure>
       </Card>
 
+      <CoachSends sends={sends} back="/body/training/routines#routines" className="mb-4" />
       <Card title="Routines" id="routines">
         {lib.routines.length ? (
           <ul className="divide-y rounded-lg border" data-testid="training-routines">

@@ -7,7 +7,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { MACROS, MACRO_NAME, nextRefeed } from "@/lib/engine/body";
-import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory, whoopStatus } from "@/lib/queries/body";
+import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory, templateSendsFor, whoopStatus } from "@/lib/queries/body";
+import { CoachSends } from "@/components/body/coach-sends";
 import { deleteDayTypeAction, disconnectWhoopAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, setBodyAiAction, setBodyShareAction, syncWhoopAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
 import { EraseBodyForm } from "@/components/body/unit-inputs";
@@ -56,7 +57,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
   const s = await bodySettingsFor(v.workspace.id, v.user.id);
   const whoop = await whoopStatus(v.workspace.id, v.user.id);
   if (!s) redirect("/body");
-  const [types, history] = await Promise.all([dayTypesFor(v.workspace.id, v.user.id), shareHistory(v.workspace.id, v.user.id)]);
+  const [types, history, sends] = await Promise.all([dayTypesFor(v.workspace.id, v.user.id), shareHistory(v.workspace.id, v.user.id), templateSendsFor(v.workspace.id, v.user.id, "day_type")]);
   const refeedNext = nextRefeed(v.today, { dayTypeId: s.refeedDayTypeId, anchor: s.refeedAnchor, everyDays: s.refeedEveryDays });
   const capRows = [...s.caps, null];
 
@@ -105,6 +106,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
         ) : null}
       </Card>
 
+      <CoachSends sends={sends} back="/body/settings#day-types" className="mb-4" />
       <Card className="mb-4" title="Day types" id="day-types">
         <p className="mb-3 text-sm text-ink-2">Each day type has its own bands: a from and a to for each macro you track. Leave a macro blank to show its total without a target. The marks: inside the band ✅; slightly off 🟡 (5% or {`50 cal / 5 g P / 5 g F / 3 g C`}, whichever is more); significantly off ⚠️ (15%); beyond that, or more than slightly under a floor, ❌.</p>
         <ul className="space-y-3" data-testid="body-day-types">

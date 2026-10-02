@@ -34,6 +34,9 @@ import { EssenceOverNote } from "@/components/essence-over";
 import { essenceFor } from "@/lib/queries/essence";
 import { coachBodySummary } from "@/lib/queries/body";
 import { MARK_ICON, fmtMacro } from "@/lib/engine/body";
+import { coachCheckins, coachSendsTo, coachTemplateLibrary } from "@/lib/queries/body";
+import { sendTemplateAction } from "@/lib/actions/body";
+import { KIND_LABEL, templateSummary, type TemplatePayload } from "@/lib/engine/body-templates";
 
 export const metadata = { title: "Client" };
 
@@ -41,7 +44,7 @@ export const metadata = { title: "Client" };
  * One client, before a call. The page answers "what do I say to this person today": where they are, what they wrote in
  * their own words, what's stuck, what they claimed, what they've built. Then the call's decisions go back in as tasks.
  */
-export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string }> }) {
+export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string; template?: string; error?: string }> }) {
   const v = await requireCoach();
   const { clientId } = await params;
   const sp = await searchParams;
@@ -73,6 +76,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const month = today.slice(0, 7);
   // Body is private: this is null unless the client has switched on "Let my coach see my Body data" (rev 179).
   const body = await coachBodySummary(v, m.userId, today);
+  // B9: the coach's own library to send from, what was sent, and the client's check-ins (sent snapshots; no sharing switch applies).
+  const [templateLib, sends, checkins] = await Promise.all([coachTemplateLibrary(ws, v.user.id), coachSendsTo(ws, v.user.id, m.userId), coachCheckins(v, m.userId)]);
   const [points, closed, recent, monthLogs, goal, stages, library, progress, claims, notes, offers, webinars, ladders, content] = await Promise.all([
     totalPoints(ws, m.userId),
     closedDates(ws, m.userId),
@@ -383,6 +388,71 @@ export default async function CoachClientPage({ params, searchParams }: { params
         </div>
 
         <div className="space-y-4">
+          <Card title="Check-ins" id="checkins" action={<span className="text-xs text-ink-3">{checkins.length ? `${checkins.length} week${checkins.length === 1 ? "" : "s"}` : "none yet"}</span>}>
+            <p className="mb-2 text-xs text-ink-3">What {u.name.split(" ")[0]} sent from their week page: the week&apos;s numbers and one note, as sent, whether or not they share their days.</p>
+            {checkins.length ? (
+              <ul className="space-y-2" data-testid="coach-checkins" data-count={checkins.length}>
+                {checkins.slice(0, 8).map((c) => (
+                  <li key={c.id} className="rounded-lg border p-2 text-xs" data-testid="coach-checkin" data-monday={c.monday}>
+                    <div className="mb-1 font-semibold text-ink-2">Week of {formatDate(c.monday, { month: "short", day: "numeric" })} · sent {formatDate(c.sentAt.slice(0, 10), { month: "short", day: "numeric" })}</div>
+                    <ul className="space-y-0.5 text-ink-2">
+                      {c.lines.map((l, i) => (
+                        <li key={i}>{l}</li>
+                      ))}
+                    </ul>
+                    {c.note ? <p className="mt-1 text-sm break-words" data-testid="coach-checkin-note">&ldquo;{c.note}&rdquo;</p> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-3">Nothing sent yet.</p>
+            )}
+          </Card>
+          <Card title="Send a template" id="templates">
+            {sp.template === "sent" ? <p className="mb-2 text-xs text-good" role="status" data-testid="template-just-sent">Sent. They decide on their own page; you see nothing of theirs.</p> : null}
+            {sp.error ? <p className="mb-2 rounded-lg border border-danger bg-danger-soft p-2 text-xs" role="alert" data-testid="template-error">{sp.error}</p> : null}
+            {templateLib ? (
+              <form action={sendTemplateAction} className="flex flex-wrap items-end gap-2" data-testid="template-form">
+                <input type="hidden" name="membershipId" value={m.id} />
+                <label className="min-w-0 flex-1">
+                  <span className="label">One of your own</span>
+                  <select name="pick" className="field" data-testid="template-pick" required>
+                    <option value="">Pick…</option>
+                    {(["day_type", "meal", "routine"] as const).map((kind) => {
+                      const rows = kind === "day_type" ? templateLib.dayTypes : kind === "meal" ? templateLib.meals : templateLib.routines;
+                      return rows.length ? (
+                        <optgroup key={kind} label={`${KIND_LABEL[kind]}s`}>
+                          {rows.map((r) => (
+                            <option key={r.id} value={`${kind}:${r.id}`}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null;
+                    })}
+                  </select>
+                </label>
+                <SubmitButton className="btn btn-primary btn-sm" pendingText="Sending…" data-testid="template-send">
+                  Send a copy
+                </SubmitButton>
+              </form>
+            ) : (
+              <p className="text-sm text-ink-3">Set up your own HumanOS first: a template is a copy of one of your own day types, meals or routines.</p>
+            )}
+            <p className="mt-2 text-xs text-ink-3">{m.bodyEnabled ? "They get their own copy to edit once they accept." : "Their HumanOS is off; the copy waits until they turn it on."}</p>
+            {sends.length ? (
+              <ul className="mt-3 space-y-1 text-xs" data-testid="template-sends" data-count={sends.length}>
+                {sends.slice(0, 10).map((s) => (
+                  <li key={s.id} className="flex flex-wrap justify-between gap-2" data-testid="template-send-row" data-status={s.status}>
+                    <span className="min-w-0 break-words">
+                      {KIND_LABEL[s.kind]}: {s.name} <span className="text-ink-3">· {templateSummary(s.payload as unknown as TemplatePayload)}</span>
+                    </span>
+                    <Badge tone={s.status === "accepted" ? "accent" : s.status === "declined" ? "neutral" : "warn"}>{s.status === "sent" ? "waiting" : s.status}</Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </Card>
           {body ? (
             <Card title="HumanOS" action={<Link href={`/coach/${m.id}/body`} className="text-xs text-ink-2 hover:underline" data-testid="coach-body-link">Their days →</Link>}>
               <p className="mb-2 text-xs text-ink-3">Shared with you by {u.name.split(" ")[0]}: read-only, comments on a day.</p>

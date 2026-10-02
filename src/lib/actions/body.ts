@@ -19,6 +19,7 @@ import { IMAGE_MAX_BYTES, isImageType } from "@/lib/engine/ai-request";
 import { readPlate, summariseWeek } from "@/lib/body-ai";
 import { isDayFlag } from "@/lib/engine/body-flags";
 import { weekNumbers } from "@/lib/engine/body-week";
+import { checkinNote, checkinWeekOk, copyName, dayTypeTemplate, isTemplateKind, mealTemplate, routineTemplate, sameName, templateName, type TemplatePayload } from "@/lib/engine/body-templates";
 import { bodyWeek } from "@/lib/queries/body";
 import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
@@ -89,6 +90,127 @@ export async function setClientHumanosAction(formData: FormData): Promise<void> 
   if (m!.bodyEnabled) return refresh();
   await db.update(schema.memberships).set({ bodyEnabled: true }).where(and(eq(schema.memberships.id, m!.id), eq(schema.memberships.workspaceId, v.workspace.id)));
   await logHumanos(v.workspace.id, m!.userId, true, "coach", v.user.name);
+  refresh();
+}
+
+/* ───────── B9: coach templates and the weekly check-in ───────── */
+
+const ownRows = <T extends { workspaceId: unknown; userId: unknown }>(t: T, workspaceId: string, userId: string) => and(eq(t.workspaceId as never, workspaceId), eq(t.userId as never, userId));
+
+/**
+ * A coach sends one of their own day types, meals or routines to a client, as a snapshot (B9a, rev 353). Only the coach's own rows
+ * are read; nothing of the client's. The client decides on their own page; a client whose HumanOS is off holds it until it's on.
+ */
+export async function sendTemplateAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  if (v.switchedInto) redirect("/coach");
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, str(formData, "membershipId")), eq(schema.memberships.workspaceId, v.workspace.id)) });
+  if (!m || m.role !== "client" || m.removedAt) redirect("/coach");
+  const where = `/coach/${m.id}`;
+  const [kind, id] = (opt(formData, "pick") ?? `${opt(formData, "kind") ?? ""}:${opt(formData, "id") ?? ""}`).split(":");
+  if (!isTemplateKind(kind) || !id) back(where, "Pick a day type, a meal or a routine to send.");
+  if (!(await bodySettingsFor(v.workspace.id, v.user.id))) back(where, "Set up your own HumanOS first: a template is one of your own day types, meals or routines.");
+  const ws = v.workspace.id;
+  let payload: TemplatePayload | null = null;
+  if (kind === "day_type") {
+    const t = await db.query.bodyDayTypes.findFirst({ where: and(eq(schema.bodyDayTypes.id, id), ownRows(schema.bodyDayTypes, ws, v.user.id)) });
+    payload = t ? dayTypeTemplate(t) : null;
+  } else if (kind === "meal") {
+    const meal = await db.query.bodyMeals.findFirst({ where: and(eq(schema.bodyMeals.id, id), ownRows(schema.bodyMeals, ws, v.user.id)) });
+    payload = meal && !meal.archivedAt ? mealTemplate(meal, await db.query.bodyFoods.findMany({ where: ownRows(schema.bodyFoods, ws, v.user.id) })) : null;
+  } else {
+    const r = await db.query.bodyRoutines.findFirst({ where: and(eq(schema.bodyRoutines.id, id), ownRows(schema.bodyRoutines, ws, v.user.id)) });
+    payload = r && !r.archivedAt ? routineTemplate(r, await db.query.bodyExercises.findMany({ where: ownRows(schema.bodyExercises, ws, v.user.id) })) : null;
+  }
+  if (!payload) back(where, "That one isn't yours to send, or it's empty.");
+  await db.insert(schema.bodyTemplateSends).values({ id: newId(), workspaceId: ws, userId: m.userId, coachUserId: v.user.id, coachName: v.user.name, kind: payload!.kind, name: templateName(payload!), payload: payload! as unknown as Record<string, unknown> });
+  refresh();
+  redirect(`${where}?template=sent#templates`);
+}
+
+/** The client takes a template as their own copy (foods and exercises made by name where missing) or declines it. */
+export async function decideTemplateAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
+  await setUp(v);
+  const backTo = (() => {
+    const b = opt(formData, "back") ?? "/body";
+    return b.startsWith("/body") && !b.includes("//") ? b : "/body";
+  })();
+  const send = await db.query.bodyTemplateSends.findFirst({ where: and(eq(schema.bodyTemplateSends.id, str(formData, "id")), ownRows(schema.bodyTemplateSends, workspaceId, userId)) });
+  if (!send || send.status !== "sent") back(backTo, "That template isn't waiting on you any more.");
+  const decision = str(formData, "decision");
+  if (decision !== "accept") {
+    await db.update(schema.bodyTemplateSends).set({ status: "declined", decidedAt: nowIso() }).where(eq(schema.bodyTemplateSends.id, send!.id));
+    refresh();
+    redirect(backTo);
+  }
+  const p = send!.payload as unknown as TemplatePayload;
+  if (p.kind === "day_type") {
+    const mine = await db.query.bodyDayTypes.findMany({ where: ownRows(schema.bodyDayTypes, workspaceId, userId) });
+    if (mine.length >= 12) back(backTo, "Twelve day types is the most; remove one to take this one.");
+    const { name, ...rest } = p.dayType;
+    await db.insert(schema.bodyDayTypes).values({ id: newId(), workspaceId, userId, name: copyName(name, mine, send!.coachName), order: mine.length, ...rest });
+  } else if (p.kind === "meal") {
+    const foods = (await db.query.bodyFoods.findMany({ where: ownRows(schema.bodyFoods, workspaceId, userId) })).filter((f) => !f.archivedAt);
+    const items: schema.BodyMealItem[] = [];
+    for (const i of p.meal.items) {
+      let f = sameName(i.food.name, foods);
+      if (!f) {
+        const id = newId();
+        await db.insert(schema.bodyFoods).values({ id, workspaceId, userId, ...i.food });
+        f = (await db.query.bodyFoods.findFirst({ where: eq(schema.bodyFoods.id, id) }))!;
+        foods.push(f);
+      }
+      items.push({ foodId: f.id, qty: i.qty });
+    }
+    const meals = (await db.query.bodyMeals.findMany({ where: ownRows(schema.bodyMeals, workspaceId, userId) })).filter((m) => !m.archivedAt);
+    await db.insert(schema.bodyMeals).values({ id: newId(), workspaceId, userId, name: copyName(p.meal.name, meals, send!.coachName), slot: p.meal.slot, items });
+  } else {
+    const exercises = (await db.query.bodyExercises.findMany({ where: ownRows(schema.bodyExercises, workspaceId, userId) })).filter((e) => !e.archivedAt);
+    const items: schema.BodyRoutineItem[] = [];
+    for (const i of p.routine.items) {
+      let e = sameName(i.exercise.name, exercises);
+      if (!e) {
+        const id = newId();
+        await db.insert(schema.bodyExercises).values({ id, workspaceId, userId, name: i.exercise.name, kind: i.exercise.kind });
+        e = (await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.id, id) }))!;
+        exercises.push(e);
+      }
+      items.push({ exerciseId: e.id, sets: i.sets, reps: i.reps });
+    }
+    const routines = (await db.query.bodyRoutines.findMany({ where: ownRows(schema.bodyRoutines, workspaceId, userId) })).filter((r) => !r.archivedAt);
+    await db.insert(schema.bodyRoutines).values({ id: newId(), workspaceId, userId, name: copyName(p.routine.name, routines, send!.coachName), dayTypeId: null, items });
+  }
+  await db.update(schema.bodyTemplateSends).set({ status: "accepted", decidedAt: nowIso() }).where(eq(schema.bodyTemplateSends.id, send!.id));
+  refresh();
+  redirect(backTo);
+}
+
+/**
+ * "Send this week to your coach" (B9b): the week's numbers as the lines the AI summary gets (never a food, a note, a photo or the
+ * health log) plus one note, kept as a snapshot the coach reads with no sharing switch in the way. One a week; sending again replaces it.
+ */
+export async function sendCheckinAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
+  const settings = await setUp(v);
+  const monday = str(formData, "monday");
+  const where = `/body/week?week=${monday}`;
+  if (!checkinWeekOk(monday, v.today, startOfWeek)) back("/body/week", "Pick a week that has started.");
+  const w = await bodyWeek(workspaceId, userId, monday, v.today);
+  if (!w) back(where, "Nothing to send yet.");
+  const lines = weekNumbers({ label: `${w!.monday} to ${w!.sunday}`, nutrition: w!.nutrition, prevNutrition: w!.prevNutrition, training: w!.training, prevTraining: w!.prevTraining, weigh: { avg: w!.weigh.avg, days: w!.weigh.days }, prevWeigh: { avg: w!.weigh.prevAvg, days: 0 }, weightUnit: settings.weightUnit, sleepAvg: w!.sleep?.avg ?? null, burnAvg: w!.burn?.avg ?? null, habits: w!.habits ?? { due: 0, kept: 0 } }).split("\n");
+  const note = checkinNote(opt(formData, "note") ?? "");
+  await db.delete(schema.bodyCheckins).where(and(ownRows(schema.bodyCheckins, workspaceId, userId), eq(schema.bodyCheckins.monday, monday)));
+  await db.insert(schema.bodyCheckins).values({ id: newId(), workspaceId, userId, monday, lines, note, sentAt: nowIso() });
+  refresh();
+  redirect(`${where}&checkin=sent#checkin`);
+}
+
+/** The member takes a sent check-in back; it goes for the coach too (rev 200). */
+export async function deleteCheckinAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "HumanOS is never open from a client's HelixOS." });
+  await setUp(v);
+  await db.delete(schema.bodyCheckins).where(and(eq(schema.bodyCheckins.id, str(formData, "id")), ownRows(schema.bodyCheckins, workspaceId, userId)));
   refresh();
 }
 
@@ -791,6 +913,8 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Deleting {first}'s data is theirs to ask for." });
   if (str(formData, "confirm").toUpperCase() !== "DELETE") back("/body/settings", "Nothing was deleted: type DELETE to confirm.");
   await db.batch([
+    db.delete(schema.bodyTemplateSends).where(and(eq(schema.bodyTemplateSends.workspaceId, workspaceId), eq(schema.bodyTemplateSends.userId, userId))),
+    db.delete(schema.bodyCheckins).where(and(eq(schema.bodyCheckins.workspaceId, workspaceId), eq(schema.bodyCheckins.userId, userId))),
     db.delete(schema.bodyActivities).where(and(eq(schema.bodyActivities.workspaceId, workspaceId), eq(schema.bodyActivities.userId, userId))),
     db.delete(schema.bodyDevices).where(and(eq(schema.bodyDevices.workspaceId, workspaceId), eq(schema.bodyDevices.userId, userId))),
     db.delete(schema.bodyOrders).where(and(eq(schema.bodyOrders.workspaceId, workspaceId), eq(schema.bodyOrders.userId, userId))),

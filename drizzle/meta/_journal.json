@@ -673,6 +673,13 @@
       "when": 1790907712525,
       "tag": "0098_kit_logo_footer_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1790910307921,
+      "tag": "0099_coach_templates_checkins",
+      "breakpoints": true
     }
   ]
 }

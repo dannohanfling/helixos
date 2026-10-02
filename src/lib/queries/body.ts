@@ -1048,6 +1048,56 @@ export async function whoopStatus(workspaceId: string, userId: string) {
   return { connectedAt: d.connectedAt, lastSyncAt: d.lastSyncAt, lastError: d.lastError, known: !!d.providerUserId, maxHr: max?.value ?? null };
 }
 
+/* ───────── B9: coach templates and the weekly check-in ───────── */
+
+/** The coach's own day types, meals and routines, as the "Send a template" card lists them. Null until the coach's own HumanOS is set up. */
+export async function coachTemplateLibrary(workspaceId: string, coachUserId: string) {
+  const settings = await bodySettingsFor(workspaceId, coachUserId);
+  if (!settings) return null;
+  const own = <T extends { workspaceId: unknown; userId: unknown }>(t: T) => and(eq(t.workspaceId as never, workspaceId), eq(t.userId as never, coachUserId));
+  const [dayTypes, meals, routines] = await Promise.all([
+    db.query.bodyDayTypes.findMany({ columns: { id: true, name: true }, where: own(schema.bodyDayTypes), orderBy: asc(schema.bodyDayTypes.order) }),
+    db.query.bodyMeals.findMany({ columns: { id: true, name: true, archivedAt: true }, where: own(schema.bodyMeals), orderBy: asc(schema.bodyMeals.name) }),
+    db.query.bodyRoutines.findMany({ columns: { id: true, name: true, archivedAt: true }, where: own(schema.bodyRoutines), orderBy: asc(schema.bodyRoutines.name) }),
+  ]);
+  return { dayTypes, meals: meals.filter((m) => !m.archivedAt), routines: routines.filter((r) => !r.archivedAt) };
+}
+
+/** What this coach has sent one client, newest first, with each send's standing. */
+export async function coachSendsTo(workspaceId: string, coachUserId: string, clientUserId: string) {
+  return db.query.bodyTemplateSends.findMany({ where: and(eq(schema.bodyTemplateSends.workspaceId, workspaceId), eq(schema.bodyTemplateSends.coachUserId, coachUserId), eq(schema.bodyTemplateSends.userId, clientUserId)), orderBy: desc(schema.bodyTemplateSends.createdAt) });
+}
+
+/** The member's sends still waiting on them, oldest first; one kind, or all. */
+export async function templateSendsFor(workspaceId: string, userId: string, kind?: schema.BodyTemplateSend["kind"]) {
+  const rows = await db.query.bodyTemplateSends.findMany({ where: and(and(eq(schema.bodyTemplateSends.workspaceId, workspaceId), eq(schema.bodyTemplateSends.userId, userId)), eq(schema.bodyTemplateSends.status, "sent")), orderBy: asc(schema.bodyTemplateSends.createdAt) });
+  return kind ? rows.filter((r) => r.kind === kind) : rows;
+}
+
+/** The member's own check-ins, newest week first. */
+export async function checkinsFor(workspaceId: string, userId: string) {
+  return db.query.bodyCheckins.findMany({ where: and(eq(schema.bodyCheckins.workspaceId, workspaceId), eq(schema.bodyCheckins.userId, userId)), orderBy: desc(schema.bodyCheckins.monday) });
+}
+
+/**
+ * A client's check-ins for their coach: only what the member sent, as sent, with no sharing switch in the way (rev 200). The
+ * client must be one of the coach's, in this workspace, not removed; nothing else of theirs is read here.
+ */
+export async function coachCheckins(v: Viewer, clientUserId: string) {
+  if (v.role !== "coach" || v.switchedInto) return [];
+  const m = await db.query.memberships.findFirst({ columns: { id: true, role: true, removedAt: true }, where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.userId, clientUserId)) });
+  if (!m || m.role !== "client" || m.removedAt) return [];
+  return checkinsFor(v.workspace.id, clientUserId);
+}
+
+/** Which clients sent a check-in for the week that holds their today: the roster's "sent" mark. */
+export async function checkinMarks(workspaceId: string, clients: { userId: string; today: string }[]): Promise<Set<string>> {
+  if (!clients.length) return new Set();
+  const rows = await db.query.bodyCheckins.findMany({ columns: { userId: true, monday: true }, where: and(eq(schema.bodyCheckins.workspaceId, workspaceId), inArray(schema.bodyCheckins.userId, clients.map((c) => c.userId))) });
+  const want = new Map(clients.map((c) => [c.userId, startOfWeek(c.today)]));
+  return new Set(rows.filter((r) => want.get(r.userId) === r.monday).map((r) => r.userId));
+}
+
 /** The device's figures for one day (phase 16b): the energy estimate and the average heart rate, for the Log page beside intake. */
 export async function deviceDay(workspaceId: string, userId: string, date: string): Promise<{ burnCal: number | null; avgHr: number | null }> {
   const rows = await db.query.bodyDaily.findMany({ columns: { key: true, value: true }, where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), eq(schema.bodyDaily.date, date), inArray(schema.bodyDaily.key, ["burn_cal", "cycle_hr"])) });

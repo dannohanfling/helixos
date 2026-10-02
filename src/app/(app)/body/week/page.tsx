@@ -10,7 +10,9 @@ import { addDays, formatDate, startOfWeek } from "@/lib/dates";
 import { MARK_ICON, fmtMacro } from "@/lib/engine/body";
 import { fmtMetric } from "@/lib/engine/body-scale";
 import { fmtHours } from "@/lib/engine/body-recovery";
-import { bodyRange, bodyWeek, requireBodyEnabled } from "@/lib/queries/body";
+import { bodyRange, bodyWeek, requireBodyEnabled, checkinsFor } from "@/lib/queries/body";
+import { CheckinCard } from "@/components/body/checkin-card";
+import { weekNumbers } from "@/lib/engine/body-week";
 import { BarChart, StreakCalendar } from "@/components/charts";
 import { RangePicker } from "@/components/body/range-picker";
 import { isRangeKey, monthLabelFor, rangeBounds, rateText } from "@/lib/engine/body-range";
@@ -82,7 +84,7 @@ async function RangeView({ v, range, from }: { v: Awaited<ReturnType<typeof requ
   );
 }
 
-export default async function BodyWeekPage({ searchParams }: { searchParams: Promise<{ week?: string; range?: string; from?: string }> }) {
+export default async function BodyWeekPage({ searchParams }: { searchParams: Promise<{ week?: string; range?: string; from?: string; checkin?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
@@ -177,6 +179,8 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
         </ul>
         <p className="mt-2 text-[11px] text-ink-3">Off-plan meals join this page when they arrive.</p>
       </Card>
+      {/* B9b: a client sends the week's numbers to their coach, sharing on or off. A coach has no coach to send to. */}
+      {v.role === "client" ? <CheckinCard monday={monday} sent={(await checkinsFor(v.workspace.id, v.user.id)).find((c) => c.monday === monday) ?? null} justSent={sp.checkin === "sent"} lines={weekNumbers({ label: `${w.monday} to ${w.sunday}`, nutrition: w.nutrition, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weigh: { avg: w.weigh.avg, days: w.weigh.days }, prevWeigh: { avg: w.weigh.prevAvg, days: 0 }, weightUnit: w.settings.weightUnit, sleepAvg: w.sleep?.avg ?? null, burnAvg: w.burn?.avg ?? null, habits: w.habits ?? { due: 0, kept: 0 } }).split("\n")} /> : null}
     </>
   );
 }

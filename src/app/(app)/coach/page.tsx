@@ -17,7 +17,7 @@ import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_DEGRADE_AT, EVI
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
-import { coachBodyColumn } from "@/lib/queries/body";
+import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
 import { setClientHumanosAction } from "@/lib/actions/body";
 import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
@@ -131,6 +131,8 @@ export default async function CoachPage() {
   const myBot = v.membership;
   // Body (rev 237 phase 12): a cell only for clients who share it with the coach; blank for the rest, private or off alike.
   const bodyOf = await coachBodyColumn(v, rows.map((r) => ({ userId: r.m.userId, today: theirToday(r.m) })));
+  // B9: a ✉️ for a client who sent this week's check-in, shared or not.
+  const sentCheckin = v.switchedInto ? new Set<string>() : await checkinMarks(v.workspace.id, rows.filter((r) => r.m.role === "client").map((r) => ({ userId: r.m.userId, today: theirToday(r.m) })));
 
   return (
     <>
@@ -203,6 +205,7 @@ export default async function CoachPage() {
                             </SubmitButton>
                           </form>
                         ) : null}
+                        {sentCheckin.has(r.m.userId) ? <Link href={`/coach/${r.m.id}#checkins`} className="ml-1" title="Sent this week's check-in" data-testid="coach-checkin-mark">✉️</Link> : null}
                       </td>
                       <td className="py-2 pr-3">
                         {TIER_ICONS[r.tier.name]} {r.tier.name} <span className="text-xs text-ink-3 tabular">{r.pts.toLocaleString()}</span>

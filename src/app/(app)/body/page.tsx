@@ -9,7 +9,8 @@ import { addDays, formatDate } from "@/lib/dates";
 import { MACROS, MACRO_LABEL, MARK_ICON, MARK_WORD, fmtMacro, slotNow } from "@/lib/engine/body";
 import { LogFoodForm } from "@/components/body/unit-inputs";
 import { loggableUnits } from "@/lib/engine/body-units";
-import { bodyDay, latestComposition, recentDays, requireBodyEnabled, deviceDay } from "@/lib/queries/body";
+import { bodyDay, latestComposition, recentDays, requireBodyEnabled, deviceDay, templateSendsFor } from "@/lib/queries/body";
+import { CoachSends } from "@/components/body/coach-sends";
 import { fmtMetric } from "@/lib/engine/body-scale";
 import { deleteEntryAction, logFoodAction, logMealAction, logPhotoAction, mealPhotoAction, setBodyAiAction, setBodyDayFlagAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
 import { DAY_FLAGS, FLAG_LABEL, flagText } from "@/lib/engine/body-flags";
@@ -27,10 +28,13 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
   const d = await bodyDay(v.workspace.id, v.user.id, date, v.today);
   const photoOk = d?.settings.aiUse ? await photoReady(v) : false;
 
+  // B9: a coach's templates wait here (every kind), and on the page each kind belongs to, until the member decides.
+  const sends = await templateSendsFor(v.workspace.id, v.user.id);
   if (!d) {
     return (
       <>
         <HumanosHeader title="Log" gear={false} subtitle="Nutrition targets and fast meal logging. Workouts and weigh-ins come next." />
+        {sends.length ? <p className="mb-4 text-sm text-ink-2" data-testid="coach-sends-held">Your coach sent you {sends.length} template{sends.length === 1 ? "" : "s"}; set up HumanOS to take {sends.length === 1 ? "it" : "them"}.</p> : null}
         {sp.erased ? (
           <p className="mb-4 rounded-xl border p-3 text-sm" role="status" data-testid="body-erased">
             All your HumanOS data is deleted.
@@ -77,6 +81,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
           </div>
         }
       />
+      <CoachSends sends={sends} back="/body" className="mb-4" />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
           {sp.error}

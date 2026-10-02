@@ -8,7 +8,8 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { fmtMacro } from "@/lib/engine/body";
-import { bodyLibrary, bodySettingsFor, requireBodyEnabled } from "@/lib/queries/body";
+import { bodyLibrary, bodySettingsFor, requireBodyEnabled, templateSendsFor } from "@/lib/queries/body";
+import { CoachSends } from "@/components/body/coach-sends";
 import { archiveFoodAction, archiveMealAction, saveFoodAction, saveMealAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
 import { UnitPicker } from "@/components/body/unit-inputs";
@@ -87,6 +88,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
   const settings = await bodySettingsFor(v.workspace.id, v.user.id);
   if (!settings) redirect("/body");
   const { foods, meals } = await bodyLibrary(v.workspace.id, v.user.id);
+  const sends = await templateSendsFor(v.workspace.id, v.user.id, "meal");
   const capTags = settings.caps.map((c) => c.tag);
 
   return (
@@ -159,6 +161,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
           <p className="text-sm text-ink-2">No foods yet.</p>
         )}
       </Card>
+      <CoachSends sends={sends} back="/body/foods#meals" className="mb-4" />
       <Card title={`Saved meals · ${meals.length}`} id="meals">
         {meals.length ? (
           <ul className="divide-y rounded-lg border" data-testid="body-meal-list">
