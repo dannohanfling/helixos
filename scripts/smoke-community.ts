@@ -278,7 +278,10 @@ async function main() {
     }
     await submit(page, `[data-testid="community-log-row"][data-week="${lostWeeks[0]}"] [data-testid="community-resolve-live"]`);
     await submit(page, `[data-testid="community-log-row"][data-week="${lostWeeks[1]}"] [data-testid="community-resolve-not"]`);
-    if ((await rowFor(lostWeeks[0]))!.status !== "posted" || (await rowFor(lostWeeks[1]))!.status !== "failed" || !(await page.locator(`[data-testid="community-log-row"][data-week="${lostWeeks[1]}"] [data-testid="community-retry"]`).count())) throw new Error("It's live marks it posted; It didn't go out marks it failed and brings Post now back");
+    // The refreshed log lands a beat after the second action's response (2 Oct, under a loaded gate): wait for Post now to be back.
+    const retryBack = page.locator(`[data-testid="community-log-row"][data-week="${lostWeeks[1]}"] [data-testid="community-retry"]`);
+    for (let i = 0; i < 50 && !(await retryBack.count()); i++) await page.waitForTimeout(100);
+    if ((await rowFor(lostWeeks[0]))!.status !== "posted" || (await rowFor(lostWeeks[1]))!.status !== "failed" || !(await retryBack.count())) throw new Error("It's live marks it posted; It didn't go out marks it failed and brings Post now back");
     console.log("✓ a post HelixOS can't find: unknown with the last check shown, never Failed and no Post now; It's live / It didn't go out settle it (only the second brings Post now back)");
 
     // 28 Sep, 12:30: this week's post was live while HelixOS said failed, with nowhere to put its link. Every row takes a link;

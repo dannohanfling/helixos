@@ -43,6 +43,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   const savedKit = v.role === "coach" ? await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) }) : null;
+  // The coach's logos in their Images library, for the kit's logo pick (deck visuals §4).
+  const logos = v.role === "coach" ? await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id), eq(schema.deckImages.kind, "logo")) }) : [];
   // A refused kit comes back as typed, so the person fixes the one pair named rather than typing thirteen fields again.
   const parseDraft = (raw: string | undefined): Partial<schema.BrandKit> | undefined => {
     if (!raw) return undefined;
@@ -425,8 +427,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Field label="Quote face" hint="pull quotes, optional">
                   <input className="field" name="quoteFont" defaultValue={brandKit?.quoteFont ?? ""} />
                 </Field>
-                <Field label="Fallback face" hint="what the file names when a brand face is missing on the reader's machine; a licensed face needs one">
+                <Field label="Fallback face" hint="what the file names when a brand face is missing on the reader's machine; a licensed face needs one. It is also the file's theme font, so text a reader adds in PowerPoint takes it.">
                   <input className="field" name="fontFallback" defaultValue={brandKit?.fontFallback ?? "Arial"} />
+                </Field>
+                <Field label="Logo" hint="from your Images library (kind Logo): on the cover and in the footer bar. None means the kit's name set as type.">
+                  <select className="field" name="logoImageId" defaultValue={brandKit?.logoImageId ?? ""} data-testid="brand-logo">
+                    <option value="">No logo</option>
+                    {logos.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.caption ? l.caption : "Logo"} · {l.width}×{l.height}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Banned colours" hint="hex, comma-separated: a kit using one is refused">
                   <input className="field font-mono" name="bannedColors" defaultValue={brandKit?.bannedColors?.join(", ") ?? ""} />

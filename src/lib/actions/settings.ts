@@ -123,6 +123,13 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
     bodyFont: str(formData, "bodyFont"),
     quoteFont: opt(formData, "quoteFont"),
     fontFallback: str(formData, "fontFallback") || "Arial",
+    // The logo (deck visuals §4): one of the coach's own library images of kind logo, or none.
+    logoImageId: await (async () => {
+      const id = str(formData, "logoImageId").trim();
+      if (!id) return null;
+      const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, coach.workspace.id), eq(schema.deckImages.kind, "logo")) });
+      return img ? img.id : null;
+    })(),
     bannedColors: str(formData, "bannedColors").split(/[,\s]+/).map(normaliseHex).filter(Boolean),
     placeholder: normaliseHex(str(formData, "placeholder")) || null,
     // Permitted names: a script may introduce one with no warning; none is ever reported as the presenter.

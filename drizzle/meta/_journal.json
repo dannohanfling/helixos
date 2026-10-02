@@ -666,6 +666,13 @@
       "when": 1790904669066,
       "tag": "0097_whoop_rest",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1790907712525,
+      "tag": "0098_kit_logo_footer_brand",
+      "breakpoints": true
     }
   ]
 }

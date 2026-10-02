@@ -46,7 +46,7 @@ export function fillRuntime(text: string, n: { runtime: number; openingMinutes: 
 
 /* ───────────── Brand kit ───────────── */
 
-export type BrandKitInput = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null };
+export type BrandKitInput = { name: string; logoImageId?: string | null; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null };
 export const BRAND_COLOR_ROLES = ["ground", "ink", "accent", "muted", "surface"] as const;
 /** The contrast a headline needs against its ground before the kit is accepted. */
 export const MIN_CONTRAST = 4.5;

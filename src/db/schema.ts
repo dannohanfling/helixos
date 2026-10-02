@@ -981,6 +981,8 @@ export const webinars = sqliteTable(
     reflectionPrompt: text("reflection_prompt"),
     /** Per-webinar chrome, both off by default: a logo footer bar on content slides, a CTA bar on the offer and Q&A slides. */
     footerBar: integer("footer_bar", { mode: "boolean" }).notNull().default(false),
+    /** The footer bar's brand line for this webinar (§4): empty means the kit's name, or the workspace's with no kit. */
+    footerBrand: text("footer_brand"),
     ctaBar: integer("cta_bar", { mode: "boolean" }).notNull().default(false),
     /** The origin story in eight beats, keyed by ORIGIN_BEATS; a beat left empty makes no slide. */
     originStory: text("origin_story", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
@@ -1151,6 +1153,8 @@ export const brandKits = sqliteTable("brand_kits", {
   bodyFont: text("body_font").notNull(),
   quoteFont: text("quote_font"),
   fontFallback: text("font_fallback").notNull().default("Arial"),
+  /** The brand's logo (deck visuals §4): a deck_images row of kind logo, shown on the cover and in the footer bar. None means the kit's name set as type. */
+  logoImageId: text("logo_image_id"),
   bannedColors: text("banned_colors", { mode: "json" }).$type<string[]>().notNull().default([]),
   /** Reserved for an unfilled slot on a slide, and nothing else: unmissable when flipping through. */
   placeholder: text("placeholder"),

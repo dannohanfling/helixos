@@ -159,7 +159,8 @@ async function main() {
     if (!emptyRes.ok()) throw new Error(`the deck exports with its slots empty: ${emptyRes.status()}`);
     const emptyZip = await JSZip.loadAsync(emptyBody);
     const emptyCover = await emptyZip.file("ppt/slides/slide1.xml")!.async("string");
-    if (/<p:pic>/.test(emptyCover)) throw new Error("no picture on the cover before one is attached");
+    // The cover carries the logo (§4, top left) and nothing else before a picture is attached to its slot.
+    if ((emptyCover.match(/<p:pic>/g) ?? []).length !== 1) throw new Error("before a picture is attached, the cover carries the logo and no other picture");
     if (!emptyCover.includes('<a:prstDash val="dash"/>') || !emptyCover.includes('<a:srgbClr val="D92D20"/>') || !emptyCover.includes("Add a photo of you: on stage, or on a call.")) throw new Error("the empty slot is a dashed frame with red text saying what to add");
     const dashed = boxes(emptyCover).find((b) => within(b.cx / EMU, COVER_FRAME.w) && within(b.cy / EMU, COVER_FRAME.h) && within(b.x / EMU, COVER_FRAME.x) && within(b.y / EMU, COVER_FRAME.y));
     if (!dashed) throw new Error(`the placeholder frame is the picture's frame: ${JSON.stringify(boxes(emptyCover))}`);
@@ -249,7 +250,11 @@ async function main() {
       return pics;
     };
     const pics1 = await checkPics(zip, "photo on the cover");
-    const coverPic = pics1.find((p) => p.slide === "ppt/slides/slide1.xml")!;
+    // The cover's slot picture is the one in the frame; the cover's logo (§4) is the small one top left.
+    const coverPics = pics1.filter((p) => p.slide === "ppt/slides/slide1.xml");
+    const coverPic = coverPics.find((p) => within(p.cx / EMU, COVER_FRAME.w))!;
+    const coverLogo = coverPics.find((p) => p !== coverPic)!;
+    if (coverPics.length !== 2 || !coverLogo || coverLogo.crop || !within(coverLogo.cx / coverLogo.cy, LOGO_PX.width / LOGO_PX.height) || coverLogo.cy / EMU > 0.55 + 1e-3) throw new Error(`the cover carries the photo in its frame and the logo whole, top left: ${JSON.stringify(coverPics)}`);
     const coverNative = await nativeOf(zip, coverPic.media);
     // A photo covers its frame: the box is the frame, the crop is left and right only (a 2:1 photo in a 1.12:1 frame), centred.
     if (!within(coverPic.cx / EMU, COVER_FRAME.w) || !within(coverPic.cy / EMU, COVER_FRAME.h)) throw new Error(`the photo fills the cover's frame: ${coverPic.cx / EMU} by ${coverPic.cy / EMU} in`);
@@ -266,9 +271,9 @@ async function main() {
     }
     const logoNative = await nativeOf(zip, logoPics[0].media);
     if (logoNative.format !== "png" || new Set(logoPics.map((p) => p.media)).size !== 1) throw new Error(`the logo is one PNG media file shared by every slide: ${JSON.stringify([...new Set(logoPics.map((p) => p.media))])}`);
-    if (media.length !== 2) throw new Error(`two pictures placed means two media files in the zip, whatever the slide count: ${media.join(", ")}`);
+    if (media.length !== 3) throw new Error(`the photo, the cover's logo and the footer's logo (two sizes of one file) are three media files, whatever the slide count: ${media.join(", ")}`);
     if (body.length > 3 * 1024 * 1024) throw new Error(`the deck stays small: ${body.length} bytes`);
-    console.log(`✓ §1 off the XML: the photo covers the cover's frame, cropped left and right only, as a ${coverNative.width}×${coverNative.height} JPEG; the logo is whole in its box on ${logoPics.length} slides as one PNG; ${media.length} media files, ${Math.round(body.length / 1024)}KB`);
+    console.log(`✓ §1 off the XML: the photo covers the cover's frame, cropped left and right only, as a ${coverNative.width}×${coverNative.height} JPEG; the logo is whole in its box on ${logoPics.length} slides as one PNG and on the cover (§4); ${media.length} media files, ${Math.round(body.length / 1024)}KB`);
 
     // The footer bar the webinar turned on: the workspace name is drawn on a content slide, and the logo is a second embedded image.
     const contentSlides = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide[2-9]\d*\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")))).join("\n");
@@ -333,7 +338,7 @@ async function main() {
     const res2 = await page.request.get(`${base}/api/webinars/${webinar.id}/deck?format=pptx`);
     const zip2 = await JSZip.loadAsync(await res2.body());
     const pics2 = await checkPics(zip2, "screenshot on the cover");
-    const shotPic = pics2.find((p) => p.slide === "ppt/slides/slide1.xml")!;
+    const shotPic = pics2.filter((p) => p.slide === "ppt/slides/slide1.xml").find((p) => within(p.cx / EMU, COVER_FRAME.w))!;
     const shotNative = await nativeOf(zip2, shotPic.media);
     if (shotPic.crop || !within(shotPic.cx / EMU, COVER_FRAME.w) || !within(shotPic.cx / shotPic.cy, SHOT_PX.width / SHOT_PX.height) || shotPic.cy > shotPic.cx) throw new Error(`a screenshot is contained whole at its own ratio across the frame's width, never cropped: ${JSON.stringify(shotPic)}`);
     if (shotNative.format !== "png" || shotNative.width !== Math.round(COVER_FRAME.w * 96 * 2) || shotNative.width >= SHOT_PX.width) throw new Error(`a screenshot stays a PNG, downscaled to fit twice the frame's 96 dpi width: ${JSON.stringify(shotNative)}`);

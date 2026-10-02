@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 49,
+    date: "2026-10-02",
+    title: "The brand kit on the deck: logo, brand line, fonts, fit",
+    lines: [
+      "The brand kit takes a logo from your Images library: it sits on the cover and in the footer bar. The footer's brand line is the kit's name (or a line you set on the webinar's Foundation step), not the workspace's. The kit's fallback face is now the file's theme font, so text anyone adds in PowerPoint takes it.",
+      "A one-line slide with no body is a statement: centred and large. Text beside a picture shrinks to fit its column, and when it cannot, the picture takes the next slide instead of running over the text. Footer text reads in the muted colour and its boxes no longer overlap.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 48,
     date: "2026-10-02",
     title: "WHOOP, the rest of it: workouts under your session, sleep stages, and the day's burn",

@@ -5,6 +5,7 @@ import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
 import { PLACEHOLDER_TEXT_SIZE, TEXT_LEFT_ZONE, deckSlides, outlineText, renderPlan, slotFrame, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
+import { placeImage } from "@/lib/engine/deck-fit";
 import { contextFor } from "@/lib/queries/webinar";
 import { filledSlides, resolveDeckSlots } from "@/lib/queries/deck-slots";
 import { readProofObject } from "@/lib/proof-storage";
@@ -23,8 +24,9 @@ async function readBytes(url: string): Promise<Buffer | null> {
     return null;
   }
 }
-/** The footer bar's logo box, right of the band. */
+/** The footer bar's logo box, right of the band; and the cover's, top left (§4). */
 const LOGO_BOX = { x: 9.0, y: 5.35, w: 0.9, h: 0.24 };
+const COVER_LOGO_BOX = { x: 0.5, y: 0.35, w: 1.8, h: 0.55 };
 
 /**
  * GET /api/webinars/{id}/deck?format=pptx|txt
@@ -71,13 +73,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (prepared) bySlide.set(r.slide, prepared);
     else filled.delete(r.slide); // The bytes wouldn't read back or decode: the slide shows the slot's placeholder, never a broken picture.
   }));
-  // The footer bar's logo, if the coach turned the bar on and has a logo in their library: their newest one, contained whole.
-  let logo: PreparedImage | null = null;
-  if (deck.footerBar) {
-    const row = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] });
-    const bytes = row ? await readOnce(row.blobUrl) : null;
-    logo = bytes ? await prepareDeckImage(bytes, "logo", LOGO_BOX) : null;
-  }
+  // The logo (§4): the kit's pick first; failing that, the newest logo in the owner's own library. On the cover, and in the footer
+  // bar when the bar is on, each contained whole in its box. No logo means the brand line set as type.
+  const logoRow =
+    (kit?.logoImageId ? await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, kit.logoImageId), eq(schema.deckImages.workspaceId, w.workspaceId)) }) : null) ??
+    (await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] })) ??
+    null;
+  const logoBytes = logoRow ? await readOnce(logoRow.blobUrl) : null;
+  const logo = logoBytes && deck.footerBar ? await prepareDeckImage(logoBytes, "logo", LOGO_BOX) : null;
+  const coverLogo = logoBytes ? await prepareDeckImage(logoBytes, "logo", COVER_LOGO_BOX) : null;
+  // The footer's brand line (§4): this webinar's own, else the kit's name, else the workspace's when no kit is applied.
+  const brand = w.footerBrand?.trim() || (deck.kitApplied ? deck.kit.name : v.workspace.name);
 
   const { default: PptxGenJS } = await import("pptxgenjs");
   const pptx = new PptxGenJS();
@@ -87,7 +93,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   pptx.subject = w.title;
   pptx.author = context.presenter;
   pptx.company = v.workspace.name;
-  const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: v.workspace.name, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo };
+  // The theme fonts are the kit's fallback face (§4): the format has no second typeface on a run, so a reader without a brand
+  // face falls to their app's substitute, but every box a reader adds in PowerPoint takes this face, not Calibri.
+  pptx.theme = { headFontFace: deck.kit.fontFallback, bodyFontFace: deck.kit.fontFallback };
+  const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: brand, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo, coverLogo };
   for (const plan of renderPlan(deck, filled)) draw(pptx, plan, bySlide.get(plan.n) ?? null, chrome);
   // The same picture on several slides (and the logo on every content slide) is one media file in the finished zip.
   const { file: buffer } = await dedupeDeckMedia((await pptx.write({ outputType: "nodebuffer" })) as Buffer);
@@ -98,7 +107,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 const normalise = (v: string): string => (v ?? "").replace(/^#/, "").toUpperCase();
 
-type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; company: string; muted: string; surface: string; accent: string; body: string; logo: PreparedImage | null };
+type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; company: string; muted: string; surface: string; accent: string; body: string; logo: PreparedImage | null; coverLogo: PreparedImage | null };
 
 /**
  * One slide from its plan: a mapping, nothing decided here. Every colour and face is the plan's. A filled slot's picture is
@@ -108,6 +117,14 @@ type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; c
 function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chrome: Chrome) {
   const slide = pptx.addSlide();
   slide.background = { color: plan.background };
+  // A slide that carries only the picture of the slide before it (§4): the picture, or its placeholder, and nothing else.
+  if (plan.pictureOnly) {
+    if (image && plan.imageFrame) drawImage(pptx, slide, image, plan.imageFrame, plan.background);
+    else if (plan.placeholderSlot) drawPlaceholder(pptx, slide, plan.placeholderSlot, chrome.body);
+    drawBars(pptx, slide, chrome, false);
+    slide.addNotes(plan.notes);
+    return;
+  }
   // A filled slot's frame, or the empty slot's: the text keeps the picture-slide layout either way (§2).
   const frame = plan.imageFrame ?? plan.placeholderSlot?.frame ?? null;
   const cover = plan.boxes.some((b) => b.role === "cover-title");
@@ -116,6 +133,8 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
   const bodyZone = frame ? { x: TEXT_LEFT_ZONE.x + 0.2, w: TEXT_LEFT_ZONE.w - 0.2 } : { x: 0.7, w: 8.6 };
 
   if (cover) {
+    // The logo on the cover (§4), top left, contained whole in its box.
+    if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: chrome.coverLogo.placement.box.x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h });
     const title = plan.boxes.find((b) => b.role === "cover-title");
     const presenter = plan.boxes.find((b) => b.role === "cover-presenter");
     if (title) slide.addText(title.text, frame ? { x: zone.x, y: 1.6, w: zone.w, h: 1.8, fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face, align: "left", valign: "middle" } : { x: 0.5, y: 1.5, w: 9, h: 1.6, fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face, align: "center", valign: "middle" });
@@ -126,7 +145,9 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     const lines = plan.boxes.filter((b) => b.role === "body" || b.role === "attribution");
     const footer = plan.boxes.find((b) => b.role === "footer");
     if (eyebrow) slide.addText(eyebrow.text, { x: zone.x, y: 0.25, w: zone.w, h: 0.4, fontSize: eyebrow.size, color: eyebrow.color, fontFace: eyebrow.face });
-    if (headline) slide.addText(headline.text, { x: zone.x, y: 0.8, w: zone.w, h: 1.5, fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, valign: "top", ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
+    // A statement (§4: one line, no body) sits vertically centred and large; a content headline sits at the top of its box.
+    if (headline && plan.layout === "statement") slide.addText(headline.text, { x: zone.x, y: 1.0, w: zone.w, h: 3.4, fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, valign: "middle", ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
+    else if (headline) slide.addText(headline.text, { x: zone.x, y: 0.8, w: zone.w, h: 1.5, fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, valign: "top", ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
     if (lines.length) {
       slide.addText(
         lines.map((b) => ({ text: b.text, options: { bullet: b.bullet, breakLine: true, fontSize: b.size, color: b.color, fontFace: b.face, ...(b.fill ? { highlight: b.fill } : {}) } })),
@@ -161,7 +182,8 @@ function drawPlaceholder(pptx: PptxGenJS, slide: PptxGenJS.Slide, ph: Placeholde
  * frame, no crop. The ratio of what is drawn always equals the ratio of what is shown, which the walk reads back from the XML.
  */
 function drawImage(pptx: PptxGenJS, slide: PptxGenJS.Slide, image: PreparedImage, frame: Frame, ground: string) {
-  const { placement } = image;
+  // Placed for the frame it is drawn in (a picture may take the next slide's bigger frame, §4), by the same fit engine.
+  const placement = placeImage(frame, { w: image.width, h: image.height }, image.mode);
   if (placement.mode === "cover" && placement.crop) {
     const w = frame.w;
     const h = (frame.w * image.height) / image.width;
@@ -181,11 +203,13 @@ function drawBars(pptx: PptxGenJS, slide: PptxGenJS.Slide, chrome: Chrome, cover
   const bandY = 5.32;
   if (chrome.footerBar) {
     slide.addShape(pptx.ShapeType.rect, { x: 0, y: bandY, w: 10, h: 0.3, fill: { color: chrome.surface } });
-    slide.addText(chrome.company, { x: 0.4, y: bandY, w: 5, h: 0.3, fontSize: 9, color: chrome.muted, fontFace: chrome.body, valign: "middle" });
+    // The boxes never collide (§4): the brand line to 3.9 in, the CTA from 4.0 to 8.8, the logo from 9.0.
+    slide.addText(chrome.company, { x: 0.4, y: bandY, w: 3.5, h: 0.3, fontSize: 9, color: chrome.muted, fontFace: chrome.body, valign: "middle" });
     // The logo whole at its own ratio inside its box, never stretched; a small one at its own size.
     if (chrome.logo) slide.addImage({ data: chrome.logo.data, x: chrome.logo.placement.box.x, y: chrome.logo.placement.box.y, w: chrome.logo.placement.box.w, h: chrome.logo.placement.box.h });
   }
   if (chrome.ctaBar && chrome.ctaFooter) {
-    slide.addText(chrome.ctaFooter, { x: 2.5, y: bandY, w: 5, h: 0.3, fontSize: 10, bold: true, color: chrome.accent, fontFace: chrome.body, align: "center", valign: "middle" });
+    // Footer text is muted (§4: the accent at 10pt failed contrast on the surface); the accent stays on the rule.
+    slide.addText(chrome.ctaFooter, { x: 4.0, y: bandY, w: 4.8, h: 0.3, fontSize: 10, bold: true, color: chrome.muted, fontFace: chrome.body, align: "center", valign: "middle" });
   }
 }

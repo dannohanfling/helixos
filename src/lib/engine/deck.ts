@@ -9,9 +9,10 @@ import { FACE_CLASS_LABEL, cleanFace, currenciesIn, currencyConflicts, type Face
 import { brandKitProblems, normaliseHex } from "./subject";
 import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type ResolvedProof, type SectionContext, type WebinarContext } from "./webinar-context";
 import { COVER_WHAT, STORY_WHAT, originWhat, slotForLine, spreadSlots } from "./deck-slot-rules";
+import { fitSize } from "./deck-fit-text";
 
 /** The brand as the renderer reads it. Null renders the neutral kit and says so. */
-export type DeckKit = { name: string; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
+export type DeckKit = { name: string; logoImageId?: string | null; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
 /** With no kit on the workspace: black on white, the accent a plain grey, and the export note says no brand was applied. */
 export const NEUTRAL_KIT: DeckKit = { name: "No brand kit", ground: "FFFFFF", ink: "111111", accent: "555555", muted: "555555", surface: "F2F2F2", displayFont: "Arial", bodyFont: "Arial", fontFallback: "Arial", bannedColors: [] };
 /** The one colour an unfilled [text] placeholder is ever drawn in when the kit reserves none: unmissable, and named in the export note. */
@@ -38,6 +39,16 @@ export const HEADLINE_FLOOR = 22;
 export const HEADLINE_MAX_CHARS = 160;
 export const BODY_SIZE = 18;
 export const EYEBROW_SIZE = 11;
+/** A body shrinks to these before anything else gives (§4): 18 is the reading size, 14 the floor. */
+export const BODY_FIT_SIZES = [BODY_SIZE, 16, 14];
+/** A statement slide (one line, no body, §4): the line sits vertically centred, large by its length. */
+export const STATEMENT_SIZES: { maxChars: number; size: number }[] = [
+  { maxChars: 30, size: 60 },
+  { maxChars: 48, size: 52 },
+  { maxChars: 80, size: 44 },
+];
+/** When a picture slide's text cannot fit beside the picture even at the floor, the picture takes the next slide, this big. */
+export const PICTURE_ONLY_FRAME: Frame = { x: 1.5, y: 0.6, w: 7, h: 4.4 };
 
 export type SlideKind = "cover" | "divider" | "recap" | "section" | "proof" | "evidence" | "story" | "offer" | "opening" | "reflection";
 /** A picture slot the deck suggests by rule from the slide's kind. The coach fills it from their image library; empty, it lists on the Deck step and the slide exports with a red placeholder in the picture's frame (§2). Never on the price slide. */
@@ -495,7 +506,9 @@ export type Frame = { x: number; y: number; w: number; h: number };
 export type PlaceholderSlot = { frame: Frame; text: string; color: string };
 /** Every label of the deck's own that may never reach a face (§9): the act names, the deck's section-less eyebrows, and the words of a label. The walk reads every face against this list and the record's section names. */
 export const FACE_LABELS_NEVER = [...Object.values(ACT_LABEL), "Act 1", "Act 2", "Act 3", "Opening ·", "What you'll leave with", "Who it is for", "Stay to the end", "A moment before we go on", "· recap", "· story", "Vehicle Story", "Internal Story", "External Story"];
-export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
+/** The slide's layout family (§4): the cover, a content slide, or a statement (one line, no body, vertically centred and large). */
+export type SlideLayout = "cover" | "content" | "statement";
+export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; layout: SlideLayout; /** A slide that carries only the picture of the slide before it (§4: its text would not fit beside the picture even at the floor). */ pictureOnly: boolean; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
 
 /**
  * The frame a filled picture occupies, by the slide's kind. The cover's picture fills the right half; every content slide's
@@ -519,9 +532,10 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set()): S
   const hex = (v: string) => normaliseHex(v);
   const placeholderColor = hex(k.placeholder ?? "") || PLACEHOLDER_FALLBACK;
   const hasInverse = Boolean(hex(k.inverseGround ?? "") && hex(k.inverseInk ?? ""));
-  return d.slides.map((s) => {
-    const imageFrame = withImage.has(s.n) ? slotFrame(s.kind) : null;
-    const placeholderSlot = !imageFrame && s.slot ? { frame: slotFrame(s.kind), text: placeholderLine(s.slot), color: PLACEHOLDER_RED } : null;
+  const plans: SlidePlan[] = [];
+  for (const s of d.slides) {
+    let imageFrame = withImage.has(s.n) ? slotFrame(s.kind) : null;
+    let placeholderSlot = !imageFrame && s.slot ? { frame: slotFrame(s.kind), text: placeholderLine(s.slot), color: PLACEHOLDER_RED } : null;
     const boxes: TextBox[] = [];
     const mark = (text: string) => placeholdersIn(text).length > 0;
     // The dark surfaces take the inverse pair when the kit has one; on it every letter is inverseInk, the one pair the kit checked.
@@ -540,8 +554,50 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set()): S
       }
       if (s.footer) boxes.push({ slide: s.n, role: "footer", text: s.footer, size: EYEBROW_SIZE, color: muted, fill: mark(s.footer) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: mark(s.footer) });
     }
-    return { n: s.n, background: dark ? hex(k.inverseGround!) : hex(k.ground), boxes, rules: s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }], notes: s.notes.join("\n"), imageFrame, placeholderSlot };
-  });
+    // The fit (§4): text beside a picture lives in the left column, so the headline steps down its tiers and the body its sizes
+    // until each fits its box; when the body cannot fit beside the picture even at the floor, the picture takes the next slide
+    // and this one keeps the full width. A one-line slide with no body is a statement: centred, large by its length.
+    const background = dark ? hex(k.inverseGround!) : hex(k.ground);
+    const notes = s.notes.join("\n");
+    const rules = s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }];
+    const headlineBox = boxes.find((b) => b.role === "headline");
+    const bodyBoxes = boxes.filter((b) => b.role === "body" || b.role === "attribution");
+    let layout: SlideLayout = s.kind === "cover" ? "cover" : "content";
+    let pictureOnly = false;
+    if (s.kind !== "cover") {
+      const narrow = Boolean(imageFrame || placeholderSlot);
+      const zoneW = narrow ? TEXT_LEFT_ZONE.w : 9;
+      if (headlineBox && !bodyBoxes.length) {
+        layout = "statement";
+        const sizes = [...STATEMENT_SIZES.filter((t) => headlineBox.text.trim().length <= t.maxChars).map((t) => t.size), ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z <= headlineBox.size), HEADLINE_FLOOR];
+        headlineBox.size = fitSize(headlineBox.text, { w: zoneW, h: 3.4 }, [...new Set(sizes)].sort((a, b) => b - a)) ?? HEADLINE_FLOOR;
+      } else if (headlineBox) {
+        const tiers = [...new Set([headlineBox.size, ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z < headlineBox.size), HEADLINE_FLOOR])].sort((a, b) => b - a);
+        headlineBox.size = fitSize(headlineBox.text, { w: zoneW, h: 1.5 }, tiers) ?? HEADLINE_FLOOR;
+      }
+      if (bodyBoxes.length) {
+        const text = bodyBoxes.map((b) => b.text).join("\n");
+        let size = fitSize(text, { w: narrow ? TEXT_LEFT_ZONE.w - 0.2 : 8.6, h: 2.4 }, BODY_FIT_SIZES);
+        if (size === null && narrow) {
+          // The picture to its own slide; this one keeps the full width and fits again.
+          pictureOnly = true;
+          size = fitSize(text, { w: 8.6, h: 2.4 }, BODY_FIT_SIZES) ?? BODY_FIT_SIZES[BODY_FIT_SIZES.length - 1];
+          if (headlineBox) headlineBox.size = fitSize(headlineBox.text, { w: 9, h: 1.5 }, [...new Set([s.headlineSize, ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z < s.headlineSize), HEADLINE_FLOOR])].sort((a, b) => b - a)) ?? HEADLINE_FLOOR;
+        }
+        for (const b of bodyBoxes) if (b.role === "body") b.size = size ?? BODY_FIT_SIZES[BODY_FIT_SIZES.length - 1];
+      }
+    }
+    if (pictureOnly) {
+      const picture = { imageFrame: imageFrame ? PICTURE_ONLY_FRAME : null, placeholderSlot: placeholderSlot ? { ...placeholderSlot, frame: PICTURE_ONLY_FRAME } : null };
+      imageFrame = null;
+      placeholderSlot = null;
+      plans.push({ n: s.n, background, boxes, rules, notes, layout, pictureOnly: false, imageFrame, placeholderSlot });
+      plans.push({ n: s.n, background, boxes: [], rules: [], notes: "The picture for the slide before: its text would not fit beside it.", layout: "content", pictureOnly: true, ...picture });
+      continue;
+    }
+    plans.push({ n: s.n, background, boxes, rules, notes, layout, pictureOnly, imageFrame, placeholderSlot });
+  }
+  return plans;
 }
 
 /** The plain-text outline: what the .txt export and the Deck step's copy carry. Never the notes' art direction on a face. */

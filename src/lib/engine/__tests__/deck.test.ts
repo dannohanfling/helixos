@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -207,7 +207,8 @@ describe("the brand kit on the file", () => {
     expect(plan[0].rules).toEqual([]);
     expect(plan[1].rules).toHaveLength(1);
     const hook = plan[1];
-    expect(hook.boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Open the loop", size: 40, color: "6E6256", fill: null, face: "Red Hat Display", bold: true });
+    // One line and no body is a statement (§4): 60pt, centred; the colours and face are the kit's as before.
+    expect(hook.boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Open the loop", size: 60, color: "6E6256", fill: null, face: "Red Hat Display", bold: true });
     // The second key point is its own slide; its headline is the unfilled slot, drawn on the kit's placeholder colour
     expect(plan[2].boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Send them to [SALES PAGE URL]", fill: "FFF3A3", face: "Red Hat Display", placeholder: true });
     expect(plan.flatMap((p) => p.boxes).find((b) => b.role === "body")?.size).toBe(BODY_SIZE);
@@ -398,6 +399,34 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
     expect(placeholderLine({ key: "k", kind: "screenshot_callout", what: "A screenshot with “602 comments on my post” circled." })).toBe("Add a screenshot with “602 comments on my post” circled.");
     expect(placeholderLine({ key: "k", kind: "testimonial", what: SLOT_WHAT.testimonial })).toBe("Add the client's photo beside their approved quote.");
     expect(placeholderLine({ key: "k", kind: "diagram", what: "Your own diagram of the system this slide names." })).toBe("Add your own diagram of the system this slide names.");
+  });
+
+  it("§4: a one-line slide is a statement, large and centred; text beside a picture shrinks to fit, and a body that cannot fit sends the picture to its own slide", () => {
+    const d = deckSlides(openCtx(), kit);
+    const plans = renderPlan(d);
+    const statement = plans.find((p) => p.n === d.slides.find((s) => s.kind === "opening" && !s.body.length)!.n)!;
+    expect(statement.layout).toBe("statement");
+    expect(statement.boxes.find((b) => b.role === "headline")!.size).toBeGreaterThanOrEqual(44);
+    const outcomes = plans.find((p) => p.n === d.slides.find((s) => s.headline === "By the end you'll have")!.n)!;
+    expect(outcomes.layout).toBe("content");
+    expect(outcomes.boxes.filter((b) => b.role === "body").every((b) => b.size === BODY_SIZE)).toBe(true);
+    // A case-study slide with a long body beside a picture: the body shrinks, then the picture takes the next slide.
+    const longBody = Array(7).fill("A long bullet about the thing we did that week and what it changed for the team").join("\n");
+    const c = ctx(base({ problem_frame: { keyPoints: `Six things happened\n${longBody}`, buildStyle: "reveal" } }), [{ type: "vehicle", fromBelief: "a", toBelief: "b", proofId: "p1", storyAssetId: "s1" }]);
+    const dd = deckSlides(c, kit);
+    const reveal = dd.slides.filter((s) => s.sectionKey === "problem_frame");
+    const last = reveal[reveal.length - 1];
+    const planned = renderPlan(dd, new Set([last.n]));
+    const forLast = planned.filter((p) => p.n === last.n);
+    expect(forLast).toHaveLength(2);
+    expect(forLast[0].imageFrame).toBeNull();
+    expect(forLast[0].pictureOnly).toBe(false);
+    expect(forLast[1]).toMatchObject({ pictureOnly: true, imageFrame: PICTURE_ONLY_FRAME, boxes: [] });
+    expect(forLast[0].boxes.filter((b) => b.role === "body").every((b) => b.size <= BODY_SIZE)).toBe(true);
+    // The same slide with a short body keeps the picture beside the text.
+    const short = renderPlan(dd, new Set([reveal[0].n])).filter((p) => p.n === reveal[0].n);
+    expect(short).toHaveLength(1);
+    expect(short[0].imageFrame).not.toBeNull();
   });
 
   it("renderPlan draws no picture frame by default, and one only on the slides told to carry an image", () => {

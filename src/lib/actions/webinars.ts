@@ -65,6 +65,7 @@ export async function updateWebinarFoundationAction(formData: FormData): Promise
       permissionLine: opt(formData, "permissionLine"),
       reflectionPrompt: opt(formData, "reflectionPrompt"),
       footerBar: formData.get("footerBar") === "on",
+      footerBrand: opt(formData, "footerBrand"),
       ctaBar: formData.get("ctaBar") === "on",
       originStory: Object.fromEntries(ORIGIN_BEATS.map((b) => [b.key, str(formData, `beat_${b.key}`)]).filter(([, v]) => v)),
       ctaType: str(formData, "ctaType") || "Book a call",

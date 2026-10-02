@@ -451,6 +451,10 @@ export default async function WebinarWizardPage({
                 </div>
                 <div className="mt-2 flex flex-wrap gap-4 text-sm">
                   <label className="flex items-center gap-2"><input type="checkbox" name="footerBar" defaultChecked={w.footerBar} data-testid="footer-bar" /> Logo footer bar on content slides</label>
+                  <label className="flex items-center gap-2">
+                    Footer brand line
+                    <input className="field py-1" name="footerBrand" defaultValue={w.footerBrand ?? ""} placeholder="empty: the kit's name" data-testid="footer-brand" />
+                  </label>
                   <label className="flex items-center gap-2"><input type="checkbox" name="ctaBar" defaultChecked={w.ctaBar} data-testid="cta-bar" /> CTA bar on offer and Q&amp;A slides</label>
                 </div>
               </div>
