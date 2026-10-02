@@ -27,14 +27,16 @@ async function discard(url: string | null | undefined, why: string): Promise<voi
 export type RecordDeckImageResult = { ok: true; id: string } | { ok: false; error: string };
 const TRANSIENT = "Storage couldn't be read back just now. Nothing is saved. Try again in a minute.";
 
-type RecordInput = { key: string; kind: DeckImageKind; caption: string; consentTick: boolean; consentName: string; noPeople: boolean };
+type RecordInput = { key: string; kind: DeckImageKind; caption: string; consentTick: boolean; consentName: string; noPeople: boolean; /** A slot on the coach's own webinar the picture fills as it is recorded (§6.2). */ attach: { webinarId: string; slotKey: string } | null };
 function parseInput(raw: unknown): RecordInput | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
   const key = typeof r.key === "string" ? r.key : "";
   const kind = typeof r.kind === "string" && (DECK_IMAGE_KINDS as readonly string[]).includes(r.kind) ? (r.kind as DeckImageKind) : null;
   if (!key || !kind) return null;
-  return { key, kind, caption: typeof r.caption === "string" ? r.caption.slice(0, 200) : "", consentTick: r.consentTick === true, consentName: typeof r.consentName === "string" ? r.consentName.slice(0, 120) : "", noPeople: r.noPeople === true };
+  const a = typeof r.attach === "object" && r.attach !== null ? (r.attach as Record<string, unknown>) : null;
+  const attach = a && typeof a.webinarId === "string" && typeof a.slotKey === "string" && a.webinarId && a.slotKey ? { webinarId: a.webinarId, slotKey: a.slotKey } : null;
+  return { key, kind, caption: typeof r.caption === "string" ? r.caption.slice(0, 200) : "", consentTick: r.consentTick === true, consentName: typeof r.consentName === "string" ? r.consentName.slice(0, 120) : "", noPeople: r.noPeople === true, attach };
 }
 
 /**
@@ -101,8 +103,22 @@ export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckIma
     await discard(object.url, "a failed insert");
     return { ok: false, error: "That image couldn't be saved just now. Nothing is kept. Try again in a minute." };
   }
+  // Straight into a slot (§6.2): the coach's own webinar only; a slot that is not theirs leaves the picture in the library.
+  if (input.attach) await attachImageToSlot({ workspaceId, userId }, input.attach.webinarId, input.attach.slotKey, id);
   refresh();
   return { ok: true, id };
+}
+
+/** Fills one slot on the owner's webinar with one of their own library images; false when either is not theirs. */
+async function attachImageToSlot(owner: { workspaceId: string; userId: string }, webinarId: string, slotKey: string, imageId: string): Promise<boolean> {
+  const w = await ownWebinar(webinarId, owner.userId);
+  if (!w) return false;
+  const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, imageId), eq(schema.deckImages.workspaceId, owner.workspaceId), eq(schema.deckImages.userId, owner.userId)) });
+  if (!img) return false;
+  const existing = await db.query.deckSlots.findFirst({ where: and(eq(schema.deckSlots.webinarId, webinarId), eq(schema.deckSlots.slotKey, slotKey)) });
+  if (existing) await db.update(schema.deckSlots).set({ imageId: img.id }).where(eq(schema.deckSlots.id, existing.id));
+  else await db.insert(schema.deckSlots).values({ id: newId(), webinarId, slotKey, imageId: img.id });
+  return true;
 }
 
 async function headOrNull(key: string): Promise<{ url: string } | null> {
@@ -161,13 +177,7 @@ export async function setDeckSlotAction(formData: FormData): Promise<void> {
   const slotKey = str(formData, "slotKey");
   const imageId = str(formData, "imageId");
   if (!slotKey || !imageId) return;
-  const w = await ownWebinar(webinarId, userId);
-  if (!w) return;
-  const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, imageId), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId)) });
-  if (!img) return;
-  const existing = await db.query.deckSlots.findFirst({ where: and(eq(schema.deckSlots.webinarId, webinarId), eq(schema.deckSlots.slotKey, slotKey)) });
-  if (existing) await db.update(schema.deckSlots).set({ imageId: img.id }).where(eq(schema.deckSlots.id, existing.id));
-  else await db.insert(schema.deckSlots).values({ id: newId(), webinarId, slotKey, imageId: img.id });
+  await attachImageToSlot({ workspaceId, userId }, webinarId, slotKey, imageId);
   refresh();
 }
 

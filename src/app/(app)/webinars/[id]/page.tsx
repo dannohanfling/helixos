@@ -1,3 +1,5 @@
+import { DeckImageUpload } from "@/components/deck-image-upload";
+import { slotDefaultKind } from "@/lib/engine/deck-slot";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/dates";
 import { ConfirmDelete } from "@/components/confirm-delete";
@@ -1332,7 +1334,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
+        <DeckStep presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
       ) : null}
 
       {step === "review" ? (
@@ -1664,7 +1666,7 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter }: { webinarId: string; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
+function DeckStep({ webinarId, owner, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter }: { webinarId: string; owner: { workspaceId: string; userId: string }; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
   const fallbacks = slotFallbacks(resolvedSlots);
   const bySlide = new Map(resolvedSlots.map((r) => [r.slide, r]));
@@ -1797,7 +1799,7 @@ function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirm
               </p>
             ) : null}
             {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-body">{s.body.join("\n")}</p> : null}
-            {bySlide.get(s.n) ? <SlotControl webinarId={webinarId} resolved={bySlide.get(s.n)!} library={library} /> : null}
+            {bySlide.get(s.n) ? <SlotControl webinarId={webinarId} owner={owner} resolved={bySlide.get(s.n)!} library={library} /> : null}
             <div className="mt-2 flex items-center justify-end gap-2">
               <CopyButton text={`${s.headline}\n${s.body.join("\n")}`} label="Copy" className="btn btn-ghost btn-xs" />
             </div>
@@ -1818,7 +1820,7 @@ function DeckStep({ webinarId, deck, pace, resolvedSlots, library, gate, confirm
  * or a picker over their library to fill it. A testimonial slot is not filled here — it draws from its approved proof — so it
  * shows only what it wants and, when empty, why. An empty non-testimonial slot with an empty library points to the Images page.
  */
-function SlotControl({ webinarId, resolved, library }: { webinarId: string; resolved: ResolvedSlot; library: DeckImage[] }) {
+function SlotControl({ webinarId, owner, resolved, library }: { webinarId: string; owner: { workspaceId: string; userId: string }; resolved: ResolvedSlot; library: DeckImage[] }) {
   const { slot } = resolved;
   if (slot.kind === "testimonial") {
     return (
@@ -1851,6 +1853,16 @@ function SlotControl({ webinarId, resolved, library }: { webinarId: string; reso
         </form>
       ) : (
         <Link href="/images" className="mt-1 inline-block text-accent underline" data-testid="deck-slot-empty-library">Add images to your library first →</Link>
+      )}
+      {resolved.image ? null : (
+        // Upload straight into the slot (§6.2): the same path, kinds and consent as the Images page; the first picture fills
+        // this slot as it is recorded and every one lands in the library.
+        <details className="mt-1" data-testid="deck-slot-upload">
+          <summary className="cursor-pointer text-accent">Upload a picture for this slide</summary>
+          <div className="mt-1">
+            <DeckImageUpload workspaceId={owner.workspaceId} userId={owner.userId} compact defaultKind={slotDefaultKind(slot.kind)} attach={{ webinarId, slotKey: slot.key }} />
+          </div>
+        </details>
       )}
     </div>
   );

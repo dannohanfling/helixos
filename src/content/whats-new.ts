@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 54,
+    date: "2026-10-02",
+    title: "Upload a picture right on the slide, and several at once",
+    lines: [
+      "On the Deck step, every empty picture slot has \"Upload a picture for this slide\": choose the file, and it fills that slot the moment it is saved, and joins your Images library for reuse. The kind starts as what the slide asks for.",
+      "On Images and on a slide, choose several files at once. Each has its own kind, caption and consent; if one is not ready (a screenshot with nobody named), nothing is sent until it is.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 53,
     date: "2026-10-02",
     title: "A brand kit you can fill in, with a preview",

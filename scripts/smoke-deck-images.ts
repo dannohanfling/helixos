@@ -149,6 +149,32 @@ async function main() {
     if (!/object-cover/.test(await thumbClass("photo")) || !/object-contain/.test(await thumbClass("diagram")) || !/object-contain/.test(await thumbClass("screenshot"))) throw new Error("a photo's thumbnail covers its card; a diagram's and a screenshot's are shown whole");
     console.log(`✓ §5: a diagram joins the library with no consent asked, its card appears with no reload (${cardsBefore}→${cardsBefore + 1}), shown whole; a photo's thumbnail covers`);
 
+    // ── §6.2: several files at once, each with its own kind and caption; a refused one stays in the list with its reason while
+    //    the rest go. ──
+    await page.locator('[data-testid="deck-image-file"]').waitFor({ state: "attached" });
+    await page.setInputFiles('[data-testid="deck-image-file"]', [
+      { name: "post.png", mimeType: "image/png", buffer: LOGO },
+      { name: "dm.png", mimeType: "image/png", buffer: SHOT },
+    ]);
+    if ((await page.locator('[data-testid="deck-image-row"]').count()) !== 2) throw new Error("two files make two rows");
+    await page.locator('[data-testid="deck-image-kind"]').nth(0).selectOption("graphic");
+    await page.locator('[data-testid="deck-image-caption"]').nth(0).fill("Your first 100 leads");
+    await page.locator('[data-testid="deck-image-kind"]').nth(1).selectOption("screenshot");
+    await page.locator('[data-testid="deck-image-caption"]').nth(1).fill("A DM, unticked");
+    await page.click('[data-testid="deck-image-send"]');
+    await page.locator('[data-testid="deck-image-error"]').waitFor({ timeout: 5000 });
+    if (!/"dm\.png": Tick the sentence/.test(await page.locator('[data-testid="deck-image-error"]').innerText())) throw new Error("a batch with an unticked screenshot is refused before anything is sent, the file named");
+    if ((await imagesOf("graphic")).length !== 0) throw new Error("nothing is sent while one file is refused");
+    await page.locator('[data-testid="deck-image-no-people"]').nth(0).check();
+    await page.click('[data-testid="deck-image-send"]');
+    await page.locator('[data-testid="library-image"][data-kind="graphic"]').waitFor({ timeout: 30000 });
+    for (let i = 0; i < 100 && (await page.locator('[data-testid="deck-image-row"]').count()); i++) await page.waitForTimeout(200);
+    const graphics = await imagesOf("graphic");
+    const dms = (await imagesOf("screenshot")).filter((s) => s.caption === "A DM, unticked");
+    if (graphics.length !== 1 || graphics[0].caption !== "Your first 100 leads" || graphics[0].consentTick || dms.length !== 1 || dms[0].consentName !== NO_PEOPLE) throw new Error(`two files at once, each with its own kind and caption: ${JSON.stringify([graphics, dms])}`);
+    if ((await page.locator('[data-testid="deck-image-row"]').count()) !== 0) throw new Error("sent files leave the list");
+    console.log("✓ §6.2: two files at once, each with its own kind, caption and consent; the batch refused while one screenshot is unticked, then both stored");
+
     // A logo, for the footer bar the webinar below turns on.
     await addImage("logo", { caption: "Wordmark" });
     await page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/images"), { timeout: 20000 }).catch(() => {});
@@ -367,9 +393,25 @@ async function main() {
     await settle(page);
     await page.goto(`${base}/webinars/${webinar.id}?step=deck`);
     await coverSlot2.locator('[data-testid="deck-slot-picker"]').waitFor({ timeout: 20000 });
-    await coverSlot2.locator('[data-testid="deck-slot-picker"]').selectOption(shots[0].id);
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), coverSlot2.locator('[data-testid="deck-slot-attach"]').click()]);
-    await settle(page);
+    // §6.2: the same screenshot uploaded straight into the slot from the Deck step: the kind starts as the slot's own (a photo,
+    // for the cover), the coach makes it a screenshot with nobody in it, and the picture fills the slot as it is recorded and
+    // joins the library. The contain checks below then read this upload, the same 3:1 bytes.
+    if (!(await coverSlot2.locator('[data-testid="deck-slot-upload"]').count())) throw new Error("an empty slot offers an upload beside the picker");
+    await coverSlot2.locator('[data-testid="deck-slot-upload"] summary').click();
+    await coverSlot2.locator('[data-testid="deck-image-file"]').setInputFiles({ name: "slot.png", mimeType: "image/png", buffer: SHOT });
+    if ((await coverSlot2.locator('[data-testid="deck-image-kind"]').inputValue()) !== "photo") throw new Error("the cover's upload starts as a photo, the slot's own kind");
+    await coverSlot2.locator('[data-testid="deck-image-kind"]').selectOption("screenshot");
+    await coverSlot2.locator('[data-testid="deck-image-caption"]').fill("A DM, uploaded on the slide");
+    await coverSlot2.locator('[data-testid="deck-image-no-people"]').check();
+    const libraryBefore = (await db.query.deckImages.findMany({ where: eq(schema.deckImages.userId, user.id) })).length;
+    if ((await coverSlot2.locator('[data-testid="deck-image-send"]').innerText()).trim() !== "Attach to this slide") throw new Error("the button says what it does on a slide");
+    await coverSlot2.locator('[data-testid="deck-image-send"]').click();
+    await page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"] [data-testid="deck-slot-filled"]').waitFor({ timeout: 30000 });
+    const slotRow2 = await db.query.deckSlots.findFirst({ where: and(eq(schema.deckSlots.webinarId, webinar.id), eq(schema.deckSlots.slotKey, "cover:photo")) });
+    const libraryAfter = await db.query.deckImages.findMany({ where: eq(schema.deckImages.userId, user.id) });
+    const uploaded = libraryAfter.find((i) => i.id === slotRow2?.imageId);
+    if (!slotRow2 || libraryAfter.length !== libraryBefore + 1 || !uploaded || uploaded.kind !== "screenshot" || uploaded.caption !== "A DM, uploaded on the slide" || uploaded.consentName !== NO_PEOPLE) throw new Error(`the uploaded picture fills the slot as it is recorded and joins the library: ${JSON.stringify({ slotRow2, uploaded })}`);
+    console.log(`✓ §6.2: a screenshot uploaded on the Deck step fills the cover slot as it is recorded (kind started as the slot's own) and joins the library (${libraryBefore}→${libraryAfter.length})`);
     const res2 = await page.request.get(`${base}/api/webinars/${webinar.id}/deck?format=pptx`);
     const zip2 = await JSZip.loadAsync(await res2.body());
     const pics2 = await checkPics(zip2, "screenshot on the cover");

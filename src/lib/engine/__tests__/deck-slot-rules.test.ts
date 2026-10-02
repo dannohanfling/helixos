@@ -1,4 +1,4 @@
-import { pictureAltText } from "../deck-slot";
+import { pictureAltText, slotDefaultKind } from "../deck-slot";
 import { describe, expect, it } from "vitest";
 import { COVER_WHAT, MAX_SLOT_RUN, STORY_WHAT, figurePhrase, originWhat, slotForLine, spreadSlots } from "../deck-slot-rules";
 
@@ -42,6 +42,18 @@ describe("which picture a slide asks for, read off its words (deck visuals §3)"
     let longest = 0, cur = 0;
     for (const k of kept) { cur = k ? cur + 1 : 0; longest = Math.max(longest, cur); }
     expect(longest).toBe(2);
+  });
+});
+
+describe("§6.2: the kind an upload into a slot starts as", () => {
+  it("is what the slot asks for", () => {
+    expect(slotDefaultKind("photo")).toBe("photo");
+    expect(slotDefaultKind("photo_pair")).toBe("photo");
+    expect(slotDefaultKind("testimonial")).toBe("photo");
+    expect(slotDefaultKind("screenshot")).toBe("screenshot");
+    expect(slotDefaultKind("screenshot_callout")).toBe("screenshot");
+    expect(slotDefaultKind("proof_wall")).toBe("proof");
+    expect(slotDefaultKind("diagram")).toBe("diagram");
   });
 });
 
