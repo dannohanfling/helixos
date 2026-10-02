@@ -24,7 +24,7 @@ import { PRESETS } from "@/lib/engine/body-correlate";
 import { isRangeKey, rangeBounds, rateText } from "@/lib/engine/body-range";
 import { addDays } from "@/lib/dates";
 import { instacartLines, listSummary } from "@/lib/engine/body-shopping";
-import { InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
+import { INSTACART_OPEN, INSTACART_SOON, INSTACART_SOON_LINE, InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
 import { KIND_LABEL, STARTER_HABITS, daysFrom, fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
 import { fmtBedtime, fmtHours, fmtWake, parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { startOfWeek } from "@/lib/dates";
@@ -581,6 +581,8 @@ defineTool({
     const skip = new Set(view0.foods.filter((f) => skipNames.has(f.name.toLowerCase())).map((f) => f.id));
     const view = skip.size ? (await shoppingView(v.workspace.id, v.user.id, v.today, skip))! : view0;
     if (!view.list.lines.length) return { text: "Nothing to send: the list is empty.", data: { sent: false } };
+    // Danno, rev 429: no Instacart key is to be had yet, so nothing is sent; the list is given in words to shop from.
+    if (!INSTACART_OPEN) return { text: `${INSTACART_SOON}. ${INSTACART_SOON_LINE} Nothing was sent. The list is ${listSummary(view.list)}:\n${listText(view)}`, data: { sent: false, comingSoon: true } };
     if (input.confirm !== true) return { text: `Not sent. The list is ${listSummary(view.list)}:\n${listText(view)}\nAsk the member to confirm, then call again with confirm: true.`, data: { sent: false, lines: view.list.lines } };
     const lines = instacartLines(view.list.lines);
     const logged = lines.map((l) => ({ name: l.name, qty: l.quantity, unit: l.unit }));
@@ -612,7 +614,7 @@ defineTool({
       const found = code ? [await lookupBarcode(code)] : await searchFoods(q, 8);
       if (!found.length) return { text: `Nothing matched "${q}".`, data: { results: [] } };
       const unit = settings.foodUnit;
-      const lines = found.map((f) => `${f.name}${f.brand ? ` (${f.brand})` : ""}: ${fmtPer100(f.per100)}`);
+      const lines = found.map((f) => `${f.name}${f.brand ? ` (${f.brand})` : ""}: ${fmtPer100(f.per100, f)}`);
       return { text: `${lines.join("\n")}\nTo keep one, the member saves it from Nutrition → Find a food (it lands per ${unit}).`, data: { results: found.map((f) => ({ source: f.source, ref: f.ref, name: f.name, brand: f.brand, per100: f.per100, perUnit: { unit, ...perUnit(f.per100, unit) } })) } };
     } catch (e) {
       if (e instanceof FoodSearchError) throw new Error(foodSearchProblem(e));

@@ -8,6 +8,14 @@
  */
 import type { InstacartLine } from "@/lib/engine/body-shopping";
 
+/**
+ * Instacart isn't taking new partners and has no waitlist (Danno, rev 429), so there is no key to be had: every "Push to Instacart"
+ * reads "Instacart: coming soon" and nothing is sent, whether or not INSTACART_API_KEY is set. Flip this to true once a key exists.
+ */
+export const INSTACART_OPEN = false;
+export const INSTACART_SOON = "Instacart: coming soon";
+export const INSTACART_SOON_LINE = "Instacart isn't taking new partners yet; your list works without it.";
+
 const API = () => process.env.INSTACART_API_URL || "https://connect.instacart.com";
 
 export type InstacartProblem = "no_key" | "unreachable" | "key" | "refused" | "busy" | "other";

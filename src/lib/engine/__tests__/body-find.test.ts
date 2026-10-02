@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeFound, encodeFound, fmtPer100, foodFromFound, fromOff, fromUsda, perUnit, readBarcode, sectionGuess, titleCase } from "@/lib/engine/body-find";
+import { decodeFound, encodeFound, fmtPer100, foodFromFound, fromOff, fromUsda, gapNote, kcalFromMacros, perUnit, readBarcode, sectionGuess, titleCase } from "@/lib/engine/body-find";
 import { records } from "../../../../scripts/fixtures/foods";
 
 describe("food search and barcode (rev 237 phase 13, B8): the two services' records", () => {
@@ -53,7 +53,33 @@ describe("what a found food becomes", () => {
   });
   it("prints a results line", () => {
     expect(fmtPer100(found.per100)).toBe("120 cal · 22.5 P · 2.6 F · 0 C · 45 mg sodium per 100 g");
-    expect(fmtPer100({ cal: 52, p: 0.3, f: 0.2, c: 13.8, sodium: 0 })).toBe("52 cal · 0.3 P · 0.2 F · 13.8 C per 100 g");
+    expect(fmtPer100({ cal: 52, p: 0.3, f: 0.2, c: 13.8, sodium: 0 })).toBe("52 cal · 0.3 P · 0.2 F · 13.8 C · 0 mg sodium per 100 g");
+  });
+  it("what the source left blank is never 0 (Danno, rev 429): energy from Atwater 2047, then 2048, else 4P + 9F + 4C; other gaps read —", () => {
+    // The ribeye Danno found: 0 kcal beside 18.7 P and 20 F, no sodium field.
+    const ribeye = fromUsda({ fdcId: 1, description: "Beef, ribeye, steak, boneless, choice, raw", foodNutrients: [{ nutrientId: 1008, unitName: "KCAL", value: 0 }, { nutrientId: 1003, unitName: "G", value: 18.7 }, { nutrientId: 1004, unitName: "G", value: 20 }, { nutrientId: 1005, unitName: "G", value: 0 }] })!;
+    expect(ribeye.per100.cal).toBe(kcalFromMacros(18.7, 20, 0));
+    expect(ribeye.per100.cal).toBe(254.8);
+    expect(ribeye.energy).toBe("macros");
+    expect(ribeye.missing).toEqual(["sodium"]);
+    expect(fmtPer100(ribeye.per100, ribeye)).toBe("255 cal (estimated from macros) · 18.7 P · 20 F · 0 C · — mg sodium per 100 g");
+    expect(gapNote(ribeye)).toBe("calories were estimated from the macros; sodium wasn't in the source, saved as 0 until you fill it in on Nutrition.");
+    // Atwater general first, then specific; no plain energy at all.
+    const atw = fromUsda({ fdcId: 2, description: "x", foodNutrients: [{ nutrientId: 2048, unitName: "KCAL", value: 250 }, { nutrientId: 2047, unitName: "KCAL", value: 248 }, { nutrientId: 1003, unitName: "G", value: 20 }, { nutrientId: 1004, unitName: "G", value: 18 }, { nutrientId: 1005, unitName: "G", value: 0 }, { nutrientId: 1093, unitName: "MG", value: 60 }] })!;
+    expect([atw.per100.cal, atw.energy, atw.missing]).toEqual([248, "atwater", undefined]);
+    const spec = fromUsda({ fdcId: 3, description: "y", foodNutrients: [{ nutrientId: 2048, unitName: "KCAL", value: 250 }, { nutrientId: 1003, unitName: "G", value: 20 }] })!;
+    expect([spec.per100.cal, spec.energy]).toEqual([250, "atwater"]);
+    expect(spec.missing).toEqual(["f", "c", "sodium"]);
+    expect(fmtPer100(spec.per100, spec)).toBe("250 cal (Atwater energy) · 20 P · — F · — C · — mg sodium per 100 g");
+    // A whole record carries neither mark, and a real 0 (water) stays 0.
+    const whole = fromUsda({ fdcId: 4, description: "Water", foodNutrients: [{ nutrientId: 1008, unitName: "KCAL", value: 0 }, { nutrientId: 1003, unitName: "G", value: 0 }, { nutrientId: 1004, unitName: "G", value: 0 }, { nutrientId: 1005, unitName: "G", value: 0 }, { nutrientId: 1093, unitName: "MG", value: 4 }] })!;
+    expect([whole.per100.cal, whole.energy, whole.missing]).toEqual([0, undefined, undefined]);
+    expect(gapNote(whole)).toBe("");
+    // Open Food Facts the same way; the marks survive the round trip through the form.
+    const off = fromOff({ product_name: "Bar", nutriments: { proteins_100g: 10, fat_100g: 5, carbohydrates_100g: 50 } }, "12345678")!;
+    expect([off.per100.cal, off.energy, off.missing]).toEqual([285, "macros", ["sodium"]]);
+    const back = decodeFound(encodeFound(off))!;
+    expect([back.energy, back.missing]).toEqual(["macros", ["sodium"]]);
   });
 });
 

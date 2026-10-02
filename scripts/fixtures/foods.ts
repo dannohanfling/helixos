@@ -12,6 +12,8 @@ export const records = {
     { fdcId: 331960, description: "Chicken, breast, boneless, skinless, roasted", dataType: "Foundation", foodCategory: "Poultry Products", foodNutrients: nutrients(157, 32.1, 3.2, 0, 47) },
     { fdcId: 2112345, description: "GRILLED CHICKEN BREAST STRIPS", dataType: "Branded", brandOwner: "Demo Foods Co.", foodCategory: "Prepared Meats", foodNutrients: nutrients(110, 21, 2.5, 1, 480) },
     { fdcId: 173944, description: "Apples, raw, with skin", dataType: "SR Legacy", foodCategory: "Fruits and Fruit Juices", foodNutrients: nutrients(52, 0.3, 0.2, 13.8, 1) },
+    // The shape Danno found (rev 429): energy reads 0 beside real macros, and there is no sodium field at all.
+    { fdcId: 2727569, description: "Beef, ribeye, steak, boneless, choice, raw", dataType: "Foundation", foodCategory: "Beef Products", foodNutrients: nutrients(0, 18.7, 20, 0, 0).filter((n) => n.nutrientId !== 1093) },
   ],
   off: [
     { code: "0012345678905", product_name: "Greek Yogurt, plain", brands: "Demo Dairy, Demo Foods", categories: "Dairies, Fermented foods, Yogurts", nutriments: { "energy-kcal_100g": 59, proteins_100g: 10.2, fat_100g: 0.4, carbohydrates_100g: 3.6, sodium_100g: 0.036 } },

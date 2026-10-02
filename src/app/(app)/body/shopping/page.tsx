@@ -7,6 +7,7 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { boughtAction, pushInstacartAction, setPlanAction } from "@/lib/actions/body";
 import { formatDate } from "@/lib/dates";
 import { listSummary } from "@/lib/engine/body-shopping";
+import { INSTACART_OPEN, INSTACART_SOON, INSTACART_SOON_LINE } from "@/lib/instacart";
 import { requireBodyEnabled, shoppingView } from "@/lib/queries/body";
 
 export const metadata = { title: "HumanOS · Shopping list" };
@@ -165,7 +166,14 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
             </Link>
           </p>
         ) : null}
-        {s.list.lines.length ? (
+        {s.list.lines.length && !INSTACART_OPEN ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2" data-testid="instacart-soon">
+            <button type="button" className="btn btn-soft btn-sm" disabled aria-disabled="true" data-testid="instacart-push">
+              {INSTACART_SOON}
+            </button>
+            <span className="text-[11px] text-ink-3">{INSTACART_SOON_LINE}</span>
+          </div>
+        ) : s.list.lines.length ? (
           <form action={pushInstacartAction} className="mt-4 flex flex-wrap items-center gap-2" data-testid="instacart-form">
             <input type="hidden" name="skip" value={skipParam} />
             <SubmitButton className="btn btn-humanos btn-sm" pendingText="Sending…" data-testid="instacart-push">

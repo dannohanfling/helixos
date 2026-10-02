@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 63,
+    date: "2026-10-03",
+    title: "HumanOS: food search fills USDA's blanks, and Instacart is coming soon",
+    lines: [
+      "When a USDA entry has no calories, Find a food takes USDA's Atwater energy, or works it out from the protein, fat and carbs and says \"estimated from macros\". A nutrient the entry leaves blank shows as —, never 0, and saving tells you what to fill in.",
+      "Instacart isn't taking new partners yet, so its button reads \"Instacart: coming soon\". Your shopping list works as before without it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 62,
     date: "2026-10-03",
     title: "Run your day from a chat with Claude",

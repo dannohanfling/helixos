@@ -251,7 +251,7 @@ async function main() {
         const expectedHits = foodRecords.usda.filter((f) => f.description.toLowerCase().includes("chicken") && f.description.toLowerCase().includes("breast")).map((f) => fromUsda(f)!);
         const hitNames = await client.locator('[data-testid="find-result-name"]').allInnerTexts();
         if (JSON.stringify(hitNames) !== JSON.stringify(expectedHits.map((f) => f.name))) throw new Error(`the results are the mock's matches, in its order: ${JSON.stringify(hitNames)}`);
-        if ((await client.locator('[data-testid="find-result-per100"]').first().innerText()) !== fmtPer100(expectedHits[0].per100)) throw new Error("each result shows its figures per 100 g");
+        if ((await client.locator('[data-testid="find-result-per100"]').first().innerText()) !== fmtPer100(expectedHits[0].per100, expectedHits[0])) throw new Error("each result shows its figures per 100 g");
         const foodUnit = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!.foodUnit;
         const wantSaved = foodFromFound(expectedHits[0], foodUnit);
         await Promise.all([client.waitForURL(/saved=/), client.locator('[data-testid="find-save"]').first().click()]);
@@ -282,8 +282,18 @@ async function main() {
         if (foodCalls.filter((c) => c.path === "/fdc/v1/foods/search").length !== 1 || foodCalls.filter((c) => c.path.startsWith("/off/")).length !== 2) throw new Error(`one USDA search and two barcode lookups went out, and the refused code none: ${JSON.stringify(foodCalls)}`);
         await noSideScroll(client, "/body/foods/find?q=chicken+breast");
         console.log(`✓ find a food: "${expectedHits[0].name}" and "${wantOff.name}" saved from the mocks per ${foodUnit}, once each; not-found and bad codes refused; the scanner loads only on press`);
-        // The two found foods leave again, so the rest of the walk sees the library it built by hand.
-        await db.delete(schema.bodyFoods).where(and(mine(schema.bodyFoods), inArray(schema.bodyFoods.name, [wantSaved.name, foodFromFound(wantOff, foodUnit).name])));
+        // A record with gaps (Danno, rev 429): the ribeye's 0 kcal beside real macros becomes 4P + 9F + 4C, marked; its missing sodium reads —.
+        const ribeyeRec = foodRecords.usda.find((f) => f.description.includes("ribeye"))!;
+        const ribeye = fromUsda(ribeyeRec)!;
+        await client.goto(`${base}/body/foods/find?q=ribeye`);
+        const ribLine = client.locator('[data-testid="find-result-per100"]').first();
+        await ribLine.waitFor({ timeout: 30000 });
+        if ((await ribLine.getAttribute("data-estimated")) !== "macros" || (await ribLine.getAttribute("data-missing")) !== "sodium" || !(await ribLine.innerText()).startsWith("255 cal (estimated from macros)") || !(await ribLine.innerText()).includes("— mg sodium")) throw new Error(`a blank energy is estimated from the macros and marked, a blank sodium reads —: ${await ribLine.innerText()}`);
+        await Promise.all([client.waitForURL(/saved=/), client.locator('[data-testid="find-save"]').first().click()]);
+        if (!(await client.locator('[data-testid="find-saved-note"]').innerText()).includes("calories were estimated from the macros; sodium wasn't in the source")) throw new Error("the save says what was estimated and what was missing");
+        console.log(`✓ USDA gaps: ${ribeye.name} reads ${ribeye.per100.cal} cal estimated from the macros and sodium —, and its save says so`);
+        // The found foods leave again, so the rest of the walk sees the library it built by hand.
+        await db.delete(schema.bodyFoods).where(and(mine(schema.bodyFoods), inArray(schema.bodyFoods.name, [wantSaved.name, foodFromFound(wantOff, foodUnit).name, foodFromFound(ribeye, foodUnit).name])));
       } finally {
         if (foodsMock.pid) process.kill(-foodsMock.pid);
       }
@@ -680,16 +690,12 @@ async function main() {
       }
       const sentLines = Number(await client.locator('[data-testid="shopping-summary"]').getAttribute("data-lines"));
       if (!sentLines) throw new Error("something is left to send");
-      await press(client, '[data-testid="instacart-push"]', async () => /pushed=/.test(client.url()), "pushed to Instacart");
-      await client.locator('[data-testid="shopping-pushed"]').waitFor({ timeout: 30000 });
-      const link = await client.locator('[data-testid="shopping-link"]').getAttribute("href");
-      if (!link?.startsWith("https://instacart.example/")) throw new Error(`the page shows Instacart's link: ${link}`);
-      const orders = await db.query.bodyOrders.findMany({ where: mine(schema.bodyOrders) });
-      if (orders.length !== 1 || orders[0].status !== "link" || orders[0].link !== link || orders[0].lines.length !== sentLines) throw new Error("the push is logged with its lines and link");
-      const { calls } = (await (await fetch("http://localhost:4071/__calls")).json()) as { calls: { method: string; path: string; body: { line_items?: unknown[]; title?: string } }[] };
-      if (calls.length !== 1 || calls[0].method !== "POST" || calls[0].path !== "/idp/v1/products/products_link" || calls[0].body.line_items?.length !== sentLines) throw new Error(`one shopping-list page was asked for, with the lines shown: ${JSON.stringify(calls.map((c) => [c.method, c.path]))}`);
-      if ((await client.locator('[data-testid="shopping-order"]').count()) !== 1) throw new Error("the push shows under Pushed before");
-      console.log(`✓ shopping: ${MEALS[0].name} planned twice gives the engine's ${expectedList.lines.length} lines (the steak's par among them); ${first.name} bought onto the shelf; a line skipped; ${sentLines} lines pushed to the mock Instacart as one request, the link shown and the order logged`);
+      // Danno, rev 429: Instacart takes no new partners, so the button reads "coming soon", is disabled, and nothing is sent or logged.
+      const soon = client.locator('[data-testid="instacart-push"]');
+      if ((await soon.innerText()).trim() !== "Instacart: coming soon" || !(await soon.isDisabled()) || !(await client.locator('[data-testid="instacart-soon"]').innerText()).includes("Instacart isn't taking new partners yet; your list works without it.")) throw new Error("the Instacart button reads coming soon, disabled, with its line");
+      const { calls } = (await (await fetch("http://localhost:4071/__calls")).json()) as { calls: unknown[] };
+      if (calls.length || (await db.query.bodyOrders.findMany({ where: mine(schema.bodyOrders) })).length) throw new Error("nothing goes to Instacart and nothing is logged");
+      console.log(`✓ shopping: ${MEALS[0].name} planned twice gives the engine's ${expectedList.lines.length} lines (the steak's par among them); ${first.name} bought onto the shelf; a line skipped; ${sentLines} lines left, Instacart reads coming soon and nothing was sent`);
     } finally {
       if (instacart.pid) process.kill(-instacart.pid);
     }
@@ -1332,26 +1338,10 @@ async function main() {
     if (!habitsRangeTool.text.includes("Breathwork:")) throw new Error(`body_habits over 90 days: ${habitsRangeTool.text}`);
     const listTool = await tool("body_shopping_list").handler(await viewerFor(), {});
     if (!listTool.text.includes(`${MEALS[0].name} × 2`)) throw new Error(`body_shopping_list reads the plan and the list: ${listTool.text}`);
-    const notSent = await tool("push_to_instacart_cart").handler(await viewerFor(), { confirm: false });
-    if (!notSent.text.startsWith("Not sent") || (notSent.data as { sent?: boolean } | undefined)?.sent !== false) throw new Error(`without confirmation the push sends nothing: ${notSent.text}`);
-    const instacart2 = spawnMock("npx", ["tsx", "scripts/mock-instacart.ts", "4071"], { stdio: "ignore", detached: true });
-    try {
-      for (let i = 0; i < 100; i++) {
-        try {
-          await fetch("http://localhost:4071/__calls");
-          break;
-        } catch {
-          await new Promise((r) => setTimeout(r, 200));
-        }
-      }
-      // The tool runs in this process, which has no dev-server env: point it at the mock the same way.
-      process.env.INSTACART_API_URL = "http://localhost:4071";
-      process.env.INSTACART_API_KEY = "test-instacart-key";
-      const sent = await tool("push_to_instacart_cart").handler(await viewerFor(), { confirm: true });
-      if (!sent.text.includes("https://instacart.example/") || !sent.text.includes("HelixOS placed nothing") || (await db.query.bodyOrders.findMany({ where: mine(schema.bodyOrders) })).length !== 2) throw new Error(`confirmed, the tool returns the link only and logs the push: ${sent.text}`);
-    } finally {
-      if (instacart2.pid) process.kill(-instacart2.pid);
-    }
+    // Even confirmed and with a key set, the tool sends nothing while Instacart is closed (Danno, rev 429); it gives the list in words.
+    process.env.INSTACART_API_KEY = "test-instacart-key";
+    const notSent = await tool("push_to_instacart_cart").handler(await viewerFor(), { confirm: true });
+    if (!notSent.text.startsWith("Instacart: coming soon. Instacart isn't taking new partners yet") || !notSent.text.includes("Nothing was sent") || (notSent.data as { sent?: boolean } | undefined)?.sent !== false || (await db.query.bodyOrders.findMany({ where: mine(schema.bodyOrders) })).length) throw new Error(`the tool says coming soon and sends nothing: ${notSent.text}`);
     if (!corrList.text.includes("Presets:") || !corrList.text.includes("Breathwork")) throw new Error("without metrics, the tool lists the presets and the member's metrics, habits included");
     await press(client, '[data-testid="body-ai-toggle"]', async () => /: Off/.test(await client.locator('[data-testid="body-ai-state"]').innerText()), "AI use off");
     if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("switching it off stops it on the next request");
@@ -1462,7 +1452,7 @@ async function main() {
     if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 3 || (own.body_routines ?? []).length !== 2 || fromWhoop > 2 || (own.body_sessions ?? []).length !== 2 + fromWhoop) throw new Error(`the member's Body export has their workouts (${(own.body_sessions ?? []).length} sessions, ${fromWhoop} from WHOOP; B9 added Coach row and Coach push day)`);
     if (!(own.body_pantry ?? []).length || (own.body_yields ?? []).length !== 1) throw new Error("the member's Body export has their pantry and weighings");
     if ((own.body_habits ?? []).length !== 4 || !(own.body_habit_logs ?? []).length || (own.body_health ?? []).length !== 1) throw new Error("the member's Body export has their habits (the Sauna one WHOOP ticks among them), their logs and their health log");
-    if ((own.body_plan ?? []).length !== 1 || (own.body_orders ?? []).length !== 2) throw new Error("the member's Body export has this week's plan and the pushes");
+    if ((own.body_plan ?? []).length !== 1 || (own.body_orders ?? []).length !== 0) throw new Error("the member's Body export has this week's plan, and no pushes while Instacart is closed");
     if ((own.body_activities ?? []).length !== 3 || (own.body_devices ?? []).length !== 0 || JSON.stringify(own).includes("enc:v1:") || JSON.stringify(own).includes("whoop-access")) throw new Error("the member's Body export has the device's workouts and never a token");
     if ((own.body_entries ?? []).length !== 6 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // ── The Airtable history (B5, rev 237 phase 7): the synthetic HumanOS base through the page. The dry run's numbers are the

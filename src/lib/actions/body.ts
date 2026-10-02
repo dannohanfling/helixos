@@ -13,7 +13,7 @@ import { requireCoach, type Viewer } from "@/lib/auth";
 import { MACROS, entryItem, totalsOf, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
 import { convertQty, storedUnit } from "@/lib/engine/body-units";
-import { decodeFound, foodFromFound } from "@/lib/engine/body-find";
+import { decodeFound, foodFromFound, gapNote } from "@/lib/engine/body-find";
 import { photoItems, readPhotoLines, type PhotoLine } from "@/lib/engine/body-photo";
 import { IMAGE_MAX_BYTES, isImageType } from "@/lib/engine/ai-request";
 import { readPlate, summariseWeek } from "@/lib/body-ai";
@@ -30,7 +30,7 @@ import { allow } from "@/lib/rate-limit";
 import { daysFrom } from "@/lib/engine/body-habits";
 import { parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { instacartLines } from "@/lib/engine/body-shopping";
-import { InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
+import { INSTACART_OPEN, INSTACART_SOON_LINE, InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
 import { shoppingView } from "@/lib/queries/body";
 import { disconnectWhoop, syncWhoop } from "@/lib/body-whoop";
 import { WhoopError, whoopProblem } from "@/lib/whoop";
@@ -406,7 +406,8 @@ export async function saveFoundFoodAction(formData: FormData): Promise<void> {
   const have = await db.query.bodyFoods.findFirst({ where: and(and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId)), eq(schema.bodyFoods.name, food.name)) });
   if (have) await db.update(schema.bodyFoods).set({ ...food, archivedAt: null }).where(eq(schema.bodyFoods.id, have.id));
   else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
-  redirect(`/body/foods/find?saved=${encodeURIComponent(food.name)}`);
+  const note = gapNote(found);
+  redirect(`/body/foods/find?saved=${encodeURIComponent(food.name)}${note ? `&note=${encodeURIComponent(note)}` : ""}`);
 }
 
 /* ───────── Day flags and the week summary (rev 237 phase 15) ───────── */
@@ -1191,6 +1192,7 @@ export async function boughtAction(formData: FormData): Promise<void> {
 export async function pushInstacartAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
   await setUp(v);
+  if (!INSTACART_OPEN) throw back(SHOPPING, INSTACART_SOON_LINE);
   const skip = new Set(str(formData, "skip").split(",").filter(Boolean));
   const view = await shoppingView(workspaceId, userId, v.today, skip);
   if (!view || !view.list.lines.length) throw back(SHOPPING, "Nothing on the list to send.");

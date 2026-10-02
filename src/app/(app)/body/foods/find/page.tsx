@@ -20,7 +20,7 @@ export const metadata = { title: "HumanOS · Find a food" };
  * section and the raw/cooked basis guessed and editable on Nutrition afterwards. Nothing saves until that press. A GET form, so
  * the search is in the address and the back button works.
  */
-export default async function FindFoodPage({ searchParams }: { searchParams: Promise<{ q?: string; code?: string; saved?: string; error?: string }> }) {
+export default async function FindFoodPage({ searchParams }: { searchParams: Promise<{ q?: string; code?: string; saved?: string; note?: string; error?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
@@ -50,6 +50,7 @@ export default async function FindFoodPage({ searchParams }: { searchParams: Pro
       {sp.saved ? (
         <p className="mb-4 rounded-xl border border-ok bg-ok-soft p-3 text-sm" role="status" data-testid="find-saved">
           Saved <strong>{sp.saved}</strong> to your foods, per {unit}. Its section and basis are guesses: fix them on <Link href="/body/foods" className="underline">Nutrition</Link> if needed.
+          {sp.note ? <span className="mt-1 block" data-testid="find-saved-note">{sp.note.slice(0, 300)}</span> : null}
         </p>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
@@ -92,7 +93,7 @@ export default async function FindFoodPage({ searchParams }: { searchParams: Pro
                     <div className="font-medium" data-testid="find-result-name">{r.name}</div>
                     <div className="text-xs text-ink-3">
                       {r.brand ? `${r.brand} · ` : ""}
-                      <span data-testid="find-result-per100">{fmtPer100(r.per100)}</span>
+                      <span data-testid="find-result-per100" data-estimated={r.energy ?? ""} data-missing={(r.missing ?? []).join(",")}>{fmtPer100(r.per100, r)}</span>
                       {` · ${SECTION_LABEL[food.section]} · per ${food.basis} weight · ${r.source === "usda" ? "USDA" : "Open Food Facts"}`}
                     </div>
                   </div>
