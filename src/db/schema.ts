@@ -416,10 +416,12 @@ export const officeHoursRequests = sqliteTable(
     responsible: text("responsible"),
     outcome: text("outcome", { enum: ["covered", "no_show"] }),
     coachNotes: text("coach_notes"),
+    /** The Airtable record a backfilled request came from (rev 441), so a second run adds nothing. Null for the app's own. */
+    airtableId: text("airtable_id"),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
     createdAt: createdAt(),
   },
-  (t) => [index("office_hours_requests_ws_friday").on(t.workspaceId, t.friday)],
+  (t) => [index("office_hours_requests_ws_friday").on(t.workspaceId, t.friday), uniqueIndex("office_hours_requests_airtable").on(t.workspaceId, t.airtableId)],
 );
 export type OfficeHoursRequest = typeof officeHoursRequests.$inferSelect;
 

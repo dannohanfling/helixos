@@ -18,7 +18,7 @@ function routedPages(dir: string, prefix = ""): string[] {
 }
 // The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
 const PAGES_CLIENT = ["/today", "/intentions", "/connect", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/offers", "/pathway", "/courses", "/recordings", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/rewards", "/more", "/settings", "/whats-new"];
-const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/office-hours", "/coach/recordings", "/coach/reports", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
+const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/backfill", "/coach/office-hours", "/coach/recordings", "/coach/reports", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {
   const routed = routedPages("src/app/(app)");

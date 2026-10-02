@@ -1705,6 +1705,62 @@ async function main() {
       if (!paths.some((x) => x.includes("tblHJOURNAL00001"))) throw new Error("the import read the Journal");
       if (echoed.length) throw new Error(`the token never comes back in a response: ${echoed.join(", ")}`);
       console.log("✓ Airtable history: the dry run's numbers are the mapper's; three weigh-ins (the newer generation winning a shared day, fractions as percents, a carried-forward day left out), four workouts (rows, a row's working-set notes, the day's notes) with fourteen sets marked From Airtable, a chest row on 15 Apr only, a twice-entered day once, the Off Day drafts never, two routines and eight exercises; a second run finds it all already in; the mock saw GETs alone, never the Password Bank; the token never came back");
+      // ── The coach's backfill (rev 441): past monthly feedback and Office Hours requests from the synthetic Omnichannel base. The
+      // dry run's numbers are the engine's against what the workspace holds; Approve writes them, dated when they were sent; a
+      // second run finds them all in; the members table gave the emails alone; the Password Bank was never asked for. ──
+      {
+        const { OMNI_BASE, OMNI_TABLES, OMNI_TOKEN } = await import("./fixtures/airtable-omni");
+        const { buildBackfill, backfillSummary, MEMBER_EMAIL_FIELD } = await import("@/lib/engine/coach-backfill");
+        const { existingBackfill, workspaceMembers } = await import("@/lib/coach-backfill");
+        const ws = mem.workspaceId;
+        const byName = (n: string) => OMNI_TABLES.find((t) => t.name.includes(n))!.records;
+        const plan = buildBackfill(
+          { feedback: byName("Client Feedback"), support: byName("Client Support"), emails: new Map(byName("Fulfillment").map((r) => [r.id, String(r.fields[MEMBER_EMAIL_FIELD])])) },
+          await workspaceMembers(ws),
+          await existingBackfill(ws),
+        );
+        const want = backfillSummary(plan);
+        const feedbackBefore = new Set((await db.query.monthlyFeedback.findMany({ where: eq(schema.monthlyFeedback.workspaceId, ws), columns: { id: true } })).map((r) => r.id));
+        const leaked: string[] = [];
+        coach.on("response", async (r) => {
+          if (r.request().method() !== "POST") return;
+          if ((await r.text().catch(() => "")).includes(OMNI_TOKEN)) leaked.push(r.url());
+        });
+        const backfillDry = async () => {
+          await coach.goto(`${base}/coach/backfill`);
+          await coach.locator('[data-testid="backfill-token"]').waitFor({ timeout: 30000 });
+          await fillExact(coach, '[data-testid="backfill-base"]', OMNI_BASE);
+          await fillExact(coach, '[data-testid="backfill-token"]', OMNI_TOKEN);
+          await press(coach, '[data-testid="backfill-dry"]', async () => (await coach.locator('[data-testid="backfill-preview"]').count()) > 0, "the backfill dry run");
+          return coach.locator('[data-testid="backfill-preview"]');
+        };
+        const pv = await backfillDry();
+        for (const [attr, n] of [["data-feedback", want.feedbackNew], ["data-feedback-already", want.feedbackAlready], ["data-ooh", want.oohNew], ["data-skipped", want.skipped]] as const)
+          if ((await pv.getAttribute(attr)) !== String(n)) throw new Error(`the backfill dry run's ${attr} is the engine's ${n}: ${await pv.getAttribute(attr)}`);
+        if (want.oohNew !== 2 || want.skipped < 3 || !(await coach.locator('[data-testid="backfill-skip"][data-why="No HelixOS member has this row\'s email."]').count())) throw new Error(`two requests land and the unplaced rows are listed with why: ${JSON.stringify(want)}`);
+        await noSideScroll(coach, "/coach/backfill with a dry run");
+        await press(coach, '[data-testid="backfill-approve"]', async () => /\/coach\/backfill\?done=/.test(coach.url()), "the backfill done");
+        const ooh = await db.query.officeHoursRequests.findMany({ where: and(eq(schema.officeHoursRequests.workspaceId, ws), inArray(schema.officeHoursRequests.airtableId, ["recOOH0000000001", "recOOH0000000002"])) });
+        const opt = ooh.find((o) => o.airtableId === "recOOH0000000001");
+        const old = ooh.find((o) => o.airtableId === "recOOH0000000002");
+        if (opt?.userId !== maya.id || opt.friday !== "2026-03-13" || opt.category !== "Funnels" || opt.outcome !== "covered" || opt.tools !== "GoHighLevel" || opt.createdAt !== "2026-03-10 15:00:00") throw new Error(`today's form lands on Maya, as written: ${JSON.stringify(opt)}`);
+        if (old?.description !== "Two offers, one audience" || old.goal !== "How do I price two offers?" || old.outcome !== "no_show" || old.friday !== "2023-12-04") throw new Error(`the older form maps by its own questions: ${JSON.stringify(old)}`);
+        const fresh = (await db.query.monthlyFeedback.findMany({ where: eq(schema.monthlyFeedback.workspaceId, ws) })).filter((r) => !feedbackBefore.has(r.id));
+        const feb = fresh.find((r) => r.userId === maya.id && r.month === "2026-02");
+        if (fresh.length !== want.feedbackNew || (want.feedbackNew && feb && (feb.proud !== "Proud 1" || feb.referralScore !== 9 || feb.createdAt !== "2026-02-27 12:00:00" || feb.updatedAt !== feb.createdAt))) throw new Error(`the feedback lands as written, dated when sent: ${JSON.stringify(fresh.map((r) => [r.month, r.proud, r.createdAt, r.updatedAt]))}`);
+        // Again: nothing new, so Approve is shut.
+        const again = await backfillDry();
+        if ((await again.getAttribute("data-feedback")) !== "0" || (await again.getAttribute("data-ooh")) !== "0" || !(await coach.locator('[data-testid="backfill-approve"]').isDisabled())) throw new Error("a second run finds everything already in");
+        const { paths: omniPaths } = (await (await fetch(`http://localhost:${mockPort}/__methods`)).json()) as { methods: string[]; paths: string[] };
+        const fulfillment = omniPaths.filter((x) => x.includes("tblxCBKthZ4EmmV6Y"));
+        if (!fulfillment.length || fulfillment.some((x) => !x.endsWith(`?fields=${MEMBER_EMAIL_FIELD}`))) throw new Error(`the members table is asked for its email field alone: ${fulfillment.join(", ")}`);
+        if (omniPaths.some((x) => x.includes("tblOPASSWORDS0001"))) throw new Error("the backfill never asks for the Password Bank's rows");
+        if (leaked.length) throw new Error(`the token never comes back in a response: ${leaked.join(", ")}`);
+        console.log(`✓ coach backfill (rev 441): the dry run's numbers are the engine's (${want.feedbackNew} feedback months, ${want.oohNew} Office Hours requests, ${want.skipped} left out with why); Approve lands them as written, dated when sent; a second run finds them all in; the members table gave its emails alone and the Password Bank was never asked for`);
+        // Back out what landed, so the rest of the walk sees the workspace it built.
+        await db.delete(schema.officeHoursRequests).where(and(eq(schema.officeHoursRequests.workspaceId, ws), inArray(schema.officeHoursRequests.airtableId, ["recOOH0000000001", "recOOH0000000002"])));
+        if (fresh.length) await db.delete(schema.monthlyFeedback).where(inArray(schema.monthlyFeedback.id, fresh.map((r) => r.id)));
+      }
     } finally {
       if (mock.pid) process.kill(-mock.pid);
     }

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 72,
+    date: "2026-10-03",
+    title: "Past feedback and Office Hours, brought over from Airtable",
+    lines: [
+      "For coaches: History from Airtable (linked from Monthly feedback) brings past monthly feedback and Office Hours requests over from the Omnichannel base. Paste a read-only token, check the dry run, then Approve.",
+      "Each row lands on the member with that email, in their own words and dated when it was sent, so nothing old shows as new. A month a member already answered in HelixOS stays theirs, a second run adds nothing, and anything that can't be placed is listed with the reason.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 71,
     date: "2026-10-03",
     title: "HumanOS: numbers the way you write them, and nothing typed is lost",

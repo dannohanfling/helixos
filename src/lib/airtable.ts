@@ -57,12 +57,14 @@ async function tables(token: string, which: Which, baseId: string): Promise<{ id
   return body.tables ?? [];
 }
 
-/** Every row of one table, paged 100 at a time. */
-async function rows(token: string, which: Which, baseId: string, tableId: string): Promise<AirtableRecord[]> {
+/** Every row of one table, paged 100 at a time; with `fieldIds`, only those fields of each row, keyed by field id. */
+async function rows(token: string, which: Which, baseId: string, tableId: string, fieldIds: string[] = []): Promise<AirtableRecord[]> {
   const out: AirtableRecord[] = [];
   let offset: string | undefined;
   do {
     const q = new URLSearchParams({ pageSize: "100" });
+    for (const f of fieldIds) q.append("fields[]", f);
+    if (fieldIds.length) q.set("returnFieldsByFieldId", "true");
     if (offset) q.set("offset", offset);
     const body = (await get(token, which, `/v0/${encodeURIComponent(baseId)}/${encodeURIComponent(tableId)}?${q}`)) as { records?: AirtableRecord[]; offset?: string };
     out.push(...(body.records ?? []));
@@ -113,4 +115,15 @@ export async function readTables(access: BaseAccess, wanted: string[]): Promise<
   if (!access.token.trim()) throw new AirtableError("no_token", "source");
   const r = await read(access.token.trim(), "source", access.baseId.trim(), wanted);
   return { found: r.found, missing: r.missing };
+}
+
+/**
+ * One field of one table, by their ids, as record id → value (rev 441's backfill: the members' emails out of the people table,
+ * and nothing else of it is asked for).
+ */
+export async function readOneField(access: BaseAccess, tableId: string, fieldId: string): Promise<Map<string, string>> {
+  if (!BASE_ID.test(access.baseId.trim())) throw new AirtableError("base_id", "source");
+  if (!access.token.trim()) throw new AirtableError("no_token", "source");
+  const all = await rows(access.token.trim(), "source", access.baseId.trim(), tableId, [fieldId]);
+  return new Map(all.flatMap((r) => (typeof r.fields[fieldId] === "string" ? [[r.id, r.fields[fieldId] as string] as const] : [])));
 }

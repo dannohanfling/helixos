@@ -30,6 +30,13 @@ export default async function CoachFeedbackPage() {
     <>
       <PageHeader title="Monthly feedback" subtitle={`${rows.length} responses across ${months.length} month${months.length === 1 ? "" : "s"}`} action={<Link href="/coach" className="btn btn-ghost btn-sm">Back</Link>} />
       <p className="mb-4 text-xs text-ink-3">A &ldquo;proud of&rdquo; answer is a member&apos;s own words, not a client result. It never goes to Proof Bank or your bot without the member&apos;s permission.</p>
+      <p className="mb-4 text-xs text-ink-3">
+        Past feedback still in Airtable?{" "}
+        <Link href="/coach/backfill" className="underline" data-testid="feedback-backfill-link">
+          Bring it over, with past Office Hours requests
+        </Link>
+        .
+      </p>
       {months.length ? null : <p className="text-sm text-ink-2">No feedback yet. Members see the card on Today from the last 3 days of a month through the 5th of the next.</p>}
       <div className="space-y-4">
         {months.map((m) => {
