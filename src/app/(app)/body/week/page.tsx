@@ -160,6 +160,7 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="week-recovery" data-sleep-avg={w.sleep.avg ?? ""} data-sleep-nights={w.sleep.nights} data-habits-kept={w.habits.kept} data-habits-due={w.habits.due}>
         <Stat label="Sleep a night" value={w.sleep.avg != null ? fmtHours(w.sleep.avg) : "—"} sub={w.sleep.avg != null ? <span>{w.sleep.atFloor} of {w.sleep.nights} at 7 h · <Delta value={w.sleep.change} unit=" h" better="up" /></span> : "Log nights on Sleep"} />
         <Stat label="Habits kept" value={w.habits.due ? `${w.habits.kept} of ${w.habits.due}` : "—"} sub={w.habits.due ? <Delta value={w.habits.prevDue ? Math.round((w.habits.kept / w.habits.due) * 100) - Math.round((w.habits.prevKept / w.habits.prevDue) * 100) : null} unit="%" better="up" /> : "Pick habits on Practices"} />
+        {w.burn.avg != null ? <Stat label="Burned a day (estimate)" value={`${w.burn.avg.toLocaleString("en-US")} cal`} sub={`your device's estimate over ${w.burn.days} day${w.burn.days === 1 ? "" : "s"}${w.nutrition.avgCal != null ? ` · intake ${fmtMacro("cal", w.nutrition.avgCal)}` : ""}`} /> : null}
       </div>
 
       <Card title="The days">

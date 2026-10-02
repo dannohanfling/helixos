@@ -22,7 +22,7 @@ const day = (back: number, hm: string) => {
 };
 export const records = {
   sleep: [
-    { id: "slp-1", user_id: USER_ID, start: day(1, "04:40"), end: day(0, "12:05"), nap: false, score_state: "SCORED", score: { stage_summary: { total_in_bed_time_milli: 7.25 * 3600000, total_awake_time_milli: 0.25 * 3600000 }, sleep_performance_percentage: 86 } },
+    { id: "slp-1", user_id: USER_ID, start: day(1, "04:40"), end: day(0, "12:05"), nap: false, score_state: "SCORED", score: { stage_summary: { total_in_bed_time_milli: 7.25 * 3600000, total_awake_time_milli: 0.25 * 3600000, total_light_sleep_time_milli: 3.5 * 3600000, total_slow_wave_sleep_time_milli: 1.5 * 3600000, total_rem_sleep_time_milli: 2 * 3600000 }, sleep_performance_percentage: 86 } },
     { id: "slp-2", user_id: USER_ID, start: day(2, "05:00"), end: day(1, "11:50"), nap: false, score_state: "SCORED", score: { stage_summary: { total_in_bed_time_milli: 6.5 * 3600000, total_awake_time_milli: 0.5 * 3600000 }, sleep_performance_percentage: 74 } },
     { id: "nap-1", user_id: USER_ID, start: day(1, "20:00"), end: day(1, "20:40"), nap: true, score_state: "SCORED", score: { stage_summary: { total_in_bed_time_milli: 2400000, total_awake_time_milli: 0 } } },
   ],
@@ -31,13 +31,13 @@ export const records = {
     { cycle_id: 900, sleep_id: "slp-2", user_id: USER_ID, created_at: day(1, "11:55"), score_state: "SCORED", score: { recovery_score: 44, resting_heart_rate: 55, hrv_rmssd_milli: 48.1 } },
   ],
   cycle: [
-    { id: 901, user_id: USER_ID, start: day(0, "12:05"), end: null, score_state: "SCORED", score: { strain: 8.2 } },
-    { id: 900, user_id: USER_ID, start: day(1, "11:50"), end: day(0, "12:05"), score_state: "SCORED", score: { strain: 14.6 } },
+    { id: 901, user_id: USER_ID, start: day(0, "12:05"), end: null, score_state: "SCORED", score: { strain: 8.2, kilojoule: 6276, average_heart_rate: 68 } },
+    { id: 900, user_id: USER_ID, start: day(1, "11:50"), end: day(0, "12:05"), score_state: "SCORED", score: { strain: 14.6, kilojoule: 11715, average_heart_rate: 74, max_heart_rate: 171 } },
   ],
   workout: [
-    { id: "wk-lift", user_id: USER_ID, start: day(1, "16:00"), end: day(1, "16:52"), sport_name: "Weightlifting", score_state: "SCORED", score: { strain: 10.1, average_heart_rate: 118, max_heart_rate: 158 } },
+    { id: "wk-lift", user_id: USER_ID, start: day(1, "16:00"), end: day(1, "16:52"), sport_name: "Weightlifting", score_state: "SCORED", score: { strain: 10.1, average_heart_rate: 118, max_heart_rate: 158, kilojoule: 1800, zone_duration: { zone_zero_milli: 4 * 60000, zone_one_milli: 14 * 60000, zone_two_milli: 22 * 60000, zone_three_milli: 10 * 60000, zone_four_milli: 2 * 60000, zone_five_milli: 0 } } },
     { id: "wk-sauna", user_id: USER_ID, start: day(1, "17:00"), end: day(1, "17:18"), sport_name: "Sauna", score_state: "SCORED", score: { strain: 3.4, average_heart_rate: 96, max_heart_rate: 110 } },
-    { id: "wk-walk", user_id: USER_ID, start: day(0, "14:00"), end: day(0, "14:35"), sport_name: "Walking", score_state: "SCORED", score: { strain: 4.0, average_heart_rate: 98, max_heart_rate: 120 } },
+    { id: "wk-walk", user_id: USER_ID, start: day(0, "14:00"), end: day(0, "14:35"), sport_name: "Walking", score_state: "SCORED", score: { strain: 4.0, average_heart_rate: 98, max_heart_rate: 120, distance_meter: 3240, zone_duration: { zone_zero_milli: 10 * 60000, zone_one_milli: 25 * 60000 } } },
   ],
 };
 
@@ -82,6 +82,7 @@ createServer((req, res) => {
     if ((req.headers.authorization ?? "") !== `Bearer ${TOKEN}`) return json(401, { error: "unauthorized" });
     const p = url.pathname;
     if (p === "/developer/v2/user/profile/basic") return json(200, { user_id: USER_ID, email: "member@example.com", first_name: "Demo", last_name: "Member" });
+    if (p === "/developer/v2/user/measurement/body") return json(200, { height_meter: 1.8, weight_kilogram: 82.5, max_heart_rate: 188 });
     const one = (list: { id?: unknown; cycle_id?: unknown }[], id: string) => list.find((x) => String(x.id ?? x.cycle_id) === id);
     let m: RegExpMatchArray | null;
     if ((m = p.match(/^\/developer\/v2\/activity\/sleep\/([^/]+)$/))) return json(one(records.sleep, m[1]) ? 200 : 404, one(records.sleep, m[1]) ?? { error: "not found" });

@@ -2888,6 +2888,10 @@ export const bodyActivities = sqliteTable(
     strain: real("strain"),
     avgHr: integer("avg_hr"),
     maxHr: integer("max_hr"),
+    /** Phase 16b: metres covered, minutes in heart-rate zones 0 to 5, and the Training session this workout sits under. */
+    distanceM: real("distance_m"),
+    zones: text("zones", { mode: "json" }).$type<number[]>(),
+    sessionId: text("session_id"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("body_activities_member_provider_id").on(t.workspaceId, t.userId, t.provider, t.providerId), index("body_activities_member_date").on(t.workspaceId, t.userId, t.date)],

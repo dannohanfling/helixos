@@ -7,6 +7,7 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
 import { activitiesOn, requireBodyEnabled, restrictedNow, trainingDay, trainingWeeks, type TrainingDayView } from "@/lib/queries/body";
+import { fmtDistance, zonesText } from "@/lib/engine/body-whoop";
 import { deleteSetAction, finishSessionAction, logSetAction, reopenSessionAction, setDayOffAction, startSessionAction } from "@/lib/actions/body";
 
 export const metadata = { title: "HumanOS · Training" };
@@ -133,10 +134,12 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
         /* WHOOP (phase 11): the day's recorded workouts; a lifting one sits with the session rather than beside it. */
         <ul className="-mt-2 mb-3 flex flex-wrap gap-2 text-xs" data-testid="training-activities" data-count={activities.length}>
           {activities.map((a) => (
-            <li key={a.id} className="rounded-full bg-surface-2 px-2.5 py-1 text-ink-2" data-testid="training-activity" data-sport={a.sport}>
+            <li key={a.id} className="rounded-full bg-surface-2 px-2.5 py-1 text-ink-2" data-testid="training-activity" data-sport={a.sport} data-session={a.sessionId ? "1" : "0"} title={a.sessionId ? "Under this day's session" : undefined}>
               ⌚ {a.sport} · {Math.round(a.minutes)} min
               {a.strain != null ? ` · strain ${a.strain}` : ""}
-              {a.avgHr != null ? ` · ${a.avgHr} bpm` : ""}
+              {a.avgHr != null ? ` · ${a.avgHr}${a.maxHr != null ? `–${a.maxHr}` : ""} bpm` : ""}
+              {fmtDistance(a.distanceM) ? ` · ${fmtDistance(a.distanceM)}` : ""}
+              {zonesText(a.zones) ? <span className="text-ink-3" data-testid="training-activity-zones"> · {zonesText(a.zones)}</span> : null}
             </li>
           ))}
         </ul>

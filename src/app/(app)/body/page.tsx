@@ -9,7 +9,7 @@ import { addDays, formatDate } from "@/lib/dates";
 import { MACROS, MACRO_LABEL, MARK_ICON, MARK_WORD, fmtMacro, slotNow } from "@/lib/engine/body";
 import { LogFoodForm } from "@/components/body/unit-inputs";
 import { loggableUnits } from "@/lib/engine/body-units";
-import { bodyDay, latestComposition, recentDays, requireBodyEnabled } from "@/lib/queries/body";
+import { bodyDay, latestComposition, recentDays, requireBodyEnabled, deviceDay } from "@/lib/queries/body";
 import { fmtMetric } from "@/lib/engine/body-scale";
 import { deleteEntryAction, logFoodAction, logMealAction, logPhotoAction, mealPhotoAction, setBodyAiAction, setBodyDayFlagAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
 import { DAY_FLAGS, FLAG_LABEL, flagText } from "@/lib/engine/body-flags";
@@ -51,7 +51,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
     );
   }
 
-  const [recent, weighIn] = await Promise.all([recentDays(v.workspace.id, v.user.id, v.today), latestComposition(v.workspace.id, v.user.id)]);
+  const [recent, weighIn, device] = await Promise.all([recentDays(v.workspace.id, v.user.id, v.today), latestComposition(v.workspace.id, v.user.id), deviceDay(v.workspace.id, v.user.id, date)]);
   const slots = d.settings.mealSlots;
   const defaultSlot = date === v.today ? slotNow(slots, v.hour) : slots[slots.length - 1] ?? "Meal";
   const prev = addDays(date, -1);
@@ -253,6 +253,13 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
               </p>
             ) : null}
             <MacroTiles totals={d.totals} bands={d.bands} marks={d.marks} setTargetsHref="/body/settings#day-types" />
+            {device.burnCal != null ? (
+              /* Phase 16b: the wearable's day beside intake, worded as the estimate it is. */
+              <p className="mt-2 text-xs text-ink-3" data-testid="body-burn" data-cal={device.burnCal}>
+                Burned about {device.burnCal.toLocaleString("en-US")} cal today by your device&apos;s estimate
+                {device.avgHr != null ? ` · ${device.avgHr} bpm on average` : ""}
+              </p>
+            ) : null}
             <div className="mt-3 space-y-1">
               <CapsLine caps={d.caps} />
               {d.sodium ? <p className="text-xs text-ink-3" data-testid="body-sodium">Sodium: {Math.round(d.sodium).toLocaleString("en-US")} mg</p> : null}

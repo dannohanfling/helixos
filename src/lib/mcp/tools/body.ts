@@ -18,14 +18,15 @@ import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
-import { bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns } from "@/lib/queries/body";
+import { fmtDistance, zonesText } from "@/lib/engine/body-whoop";
 import { PRESETS } from "@/lib/engine/body-correlate";
 import { isRangeKey, rangeBounds, rateText } from "@/lib/engine/body-range";
 import { addDays } from "@/lib/dates";
 import { instacartLines, listSummary } from "@/lib/engine/body-shopping";
 import { InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
 import { fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
-import { fmtHours, parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
+import { fmtBedtime, fmtHours, fmtWake, parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { startOfWeek } from "@/lib/dates";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -178,7 +179,7 @@ export const bodyTraining = defineTool({
       return { text: `${ex.name}${h.pr ? `, PR ${h.pr.text} on ${h.pr.date}` : ", no sets yet"}.\n${sessions.join("\n")}`, data: { exercise: ex.name, kind: ex.kind, unit: h.unit, pr: h.pr, points: h.points, sessions: h.sessions.slice(0, 12) } };
     }
     const date = dayOf(v, input.date);
-    const [t, weeks] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today)]);
+    const [t, weeks, activities] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), activitiesOn(v.workspace.id, v.user.id, date)]);
     if (!t) throw new Error("HumanOS isn't set up for this member yet.");
     const lines: string[] = [];
     if (t.off) lines.push(`${date === v.today ? "Today" : date} is marked Off.`);
@@ -186,7 +187,9 @@ export const bodyTraining = defineTool({
     else lines.push(`${date === v.today ? "Today" : date}: no workout started${t.suggested ? `; ${t.suggested.name} is on the plan for this day type` : ""}.`);
     for (const x of t.exercises) lines.push(`${x.exercise.name}${x.target ? ` (plan ${x.target.sets} × ${x.target.reps || "?"})` : ""}: ${x.today.length ? x.today.map((s) => `${fmtSet(s, t.unit, x.exercise.kind)}${s.pr ? " (PR)" : ""}`).join(", ") : "no sets yet"}${x.last.length ? `; last time ${x.lastDate}: ${x.last.join(", ")}` : ""}${x.pr ? `; PR ${x.pr.text}` : ""}.`);
     if (weeks) lines.push(`This week: ${weeks.tally.done}${weeks.tally.planned != null ? ` of ${weeks.tally.planned}` : ""} session${weeks.tally.done === 1 && weeks.tally.planned == null ? "" : "s"}.`);
-    return { text: lines.join("\n"), data: { date, off: t.off, routine: t.routineName, finished: !!t.completedAt, plan: t.plan, exercises: t.exercises.map((x) => ({ name: x.exercise.name, kind: x.exercise.kind, target: x.target, today: x.today.map((s) => ({ weight: s.weight, unit: s.unit, reps: s.reps, pr: s.pr })), last: x.last, pr: x.pr })), week: weeks?.tally ?? null } };
+    // Phase 16b: the device's workouts that day, under the session.
+    if (activities.length) lines.push(`Recorded by the device: ${activities.map((a) => `${a.sport} ${Math.round(a.minutes)} min${a.strain != null ? `, strain ${a.strain}` : ""}${a.avgHr != null ? `, ${a.avgHr} bpm` : ""}${fmtDistance(a.distanceM) ? `, ${fmtDistance(a.distanceM)}` : ""}${zonesText(a.zones) ? `, zones ${zonesText(a.zones)}` : ""}`).join("; ")}.`);
+    return { text: lines.join("\n"), data: { date, off: t.off, routine: t.routineName, finished: !!t.completedAt, plan: t.plan, exercises: t.exercises.map((x) => ({ name: x.exercise.name, kind: x.exercise.kind, target: x.target, today: x.today.map((s) => ({ weight: s.weight, unit: s.unit, reps: s.reps, pr: s.pr })), last: x.last, pr: x.pr })), week: weeks?.tally ?? null, activities: activities.map((a) => ({ sport: a.sport, minutes: a.minutes, strain: a.strain, avgHr: a.avgHr, maxHr: a.maxHr, distanceM: a.distanceM, zones: a.zones, underSession: !!a.sessionId })) } };
   },
 });
 
@@ -427,7 +430,7 @@ defineTool({
   name: "body_sleep",
   scope: "body",
   kind: "read",
-  description: "The member's sleep: last night's hours and score, this week's average against last week's and the nights at 7 hours or more, and the last 14 nights. With range (\"month\", \"90d\", \"year\") and an optional from: the nights over that span, the average, nights at 7 h and under, by week. Nothing else of their health.",
+  description: "The member's sleep: last night's hours and score, this week's average against last week's and the nights at 7 hours or more, and the last 14 nights (with bed and wake times and the stages when a wearable gave them). With range (\"month\", \"90d\", \"year\") and an optional from: the nights over that span, the average, nights at 7 h and under, by week. Nothing else of their health.",
   input: { range: z.enum(["week", "month", "90d", "year"]).optional(), from: z.string().optional() },
   handler: async (v, input): Promise<ToolResult> => {
     await ready(v);
@@ -440,7 +443,7 @@ defineTool({
     if (!s) throw new Error("HumanOS isn't set up for this member yet.");
     const lines = [s.last ? `Last night (${s.last.date}): ${s.last.text}${s.last.score != null ? `, score ${s.last.score}` : ""}.` : "No nights logged yet."];
     if (s.week.avg != null) lines.push(`This week: ${fmtHours(s.week.avg)} a night over ${s.week.nights} night${s.week.nights === 1 ? "" : "s"}, ${s.week.atFloor} at 7 h or more${s.prevWeek.avg != null ? `; last week ${fmtHours(s.prevWeek.avg)}` : ""}.`);
-    if (s.recent.length) lines.push(`Nights: ${s.recent.map((n) => `${n.date} ${n.sleep_h != null ? fmtHours(n.sleep_h) : "—"}${n.sleep_score != null ? ` (${n.sleep_score})` : ""}`).join("; ")}.`);
+    if (s.recent.length) lines.push(`Nights: ${s.recent.map((n) => `${n.date} ${n.sleep_h != null ? fmtHours(n.sleep_h) : "—"}${n.sleep_score != null ? ` (${n.sleep_score})` : ""}${n.bedtime != null && n.waketime != null ? `, ${fmtBedtime(n.bedtime)} to ${fmtWake(n.waketime)}` : ""}${n.sleep_deep_min != null ? `, deep ${n.sleep_deep_min} min` : ""}${n.sleep_rem_min != null ? `, REM ${n.sleep_rem_min} min` : ""}`).join("; ")}.`);
     return { text: lines.join("\n"), data: { last: s.last, week: s.week, prevWeek: s.prevWeek, nights: s.recent } };
   },
 });

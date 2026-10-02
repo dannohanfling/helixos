@@ -9,7 +9,7 @@ import type { Viewer } from "@/lib/auth";
 import { addDays, daysBetween, formatDate, rangeDays, startOfWeek, todayInTz } from "@/lib/dates";
 import { belowPar, daysLeft, dueSoon, yieldFor } from "@/lib/engine/body-pantry";
 import { fmtHabitValue, habitsWeek, kept, dueOn, streak, weekDots, type Dot } from "@/lib/engine/body-habits";
-import { fmtHours, isRecoveryKey, sleepAverages, sleepWeek, type Night, type RecoveryKey } from "@/lib/engine/body-recovery";
+import { bedtimeDrift, fmtHours, isRecoveryKey, RECOVERY, sleepAverages, sleepWeek, type Night, type RecoveryKey } from "@/lib/engine/body-recovery";
 import { weekday } from "@/lib/dates";
 import { METRIC_DEFS, habitKey, isHabitKey, pairUp, verdict, type Fold, type Grain, type MetricDef, type Point } from "@/lib/engine/body-correlate";
 import { shoppingList, type ShopFood } from "@/lib/engine/body-shopping";
@@ -567,6 +567,7 @@ export async function bodyWeek(workspaceId: string, userId: string, monday: stri
     weigh: { ...weigh, prevAvg: prevWeigh.avg, change: change(weigh.avg, prevWeigh.avg), latest },
     pace,
     sleep: recovery.sleep,
+    burn: recovery.burn,
     habits: recovery.habits,
   };
 }
@@ -705,7 +706,7 @@ async function habitsSpan(workspaceId: string, userId: string, from: string, to:
 
 /** The nights on record, oldest first: hours and the optional score, from the manual rows and any wearable's. */
 async function nights(workspaceId: string, userId: string, from: string, to: string) {
-  const rows = await db.query.bodyDaily.findMany({ where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), inArray(schema.bodyDaily.key, ["sleep_h", "sleep_score", "recovery", "strain", "rhr", "hrv"]), gte(schema.bodyDaily.date, from), lte(schema.bodyDaily.date, to)), orderBy: asc(schema.bodyDaily.date) });
+  const rows = await db.query.bodyDaily.findMany({ where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), inArray(schema.bodyDaily.key, RECOVERY.map((m) => m.key)), gte(schema.bodyDaily.date, from), lte(schema.bodyDaily.date, to)), orderBy: asc(schema.bodyDaily.date) });
   const byDate = new Map<string, Partial<Record<RecoveryKey, number>> & { date: string }>();
   for (const r of rows) {
     if (!isRecoveryKey(r.key)) continue;
@@ -729,7 +730,7 @@ export async function sleepView(workspaceId: string, userId: string, today: stri
   const last = slept[slept.length - 1] ?? null;
   return {
     settings,
-    last: last ? { date: last.date, hours: last.sleep_h, text: fmtHours(last.sleep_h), score: last.sleep_score ?? null } : null,
+    last: last ? { date: last.date, hours: last.sleep_h, text: fmtHours(last.sleep_h), score: last.sleep_score ?? null, bedtime: last.bedtime ?? null, waketime: last.waketime ?? null } : null,
     week: sleepWeek(inSpan(monday, today)),
     prevWeek: sleepWeek(inSpan(addDays(monday, -7), addDays(monday, -1))),
     trend,
@@ -769,7 +770,10 @@ export async function recoveryWeek(workspaceId: string, userId: string, monday: 
   const asNights = (ns: Awaited<ReturnType<typeof nights>>): Night[] => ns.filter((n): n is typeof n & { sleep_h: number } => n.sleep_h != null).map((n) => ({ date: n.date, hours: n.sleep_h }));
   const sleep = sleepWeek(asNights(thisN));
   const prevSleep = sleepWeek(asNights(prevN));
-  return { sleep: { ...sleep, prevAvg: prevSleep.avg, change: change(sleep.avg, prevSleep.avg) }, habits: { ...habits, prevDue: prevHabits.due, prevKept: prevHabits.kept } };
+  // Phase 16b: the device's energy estimate, averaged over the days it gave one.
+  const burns = thisN.filter((n) => n.burn_cal != null).map((n) => n.burn_cal!);
+  const burn = { avg: burns.length ? Math.round(burns.reduce((a, b) => a + b, 0) / burns.length) : null, days: burns.length };
+  return { sleep: { ...sleep, prevAvg: prevSleep.avg, change: change(sleep.avg, prevSleep.avg) }, burn, habits: { ...habits, prevDue: prevHabits.due, prevKept: prevHabits.kept } };
 }
 
 /** Habits and sleep in words for the AI block (rev 219 allows both as numbers and short text). Never the health log. */
@@ -806,7 +810,9 @@ async function seriesFor(workspaceId: string, userId: string, key: string, from:
     // Every due day counts: a day without a log is a zero, so a skipped habit is data too.
     return rangeDays(from, to).filter((d) => dueOn(hs, weekday(d), d)).map((d) => ({ date: d, value: h.kind === "done" ? (kept(h, value.get(d)) ? 1 : 0) : (value.get(d) ?? 0) }));
   }
-  if (key === "sleep_h" || key === "sleep_score") {
+  // Bedtime drift (phase 16b) reads the week before the range too, so the first nights have a window to drift from.
+  if (key === "bedtime_drift") return bedtimeDrift(await seriesFor(workspaceId, userId, "bedtime", addDays(from, -7), to, today, tz), daysBetween).filter((p) => p.date >= from);
+  if (isRecoveryKey(key)) {
     const rows = await db.query.bodyDaily.findMany({ where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), eq(schema.bodyDaily.key, key), gte(schema.bodyDaily.date, from), lte(schema.bodyDaily.date, to)) });
     const byDate = new Map<string, number>();
     for (const r of rows) byDate.set(r.date, r.value);
@@ -1037,7 +1043,15 @@ export type BodyRangeView = NonNullable<Awaited<ReturnType<typeof bodyRange>>>;
 /** The member's WHOOP connection for Body settings: connected when, last sync, last error; never a token. */
 export async function whoopStatus(workspaceId: string, userId: string) {
   const d = await db.query.bodyDevices.findFirst({ columns: { connectedAt: true, lastSyncAt: true, lastError: true, providerUserId: true }, where: and(and(eq(schema.bodyDevices.workspaceId, workspaceId), eq(schema.bodyDevices.userId, userId)), eq(schema.bodyDevices.provider, "whoop")) });
-  return d ? { connectedAt: d.connectedAt, lastSyncAt: d.lastSyncAt, lastError: d.lastError, known: !!d.providerUserId } : null;
+  if (!d) return null;
+  const max = await db.query.bodyDaily.findFirst({ columns: { value: true }, where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), eq(schema.bodyDaily.key, "max_hr")), orderBy: desc(schema.bodyDaily.date) });
+  return { connectedAt: d.connectedAt, lastSyncAt: d.lastSyncAt, lastError: d.lastError, known: !!d.providerUserId, maxHr: max?.value ?? null };
+}
+
+/** The device's figures for one day (phase 16b): the energy estimate and the average heart rate, for the Log page beside intake. */
+export async function deviceDay(workspaceId: string, userId: string, date: string): Promise<{ burnCal: number | null; avgHr: number | null }> {
+  const rows = await db.query.bodyDaily.findMany({ columns: { key: true, value: true }, where: and(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId)), eq(schema.bodyDaily.date, date), inArray(schema.bodyDaily.key, ["burn_cal", "cycle_hr"])) });
+  return { burnCal: rows.find((r) => r.key === "burn_cal")?.value ?? null, avgHr: rows.find((r) => r.key === "cycle_hr")?.value ?? null };
 }
 
 /** The device's workouts on a day, for Training: sport, minutes, strain, heart rate. */

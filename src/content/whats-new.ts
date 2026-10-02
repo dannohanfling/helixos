@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 48,
+    date: "2026-10-02",
+    title: "WHOOP, the rest of it: workouts under your session, sleep stages, and the day's burn",
+    lines: [
+      "A WHOOP workout now sits under that day's Training session, with its heart-rate zones and distance; a day with no logged routine gets a session of its own, \"From WHOOP\", never twice.",
+      "Sleep shows each night's bed and wake times and its stages (deep, REM, light, awake). Patterns gains them as metrics, with bedtime drift (how far a night strays from your week's usual), recovery, strain, resting heart rate, HRV, average heart rate and the day's energy estimate.",
+      "Log and This week show the day's energy burned beside intake, worded as the estimate it is, and Settings shows the max heart rate your device reports.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 46,
     date: "2026-10-02",
     title: "Practices: today is an outline until it's kept, and the week is drawn whole",

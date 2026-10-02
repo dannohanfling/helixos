@@ -8,13 +8,18 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { HabitKind } from "@/db/schema";
 
-export type WhoopSleep = { id: string; start?: string; end?: string; nap?: boolean; score_state?: string; score?: { stage_summary?: { total_in_bed_time_milli?: number; total_awake_time_milli?: number }; sleep_performance_percentage?: number } };
+export type WhoopStages = { total_in_bed_time_milli?: number; total_awake_time_milli?: number; total_light_sleep_time_milli?: number; total_slow_wave_sleep_time_milli?: number; total_rem_sleep_time_milli?: number };
+export type WhoopSleep = { id: string; start?: string; end?: string; nap?: boolean; score_state?: string; score?: { stage_summary?: WhoopStages; sleep_performance_percentage?: number } };
 export type WhoopRecovery = { cycle_id?: number | string; sleep_id?: string; created_at?: string; updated_at?: string; score_state?: string; score?: { recovery_score?: number; resting_heart_rate?: number; hrv_rmssd_milli?: number } };
-export type WhoopCycle = { id: number | string; start?: string; end?: string | null; score_state?: string; score?: { strain?: number } };
-export type WhoopWorkout = { id: string | number; start?: string; end?: string; sport_name?: string; sport_id?: number; score_state?: string; score?: { strain?: number; average_heart_rate?: number; max_heart_rate?: number } };
+export type WhoopCycle = { id: number | string; start?: string; end?: string | null; score_state?: string; score?: { strain?: number; kilojoule?: number; average_heart_rate?: number; max_heart_rate?: number } };
+export type WhoopZones = { zone_zero_milli?: number; zone_one_milli?: number; zone_two_milli?: number; zone_three_milli?: number; zone_four_milli?: number; zone_five_milli?: number };
+export type WhoopWorkout = { id: string | number; start?: string; end?: string; sport_name?: string; sport_id?: number; score_state?: string; score?: { strain?: number; average_heart_rate?: number; max_heart_rate?: number; kilojoule?: number; distance_meter?: number; zone_duration?: WhoopZones; zone_durations?: WhoopZones } };
+/** The body-measurement endpoint: only the max heart rate is kept (phase 16b); height and WHOOP's weight are ignored. */
+export type WhoopMeasurement = { height_meter?: number; weight_kilogram?: number; max_heart_rate?: number };
 
 export type DailyRow = { date: string; key: string; value: number; readingId: string; time: string | null };
-export type ActivityRow = { providerId: string; date: string; sport: string; startedAt: string | null; endedAt: string | null; minutes: number; strain: number | null; avgHr: number | null; maxHr: number | null };
+export type ActivityRow = { providerId: string; date: string; sport: string; startedAt: string | null; endedAt: string | null; minutes: number; strain: number | null; avgHr: number | null; maxHr: number | null; distanceM: number | null; zones: number[] | null };
+export const KCAL_PER_KJ = 1 / 4.184;
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -32,7 +37,27 @@ export function sleepRows(s: WhoopSleep, dateOf: (iso: string) => string, timeOf
   if (inBed != null && inBed > 0) out.push({ date, key: "sleep_h", value: Math.round(((inBed - awake) / 3600000) * 100) / 100, readingId, time: timeOf(s.end) });
   const perf = num(s.score?.sleep_performance_percentage);
   if (perf != null) out.push({ date, key: "sleep_score", value: Math.round(perf), readingId, time: timeOf(s.end) });
+  // Phase 16b: the stages in minutes, and the window as minutes after 6 pm (bed) and after midnight (wake), on the member's clock.
+  const mins = (ms: number | null) => (ms == null ? null : Math.round(ms / 60000));
+  for (const [key, ms] of [["sleep_light_min", num(st?.total_light_sleep_time_milli)], ["sleep_deep_min", num(st?.total_slow_wave_sleep_time_milli)], ["sleep_rem_min", num(st?.total_rem_sleep_time_milli)], ["sleep_awake_min", inBed != null ? awake : null]] as const) {
+    const v = mins(ms);
+    if (v != null) out.push({ date, key, value: v, readingId, time: null });
+  }
+  const bed = s.start ? clock(timeOf(s.start)) : null;
+  if (bed != null) out.push({ date, key: "bedtime", value: (bed - 18 * 60 + 1440) % 1440, readingId, time: timeOf(s.start!) });
+  const wake = clock(timeOf(s.end));
+  if (wake != null) out.push({ date, key: "waketime", value: wake, readingId, time: timeOf(s.end) });
   return out;
+}
+const clock = (hm: string | null): number | null => {
+  const m = hm?.match(/^(\d{1,2}):(\d{2})$/);
+  return m ? +m[1] * 60 + +m[2] : null;
+};
+
+/** The device's max heart rate, as a reading on the day it was read; nothing else of the measurement. */
+export function measurementRows(m: WhoopMeasurement | null, date: string): DailyRow[] {
+  const max = num(m?.max_heart_rate);
+  return max != null && max > 0 ? [{ date, key: "max_hr", value: Math.round(max), readingId: "whoop:measurement", time: null }] : [];
 }
 
 /** A recovery: the score, resting heart rate and HRV, on the day it was made. */
@@ -50,12 +75,36 @@ export function recoveryRows(r: WhoopRecovery, dateOf: (iso: string) => string):
   return out;
 }
 
-/** A cycle's strain, on the day it started. */
+/** A cycle's strain, its kilojoules as calories burned (an estimate) and its average heart rate, on the day it started. */
 export function cycleRows(c: WhoopCycle, dateOf: (iso: string) => string): DailyRow[] {
+  if (!scored(c) || !c.start) return [];
+  const date = dateOf(c.start);
+  const readingId = `whoop:cycle:${c.id}`;
+  const out: DailyRow[] = [];
   const strain = num(c.score?.strain);
-  if (!scored(c) || !c.start || strain == null) return [];
-  return [{ date: dateOf(c.start), key: "strain", value: r1(strain), readingId: `whoop:cycle:${c.id}`, time: null }];
+  if (strain != null) out.push({ date, key: "strain", value: r1(strain), readingId, time: null });
+  const kj = num(c.score?.kilojoule);
+  if (kj != null && kj > 0) out.push({ date, key: "burn_cal", value: Math.round(kj * KCAL_PER_KJ), readingId, time: null });
+  const hr = num(c.score?.average_heart_rate);
+  if (hr != null && hr > 0) out.push({ date, key: "cycle_hr", value: Math.round(hr), readingId, time: null });
+  return out;
 }
+
+/** Minutes in zones 0 to 5 from the workout's zone durations, when the device gave any. */
+export function zoneMinutes(z: WhoopZones | undefined): number[] | null {
+  if (!z) return null;
+  const ms = [z.zone_zero_milli, z.zone_one_milli, z.zone_two_milli, z.zone_three_milli, z.zone_four_milli, z.zone_five_milli].map(num);
+  if (ms.every((v) => v == null)) return null;
+  return ms.map((v) => Math.round((v ?? 0) / 60000));
+}
+/** "Z1 12 · Z2 20 · Z3 8 min": the zones with time in them, zone 0 left out. */
+export function zonesText(zones: number[] | null | undefined): string {
+  if (!zones) return "";
+  const parts = zones.map((m, i) => (i > 0 && m > 0 ? `Z${i} ${m}` : "")).filter(Boolean);
+  return parts.length ? `${parts.join(" · ")} min` : "";
+}
+/** Metres → "4.2 km" (or "0.8 km"); nothing under 50 m. */
+export const fmtDistance = (m: number | null | undefined): string => (m != null && m >= 50 ? `${(Math.round(m / 100) / 10).toFixed(1)} km` : "");
 
 /** A workout as an activity: its sport, minutes, strain and heart rate, on the day it started. */
 export function activityRow(w: WhoopWorkout, dateOf: (iso: string) => string): ActivityRow | null {
@@ -65,7 +114,8 @@ export function activityRow(w: WhoopWorkout, dateOf: (iso: string) => string): A
   const strain = num(w.score?.strain);
   const avg = num(w.score?.average_heart_rate);
   const max = num(w.score?.max_heart_rate);
-  return { providerId: String(w.id), date: dateOf(w.start), sport: (w.sport_name ?? `Sport ${w.sport_id ?? "?"}`).trim() || "Activity", startedAt: w.start, endedAt: w.end, minutes, strain: strain != null ? r1(strain) : null, avgHr: avg != null ? Math.round(avg) : null, maxHr: max != null ? Math.round(max) : null };
+  const dist = num(w.score?.distance_meter);
+  return { providerId: String(w.id), date: dateOf(w.start), sport: (w.sport_name ?? `Sport ${w.sport_id ?? "?"}`).trim() || "Activity", startedAt: w.start, endedAt: w.end, minutes, strain: strain != null ? r1(strain) : null, avgHr: avg != null ? Math.round(avg) : null, maxHr: max != null ? Math.round(max) : null, distanceM: dist != null && dist > 0 ? Math.round(dist) : null, zones: zoneMinutes(w.score?.zone_duration ?? w.score?.zone_durations) };
 }
 
 /** WHOOP's sport names that mean one of the starter habits; a habit is matched by its own name too (case aside). */
@@ -83,6 +133,8 @@ export function habitTick(sport: string, minutes: number, habits: { id: string; 
 
 /** A lifting workout that overlaps a Training session attaches to it rather than standing beside it (rev 198). */
 export const isLifting = (sport: string): boolean => /weightlift|strength|powerlift|functional fitness|crossfit/i.test(sport);
+/** The name a session made from the device's workout carries (phase 16b): a day with no logged routine gets one, never two. */
+export const FROM_WHOOP = "From WHOOP";
 
 /** The webhook's signature: base64 HMAC-SHA256 with the client secret over the timestamp followed by the raw body. */
 export function signWebhook(secret: string, timestamp: string, rawBody: string): string {

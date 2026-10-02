@@ -8,7 +8,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { open, seal } from "@/lib/crypto";
 import { addDays, nowIso, todayInTz } from "@/lib/dates";
-import { activityRow, cycleRows, habitTick, recoveryRows, sleepRows, type DailyRow, type WhoopCycle, type WhoopRecovery, type WhoopSleep, type WhoopWorkout } from "@/lib/engine/body-whoop";
+import { activityRow, cycleRows, FROM_WHOOP, habitTick, measurementRows, recoveryRows, sleepRows, type DailyRow, type WhoopCycle, type WhoopMeasurement, type WhoopRecovery, type WhoopSleep, type WhoopWorkout } from "@/lib/engine/body-whoop";
 import { newId } from "@/lib/ids";
 import { apiAll, apiGet, refreshTokens, WhoopError, type Tokens } from "@/lib/whoop";
 
@@ -46,13 +46,41 @@ async function tokenFor(dev: schema.BodyDevice): Promise<string> {
   return t.accessToken;
 }
 
-type Pulled = { sleep: WhoopSleep[]; recovery: WhoopRecovery[]; cycle: WhoopCycle[]; workout: WhoopWorkout[] };
+type Pulled = { sleep: WhoopSleep[]; recovery: WhoopRecovery[]; cycle: WhoopCycle[]; workout: WhoopWorkout[]; measurement?: WhoopMeasurement | null };
+
+/**
+ * Phase 16b: a workout sits under the day's Training session. A day with a session (a logged routine, or sets) takes it; a day
+ * without gets one session named "From WHOOP", once, and every workout of that day attaches to it. Re-syncs re-attach, never add.
+ */
+async function attachToSessions(workspaceId: string, userId: string, dates: string[]): Promise<void> {
+  if (!dates.length) return;
+  const have = await db.query.bodySessions.findMany({ columns: { id: true, date: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), inArray(schema.bodySessions.date, dates)) });
+  const byDate = new Map(have.map((s) => [s.date, s.id]));
+  for (const date of dates) {
+    if (byDate.has(date)) continue;
+    await db.insert(schema.bodySessions).values({ id: newId(), workspaceId, userId, date, routineId: null, routineName: FROM_WHOOP }).onConflictDoNothing({ target: [schema.bodySessions.workspaceId, schema.bodySessions.userId, schema.bodySessions.date] });
+    const made = await db.query.bodySessions.findFirst({ columns: { id: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), eq(schema.bodySessions.date, date)) });
+    if (made) byDate.set(date, made.id);
+  }
+  for (const [date, sessionId] of byDate) await db.update(schema.bodyActivities).set({ sessionId }).where(and(eq(schema.bodyActivities.workspaceId, workspaceId), eq(schema.bodyActivities.userId, userId), eq(schema.bodyActivities.date, date)));
+}
+
+/** A "From WHOOP" session with no sets and no workouts left under it goes too (a workout deleted on the device). */
+async function dropEmptyWhoopSession(workspaceId: string, userId: string, date: string): Promise<void> {
+  const s = await db.query.bodySessions.findFirst({ where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), eq(schema.bodySessions.date, date)) });
+  if (!s || s.routineName !== FROM_WHOOP) return;
+  const [set, act] = await Promise.all([
+    db.query.bodySets.findFirst({ columns: { id: true }, where: eq(schema.bodySets.sessionId, s.id) }),
+    db.query.bodyActivities.findFirst({ columns: { id: true }, where: eq(schema.bodyActivities.sessionId, s.id) }),
+  ]);
+  if (!set && !act) await db.delete(schema.bodySessions).where(eq(schema.bodySessions.id, s.id));
+}
 
 /** Write what the device gave: daily rows by reading id (replaced), activities by provider id (replaced), habit ticks never over a hand-logged value. */
 export async function applyWhoop(workspaceId: string, userId: string, tz: string, pulled: Pulled): Promise<{ nights: number; recoveries: number; cycles: number; activities: number; ticks: number }> {
   const dateOf = (iso: string) => todayInTz(tz, new Date(iso));
   const timeOf = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
-  const daily: DailyRow[] = [...pulled.sleep.flatMap((s) => sleepRows(s, dateOf, timeOf)), ...pulled.recovery.flatMap((r) => recoveryRows(r, dateOf)), ...pulled.cycle.flatMap((c) => cycleRows(c, dateOf))];
+  const daily: DailyRow[] = [...pulled.sleep.flatMap((s) => sleepRows(s, dateOf, timeOf)), ...pulled.recovery.flatMap((r) => recoveryRows(r, dateOf)), ...pulled.cycle.flatMap((c) => cycleRows(c, dateOf)), ...measurementRows(pulled.measurement ?? null, todayInTz(tz))];
   const readingIds = [...new Set(daily.map((d) => d.readingId))];
   // A WHOOP night replaces a manual night of the same date: the device measured it.
   const nightDates = [...new Set(daily.filter((d) => d.key === "sleep_h").map((d) => d.date))];
@@ -66,6 +94,7 @@ export async function applyWhoop(workspaceId: string, userId: string, tz: string
   const ids = acts.map((a) => a.providerId);
   for (let i = 0; i < ids.length; i += 200) await db.delete(schema.bodyActivities).where(and(and(eq(schema.bodyActivities.workspaceId, workspaceId), eq(schema.bodyActivities.userId, userId)), inArray(schema.bodyActivities.providerId, ids.slice(i, i + 200))));
   if (acts.length) await db.insert(schema.bodyActivities).values(acts.map((a) => ({ id: newId(), workspaceId, userId, provider: "whoop" as const, ...a })));
+  await attachToSessions(workspaceId, userId, [...new Set(acts.map((a) => a.date))]);
 
   // Habit auto-ticks (rev 196): a sport that is one of the member's habits ticks it for the day; a hand-logged value stays.
   const habits = (await db.query.bodyHabits.findMany({ where: and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId)) })).filter((h) => !h.archivedAt);
@@ -89,8 +118,8 @@ export async function syncWhoop(workspaceId: string, userId: string, tz: string,
   try {
     const token = await tokenFor(dev);
     const start = `${addDays(todayInTz(tz), -days)}T00:00:00.000Z`;
-    const [sleep, recovery, cycle, workout] = await Promise.all([apiAll<WhoopSleep>(token, "/activity/sleep", start), apiAll<WhoopRecovery>(token, "/recovery", start), apiAll<WhoopCycle>(token, "/cycle", start), apiAll<WhoopWorkout>(token, "/activity/workout", start)]);
-    const result = await applyWhoop(workspaceId, userId, tz, { sleep, recovery, cycle, workout });
+    const [sleep, recovery, cycle, workout, measurement] = await Promise.all([apiAll<WhoopSleep>(token, "/activity/sleep", start), apiAll<WhoopRecovery>(token, "/recovery", start), apiAll<WhoopCycle>(token, "/cycle", start), apiAll<WhoopWorkout>(token, "/activity/workout", start), apiGet<WhoopMeasurement | null>(token, "/user/measurement/body").catch(() => null)]);
+    const result = await applyWhoop(workspaceId, userId, tz, { sleep, recovery, cycle, workout, measurement });
     await db.update(schema.bodyDevices).set({ lastSyncAt: nowIso(), lastError: null }).where(eq(schema.bodyDevices.id, dev.id));
     return result;
   } catch (e) {
@@ -110,8 +139,11 @@ export async function handleWhoopEvent(event: { user_id?: number | string; id?: 
   const [kind, verb] = event.type.split(".");
   const id = String(event.id);
   if (verb === "deleted") {
-    if (kind === "workout") await db.delete(schema.bodyActivities).where(and(eq(schema.bodyActivities.workspaceId, dev.workspaceId), eq(schema.bodyActivities.userId, dev.userId), eq(schema.bodyActivities.providerId, id)));
-    else await db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.workspaceId, dev.workspaceId), eq(schema.bodyDaily.userId, dev.userId), eq(schema.bodyDaily.readingId, `whoop:${kind}:${id}`)));
+    if (kind === "workout") {
+      const gone = await db.query.bodyActivities.findFirst({ columns: { date: true }, where: and(eq(schema.bodyActivities.workspaceId, dev.workspaceId), eq(schema.bodyActivities.userId, dev.userId), eq(schema.bodyActivities.providerId, id)) });
+      await db.delete(schema.bodyActivities).where(and(eq(schema.bodyActivities.workspaceId, dev.workspaceId), eq(schema.bodyActivities.userId, dev.userId), eq(schema.bodyActivities.providerId, id)));
+      if (gone) await dropEmptyWhoopSession(dev.workspaceId, dev.userId, gone.date);
+    } else await db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.workspaceId, dev.workspaceId), eq(schema.bodyDaily.userId, dev.userId), eq(schema.bodyDaily.readingId, `whoop:${kind}:${id}`)));
     return true;
   }
   const token = await tokenFor(dev);

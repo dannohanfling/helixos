@@ -7,7 +7,7 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { TrendLine } from "@/components/body/trend-line";
 import { deleteSleepAction, logSleepAction } from "@/lib/actions/body";
 import { formatDate } from "@/lib/dates";
-import { fmtHours } from "@/lib/engine/body-recovery";
+import { fmtBedtime, fmtHours, fmtMinutes, fmtWake } from "@/lib/engine/body-recovery";
 import { requireBodyEnabled, sleepRange, sleepView } from "@/lib/queries/body";
 import { BarChart } from "@/components/charts";
 import { RangePicker } from "@/components/body/range-picker";
@@ -45,7 +45,7 @@ export default async function SleepPage({ searchParams }: { searchParams: Promis
       ) : null}
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="sleep-stats" data-last={s.last?.hours ?? ""} data-avg={s.week.avg ?? ""} data-nights={s.week.nights} data-floor={s.week.atFloor}>
-        <Stat label="Last night" value={s.last ? fmtHours(s.last.hours) : "—"} sub={s.last ? `${formatDate(s.last.date, { weekday: "short", month: "short", day: "numeric" })}${s.last.score != null ? ` · score ${s.last.score}` : ""}` : "Nothing logged yet"} />
+        <Stat label="Last night" value={s.last ? fmtHours(s.last.hours) : "—"} sub={s.last ? `${formatDate(s.last.date, { weekday: "short", month: "short", day: "numeric" })}${s.last.score != null ? ` · score ${s.last.score}` : ""}${s.last.bedtime != null && s.last.waketime != null ? ` · ${fmtBedtime(s.last.bedtime)} to ${fmtWake(s.last.waketime)}` : ""}` : "Nothing logged yet"} />
         <Stat label="This week" value={s.week.avg != null ? `${fmtHours(s.week.avg)} a night` : "—"} sub={delta != null ? <span className={`text-xs ${delta === 0 ? "text-ink-3" : delta > 0 ? "text-good" : "text-warn"}`}>{delta > 0 ? "▲ +" : delta < 0 ? "▼ −" : "= "}{Math.abs(delta)} h vs last week</span> : `${s.week.nights} night${s.week.nights === 1 ? "" : "s"} logged`} />
         <Stat label="At 7 h or more" value={s.week.nights ? `${s.week.atFloor} of ${s.week.nights}` : "—"} sub="nights this week" />
         <Stat label="Last week" value={s.prevWeek.avg != null ? `${fmtHours(s.prevWeek.avg)} a night` : "—"} sub={`${s.prevWeek.nights} night${s.prevWeek.nights === 1 ? "" : "s"}`} />
@@ -105,6 +105,16 @@ export default async function SleepPage({ searchParams }: { searchParams: Promis
                     {n.recovery != null ? ` · recovery ${n.recovery}%` : ""}
                     {n.strain != null ? ` · strain ${n.strain}` : ""}
                   </span>
+                  {n.bedtime != null || n.sleep_deep_min != null ? (
+                    /* Phase 16b: the window and the stages a wearable gives. */
+                    <span className="block text-xs text-ink-3" data-testid="sleep-night-detail">
+                      {n.bedtime != null && n.waketime != null ? `${fmtBedtime(n.bedtime)} to ${fmtWake(n.waketime)}` : ""}
+                      {n.sleep_deep_min != null ? `${n.bedtime != null ? " · " : ""}deep ${fmtMinutes(n.sleep_deep_min)}` : ""}
+                      {n.sleep_rem_min != null ? ` · REM ${fmtMinutes(n.sleep_rem_min)}` : ""}
+                      {n.sleep_light_min != null ? ` · light ${fmtMinutes(n.sleep_light_min)}` : ""}
+                      {n.sleep_awake_min != null ? ` · awake ${fmtMinutes(n.sleep_awake_min)}` : ""}
+                    </span>
+                  ) : null}
                 </span>
                 {n.sleep_h != null ? (
                   <form action={deleteSleepAction}>

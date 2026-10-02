@@ -88,7 +88,7 @@ export function goalPace(goal: { target: number; by: string | null } | null, lat
 
 /* ───────── The AI week summary (rev 237 phase 15, rev 196): numbers only ───────── */
 
-export type WeekNumbers = { label: string; nutrition: NutritionWeek; prevNutrition: NutritionWeek; training: TrainingWeek; prevTraining: TrainingWeek; weigh: { avg: number | null; days: number }; prevWeigh: { avg: number | null; days: number }; weightUnit: string; sleepAvg: number | null; habits: { due: number; kept: number } };
+export type WeekNumbers = { label: string; nutrition: NutritionWeek; prevNutrition: NutritionWeek; training: TrainingWeek; prevTraining: TrainingWeek; weigh: { avg: number | null; days: number }; prevWeigh: { avg: number | null; days: number }; weightUnit: string; sleepAvg: number | null; burnAvg?: number | null; habits: { due: number; kept: number } };
 export const WEEK_SUMMARY_TASK = `You write a HumanOS week summary for the member whose week numbers you are given: one short paragraph, plain and warm, second person, under 120 words, no headings, no bullet points, no invented details, no medical claims. Say what went well, one thing to watch, and one suggestion for next week, all from the numbers. Numbers only reach you; never ask for more.`;
 /** The week as lines of numbers for the model: days logged and in band, averages, sessions, sets, PRs, weight, sleep, habits. Nothing named. */
 export function weekNumbers(w: WeekNumbers): string {
@@ -100,6 +100,7 @@ export function weekNumbers(w: WeekNumbers): string {
     `Training: ${w.training.sessions} sessions${w.training.planned != null ? ` of ${w.training.planned} planned` : ""}, ${w.training.sets} sets, ${w.training.prs} PRs (last week ${w.prevTraining.sessions} sessions, ${w.prevTraining.sets} sets).`,
     `Weight: ${w.weigh.avg != null ? `average ${w.weigh.avg} ${w.weightUnit}` : "no weigh-ins"} over ${w.weigh.days} days${w.prevWeigh.avg != null ? ` (last week ${w.prevWeigh.avg} ${w.weightUnit})` : ""}.`,
     `Sleep: ${w.sleepAvg != null ? `${w.sleepAvg} h a night on average` : "no nights logged"}.`,
+    ...(w.burnAvg != null ? [`Energy burned: about ${w.burnAvg} cal a day, the device's estimate.`] : []),
     `Habits: ${w.habits.kept} of ${w.habits.due} kept.`,
   ];
   return lines.join("\n");

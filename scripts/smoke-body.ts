@@ -963,7 +963,7 @@ async function main() {
         }
       }
       const memberTz = mem.timezone || (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }))!.timezone;
-      const whoopRecords = (await (await fetch("http://localhost:4072/__records")).json()) as { sleep: Parameters<typeof nightRowsOf>[0][]; workout: Parameters<typeof activityOf>[0][] };
+      const whoopRecords = (await (await fetch("http://localhost:4072/__records")).json()) as { sleep: Parameters<typeof nightRowsOf>[0][]; workout: Parameters<typeof activityOf>[0][]; cycle: { id: number; start: string }[] };
       const inTz = (iso: string) => dateInTz(memberTz, new Date(iso));
       const sauna = (await db.query.bodyHabits.findMany({ where: mine(schema.bodyHabits) })).find((h) => h.name === "Sauna") ?? null;
       if (!sauna) await db.insert(schema.bodyHabits).values({ id: freshId(), workspaceId: mem.workspaceId, userId: maya.id, name: "Sauna", kind: "minutes", target: 15, days: [], order: 9 });
@@ -988,9 +988,36 @@ async function main() {
       if (acts.length !== 3 || !acts.some((a) => a.sport === "Weightlifting" && a.minutes === liftExpected.minutes && a.strain === 10.1 && a.avgHr === 118 && a.date === liftExpected.date)) throw new Error(`three workouts land by sport with minutes, strain and heart rate: ${JSON.stringify(acts.map((a) => [a.sport, a.minutes, a.date]))}`);
       const saunaLog = await db.query.bodyHabitLogs.findFirst({ where: eq(schema.bodyHabitLogs.habitId, saunaHabit.id) });
       if (!saunaLog || saunaLog.value !== 18 || saunaLog.source !== "whoop") throw new Error("the sauna workout ticks the Sauna habit with its minutes, source whoop");
+      // Phase 16b: the rest of WHOOP. Stages, bed and wake times, the cycle's calories and heart rate, the max heart rate land as daily rows.
+      for (const [key, value] of [["sleep_light_min", 210], ["sleep_deep_min", 90], ["sleep_rem_min", 120], ["sleep_awake_min", 15], ["burn_cal", 1500], ["burn_cal", 2800], ["cycle_hr", 68], ["cycle_hr", 74], ["max_hr", 188]] as const) if (!whoopRows.some((r) => r.key === key && r.value === value)) throw new Error(`${key} ${value} lands from the pull`);
+      if (!whoopRows.some((r) => r.key === "bedtime") || !whoopRows.some((r) => r.key === "waketime")) throw new Error("the night's bed and wake times land");
+      // Every workout sits under its day's session: the lift and the sauna share one, made "From WHOOP" when the day had none.
+      const lift = acts.find((a) => a.sport === "Weightlifting")!;
+      const saunaAct = acts.find((a) => a.sport === "Sauna")!;
+      if (!lift.sessionId || lift.sessionId !== saunaAct.sessionId || JSON.stringify(lift.zones) !== "[4,14,22,10,2,0]" || acts.find((a) => a.sport === "Walking")!.distanceM !== 3240) throw new Error(`the day's workouts share one session, with zones and distance: ${JSON.stringify(acts.map((a) => [a.sport, a.sessionId, a.zones, a.distanceM]))}`);
+      const liftSession = (await db.query.bodySessions.findFirst({ where: eq(schema.bodySessions.id, lift.sessionId) }))!;
+      const liftSets = await db.query.bodySets.findMany({ where: eq(schema.bodySets.sessionId, liftSession.id) });
+      if (liftSession.date !== liftExpected.date || (liftSets.length === 0 && liftSession.routineName !== "From WHOOP") || (liftSets.length > 0 && liftSession.routineName === "From WHOOP")) throw new Error(`a day with sets keeps its session, a day without gets "From WHOOP": ${liftSession.routineName}, ${liftSets.length} sets`);
+      if ((await db.query.bodySessions.findMany({ where: and(mine(schema.bodySessions), eq(schema.bodySessions.date, liftExpected.date)) })).length !== 1) throw new Error("one session a day, never two");
       await client.goto(`${base}/body/training?date=${liftExpected.date}`);
       await client.locator('[data-testid="training-activities"]').waitFor({ timeout: 30000 });
-      if ((await client.locator('[data-testid="training-activity"]').count()) !== 2 || !(await client.locator('[data-testid="training-activity"][data-sport="Weightlifting"]').count())) throw new Error("Training shows the day's two recorded workouts");
+      if ((await client.locator('[data-testid="training-activity"]').count()) !== 2 || !(await client.locator('[data-testid="training-activity"][data-sport="Weightlifting"][data-session="1"]').count())) throw new Error("Training shows the day's two recorded workouts under the session");
+      if (!(await client.locator('[data-testid="training-activity"][data-sport="Weightlifting"] [data-testid="training-activity-zones"]').textContent())?.includes("Z2 22")) throw new Error("the lift's zones show on its chip");
+      // The Sleep page shows the night's window and stages; Log shows the day's energy estimate beside intake; Settings the max heart rate.
+      // The mock dates its newest night by UTC; on the member's clock (Los Angeles) that morning can still be tomorrow, and a night
+      // that hasn't ended yet rightly stays off the page. So the stages are read on the newest night that is on or before today.
+      await client.goto(`${base}/body/sleep`);
+      await client.locator('[data-testid="sleep-night-detail"]').first().waitFor({ timeout: 30000 });
+      const firstDetail = (await client.locator('[data-testid="sleep-night-detail"]').first().textContent()) ?? "";
+      if (night1[0].date <= today ? !firstDetail.includes("deep 1 h 30 min") : !/\d\d:\d\d to \d\d:\d\d/.test(firstDetail)) throw new Error(`the night's window and stages show on Sleep: "${firstDetail}" (newest night ${night1[0].date}, today ${today})`);
+      const cycleDate = inTz(whoopRecords.cycle[1].start); // the finished cycle, yesterday on the member's clock: 11715 kJ → 2800 cal
+      await client.goto(`${base}/body?date=${cycleDate}`);
+      await client.locator('[data-testid="body-burn"]').waitFor({ timeout: 30000 });
+      if ((await client.locator('[data-testid="body-burn"]').getAttribute("data-cal")) !== "2800") throw new Error("Log shows the day's energy estimate from the cycle");
+      await client.goto(`${base}/body/insights`);
+      if (!(await client.locator('select[name="a"] option[value="bedtime_drift"]').count())) throw new Error("Patterns offers bedtime drift");
+      await client.goto(`${base}/body/settings`);
+      await client.locator('[data-testid="whoop-max-hr"]').waitFor({ timeout: 30000 });
       // A signed webhook for the walk's workout is handled; the same with a wrong secret is refused.
       const hook = async (badSecret: boolean) => (await (await fetch("http://localhost:4072/__webhook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: `${base}/api/webhooks/whoop`, event: { user_id: 4242, id: "wk-walk", type: "workout.updated" }, badSecret }) })).json()) as { status: number; body: string };
       const good = await hook(false);
@@ -1002,6 +1029,8 @@ async function main() {
       await press(client, '[data-testid="whoop-disconnect"]', async () => (await client.locator('[data-testid="whoop-connect"]').count()) > 0, "disconnected");
       if ((await db.query.bodyDevices.findMany({ where: mine(schema.bodyDevices) })).length || (await db.query.bodyActivities.findMany({ where: mine(schema.bodyActivities) })).length !== 3) throw new Error("Disconnect removes the row and keeps what was pulled");
       const { calls: whoopCalls } = (await (await fetch("http://localhost:4072/__calls")).json()) as { calls: { method: string; path: string }[] };
+      const whoopCallsHad = (path: string) => whoopCalls.some((c) => c.path === path);
+      if (!whoopCallsHad("/developer/v2/user/measurement/body")) throw new Error("the body measurement was read for the max heart rate");
       if (!whoopCalls.some((c) => c.path === "/oauth/oauth2/token" && c.method === "POST") || !whoopCalls.some((c) => c.path === "/developer/v2/activity/workout/wk-walk")) throw new Error("the code was exchanged and the webhook's one workout fetched");
       console.log(`✓ WHOOP: connected through the mock, tokens sealed and the WHOOP id read; the pull landed ${night1[0].value} h on ${night1[0].date} (the manual night giving way), recovery 67, RHR 51, HRV 72, strain 8.2 and three workouts by sport; the sauna ticked its habit (18 min, whoop); Training shows the day's workouts; a signed webhook handled, a bad one refused; Sync now; Disconnect removed the row and kept the data`);
     } finally {
@@ -1279,7 +1308,9 @@ async function main() {
     // ── The member's own export, then delete-all. ──
     const own = (await (await client.request.get(`${base}/api/export?format=json&scope=body`)).json()) as Record<string, unknown[]>;
     if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
-    if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || (own.body_sessions ?? []).length !== 2) throw new Error("the member's Body export has their workouts");
+    // Phase 16b: the device's workouts on a day with no session made one, "From WHOOP"; how many depends on the member's clock against the mock's UTC dates.
+    const fromWhoop = ((own.body_sessions ?? []) as { routineName: string | null }[]).filter((s) => s.routineName === "From WHOOP").length;
+    if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 2 || (own.body_routines ?? []).length !== 1 || fromWhoop > 2 || (own.body_sessions ?? []).length !== 2 + fromWhoop) throw new Error(`the member's Body export has their workouts (${(own.body_sessions ?? []).length} sessions, ${fromWhoop} from WHOOP)`);
     if (!(own.body_pantry ?? []).length || (own.body_yields ?? []).length !== 1) throw new Error("the member's Body export has their pantry and weighings");
     if ((own.body_habits ?? []).length !== 4 || !(own.body_habit_logs ?? []).length || (own.body_health ?? []).length !== 1) throw new Error("the member's Body export has their habits (the Sauna one WHOOP ticks among them), their logs and their health log");
     if ((own.body_plan ?? []).length !== 1 || (own.body_orders ?? []).length !== 2) throw new Error("the member's Body export has this week's plan and the pushes");

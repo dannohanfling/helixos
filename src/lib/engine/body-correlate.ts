@@ -96,6 +96,18 @@ export type MetricDef = { key: string; label: string; group: "Body" | "Nutrition
 export const METRIC_DEFS: MetricDef[] = [
   { key: "sleep_h", label: "Sleep hours", group: "Body", fold: "mean", unit: "h" },
   { key: "sleep_score", label: "Sleep score", group: "Body", fold: "mean" },
+  // Phase 16b: what a wearable adds, as body_daily keys. Bedtime counts minutes after 6 pm, wake time after midnight.
+  { key: "recovery", label: "Recovery %", group: "Body", fold: "mean", unit: "%" },
+  { key: "strain", label: "Strain", group: "Body", fold: "mean" },
+  { key: "rhr", label: "Resting heart rate", group: "Body", fold: "mean", unit: "bpm" },
+  { key: "hrv", label: "HRV", group: "Body", fold: "mean", unit: "ms" },
+  { key: "sleep_deep_min", label: "Deep sleep (min)", group: "Body", fold: "mean", unit: "min" },
+  { key: "sleep_rem_min", label: "REM sleep (min)", group: "Body", fold: "mean", unit: "min" },
+  { key: "bedtime", label: "Bedtime (minutes after 6 pm)", group: "Body", fold: "mean", unit: "min" },
+  { key: "waketime", label: "Wake time (minutes after midnight)", group: "Body", fold: "mean", unit: "min" },
+  { key: "bedtime_drift", label: "Bedtime drift (minutes from the week's usual)", group: "Body", fold: "mean", unit: "min" },
+  { key: "burn_cal", label: "Energy burned (device estimate)", group: "Body", fold: "mean", unit: "cal" },
+  { key: "cycle_hr", label: "Average heart rate", group: "Body", fold: "mean", unit: "bpm" },
   { key: "weight", label: "Weight", group: "Body", fold: "mean", weeklyByDefault: true, unit: "lb" },
   { key: "bf", label: "Body fat %", group: "Body", fold: "mean", weeklyByDefault: true, unit: "%" },
   { key: "cal", label: "Calories", group: "Nutrition", fold: "mean", unit: "cal" },

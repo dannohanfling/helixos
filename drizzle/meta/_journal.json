@@ -659,6 +659,13 @@
       "when": 1790891950138,
       "tag": "0095_body_day_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1790904669066,
+      "tag": "0097_whoop_rest",
+      "breakpoints": true
     }
   ]
 }

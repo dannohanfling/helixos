@@ -318,7 +318,7 @@ export async function summariseWeekAction(_prev: SummaryState, f: FormData): Pro
   if (!(await allow(`body-summary:${userId}`, 10, 15 * 60000))) return { error: "That's a lot of summaries in a row. Wait 15 minutes and try again.", monday };
   const w = await bodyWeek(workspaceId, userId, startOfWeek(monday), v.today);
   if (!w) return { error: "Nothing to summarise yet.", monday };
-  const numbers = weekNumbers({ label: `${w.monday} to ${w.sunday}`, nutrition: w.nutrition, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weigh: { avg: w.weigh.avg, days: w.weigh.days }, prevWeigh: { avg: w.weigh.prevAvg, days: 0 }, weightUnit: w.settings.weightUnit, sleepAvg: w.sleep?.avg ?? null, habits: w.habits ?? { due: 0, kept: 0 } });
+  const numbers = weekNumbers({ label: `${w.monday} to ${w.sunday}`, nutrition: w.nutrition, prevNutrition: w.prevNutrition, training: w.training, prevTraining: w.prevTraining, weigh: { avg: w.weigh.avg, days: w.weigh.days }, prevWeigh: { avg: w.weigh.prevAvg, days: 0 }, weightUnit: w.settings.weightUnit, sleepAvg: w.sleep?.avg ?? null, burnAvg: w.burn?.avg ?? null, habits: w.habits ?? { due: 0, kept: 0 } });
   const text = await summariseWeek(numbers);
   if (!text) return { error: "AI didn't answer: it needs your own key on Settings, under today's cap, and a model that answers.", monday };
   return { text, monday };

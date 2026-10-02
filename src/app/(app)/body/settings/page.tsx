@@ -257,7 +257,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
       </Card>
 
       <Card className="mb-4" title="Devices" id="devices">
-        <p className="text-sm text-ink-2">WHOOP fills Sleep (hours and score), recovery, strain, resting heart rate and HRV, and every workout by its sport; a sport that is one of your habits ticks it for the day. The connection is yours: Disconnect removes it, and what was pulled stays.</p>
+        <p className="text-sm text-ink-2">WHOOP fills Sleep (hours, score, the stages and bed times), recovery, strain, resting heart rate and HRV, the day&apos;s energy estimate and average heart rate, and every workout by its sport with its zones and distance. A workout on a day with a logged routine sits under that session; on a day without, it becomes the day&apos;s session, &quot;From WHOOP&quot;. A sport that is one of your habits ticks it for the day. The connection is yours: Disconnect removes it, and what was pulled stays.</p>
         {whoop ? (
           <div className="mt-3 flex flex-wrap items-center gap-3 text-sm" data-testid="whoop-connected" data-known={whoop.known ? "1" : "0"}>
             <span>
@@ -265,6 +265,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
               {whoop.connectedAt ? <span className="text-ink-3"> · since {formatDate(whoop.connectedAt.slice(0, 10))}</span> : null}
               {whoop.lastSyncAt ? <span className="text-ink-3"> · synced {formatDateTime(whoop.lastSyncAt, v.tz)}</span> : null}
               {whoop.lastError ? <span className="text-warn"> · last sync didn&apos;t finish</span> : null}
+              {whoop.maxHr != null ? <span className="text-ink-3" data-testid="whoop-max-hr"> · max heart rate {whoop.maxHr} bpm</span> : null}
             </span>
             <form action={syncWhoopAction}>
               <SubmitButton className="btn btn-soft btn-sm" pendingText="Syncing…" data-testid="whoop-sync">
