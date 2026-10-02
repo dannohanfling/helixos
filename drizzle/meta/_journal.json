@@ -680,6 +680,13 @@
       "when": 1790910307921,
       "tag": "0099_coach_templates_checkins",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1790924113592,
+      "tag": "0100_deck_slot_dropped",
+      "breakpoints": true
     }
   ]
 }

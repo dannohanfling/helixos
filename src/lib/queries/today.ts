@@ -10,7 +10,10 @@ import { roadLine, simplePath } from "@/lib/engine/pathway";
 import { closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
 import { brokenStreak } from "@/lib/engine/streak";
 import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
-import { knownFor } from "@/lib/queries/webinar";
+import { contextFor, knownFor } from "@/lib/queries/webinar";
+import { deckSlides } from "@/lib/engine/deck";
+import { resolveDeckSlots } from "@/lib/queries/deck-slots";
+import { shotList } from "@/lib/engine/shot-list";
 import { totalPoints } from "./points";
 
 /** The one pathway task to show today: revisions first, then the next must-do on the simple path. */
@@ -126,6 +129,7 @@ export async function todayData(v: Viewer) {
   }).length;
   const building = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["draft", "building"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) });
   let webinarInProgress: Snapshot["webinarInProgress"] = null;
+  let shotListSnapshot: Snapshot["shotList"] = null;
   if (building) {
     const [secs, bels] = await Promise.all([
       db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, building.id) }),
@@ -134,6 +138,12 @@ export async function todayData(v: Viewer) {
     const p = buildChecks({ webinar: building, sections: secs, beliefs: bels, review: null });
     const step = nextStep(p.steps);
     webinarInProgress = { id: building.id, title: building.title, step, stepLabel: STEPS.find((s) => s.key === step)?.label ?? step };
+    // "Pictures to gather" (§6.3), the same list Foundation shows, as a Today action until it is complete.
+    const [context, kit] = await Promise.all([contextFor(building), db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, workspaceId) })]);
+    const resolved = await resolveDeckSlots(building.id, deckSlides(context, kit ?? null), { workspaceId: building.workspaceId, userId: building.userId });
+    const hasLogo = Boolean(kit?.logoImageId) || Boolean(await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, building.workspaceId), eq(schema.deckImages.userId, building.userId), eq(schema.deckImages.kind, "logo")) }));
+    const list = shotList(resolved, hasLogo);
+    if (resolved.length && !list.done) shotListSnapshot = { webinarId: building.id, title: building.title, gathered: list.gathered, total: list.total };
   }
   // A webinar already marked ready or scheduled whose checks have since broken: the status does not fall back on its own, so Today says so.
   let webinarBroken: Snapshot["webinarBroken"] = null;
@@ -168,6 +178,7 @@ export async function todayData(v: Viewer) {
     runningStreak: streak.running,
     clientsDueCheckin,
     webinarInProgress,
+    shotList: shotListSnapshot,
     webinarBroken,
   };
   const actions: Action[] = nextBestActions(snapshot);

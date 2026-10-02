@@ -57,7 +57,8 @@ import { contextFor, presenterOf } from "@/lib/queries/webinar";
 import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult } from "@/lib/engine/deck";
 import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
 import { resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
-import { clearDeckSlotAction, setDeckSlotAction } from "@/lib/actions/deck-images";
+import { shotCountLine, shotList } from "@/lib/engine/shot-list";
+import {clearDeckSlotAction, setDeckSlotAction, dropDeckSlotAction, restoreDeckSlotAction } from "@/lib/actions/deck-images";
 import type { DeckImage } from "@/db/schema";
 import { formatPrice } from "@/lib/engine/offer-score";
 import { essenceFor } from "@/lib/queries/essence";
@@ -484,6 +485,7 @@ export default async function WebinarWizardPage({
             </form>
           </Card>
           <div className="space-y-4">
+            <ShotListCard webinarId={w.id} resolved={deckSlotsResolved} hasLogo={Boolean(brandKit?.logoImageId) || deckLibrary.some((i) => i.kind === "logo")} />
             <Card title="The structure you're building">
               <ol className="space-y-2 text-sm">
                 {ACTS.map((a) => (
@@ -1748,6 +1750,11 @@ function DeckStep({ webinarId, owner, deck, pace, resolvedSlots, library, gate, 
           </ul>
         </div>
       ) : null}
+      {fallbacks.droppedCount ? (
+        <p className="mb-3 text-sm text-ink-2" data-testid="deck-slots-dropped">
+          {fallbacks.droppedCount} {fallbacks.droppedCount === 1 ? "picture" : "pictures"} you said you don&apos;t have: {fallbacks.droppedCount === 1 ? "that slide exports" : "those slides export"} as text with no placeholder. Put one back below if you find it.
+        </p>
+      ) : null}
       {fallbacks.emptyCount ? (
         <p className="mb-3 text-sm text-ink-2" data-testid="deck-slots">
           {fallbacks.emptyCount} suggested {fallbacks.emptyCount === 1 ? "picture" : "pictures"} not added: each of these slides exports with a red placeholder in the picture&apos;s frame until you attach an image.
@@ -1829,6 +1836,20 @@ function SlotControl({ webinarId, owner, resolved, library }: { webinarId: strin
       </div>
     );
   }
+  if (resolved.dropped) {
+    return (
+      <div className="mt-2 rounded-lg bg-surface-2 p-2 text-[11px] text-ink-3" data-testid="deck-slot" data-slot-key={slot.key} data-kind={slot.kind} data-dropped="1">
+        <p>
+          <span className="font-medium">Dropped:</span> you said you don&apos;t have this ({slot.what.replace(/\.$/, "").toLowerCase()}). The slide exports as text with no placeholder.
+        </p>
+        <form action={restoreDeckSlotAction} className="mt-1">
+          <input type="hidden" name="webinarId" value={webinarId} />
+          <input type="hidden" name="slotKey" value={slot.key} />
+          <SubmitButton className="btn btn-ghost btn-xs" data-testid="deck-slot-restore" pendingText="Putting back…">Put back</SubmitButton>
+        </form>
+      </div>
+    );
+  }
   return (
     <div className="mt-2 rounded-lg border border-line p-2 text-[11px]" data-testid="deck-slot" data-slot-key={slot.key} data-kind={slot.kind}>
       <p className="text-ink-3">{slot.what}</p>
@@ -1855,6 +1876,13 @@ function SlotControl({ webinarId, owner, resolved, library }: { webinarId: strin
         <Link href="/images" className="mt-1 inline-block text-accent underline" data-testid="deck-slot-empty-library">Add images to your library first →</Link>
       )}
       {resolved.image ? null : (
+        <form action={dropDeckSlotAction} className="mt-1">
+          <input type="hidden" name="webinarId" value={webinarId} />
+          <input type="hidden" name="slotKey" value={slot.key} />
+          <SubmitButton className="btn btn-ghost btn-xs" data-testid="deck-slot-drop" pendingText="Dropping…">I don&apos;t have this</SubmitButton>
+        </form>
+      )}
+      {resolved.image ? null : (
         // Upload straight into the slot (§6.2): the same path, kinds and consent as the Images page; the first picture fills
         // this slot as it is recorded and every one lands in the library.
         <details className="mt-1" data-testid="deck-slot-upload">
@@ -1867,3 +1895,61 @@ function SlotControl({ webinarId, owner, resolved, library }: { webinarId: strin
     </div>
   );
 }
+
+/**
+ * "Pictures to gather" (§6.3): the outline's picture slots as a list the client works through while they write, grouped by the
+ * kind of picture, each naming the slide it serves, with the count; the logo is one more line. "I don't have this" drops a slot
+ * (its slide exports as text, no placeholder) and takes it out of the count; Put back returns it. A testimonial draws from the
+ * Proof Bank, so its line points there. Shown once the outline has a slot, and Today carries the count until it is complete.
+ */
+function ShotListCard({ webinarId, resolved, hasLogo }: { webinarId: string; resolved: ResolvedSlot[]; hasLogo: boolean }) {
+  if (!resolved.length) return null;
+  const list = shotList(resolved, hasLogo);
+  return (
+    <Card title="Pictures to gather" action={<span className="text-xs text-ink-3" data-testid="shot-list-count">{shotCountLine(list)}</span>}>
+      <div id="pictures" />
+      <div data-testid="shot-list" data-gathered={list.gathered} data-total={list.total}>
+        <p className="mb-2 text-xs text-ink-3">{list.done ? "Everything the deck asks for is in. Attach each on the Deck step if you haven't." : "Gather these while you write, not the night before. Each fills a slot on the Deck step."}</p>
+        {list.groups.map((g) => (
+          <div key={g.group} className="mb-2">
+            <div className="label">{g.label}</div>
+            <ul className="space-y-1 text-sm">
+              {g.items.map((i) => (
+                <li key={i.key} className={`flex flex-wrap items-start justify-between gap-2 rounded-lg p-2 ${i.state === "gathered" ? "bg-good-soft" : i.state === "dropped" ? "bg-surface-2 text-ink-3" : "bg-surface-2"}`} data-testid="shot-item" data-state={i.state} data-slot-key={i.key}>
+                  <span className="min-w-0 flex-1">
+                    <span className={i.state === "dropped" ? "line-through" : ""}>{i.what}</span>
+                    <span className="block text-[11px] text-ink-3">
+                      slide {i.slide} · {i.section}
+                      {i.state === "gathered" ? " · in" : i.state === "dropped" ? " · dropped, the slide exports as text" : i.testimonial ? " · from an approved proof with a photo in the Proof Bank" : ""}
+                    </span>
+                  </span>
+                  {i.state === "missing" && !i.testimonial ? (
+                    <span className="flex items-center gap-1">
+                      <Link href={`/webinars/${webinarId}?step=deck`} className="btn btn-ghost btn-xs">Add it</Link>
+                      <form action={dropDeckSlotAction}>
+                        <input type="hidden" name="webinarId" value={webinarId} />
+                        <input type="hidden" name="slotKey" value={i.key} />
+                        <SubmitButton className="btn btn-ghost btn-xs" data-testid="shot-item-drop" pendingText="Dropping…">I don&apos;t have this</SubmitButton>
+                      </form>
+                    </span>
+                  ) : i.state === "dropped" ? (
+                    <form action={restoreDeckSlotAction}>
+                      <input type="hidden" name="webinarId" value={webinarId} />
+                      <input type="hidden" name="slotKey" value={i.key} />
+                      <SubmitButton className="btn btn-ghost btn-xs" data-testid="shot-item-restore" pendingText="Putting back…">Put back</SubmitButton>
+                    </form>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        <div className="label">Your logo</div>
+        <p className={`rounded-lg p-2 text-sm ${list.logo ? "bg-good-soft" : "bg-surface-2"}`} data-testid="shot-item-logo" data-state={list.logo ? "gathered" : "missing"}>
+          {list.logo ? "In: on the cover and in the footer bar." : <>Add one on <Link href="/settings#brand-kit" className="underline">Settings</Link> (the brand kit) or <Link href="/images" className="underline">Images</Link>; without it the brand line stands as type.</>}
+        </p>
+      </div>
+    </Card>
+  );
+}
+

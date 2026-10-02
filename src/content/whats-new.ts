@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 55,
+    date: "2026-10-02",
+    title: "Pictures to gather: a shot list from day one",
+    lines: [
+      "The Foundation step now lists every picture the deck will ask for, grouped by kind (photos of you, screenshots of results, proof, diagrams, your logo), each naming the slide it serves, with the count: \"5 of 14 gathered\". Today carries the count as an action until it is complete, so you gather while you write, not the night before.",
+      "\"I don't have this\" drops a picture: its slide exports as text with no placeholder and it leaves the count; Put back returns it. The Deck step says how many were dropped.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 54,
     date: "2026-10-02",
     title: "Upload a picture right on the slide, and several at once",

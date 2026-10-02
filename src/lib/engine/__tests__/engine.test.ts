@@ -118,3 +118,17 @@ describe("next best action", () => {
     expect(nextBestActions(base)[0].key).toBe("done");
   });
 });
+
+describe("§6.3: pictures to gather as a Today action", () => {
+  it("is there while pictures are missing, after the webinar action, and gone when the list is complete", () => {
+    const base = { openTasks: 0, overdueTasks: 0, focusTasksOpen: 0, followUpsDue: 0, unansweredInbound: 0, contentDueToday: 0, contentOverdue: 0, nextPathwayTask: null, pendingRevision: 0, curriculumDay: null, streakAlive: true, runningStreak: 0, morningDone: true, eveningDone: true, webinarInProgress: { id: "w1", title: "Pictures", step: "deck", stepLabel: "Deck" } } as unknown as Parameters<typeof nextBestActions>[0];
+    const keys = nextBestActions({ ...base, shotList: { webinarId: "w1", title: "Pictures", gathered: 1, total: 2 } }).map((a) => a.key);
+    expect(keys.indexOf("shot-list")).toBe(keys.indexOf("webinar") + 1);
+    const action = nextBestActions({ ...base, shotList: { webinarId: "w1", title: "Pictures", gathered: 1, total: 2 } }).find((a) => a.key === "shot-list")!;
+    expect(action.title).toBe("Pictures to gather: 1 of 2 for Pictures");
+    expect(action.href).toBe("/webinars/w1?step=foundation#pictures");
+    expect(nextBestActions({ ...base, shotList: { webinarId: "w1", title: "Pictures", gathered: 2, total: 2 } }).some((a) => a.key === "shot-list")).toBe(false);
+    expect(nextBestActions({ ...base, shotList: null }).some((a) => a.key === "shot-list")).toBe(false);
+  });
+});
+

@@ -527,7 +527,7 @@ export const TEXT_LEFT_ZONE = { x: 0.5, w: 4.5 };
  * Accent draws rules and fills, never letters: every text box is ink or muted (both refused under 4.5:1 by the kit rules), and
  * the accent's one appearance is the rule under the eyebrow, so text in or on the accent cannot arrive without this changing.
  */
-export function renderPlan(d: DeckResult, withImage: Set<number> = new Set()): SlidePlan[] {
+export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dropped: Set<number> = new Set()): SlidePlan[] {
   const k = d.kit;
   const hex = (v: string) => normaliseHex(v);
   const placeholderColor = hex(k.placeholder ?? "") || PLACEHOLDER_FALLBACK;
@@ -535,7 +535,8 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set()): S
   const plans: SlidePlan[] = [];
   for (const s of d.slides) {
     let imageFrame = withImage.has(s.n) ? slotFrame(s.kind) : null;
-    let placeholderSlot = !imageFrame && s.slot ? { frame: slotFrame(s.kind), text: placeholderLine(s.slot), color: PLACEHOLDER_RED } : null;
+    // A slot the coach said they don't have (§6.3) is no slot: no placeholder, and the text keeps the full width.
+    let placeholderSlot = !imageFrame && s.slot && !dropped.has(s.n) ? { frame: slotFrame(s.kind), text: placeholderLine(s.slot), color: PLACEHOLDER_RED } : null;
     const boxes: TextBox[] = [];
     const mark = (text: string) => placeholdersIn(text).length > 0;
     // The dark surfaces take the inverse pair when the kit has one; on it every letter is inverseInk, the one pair the kit checked.

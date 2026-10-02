@@ -8,7 +8,7 @@ import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/dec
 import { pictureAltText } from "@/lib/engine/deck-slot";
 import { placeImage } from "@/lib/engine/deck-fit";
 import { contextFor } from "@/lib/queries/webinar";
-import { filledSlides, resolveDeckSlots } from "@/lib/queries/deck-slots";
+import { droppedSlides, filledSlides, resolveDeckSlots } from "@/lib/queries/deck-slots";
 import { readProofObject } from "@/lib/proof-storage";
 import { sameItems, sectionGate } from "@/lib/engine/provenance";
 import { confirmFor } from "@/lib/provenance";
@@ -98,7 +98,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // face falls to their app's substitute, but every box a reader adds in PowerPoint takes this face, not Calibri.
   pptx.theme = { headFontFace: deck.kit.fontFallback, bodyFontFace: deck.kit.fontFallback };
   const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: brand, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo, coverLogo };
-  for (const plan of renderPlan(deck, filled)) draw(pptx, plan, bySlide.get(plan.n) ?? null, chrome);
+  for (const plan of renderPlan(deck, filled, droppedSlides(resolved))) draw(pptx, plan, bySlide.get(plan.n) ?? null, chrome);
   // The same picture on several slides (and the logo on every content slide) is one media file in the finished zip.
   const { file: buffer } = await dedupeDeckMedia((await pptx.write({ outputType: "nodebuffer" })) as Buffer);
   return new Response(new Uint8Array(buffer), {

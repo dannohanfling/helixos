@@ -15,6 +15,8 @@ export type ResolvedSlot = {
   image: SlotImage | null;
   /** When the slot is empty for a reason worth naming on the Deck step (an approval withdrawn, a testimonial with no photo). */
   why: string | null;
+  /** The coach said "I don't have this" (§6.3): no picture, no placeholder, and the shot list counts it out. */
+  dropped: boolean;
 };
 
 /**
@@ -29,7 +31,8 @@ export async function resolveDeckSlots(webinarId: string, deck: DeckResult, owne
 
   // The coach's choices for this webinar, keyed by slot, and the images they point at — the coach's own images only.
   const slotRows = await db.query.deckSlots.findMany({ where: eq(schema.deckSlots.webinarId, webinarId) });
-  const chosen = new Map(slotRows.filter((r) => r.imageId).map((r) => [r.slotKey, r.imageId!]));
+  const dropped = new Set(slotRows.filter((r) => r.droppedAt).map((r) => r.slotKey));
+  const chosen = new Map(slotRows.filter((r) => r.imageId && !r.droppedAt).map((r) => [r.slotKey, r.imageId!]));
   const imageIds = [...new Set(chosen.values())];
   const images = imageIds.length ? await db.query.deckImages.findMany({ where: and(inArray(schema.deckImages.id, imageIds), eq(schema.deckImages.workspaceId, owner.workspaceId), eq(schema.deckImages.userId, owner.userId)) }) : [];
   const imageById = new Map(images.map((i) => [i.id, i]));
@@ -51,15 +54,17 @@ export async function resolveDeckSlots(webinarId: string, deck: DeckResult, owne
       // The display rendition (a HEIC's JPEG) when there is one, else the original with its own type: a PNG is not called a JPEG.
       proofPhoto: photo ? { url: photo.displayUrl ?? photo.blobUrl, mime: photo.displayUrl ? "image/jpeg" : photo.mime, width: photo.width ?? 0, height: photo.height ?? 0, source: "proof", kind: "proof" } : null,
     });
-    return { slide, section, slot, image, why };
+    return dropped.has(slot.key) ? { slide, section, slot, image: null, why: null, dropped: true } : { slide, section, slot, image, why, dropped: false };
   });
 }
 
 /** The slides that have a picture, for the render to narrow their text and place the image. */
 export const filledSlides = (resolved: ResolvedSlot[]): Set<number> => new Set(resolved.filter((r) => r.image).map((r) => r.slide));
+/** The slides whose slot the coach dropped (§6.3): they export as text with no placeholder. */
+export const droppedSlides = (resolved: ResolvedSlot[]): Set<number> => new Set(resolved.filter((r) => r.dropped).map((r) => r.slide));
 
 /** What the Deck step tells the coach fell back: the count of empty slots, and the ones with a reason worth a sentence. */
-export function slotFallbacks(resolved: ResolvedSlot[]): { emptyCount: number; reasons: { slide: number; section: string; why: string }[] } {
-  const empty = resolved.filter((r) => !r.image);
-  return { emptyCount: empty.length, reasons: empty.filter((r) => r.why).map((r) => ({ slide: r.slide, section: r.section, why: r.why! })) };
+export function slotFallbacks(resolved: ResolvedSlot[]): { emptyCount: number; droppedCount: number; reasons: { slide: number; section: string; why: string }[] } {
+  const empty = resolved.filter((r) => !r.image && !r.dropped);
+  return { emptyCount: empty.length, droppedCount: resolved.filter((r) => r.dropped).length, reasons: empty.filter((r) => r.why).map((r) => ({ slide: r.slide, section: r.section, why: r.why! })) };
 }

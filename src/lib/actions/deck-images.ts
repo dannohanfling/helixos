@@ -181,6 +181,28 @@ export async function setDeckSlotAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/** "I don't have this" (§6.3): the slot is dropped, the slide exports as text with no placeholder, the shot list counts it out. */
+export async function dropDeckSlotAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const webinarId = str(formData, "webinarId");
+  const slotKey = str(formData, "slotKey");
+  if (!slotKey || !(await ownWebinar(webinarId, userId))) return;
+  const existing = await db.query.deckSlots.findFirst({ where: and(eq(schema.deckSlots.webinarId, webinarId), eq(schema.deckSlots.slotKey, slotKey)) });
+  if (existing) await db.update(schema.deckSlots).set({ imageId: null, droppedAt: nowIso() }).where(eq(schema.deckSlots.id, existing.id));
+  else await db.insert(schema.deckSlots).values({ id: newId(), webinarId, slotKey, imageId: null, droppedAt: nowIso() });
+  refresh();
+}
+
+/** Puts a dropped slot back: it asks for its picture again and the placeholder returns until one is attached. */
+export async function restoreDeckSlotAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const webinarId = str(formData, "webinarId");
+  const slotKey = str(formData, "slotKey");
+  if (!slotKey || !(await ownWebinar(webinarId, userId))) return;
+  await db.update(schema.deckSlots).set({ droppedAt: null }).where(and(eq(schema.deckSlots.webinarId, webinarId), eq(schema.deckSlots.slotKey, slotKey)));
+  refresh();
+}
+
 /** Empties a slot: the slide falls back to text, the image stays in the library. */
 export async function clearDeckSlotAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();

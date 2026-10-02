@@ -246,6 +246,40 @@ async function main() {
     const redBox = { w: rMaxX - rMinX + 1, h: rMaxY - rMinY + 1 };
     if (reds < 200 || !within(redBox.w / rinfo.width, COVER_FRAME.w / 10, 0.03) || !within(redBox.h / rinfo.height, COVER_FRAME.h / 5.625, 0.03)) throw new Error(`the render paints the red placeholder across the picture's frame: ${JSON.stringify(redBox)} of ${rinfo.width}×${rinfo.height}, ${reds} red px`);
     console.log(`✓ §2: an empty slot exports as a dashed red frame with "Add a photo: …" in it, the picture's own frame on the XML and on the render (${redBox.w}×${redBox.h} px of ${rinfo.width}×${rinfo.height})`);
+    // ── §6.3: "Pictures to gather" on Foundation: the cover's photo missing, the logo in (1 of 2). "I don't have this" drops the
+    //    cover slot: the count falls to 1 of 1, the Deck step says so, the export carries no placeholder on the cover, and Today's
+    //    action goes; Put back returns the slot, the placeholder and the Today action. ──
+    await page.goto(`${base}/webinars/${webinar.id}?step=foundation`);
+    await page.locator('[data-testid="shot-list"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="shot-list-count"]').innerText()).trim() !== "1 of 2 gathered") throw new Error(`the shot list counts the cover's photo missing and the logo in: ${await page.locator('[data-testid="shot-list-count"]').innerText()}`);
+    const coverItem = page.locator('[data-testid="shot-item"][data-slot-key="cover:photo"]');
+    if ((await coverItem.getAttribute("data-state")) !== "missing" || !/slide 1/.test(await coverItem.innerText()) || (await page.locator('[data-testid="shot-item-logo"]').getAttribute("data-state")) !== "gathered") throw new Error("each item names its slide and state; the logo line reads gathered");
+    // Today's action, read through the same query the page renders (the demo member's day already carries more actions than the
+    // page shows, so the list is the truth here, the page a bonus when it fits).
+    const { viewerFor } = await import("@/lib/auth");
+    const { todayData } = await import("@/lib/queries/today");
+    const todayActions = async () => (await todayData((await viewerFor(user.id, wsId))!)).actions;
+    const shotAction = (await todayActions()).find((a) => a.key === "shot-list");
+    if (!shotAction || shotAction.title !== "Pictures to gather: 1 of 2 for Pictures on a deck (walk)" || !shotAction.href.endsWith(`/webinars/${webinar.id}?step=foundation#pictures`)) throw new Error(`Today carries the count as an action while pictures are missing: ${JSON.stringify(shotAction)}`);
+    await page.goto(`${base}/webinars/${webinar.id}?step=foundation`);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), coverItem.locator('[data-testid="shot-item-drop"]').click()]);
+    await page.locator('[data-testid="shot-item"][data-slot-key="cover:photo"][data-state="dropped"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="shot-list-count"]').innerText()).trim() !== "1 of 1 gathered") throw new Error("a dropped slot leaves the count");
+    if ((await todayActions()).some((a) => a.key === "shot-list")) throw new Error("with nothing missing, Today drops the action");
+    await page.goto(`${base}/webinars/${webinar.id}?step=deck`);
+    await page.locator('[data-testid="deck-slots-dropped"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="deck-slots"]').count()) !== 0 || !/1 picture you said you don't have/.test(await page.locator('[data-testid="deck-slots-dropped"]').innerText())) throw new Error("the Deck step says one picture was dropped and counts no empty slot");
+    if ((await page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"]').getAttribute("data-dropped")) !== "1") throw new Error("the cover's slot reads dropped");
+    const droppedRes = await page.request.get(`${base}/api/webinars/${webinar.id}/deck?format=pptx`);
+    const droppedZip = await JSZip.loadAsync(await droppedRes.body());
+    const droppedCover = await droppedZip.file("ppt/slides/slide1.xml")!.async("string");
+    if (/D92D20/.test(droppedCover) || /Add a photo/i.test(droppedCover)) throw new Error("a dropped slot's slide exports as text with no red placeholder");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"] [data-testid="deck-slot-restore"]').click()]);
+    await page.locator('[data-testid="deck-slot"][data-slot-key="cover:photo"] [data-testid="deck-slot-picker"]').waitFor({ timeout: 20000 });
+    if ((await db.query.deckSlots.findFirst({ where: and(eq(schema.deckSlots.webinarId, webinar.id), eq(schema.deckSlots.slotKey, "cover:photo")) }))?.droppedAt) throw new Error("Put back clears the drop");
+    console.log("✓ §6.3: Pictures to gather reads 1 of 2 on Foundation and as a Today action; I don't have this drops the cover (1 of 1, the Deck step says so, no placeholder in the export, no Today action); Put back returns it");
+    await page.goto(`${base}/webinars/${webinar.id}?step=deck`);
+    await coverSlot.locator('[data-testid="deck-slot-picker"]').waitFor({ timeout: 20000 });
     await coverSlot.locator('[data-testid="deck-slot-picker"]').selectOption(photos[0].id);
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), coverSlot.locator('[data-testid="deck-slot-attach"]').click()]);
     await settle(page);

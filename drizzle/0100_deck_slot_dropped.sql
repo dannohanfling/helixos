@@ -1,0 +1,1 @@
+ALTER TABLE `deck_slots` ADD `dropped_at` text;

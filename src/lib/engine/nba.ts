@@ -18,6 +18,8 @@ export type Snapshot = {
   runningStreak: number;
   clientsDueCheckin?: number;
   webinarInProgress?: { id: string; title: string; step: string; stepLabel: string } | null;
+  /** "Pictures to gather" for the webinar being built (§6.3), while any are missing. */
+  shotList?: { webinarId: string; title: string; gathered: number; total: number } | null;
   /** A webinar marked ready or scheduled whose build checks have since broken; the note names them. */
   webinarBroken?: { id: string; title: string; status: string; note: string; daysAway?: number | null } | null;
 };
@@ -138,6 +140,16 @@ export function nextBestActions(s: Snapshot): Action[] {
       why: "Twenty minutes a day on the build beats a weekend of panic.",
       href: `/webinars/${s.webinarInProgress.id}?step=${s.webinarInProgress.step}`,
       cta: "Keep building",
+      tone: "neutral",
+    });
+  }
+  if (s.shotList && s.shotList.gathered < s.shotList.total) {
+    out.push({
+      key: "shot-list",
+      title: `Pictures to gather: ${s.shotList.gathered} of ${s.shotList.total} for ${s.shotList.title}`,
+      why: "Gather them while you write, not the night before; each fills a slot on the Deck step.",
+      href: `/webinars/${s.shotList.webinarId}?step=foundation#pictures`,
+      cta: "Gather pictures",
       tone: "neutral",
     });
   }

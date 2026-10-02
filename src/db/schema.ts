@@ -1116,6 +1116,8 @@ export const deckSlots = sqliteTable(
     webinarId: text("webinar_id").notNull().references(() => webinars.id, { onDelete: "cascade" }),
     slotKey: text("slot_key").notNull(),
     imageId: text("image_id"),
+    /** Set when the coach said "I don't have this" (§6.3): the slide exports as text with no placeholder, and the shot list counts it out. */
+    droppedAt: text("dropped_at"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("deck_slots_key").on(t.webinarId, t.slotKey)],
