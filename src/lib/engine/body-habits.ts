@@ -27,7 +27,10 @@ export const STARTER_HABITS: { name: string; kind: HabitKind; unit?: string; tar
 ];
 
 export const KIND_LABEL: Record<HabitKind, string> = { done: "done or not", minutes: "minutes", count: "a count", amount: "an amount" };
-export const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
+/** Sunday first, as weekday() counts: Th, Sa and Su where a day is one mark wide, never two Ts and two Ss (Danno, rev 365). */
+export const DAY_LETTERS = ["Su", "M", "T", "W", "Th", "F", "Sa"];
+/** Sunday first, where there is room for the name. */
+export const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /** Due on this date: every day when no days are set, else when the weekday (0 = Sunday) is one of them; never before the habit existed. */
 export const dueOn = (h: Pick<HabitLike, "days" | "since">, weekdayOf: number, date?: string): boolean => (!h.since || !date || date >= h.since) && (!h.days.length || h.days.includes(weekdayOf));
@@ -114,7 +117,6 @@ export function daysFrom(ticked: number[]): number[] {
 /** "Mon, Wed, Fri" or "every day". */
 export function fmtDays(days: number[]): string {
   if (!days.length) return "every day";
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const order = [1, 2, 3, 4, 5, 6, 0];
-  return order.filter((d) => days.includes(d)).map((d) => names[d]).join(", ");
+  return order.filter((d) => days.includes(d)).map((d) => DAY_NAMES[d]).join(", ");
 }

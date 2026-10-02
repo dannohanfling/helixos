@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays, startOfWeek, weekday } from "@/lib/dates";
-import { STARTER_HABITS, daysFrom, dueOn, fmtDays, fmtHabitValue, fmtTarget, habitsWeek, kept, streak, weekDots, type HabitLike } from "@/lib/engine/body-habits";
+import { DAY_LETTERS, DAY_NAMES, STARTER_HABITS, daysFrom, dueOn, fmtDays, fmtHabitValue, fmtTarget, habitsWeek, kept, streak, weekDots, type HabitLike } from "@/lib/engine/body-habits";
 import { fmtHours, parseHours, sleepAverages, sleepWeek } from "@/lib/engine/body-recovery";
 
 const dates = { addDays, weekday, startOfWeek };
@@ -32,6 +32,10 @@ describe("habits (B7, rev 237 phase 8)", () => {
     expect(daysFrom([5, 1, 3, 3])).toEqual([1, 3, 5]);
     expect(fmtDays([1, 3, 5])).toBe("Mon, Wed, Fri");
     expect(fmtDays([])).toBe("every day");
+    // Day marks never repeat a letter: Th, Sa, Su (Danno, rev 365), Sunday first as weekday() counts.
+    expect(DAY_LETTERS).toEqual(["Su", "M", "T", "W", "Th", "F", "Sa"]);
+    expect(new Set(DAY_LETTERS).size).toBe(7);
+    expect(DAY_NAMES[4]).toBe("Thu");
     // Never due before it existed (phase 10b), so a 90-day view of a new habit isn't 90 gaps.
     const young = { ...done, since: "2026-09-30" };
     expect(dueOn(young, 1, "2026-09-28")).toBe(false);

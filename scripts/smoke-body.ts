@@ -766,7 +766,10 @@ async function main() {
     await client.locator('[data-testid="today-habits"]').waitFor({ timeout: 30000 });
     if ((await client.locator('[data-testid="today-habit"][data-name="Breathwork"]').getAttribute("data-kept")) !== "1" || (await client.locator('[data-testid="today-habit"]').count()) !== dueToday) throw new Error("Today's chips are the habits due today, Breathwork kept");
     await press(client, '[data-testid="today-habit"][data-name="Breathwork"]', async () => (await client.locator('[data-testid="today-habit"][data-name="Breathwork"]').getAttribute("data-kept")) === "0", "the chip untapped");
+    // Untapped, the run carried from before shows a grey flame that says "not yet today", never as done today (Danno, rev 364).
+    if ((await client.locator('[data-testid="today-habit"][data-name="Breathwork"] [data-testid="today-streak"]').getAttribute("data-kept")) !== "0") throw new Error("an unkept habit's streak badge is marked not yet today");
     await press(client, '[data-testid="today-habit"][data-name="Breathwork"]', async () => (await client.locator('[data-testid="today-habit"][data-name="Breathwork"]').getAttribute("data-kept")) === "1", "the chip tapped again");
+    if ((await client.locator('[data-testid="today-habit"][data-name="Breathwork"] [data-testid="today-streak"]').getAttribute("data-kept")) !== "1") throw new Error("a kept habit's streak badge is marked kept");
     if (!/\/today/.test(client.url())) throw new Error("the chip comes back to Today");
     // Sleep: last night, then an earlier night, then last night logged again replaces it.
     await client.goto(`${base}/body/sleep`);
@@ -930,6 +933,13 @@ async function main() {
     if ((await client.locator('[data-testid="habits-range"]').getAttribute("data-kept")) !== String(hr.kept) || (await client.locator('[data-testid="habits-range"]').getAttribute("data-due")) !== String(hr.due)) throw new Error("Practices over the month carries the query's kept of due");
     const bh = hr.habits.find((h) => h.name === "Breathwork")!;
     if ((await client.locator('[data-testid="habit-range"][data-name="Breathwork"]').getAttribute("data-best")) !== String(bh.best)) throw new Error(`Breathwork's best run is the query's (${bh.best})`);
+    // The strip draws whole weeks: every cell up to today has its day's title, the month's first Monday included (Danno, rev 364).
+    const untitled = await client.locator('[data-testid="habit-range"][data-name="Breathwork"] [data-date]').evaluateAll((els, t) => els.filter((e) => (e.getAttribute("data-date") ?? "") <= t && !e.getAttribute("title")).length, today);
+    if (untitled !== 0 || (await client.locator('[data-testid="habit-range"][data-name="Breathwork"] [data-date]').count()) % 7 !== 0) throw new Error("the month strip draws whole weeks, every past day titled");
+    if ((await client.locator('[data-testid="habit-range"][data-name="Breathwork"] [data-pending="1"]').count()) !== 0) throw new Error("a kept habit has no pending outline today");
+    // Evening walk is due Monday to Friday and never logged: on a weekday, today is an outline, not a fill.
+    if ([1, 2, 3, 4, 5].includes(weekday(today)) && (await client.locator(`[data-testid="habit-range"][data-name="Evening walk"] [data-date="${today}"][data-pending="1"]`).count()) !== 1) throw new Error("today, due, not yet is an outline on the strip");
+    if ((await client.locator('[data-testid="habit-range"][data-name="Breathwork"]').textContent())?.includes("Th") !== true) throw new Error("the strip's day labels say Th");
     await noSideScroll(client, "/body/practices?range=month");
     // An exercise over a year: every session in the list, the span marked.
     await client.goto(`${base}/body/training/${bench.id}?range=365`);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addDays, startOfWeek } from "@/lib/dates";
-import { calendarWeeks, mondaysIn, perWeek, rangeBounds, rateText, stepRange } from "@/lib/engine/body-range";
+import { calendarWeeks, mondaysIn, perWeek, rangeBounds, rateText, stepRange, stripBounds } from "@/lib/engine/body-range";
 
 const dates = { addDays, startOfWeek };
 const today = "2026-10-01"; // a Thursday
@@ -32,10 +32,14 @@ describe("longer views (rev 237 phase 10b)", () => {
     const pts = [{ date: "2026-09-08", value: 2 }, { date: "2026-09-09", value: 4 }, { date: "2026-09-29", value: 7 }, { date: "2026-10-05", value: 100 }];
     expect(perWeek(pts, "2026-09-07", "2026-09-30", "sum", dates).map((w) => [w.monday, w.value, w.n])).toEqual([["2026-09-07", 6, 2], ["2026-09-14", 0, 0], ["2026-09-21", 0, 0], ["2026-09-28", 7, 1]]);
     expect(perWeek(pts, "2026-09-07", "2026-09-30", "mean", dates).map((w) => w.value)).toEqual([3, null, null, 7]);
-    const strip = calendarWeeks("2026-09-29", "2026-10-05", today, dates, (d) => (d === "2026-09-30" ? 3 : 1), (d) => d);
+    // The strip draws the whole week: Mon 28 is before the range yet drawn (Danno, rev 364); Fri 2 onward is after today, blank.
+    expect(stripBounds("2026-09-29", "2026-10-05", dates)).toEqual({ from: "2026-09-28", to: "2026-10-11" });
+    const strip = calendarWeeks("2026-09-29", "2026-10-05", today, dates, (d) => (d === "2026-09-30" ? 3 : 1), (d) => d, (d) => d === today);
     expect(strip).toHaveLength(2);
-    expect(strip[0].days.map((d) => d.level)).toEqual([0, 1, 3, 1, 0, 0, 0]); // Mon 28 before the range; Fri 2 onward after today
-    expect(strip[0].days[0].title).toBe("");
+    expect(strip[0].days.map((d) => d.level)).toEqual([1, 1, 3, 1, 0, 0, 0]);
+    expect(strip[0].days[0].title).toBe("2026-09-28");
+    expect(strip[0].days.map((d) => !!d.pending)).toEqual([false, false, false, true, false, false, false]); // today, due, not yet: an outline
+    expect(strip[1].days.some((d) => d.pending)).toBe(false);
     expect(rateText(12, 15)).toBe("12 of 15 (80%)");
     expect(rateText(0, 0)).toBe("—");
   });

@@ -30,7 +30,7 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
         <PageHeader title="HumanOS" action={<Link href={`/coach/${clientId}`} className="btn btn-ghost btn-sm">← Client</Link>} />
         <Card>
           <p className="text-sm text-ink-2" data-testid="coach-body-private">
-            🔒 This client&apos;s Body data is private. They can choose to share it with you from their Body settings.
+            🔒 This client&apos;s HumanOS data is private. They can choose to share it with you from their HumanOS settings.
           </p>
         </Card>
       </>

@@ -71,24 +71,24 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
 
       <Card className="mb-4" title="Sharing" id="share">
         <p className="text-sm text-ink-2">
-          Your Body data is private by default. Switched on, your coach can <b>read</b> your days and leave a comment on a day, nothing else: no edits, no exports, no AI. Your health log and photos stay yours alone either way. You can switch it off any time, and every change is logged below.
+          Your HumanOS data is private by default. Switched on, your coach can <b>read</b> your days and leave a comment on a day, nothing else: no edits, no exports, no AI. Your health log and photos stay yours alone either way. You can switch it off any time, and every change is logged below.
         </p>
         <form action={setBodyShareAction} className="mt-3 flex flex-wrap items-center gap-3">
           <input type="hidden" name="shared" value={s.shareWithCoach ? "0" : "1"} />
           <span className="text-sm font-medium" data-testid="body-share-state">
-            Let my coach see my Body data: {s.shareWithCoach ? "On" : "Off"}
+            Let my coach see my HumanOS data: {s.shareWithCoach ? "On" : "Off"}
           </span>
           <SubmitButton className={`btn btn-sm ${s.shareWithCoach ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="body-share-toggle">
             {s.shareWithCoach ? "Switch off" : "Switch on"}
           </SubmitButton>
         </form>
         <p className="mt-4 text-sm text-ink-2">
-          Separately, you can let HelixOS&apos;s AI use your Body numbers (targets, what you logged, your saved meals) to support you better, on your own AI key. Never your photos or notes. Off, AI only sees Body data when you press a button for that one request.
+          Separately, you can let HelixOS&apos;s AI use your HumanOS numbers (targets, what you logged, your saved meals) to support you better, on your own AI key. Never your photos or notes. Off, AI only sees HumanOS data when you press a button for that one request.
         </p>
         <form action={setBodyAiAction} className="mt-3 flex flex-wrap items-center gap-3">
           <input type="hidden" name="on" value={s.aiUse ? "0" : "1"} />
           <span className="text-sm font-medium" data-testid="body-ai-state">
-            Let AI use my Body data to support me: {s.aiUse ? "On" : "Off"}
+            Let AI use my HumanOS data to support me: {s.aiUse ? "On" : "Off"}
           </span>
           <SubmitButton className={`btn btn-sm ${s.aiUse ? "btn-soft" : "btn-primary"}`} pendingText="Saving…" data-testid="body-ai-toggle">
             {s.aiUse ? "Switch off" : "Switch on"}

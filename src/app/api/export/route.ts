@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/export?format=json                      everything the signed-in member owns in this workspace, one JSON file
  * GET /api/export?format=csv&table=leads           one table as CSV (see EXPORT_TABLES)
- * GET /api/export?...&user=<userId>                a coach exporting one of their clients (same workspace only), never Body
- * GET /api/export?format=json&scope=body           the member's own Body data alone
+ * GET /api/export?...&user=<userId>                a coach exporting one of their clients (same workspace only), never HumanOS
+ * GET /api/export?format=json&scope=body           the member's own HumanOS data alone
  */
 export async function GET(request: Request) {
   const v = await getViewer();

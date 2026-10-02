@@ -82,11 +82,27 @@ export function perWeek(points: { date: string; value: number }[], from: string,
   });
 }
 
-/** The calendar strip's weeks for a range: every week touching it, each day with the level and title the caller gives. */
-export function calendarWeeks(from: string, to: string, today: string, dates: Dates, levelFor: (date: string) => 0 | 1 | 2 | 3, titleFor: (date: string) => string): { monday: string; days: { date: string; level: 0 | 1 | 2 | 3; title: string }[] }[] {
+/** The whole weeks a range touches: the Monday of its first week to the Sunday of its last, what the strip draws (Danno, rev 364). */
+export function stripBounds(from: string, to: string, dates: Dates): { from: string; to: string } {
+  const mondays = mondaysIn(from, to, dates);
+  return { from: mondays[0], to: dates.addDays(mondays[mondays.length - 1], 6) };
+}
+
+export type StripDay = { date: string; level: 0 | 1 | 2 | 3; title: string; pending?: boolean };
+
+/**
+ * The calendar strip's weeks for a range: every week touching it, whole, each day with the level and title the caller gives. A day
+ * outside the range but inside its week is drawn like any other (the range governs totals, never the strip); only a day after today
+ * is blank. `pendingFor` marks a day drawn as an outline, never a fill: today, due, not yet kept.
+ */
+export function calendarWeeks(from: string, to: string, today: string, dates: Dates, levelFor: (date: string) => 0 | 1 | 2 | 3, titleFor: (date: string) => string, pendingFor?: (date: string) => boolean): { monday: string; days: StripDay[] }[] {
   return mondaysIn(from, to, dates).map((monday) => ({
     monday,
-    days: Array.from({ length: 7 }, (_, i) => dates.addDays(monday, i)).map((date) => ({ date, level: date < from || date > to || date > today ? 0 : levelFor(date), title: date < from || date > to ? "" : titleFor(date) })),
+    days: Array.from({ length: 7 }, (_, i) => dates.addDays(monday, i)).map((date) => {
+      const day: StripDay = { date, level: date > today ? 0 : levelFor(date), title: titleFor(date) };
+      if (date <= today && pendingFor?.(date)) day.pending = true;
+      return day;
+    }),
   }));
 }
 

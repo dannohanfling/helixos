@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 46,
+    date: "2026-10-02",
+    title: "Practices: today is an outline until it's kept, and the week is drawn whole",
+    lines: [
+      "On the Practices strip, today's square is an outline until you keep the habit; only kept fills. A streak not yet kept today shows a grey flame and says \"not yet today\", on Practices and on Today's chips.",
+      "With the range on Month, the strip now draws the whole first and last week, so a Wednesday kept on 30 Sep shows under October's first week. The totals and the rate still count the month alone.",
+      "Day labels read M T W Th F Sa Su on every strip, and Sun to Sat on the habit's days.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 45,
     date: "2026-10-01",
     title: "HumanOS: mark a travel or sick day, and the week in a paragraph",

@@ -6,7 +6,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { archiveHabitAction, logHabitAction, saveHabitAction } from "@/lib/actions/body";
 import { formatDate } from "@/lib/dates";
-import { DAY_LETTERS, KIND_LABEL, STARTER_HABITS, fmtDays, fmtTarget, type Dot } from "@/lib/engine/body-habits";
+import { DAY_LETTERS, DAY_NAMES, KIND_LABEL, STARTER_HABITS, fmtDays, fmtTarget, type Dot } from "@/lib/engine/body-habits";
 import { bodySettingsFor, habitsDay, habitsRange, requireBodyEnabled, type HabitsDayView } from "@/lib/queries/body";
 import { StreakCalendar } from "@/components/charts";
 import { RangePicker } from "@/components/body/range-picker";
@@ -39,8 +39,10 @@ function HabitRow({ h, date, today }: { h: Habit; date: string; today: string })
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{h.name}</span>
           {h.streak ? (
-            <span className="text-xs text-ink-2" data-testid="habit-streak">
-              🔥 {h.streak} day{h.streak === 1 ? "" : "s"}
+            // Not yet logged today: the flame greys and says so, so a run carried from before never reads as done today (Danno, rev 364).
+            <span className="text-xs text-ink-2" data-testid="habit-streak" data-kept={h.kept ? "1" : "0"}>
+              <span className={h.kept ? "" : "opacity-60 grayscale"}>🔥</span> {h.streak} day{h.streak === 1 ? "" : "s"}
+              {h.kept ? "" : " · not yet today"}
             </span>
           ) : null}
         </div>
@@ -110,7 +112,7 @@ function HabitForm({ h }: { h?: Habit }) {
         <div className="flex flex-wrap gap-2 text-sm">
           {[1, 2, 3, 4, 5, 6, 0].map((d) => (
             <label key={d} className="inline-flex items-center gap-1">
-              <input type="checkbox" name={`d${d}`} value="1" defaultChecked={!!h?.days.includes(d)} /> {DAY_LETTERS[d]}
+              <input type="checkbox" name={`d${d}`} value="1" defaultChecked={!!h?.days.includes(d)} /> {DAY_NAMES[d]}
             </label>
           ))}
         </div>

@@ -33,17 +33,17 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
         <HumanosHeader title="Log" gear={false} subtitle="Nutrition targets and fast meal logging. Workouts and weigh-ins come next." />
         {sp.erased ? (
           <p className="mb-4 rounded-xl border p-3 text-sm" role="status" data-testid="body-erased">
-            All your Body data is deleted.
+            All your HumanOS data is deleted.
           </p>
         ) : null}
         <Card title="Start">
           <p className="mb-1 text-sm text-ink-2">HumanOS starts empty and you fill it in: your daily targets, the foods you eat most, your go-to meals. A short checklist walks you through it.</p>
           <p className="mb-4 text-sm text-ink-2" data-testid="body-private-note">
-            🔒 Your Body data is <b>private to you</b>. Your coach doesn&apos;t see it unless you switch on &quot;Let my coach see my Body data&quot; in Body settings, and it&apos;s never sent to AI.
+            🔒 Your HumanOS data is <b>private to you</b>. Your coach doesn&apos;t see it unless you switch on &quot;Let my coach see my HumanOS data&quot; in HumanOS settings, and it&apos;s never sent to AI.
           </p>
           <form action={setupBodyAction}>
             <SubmitButton className="btn btn-humanos btn-sm" pendingText="Setting up…" data-testid="body-start">
-              Set up Body
+              Set up HumanOS
             </SubmitButton>
           </form>
         </Card>

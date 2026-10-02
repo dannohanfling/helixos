@@ -388,6 +388,11 @@ describe("the product is called HumanOS (rev 324)", () => {
         for (const m of line.matchAll(/"[^"\n]*"|'[^'\n]*'|`[^`\n]*`|>[^<\n]*</g)) {
           if (/\bBody\b/.test(m[0])) offenders.push(`${f}:${i + 1}: ${m[0].slice(0, 80)}`);
         }
+        // A bare JSX text line (no tag on it, no code shape) is shown too: "All your Body data is deleted." on its own line.
+        if (/\.tsx$/.test(f) && !/^[<{})\]\/*.]/.test(t) && !/^(const|let|var|return|export|import|if|else|for|while|type|interface|function|async|await|case|default|throw|try|catch|switch)\b/.test(t)) {
+          const shown = t.replace(/\{[^{}]*\}/g, " ").replace(/<[^>]*>/g, " ").replace(/&\w+;/g, "'");
+          if (!/[=;]|=>/.test(shown) && /\bBody\b/.test(shown)) offenders.push(`${f}:${i + 1}: ${t.slice(0, 80)}`);
+        }
       });
     }
     expect(offenders).toEqual([]);
