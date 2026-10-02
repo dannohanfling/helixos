@@ -49,7 +49,19 @@ async function main() {
   await coach.goto(`${base}/settings`);
   await coach.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
   const kit: Record<string, string> = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: "000000", placeholder: "FFF3A3", aliases: "Turas" };
-  for (const [k, v] of Object.entries(kit)) await coach.fill(`[data-testid="brand-form"] input[name="${k}"]`, v);
+  // §6.1: a face comes from the list, or from "Other (licensed font)" typed by name; the colours keep their hex inputs.
+  for (const [k, v] of Object.entries(kit)) {
+    if (!["displayFont", "bodyFont", "quoteFont", "fontFallback"].includes(k)) {
+      await coach.fill(`[data-testid="brand-form"] input[name="${k}"]`, v);
+      continue;
+    }
+    const select = coach.locator(`[data-testid="brand-font-${k}"]`);
+    if (await select.locator(`option[value="${v}"]`).count()) await select.selectOption(v);
+    else {
+      await select.selectOption("__other");
+      await coach.fill(`[data-testid="brand-font-${k}-other"]`, v);
+    }
+  }
   await submit(coach, '[data-testid="brand-form"] button[type="submit"]');
   await coach.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
   if ((await coach.locator('[data-testid="brand-aliases"]').inputValue()) !== "Turas") throw new Error("the permitted name is read back");

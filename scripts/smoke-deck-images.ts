@@ -248,7 +248,7 @@ async function main() {
 
     // ── Deck visuals §1, read off the XML: every placed picture's drawn box has the ratio of what it shows (its crop box when
     //    covered, its whole self when contained), within 1%; the bytes are downscaled and re-encoded; one media file per picture. ──
-    type Pic = { slide: string; media: string; cx: number; cy: number; crop: { l: number; r: number; t: number; b: number } | null };
+    type Pic = { slide: string; media: string; cx: number; cy: number; crop: { l: number; r: number; t: number; b: number } | null; descr: string };
     const picsIn = async (z: InstanceType<typeof JSZip>): Promise<Pic[]> => {
       const out: Pic[] = [];
       for (const f of Object.keys(z.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))) {
@@ -261,7 +261,7 @@ async function main() {
           const rId = pic.match(/r:embed="(rId\d+)"/)![1];
           const ext = pic.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/)!;
           const sr = pic.match(/<a:srcRect l="(-?\d+)" r="(-?\d+)" t="(-?\d+)" b="(-?\d+)"\/>/);
-          out.push({ slide: f, media: `ppt/media/${target(rId)}`, cx: Number(ext[1]), cy: Number(ext[2]), crop: sr ? { l: Number(sr[1]) / 1e5, r: Number(sr[2]) / 1e5, t: Number(sr[3]) / 1e5, b: Number(sr[4]) / 1e5 } : null });
+          out.push({ slide: f, media: `ppt/media/${target(rId)}`, cx: Number(ext[1]), cy: Number(ext[2]), crop: sr ? { l: Number(sr[1]) / 1e5, r: Number(sr[2]) / 1e5, t: Number(sr[3]) / 1e5, b: Number(sr[4]) / 1e5 } : null, descr: pic.match(/<p:cNvPr [^>]*descr="([^"]*)"/)?.[1] ?? "" });
         }
       }
       return out;
@@ -288,6 +288,8 @@ async function main() {
     const coverPic = coverPics.find((p) => within(p.cx / EMU, COVER_FRAME.w))!;
     const coverLogo = coverPics.find((p) => p !== coverPic)!;
     if (coverPics.length !== 2 || !coverLogo || coverLogo.crop || !within(coverLogo.cx / coverLogo.cy, LOGO_PX.width / LOGO_PX.height) || coverLogo.cy / EMU > 0.55 + 1e-3) throw new Error(`the cover carries the photo in its frame and the logo whole, top left: ${JSON.stringify(coverPics)}`);
+    // §6.8: every picture's alt text is the caption (the photo was captioned "Me on stage"), the logo's names the brand; never "preencoded.png".
+    if (coverPic.descr !== "Me on stage" || !/logo$/.test(coverLogo.descr) || pics1.some((p) => /preencoded|\.png$|\.jpe?g$/i.test(p.descr))) throw new Error(`alt text is the caption or the brand's logo, never a file name: ${JSON.stringify(pics1.map((p) => p.descr))}`);
     const coverNative = await nativeOf(zip, coverPic.media);
     // A photo covers its frame: the box is the frame, the crop is left and right only (a 2:1 photo in a 1.12:1 frame), centred.
     if (!within(coverPic.cx / EMU, COVER_FRAME.w) || !within(coverPic.cy / EMU, COVER_FRAME.h)) throw new Error(`the photo fills the cover's frame: ${coverPic.cx / EMU} by ${coverPic.cy / EMU} in`);

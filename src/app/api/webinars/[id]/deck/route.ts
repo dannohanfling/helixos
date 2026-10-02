@@ -5,6 +5,7 @@ import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
 import { PLACEHOLDER_TEXT_SIZE, TEXT_LEFT_ZONE, deckSlides, outlineText, renderPlan, slotFrame, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
+import { pictureAltText } from "@/lib/engine/deck-slot";
 import { placeImage } from "@/lib/engine/deck-fit";
 import { contextFor } from "@/lib/queries/webinar";
 import { filledSlides, resolveDeckSlots } from "@/lib/queries/deck-slots";
@@ -64,13 +65,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const resolved = await resolveDeckSlots(w.id, deck, { workspaceId: w.workspaceId, userId: w.userId });
   const filled = filledSlides(resolved);
   const kindOf = new Map(deck.slides.map((s) => [s.n, s.kind]));
-  const bySlide = new Map<number, PreparedImage>();
+  const bySlide = new Map<number, PreparedImage & { alt: string }>();
   const bytesByUrl = new Map<string, Promise<Buffer | null>>();
   const readOnce = (url: string) => bytesByUrl.get(url) ?? bytesByUrl.set(url, readBytes(url)).get(url)!;
   await Promise.all(resolved.filter((r) => r.image).map(async (r) => {
     const bytes = await readOnce(r.image!.url);
     const prepared = bytes ? await prepareDeckImage(bytes, r.image!.kind, slotFrame(kindOf.get(r.slide) ?? "section")) : null;
-    if (prepared) bySlide.set(r.slide, prepared);
+    if (prepared) bySlide.set(r.slide, { ...prepared, alt: pictureAltText(r.image!.caption, r.slot.what) });
     else filled.delete(r.slide); // The bytes wouldn't read back or decode: the slide shows the slot's placeholder, never a broken picture.
   }));
   // The logo (§4): the kit's pick first; failing that, the newest logo in the owner's own library. On the cover, and in the footer
@@ -134,7 +135,7 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
 
   if (cover) {
     // The logo on the cover (§4), top left, contained whole in its box.
-    if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: chrome.coverLogo.placement.box.x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h });
+    if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: chrome.coverLogo.placement.box.x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h, altText: `${chrome.company} logo` });
     const title = plan.boxes.find((b) => b.role === "cover-title");
     const presenter = plan.boxes.find((b) => b.role === "cover-presenter");
     if (title) slide.addText(title.text, frame ? { x: zone.x, y: 1.6, w: zone.w, h: 1.8, fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face, align: "left", valign: "middle" } : { x: 0.5, y: 1.5, w: 9, h: 1.6, fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face, align: "center", valign: "middle" });
@@ -181,17 +182,17 @@ function drawPlaceholder(pptx: PptxGenJS, slide: PptxGenJS.Slide, ph: Placeholde
  * the sizing box). Contain: the box is the picture's own ratio, centred, with the slide's ground behind the bare part of the
  * frame, no crop. The ratio of what is drawn always equals the ratio of what is shown, which the walk reads back from the XML.
  */
-function drawImage(pptx: PptxGenJS, slide: PptxGenJS.Slide, image: PreparedImage, frame: Frame, ground: string) {
+function drawImage(pptx: PptxGenJS, slide: PptxGenJS.Slide, image: PreparedImage & { alt?: string }, frame: Frame, ground: string) {
   // Placed for the frame it is drawn in (a picture may take the next slide's bigger frame, §4), by the same fit engine.
   const placement = placeImage(frame, { w: image.width, h: image.height }, image.mode);
   if (placement.mode === "cover" && placement.crop) {
     const w = frame.w;
     const h = (frame.w * image.height) / image.width;
-    slide.addImage({ data: image.data, x: frame.x, y: frame.y, w, h, sizing: { type: "cover", w: frame.w, h: frame.h } });
+    slide.addImage({ data: image.data, x: frame.x, y: frame.y, w, h, sizing: { type: "cover", w: frame.w, h: frame.h }, altText: image.alt });
     return;
   }
   if (placement.pads) slide.addShape(pptx.ShapeType.rect, { x: frame.x, y: frame.y, w: frame.w, h: frame.h, fill: { color: ground }, line: { color: ground, width: 0 } });
-  slide.addImage({ data: image.data, x: placement.box.x, y: placement.box.y, w: placement.box.w, h: placement.box.h });
+  slide.addImage({ data: image.data, x: placement.box.x, y: placement.box.y, w: placement.box.w, h: placement.box.h, altText: image.alt });
 }
 
 /**
@@ -206,7 +207,7 @@ function drawBars(pptx: PptxGenJS, slide: PptxGenJS.Slide, chrome: Chrome, cover
     // The boxes never collide (§4): the brand line to 3.9 in, the CTA from 4.0 to 8.8, the logo from 9.0.
     slide.addText(chrome.company, { x: 0.4, y: bandY, w: 3.5, h: 0.3, fontSize: 9, color: chrome.muted, fontFace: chrome.body, valign: "middle" });
     // The logo whole at its own ratio inside its box, never stretched; a small one at its own size.
-    if (chrome.logo) slide.addImage({ data: chrome.logo.data, x: chrome.logo.placement.box.x, y: chrome.logo.placement.box.y, w: chrome.logo.placement.box.w, h: chrome.logo.placement.box.h });
+    if (chrome.logo) slide.addImage({ data: chrome.logo.data, x: chrome.logo.placement.box.x, y: chrome.logo.placement.box.y, w: chrome.logo.placement.box.w, h: chrome.logo.placement.box.h, altText: `${chrome.company} logo` });
   }
   if (chrome.ctaBar && chrome.ctaFooter) {
     // Footer text is muted (§4: the accent at 10pt failed contrast on the surface); the accent stays on the rule.

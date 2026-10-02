@@ -106,10 +106,64 @@ export function brandKitProblems(kit: BrandKitInput): string[] {
 export function brandKitWarnings(kit: Pick<BrandKitInput, "ground" | "accent" | "inverseGround">): string[] {
   const out: string[] = [];
   const onGround = contrastRatio(kit.ground, kit.accent);
-  if (onGround < MIN_CONTRAST) out.push(`accent on ground is ${onGround}:1: fine for a rule or a large word, under ${MIN_CONTRAST}:1 for text.`);
+  if (onGround < MIN_CONTRAST) out.push(`accent on ground is ${onGround}:1: too light for small text, so the deck uses it for rules and buttons only, never for words.`);
   if (normaliseHex(kit.inverseGround)) {
     const onInverse = contrastRatio(kit.inverseGround!, kit.accent);
     if (onInverse < MIN_CONTRAST) out.push(`accent on inverseGround is ${onInverse}:1: not for text on a full-bleed slide.`);
+  }
+  return out;
+}
+
+/**
+ * A text colour moved until it reads at `min` on its ground (§6.1, the check that proposes a fix): stepped toward black on a
+ * light ground, toward white on a dark one, two per cent at a time, the first step that reads. The colour given back when it
+ * already reads; null when either is not a colour.
+ */
+export function fixContrast(fg: string, bg: string, min = MIN_CONTRAST): string | null {
+  const f = normaliseHex(fg);
+  const b = normaliseHex(bg);
+  if (!isHex(f) || !isHex(b)) return null;
+  if (contrastRatio(f, b) >= min) return f;
+  const towardBlack = contrastRatio("000000", b) >= contrastRatio("FFFFFF", b);
+  const rgb = [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16));
+  for (let t = 0.02; t <= 1.0001; t += 0.02) {
+    const hex = rgb
+      .map((v) => Math.round(towardBlack ? v * (1 - t) : v + (255 - v) * t))
+      .map((v) => Math.min(255, Math.max(0, v)).toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase();
+    if (contrastRatio(hex, b) >= min) return hex;
+  }
+  return towardBlack ? "000000" : "FFFFFF";
+}
+
+export type KitProposal = { text: string; field?: "ink" | "muted" | "inverseInk"; value?: string };
+
+/**
+ * What the kit editor says as the colours are typed (§6.1): a text pair under the floor names the ratio and proposes the
+ * nearest colour that reads, with the field it goes in; an accent under the floor is not refused but explained, since the deck
+ * never sets words in it. Pure, so the browser and the server say the same thing.
+ */
+export function kitProposals(kit: Pick<BrandKitInput, "ground" | "ink" | "accent" | "muted" | "inverseGround" | "inverseInk">): KitProposal[] {
+  const out: KitProposal[] = [];
+  const pairs: [KitProposal["field"] & string, "ground" | "inverseGround"][] = [["ink", "ground"], ["muted", "ground"], ["inverseInk", "inverseGround"]];
+  for (const [fgRole, bgRole] of pairs) {
+    const fg = normaliseHex(kit[fgRole]);
+    const bg = normaliseHex(kit[bgRole]);
+    if (!isHex(fg) || !isHex(bg)) continue;
+    const ratio = contrastRatio(bg, fg);
+    if (ratio >= MIN_CONTRAST) continue;
+    const fix = fixContrast(fg, bg);
+    out.push({ text: `${fgRole} on ${bgRole} is ${ratio}:1 and needs ${MIN_CONTRAST}:1 to read on a slide. Try ${fix} for ${fgRole}.`, field: fgRole, value: fix ?? undefined });
+  }
+  const ground = normaliseHex(kit.ground);
+  const accent = normaliseHex(kit.accent);
+  if (isHex(ground) && isHex(accent) && contrastRatio(ground, accent) < MIN_CONTRAST) {
+    out.push({ text: `Your accent is too light for small text (${contrastRatio(ground, accent)}:1 on your ground); the deck uses it for rules and buttons only, never for words.` });
+  }
+  const inverse = normaliseHex(kit.inverseGround);
+  if (isHex(inverse) && isHex(accent) && contrastRatio(inverse, accent) < MIN_CONTRAST) {
+    out.push({ text: `On full-bleed slides your accent is ${contrastRatio(inverse, accent)}:1 against inverseGround: rules only there, never words.` });
   }
   return out;
 }

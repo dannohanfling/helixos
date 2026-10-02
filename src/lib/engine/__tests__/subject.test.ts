@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brandKitProblems, brandKitWarnings, contrastRatio, fillRuntime, knownReferences, nameMismatch } from "../subject";
+import { brandKitProblems, brandKitWarnings, contrastRatio, fillRuntime, fixContrast, kitProposals, knownReferences, nameMismatch } from "../subject";
 
 describe("the subject: what still resolves, who presents, what the brand allows", () => {
   it("builds every known id in one place: approved proofs only, bank and Essence stories, own and shared studies, offers", () => {
@@ -51,7 +51,37 @@ describe("the subject: what still resolves, who presents, what the brand allows"
     expect(brandKitProblems({ ...turas, inverseGround: "000000" })).toEqual(["inverseGround is 000000, which this brand bans."]);
     // Heartfire Red reads on Clarity White; on Grounded Taupe it is the 1.24:1 eyebrow a human once caught on a render
     expect(brandKitWarnings(turas)).toEqual(["accent on inverseGround is 1.24:1: not for text on a full-bleed slide."]);
-    expect(brandKitWarnings({ ground: "FAF8F5", accent: "F2A4A4", inverseGround: null })).toEqual(["accent on ground is 1.87:1: fine for a rule or a large word, under 4.5:1 for text."]);
+    expect(brandKitWarnings({ ground: "FAF8F5", accent: "F2A4A4", inverseGround: null })).toEqual(["accent on ground is 1.87:1: too light for small text, so the deck uses it for rules and buttons only, never for words."]);
     expect(brandKitWarnings({ ground: "FFFFFF", accent: "000000", inverseGround: null })).toEqual([]);
   });
 });
+
+describe("§6.1: the contrast check proposes a fix", () => {
+  it("moves a text colour toward black on a light ground until it reads, and gives a reading colour back as it is", () => {
+    const fixed = fixContrast("9CA3AF", "FAF8F5")!;
+    expect(contrastRatio(fixed, "FAF8F5")).toBeGreaterThanOrEqual(4.5);
+    expect(fixed < "9CA3AF").toBe(true); // darker
+    expect(fixContrast("6E6256", "FAF8F5")).toBe("6E6256");
+    expect(fixContrast("not", "FAF8F5")).toBeNull();
+  });
+
+  it("moves toward white on a dark ground", () => {
+    const fixed = fixContrast("555555", "111111")!;
+    expect(contrastRatio(fixed, "111111")).toBeGreaterThanOrEqual(4.5);
+    expect(parseInt(fixed.slice(0, 2), 16)).toBeGreaterThan(0x55);
+  });
+
+  it("names the pair, the ratio and the colour to try, with the field it goes in; an accent is explained, never refused", () => {
+    const out = kitProposals({ ground: "FAF8F5", ink: "9CA3AF", accent: "F2A4A4", muted: "4B5563", inverseGround: null, inverseInk: null });
+    expect(out[0].field).toBe("ink");
+    expect(out[0].text).toMatch(/^ink on ground is 2\.4:1 and needs 4\.5:1 to read on a slide\. Try [0-9A-F]{6} for ink\.$/);
+    expect(out[0].value).toBe(fixContrast("9CA3AF", "FAF8F5"));
+    expect(out[1].field).toBeUndefined();
+    expect(out[1].text).toMatch(/^Your accent is too light for small text \(.*:1 on your ground\); the deck uses it for rules and buttons only, never for words\.$/);
+    expect(kitProposals({ ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", inverseGround: "6E6256", inverseInk: "FAF8F5" })).toEqual([
+      { text: "On full-bleed slides your accent is 1.24:1 against inverseGround: rules only there, never words." },
+    ]);
+    expect(kitProposals({ ground: "FFFFFF", ink: "111111", accent: "000000", muted: "444444", inverseGround: "", inverseInk: "" })).toEqual([]);
+  });
+});
+

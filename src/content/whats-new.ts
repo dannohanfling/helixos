@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 53,
+    date: "2026-10-02",
+    title: "A brand kit you can fill in, with a preview",
+    lines: [
+      "On Settings, the brand kit's colours are pickers with the hex still there to edit; the faces come from a list (the faces most machines have, plus Google's), or \"Other (licensed font)\" typed by name with one line saying who will not see it; the logo can be uploaded right there and is picked at once.",
+      "A preview of a cover, a content slide, a moment slide and the footer band draws itself from the kit as you type, and marks a slide whose text cannot read. A colour pair under the floor now proposes a colour to try, with Apply, instead of only refusing; an accent too light for small text is explained: the deck uses it for rules and buttons, never words.",
+      "In the exported file, every picture's alt text is your caption, or the slot's own instruction when there is no caption.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 51,
     date: "2026-10-02",
     title: "Images: no people in this, graphics and diagrams, shown whole",

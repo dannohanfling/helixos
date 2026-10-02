@@ -8,6 +8,7 @@ import { formatDateTime } from "@/lib/dates";
 import { setCoachCanWorkAction } from "@/lib/actions/switch";
 import { rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
+import { BrandKitEditor } from "@/components/brand-kit-editor";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
@@ -402,44 +403,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               ) : null}
               {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
               <form action={saveBrandKitAction} className="grid gap-3 sm:grid-cols-2" data-testid="brand-form">
-                <div className="sm:col-span-2">
-                  <Field label="Name">
-                    <input className="field" name="name" defaultValue={brandKit?.name ?? ""} placeholder="Turas — True North" />
-                  </Field>
-                </div>
-                {(["ground", "ink", "accent", "muted", "surface"] as const).map((role) => (
-                  <Field key={role} label={role} hint={role === "ground" ? "page background" : role === "ink" ? "headline and body text" : role === "accent" ? "emphasis and calls to action only" : role === "muted" ? "secondary text" : "panels, the alternate ground"}>
-                    <input className="field font-mono" name={role} defaultValue={brandKit?.[role] ?? ""} maxLength={7} />
-                  </Field>
-                ))}
-                <Field label="inverseGround" hint="full-bleed slides, optional">
-                  <input className="field font-mono" name="inverseGround" defaultValue={brandKit?.inverseGround ?? ""} maxLength={7} />
-                </Field>
-                <Field label="inverseInk" hint="text on inverseGround, optional">
-                  <input className="field font-mono" name="inverseInk" defaultValue={brandKit?.inverseInk ?? ""} maxLength={7} />
-                </Field>
-                <Field label="Display face" hint="headlines">
-                  <input className="field" name="displayFont" defaultValue={brandKit?.displayFont ?? ""} />
-                </Field>
-                <Field label="Body face">
-                  <input className="field" name="bodyFont" defaultValue={brandKit?.bodyFont ?? ""} />
-                </Field>
-                <Field label="Quote face" hint="pull quotes, optional">
-                  <input className="field" name="quoteFont" defaultValue={brandKit?.quoteFont ?? ""} />
-                </Field>
-                <Field label="Fallback face" hint="what the file names when a brand face is missing on the reader's machine; a licensed face needs one. It is also the file's theme font, so text a reader adds in PowerPoint takes it.">
-                  <input className="field" name="fontFallback" defaultValue={brandKit?.fontFallback ?? "Arial"} />
-                </Field>
-                <Field label="Logo" hint="from your Images library (kind Logo): on the cover and in the footer bar. None means the kit's name set as type.">
-                  <select className="field" name="logoImageId" defaultValue={brandKit?.logoImageId ?? ""} data-testid="brand-logo">
-                    <option value="">No logo</option>
-                    {logos.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.caption ? l.caption : "Logo"} · {l.width}×{l.height}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <BrandKitEditor
+                  kit={{
+                    name: brandKit?.name ?? "",
+                    ground: brandKit?.ground ?? "",
+                    ink: brandKit?.ink ?? "",
+                    accent: brandKit?.accent ?? "",
+                    muted: brandKit?.muted ?? "",
+                    surface: brandKit?.surface ?? "",
+                    inverseGround: brandKit?.inverseGround ?? "",
+                    inverseInk: brandKit?.inverseInk ?? "",
+                    displayFont: brandKit?.displayFont ?? "",
+                    bodyFont: brandKit?.bodyFont ?? "",
+                    quoteFont: brandKit?.quoteFont ?? "",
+                    fontFallback: brandKit?.fontFallback ?? "Arial",
+                    logoImageId: brandKit?.logoImageId ?? "",
+                  }}
+                  logos={logos.map((l) => ({ id: l.id, caption: l.caption, width: l.width, height: l.height }))}
+                  workspaceId={v.workspace.id}
+                  userId={v.user.id}
+                />
                 <Field label="Banned colours" hint="hex, comma-separated: a kit using one is refused">
                   <input className="field font-mono" name="bannedColors" defaultValue={brandKit?.bannedColors?.join(", ") ?? ""} />
                 </Field>

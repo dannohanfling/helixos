@@ -1,3 +1,4 @@
+import { pictureAltText } from "../deck-slot";
 import { describe, expect, it } from "vitest";
 import { COVER_WHAT, MAX_SLOT_RUN, STORY_WHAT, figurePhrase, originWhat, slotForLine, spreadSlots } from "../deck-slot-rules";
 
@@ -43,3 +44,12 @@ describe("which picture a slide asks for, read off its words (deck visuals §3)"
     expect(longest).toBe(2);
   });
 });
+
+describe("§6.8: a picture's alt text", () => {
+  it("is the coach's caption, else the slot's own instruction, never a file name", () => {
+    expect(pictureAltText("Me on stage", "A photo of you on stage or on a call.")).toBe("Me on stage");
+    expect(pictureAltText("  ", "A photo of you on stage or on a call.")).toBe("A photo of you on stage or on a call.");
+    expect(pictureAltText(null, "A screenshot with “602 comments on my post” circled.")).toBe("A screenshot with “602 comments on my post” circled.");
+  });
+});
+

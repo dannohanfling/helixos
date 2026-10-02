@@ -71,20 +71,47 @@ async function main() {
     await page.goto(`${base}/settings`);
     await page.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
     const kit: Record<string, string> = { name: "Turas — True North", ground: "FAF8F5", ink: "9CA3AF", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: "000000", placeholder: "FFF3A3", aliases: "Turas" };
-    for (const [k, v] of Object.entries(kit)) await page.fill(`[data-testid="brand-form"] input[name="${k}"]`, v);
+    // §6.1: a face comes from the list, or from "Other (licensed font)" typed by name; the colours keep their hex inputs.
+    const FONT_KEYS = ["displayFont", "bodyFont", "quoteFont", "fontFallback"];
+    for (const [k, v] of Object.entries(kit)) {
+      if (!FONT_KEYS.includes(k)) {
+        await page.fill(`[data-testid="brand-form"] input[name="${k}"]`, v);
+        continue;
+      }
+      const select = page.locator(`[data-testid="brand-font-${k}"]`);
+      const listed = await select.locator(`option[value="${v}"]`).count();
+      if (listed) await select.selectOption(v);
+      else {
+        await select.selectOption("__other");
+        await page.fill(`[data-testid="brand-font-${k}-other"]`, v);
+      }
+    }
+    if ((await page.locator('[data-testid="brand-font-bodyFont-line"]').innerText()).trim() !== "People without this font installed will see Arial.") throw new Error("a licensed face says who will not see it");
+    if ((await page.locator('[data-testid="brand-font-displayFont-other"]').count()) !== 0) throw new Error("a listed face asks for no typed name");
+    // The preview draws the kit as typed, and the check proposes a fix for the pair that cannot read, before any save.
+    const coverStyle = (await page.locator('[data-testid="brand-preview-cover"]').getAttribute("style")) ?? "";
+    if (!/FAF8F5|250, 248, 245/i.test(coverStyle)) throw new Error(`the preview's cover takes the ground colour as typed: ${coverStyle}`);
+    const proposal = await page.locator('[data-testid="brand-proposals"]').innerText();
+    if (!/ink on ground is 2\.4:1 and needs 4\.5:1 to read on a slide\. Try [0-9A-F]{6} for ink\./.test(proposal) || !/full-bleed slides your accent is 1\.24:1 against inverseGround: rules only there/.test(proposal)) throw new Error(`the check proposes a fix before the save, got "${proposal}"`);
+    if (!/won't read/.test(await page.locator('[data-testid="brand-preview-cover"]').innerText())) throw new Error("the preview marks the slide whose text cannot read");
     await submit(page, '[data-testid="brand-form"] button[type="submit"]');
     const refused = await page.locator('[data-testid="brand-refused"]').innerText();
     if (!/ink on ground is 2\.4:1; it needs 4\.5:1/.test(refused)) throw new Error(`the kit is refused with the pair named, got "${refused}"`);
+    // Apply takes the proposed ink; the walk then types the brand's own brown, as a client who knows theirs would.
+    await page.click('[data-testid="brand-apply-ink"]');
+    const applied = await page.locator('[data-testid="brand-form"] input[name="ink"]').inputValue();
+    if (!/^[0-9A-F]{6}$/.test(applied) || applied === "9CA3AF" || (await page.locator('[data-testid="brand-apply-ink"]').count()) !== 0) throw new Error(`Apply puts the proposed colour in the field and the proposal goes: ${applied}`);
     await page.fill('[data-testid="brand-form"] input[name="ink"]', "6E6256");
     await submit(page, '[data-testid="brand-form"] button[type="submit"]');
     await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
     if ((await page.locator('[data-testid="brand-form"] input[name="ink"]').inputValue()) !== "6E6256") throw new Error("the saved kit is read back");
+    if ((await page.locator('[data-testid="brand-font-bodyFont"]').inputValue()) !== "__other" || (await page.locator('[data-testid="brand-font-bodyFont-other"]').inputValue()) !== "Helvetica Now Display" || (await page.locator('[data-testid="brand-font-displayFont"]').inputValue()) !== "Red Hat Display") throw new Error("the saved faces are read back: a listed one in the list, a licensed one under Other");
     await expectText(page, "ink on ground", "the contrast is shown beside the kit");
     // The accent pairs warn beside the saved kit, with the ratio: the Turas red cannot carry text on the brown
     const warnings = await page.locator('[data-testid="brand-warnings"]').innerText();
     if (!/accent on inverseGround is 1\.24:1/.test(warnings)) throw new Error(`the accent pair warns with the ratio, got "${warnings}"`);
     if ((await page.locator('[data-testid="brand-aliases"]').inputValue()) !== "Turas") throw new Error("the permitted name is read back");
-    console.log("✓ brand kit: ash grey on cream refused with the ratio named; the Turas kit saved and read back; the accent pair warns with its ratio");
+    console.log("✓ brand kit (§6.1): faces from the list or typed under Other with the who-will-not-see line; the preview draws the kit as typed and marks the slide that cannot read; the check proposes an ink with Apply; ash grey on cream still refused on the server with the ratio; the Turas kit saved and read back; the accent pair warns with its ratio");
     await page.goto(`${base}/coach`);
     await page.locator('[data-testid="client-link"]', { hasText: "Maya" }).first().click();
     await page.waitForURL(new RegExp(`/coach/${mm.id}$`));

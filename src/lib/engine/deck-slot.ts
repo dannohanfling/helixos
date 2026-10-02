@@ -2,7 +2,10 @@ import type { DeckImageKind } from "@/db/schema";
 import type { Slot } from "./deck";
 
 /** A picture ready to place on a slide: a private-store URL the render reads back, with the type, size and kind it was stored as. The kind decides its fit (a photo covers its frame; a screenshot, proof, logo, graphic or diagram is contained whole). */
-export type SlotImage = { url: string; mime: string; width: number; height: number; source: "library" | "proof"; kind: DeckImageKind | "proof" };
+export type SlotImage = { url: string; mime: string; width: number; height: number; source: "library" | "proof"; kind: DeckImageKind | "proof"; /** The coach's caption, the picture's alt text in the file (§6.8). */ caption?: string | null };
+
+/** A picture's alt text in the file (§6.8): the coach's caption, else the slot's own instruction; never a file name. */
+export const pictureAltText = (caption: string | null | undefined, what: string): string => caption?.trim() || what;
 
 /**
  * What the resolver has already loaded for one slot: the coach's chosen library image (for a photo, screenshot, diagram, and

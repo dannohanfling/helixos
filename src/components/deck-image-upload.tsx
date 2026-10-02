@@ -25,9 +25,9 @@ const extFromMime: Record<string, string> = { "image/png": "png", "image/jpeg": 
  * name, email or number hidden, with who is in it (the same tick the proof store already asks for, stored with who and when), or
  * say that no people are in it (a logo, a chart), which satisfies the field on its own.
  */
-export function DeckImageUpload({ workspaceId, userId }: { workspaceId: string; userId: string }) {
+export function DeckImageUpload({ workspaceId, userId, fixedKind, onRecorded, compact }: { workspaceId: string; userId: string; /** One kind only (the kit's logo upload, §6.1): no kind select, and the kind stays after a send. */ fixedKind?: DeckImageKind; /** Told the new row, so a picker beside this can select it at once. */ onRecorded?: (image: { id: string; caption: string }) => void; compact?: boolean }) {
   const [file, setFile] = useState<File | null>(null);
-  const [kind, setKind] = useState<DeckImageKind>("photo");
+  const [kind, setKind] = useState<DeckImageKind>(fixedKind ?? "photo");
   const [caption, setCaption] = useState("");
   const [consentTick, setConsentTick] = useState(false);
   const [consentName, setConsentName] = useState("");
@@ -59,9 +59,10 @@ export function DeckImageUpload({ workspaceId, userId }: { workspaceId: string; 
         const blob = await upload(key, file, { access: "private", contentType: sniffed.mime, handleUploadUrl: "/api/deck-images/upload", onUploadProgress: (p) => setProgress(p.percentage) });
         const r = await recordDeckImageAction({ key: blob.pathname, kind, caption, consentTick, consentName, noPeople });
         if (!r.ok) return setError(r.error);
+        onRecorded?.({ id: r.id, caption: caption.trim() });
         pick(null);
         setCaption("");
-        setKind("photo");
+        setKind(fixedKind ?? "photo");
         router.refresh();
       } catch (e) {
         console.error("[deck-image-upload]", redactUrls(e instanceof Error ? `${e.name}: ${e.message}` : String(e)));
@@ -73,24 +74,26 @@ export function DeckImageUpload({ workspaceId, userId }: { workspaceId: string; 
   };
 
   return (
-    <div className="space-y-3 rounded-lg border border-line p-3" data-testid="deck-image-upload">
+    <div className={compact ? "space-y-2" : "space-y-3 rounded-lg border border-line p-3"} data-testid="deck-image-upload">
       <div className="flex flex-wrap items-center gap-2">
         <label className="btn btn-soft btn-sm cursor-pointer">
-          Choose an image
+          {fixedKind ? `Choose a ${fixedKind}` : "Choose an image"}
           <input type="file" className="sr-only" accept={DECK_IMAGE_MIME.join(",")} disabled={pending} data-testid="deck-image-file" onChange={(e) => pick(e.currentTarget.files?.[0] ?? null)} />
         </label>
         {file ? <span className="text-xs text-ink-2" data-testid="deck-image-name">{file.name}</span> : null}
       </div>
       {file ? (
         <div className="space-y-2">
-          <label className="block text-sm">
-            <span className="label">What is it?</span>
-            <select className="field" value={kind} disabled={pending} data-testid="deck-image-kind" onChange={(e) => setKind(e.currentTarget.value as DeckImageKind)}>
-              {DECK_IMAGE_KINDS.map((k) => (
-                <option key={k} value={k}>{KIND_LABEL[k]}</option>
-              ))}
-            </select>
-          </label>
+          {fixedKind ? null : (
+            <label className="block text-sm">
+              <span className="label">What is it?</span>
+              <select className="field" value={kind} disabled={pending} data-testid="deck-image-kind" onChange={(e) => setKind(e.currentTarget.value as DeckImageKind)}>
+                {DECK_IMAGE_KINDS.map((k) => (
+                  <option key={k} value={k}>{KIND_LABEL[k]}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block text-sm">
             <span className="label">Caption (optional)</span>
             <input className="field" value={caption} disabled={pending} data-testid="deck-image-caption" onChange={(e) => setCaption(e.currentTarget.value)} placeholder="So you can find it again" />

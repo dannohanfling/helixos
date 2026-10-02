@@ -46,7 +46,7 @@ export async function resolveDeckSlots(webinarId: string, deck: DeckResult, owne
     const proof = slot.proofId ? proofById.get(slot.proofId) : undefined;
     const photo = proof ? atts.find((a) => a.proofId === proof.id && a.kind === "image" && (!a.showsAPerson || a.consentRecordedAt)) : undefined;
     const { image, why } = pickSlotImage(slot, {
-      chosenImage: img ? { url: img.blobUrl, mime: img.mime, width: img.width, height: img.height, source: "library", kind: img.kind } : null,
+      chosenImage: img ? { url: img.blobUrl, mime: img.mime, width: img.width, height: img.height, source: "library", kind: img.kind, caption: img.caption } : null,
       proof: proof ? { name: proof.name, status: proof.status } : (slot.proofId ? null : undefined),
       // The display rendition (a HEIC's JPEG) when there is one, else the original with its own type: a PNG is not called a JPEG.
       proofPhoto: photo ? { url: photo.displayUrl ?? photo.blobUrl, mime: photo.displayUrl ? "image/jpeg" : photo.mime, width: photo.width ?? 0, height: photo.height ?? 0, source: "proof", kind: "proof" } : null,
