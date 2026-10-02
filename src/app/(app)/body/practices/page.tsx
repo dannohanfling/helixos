@@ -4,10 +4,11 @@ import { requireViewer } from "@/lib/auth";
 import { Card, Disclosure } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
-import { archiveHabitAction, logHabitAction, saveHabitAction } from "@/lib/actions/body";
+import { archiveHabitAction, deleteHabitAction, logHabitAction, restoreHabitAction, saveHabitAction } from "@/lib/actions/body";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { formatDate } from "@/lib/dates";
 import { DAY_LETTERS, DAY_NAMES, KIND_LABEL, STARTER_HABITS, fmtDays, fmtTarget, type Dot } from "@/lib/engine/body-habits";
-import { bodySettingsFor, habitsDay, habitsRange, requireBodyEnabled, type HabitsDayView } from "@/lib/queries/body";
+import { bodySettingsFor, habitsDay, habitsRange, requireBodyEnabled, type HabitsDayView, archivedHabits } from "@/lib/queries/body";
 import { StreakCalendar } from "@/components/charts";
 import { RangePicker } from "@/components/body/range-picker";
 import { isRangeKey, monthLabelFor, rangeBounds, rateText } from "@/lib/engine/body-range";
@@ -134,6 +135,7 @@ export default async function PracticesPage({ searchParams }: { searchParams: Pr
   if (!settings) redirect("/body");
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= v.today ? sp.date : v.today;
   const hd = await habitsDay(v.workspace.id, v.user.id, date, v.today);
+  const archived = await archivedHabits(v.workspace.id, v.user.id);
   const due = hd.habits.filter((h) => h.due);
   const rest = hd.habits.filter((h) => !h.due);
   const have = new Set(hd.habits.map((h) => h.name.toLowerCase()));
@@ -265,6 +267,37 @@ export default async function PracticesPage({ searchParams }: { searchParams: Pr
             ))}
           </ul>
         </Card>
+      ) : null}
+
+      {archived.length ? (
+        /* Archived (rev 386): collapsed, each with its archive date and logged days; Restore puts it back whole, Delete asks with the count and is only here. */
+        <details className="card mb-8 p-4 sm:p-5" data-testid="habits-archived" data-count={archived.length}>
+          <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide text-ink-2">Archived ({archived.length})</summary>
+          <ul className="mt-2 divide-y text-sm">
+            {archived.map((h) => (
+              <li key={h.id} className="flex flex-wrap items-center justify-between gap-2 py-2" data-testid="habit-archived" data-name={h.name} data-logged={h.loggedDays}>
+                <span className="min-w-0 break-words">
+                  <span className="font-medium">{h.name}</span>{" "}
+                  <span className="text-xs text-ink-3">
+                    archived {formatDate(h.archivedAt.slice(0, 10), { month: "short", day: "numeric" })} · {h.loggedDays} logged day{h.loggedDays === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <span className="flex gap-2">
+                  <form action={restoreHabitAction}>
+                    <input type="hidden" name="id" value={h.id} />
+                    <SubmitButton className="btn btn-soft btn-xs" pendingText="…" data-testid="habit-restore">
+                      Restore
+                    </SubmitButton>
+                  </form>
+                  <form action={deleteHabitAction}>
+                    <input type="hidden" name="id" value={h.id} />
+                    <ConfirmDelete what={`"${h.name}" and its ${h.loggedDays} logged day${h.loggedDays === 1 ? "" : "s"}`} className="btn btn-ghost btn-xs text-danger" testId="habit-delete" />
+                  </form>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
     </>
   );

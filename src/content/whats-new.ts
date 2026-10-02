@@ -23,6 +23,16 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "coach",
   },
   {
+    n: 52,
+    date: "2026-10-02",
+    title: "Practices: archived habits can come back, or go for good",
+    lines: [
+      "Under Edit on Practices, \"Archived (n)\" lists the habits you archived, with when and how many days each was logged. Restore puts one back where it was, logs and streak intact.",
+      "Delete, only from that list, asks first (\"Delete \"Sauna\" and its 12 logged days?\") and then removes the habit and every log for good. Nothing active is one tap from gone.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 51,
     date: "2026-10-02",
     title: "Images: no people in this, graphics and diagrams, shown whole",

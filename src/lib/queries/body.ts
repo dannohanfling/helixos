@@ -1048,6 +1048,16 @@ export async function whoopStatus(workspaceId: string, userId: string) {
   return { connectedAt: d.connectedAt, lastSyncAt: d.lastSyncAt, lastError: d.lastError, known: !!d.providerUserId, maxHr: max?.value ?? null };
 }
 
+/** Archived habits, newest archive first, each with how many days it was logged: Practices' archived fold (Claude → Body, rev 386). */
+export async function archivedHabits(workspaceId: string, userId: string) {
+  const rows = (await habitsFor(workspaceId, userId, { archived: true })).filter((h) => h.archivedAt);
+  if (!rows.length) return [];
+  const logs = await db.query.bodyHabitLogs.findMany({ columns: { habitId: true }, where: and(and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId)), inArray(schema.bodyHabitLogs.habitId, rows.map((h) => h.id))) });
+  const n = new Map<string, number>();
+  for (const l of logs) n.set(l.habitId, (n.get(l.habitId) ?? 0) + 1);
+  return rows.map((h) => ({ ...h, archivedAt: h.archivedAt!, loggedDays: n.get(h.id) ?? 0 })).sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
+}
+
 /* ───────── B9: coach templates and the weekly check-in ───────── */
 
 /** The coach's own day types, meals and routines, as the "Send a template" card lists them. Null until the coach's own HumanOS is set up. */

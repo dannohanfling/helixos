@@ -1031,6 +1031,27 @@ export async function archiveHabitAction(formData: FormData): Promise<void> {
   redirect(PRACTICES);
 }
 
+/** Restore (rev 386): an archived habit comes back where it was, its logs and streak history untouched. */
+export async function restoreHabitAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await db.update(schema.bodyHabits).set({ archivedAt: null }).where(and(eq(schema.bodyHabits.id, str(formData, "id")), and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId))));
+  refresh();
+  redirect(PRACTICES);
+}
+
+/** Delete (rev 386): only an archived habit, from the archived fold, after the confirm that counts its logged days; the habit and every log go for good. */
+export async function deleteHabitAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const h = await db.query.bodyHabits.findFirst({ where: and(eq(schema.bodyHabits.id, str(formData, "id")), and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId))) });
+  if (!h || !h.archivedAt) back(PRACTICES, "Archive a habit before deleting it; nothing active is one tap from gone.");
+  await db.delete(schema.bodyHabitLogs).where(and(eq(schema.bodyHabitLogs.habitId, h!.id), and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId))));
+  await db.delete(schema.bodyHabits).where(eq(schema.bodyHabits.id, h!.id));
+  refresh();
+  redirect(PRACTICES);
+}
+
 /**
  * One tap: a done habit toggles (value 1, or the row removed); a measured one takes the number typed. Today or a past day, never
  * the future. Goes back where the chip was (Today or Practices).

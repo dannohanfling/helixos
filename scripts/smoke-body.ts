@@ -771,6 +771,30 @@ async function main() {
     await press(client, '[data-testid="today-habit"][data-name="Breathwork"]', async () => (await client.locator('[data-testid="today-habit"][data-name="Breathwork"]').getAttribute("data-kept")) === "1", "the chip tapped again");
     if ((await client.locator('[data-testid="today-habit"][data-name="Breathwork"] [data-testid="today-streak"]').getAttribute("data-kept")) !== "1") throw new Error("a kept habit's streak badge is marked kept");
     if (!/\/today/.test(client.url())) throw new Error("the chip comes back to Today");
+    // Archived habits (Claude → Body, rev 386): a starter added and kept once, archived; the fold lists it with its day; Restore brings it back
+    // whole; archived again, Delete asks with the count and removes the habit and its log. Nothing active offers Delete.
+    await client.goto(`${base}/body/practices`);
+    await client.locator('[data-testid="habit-starter"][data-name="Stretching"]').waitFor({ timeout: 30000 });
+    await press(client, '[data-testid="habit-starter"][data-name="Stretching"]', async () => (await client.locator('[data-testid="habit"][data-name="Stretching"]').count()) > 0, "Stretching added");
+    await press(client, '[data-testid="habit"][data-name="Stretching"] [data-testid="habit-tap"]', async () => (await client.locator('[data-testid="habit"][data-name="Stretching"]').getAttribute("data-kept")) === "1", "Stretching kept once");
+    const stretch = (await db.query.bodyHabits.findMany({ where: mine(schema.bodyHabits) })).find((h) => h.name === "Stretching")!;
+    if (await client.locator('[data-testid="habit-delete"]').count()) throw new Error("no Delete on an active habit");
+    if (await client.locator('[data-testid="habits-archived"]').count()) throw new Error("no archived fold while nothing is archived");
+    await client.locator("summary", { hasText: "Stretching" }).click();
+    await press(client, `form:has(input[name="id"][value="${stretch.id}"]) [data-testid="habit-archive"]`, async () => (await client.locator('[data-testid="habit"][data-name="Stretching"]').count()) === 0 && (await client.locator('[data-testid="habits-archived"]').count()) > 0, "Stretching archived");
+    const archivedRow = client.locator('[data-testid="habit-archived"][data-name="Stretching"]');
+    if ((await client.locator('[data-testid="habits-archived"] > summary').textContent())?.trim() !== "Archived (1)" || (await archivedRow.getAttribute("data-logged")) !== "1" || !(await archivedRow.textContent())?.includes("1 logged day")) throw new Error("the fold lists the archived habit with its one logged day");
+    await client.locator('[data-testid="habits-archived"] > summary').click();
+    await press(client, '[data-testid="habit-archived"][data-name="Stretching"] [data-testid="habit-restore"]', async () => (await client.locator('[data-testid="habit"][data-name="Stretching"]').count()) > 0 && (await client.locator('[data-testid="habits-archived"]').count()) === 0, "Stretching restored");
+    if ((await client.locator('[data-testid="habit"][data-name="Stretching"]').getAttribute("data-kept")) !== "1" || (await db.query.bodyHabitLogs.findMany({ where: eq(schema.bodyHabitLogs.habitId, stretch.id) })).length !== 1) throw new Error("a restored habit keeps its log and its kept mark");
+    await client.locator("summary", { hasText: "Stretching" }).click();
+    await press(client, `form:has(input[name="id"][value="${stretch.id}"]) [data-testid="habit-archive"]`, async () => (await client.locator('[data-testid="habits-archived"]').count()) > 0, "Stretching archived again");
+    await client.locator('[data-testid="habits-archived"] > summary').click();
+    await client.locator('[data-testid="habit-archived"][data-name="Stretching"] [data-testid="habit-delete"]').click();
+    if ((await client.locator('dialog[open] [data-testid="confirm-delete-question"]').textContent())?.trim() !== 'Delete "Stretching" and its 1 logged day?') throw new Error(`the confirm counts the logged days: "${await client.locator('dialog[open] [data-testid="confirm-delete-question"]').textContent()}"`);
+    await press(client, 'dialog[open] [data-testid="confirm-delete-yes"]', async () => (await client.locator('[data-testid="habits-archived"]').count()) === 0 && (await client.locator('[data-testid="habit"][data-name="Stretching"]').count()) === 0, "Stretching deleted");
+    if ((await db.query.bodyHabits.findMany({ where: mine(schema.bodyHabits) })).some((h) => h.id === stretch.id) || (await db.query.bodyHabitLogs.findMany({ where: eq(schema.bodyHabitLogs.habitId, stretch.id) })).length) throw new Error("Delete removes the habit and every log for good");
+    console.log("✓ archived habits: the fold lists an archived habit with its logged day, Restore brings it back whole, Delete asks with the count and removes it and its log; Delete is offered only there");
     // Sleep: last night, then an earlier night, then last night logged again replaces it.
     await client.goto(`${base}/body/sleep`);
     await client.locator('[data-testid="sleep-form"]').waitFor({ timeout: 30000 });
