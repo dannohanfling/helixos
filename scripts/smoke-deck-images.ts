@@ -264,6 +264,15 @@ async function main() {
     if (Number(await summaryEl.getAttribute("data-overflow")) !== flagged || Number(await summaryEl.getAttribute("data-empty")) < 1) throw new Error("the summary counts what the thumbnails mark");
     console.log(`✓ §6.4: ${thumbCount} thumbnails drawn from the plan; the empty cover marked with its placeholder; the title box matches the file's; ${flagged} slides measured over their box in the browser`);
 
+    // ── §6.5: the check before download reads the same counts, the overflow from the thumbnails' measure, and holds the download. ──
+    const check = page.locator('[data-testid="deck-check"]');
+    for (let i = 0; i < 50 && (await check.getAttribute("data-overflow")) === ""; i++) await page.waitForTimeout(100);
+    const got = { empty: Number(await check.getAttribute("data-empty")), overflow: Number(await check.getAttribute("data-overflow")), logo: Number(await check.getAttribute("data-logo-missing")), face: Number(await check.getAttribute("data-face")), placeholders: Number(await check.getAttribute("data-placeholders")), total: Number(await check.getAttribute("data-total")) };
+    if (got.empty !== 1 || got.overflow !== flagged || got.logo !== 0 || got.face !== 0 || got.total !== got.empty + got.overflow + got.logo + got.face + got.placeholders) throw new Error(`the check counts the empty slot, the measured overflow, the logo, the face and the placeholders: ${JSON.stringify(got)}`);
+    if (!(await check.locator('[data-testid="deck-check-line"]').innerText()).startsWith(`${got.total} thing`) || !(await check.locator('[data-testid="deck-check-empty"]').innerText()).includes("1 empty picture slot")) throw new Error("the panel says how many things to look at and names them");
+    if (!(await check.locator('[data-testid="deck-pptx"]').count())) throw new Error("Download .pptx sits inside the panel, under the count");
+    console.log(`✓ §6.5: the check before download: ${got.total} to look at (${got.empty} empty slot, ${got.overflow} over, ${got.placeholders} placeholders), the download under it`);
+
     // ── §6.3: "Pictures to gather" on Foundation: the cover's photo missing, the logo in (1 of 2). "I don't have this" drops the
     //    cover slot: the count falls to 1 of 1, the Deck step says so, the export carries no placeholder on the cover, and Today's
     //    action goes; Put back returns the slot, the placeholder and the Today action. ──
@@ -313,6 +322,7 @@ async function main() {
     await coverThumbFilled.locator('[data-testid="deck-thumb-picture"]').waitFor({ timeout: 20000 });
     if ((await coverThumbFilled.getAttribute("data-empty")) !== "0" || (await coverThumbFilled.locator('[data-testid="deck-thumb-picture"]').getAttribute("src")) !== `/api/deck-images/${photos[0].id}`) throw new Error("the filled cover's thumbnail shows the library picture through the app's route");
     console.log("✓ §6.4: the filled cover's thumbnail shows the picture and loses its empty mark");
+    if ((await page.locator('[data-testid="deck-check"]').getAttribute("data-empty")) !== "0") throw new Error("the check's empty count falls with the attach");
 
     // ── The .pptx: the picture inside its frame, no text box off the slide, no construction language in the notes. ──
     const res = await page.request.get(`${base}/api/webinars/${webinar.id}/deck?format=pptx`);

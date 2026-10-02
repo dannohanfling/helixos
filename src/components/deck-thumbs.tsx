@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { BoxGeometry, SlideGeometry, SlidePlan } from "@/lib/engine/deck";
 
 /** What one thumbnail needs, computed on the server from the same plan the export draws. */
@@ -42,7 +42,7 @@ const face = (name: string, fallback: string) => [name, fallback, "Arial", "sans
  * an empty slot or a deck with no logo is marked too. The thumbnail scales its type with its width, so a 300 px thumbnail and
  * a 600 px one show the same slide.
  */
-export function DeckThumbs({ slides, chrome, hasLogo }: { slides: ThumbSlide[]; chrome: ThumbChrome; hasLogo: boolean }) {
+export function DeckThumbs({ slides, chrome, hasLogo, onMeasured }: { slides: ThumbSlide[]; chrome: ThumbChrome; hasLogo: boolean; /** Told the number of slides whose text runs past its box, each time it is measured (§6.5). */ onMeasured?: (overflow: number) => void }) {
   const [overflow, setOverflow] = useState<Set<number>>(new Set());
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -52,6 +52,7 @@ export function DeckThumbs({ slides, chrome, hasLogo }: { slides: ThumbSlide[]; 
         if (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1) out.add(Number(el.dataset.measure));
       });
       setOverflow((prev) => (prev.size === out.size && [...prev].every((n) => out.has(n)) ? prev : out));
+      onMeasured?.(out.size);
     };
     measure();
     const t = setTimeout(measure, 600); // a web face arriving after first paint can change the measure
@@ -62,7 +63,7 @@ export function DeckThumbs({ slides, chrome, hasLogo }: { slides: ThumbSlide[]; 
       clearTimeout(t);
       ro?.disconnect();
     };
-  }, [slides]);
+  }, [slides, onMeasured]);
 
   const empty = slides.filter((s) => s.plan.placeholderSlot).map((s) => s.plan.n);
   const summary = [
@@ -171,3 +172,50 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
     </figure>
   );
 }
+
+/** What the server already knows before download (§6.5); the overflow count comes from the thumbnails' measure in the browser. */
+export type DeckCheckCounts = { emptySlots: number; placeholders: number; missingLogo: boolean; licensedNoFallback: number; dropped: number };
+
+/**
+ * The check before download (deck visuals brief §6.5): one panel above "Download .pptx" that counts what a client should look
+ * at first: empty picture slots, slides whose text runs past its box (measured on the thumbnails below, not guessed), a missing
+ * logo, a licensed face with no fallback, and unfilled [placeholders]. Nothing here blocks the download; it says what the file
+ * will carry. The download controls sit inside the panel so the count is read before the button.
+ */
+export function DeckCheck({ counts, slides, chrome, hasLogo, downloads }: { counts: DeckCheckCounts; slides: ThumbSlide[]; chrome: ThumbChrome; hasLogo: boolean; downloads: ReactNode }) {
+  const [overflow, setOverflow] = useState<number | null>(null);
+  const items: { key: string; n: number; text: string }[] = [
+    { key: "empty", n: counts.emptySlots, text: counts.emptySlots === 1 ? "1 empty picture slot: that slide exports with a red placeholder" : `${counts.emptySlots} empty picture slots: those slides export with red placeholders` },
+    { key: "overflow", n: overflow ?? 0, text: overflow === null ? "measuring the text against its boxes…" : overflow === 1 ? "1 slide with text past its box" : `${overflow} slides with text past their box` },
+    { key: "logo", n: counts.missingLogo ? 1 : 0, text: "no logo: the brand line stands as type on the cover and in the footer bar" },
+    { key: "face", n: counts.licensedNoFallback, text: "a licensed face with no fallback: readers without it will see their app's own substitute" },
+    { key: "placeholders", n: counts.placeholders, text: counts.placeholders === 1 ? "1 unfilled [placeholder] in the text" : `${counts.placeholders} unfilled [placeholders] in the text` },
+  ];
+  const open = items.filter((i) => i.n > 0);
+  const total = open.reduce((a, i) => a + i.n, 0);
+  return (
+    <div>
+      <div className={`mb-3 rounded-lg border p-3 ${total ? "border-warn bg-warn-soft" : "border-good bg-good-soft"}`} data-testid="deck-check" data-total={total} data-empty={counts.emptySlots} data-overflow={overflow ?? ""} data-logo-missing={counts.missingLogo ? 1 : 0} data-face={counts.licensedNoFallback} data-placeholders={counts.placeholders}>
+        <p className="text-sm font-semibold" data-testid="deck-check-line">
+          {overflow === null ? "Checking the slides…" : total === 0 ? "Nothing to fix before you download." : `${total} ${total === 1 ? "thing" : "things"} to look at before you download.`}
+        </p>
+        {open.length ? (
+          <ul className="mt-1 list-disc pl-5 text-sm text-ink-2">
+            {open.map((i) => (
+              <li key={i.key} data-testid={`deck-check-${i.key}`}>{i.text}</li>
+            ))}
+          </ul>
+        ) : null}
+        {counts.dropped ? <p className="mt-1 text-xs text-ink-3">{counts.dropped === 1 ? "1 picture you said you don't have exports as text, no placeholder." : `${counts.dropped} pictures you said you don't have export as text, no placeholder.`}</p> : null}
+        {downloads ? <div className="mt-2">{downloads}</div> : null}
+      </div>
+      <details className="mb-4" open data-testid="deck-thumbs">
+        <summary className="cursor-pointer text-sm font-semibold">See the slides as the file lays them out</summary>
+        <div className="mt-2">
+          <DeckThumbs slides={slides} chrome={chrome} hasLogo={hasLogo} onMeasured={setOverflow} />
+        </div>
+      </details>
+    </div>
+  );
+}
+

@@ -57,7 +57,8 @@ import { contextFor, presenterOf } from "@/lib/queries/webinar";
 import {HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry } from "@/lib/engine/deck";
 import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
 import { droppedSlides, filledSlides, resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
-import { DeckThumbs, type ThumbChrome, type ThumbSlide } from "@/components/deck-thumbs";
+import { DeckCheck, type ThumbChrome, type ThumbSlide } from "@/components/deck-thumbs";
+import { isListedFont } from "@/lib/engine/fonts";
 import { fitModeFor } from "@/lib/engine/deck-fit";
 import { shotCountLine, shotList } from "@/lib/engine/shot-list";
 import {clearDeckSlotAction, setDeckSlotAction, dropDeckSlotAction, restoreDeckSlotAction } from "@/lib/actions/deck-images";
@@ -1708,20 +1709,32 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
   return (
     <Card
       title={`9 · Deck · ${deck.slides.length} slides`}
-      action={
-        refused || held ? null : (
-          <span className="flex flex-wrap gap-2">
-            <a className="btn btn-primary btn-sm" href={`/api/webinars/${webinarId}/deck?format=pptx${query}`} download data-testid="deck-pptx">
-              Download .pptx
-            </a>
-            <a className="btn btn-ghost btn-sm" href={`/api/webinars/${webinarId}/deck?format=txt${query}`} download data-testid="deck-txt">
-              Outline (.txt)
-            </a>
-            <CopyButton text={md} label="Copy all" className="btn btn-ghost btn-sm" />
-          </span>
-        )
-      }
     >
+      <DeckCheck
+        counts={{
+          emptySlots: fallbacks.emptyCount,
+          placeholders: deck.placeholderCount,
+          missingLogo: !hasLogo,
+          licensedNoFallback: [deck.kit.displayFont, deck.kit.bodyFont, deck.kit.quoteFont ?? ""].some((f) => f.trim() && !isListedFont(f)) && !deck.kit.fontFallback.trim() ? 1 : 0,
+          dropped: fallbacks.droppedCount,
+        }}
+        slides={thumbs}
+        chrome={thumbChrome}
+        hasLogo={hasLogo}
+        downloads={
+          refused || held ? null : (
+            <span className="flex flex-wrap gap-2">
+              <a className="btn btn-primary btn-sm" href={`/api/webinars/${webinarId}/deck?format=pptx${query}`} download data-testid="deck-pptx">
+                Download .pptx
+              </a>
+              <a className="btn btn-ghost btn-sm" href={`/api/webinars/${webinarId}/deck?format=txt${query}`} download data-testid="deck-txt">
+                Outline (.txt)
+              </a>
+              <CopyButton text={md} label="Copy all" className="btn btn-ghost btn-sm" />
+            </span>
+          )
+        }
+      />
       {!refused && gate && held ? (
         <div className="mb-3">
           <GateBlock gate={gate} reviewHref={reviewHref} action={confirmDeckExportAction} fields={{ id: webinarId }} />
@@ -1818,12 +1831,6 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
           {deck.placeholderCount} unfilled [placeholder]{deck.placeholderCount === 1 ? "" : "s"} across the deck, each drawn in {deck.kit.placeholder ?? "FFF3A3"} so it cannot be missed.
         </p>
       ) : null}
-      <details className="mb-4" open data-testid="deck-thumbs">
-        <summary className="cursor-pointer text-sm font-semibold">See the slides as the file lays them out</summary>
-        <div className="mt-2">
-          <DeckThumbs slides={thumbs} chrome={thumbChrome} hasLogo={hasLogo} />
-        </div>
-      </details>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {deck.slides.map((s) => (
           <div key={s.n} className={`rounded-lg border p-3 text-sm ${s.inverse ? "bg-surface-2" : ""}`} data-testid="deck-slide" data-kind={s.kind} data-section={s.sectionKey ?? ""}>

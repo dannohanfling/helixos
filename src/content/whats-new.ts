@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 57,
+    date: "2026-10-02",
+    title: "A check before you download",
+    lines: [
+      "Above Download .pptx on the Deck step, one panel counts what to look at first: empty picture slots, slides with text past its box (measured on the thumbnails, not guessed), a missing logo, a licensed face with no fallback, and unfilled [placeholders]. Nothing here stops the download; it says what the file will carry.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 56,
     date: "2026-10-02",
     title: "See the slides before you download",
