@@ -102,7 +102,10 @@ export async function refreshAccounts(conn: SocialConnection): Promise<GhlResult
   }
   const accounts: SocialAccount[] = (r.data.results?.accounts ?? []).map((a) => ({ id: String(a.id ?? a._id ?? ""), name: a.name ?? "Account", platform: (a.platform ?? "").toLowerCase(), type: (a.type ?? "").toLowerCase(), isExpired: Boolean(a.isExpired), avatar: a.avatar ?? null })).filter((a) => a.id);
   const mapping = autoMap(accounts, conn.mapping);
-  await db.update(schema.socialConnections).set({ accounts, mapping, connectedAt: conn.connectedAt ?? nowIso(), lastSyncAt: nowIso(), lastError: null }).where(eq(schema.socialConnections.id, conn.id));
+  // The sub-account's name for the Connected card. A token without locations.readonly still connects: the name stays as it was.
+  const loc = await call<{ location?: { name?: unknown } }>(cred.data.base, cred.data.token, `/locations/${encodeURIComponent(conn.locationId)}`);
+  const locationName = loc.ok && typeof loc.data?.location?.name === "string" && loc.data.location.name.trim() ? loc.data.location.name.trim().slice(0, 200) : conn.locationName;
+  await db.update(schema.socialConnections).set({ accounts, mapping, locationName, connectedAt: conn.connectedAt ?? nowIso(), lastSyncAt: nowIso(), lastError: null }).where(eq(schema.socialConnections.id, conn.id));
   await logSync({ workspaceId: conn.workspaceId, userId: conn.userId, provider: "gohighlevel", direction: "out", event: "social.accounts", payload: { count: accounts.length }, status: "sent", note: `${accounts.length} connected accounts` });
   return { ok: true, data: accounts };
 }
@@ -294,7 +297,7 @@ export async function upsertConnection(input: { workspaceId: string; userId: str
     const changedLocation = existing.locationId !== input.locationId;
     await db
       .update(schema.socialConnections)
-      .set({ locationId: input.locationId, ghlUserId: input.ghlUserId, manualToken: token, ...(changedLocation ? { accounts: [], mapping: {}, connectedAt: null } : {}), lastError: null })
+      .set({ locationId: input.locationId, ghlUserId: input.ghlUserId, manualToken: token, ...(changedLocation ? { accounts: [], mapping: {}, locationName: null, connectedAt: null } : {}), lastError: null })
       .where(eq(schema.socialConnections.id, existing.id));
   } else {
     await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: input.workspaceId, userId: input.userId, provider: "gohighlevel", locationId: input.locationId, ghlUserId: input.ghlUserId, manualToken: token });

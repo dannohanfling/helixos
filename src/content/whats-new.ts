@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 69,
+    date: "2026-10-03",
+    title: "Every morning starts clean",
+    lines: [
+      "A new day's lock-in starts fresh: yesterday's Top 3 that you didn't finish loses its star, and it's offered first in the morning's picker under \"Still open from yesterday\", unticked, so you choose again.",
+      "Your Top 3 on Today is quieter: just the task, when it's due and its points, without the category.",
+      "Connecting GoHighLevel asks for one more permission, locations.readonly, and the green Connected line now shows your sub-account's name, so you can see which account is connected.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 68,
     date: "2026-10-03",
     title: "Tell your coach about an issue or an idea",

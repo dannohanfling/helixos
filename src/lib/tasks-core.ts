@@ -52,6 +52,35 @@ export async function addTask(v: Viewer, input: NewTask): Promise<{ task: schema
   return { task: (await db.query.tasks.findFirst({ where: eq(schema.tasks.id, id) }))!, created: true };
 }
 
+/**
+ * A fresh morning (rev 377, approved in rev 418): a focus task from an earlier day that is still open loses the star. Its
+ * urgency drops from Top 3 to high, and it stays "today" only if it is due today, else it goes back to upcoming (a task in
+ * progress keeps that). Its focus date stays, so the picker can offer it under "Still open from yesterday". Done tasks and
+ * points are never touched. Idempotent: once demoted it no longer matches. Never while a coach is switched in, so a look
+ * at a client's Today writes nothing to their tasks.
+ */
+export async function settleOldFocus(v: Viewer): Promise<number> {
+  if (v.switchedInto) return 0;
+  const stale = await db.query.tasks.findMany({
+    where: and(eq(schema.tasks.userId, v.user.id), eq(schema.tasks.workspaceId, v.workspace.id), ne(schema.tasks.status, "done"), eq(schema.tasks.urgency, "top3"), lt(schema.tasks.focusDate, v.today)),
+    columns: { id: true, status: true, dueDate: true },
+  });
+  for (const t of stale) {
+    const status = t.status === "today" && t.dueDate !== v.today ? "upcoming" : t.status === "upcoming" && t.dueDate === v.today ? "today" : t.status;
+    await db.update(schema.tasks).set({ urgency: "high", status }).where(and(eq(schema.tasks.id, t.id), eq(schema.tasks.userId, v.user.id), eq(schema.tasks.urgency, "top3")));
+  }
+  return stale.length;
+}
+
+/** The open focus tasks of the last day the member locked in, within the past week: offered first, unticked, in the next morning's picker. */
+export async function stillOpenFocus(v: Viewer): Promise<{ day: string; tasks: schema.Task[] } | null> {
+  const mine = and(eq(schema.tasks.userId, v.user.id), eq(schema.tasks.workspaceId, v.workspace.id), isNull(schema.tasks.reviewState), ne(schema.tasks.status, "done"));
+  const last = await db.query.tasks.findFirst({ where: and(mine, lt(schema.tasks.focusDate, v.today), gte(schema.tasks.focusDate, addDays(v.today, -7))), orderBy: desc(schema.tasks.focusDate), columns: { focusDate: true } });
+  if (!last?.focusDate) return null;
+  const tasks = await db.query.tasks.findMany({ where: and(mine, eq(schema.tasks.focusDate, last.focusDate)), orderBy: asc(schema.tasks.createdAt), limit: 6 });
+  return tasks.length ? { day: last.focusDate, tasks } : null;
+}
+
 /** One of the viewer's own tasks by id, or undefined. */
 export const ownTask = (v: Viewer, id: string) => db.query.tasks.findFirst({ where: and(eq(schema.tasks.id, id), eq(schema.tasks.userId, v.user.id)) });
 
@@ -112,6 +141,7 @@ export type TaskLists = { top3: schema.Task[]; dueToday: schema.Task[]; overdue:
 
 /** What Today and Tasks show: today's Top 3, the rest due today, overdue, the next seven days, and what was ticked today. */
 export async function taskLists(v: Viewer): Promise<TaskLists> {
+  await settleOldFocus(v);
   const userId = v.user.id;
   const mine = and(eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, v.workspace.id), inPlay);
   const [top3, due, overdue, upcoming, doneToday] = await Promise.all([

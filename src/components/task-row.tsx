@@ -15,7 +15,7 @@ const CATEGORY_ICON: Record<string, string> = { sales: "💬", content: "✍️"
  * control is disabled and marked busy until the server confirms, so a second tap can't fire the same action twice. On a
  * phone each control carries its word; the words hide only where a mouse can hover for the tooltip.
  */
-export function TaskRow({ task, today, compact = false, origin }: { task: Task; today: string; compact?: boolean; origin?: TaskOrigin }) {
+export function TaskRow({ task, today, compact = false, showCategory = true, origin }: { task: Task; today: string; compact?: boolean; showCategory?: boolean; origin?: TaskOrigin }) {
   const [pending, start] = useTransition();
   const [shown, setShown] = useOptimistic({ done: task.status === "done", focus: task.focusDate === today }, (state, next: Partial<{ done: boolean; focus: boolean }>) => ({ ...state, ...next }));
   const from = origin ? originLabel(origin.source, origin.date, (d) => formatDate(d)) : null;
@@ -54,10 +54,15 @@ export function TaskRow({ task, today, compact = false, origin }: { task: Task; 
         </div>
         {!compact && task.details ? <div className="mt-0.5 text-xs text-ink-2">{task.details}</div> : null}
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">
-          <span>{CATEGORY_ICON[task.category] ?? "•"} {task.category}</span>
-          {task.dueDate ? <span className={overdue ? "font-semibold text-danger" : ""}>· {relativeDay(task.dueDate, today)}</span> : null}
-          {task.repeatEveryDays ? <span>· repeats every {task.repeatEveryDays === 1 ? "day" : `${task.repeatEveryDays} days`}</span> : null}
-          <span>· +{task.points} pts</span>
+          {/* The Top 3 on Today goes without the category (rev 377): three tasks don't need sorting. */}
+          {showCategory ? (
+            <span data-testid="task-category">
+              {CATEGORY_ICON[task.category] ?? "•"} {task.category}
+            </span>
+          ) : null}
+          {task.dueDate ? <span className={overdue ? "font-semibold text-danger" : ""}>{showCategory ? "· " : ""}{relativeDay(task.dueDate, today)}</span> : null}
+          {task.repeatEveryDays ? <span>{showCategory || task.dueDate ? "· " : ""}repeats every {task.repeatEveryDays === 1 ? "day" : `${task.repeatEveryDays} days`}</span> : null}
+          <span>{showCategory || task.dueDate || task.repeatEveryDays ? "· " : ""}+{task.points} pts</span>
           {from ? (
             <span className="rounded-md bg-accent-soft px-1.5 py-0.5 font-medium text-accent-ink" data-testid="task-origin">
               📞 {from}

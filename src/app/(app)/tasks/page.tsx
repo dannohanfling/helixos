@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
+import { settleOldFocus } from "@/lib/tasks-core";
 import { NewTaskForm } from "@/components/new-task-form";
 import { TaskRow } from "@/components/task-row";
 import { taskOrigins } from "@/lib/queries/tasks";
@@ -15,6 +16,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const v = await requireViewer();
   const { filter = "open" } = await searchParams;
   const today = v.today;
+  await settleOldFocus(v);
   const open = await db.query.tasks.findMany({
     where: and(eq(schema.tasks.userId, v.user.id), ne(schema.tasks.status, "done"), isNull(schema.tasks.reviewState)),
     orderBy: [asc(schema.tasks.dueDate), asc(schema.tasks.createdAt)],

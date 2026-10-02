@@ -62,6 +62,16 @@ createServer((req, res) => {
       Object.assign(c, JSON.parse(Buffer.concat(chunks).toString() || "{}"), { updates: Number(c.updates ?? 0) + 1 });
       return json(200, { succeded: true, contact: { id: c.id } });
     }
+    const lm = url.match(/^\/locations\/([^/?]+)$/);
+    if (lm && req.method === "GET") {
+      // As the real endpoint (locations.readonly): the sub-account itself, its name among the rest. A location whose id says
+      // "noname" refuses it the way GoHighLevel refuses a token without the scope.
+      const loc = decodeURIComponent(lm[1]);
+      if (!token.startsWith("pit-")) return json(401, { message: "Invalid JWT" });
+      if (loc.includes("noname") || token === "pit-noscope") return json(403, { message: "The token does not have access to this scope: locations.readonly" });
+      if (token !== `pit-${loc}`) return json(404, { message: `Location not found: ${loc}` });
+      return json(200, { location: { id: loc, companyId: "co_mock", name: `${loc.replace(/^loc_/, "").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} Coaching`, timezone: "Australia/Sydney" } });
+    }
     const m = url.match(/^\/social-media-posting\/([^/]+)\/(accounts|posts)(?:\/([^/?]+))?/);
     if (!m) return json(404, { message: "Not found" });
     const [, loc, kind, id] = m;

@@ -13,7 +13,7 @@ import { PendingLink } from "@/components/pending-link";
 import { FIELD_TASKS } from "@/lib/engine/pathway";
 import { TaskRow } from "@/components/task-row";
 import { Badge, Card, Empty, Field, Progress } from "@/components/ui";
-import { formatDate, relativeDay } from "@/lib/dates";
+import { addDays, formatDate, relativeDay } from "@/lib/dates";
 import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { TIER_ICONS } from "@/lib/engine/tiers";
 import { shareFor } from "@/lib/community";
@@ -263,7 +263,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   {d.focusTasks.length ? (
                     <div className="-mx-2 divide-y">
                       {[...openFocus, ...doneFocus].map((t) => (
-                        <TaskRow key={t.id} task={t} today={v.today} compact origin={d.taskOrigins.get(t.id)} />
+                        <TaskRow key={t.id} task={t} today={v.today} compact showCategory={false} origin={d.taskOrigins.get(t.id)} />
                       ))}
                     </div>
                   ) : (
@@ -272,11 +272,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                 </div>
                 <details>
                   <summary className="text-xs text-ink-3 underline">Redo lock-in</summary>
-                  <LockInForm openTasks={d.openTasks} today={v.today} defaultIntention={d.log?.intention ?? ""} />
+                  <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention={d.log?.intention ?? ""} />
                 </details>
               </div>
             ) : (
-              <LockInForm openTasks={d.openTasks} today={v.today} defaultIntention="" />
+              <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention="" />
             )}
           </Card>
 
@@ -541,8 +541,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   );
 }
 
-function LockInForm({ openTasks, today, defaultIntention }: { openTasks: { id: string; title: string; focusDate: string | null; dueDate: string | null; urgency: string }[]; today: string; defaultIntention: string }) {
-  const candidates = openTasks.slice(0, 12);
+type PickTask = { id: string; title: string; focusDate: string | null; dueDate: string | null; urgency: string };
+
+function LockInForm({ openTasks, stillOpen, today, defaultIntention }: { openTasks: PickTask[]; stillOpen: { day: string; tasks: PickTask[] } | null; today: string; defaultIntention: string }) {
+  // The last lock-in day's unfinished Top 3 first, unticked, under its own line (rev 418); then the rest, as before.
+  const carried = stillOpen?.tasks ?? [];
+  const carriedIds = new Set(carried.map((t) => t.id));
+  const candidates = [...carried, ...openTasks.filter((t) => !carriedIds.has(t.id)).slice(0, 12)];
+  const carriedLabel = stillOpen ? (stillOpen.day === addDays(today, -1) ? "Still open from yesterday" : `Still open from ${formatDate(stillOpen.day, { weekday: "long" })}`) : null;
   return (
     <form action={morningCheckinAction} className="mt-2 space-y-4">
       <div>
@@ -565,6 +571,7 @@ function LockInForm({ openTasks, today, defaultIntention }: { openTasks: { id: s
       <Top3Picker
         candidates={candidates.map((t) => ({ id: t.id, title: t.title, late: Boolean(t.dueDate && t.dueDate < today) }))}
         initiallyChecked={candidates.filter((t) => t.focusDate === today).map((t) => t.id)}
+        carried={carriedLabel ? { label: carriedLabel, ids: [...carriedIds] } : undefined}
       />
       <SubmitButton className="btn btn-accent" pendingText="Locking in…">
         Lock it in · +10

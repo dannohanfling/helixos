@@ -11,7 +11,7 @@ export const TOP3 = 3;
  * task for today, ticked while fewer than three are, and clears the box for the next one; one tap takes an added one back.
  * Only three can be ticked: past the third, a new task goes in unticked with a quiet line. The ticks are what Lock it in sends.
  */
-export function Top3Picker({ candidates, initiallyChecked }: { candidates: Item[]; initiallyChecked: string[] }) {
+export function Top3Picker({ candidates, initiallyChecked, carried }: { candidates: Item[]; initiallyChecked: string[]; carried?: { label: string; ids: string[] } }) {
   const [items, setItems] = useState<Item[]>(candidates);
   const [checked, setChecked] = useState<string[]>(initiallyChecked.slice(0, TOP3));
   const [text, setText] = useState("");
@@ -51,22 +51,36 @@ export function Top3Picker({ candidates, initiallyChecked }: { candidates: Item[
     });
   };
 
+  const row = (t: Item) => (
+    <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent-soft" data-testid="top3-item" data-added={t.added ? "yes" : "no"}>
+      <input type="checkbox" name="focus" value={t.id} checked={checked.includes(t.id)} onChange={(e) => toggle(t.id, e.target.checked)} />
+      <span className="truncate">{t.title}</span>
+      {t.late ? <span className="ml-auto shrink-0 text-[10px] font-semibold text-danger">late</span> : null}
+      {t.added ? (
+        <button type="button" className={`${t.late ? "" : "ml-auto"} shrink-0 rounded px-1 text-ink-3 hover:text-danger`} aria-label={`Remove ${t.title}`} onClick={(e) => { e.preventDefault(); remove(t.id); }} data-testid="top3-remove">
+          ×
+        </button>
+      ) : null}
+    </label>
+  );
+  const carriedItems = carried ? items.filter((t) => carried.ids.includes(t.id)) : [];
+
   return (
     <div data-testid="top3-picker">
       <div className="label">Pick your top 3</div>
+      {carried && carriedItems.length ? (
+        <>
+          <div className="mb-1 text-xs font-medium text-ink-2" data-testid="top3-carried-label">
+            {carried.label}
+          </div>
+          <div className="mb-2 grid grid-cols-1 gap-1 sm:grid-cols-2" data-testid="top3-carried">
+            {carriedItems.map(row)}
+          </div>
+          <div className="mb-1 text-xs font-medium text-ink-2">Everything else</div>
+        </>
+      ) : null}
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-        {items.map((t) => (
-          <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent-soft" data-testid="top3-item" data-added={t.added ? "yes" : "no"}>
-            <input type="checkbox" name="focus" value={t.id} checked={checked.includes(t.id)} onChange={(e) => toggle(t.id, e.target.checked)} />
-            <span className="truncate">{t.title}</span>
-            {t.late ? <span className="ml-auto shrink-0 text-[10px] font-semibold text-danger">late</span> : null}
-            {t.added ? (
-              <button type="button" className={`${t.late ? "" : "ml-auto"} shrink-0 rounded px-1 text-ink-3 hover:text-danger`} aria-label={`Remove ${t.title}`} onClick={(e) => { e.preventDefault(); remove(t.id); }} data-testid="top3-remove">
-                ×
-              </button>
-            ) : null}
-          </label>
-        ))}
+        {items.filter((t) => !carried?.ids.includes(t.id)).map(row)}
       </div>
       <div className="mt-2 flex gap-2">
         <input

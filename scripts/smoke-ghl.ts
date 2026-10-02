@@ -128,7 +128,7 @@ async function main() {
     if (!(await page.locator('[data-testid="ghl-steps"] button:has-text("Copy the list")').count())) throw new Error("Copy the list puts the names on the clipboard");
     await page.locator('[data-testid="ghl-steps"] summary:has-text("Read the list instead")').click();
     const listedScopes = await page.locator('[data-testid="ghl-scope-list"] li').evaluateAll((els) => els.map((e) => e.textContent?.trim()));
-    if (listedScopes.length !== 17 || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
+    if (listedScopes.length !== 18 || !listedScopes.includes("locations.readonly") || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
     await saveConnection(page, "loc_maya", "wrong-token");
     await expectText(page, "GoHighLevel didn't accept that token", "bad token reason, in plain words");
     await saveConnection(page, "loc_maya", "pit-noscope");
@@ -139,6 +139,7 @@ async function main() {
     await saveConnection(page, "loc_maya", "pit-loc_maya");
     await page.locator('[data-testid="ghl-connected-badge"]').waitFor({ timeout: 15000 });
     await expectText(page, "6 connected pages and profiles", "valid token connected");
+    if ((await page.locator('[data-testid="ghl-location-name"]').innerText()).trim() !== "to Maya Coaching") throw new Error("the green Connected state names the sub-account, read from GET /locations/{id}");
     if ((await page.locator('[data-testid="ghl-token"]').count()) || (await page.locator('[data-testid="ghl-connected"]').innerText()).includes("loc_maya")) throw new Error("connected: no token box and no ID on screen");
     await expectText(page, "0/5 channels will auto-publish", "auto-mapped, but nothing publishes without the user id");
     if (!(await page.locator('[data-testid="ghl-no-user"]').count())) throw new Error("the user id is asked for only now, since GoHighLevel's answer did not carry it");

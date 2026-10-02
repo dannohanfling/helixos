@@ -15,6 +15,7 @@ import { deckSlides } from "@/lib/engine/deck";
 import { resolveDeckSlots } from "@/lib/queries/deck-slots";
 import { shotList } from "@/lib/engine/shot-list";
 import { totalPoints } from "./points";
+import { settleOldFocus, stillOpenFocus } from "@/lib/tasks-core";
 
 /** The one pathway task to show today: revisions first, then the next must-do on the simple path. */
 export async function nextPathwayTask(userId: string) {
@@ -59,6 +60,8 @@ export async function todayData(v: Viewer) {
   const userId = user.id;
   const workspaceId = v.workspace.id;
   const tomorrow = addDays(today, 1);
+  // Yesterday's unfinished Top 3 loses the star before anything is read, so the new morning starts clean.
+  await settleOldFocus(v);
 
   const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal, everLockedIn] =
     await Promise.all([
@@ -206,6 +209,8 @@ export async function todayData(v: Viewer) {
     taskOrigins: await taskOrigins([...focusTasks, ...dueTasks, ...overdueTasks, ...upcomingTasks]),
     road: await pathwayRoad(userId),
     openTasks,
+    /** The last lock-in day's unfinished Top 3, offered first and unticked in the picker. */
+    stillOpen: await stillOpenFocus(v),
     contentDue: [...contentOverdue, ...contentDue],
     followUps,
     inbound,

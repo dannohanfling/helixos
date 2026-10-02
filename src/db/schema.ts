@@ -1950,6 +1950,8 @@ export const socialConnections = sqliteTable(
     userId: text("user_id").notNull(),
     provider: text("provider").notNull().default("gohighlevel"),
     locationId: text("location_id").notNull(),
+    /** The sub-account's own name from GET /locations/{id} (locations.readonly), shown in the green Connected state; null until read. */
+    locationName: text("location_name"),
     ghlUserId: text("ghl_user_id"),
     /** The member's own location-level Private Integration token, encrypted at rest. The only credential the GoHighLevel integration uses. */
     manualToken: text("manual_token"),

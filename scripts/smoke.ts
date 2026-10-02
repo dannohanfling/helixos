@@ -46,6 +46,22 @@ async function main() {
     failures.push(`pageerror: ${e.message}`);
   });
 
+  // A fresh morning (rev 377, rev 418): two of yesterday's Top 3 still open, one due today and one due in two days. Today
+  // demotes both (no star's urgency; "today" only for the one due today) and offers them first, unticked.
+  const { db, schema } = await import("@/db");
+  const { and, eq, inArray } = await import("drizzle-orm");
+  const { addDays, todayInTz } = await import("@/lib/dates");
+  const { newId } = await import("@/lib/ids");
+  const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
+  const mayaM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+  const ws = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mayaM.workspaceId) }))!;
+  const mayaToday = todayInTz(mayaM.timezone || ws.timezone);
+  const CARRIED = { dueToday: "Smoke carried due today", dueLater: "Smoke carried due later" };
+  await db.delete(schema.tasks).where(and(eq(schema.tasks.userId, maya.id), inArray(schema.tasks.title, Object.values(CARRIED))));
+  for (const [title, dueDate] of [[CARRIED.dueToday, mayaToday], [CARRIED.dueLater, addDays(mayaToday, 2)]] as const) {
+    await db.insert(schema.tasks).values({ id: newId(), workspaceId: ws.id, userId: maya.id, title, category: "content", urgency: "top3", status: "today", dueDate, focusDate: addDays(mayaToday, -1), points: 20 });
+  }
+
   // Login
   await page.goto(`${base}/login`);
   await expectText(page, "Welcome back", "login");
@@ -64,6 +80,15 @@ async function main() {
   await page.fill('input[name="intention"]', "Three real conversations before noon.");
   // Several new tasks before locking in (rev 157): Add or Enter puts each in the list, ticked up to three, and clears the box.
   const picker = page.locator('[data-testid="top3-picker"]');
+  if ((await picker.locator('[data-testid="top3-carried-label"]').innerText()).trim() !== "Still open from yesterday") throw new Error("yesterday's unfinished Top 3 comes first, under its own line");
+  for (const t of Object.values(CARRIED)) {
+    if ((await picker.locator('[data-testid="top3-carried"] [data-testid="top3-item"]', { hasText: t }).locator("input").isChecked()) !== false) throw new Error(`${t}: offered first and unticked`);
+  }
+  const carriedRows = await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, maya.id), inArray(schema.tasks.title, Object.values(CARRIED))) });
+  const byTitle = new Map(carriedRows.map((t) => [t.title, t]));
+  if (byTitle.get(CARRIED.dueToday)?.urgency !== "high" || byTitle.get(CARRIED.dueToday)?.status !== "today") throw new Error(`the one due today loses the star and stays today: ${JSON.stringify(byTitle.get(CARRIED.dueToday))}`);
+  if (byTitle.get(CARRIED.dueLater)?.urgency !== "high" || byTitle.get(CARRIED.dueLater)?.status !== "upcoming") throw new Error(`the one due later loses the star and goes back to upcoming: ${JSON.stringify(byTitle.get(CARRIED.dueLater))}`);
+  console.log("✓ fresh morning: yesterday's unfinished Top 3 demoted (high; today only if due today) and offered first, unticked, under \"Still open from yesterday\"");
   while (await picker.locator('input[name="focus"]:checked').count()) await picker.locator('input[name="focus"]:checked').first().uncheck();
   const NEW_TASKS = ["Smoke focus task", "Smoke task two", "Smoke task three", "Smoke task four"];
   for (const [i, t] of NEW_TASKS.entries()) {
@@ -82,6 +107,8 @@ async function main() {
   await expectText(page, "Done · +10", "lock-in done");
   for (const t of NEW_TASKS.slice(0, 3)) await page.locator('[data-testid="task-row"]', { hasText: t }).first().waitFor({ timeout: 15000 });
   if (await page.locator('[data-testid="task-row"]', { hasText: "Smoke task four" }).count()) throw new Error("a task taken back before the lock-in is gone");
+  if (await page.locator('#checkin [data-testid="task-row"] [data-testid="task-category"]').count()) throw new Error("the Top 3 rows carry no category");
+  if (!(await page.locator('[data-testid="task-row"]', { hasText: CARRIED.dueToday }).locator('[data-testid="task-category"]').count())) throw new Error("the board's rows keep their category");
   console.log("✓ lock-in: four tasks added (Add and Enter), three ticked, the fourth unticked with a quiet line, one taken back, three locked in");
   const errors = await page.locator("nextjs-portal").count();
   console.log(`dev overlay portals: ${errors}`);

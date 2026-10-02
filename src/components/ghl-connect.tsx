@@ -41,6 +41,11 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
           <span className="flex items-center gap-1 font-semibold text-good" data-testid="ghl-connected-badge">
             <span aria-hidden="true">✓</span> Connected
           </span>
+          {conn.locationName ? (
+            <span className="font-medium" data-testid="ghl-location-name">
+              to {conn.locationName}
+            </span>
+          ) : null}
           <span className="text-ink-2">{conn.accounts.length} connected {conn.accounts.length === 1 ? "page or profile" : "pages and profiles"}</span>
           <span className="text-ink-2" data-testid="ghl-ready">
             · {ready.mapped}/{ready.total} channels will auto-publish
