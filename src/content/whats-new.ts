@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 68,
+    date: "2026-10-03",
+    title: "Tell your coach about an issue or an idea",
+    lines: [
+      "\"I have an issue or a suggestion\" is now in the menu on every page (under More on a phone). Say what happened or what you'd like, pick how much it gets in your way (red blocking, orange annoying, green an idea), and add a screenshot if it helps: upload one, or capture the screen where your browser allows it. The page you were on goes with it.",
+      "If an Ask Danno answer was wrong or out of date, pick that kind, paste the question and the answer, and tick if you'd like to talk about it.",
+      "For coaches: everything lands in Issues and ideas, newest first, with Seen and Done; new monthly feedback now shows as a count on the Coach page, in the menu and on Today, and the feedback form tells members their coach reads every answer.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 67,
     date: "2026-10-03",
     title: "A save that doesn't go through no longer loses what you typed",

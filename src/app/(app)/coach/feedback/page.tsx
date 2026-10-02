@@ -4,6 +4,8 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { monthLabel, monthSummary, prevMonth, trendLine } from "@/lib/engine/feedback";
 import { Badge, Card, PageHeader } from "@/components/ui";
+import { nowIso } from "@/lib/dates";
+import { timeOf } from "@/lib/engine/reports";
 
 export const metadata = { title: "Monthly feedback" };
 
@@ -14,6 +16,10 @@ export const metadata = { title: "Monthly feedback" };
  */
 export default async function CoachFeedbackPage() {
   const v = await requireCoach();
+  // Opening this page is the coach's look (rev 432 item 4): what came in since is marked new here once, then the count clears.
+  const seenBefore = timeOf(v.membership.feedbackSeenAt);
+  if (!v.switchedInto) await db.update(schema.memberships).set({ feedbackSeenAt: nowIso() }).where(eq(schema.memberships.id, v.membership.id));
+  const isNew = (r: { createdAt: string; updatedAt: string }) => Math.max(timeOf(r.createdAt), timeOf(r.updatedAt)) > seenBefore;
   const rows = await db.query.monthlyFeedback.findMany({ where: eq(schema.monthlyFeedback.workspaceId, v.workspace.id), orderBy: [desc(schema.monthlyFeedback.month), desc(schema.monthlyFeedback.createdAt)] });
   const users = rows.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(rows.map((r) => r.userId))]) }) : [];
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
@@ -41,8 +47,8 @@ export default async function CoachFeedbackPage() {
                   <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">What they&apos;re proud of</div>
                   <ul className="mt-1 space-y-1 text-sm" data-testid="feedback-proud">
                     {these.map((r) => (
-                      <li key={r.id}>
-                        <span className="font-medium">{nameOf.get(r.userId) ?? "A member"}:</span> <span className="whitespace-pre-line text-ink-2">{r.proud}</span>
+                      <li key={r.id} data-new={isNew(r) ? "1" : "0"}>
+                        {isNew(r) ? <Badge tone="danger">new</Badge> : null} <span className="font-medium">{nameOf.get(r.userId) ?? "A member"}:</span> <span className="whitespace-pre-line text-ink-2">{r.proud}</span>
                       </li>
                     ))}
                   </ul>

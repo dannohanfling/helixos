@@ -71,6 +71,7 @@ const ROUTES: Record<string, Route> = {
   "/api/deck-images/[id]": { kind: "owned", table: "deckImages" },
   "/body/training/[exerciseId]": { kind: "owned", table: "bodyExercises" },
   "/api/proofs/attachments/[id]": { kind: "owned", table: "proofAttachments" },
+  "/api/reports/[id]/screenshot": { kind: "owned", table: "memberReports" },
   "/api/webinars/[id]/deck": { kind: "owned", table: "webinars" },
   "/api/webhooks/fathom/[connectionId]": { kind: "public", why: "Fathom's signed delivery for one workspace connection: POST only, verified against the connection's sealed secret, 401 unsigned; a GET answers 405 for every id" },
   "/files/[...key]": { kind: "public", why: "the public object store; a private proof file is served by /api/proofs/attachments/[id]" },
@@ -202,7 +203,17 @@ async function main() {
     }
     return r;
   };
-  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording()]);
+  // An issue B sent with a screenshot (rev 432): to A, its picture must read exactly as a missing one.
+  const ensureReport = async () => {
+    let r = await db.query.memberReports.findFirst({ where: eq(schema.memberReports.userId, B.id) });
+    if (!r) {
+      const id = newId();
+      await db.insert(schema.memberReports).values({ id, workspaceId: ws, userId: B.id, kind: "issue", severity: "red", description: "B's private issue.", page: "/today", screenshotKey: `reports/${ws}/${id}.png`, screenshotUrl: `http://localhost:4050/reports/${ws}/${id}.png`, screenshotType: "image/png" });
+      r = (await db.query.memberReports.findFirst({ where: eq(schema.memberReports.id, id) }))!;
+    }
+    return r;
+  };
+  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording(), ensureReport()]);
 
   // One B-owned id per table the routes name, so the walk can substitute B's id into A's request.
   const first = async <T>(q: Promise<T | undefined>): Promise<T> => {
@@ -230,6 +241,7 @@ async function main() {
     bodyHabits: (await ensureHabit()).id,
     bodyHealth: (await ensureHealth()).id,
     recordings: (await ensureRecording()).id,
+    memberReports: (await ensureReport()).id,
   };
   // B's private words, per table, that must never appear in a response to A.
   const bWord: Record<string, string> = {

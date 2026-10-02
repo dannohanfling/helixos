@@ -104,6 +104,8 @@ export const MEMBER_TABLES = {
   mcp_calls: schema.mcpCalls,
   // Recordings R1: a step from a recorded call on this member's plate (suggested, accepted as their task, or dismissed).
   recording_steps: schema.recordingSteps,
+  // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row).
+  member_reports: schema.memberReports,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 
@@ -176,6 +178,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash", "webhookSecretEncrypted"]);
+export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);

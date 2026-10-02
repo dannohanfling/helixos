@@ -11,6 +11,8 @@ import { APP_VERSION } from "@/lib/version";
 import { PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { hasVisibleRecordings } from "@/lib/recordings";
+import { ReportButton } from "@/components/report-button";
+import { coachFirstName } from "@/lib/queries/reports";
 
 export const metadata = { title: "More" };
 
@@ -19,6 +21,7 @@ export default async function MorePage() {
   const due = (await intentionsDueFor(v.workspace.id, v.user.id, v.today)).length;
   const unseen = unseenCount(WHATS_NEW, v.role, v.membership.whatsNewSeen);
   const recordingsEnabled = v.role === "client" && (await hasVisibleRecordings(v.workspace.id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role }));
+  const coachFirst = v.role === "client" && !v.switchedInto ? await coachFirstName(v.workspace.id) : null;
   return (
     <>
       <PageHeader title="Everything" />
@@ -40,6 +43,7 @@ export default async function MorePage() {
           </div>
         ))}
         <div className="card p-2">
+          {coachFirst ? <ReportButton coachFirst={coachFirst} variant="row" /> : null}
           <Link href="/settings" className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2">
             <span className="w-6 text-center text-lg">⚙️</span> Settings
           </Link>

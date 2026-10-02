@@ -171,6 +171,8 @@ export const memberships = sqliteTable(
     lastNudgedAt: text("last_nudged_at"),
     /** Tick one: at connection the member acknowledged that anything harvested from a recording is someone else's words. Date of the tick. */
     fathomConsentAt: text("fathom_consent_at"),
+    /** A coach's last look at Monthly feedback (rev 432 item 4): responses sent or changed after it count as new. */
+    feedbackSeenAt: text("feedback_seen_at"),
     lastComebackAt: text("last_comeback_at"),
     createdAt: createdAt(),
   },
@@ -1724,6 +1726,46 @@ export const fathomWorkspaceConnections = sqliteTable(
   (t) => [uniqueIndex("fathom_workspace_connections_ws").on(t.workspaceId)],
 );
 export type FathomWorkspaceConnection = typeof fathomWorkspaceConnections.$inferSelect;
+
+/* ───────────────────────── Issues and suggestions (rev 432, items 2 to 4) ───────────────────────── */
+
+/** An issue (something broken), a suggestion (an idea), or an Ask Danno answer that was wrong or out of date. */
+export const MEMBER_REPORT_KINDS = ["issue", "suggestion", "ask_danno"] as const;
+export type MemberReportKind = (typeof MEMBER_REPORT_KINDS)[number];
+/** Red blocks the member, orange annoys them, green is an idea. */
+export const REPORT_SEVERITIES = ["red", "orange", "green"] as const;
+export type ReportSeverity = (typeof REPORT_SEVERITIES)[number];
+
+/**
+ * What a member sends from "I have an issue or a suggestion" in the menu: their words, the page they were on, how much it gets
+ * in their way, and an optional screenshot, kept in the private store under reports/<workspace>/. For an Ask Danno answer, the
+ * question and the answer as they pasted them, and whether they want to talk to the coach about it. The coach's inbox marks
+ * each Seen and Done. The member's own row: in their export, and deleted with them, screenshot and all.
+ */
+export const memberReports = sqliteTable(
+  "member_reports",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    kind: text("kind", { enum: MEMBER_REPORT_KINDS }).notNull(),
+    severity: text("severity", { enum: REPORT_SEVERITIES }).notNull(),
+    description: text("description").notNull().default(""),
+    /** The page the member was on when they opened the form, its path only. */
+    page: text("page"),
+    question: text("question"),
+    answer: text("answer"),
+    talkToCoach: integer("talk_to_coach", { mode: "boolean" }).notNull().default(false),
+    screenshotKey: text("screenshot_key"),
+    screenshotUrl: text("screenshot_url"),
+    screenshotType: text("screenshot_type"),
+    seenAt: text("seen_at"),
+    doneAt: text("done_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("member_reports_ws_created").on(t.workspaceId, t.createdAt), index("member_reports_user").on(t.userId)],
+);
+export type MemberReport = typeof memberReports.$inferSelect;
 
 export const RECORDING_SOURCES = ["webhook", "sync", "backfill"] as const;
 export const TITLE_MATCHES = ["exact", "close", "none"] as const;

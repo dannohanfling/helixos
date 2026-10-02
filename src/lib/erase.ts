@@ -92,6 +92,10 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
     const known = new Set(deckRows.map((d) => d.blobKey));
     for (const o of await listProofObjects(`deck/${workspaceId}/${m.userId}/`)) if (!known.has(o.key)) objects.push({ store: "proof", key: o.key, url: o.url, label: "deck_images", rowId: "" });
   }
+  // A report's screenshot (rev 432), in the private store under reports/, with the report that points at it.
+  if (ids.member_reports.length) {
+    for (const r of await db.query.memberReports.findMany({ where: inArray(schema.memberReports.id, ids.member_reports) })) if (r.screenshotKey && r.screenshotUrl) objects.push({ store: "proof", key: r.screenshotKey, url: r.screenshotUrl, label: "member_reports", rowId: r.id });
+  }
   // Lead magnet files in the public store: the recorded PDF and upload, and every file under the magnet's folder.
   const magnets = ids.lead_magnets.length ? await db.query.leadMagnets.findMany({ where: inArray(schema.leadMagnets.id, ids.lead_magnets) }) : [];
   const publicKeys = new Set<string>();

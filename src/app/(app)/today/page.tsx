@@ -27,6 +27,7 @@ import { monthOf } from "@/lib/engine/month-intentions";
 import { todayBody } from "@/lib/queries/body";
 import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { ENERGY_WORDS } from "@/lib/daily-core";
+import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 
 export const metadata = { title: "Today" };
 
@@ -73,8 +74,24 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const primary = d.actions[0];
   const rest = d.actions.slice(1, 6);
 
+  // The coach's notice (rev 432 item 4): new monthly feedback and issues not yet opened, so neither can be missed.
+  const coachNew = v.role === "coach" && !v.switchedInto ? await Promise.all([newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt), unseenReports(v.workspace.id)]) : null;
   return (
     <>
+      {coachNew && (coachNew[0] || coachNew[1]) ? (
+        <div className="mb-4 flex flex-wrap gap-2" data-testid="coach-new">
+          {coachNew[0] ? (
+            <Link href="/coach/feedback" className="rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="coach-new-feedback">
+              {coachNew[0]} new monthly feedback →
+            </Link>
+          ) : null}
+          {coachNew[1] ? (
+            <Link href="/coach/reports" className="rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="coach-new-reports">
+              {coachNew[1]} new issue{coachNew[1] === 1 ? "" : "s"} and idea{coachNew[1] === 1 ? "" : "s"} →
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-sm text-ink-2">{formatDate(v.today, { weekday: "long", month: "long", day: "numeric" })}</div>

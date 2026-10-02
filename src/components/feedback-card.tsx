@@ -17,6 +17,7 @@ function FeedbackForm({ month, given, lookBack, owner }: { month: string; given:
   return (
     <form action={saveFeedbackAction} className="space-y-3" data-testid="feedback-form">
       {owner ? <DraftKeeper id={`feedback.${owner}.${month}`} /> : null}
+      <p className="text-xs text-ink-3" data-testid="feedback-who-reads">Your coach reads every answer here, in full. It goes to them and nowhere else.</p>
       {lookBack ? (
         <p className="rounded-lg bg-surface-2 p-2 text-sm text-ink-2" data-testid="feedback-lookback">
           At the start of {monthLabel(month).split(" ")[0]} you wrote that you wanted to look back and feel most proud of: <span className="whitespace-pre-line italic">&ldquo;{lookBack}&rdquo;</span>

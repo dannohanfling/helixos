@@ -37,6 +37,16 @@ export async function putProofObject(key: string, bytes: Buffer, contentType: st
   return { key, url: blob.url, size: bytes.length, contentType };
 }
 
+/**
+ * A member report's screenshot (rev 432): private, the proof store's token, a key under reports/ only, which no sweep
+ * reconciles (proofs/ and deck/ are swept against their rows; a screenshot goes with its report, in deletion on request).
+ */
+export async function putReportObject(key: string, bytes: Buffer, contentType: string): Promise<ProofObject> {
+  if (!/^reports\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(key)) throw new Error("refusing to write a report object outside the reports tree");
+  const blob = await put(key, bytes, { access: "private", token: proofToken(), contentType, addRandomSuffix: false });
+  return { key, url: blob.url, size: bytes.length, contentType };
+}
+
 /** What the store says about an object, from the store, by its pathname: size, type and URL, never the browser's claim. */
 export async function headProofObject(key: string): Promise<ProofObject> {
   const blob = await head(key, { token: proofToken() });

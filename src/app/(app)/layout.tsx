@@ -12,6 +12,7 @@ import { WHATS_NEW } from "@/content/whats-new";
 import { unseenCount } from "@/lib/engine/whats-new";
 import { chatWidgetProps } from "@/lib/chat";
 import { hasVisibleRecordings } from "@/lib/recordings";
+import { coachFirstName, newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
 export const dynamic = "force-dynamic";
@@ -29,9 +30,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // The Recordings item shows a client only once something is published for them (Recordings R1).
     viewer.role === "client" ? hasVisibleRecordings(viewer.workspace.id, { userId: viewer.user.id, programTier: viewer.membership.programTier, role: viewer.role }) : Promise.resolve(false),
   ]);
+  // The coach's counts (rev 432): issues and ideas not yet opened, and monthly feedback new since they last looked. A client
+  // gets the coach's first name for "Tell Danno" instead.
+  const coachView = viewer.role === "coach" && !viewer.switchedInto;
+  const [reportsNew, feedbackNew, coachFirst] = await Promise.all([
+    coachView ? unseenReports(viewer.workspace.id) : Promise.resolve(0),
+    coachView ? newMonthlyFeedback(viewer.workspace.id, viewer.membership.feedbackSeenAt) : Promise.resolve(0),
+    viewer.role === "client" ? coachFirstName(viewer.workspace.id) : Promise.resolve(null),
+  ]);
   const tier = tierFor(points);
   return (
-    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen) }}>
+    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} coachFirst={coachFirst} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>
