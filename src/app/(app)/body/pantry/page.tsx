@@ -88,7 +88,7 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
                           <form action={usePantryAction} className="flex items-center gap-1">
                             <input type="hidden" name="id" value={it.id} />
                             <span className="w-16 shrink-0">
-                              <input name="qty" type="number" step="any" min={0} inputMode="decimal" className="field py-0.5 text-xs tabular" placeholder={String(it.qty)} aria-label={`Used from ${it.food?.name ?? "item"}`} data-testid="pantry-use-qty" />
+                              <input name="qty" type="text" autoComplete="off" inputMode="decimal" className="field py-0.5 text-xs tabular" placeholder={String(it.qty)} aria-label={`Used from ${it.food?.name ?? "item"}`} data-testid="pantry-use-qty" />
                             </span>
                             <SubmitButton className="btn btn-ghost btn-xs" pendingText="…" data-testid="pantry-use">
                               Used
@@ -129,7 +129,7 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
                 </label>
                 <label className="w-24">
                   <span className="label">How much</span>
-                  <input name="qty" type="number" step="any" min={0} inputMode="decimal" className={big} required data-testid="pantry-qty" />
+                  <input name="qty" type="text" autoComplete="off" inputMode="decimal" className={big} required data-testid="pantry-qty" />
                 </label>
                 <label className="w-40">
                   <span className="label">Unit</span>
@@ -209,7 +209,7 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
                         {f.name}
                       </span>
                       <span className="flex items-center gap-2">
-                        <input name="par" type="number" step="any" min={0} inputMode="decimal" className="field w-20 py-0.5 text-sm tabular" defaultValue={f.par ?? ""} placeholder="none" aria-label={`Par for ${f.name}`} />
+                        <input name="par" type="text" autoComplete="off" inputMode="decimal" className="field w-20 py-0.5 text-sm tabular" defaultValue={f.par ?? ""} placeholder="none" aria-label={`Par for ${f.name}`} />
                         <span className="text-xs whitespace-nowrap text-ink-3">{f.unit}</span>
                         <SubmitButton className="btn btn-ghost btn-xs" pendingText="…">
                           Save
@@ -238,7 +238,7 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
                   </label>
                   <label className="w-28">
                     <span className="label">Keep at least</span>
-                    <input name="par" type="number" step="any" min={0} inputMode="decimal" className={big} required data-testid="pantry-par-add-qty" />
+                    <input name="par" type="text" autoComplete="off" inputMode="decimal" className={big} required data-testid="pantry-par-add-qty" />
                   </label>
                   <SubmitButton className="btn btn-humanos btn-sm" pendingText="Saving…" data-testid="pantry-par-add-save">
                     Save
@@ -292,11 +292,11 @@ export default async function PantryPage({ searchParams }: { searchParams: Promi
                   </label>
                   <label className="w-24">
                     <span className="label">Raw</span>
-                    <input name="raw" type="number" step="any" min={0} inputMode="decimal" className={big} required data-testid="pantry-weigh-raw" />
+                    <input name="raw" type="text" autoComplete="off" inputMode="decimal" className={big} required data-testid="pantry-weigh-raw" />
                   </label>
                   <label className="w-24">
                     <span className="label">Cooked</span>
-                    <input name="cooked" type="number" step="any" min={0} inputMode="decimal" className={big} required data-testid="pantry-weigh-cooked" />
+                    <input name="cooked" type="text" autoComplete="off" inputMode="decimal" className={big} required data-testid="pantry-weigh-cooked" />
                   </label>
                   <label className="w-20">
                     <span className="label">Unit</span>

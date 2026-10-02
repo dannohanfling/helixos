@@ -63,7 +63,7 @@ export default async function SleepPage({ searchParams }: { searchParams: Promis
           </label>
           <label className="w-24">
             <span className="label">Score (opt.)</span>
-            <input name="score" type="number" min={0} max={100} className="field tabular" placeholder="—" data-testid="sleep-score" />
+            <input name="score" type="text" autoComplete="off" inputMode="decimal" className="field tabular" placeholder="—" data-testid="sleep-score" />
           </label>
           <SubmitButton className="btn btn-humanos btn-sm" pendingText="Saving…" data-testid="sleep-save">
             Save

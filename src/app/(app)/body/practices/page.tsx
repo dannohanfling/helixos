@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { Card, Disclosure } from "@/components/ui";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { archiveHabitAction, deleteHabitAction, logHabitAction, restoreHabitAction, saveHabitAction } from "@/lib/actions/body";
@@ -82,7 +83,7 @@ function HabitRow({ h, date, today }: { h: Habit; date: string; today: string })
           <input type="hidden" name="date" value={date} />
           <input type="hidden" name="back" value={date === today ? "/body/practices" : `/body/practices?date=${date}`} />
           <span className="w-24">
-            <input name="value" type="number" step="any" min={0} inputMode="decimal" defaultValue={h.value ?? ""} placeholder={h.target != null ? String(h.target) : "0"} className="field py-1 text-sm tabular" aria-label={`${h.name} today`} data-testid="habit-value" />
+            <input name="value" type="text" autoComplete="off" inputMode="decimal" defaultValue={h.value ?? ""} placeholder={h.target != null ? String(h.target) : "0"} className="field py-1 text-sm tabular" aria-label={`${h.name} today`} data-testid="habit-value" />
           </span>
           <span className="text-xs text-ink-3">{h.kind === "minutes" ? "min" : (h.unit ?? "")}</span>
           <SubmitButton className={`btn btn-sm ${h.kept ? "btn-humanos" : "btn-soft"}`} pendingText="…" data-testid="habit-log">
@@ -94,9 +95,10 @@ function HabitRow({ h, date, today }: { h: Habit; date: string; today: string })
   );
 }
 
-function HabitForm({ h }: { h?: Habit }) {
+function HabitForm({ owner, h }: { owner: string; h?: Habit }) {
   return (
     <form action={saveHabitAction} className="grid gap-2 sm:grid-cols-2" data-testid={h ? "habit-edit-form" : "habit-new-form"}>
+      <DraftKeeper id={`body.habit.${owner}.${h?.id ?? "new"}`} />
       {h ? <input type="hidden" name="id" value={h.id} /> : null}
       <label className="block sm:col-span-2">
         <span className="label">Name</span>
@@ -115,7 +117,7 @@ function HabitForm({ h }: { h?: Habit }) {
       <label className="block">
         <span className="label">Daily target (optional) and unit</span>
         <span className="flex gap-2">
-          <input name="target" type="number" step="any" min={0} inputMode="decimal" className="field tabular" defaultValue={h?.ownTarget ?? ""} placeholder="10" />
+          <input name="target" type="text" autoComplete="off" inputMode="decimal" className="field tabular" defaultValue={h?.ownTarget ?? ""} placeholder="10" />
           <input name="unit" className="field" maxLength={12} defaultValue={h?.ownUnit ?? ""} placeholder="oz" />
         </span>
       </label>
@@ -242,7 +244,7 @@ export default async function PracticesPage({ searchParams }: { searchParams: Pr
         ) : null}
         <Disclosure summary={<span className="mt-3 text-sm underline">Your own</span>} className="mt-3">
           <div className="mt-2">
-            <HabitForm />
+            <HabitForm owner={v.user.id} />
           </div>
         </Disclosure>
       </Card>
@@ -279,7 +281,7 @@ export default async function PracticesPage({ searchParams }: { searchParams: Pr
               <li key={h.id} className="py-2">
                 <Disclosure summary={<span className="underline">{h.name}</span>}>
                   <div className="mt-2 space-y-2">
-                    <HabitForm h={h} />
+                    <HabitForm owner={v.user.id} h={h} />
                     <form action={archiveHabitAction}>
                       <input type="hidden" name="id" value={h.id} />
                       <SubmitButton className="btn btn-ghost btn-sm text-ink-3" pendingText="…" data-testid="habit-archive">

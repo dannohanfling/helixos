@@ -218,8 +218,35 @@ async function main() {
       if (key === "egg") await fillExact(client, '[data-testid="body-new-food"] input[name="sodium"]', String(EGG_SODIUM));
       if (key === "white-cheddar") await fillExact(client, '[data-testid="body-new-food"] input[name="capTag"]', "cheese");
       const before = await foodRows();
+      if (key === FOODS[0]) {
+        // Rev 444: a box it can't read is refused in place: only that box is marked, and everything typed is still there.
+        await fillExact(client, '[data-testid="body-new-food"] input[name="p"]', "lots");
+        await press(client, '[data-testid="body-new-food"] button[type="submit"]', async () => (await client.locator('[data-testid="body-new-food"] [data-testid="field-error"]').count()) === 1, "the protein box marked");
+        const marked = await client.locator('[data-testid="body-new-food"] [aria-invalid="true"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).name));
+        const kept = await client.locator('[data-testid="body-new-food"] input[name="name"]').inputValue();
+        const keptP = await client.locator('[data-testid="body-new-food"] input[name="p"]').inputValue();
+        if (marked.join() !== "p" || kept !== f.name || keptP !== "lots" || (await foodRows()) !== before) throw new Error(`a refused food keeps what was typed and marks only protein: ${JSON.stringify({ marked, kept, keptP })}`);
+        await fillExact(client, '[data-testid="body-new-food"] input[name="p"]', String(f.p));
+      }
+      if (key === FOODS[1]) {
+        // A long form keeps a draft: the page reloaded before Save brings back what was typed.
+        await client.waitForTimeout(500);
+        await client.reload();
+        await openDisclosure(client, "New food", '[data-testid="body-new-food"]');
+        await client.locator('[data-testid="body-new-food"] [data-testid="draft-restored"][data-kind="draft"]').waitFor({ timeout: 10000 });
+        if ((await client.locator('[data-testid="body-new-food"] input[name="name"]').inputValue()) !== f.name) throw new Error("the new food's draft comes back after a reload");
+      }
       await press(client, '[data-testid="body-new-food"] button[type="submit"]', async () => (await foodRows()) === before + 1, `${f.name} added`);
+      if (key === FOODS[0]) {
+        // The save after a refusal leaves the refusal behind, so nothing it saved is put back into the empty form.
+        for (let i = 0; i < 50 && client.url().includes("error="); i++) await client.waitForTimeout(100);
+        await client.waitForTimeout(500);
+        if (client.url().includes("error=") || (await client.locator('[data-testid="body-new-food"] input[name="name"]').inputValue())) throw new Error(`the corrected save clears the refusal and the form: ${client.url()}`);
+      }
     }
+    await client.reload();
+    if (await client.locator('[data-testid="draft-restored"]:visible').count()) throw new Error("a saved food leaves no draft behind");
+    console.log("✓ rev 444 on Foods: protein typed as a word is refused with only that box marked and the rest kept; a reloaded form brings its draft back; a save drops it");
     const foods = await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) });
     if ((await db.query.bodyFoods.findFirst({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, fx("white-cheddar").name)) }))?.capTag !== "cheese") throw new Error("the tag field saves a cap tag");
     if ((await db.query.bodyFoods.findFirst({ where: and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, fx("egg").name)) }))?.sodium !== EGG_SODIUM) throw new Error("sodium saves on the food");
@@ -517,7 +544,8 @@ async function main() {
     };
     // Two readings today, the heavier one first: the day's figure is the lighter one, with its own body fat.
     await weigh("150.4", "21.0", "21:00");
-    await weigh("149.6", "20.6", "07:10");
+    // Typed the way people write it (rev 444): the kilos read in the member's pounds, a decimal comma and a % sign.
+    await weigh("67.857 kg", "20,6%", "07:10");
     const latestText = (await client.locator('[data-testid="weigh-latest"]').textContent()) ?? "";
     if (!latestText.includes("149.6 lb") || !latestText.includes("20.6%")) throw new Error(`the day's figure is its lowest reading, whole: "${latestText}"`);
     const todayRows = await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.date, today)) });
@@ -598,7 +626,8 @@ async function main() {
       await fillExact(client, '[data-testid="pantry-use-by"]', useBy);
       await press(client, '[data-testid="pantry-save"]', async () => (await shelfRows()) === before + 1, "the item on the shelf");
     };
-    await addToShelf(idOf("lean-steak"), "16", "raw", addDays(today, 2));
+    // "1 lb" of a food counted per oz is 16 oz on the shelf (rev 444).
+    await addToShelf(idOf("lean-steak"), "1 lb", "raw", addDays(today, 2));
     await addToShelf(idOf("egg"), "12", "raw", addDays(today, 10));
     if (!((await client.locator('[data-testid="pantry-soon"]').textContent()) ?? "").includes(fx("lean-steak").name)) throw new Error("the steak, use by in two days, is to use soon");
     // Par levels (rev 452): only foods that have one are listed; the rest are picked in "Add a par level".

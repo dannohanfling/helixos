@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { Card, Disclosure } from "@/components/ui";
 import { HumanosHeader } from "@/components/body/humanos-header";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { fmtMacro } from "@/lib/engine/body";
@@ -33,12 +34,12 @@ function FoodFields({ food, preferred, tags }: { food?: schema.BodyFood; preferr
       {(["cal", "p", "f", "c"] as const).map((k) => (
         <label key={k}>
           <span className="label">{k === "cal" ? "Cal" : k.toUpperCase()}</span>
-          <input name={k} type="number" step="any" min={0} className="field py-1 text-sm tabular" defaultValue={food?.[k] ?? ""} required />
+          <input name={k} type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={food?.[k] ?? ""} required />
         </label>
       ))}
       <label>
         <span className="label">Sodium (mg)</span>
-        <input name="sodium" type="number" step="any" min={0} className="field py-1 text-sm tabular" defaultValue={food?.sodium || ""} placeholder="0" />
+        <input name="sodium" type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={food?.sodium || ""} placeholder="0" />
       </label>
       <label className="col-span-2 sm:col-span-3">
         <span className="label">Tag (for caps, e.g. cheese)</span>
@@ -64,11 +65,11 @@ function FoodFields({ food, preferred, tags }: { food?: schema.BodyFood; preferr
       </label>
       <label>
         <span className="label">Par (on hand)</span>
-        <input name="par" type="number" step="any" min={0} className="field py-1 text-sm tabular" defaultValue={food?.par ?? ""} placeholder="none" />
+        <input name="par" type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={food?.par ?? ""} placeholder="none" />
       </label>
       <label>
         <span className="label">Cooked yield %</span>
-        <input name="yieldPct" type="number" step="any" min={10} max={150} className="field py-1 text-sm tabular" defaultValue={food?.cookedYield != null ? Math.round(food.cookedYield * 100) : ""} placeholder="weighings" />
+        <input name="yieldPct" type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={food?.cookedYield != null ? Math.round(food.cookedYield * 100) : ""} placeholder="weighings" />
       </label>
       {tags.length ? (
         <datalist id="body-cap-tags">
@@ -103,6 +104,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
       <Card className="mb-4" title={`Foods · ${foods.length}`} id="foods">
         <Disclosure summary={<span className="btn btn-soft btn-sm">＋ New food</span>} className="mb-3" open={!foods.length}>
           <form action={saveFoodAction} className="space-y-2" data-testid="body-new-food">
+            <DraftKeeper id={`body.food.${v.user.id}.new`} />
             <FoodFields preferred={settings.foodUnit} tags={capTags} />
             <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
               Save food
@@ -133,6 +135,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
                           {f.capTag ? <span className="ml-1 text-xs text-ink-3">({f.capTag} cap)</span> : null}
                         </summary>
                         <form action={saveFoodAction} className="mt-2 space-y-2">
+                          <DraftKeeper id={`body.food.${v.user.id}.${f.id}`} />
                           <input type="hidden" name="id" value={f.id} />
                           <FoodFields food={f} preferred={settings.foodUnit} tags={capTags} />
                                                     <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">
@@ -181,7 +184,7 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
                   </form>
                 </div>
                 <Disclosure summary={<span className="text-xs text-ink-3 underline">Edit</span>}>
-                  <MealForm meal={m} foods={foods} slots={settings.mealSlots} />
+                  <MealForm owner={v.user.id} meal={m} foods={foods} slots={settings.mealSlots} />
                 </Disclosure>
               </li>
             ))}
@@ -190,17 +193,18 @@ export default async function BodyFoodsPage({ searchParams }: { searchParams: Pr
           <p className="text-sm text-ink-2">No saved meals yet.</p>
         )}
         <Disclosure summary={<span className="btn btn-soft btn-sm">＋ New meal</span>} className="mt-3" open={foods.length > 0 && !meals.length}>
-          {foods.length ? <MealForm foods={foods} slots={settings.mealSlots} /> : <p className="text-sm text-ink-2">Add a food first.</p>}
+          {foods.length ? <MealForm owner={v.user.id} foods={foods} slots={settings.mealSlots} /> : <p className="text-sm text-ink-2">Add a food first.</p>}
         </Disclosure>
       </Card>
     </>
   );
 }
 
-function MealForm({ meal, foods, slots }: { meal?: { id: string; name: string; slot: string | null; items: schema.BodyMealItem[] }; foods: schema.BodyFood[]; slots: string[] }) {
+function MealForm({ owner, meal, foods, slots }: { owner: string; meal?: { id: string; name: string; slot: string | null; items: schema.BodyMealItem[] }; foods: schema.BodyFood[]; slots: string[] }) {
   const rows = Array.from({ length: Math.max(MEAL_ROWS, (meal?.items.length ?? 0) + 2) }, (_, i) => meal?.items[i] ?? null);
   return (
     <form action={saveMealAction} className="mt-2 space-y-2" data-testid={meal ? "body-edit-meal" : "body-new-meal"}>
+      <DraftKeeper id={`body.meal.${owner}.${meal?.id ?? "new"}`} />
       {meal ? <input type="hidden" name="id" value={meal.id} /> : null}
       <div className="flex flex-wrap gap-2">
         <label className="min-w-0 flex-1">
@@ -227,7 +231,7 @@ function MealForm({ meal, foods, slots }: { meal?: { id: string; name: string; s
               </option>
             ))}
           </select>
-          <input name={`item_${i}_qty`} type="number" step="any" min={0} className="field w-20 py-1 text-sm tabular" defaultValue={item?.qty ?? ""} aria-label={`Quantity ${i + 1}`} />
+          <input name={`item_${i}_qty`} type="text" autoComplete="off" inputMode="decimal" className="field w-20 py-1 text-sm tabular" defaultValue={item?.qty ?? ""} aria-label={`Quantity ${i + 1}`} />
         </div>
       ))}
       <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">

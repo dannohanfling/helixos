@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 71,
+    date: "2026-10-03",
+    title: "HumanOS: numbers the way you write them, and nothing typed is lost",
+    lines: [
+      "Every HumanOS number box reads what you'd naturally type: \"70 kg\" or \"154 lb\" for a weigh-in whichever units you use, \"500 ml\" for a water habit tracked in fl oz, \"1 lb\" of a food counted in ounces, a decimal comma (\"2,5\"), \"2.2k\" or \"30 tablets\".",
+      "If something can't be read, the form says which box to fix, marks only that box, and keeps everything else you typed.",
+      "Foods, meals, habits, routines, supplements & meds, day types and your HumanOS settings keep a draft as you type, so a reload or a dropped connection brings it back.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 70,
     date: "2026-10-03",
     title: "HumanOS: an easier Pantry",

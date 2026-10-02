@@ -57,7 +57,7 @@ function TrendCard({ card, unit, today }: { card: WeighInsView["cards"][number];
           <input type="hidden" name="key" value={metric.key} />
           <label className="w-24">
             <span className="label">Target {unitLabel(metric.key, unit) ? `(${unitLabel(metric.key, unit)})` : ""}</span>
-            <input name="target" type="number" step="any" min={0} inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={goal ? displayValue(metric.key, goal.target, unit) : ""} placeholder="none" />
+            <input name="target" type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={goal ? displayValue(metric.key, goal.target, unit) : ""} placeholder="none" />
           </label>
           <label className="w-36">
             <span className="label">By</span>
@@ -132,11 +132,11 @@ export default async function WeighInsPage({ searchParams }: { searchParams: Pro
               </label>
               <label className="w-24">
                 <span className="label">Weight ({unit})</span>
-                <input name="weight" type="number" step="any" min={0} inputMode="decimal" className={big} required data-testid="weigh-weight" />
+                <input name="weight" type="text" autoComplete="off" inputMode="decimal" className={big} required data-testid="weigh-weight" />
               </label>
               <label className="w-24">
                 <span className="label">Body fat %</span>
-                <input name="bf" type="number" step="any" min={0} max={80} inputMode="decimal" className={big} placeholder="—" data-testid="weigh-bf" />
+                <input name="bf" type="text" autoComplete="off" inputMode="decimal" className={big} placeholder="—" data-testid="weigh-bf" />
               </label>
               <SubmitButton className="btn btn-humanos" pendingText="Saving…" data-testid="weigh-save">
                 Save
@@ -153,7 +153,7 @@ export default async function WeighInsPage({ searchParams }: { searchParams: Pro
                     <span className="label">
                       {METRICS.find((m) => m.key === k)!.short} {unitLabel(k, unit) ? `(${unitLabel(k, unit)})` : ""}
                     </span>
-                    <input name={k} type="number" step="any" min={0} inputMode="decimal" className={big} placeholder="—" />
+                    <input name={k} type="text" autoComplete="off" inputMode="decimal" className={big} placeholder="—" />
                   </label>
                 ))}
               </div>

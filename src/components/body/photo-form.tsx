@@ -72,13 +72,13 @@ export function PhotoForm({ action, logAction, date, slots, defaultSlot }: { act
                 <input type="checkbox" name={`line_${n}_use`} value="1" defaultChecked className="mt-2" aria-label={`Log ${l.name}`} data-testid="body-photo-use" />
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_5rem_6rem_4rem_4rem_4rem_4rem]">
                   <input name={`line_${n}_name`} defaultValue={l.name} maxLength={80} className="field col-span-2 py-1 text-sm sm:col-span-1" aria-label="Food" />
-                  <input name={`line_${n}_qty`} type="number" step="any" min={0} defaultValue={l.qty} className="field py-1 text-sm tabular" aria-label="Quantity" data-testid="body-photo-qty" />
+                  <input name={`line_${n}_qty`} type="text" autoComplete="off" inputMode="decimal" defaultValue={l.qty} className="field py-1 text-sm tabular" aria-label="Quantity" data-testid="body-photo-qty" />
                   <input name={`line_${n}_unit`} defaultValue={l.unit} maxLength={20} className="field py-1 text-sm" aria-label="Unit" />
                   <input type="hidden" name={`line_${n}_qty0`} value={l.qty} />
                   {(["cal", "p", "f", "c"] as const).map((k) => (
                     <label key={k} className="text-xs text-ink-3">
                       {k === "cal" ? "cal" : k.toUpperCase()}
-                      <input name={`line_${n}_${k}`} type="number" step="any" min={0} defaultValue={l[k]} className="field py-1 text-sm tabular" aria-label={k} />
+                      <input name={`line_${n}_${k}`} type="text" autoComplete="off" inputMode="decimal" defaultValue={l[k]} className="field py-1 text-sm tabular" aria-label={k} />
                     </label>
                   ))}
                 </div>

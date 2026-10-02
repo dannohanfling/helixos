@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { Card, Disclosure } from "@/components/ui";
 import { HumanosHeader } from "@/components/body/humanos-header";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { fmtTarget } from "@/lib/engine/body-training";
@@ -33,13 +34,14 @@ function ExerciseFields({ exercise }: { exercise?: schema.BodyExercise }) {
   );
 }
 
-function RoutineForm({ routine, lib, types, rowCount }: { routine?: TrainingLibrary["routines"][number]; lib: TrainingLibrary; types: schema.BodyDayType[]; rowCount: number }) {
+function RoutineForm({ owner, routine, lib, types, rowCount }: { owner: string; routine?: TrainingLibrary["routines"][number]; lib: TrainingLibrary; types: schema.BodyDayType[]; rowCount: number }) {
   // Rev 296: seven- and eight-exercise days are normal, so "Add rows" (?rows=) grows the form; it never shrinks below what a routine has.
   const rows = Array.from({ length: Math.max(rowCount, (routine?.items.length ?? 0) + 2) }, (_, i) => routine?.items[i] ?? null);
   // A routine keeps an archived exercise it already has; the picker otherwise offers only live ones.
   const pick = (id?: string) => lib.exercises.concat(id && !lib.exercises.some((e) => e.id === id) && lib.byId.has(id) ? [lib.byId.get(id)!] : []);
   return (
     <form action={saveRoutineAction} className="mt-2 space-y-2" data-testid={routine ? "training-edit-routine" : "training-new-routine"}>
+      <DraftKeeper id={`body.routine.${owner}.${routine?.id ?? "new"}`} />
       {routine ? <input type="hidden" name="id" value={routine.id} /> : null}
       <div className="flex flex-wrap gap-2">
         <label className="min-w-0 flex-1">
@@ -73,7 +75,7 @@ function RoutineForm({ routine, lib, types, rowCount }: { routine?: TrainingLibr
               </option>
             ))}
           </select>
-          <input name={`item_${i}_sets`} type="number" step={1} min={1} max={20} className="field py-1 text-sm tabular" defaultValue={item?.sets ?? 3} aria-label={`Sets ${i + 1}`} />
+          <input name={`item_${i}_sets`} type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={item?.sets ?? 3} aria-label={`Sets ${i + 1}`} />
           <input name={`item_${i}_reps`} className="field py-1 text-sm" defaultValue={item?.reps ?? ""} maxLength={20} placeholder="8–10" aria-label={`Reps ${i + 1}`} />
         </div>
       ))}
@@ -169,7 +171,7 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
                   </form>
                 </div>
                 <Disclosure summary={<span className="text-xs text-ink-3 underline">Edit</span>}>
-                  <RoutineForm routine={r} lib={lib} types={types} rowCount={rowCount} />
+                  <RoutineForm owner={v.user.id} routine={r} lib={lib} types={types} rowCount={rowCount} />
                 </Disclosure>
               </li>
             ))}
@@ -178,7 +180,7 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
           <p className="text-sm text-ink-2">No routines yet.</p>
         )}
         <Disclosure summary={<span className="btn btn-soft btn-sm">＋ New routine</span>} className="mt-3" open={lib.exercises.length > 0 && !lib.routines.length}>
-          {lib.exercises.length ? <RoutineForm lib={lib} types={types} rowCount={rowCount} /> : <p className="text-sm text-ink-2">Add an exercise first.</p>}
+          {lib.exercises.length ? <RoutineForm owner={v.user.id} lib={lib} types={types} rowCount={rowCount} /> : <p className="text-sm text-ink-2">Add an exercise first.</p>}
         </Disclosure>
       </Card>
     </>

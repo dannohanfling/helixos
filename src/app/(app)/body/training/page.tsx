@@ -68,14 +68,14 @@ function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exerc
         <input type="hidden" name="exerciseId" value={x.exercise.id} />
         <label className="w-24">
           <span className="label">{bw ? `Added (${unit})` : `Weight (${unit})`}</span>
-          <input name="weight" type="number" step="any" min={0} inputMode="decimal" defaultValue={x.next.weight ?? ""} placeholder={bw ? "none" : ""} required={!bw} className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
+          <input name="weight" type="text" autoComplete="off" inputMode="decimal" defaultValue={x.next.weight ?? ""} placeholder={bw ? "none" : ""} required={!bw} className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
         </label>
         <span className="pb-2 text-ink-3" aria-hidden>
           ×
         </span>
         <label className="w-20">
           <span className="label">Reps</span>
-          <input name="reps" type="number" step={1} min={1} inputMode="numeric" defaultValue={x.next.reps ?? ""} required className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
+          <input name="reps" type="text" autoComplete="off" inputMode="numeric" defaultValue={x.next.reps ?? ""} required className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
         </label>
         <SubmitButton className="btn btn-humanos" pendingText="Logging…" data-testid="training-log-set">
           Log set
@@ -306,11 +306,11 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
                 </label>
                 <label className="w-24">
                   <span className="label">Weight ({t.unit})</span>
-                  <input name="weight" type="number" step="any" min={0} inputMode="decimal" className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
+                  <input name="weight" type="text" autoComplete="off" inputMode="decimal" className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
                 </label>
                 <label className="w-20">
                   <span className="label">Reps</span>
-                  <input name="reps" type="number" step={1} min={1} inputMode="numeric" required className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
+                  <input name="reps" type="text" autoComplete="off" inputMode="numeric" required className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
                 </label>
                 <SubmitButton className="btn btn-humanos" pendingText="Logging…" data-testid="training-add-log">
                   Log set

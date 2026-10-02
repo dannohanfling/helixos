@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { Card, Disclosure } from "@/components/ui";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { archiveMedAction, countMedAction, fillBoxesMedAction, refillMedAction, saveMedAction, setMedsSwitchAction, takeMedAction } from "@/lib/actions/body";
@@ -15,9 +16,10 @@ type Med = MedsView["meds"][number];
 const TONE: Record<MedLine["tone"], string> = { info: "text-ink-2", soon: "text-warn", now: "text-danger", stop: "text-danger font-medium" };
 
 /** One item's form: what it is, when it's taken, the supply, and for a script its dates, repeats and refill rule. */
-function MedForm({ m }: { m?: Med }) {
+function MedForm({ owner, m }: { owner: string; m?: Med }) {
   return (
     <form action={saveMedAction} className="grid gap-2 sm:grid-cols-2" data-testid={m ? "med-edit-form" : "med-new-form"}>
+      <DraftKeeper id={`body.med.${owner}.${m?.id ?? "new"}`} />
       {m ? <input type="hidden" name="id" value={m.id} /> : null}
       <label className="block">
         <span className="label">Name</span>
@@ -43,7 +45,7 @@ function MedForm({ m }: { m?: Med }) {
       </label>
       <label className="block">
         <span className="label">Times a day</span>
-        <input name="timesPerDay" type="number" min={0} max={12} className="field tabular" defaultValue={m?.timesPerDay ?? 1} />
+        <input name="timesPerDay" type="text" autoComplete="off" inputMode="decimal" className="field tabular" defaultValue={m?.timesPerDay ?? 1} />
       </label>
       <label className="block">
         <span className="label">With food</span>
@@ -68,18 +70,18 @@ function MedForm({ m }: { m?: Med }) {
       </fieldset>
       <label className="block">
         <span className="label">On hand (count)</span>
-        <input name="onHand" type="number" step="any" min={0} className="field tabular" defaultValue={m?.onHand ?? ""} placeholder="60" data-testid="med-on-hand" />
+        <input name="onHand" type="text" autoComplete="off" inputMode="decimal" className="field tabular" defaultValue={m?.onHand ?? ""} placeholder="60" data-testid="med-on-hand" />
       </label>
       <label className="block">
         <span className="label">Per dose, and what you count</span>
         <span className="flex gap-2">
-          <input name="perDose" type="number" step="any" min={0.25} className="field tabular" defaultValue={m?.perDose ?? 1} />
+          <input name="perDose" type="text" autoComplete="off" inputMode="decimal" className="field tabular" defaultValue={m?.perDose ?? 1} />
           <input name="unitWord" className="field" maxLength={20} defaultValue={m?.unitWord ?? ""} placeholder="tablets" />
         </span>
       </label>
       <label className="block">
         <span className="label">Days&apos; supply per fill</span>
-        <input name="supplyDays" type="number" min={1} max={400} className="field tabular" defaultValue={m?.supplyDays ?? ""} placeholder="30" />
+        <input name="supplyDays" type="text" autoComplete="off" inputMode="decimal" className="field tabular" defaultValue={m?.supplyDays ?? ""} placeholder="30" />
       </label>
       <label className="block">
         <span className="label">Last filled</span>
@@ -104,7 +106,7 @@ function MedForm({ m }: { m?: Med }) {
         </label>
         <label className="block">
           <span className="label">Repeats left</span>
-          <input name="repeatsLeft" type="number" min={0} max={99} className="field tabular" defaultValue={m?.repeatsLeft ?? ""} data-testid="med-repeats" />
+          <input name="repeatsLeft" type="text" autoComplete="off" inputMode="decimal" className="field tabular" defaultValue={m?.repeatsLeft ?? ""} data-testid="med-repeats" />
         </label>
         <label className="block">
           <span className="label">Script</span>
@@ -121,8 +123,8 @@ function MedForm({ m }: { m?: Med }) {
               <option value="before_runout">days before you run out</option>
               <option value="share_used">once this % is used</option>
             </select>
-            <input name="refillDays" type="number" min={0} max={60} className="field w-20 tabular" defaultValue={m?.refillDays ?? 12} aria-label="Days before you run out" />
-            <input name="refillShare" type="number" min={1} max={100} className="field w-20 tabular" defaultValue={m?.refillShare ?? 75} aria-label="Percent used" />
+            <input name="refillDays" type="text" autoComplete="off" inputMode="decimal" className="field w-20 tabular" defaultValue={m?.refillDays ?? 12} aria-label="Days before you run out" />
+            <input name="refillShare" type="text" autoComplete="off" inputMode="decimal" className="field w-20 tabular" defaultValue={m?.refillShare ?? 75} aria-label="Percent used" />
           </span>
         </label>
         <label className="block">
@@ -137,7 +139,7 @@ function MedForm({ m }: { m?: Med }) {
       <label className="block">
         <span className="label">Remind me</span>
         <span className="flex gap-2">
-          <input name="remindDays" type="number" min={0} max={60} className="field w-20 tabular" defaultValue={m?.remindDays ?? 5} aria-label="Days ahead" />
+          <input name="remindDays" type="text" autoComplete="off" inputMode="decimal" className="field w-20 tabular" defaultValue={m?.remindDays ?? 5} aria-label="Days ahead" />
           <select name="remindOn" className="field" defaultValue={m?.remindOn ?? "runout"}>
             <option value="runout">days before it runs out</option>
             <option value="refill_open">when the refill opens</option>
@@ -230,21 +232,21 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
                 <div className="mt-2 flex flex-wrap items-end gap-2">
                   <form action={refillMedAction} className="flex items-end gap-1">
                     <input type="hidden" name="id" value={m.id} />
-                    <input name="added" type="number" step="any" min={0} className="field w-20 py-1 text-xs tabular" placeholder={m.supplyDays ? "a fill" : "how many"} aria-label="How many you got" />
+                    <input name="added" type="text" autoComplete="off" inputMode="decimal" className="field w-20 py-1 text-xs tabular" placeholder={m.supplyDays ? "a fill" : "how many"} aria-label="How many you got" />
                     <SubmitButton className="btn btn-soft btn-xs" pendingText="…" data-testid="med-refill">
                       Refilled
                     </SubmitButton>
                   </form>
                   <form action={fillBoxesMedAction} className="flex items-end gap-1">
                     <input type="hidden" name="id" value={m.id} />
-                    <input name="days" type="number" min={1} max={120} defaultValue={14} className="field w-16 py-1 text-xs tabular" aria-label="Days of pill boxes" />
+                    <input name="days" type="text" autoComplete="off" inputMode="decimal" defaultValue={14} className="field w-16 py-1 text-xs tabular" aria-label="Days of pill boxes" />
                     <SubmitButton className="btn btn-soft btn-xs" pendingText="…" data-testid="med-boxes">
                       Filled pill boxes
                     </SubmitButton>
                   </form>
                   <form action={countMedAction} className="flex items-end gap-1">
                     <input type="hidden" name="id" value={m.id} />
-                    <input name="onHand" type="number" step="any" min={0} className="field w-20 py-1 text-xs tabular" placeholder="count" aria-label="How many are left" data-testid="med-count-value" />
+                    <input name="onHand" type="text" autoComplete="off" inputMode="decimal" className="field w-20 py-1 text-xs tabular" placeholder="count" aria-label="How many are left" data-testid="med-count-value" />
                     <SubmitButton className="btn btn-ghost btn-xs" pendingText="…" data-testid="med-count">
                       Count what&apos;s left
                     </SubmitButton>
@@ -253,7 +255,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
                 <div className="mt-2">
                   <Disclosure summary={<span className="text-xs underline">Edit {m.name}</span>}>
                     <div className="mt-2 space-y-2">
-                      <MedForm m={m} />
+                      <MedForm owner={v.user.id} m={m} />
                       <form action={archiveMedAction}>
                         <input type="hidden" name="id" value={m.id} />
                         <SubmitButton className="btn btn-ghost btn-sm text-ink-3" pendingText="…" data-testid="med-archive">
@@ -272,7 +274,7 @@ export default async function MedsPage({ searchParams }: { searchParams: Promise
       </Card>
 
       <Card className="mb-4" title="Add">
-        <MedForm />
+        <MedForm owner={v.user.id} />
       </Card>
 
       <Card className="mb-8" title="Who sees this">

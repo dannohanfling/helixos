@@ -205,7 +205,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
                             <label key={n} className="text-xs">
                               <span className="block text-ink-3">{l.food.name}</span>
                               <span className="flex items-center gap-1">
-                                <input name={`qty_${n}`} type="number" step="any" min={0} defaultValue={l.qty} className="field w-20 py-1 text-sm tabular" />
+                                <input name={`qty_${n}`} type="text" autoComplete="off" inputMode="decimal" defaultValue={l.qty} className="field w-20 py-1 text-sm tabular" />
                                 {l.food.unit}
                               </span>
                             </label>

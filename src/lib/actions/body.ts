@@ -6,13 +6,14 @@
  */
 import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
-import { ctx, num, opt, optNum, refresh, str } from "@/lib/action-helpers";
+import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { requireCoach, type Viewer } from "@/lib/auth";
 import { MACROS, entryItem, totalsOf, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
-import { convertQty, storedUnit } from "@/lib/engine/body-units";
+import { amountIn, convertQty, storedUnit } from "@/lib/engine/body-units";
 import { decodeFound, foodFromFound, gapNote } from "@/lib/engine/body-find";
 import { photoItems, readPhotoLines, type PhotoLine } from "@/lib/engine/body-photo";
 import { IMAGE_MAX_BYTES, isImageType } from "@/lib/engine/ai-request";
@@ -42,7 +43,51 @@ import { bodyAccess, bodySettingsFor, groupReadings } from "@/lib/queries/body";
 import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const back = (path: string, error: string): never => redirect(`${path}${path.includes("?") ? "&" : "?"}error=${encodeURIComponent(error)}`);
+/** A refusal: back to `path` with the reason, naming the box to fix when there is one, so only that box is marked (rev 444). */
+const back = (path: string, error: string, field?: string): never =>
+  redirect(`${path}${path.includes("?") ? "&" : "?"}error=${encodeURIComponent(error)}${field ? `&field=${encodeURIComponent(field)}` : ""}`);
+
+/**
+ * The HumanOS page a form was sent from, for a refusal that doesn't know it (rev 444): the address the browser names, kept only
+ * when it is a HumanOS page, with any earlier answer taken off it. Anything else goes to `fallback`.
+ */
+async function sentFrom(fallback: string): Promise<string> {
+  try {
+    const u = new URL((await headers()).get("referer") ?? "");
+    if (!/^\/body(\/|$)/.test(u.pathname)) return fallback;
+    for (const k of ["error", "field", "said", "logged"]) u.searchParams.delete(k);
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * A save that lands after a refusal leaves the page without the refusal (rev 444). Body's saves mostly answer in place, so the
+ * address would keep the earlier "?error=…" and the shared SubmitButton would read it as this save refused, putting back the
+ * typing it just saved. Only a HumanOS page that still names an error is sent anywhere.
+ */
+async function settle(): Promise<void> {
+  let ref: URL;
+  try {
+    ref = new URL((await headers()).get("referer") ?? "");
+  } catch {
+    return;
+  }
+  if (!/^\/body(\/|$)/.test(ref.pathname) || ![...ref.searchParams.keys()].some((k) => /error$/i.test(k))) return;
+  redirect(await sentFrom(ref.pathname));
+}
+
+/**
+ * A number from a box, read the way people write it (rev 444): "1.5k", "2,5", "154 lb" in a kg box (converted to `to`), "30
+ * tablets". Blank is null. Anything it can't read goes back to the page the form was on, with what was typed put back and only
+ * that box marked; nothing unreadable is ever saved as 0.
+ */
+async function amount(fd: FormData, key: string, to?: string | null, fallback = "/body"): Promise<number | null> {
+  const r = amountIn(str(fd, key), to);
+  if (r != null && typeof r === "object") back(await sentFrom(fallback), r.error, key);
+  return r as number | null;
+}
 
 /** Body ships dark (rev 195): a member whose Body is off writes nothing, whatever reaches the action. */
 function enabled(v: Viewer): void {
@@ -77,6 +122,7 @@ export async function setHumanosAction(formData: FormData): Promise<void> {
   await db.update(schema.memberships).set({ bodyEnabled: on }).where(and(eq(schema.memberships.id, v.membership.id), eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.userId, v.user.id)));
   await logHumanos(v.workspace.id, v.user.id, on, "member");
   refresh();
+  await settle();
 }
 
 /**
@@ -93,6 +139,7 @@ export async function setClientHumanosAction(formData: FormData): Promise<void> 
   await db.update(schema.memberships).set({ bodyEnabled: true }).where(and(eq(schema.memberships.id, m!.id), eq(schema.memberships.workspaceId, v.workspace.id)));
   await logHumanos(v.workspace.id, m!.userId, true, "coach", v.user.name);
   refresh();
+  await settle();
 }
 
 /* ───────── B9: coach templates and the weekly check-in ───────── */
@@ -214,6 +261,7 @@ export async function deleteCheckinAction(formData: FormData): Promise<void> {
   await setUp(v);
   await db.delete(schema.bodyCheckins).where(and(eq(schema.bodyCheckins.id, str(formData, "id")), ownRows(schema.bodyCheckins, workspaceId, userId)));
   refresh();
+  await settle();
 }
 
 /* ───────── Setup ───────── */
@@ -246,16 +294,17 @@ export async function saveBodySettingsAction(formData: FormData): Promise<void> 
   const typeOrNull = (v: string) => (typeIds.has(v) ? v : null);
   const anchor = str(formData, "refeedAnchor");
   if (anchor && !DATE.test(anchor)) back("/body/settings", "The next refeed needs a date.");
-  const every = Math.round(num(formData, "refeedEveryDays"));
+  const every = Math.round((await amount(formData, "refeedEveryDays", null, "/body/settings")) ?? 0);
   const slots = str(formData, "mealSlots").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 8);
   const caps: schema.BodyCap[] = [];
   for (let i = 0; i < 10; i++) {
     const tag = str(formData, `cap_${i}_tag`).toLowerCase();
     if (!tag) continue;
-    const soft = num(formData, `cap_${i}_soft`);
-    const hard = num(formData, `cap_${i}_hard`);
-    if (hard < soft) back("/body/settings", `The ${tag} cap's flex top can't be under its default.`);
-    caps.push({ tag, label: str(formData, `cap_${i}_label`) || tag, unit: str(formData, `cap_${i}_unit`) || "oz", soft, hard, per: str(formData, `cap_${i}_per`) === "week" ? "week" : "day" });
+    const capUnit = str(formData, `cap_${i}_unit`) || "oz";
+    const soft = (await amount(formData, `cap_${i}_soft`, capUnit, "/body/settings")) ?? 0;
+    const hard = (await amount(formData, `cap_${i}_hard`, capUnit, "/body/settings")) ?? 0;
+    if (hard < soft) back("/body/settings", `The ${tag} cap's flex top can't be under its default.`, `cap_${i}_hard`);
+    caps.push({ tag, label: str(formData, `cap_${i}_label`) || tag, unit: capUnit, soft, hard, per: str(formData, `cap_${i}_per`) === "week" ? "week" : "day" });
   }
   await db
     .update(schema.bodySettings)
@@ -265,8 +314,8 @@ export async function saveBodySettingsAction(formData: FormData): Promise<void> 
         const measures: Measures = isMeasures(str(formData, "measures")) ? (str(formData, "measures") as Measures) : (settings.measures as Measures | null) ?? "us";
         return { measures, ...unitsFor(measures) };
       })(),
-      calFloor: optNum(formData, "calFloor"),
-      fatFloor: optNum(formData, "fatFloor"),
+      calFloor: await amount(formData, "calFloor", null, "/body/settings"),
+      fatFloor: await amount(formData, "fatFloor", "g", "/body/settings"),
       overOk: MACROS.filter((m) => formData.get(`overOk_${m}`) === "on") as Macro[],
       weekPattern: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), typeOrNull(str(formData, `pattern_${d}`))])),
       refeedDayTypeId: typeOrNull(str(formData, "refeedDayTypeId")),
@@ -278,6 +327,7 @@ export async function saveBodySettingsAction(formData: FormData): Promise<void> 
     })
     .where(eq(schema.bodySettings.id, settings.id));
   refresh();
+  await settle();
 }
 
 /** "Let my coach see my Body data": on or off, logged either way. */
@@ -291,6 +341,7 @@ export async function setBodyShareAction(formData: FormData): Promise<void> {
     db.insert(schema.bodyShareEvents).values({ id: newId(), workspaceId, userId, shared }),
   ]);
   refresh();
+  await settle();
 }
 
 /** "Let AI use my Body data to support me" (rev 219): on or off, logged either way, independent of coach sharing. */
@@ -309,6 +360,7 @@ export async function setBodyAiAction(formData: FormData): Promise<void> {
     db.insert(schema.bodyShareEvents).values({ id: newId(), workspaceId, userId, shared: on, kind: "ai" }),
   ]);
   refresh();
+  await settle();
 }
 
 /* ───────── Day types ───────── */
@@ -320,7 +372,7 @@ export async function saveDayTypeAction(formData: FormData): Promise<void> {
   const name = str(formData, "name").slice(0, 60);
   if (!name) back("/body/settings", "A day type needs a name.");
   // A band is both ends or neither: a macro left blank has no band yet (shown as a total, unmarked).
-  const bands = { calMin: optNum(formData, "calMin"), calMax: optNum(formData, "calMax"), pMin: optNum(formData, "pMin"), pMax: optNum(formData, "pMax"), fMin: optNum(formData, "fMin"), fMax: optNum(formData, "fMax"), cMin: optNum(formData, "cMin"), cMax: optNum(formData, "cMax") };
+  const bands = { calMin: await amount(formData, "calMin", null, "/body/settings"), calMax: await amount(formData, "calMax", null, "/body/settings"), pMin: await amount(formData, "pMin", "g", "/body/settings"), pMax: await amount(formData, "pMax", "g", "/body/settings"), fMin: await amount(formData, "fMin", "g", "/body/settings"), fMax: await amount(formData, "fMax", "g", "/body/settings"), cMin: await amount(formData, "cMin", "g", "/body/settings"), cMax: await amount(formData, "cMax", "g", "/body/settings") };
   for (const [lo, hi, label] of [["calMin", "calMax", "Calories"], ["pMin", "pMax", "Protein"], ["fMin", "fMax", "Fat"], ["cMin", "cMax", "Carbs"]] as const) {
     const a = bands[lo];
     const b = bands[hi];
@@ -336,6 +388,7 @@ export async function saveDayTypeAction(formData: FormData): Promise<void> {
     await db.insert(schema.bodyDayTypes).values({ id: newId(), workspaceId, userId, name, reminder, order: count, ...bands });
   }
   refresh();
+  await settle();
 }
 
 /** A day type goes; days set to it fall back to the pattern, and the pattern and refeed rule forget it. The last one stays. */
@@ -355,6 +408,7 @@ export async function deleteDayTypeAction(formData: FormData): Promise<void> {
       .where(eq(schema.bodySettings.id, settings.id)),
   ]);
   refresh();
+  await settle();
 }
 
 /** Set one date's day type by hand (a swapped lift day, an unplanned refeed), or clear it back to the pattern. */
@@ -373,6 +427,7 @@ export async function setBodyDayTypeAction(formData: FormData): Promise<void> {
   } else if (existing) await db.update(schema.bodyDays).set({ dayTypeId: typeId }).where(eq(schema.bodyDays.id, existing.id));
   else await db.insert(schema.bodyDays).values({ id: newId(), workspaceId, userId, date, dayTypeId: typeId });
   refresh();
+  await settle();
 }
 
 /* ───────── Foods and meals ───────── */
@@ -387,14 +442,16 @@ export async function saveFoodAction(formData: FormData): Promise<void> {
   const unit = storedUnit(choice === "other" ? str(formData, "unitOther") : choice || str(formData, "unit")).slice(0, 30);
   if (!name || !unit) back("/body/foods", "A food needs a name and a unit (pick one, or type it under Other).");
   // Pantry (phase 5, rev 251): the nutrition's basis (cooked unless said raw), a par level, and an entered cooked yield in %.
-  const yieldPct = optNum(formData, "yieldPct");
-  const par = optNum(formData, "par");
-  const food = { name, unit, cal: num(formData, "cal"), p: num(formData, "p"), f: num(formData, "f"), c: num(formData, "c"), sodium: num(formData, "sodium"), capTag: opt(formData, "capTag")?.toLowerCase().slice(0, 30) ?? null, basis: str(formData, "basis") === "raw" ? ("raw" as const) : ("cooked" as const), section: (schema.FOOD_SECTIONS as readonly string[]).includes(str(formData, "section")) ? (str(formData, "section") as schema.FoodSection) : null, par: par != null && par > 0 ? par : null, cookedYield: yieldPct != null && yieldPct >= 10 && yieldPct <= 150 ? Math.round(yieldPct) / 100 : null };
+  const yieldPct = await amount(formData, "yieldPct", null, "/body/foods");
+  const par = await amount(formData, "par", unit, "/body/foods");
+  const macro = async (k: string, to: string | null) => (await amount(formData, k, to, "/body/foods")) ?? 0;
+  const food = { name, unit, cal: await macro("cal", null), p: await macro("p", "g"), f: await macro("f", "g"), c: await macro("c", "g"), sodium: await macro("sodium", null), capTag: opt(formData, "capTag")?.toLowerCase().slice(0, 30) ?? null, basis: str(formData, "basis") === "raw" ? ("raw" as const) : ("cooked" as const), section: (schema.FOOD_SECTIONS as readonly string[]).includes(str(formData, "section")) ? (str(formData, "section") as schema.FoodSection) : null, par: par != null && par > 0 ? par : null, cookedYield: yieldPct != null && yieldPct >= 10 && yieldPct <= 150 ? Math.round(yieldPct) / 100 : null };
   if ([food.cal, food.p, food.f, food.c, food.sodium].some((n) => n < 0)) back("/body/foods", `${name}: macros can't be negative.`);
   if (yieldPct != null && (yieldPct < 10 || yieldPct > 150)) back("/body/foods", `${name}: a cooked yield is between 10% and 150%.`);
   if (id) await db.update(schema.bodyFoods).set(food).where(and(eq(schema.bodyFoods.id, id), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
   else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
   refresh();
+  await settle();
 }
 
 /**
@@ -429,6 +486,7 @@ export async function setBodyDayFlagAction(formData: FormData): Promise<void> {
   if (existing) await db.update(schema.bodyDays).set({ flag }).where(eq(schema.bodyDays.id, existing.id));
   else if (flag) await db.insert(schema.bodyDays).values({ id: newId(), workspaceId, userId, date, dayTypeId: null, off: false, flag });
   refresh();
+  await settle();
 }
 
 export type SummaryState = { error?: string; text?: string; monday?: string } | undefined;
@@ -489,6 +547,7 @@ export async function logPhotoAction(formData: FormData): Promise<void> {
   const items = photoItems(lines);
   await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId, userId, date, slot, name: "From a photo", mealId: null, items, ...totalsOf(items) });
   refresh();
+  await settle();
 }
 
 /** Archived foods leave the picker; meals and past days that use them keep working. */
@@ -497,6 +556,7 @@ export async function archiveFoodAction(formData: FormData): Promise<void> {
   await setUp(v);
   await db.update(schema.bodyFoods).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyFoods.id, str(formData, "id")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** A meal's items come as item_<n>_food / item_<n>_qty pairs; a blank food or a zero quantity drops the row. */
@@ -511,7 +571,7 @@ export async function saveMealAction(formData: FormData): Promise<void> {
   const items: schema.BodyMealItem[] = [];
   for (let i = 0; i < 20; i++) {
     const foodId = str(formData, `item_${i}_food`);
-    const qty = num(formData, `item_${i}_qty`);
+    const qty = (await amount(formData, `item_${i}_qty`, foods.find((f) => f.id === foodId)?.unit, "/body/foods")) ?? 0;
     if (known.has(foodId) && qty > 0) items.push({ foodId, qty });
   }
   if (!items.length) back("/body/foods", `${name}: add at least one food with a quantity.`);
@@ -519,6 +579,7 @@ export async function saveMealAction(formData: FormData): Promise<void> {
   if (id) await db.update(schema.bodyMeals).set({ name, slot, items }).where(and(eq(schema.bodyMeals.id, id), and(eq(schema.bodyMeals.workspaceId, workspaceId), eq(schema.bodyMeals.userId, userId))));
   else await db.insert(schema.bodyMeals).values({ id: newId(), workspaceId, userId, name, slot, items });
   refresh();
+  await settle();
 }
 
 export async function archiveMealAction(formData: FormData): Promise<void> {
@@ -526,6 +587,7 @@ export async function archiveMealAction(formData: FormData): Promise<void> {
   await setUp(v);
   await db.update(schema.bodyMeals).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyMeals.id, str(formData, "id")), and(eq(schema.bodyMeals.workspaceId, workspaceId), eq(schema.bodyMeals.userId, userId))));
   refresh();
+  await settle();
 }
 
 /* ───────── Logging ───────── */
@@ -547,9 +609,11 @@ export async function logMealAction(formData: FormData): Promise<void> {
   if (!meal) return;
   const foods = await db.query.bodyFoods.findMany({ where: and(and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId)), inArray(schema.bodyFoods.id, meal.items.map((i) => i.foodId))) });
   const byId = new Map(foods.map((f) => [f.id, f]));
+  const typed: (number | null)[] = [];
+  for (const [n, i] of meal.items.entries()) typed.push(await amount(formData, `qty_${n}`, byId.get(i.foodId)?.unit));
   const items = meal.items.flatMap((i, n) => {
     const food = byId.get(i.foodId);
-    const adjusted = optNum(formData, `qty_${n}`);
+    const adjusted = typed[n];
     const qty = adjusted !== null && adjusted >= 0 ? adjusted : i.qty;
     return food && qty > 0 ? [entryItem(food, qty)] : [];
   });
@@ -557,6 +621,7 @@ export async function logMealAction(formData: FormData): Promise<void> {
   await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId, userId, date, slot, name: meal.name, mealId: meal.id, items, ...totalsOf(items) });
   await consumePantry(workspaceId, userId, items);
   refresh();
+  await settle();
 }
 
 /** A food × a quantity. */
@@ -565,9 +630,9 @@ export async function logFoodAction(formData: FormData): Promise<void> {
   const settings = await setUp(v);
   const { date, slot } = logTarget(formData, settings.mealSlots);
   const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
-  const typed = num(formData, "qty");
-  if (!food) back(`/body?date=${date}`, "Pick a food.");
-  if (!(typed > 0)) back(`/body?date=${date}`, "Give a quantity above zero.");
+  if (!food) back(`/body?date=${date}`, "Pick a food.", "foodId");
+  const typed = (await amount(formData, "qty", str(formData, "unit") || food!.unit, `/body?date=${date}`)) ?? 0;
+  if (!(typed > 0)) back(`/body?date=${date}`, "Give a quantity above zero.", "qty");
   // Logged in another unit of the same group (g for a food per oz): converted into the food's own unit, so its macros apply.
   const as = str(formData, "unit") || food!.unit;
   const converted = convertQty(typed, as, food!.unit);
@@ -581,6 +646,7 @@ export async function logFoodAction(formData: FormData): Promise<void> {
   await db.insert(schema.bodyEntries).values({ id: newId(), workspaceId, userId, date, slot, name: asBasis.check ? `${food!.name} (weighed raw, check the yield)` : food!.name, mealId: null, items, ...totalsOf(items) });
   await consumePantry(workspaceId, userId, items);
   refresh();
+  await settle();
 }
 
 export async function deleteEntryAction(formData: FormData): Promise<void> {
@@ -588,6 +654,7 @@ export async function deleteEntryAction(formData: FormData): Promise<void> {
   await setUp(v);
   await db.delete(schema.bodyEntries).where(and(eq(schema.bodyEntries.id, str(formData, "id")), and(eq(schema.bodyEntries.workspaceId, workspaceId), eq(schema.bodyEntries.userId, userId))));
   refresh();
+  await settle();
 }
 
 /* ───────── B2, workouts (rev 182) ───────── */
@@ -607,6 +674,7 @@ export async function saveExerciseAction(formData: FormData): Promise<void> {
   if (id) await db.update(schema.bodyExercises).set({ name, kind }).where(and(eq(schema.bodyExercises.id, id), and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))));
   else await db.insert(schema.bodyExercises).values({ id: newId(), workspaceId, userId, name, kind });
   refresh();
+  await settle();
 }
 
 /** Archived exercises leave the pickers; routines and past sessions that use them keep working. */
@@ -615,6 +683,7 @@ export async function archiveExerciseAction(formData: FormData): Promise<void> {
   await setUp(v);
   await db.update(schema.bodyExercises).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyExercises.id, str(formData, "id")), and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** A routine's lines come as item_<n>_exercise / item_<n>_sets / item_<n>_reps; a blank exercise drops the row. */
@@ -633,7 +702,7 @@ export async function saveRoutineAction(formData: FormData): Promise<void> {
   for (let i = 0; i < 20; i++) {
     const exerciseId = str(formData, `item_${i}_exercise`);
     if (!known.has(exerciseId)) continue;
-    items.push({ exerciseId, sets: Math.min(20, Math.max(1, Math.round(num(formData, `item_${i}_sets`)) || 3)), reps: str(formData, `item_${i}_reps`).slice(0, 20) });
+    items.push({ exerciseId, sets: Math.min(20, Math.max(1, Math.round((await amount(formData, `item_${i}_sets`, null, `${TRAINING}/routines`)) ?? 0) || 3)), reps: str(formData, `item_${i}_reps`).slice(0, 20) });
   }
   if (!items.length) back(`${TRAINING}/routines`, `${name}: add at least one exercise.`);
   const typeId = str(formData, "dayTypeId");
@@ -641,6 +710,7 @@ export async function saveRoutineAction(formData: FormData): Promise<void> {
   if (id) await db.update(schema.bodyRoutines).set({ name, dayTypeId, items }).where(and(eq(schema.bodyRoutines.id, id), and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId))));
   else await db.insert(schema.bodyRoutines).values({ id: newId(), workspaceId, userId, name, dayTypeId, items });
   refresh();
+  await settle();
 }
 
 export async function archiveRoutineAction(formData: FormData): Promise<void> {
@@ -648,6 +718,7 @@ export async function archiveRoutineAction(formData: FormData): Promise<void> {
   await setUp(v);
   await db.update(schema.bodyRoutines).set({ archivedAt: nowIso() }).where(and(eq(schema.bodyRoutines.id, str(formData, "id")), and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** The day's session, made on first use: from a routine (its name copied) or empty. One per date; a second start is a no-op. */
@@ -683,16 +754,17 @@ export async function logSetAction(formData: FormData): Promise<void> {
   if (!DATE.test(date) || date > v.today) back(TRAINING, "That day isn't open for a workout.");
   const exercise = await db.query.bodyExercises.findFirst({ where: and(eq(schema.bodyExercises.id, str(formData, "exerciseId")), and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))) });
   if (!exercise) back(trainingAt(date), "Pick an exercise.");
-  const reps = Math.round(num(formData, "reps"));
-  if (reps < 1 || reps > 1000) back(trainingAt(date), `${exercise!.name}: enter the reps.`);
-  const raw = optNum(formData, "weight");
+  const reps = Math.round((await amount(formData, "reps", null, trainingAt(date))) ?? 0);
+  if (reps < 1 || reps > 1000) back(trainingAt(date), `${exercise!.name}: enter the reps.`, "reps");
+  const raw = await amount(formData, "weight", settings.weightUnit, trainingAt(date));
   const weight = raw != null && raw > 0 && raw < 5000 ? raw : null;
-  if (exercise!.kind === "weight" && weight == null) back(trainingAt(date), `${exercise!.name}: enter the weight.`);
+  if (exercise!.kind === "weight" && weight == null) back(trainingAt(date), `${exercise!.name}: enter the weight.`, "weight");
   const session = await sessionFor(workspaceId, userId, date, null);
   await db.insert(schema.bodySets).values({ id: newId(), workspaceId, userId, sessionId: session.id, exerciseId: exercise!.id, date, weight, unit: settings.weightUnit, reps });
   // A set after "Finish workout" reopens the session (phase 3): finished means nothing more was logged.
   if (session.completedAt) await db.update(schema.bodySessions).set({ completedAt: null }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** "Finish workout" (phase 3): the day's session is stamped done, with a note if one was typed. Logging another set reopens it. */
@@ -705,6 +777,7 @@ export async function finishSessionAction(formData: FormData): Promise<void> {
   const session = await sessionFor(workspaceId, userId, date, null);
   await db.update(schema.bodySessions).set({ completedAt: nowIso(), note }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** Undo "Finish workout"; the note stays. */
@@ -715,6 +788,7 @@ export async function reopenSessionAction(formData: FormData): Promise<void> {
   if (!DATE.test(date)) return;
   await db.update(schema.bodySessions).set({ completedAt: null }).where(and(eq(schema.bodySessions.date, date), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
   refresh();
+  await settle();
 }
 
 export async function deleteSetAction(formData: FormData): Promise<void> {
@@ -722,6 +796,7 @@ export async function deleteSetAction(formData: FormData): Promise<void> {
   await setUp(v);
   await db.delete(schema.bodySets).where(and(eq(schema.bodySets.id, str(formData, "id")), and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** Mark a day Off, or undo it. A day with sets logged can't be Off: delete them first. */
@@ -743,6 +818,7 @@ export async function setDayOffAction(formData: FormData): Promise<void> {
   } else if (existing?.dayTypeId) await db.update(schema.bodyDays).set({ off: false }).where(where);
   else if (existing) await db.delete(schema.bodyDays).where(where);
   refresh();
+  await settle();
 }
 
 /* ───────── Pantry (rev 237 phase 5) ───────── */
@@ -757,14 +833,15 @@ export async function savePantryItemAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
   await setUp(v);
   const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
-  if (!food) back(PANTRY, "Pick a food.");
-  const qty = num(formData, "qty");
-  if (!(qty > 0)) back(PANTRY, "Give a quantity above zero.");
+  if (!food) back(PANTRY, "Pick a food.", "foodId");
+  const qty = (await amount(formData, "qty", str(formData, "unit") || food!.unit, PANTRY)) ?? 0;
+  if (!(qty > 0)) back(PANTRY, "Give a quantity above zero.", "qty");
   const values = { foodId: food!.id, qty, unit: storedUnit(str(formData, "unit") || food!.unit).slice(0, 30), state: stateOf(str(formData, "state")), location: locationOf(str(formData, "location")), boughtOn: dateOrNull(str(formData, "boughtOn")), useBy: dateOrNull(str(formData, "useBy")) };
   const id = str(formData, "id");
   if (id) await db.update(schema.bodyPantry).set(values).where(and(eq(schema.bodyPantry.id, id), and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId))));
   else await db.insert(schema.bodyPantry).values({ id: newId(), workspaceId, userId, ...values });
   refresh();
+  await settle();
 }
 
 export async function deletePantryItemAction(formData: FormData): Promise<void> {
@@ -772,6 +849,7 @@ export async function deletePantryItemAction(formData: FormData): Promise<void> 
   await setUp(v);
   await db.delete(schema.bodyPantry).where(and(eq(schema.bodyPantry.id, str(formData, "id")), and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** Some of an item used or thrown out, outside a logged meal: the quantity comes down; at zero (or blank) the item goes. */
@@ -781,20 +859,23 @@ export async function usePantryAction(formData: FormData): Promise<void> {
   const where = and(eq(schema.bodyPantry.id, str(formData, "id")), and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId)));
   const it = await db.query.bodyPantry.findFirst({ where });
   if (!it) return;
-  const used = optNum(formData, "qty");
+  const used = await amount(formData, "qty", it.unit, PANTRY);
   const left = used == null ? 0 : Math.round((it.qty - used) * 100) / 100;
   if (left <= 0) await db.delete(schema.bodyPantry).where(where);
   else await db.update(schema.bodyPantry).set({ qty: left }).where(where);
   refresh();
+  await settle();
 }
 
 /** A food's par level, in its unit; blank clears it. */
 export async function setFoodParAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
   await setUp(v);
-  const par = optNum(formData, "par");
+  const food = await db.query.bodyFoods.findFirst({ columns: { unit: true }, where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
+  const par = await amount(formData, "par", food?.unit, PANTRY);
   await db.update(schema.bodyFoods).set({ par: par != null && par > 0 ? par : null }).where(and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** One raw → cooked weighing of a food; the yield is the median of them (rev 251). */
@@ -802,13 +883,15 @@ export async function addYieldAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
   await setUp(v);
   const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
-  if (!food) back(PANTRY, "Pick a food.");
-  const raw = num(formData, "raw");
-  const cooked = num(formData, "cooked");
-  if (!(raw > 0 && cooked > 0)) back(PANTRY, "Give both weights, raw and cooked.");
+  if (!food) back(PANTRY, "Pick a food.", "foodId");
+  const weighedIn = str(formData, "unit") || "oz";
+  const raw = (await amount(formData, "raw", weighedIn, PANTRY)) ?? 0;
+  const cooked = (await amount(formData, "cooked", weighedIn, PANTRY)) ?? 0;
+  if (!(raw > 0 && cooked > 0)) back(PANTRY, "Give both weights, raw and cooked.", raw > 0 ? "cooked" : "raw");
   if (cooked / raw < 0.1 || cooked / raw > 1.5) back(PANTRY, `${food!.name}: ${raw} raw → ${cooked} cooked isn't a yield (between 10% and 150%).`);
   await db.insert(schema.bodyYields).values({ id: newId(), workspaceId, userId, foodId: food!.id, raw, cooked, unit: storedUnit(str(formData, "unit") || "oz").slice(0, 30), date: v.today });
   refresh();
+  await settle();
 }
 
 /* ───────── Body composition (rev 237 phase 2) ───────── */
@@ -823,14 +906,16 @@ export async function logWeighInAction(formData: FormData): Promise<void> {
   if (!DATE.test(date) || date > v.today) back(WEIGHT, "Pick a day up to today.");
   const time = readTime(str(formData, "time"));
   const readingId = newId();
-  const rows = METRIC_KEYS.flatMap((key) => {
-    const typed = optNum(formData, key);
-    if (typed == null || typed <= 0) return [];
+  const rows: (typeof schema.bodyDaily.$inferInsert)[] = [];
+  for (const key of METRIC_KEYS) {
+    // A mass typed in either unit ("70 kg" for a member in lb) is read in the member's unit first.
+    const typed = await amount(formData, key, METRIC[key].unit === "mass" ? settings.weightUnit : null, WEIGHT);
+    if (typed == null || typed <= 0) continue;
     const value = storedValue(key, typed, settings.weightUnit);
-    if (!inRange(key, value)) back(WEIGHT, `${METRIC[key].label}: that number doesn't look right.`);
-    return [{ id: newId(), workspaceId, userId, date, key, value, source: "manual" as const, readingId, time }];
-  });
-  if (!rows.some((x) => x.key === "weight")) back(WEIGHT, "Enter your weight.");
+    if (!inRange(key, value)) back(WEIGHT, `${METRIC[key].label}: that number doesn't look right.`, key);
+    rows.push({ id: newId(), workspaceId, userId, date, key, value, source: "manual" as const, readingId, time });
+  }
+  if (!rows.some((x) => x.key === "weight")) back(WEIGHT, "Enter your weight.", "weight");
   await db.insert(schema.bodyDaily).values(rows);
   refresh();
   redirect(`${WEIGHT}?logged=1`);
@@ -842,6 +927,7 @@ export async function deleteReadingAction(formData: FormData): Promise<void> {
   await setUp(v);
   await db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.readingId, str(formData, "id")), and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId))));
   refresh();
+  await settle();
 }
 
 /**
@@ -879,19 +965,20 @@ export async function setBodyGoalAction(formData: FormData): Promise<void> {
   const settings = await setUp(v);
   const key = str(formData, "key");
   if (!(key in METRIC) || !METRIC[key as MetricKey].primary) return;
-  const typed = optNum(formData, "target");
+  const typed = await amount(formData, "target", METRIC[key as MetricKey].unit === "mass" ? settings.weightUnit : null, WEIGHT);
   const by = str(formData, "by");
   const existing = await db.query.bodyGoals.findFirst({ where: and(and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)), eq(schema.bodyGoals.key, key)) });
   if (typed == null || typed <= 0) {
     if (existing) await db.delete(schema.bodyGoals).where(eq(schema.bodyGoals.id, existing.id));
   } else {
     const target = storedValue(key as MetricKey, typed, settings.weightUnit);
-    if (!inRange(key as MetricKey, target)) back(WEIGHT, `${METRIC[key as MetricKey].label} goal: that number doesn't look right.`);
+    if (!inRange(key as MetricKey, target)) back(WEIGHT, `${METRIC[key as MetricKey].label} goal: that number doesn't look right.`, "target");
     const values = { target, by: DATE.test(by) ? by : null };
     if (existing) await db.update(schema.bodyGoals).set(values).where(eq(schema.bodyGoals.id, existing.id));
     else await db.insert(schema.bodyGoals).values({ id: newId(), workspaceId, userId, key, ...values });
   }
   refresh();
+  await settle();
 }
 
 /* ───────── The coach, when shared ───────── */
@@ -907,6 +994,7 @@ export async function addBodyCommentAction(formData: FormData): Promise<void> {
   if (!DATE.test(date) || !text) return;
   await db.insert(schema.bodyComments).values({ id: newId(), workspaceId: v.workspace.id, userId: m!.userId, date, authorUserId: v.user.id, text });
   refresh();
+  await settle();
 }
 
 /* ───────── Delete all ───────── */
@@ -1014,7 +1102,7 @@ export async function saveHabitAction(formData: FormData): Promise<void> {
   const kindRaw = str(formData, "kind");
   const kind = (schema.HABIT_KINDS as readonly string[]).includes(kindRaw) ? (kindRaw as schema.HabitKind) : "done";
   const unit = kind === "amount" ? str(formData, "unit").slice(0, 12) || null : kind === "count" ? str(formData, "unit").slice(0, 12) || null : null;
-  const t = optNum(formData, "target");
+  const t = await amount(formData, "target", kind === "amount" ? unit : null, PRACTICES);
   const target = kind === "done" || t == null || t <= 0 ? null : t;
   const days = daysFrom([0, 1, 2, 3, 4, 5, 6].filter((d) => formData.get(`d${d}`) === "1" || formData.get(`d${d}`) === "on"));
   const diff = str(formData, "difficulty");
@@ -1045,8 +1133,8 @@ export async function archiveHabitAction(formData: FormData): Promise<void> {
 
 const MEDS = "/body/practices/meds";
 const ownMed = (workspaceId: string, userId: string, id: string) => and(eq(schema.bodyMeds.id, id), and(eq(schema.bodyMeds.workspaceId, workspaceId), eq(schema.bodyMeds.userId, userId)));
-const optInt = (f: FormData, k: string, lo: number, hi: number): number | null => {
-  const n = optNum(f, k);
+const optInt = async (f: FormData, k: string, lo: number, hi: number): Promise<number | null> => {
+  const n = await amount(f, k, null, MEDS);
   return n == null ? null : Math.min(hi, Math.max(lo, Math.round(n)));
 };
 const optDate = (f: FormData, k: string): string | null => (DATE.test(str(f, k)) ? str(f, k) : null);
@@ -1061,7 +1149,7 @@ export async function saveMedAction(formData: FormData): Promise<void> {
   const type = (MED_TYPES as readonly string[]).includes(str(formData, "type")) ? (str(formData, "type") as MedType) : "supplement";
   const withFood = (WITH_FOOD as readonly string[]).includes(str(formData, "withFood")) ? (str(formData, "withFood") as WithFood) : null;
   const issuedOn = optDate(formData, "issuedOn");
-  const months = optInt(formData, "expiryMonths", 1, 24);
+  const months = await optInt(formData, "expiryMonths", 1, 24);
   // An expiry typed wins; else 6 or 12 months from the issue date when picked (Joy).
   const expiresOn = optDate(formData, "expiresOn") ?? (issuedOn && months ? expiryFrom(issuedOn, months) : null);
   const scriptKind: "paper" | "electronic" | null = str(formData, "scriptKind") === "paper" ? "paper" : str(formData, "scriptKind") === "electronic" ? "electronic" : null;
@@ -1070,26 +1158,26 @@ export async function saveMedAction(formData: FormData): Promise<void> {
     type,
     dose: opt(formData, "dose")?.slice(0, 60) ?? null,
     howTaken: opt(formData, "howTaken")?.slice(0, 80) ?? null,
-    timesPerDay: optInt(formData, "timesPerDay", 0, 12) ?? 1,
+    timesPerDay: await optInt(formData, "timesPerDay", 0, 12) ?? 1,
     days: daysFrom([0, 1, 2, 3, 4, 5, 6].filter((d) => formData.get(`d${d}`) === "1" || formData.get(`d${d}`) === "on")),
     withFood,
     note: opt(formData, "note")?.slice(0, 200) ?? null,
-    perDose: Math.max(0.25, Math.min(100, optNum(formData, "perDose") ?? 1)),
+    perDose: Math.max(0.25, Math.min(100, await amount(formData, "perDose", null, MEDS) ?? 1)),
     unitWord: opt(formData, "unitWord")?.slice(0, 20) ?? null,
-    onHand: (() => {
-      const n = optNum(formData, "onHand");
+    onHand: await (async () => {
+      const n = await amount(formData, "onHand", null, MEDS);
       return n == null ? null : Math.max(0, Math.min(100000, n));
     })(),
-    supplyDays: optInt(formData, "supplyDays", 1, 400),
-    repeatsLeft: type === "prescription" ? optInt(formData, "repeatsLeft", 0, 99) : null,
+    supplyDays: await optInt(formData, "supplyDays", 1, 400),
+    repeatsLeft: type === "prescription" ? await optInt(formData, "repeatsLeft", 0, 99) : null,
     lastFilledOn: optDate(formData, "lastFilledOn"),
     issuedOn: type === "prescription" ? issuedOn : null,
     expiresOn: type === "prescription" ? expiresOn : null,
     scriptKind: type === "prescription" ? scriptKind : null,
     refillRule: str(formData, "refillRule") === "share_used" ? ("share_used" as const) : ("before_runout" as const),
-    refillDays: optInt(formData, "refillDays", 0, 60) ?? 12,
-    refillShare: optInt(formData, "refillShare", 1, 100) ?? 75,
-    remindDays: optInt(formData, "remindDays", 0, 60) ?? 5,
+    refillDays: await optInt(formData, "refillDays", 0, 60) ?? 12,
+    refillShare: await optInt(formData, "refillShare", 1, 100) ?? 75,
+    remindDays: await optInt(formData, "remindDays", 0, 60) ?? 5,
     remindOn: str(formData, "remindOn") === "refill_open" ? ("refill_open" as const) : ("runout" as const),
     pharmacy: type === "prescription" ? opt(formData, "pharmacy")?.slice(0, 80) ?? null : null,
     prescriber: type === "prescription" ? opt(formData, "prescriber")?.slice(0, 80) ?? null : null,
@@ -1122,7 +1210,7 @@ export async function takeMedAction(formData: FormData): Promise<void> {
   if (!DATE.test(date) || date > v.today) back(to, "That day isn't open yet.");
   const med = await db.query.bodyMeds.findFirst({ where: ownMed(workspaceId, userId, str(formData, "medId")) });
   if (!med) throw back(to, "Pick one from your list.");
-  const slot = Math.max(1, Math.min(12, Math.round(num(formData, "slot")) || 1));
+  const slot = Math.max(1, Math.min(12, Math.round((await amount(formData, "slot", null, MEDS)) ?? 0) || 1));
   const have = await db.query.bodyMedLogs.findFirst({ where: and(eq(schema.bodyMedLogs.medId, med.id), eq(schema.bodyMedLogs.date, date), eq(schema.bodyMedLogs.slot, slot)) });
   const fromBottle = takesFromBottle(med, date) && med.onHand != null;
   if (have) {
@@ -1142,7 +1230,7 @@ export async function refillMedAction(formData: FormData): Promise<void> {
   await setUp(v);
   const med = await db.query.bodyMeds.findFirst({ where: ownMed(workspaceId, userId, str(formData, "id")) });
   if (!med) throw back(MEDS, "Pick one from your list.");
-  const r = refill(med, v.today, optNum(formData, "added"));
+  const r = refill(med, v.today, await amount(formData, "added", null, MEDS));
   if (!r.ok) throw back(MEDS, r.why);
   await db.update(schema.bodyMeds).set({ onHand: r.onHand, repeatsLeft: r.repeatsLeft, lastFilledOn: r.lastFilledOn }).where(eq(schema.bodyMeds.id, med.id));
   refresh();
@@ -1155,7 +1243,7 @@ export async function fillBoxesMedAction(formData: FormData): Promise<void> {
   await setUp(v);
   const med = await db.query.bodyMeds.findFirst({ where: ownMed(workspaceId, userId, str(formData, "id")) });
   if (!med) throw back(MEDS, "Pick one from your list.");
-  const r = fillBoxes(med, num(formData, "days") || 14, v.today, { addDays, daysBetween, weekday });
+  const r = fillBoxes(med, (await amount(formData, "days", null, MEDS)) || 14, v.today, { addDays, daysBetween, weekday });
   if (!r.ok) throw back(MEDS, r.why);
   await db.update(schema.bodyMeds).set({ onHand: r.onHand, boxedUntil: r.boxedUntil }).where(eq(schema.bodyMeds.id, med.id));
   refresh();
@@ -1168,7 +1256,7 @@ export async function countMedAction(formData: FormData): Promise<void> {
   await setUp(v);
   const med = await db.query.bodyMeds.findFirst({ where: ownMed(workspaceId, userId, str(formData, "id")) });
   if (!med) throw back(MEDS, "Pick one from your list.");
-  const n = optNum(formData, "onHand");
+  const n = await amount(formData, "onHand", null, MEDS);
   if (n == null || n < 0) throw back(MEDS, "Type how many are left.");
   await db.update(schema.bodyMeds).set({ onHand: Math.min(100000, n) }).where(eq(schema.bodyMeds.id, med.id));
   refresh();
@@ -1224,11 +1312,13 @@ export async function logHabitAction(formData: FormData): Promise<void> {
   let value: number | null;
   if (habit.kind === "done") value = str(formData, "value") === "0" || (str(formData, "value") === "" && existing) ? null : 1;
   else {
-    const n = optNum(formData, "value");
-    if (n == null) throw back(to, `How much ${habit.name.toLowerCase()}? Give a number.`);
-    // Typed in the member's system (rev 424), stored in the habit's own unit, so a switch never rewrites a day.
+    // Typed in the member's system (rev 424), stored in the habit's own unit, so a switch never rewrites a day. "500 ml" in a
+    // habit shown in fl oz is read in fl oz first (rev 444).
     const settings = await bodySettingsFor(workspaceId, userId);
-    const typed = storedFromShown(n, habitShown(habit.unit, habit.target, isMeasures(settings?.measures) ? settings!.measures : "us"));
+    const shown = habitShown(habit.unit, habit.target, isMeasures(settings?.measures) ? settings!.measures : "us");
+    const n = await amount(formData, "value", habit.kind === "amount" ? (shown.unit ?? habit.unit) : null, to);
+    if (n == null) throw back(to, `How much ${habit.name.toLowerCase()}? Give a number.`, "value");
+    const typed = storedFromShown(n, shown);
     value = typed > 0 && typed < 1_000_000 ? typed : null;
   }
   if (existing) await db.delete(schema.bodyHabitLogs).where(and(eq(schema.bodyHabitLogs.id, existing.id), and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId))));
@@ -1245,7 +1335,7 @@ export async function logSleepAction(formData: FormData): Promise<void> {
   if (!DATE.test(date) || date > v.today) back(SLEEP, "That night hasn't happened yet.");
   const hours = parseHours(str(formData, "hours"));
   if (hours == null || !recoveryInRange("sleep_h", hours)) throw back(SLEEP, "Hours slept: give a time like 7:30 or 7.5.");
-  const score = optNum(formData, "score");
+  const score = await amount(formData, "score", null, "/body/sleep");
   if (score != null && !recoveryInRange("sleep_score", score)) back(SLEEP, "A sleep score is 0 to 100.");
   const readingId = sleepReadingId(date);
   const own = and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId));
@@ -1264,6 +1354,7 @@ export async function deleteSleepAction(formData: FormData): Promise<void> {
   if (!DATE.test(date)) return;
   await db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.readingId, sleepReadingId(date)), and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId))));
   refresh();
+  await settle();
 }
 
 /** The health log (revs 231, 251): an injury with its start, side, the movements it affects and the exercises to leave out. Member-only. */
@@ -1321,7 +1412,7 @@ export async function setPlanAction(formData: FormData): Promise<void> {
   const mealId = str(formData, "mealId");
   const meal = await db.query.bodyMeals.findFirst({ where: and(eq(schema.bodyMeals.id, mealId), and(eq(schema.bodyMeals.workspaceId, workspaceId), eq(schema.bodyMeals.userId, userId))) });
   if (!meal) back(SHOPPING, "Pick one of your saved meals.");
-  const times = Math.max(0, Math.min(21, Math.round(optNum(formData, "times") ?? 1)));
+  const times = Math.max(0, Math.min(21, Math.round((await amount(formData, "times", null, SHOPPING)) ?? 1)));
   const monday = startOfWeek(v.today);
   const own = and(and(eq(schema.bodyPlan.workspaceId, workspaceId), eq(schema.bodyPlan.userId, userId)), and(eq(schema.bodyPlan.monday, monday), eq(schema.bodyPlan.mealId, mealId)));
   await db.delete(schema.bodyPlan).where(own);
@@ -1336,8 +1427,8 @@ export async function boughtAction(formData: FormData): Promise<void> {
   await setUp(v);
   const food = await db.query.bodyFoods.findFirst({ where: and(eq(schema.bodyFoods.id, str(formData, "foodId")), and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId))) });
   if (!food) throw back(SHOPPING, "Pick a food.");
-  const qty = optNum(formData, "qty");
-  if (qty == null || qty <= 0) throw back(SHOPPING, `How much ${food.name.toLowerCase()}?`);
+  const qty = await amount(formData, "qty", food.unit, SHOPPING);
+  if (qty == null || qty <= 0) throw back(SHOPPING, `How much ${food.name.toLowerCase()}?`, "qty");
   await db.insert(schema.bodyPantry).values({ id: newId(), workspaceId, userId, foodId: food.id, qty, unit: food.unit, state: food.basis, location: "fridge", boughtOn: v.today, useBy: null });
   refresh();
   redirect(SHOPPING);

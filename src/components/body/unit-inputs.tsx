@@ -27,7 +27,8 @@ export function UnitPicker({ value, preferred }: { value?: string; preferred: "o
         ))}
         <option value="other">Other…</option>
       </select>
-      {choice === "other" ? <input name="unitOther" className="field w-24 py-1 text-sm" defaultValue={read.unit ? "" : read.other} placeholder="e.g. strip" maxLength={30} required aria-label="Other unit" data-testid="unit-other" /> : null}
+      {/* Always drawn (hidden unless Other is picked), so a draft put back after a reload has a box to land in (rev 444). */}
+      <input name="unitOther" className="field w-24 py-1 text-sm" defaultValue={read.unit ? "" : read.other} placeholder="e.g. strip" maxLength={30} required={choice === "other"} hidden={choice !== "other"} aria-label="Other unit" data-testid="unit-other" />
     </span>
   );
 }
@@ -81,7 +82,7 @@ export function LogFoodForm({ action, foods, slots, defaultSlot, date, recent = 
       </label>
       <label className="w-20">
         <span className="label">Qty</span>
-        <input name="qty" type="number" step="any" min={0} defaultValue={1} className={`${big} tabular`} />
+        <input name="qty" type="text" autoComplete="off" inputMode="decimal" defaultValue={1} className={`${big} tabular`} />
       </label>
       <label>
         <span className="label">Unit</span>

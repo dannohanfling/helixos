@@ -3,6 +3,7 @@
  * portions and macros, and nothing is logged until they check the lines and press Log. This module is pure: the task the model
  * gets, the reading of its answer, the lines carried through the confirm form, and the entry items they become.
  */
+import { parseAmount } from "@/lib/engine/amount";
 import type { BodyEntryItem } from "@/db/schema";
 
 export const PHOTO_TASK = `You read one meal photo and answer with JSON only, no prose: {"lines":[{"name":"Grilled chicken breast","qty":6,"unit":"oz","cal":280,"p":52,"f":6,"c":0}],"note":"one short caveat"}.
@@ -14,7 +15,9 @@ export const PHOTO_MAX_LINES = 12;
 const UNITS = ["oz", "g", "cup", "tbsp", "tsp", "slice", "each", "piece", "ml", "fl oz", "scoop", "serving"];
 
 const num = (v: unknown, max = 100000): number | null => {
-  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  // A typed quantity reads the way people write it (rev 444): "1,5", "8 oz" (its unit is the line's own).
+  const read = typeof v === "string" ? parseAmount(v) : null;
+  const n = typeof v === "number" ? v : read && !("error" in read) ? read.value : NaN;
   return Number.isFinite(n) && n >= 0 && n <= max ? Math.round(n * 10) / 10 : null;
 };
 const clean = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);

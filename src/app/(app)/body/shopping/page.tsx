@@ -102,7 +102,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
               </label>
               <label className="w-24">
                 <span className="label">Times</span>
-                <input name="times" type="number" min={1} max={21} defaultValue={3} className="field py-2 text-base tabular sm:py-1 sm:text-sm" data-testid="plan-times" />
+                <input name="times" type="text" autoComplete="off" inputMode="decimal" defaultValue={3} className="field py-2 text-base tabular sm:py-1 sm:text-sm" data-testid="plan-times" />
               </label>
               <SubmitButton className="btn btn-humanos btn-sm" pendingText="Adding…" data-testid="plan-add">
                 Plan it
@@ -140,7 +140,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
                       <form action={boughtAction} className="mt-1 flex items-center gap-1">
                         <input type="hidden" name="foodId" value={l.foodId} />
                         <span className="w-24">
-                          <input name="qty" type="number" step="any" min={0} defaultValue={l.toBuy} className="field py-1 text-sm tabular" aria-label={`${l.name} bought, in ${l.unit}`} />
+                          <input name="qty" type="text" autoComplete="off" inputMode="decimal" defaultValue={l.toBuy} className="field py-1 text-sm tabular" aria-label={`${l.name} bought, in ${l.unit}`} />
                         </span>
                         <span className="text-xs text-ink-3">{l.unit}</span>
                         <SubmitButton className="btn btn-soft btn-sm" pendingText="…" data-testid="shopping-bought">

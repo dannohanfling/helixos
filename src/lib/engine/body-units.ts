@@ -3,6 +3,8 @@
  * or volume a quantity converts; count units and Other never do. Free-text units saved before the list existed are read onto it
  * when they match, and kept as Other when they don't: nothing saved is lost.
  */
+import { parseAmount } from "@/lib/engine/amount";
+
 export type UnitGroup = "weight" | "volume" | "count";
 
 /** Each unit's size in the group's base: grams for weight, millilitres for volume. Count units have no size. */
@@ -66,4 +68,22 @@ export function convertQty(qty: number, from: string, to: string): number | null
   const fb = byUnit.get(b);
   if (!fa?.base || !fb?.base || fa.group !== fb.group) return null;
   return (qty * fa.base) / fb.base;
+}
+
+/**
+ * A typed amount for a box measured in `to` (rev 444): "154 lb" in a kg box is 69.85, "500 ml" in a cup box is 2.11, and "8 oz"
+ * in a gram box is 226.8. A weight or volume that doesn't convert to `to` is refused, as is one typed where no unit belongs
+ * (`to` absent: reps, days, a count; "2 slices" counts there); other words after the number ("30 tablets", "21%", "12 reps") are read past. Blank is null.
+ */
+export function amountIn(text: string | null | undefined, to?: string | null): number | null | { error: string } {
+  const a = parseAmount(text);
+  if (a == null || "error" in a) return a;
+  if (!a.unit) return a.value;
+  const typed = readUnit(a.unit).unit;
+  if (!typed) return a.value;
+  const target = to ? (readUnit(to).unit ?? to.trim()) : null;
+  if (!target) return byUnit.get(typed)?.group === "count" ? a.value : { error: `Just the number here, without "${a.unit}".` };
+  const n = convertQty(a.value, typed, target);
+  if (n == null) return { error: `This is in ${target}; ${a.unit} doesn't convert to it.` };
+  return Math.round(n * 100) / 100;
 }

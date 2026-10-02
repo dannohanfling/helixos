@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { Card, Disclosure } from "@/components/ui";
 import { HumanosHeader } from "@/components/body/humanos-header";
+import { DraftKeeper } from "@/components/draft-keeper";
 import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { formatDate, formatDateTime } from "@/lib/dates";
@@ -25,9 +26,9 @@ function DayTypeFields({ t }: { t?: schema.BodyDayType }) {
         {label} <span className="normal-case text-ink-3">({unit})</span>
       </span>
       <div className="flex items-center gap-1">
-        <input name={lo} type="number" step="any" min={0} className="field w-full py-1 text-sm tabular" defaultValue={t?.[lo] == null ? "" : String(t[lo])} placeholder="from" aria-label={`${label} from`} />
+        <input name={lo} type="text" autoComplete="off" inputMode="decimal" className="field w-full py-1 text-sm tabular" defaultValue={t?.[lo] == null ? "" : String(t[lo])} placeholder="from" aria-label={`${label} from`} />
         <span className="text-ink-3">–</span>
-        <input name={hi} type="number" step="any" min={0} className="field w-full py-1 text-sm tabular" defaultValue={t?.[hi] == null ? "" : String(t[hi])} placeholder="to" aria-label={`${label} to`} />
+        <input name={hi} type="text" autoComplete="off" inputMode="decimal" className="field w-full py-1 text-sm tabular" defaultValue={t?.[hi] == null ? "" : String(t[hi])} placeholder="to" aria-label={`${label} to`} />
       </div>
     </div>
   );
@@ -133,6 +134,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
         </ul>
         <Disclosure summary={<span className="btn btn-soft btn-sm">＋ New day type</span>} className="mt-3">
           <form action={saveDayTypeAction} className="rounded-lg border p-3">
+            <DraftKeeper id={`body.daytype.${v.user.id}.new`} />
             <DayTypeFields />
             <SubmitButton className="btn btn-primary btn-sm mt-2" pendingText="Saving…">
               Add day type
@@ -143,6 +145,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
 
       <Card className="mb-4" title="Your week, refeeds, floors and caps" id="week">
         <form action={saveBodySettingsAction} className="space-y-4" data-testid="body-settings-form">
+          <DraftKeeper id={`body.settings.${v.user.id}`} />
           <div>
             <span className="label">Weekly pattern</span>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
@@ -180,7 +183,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
             </label>
             <label>
               <span className="label">Then every (days)</span>
-              <input name="refeedEveryDays" type="number" min={1} max={60} className="field py-1 text-sm tabular" defaultValue={s.refeedEveryDays} />
+              <input name="refeedEveryDays" type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={s.refeedEveryDays} />
             </label>
           </div>
           <p className="-mt-2 text-xs text-ink-3">{refeedNext ? `Next refeed: ${formatDate(refeedNext, { weekday: "long", month: "short", day: "numeric" })}. It replaces that day's usual type.` : "No refeed days until you set the next one."}</p>
@@ -188,11 +191,11 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
           <div className="grid gap-3 sm:grid-cols-4">
             <label>
               <span className="label">Calorie floor</span>
-              <input name="calFloor" type="number" min={0} className="field py-1 text-sm tabular" defaultValue={s.calFloor ?? ""} placeholder="none" />
+              <input name="calFloor" type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={s.calFloor ?? ""} placeholder="none" />
             </label>
             <label>
               <span className="label">Fat floor (g)</span>
-              <input name="fatFloor" type="number" min={0} className="field py-1 text-sm tabular" defaultValue={s.fatFloor ?? ""} placeholder="none" />
+              <input name="fatFloor" type="text" autoComplete="off" inputMode="decimal" className="field py-1 text-sm tabular" defaultValue={s.fatFloor ?? ""} placeholder="none" />
             </label>
             <label>
               <span className="label">Measures</span>
@@ -230,8 +233,8 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
                   <input name={`cap_${i}_tag`} className="field py-1" defaultValue={c?.tag ?? ""} placeholder="tag" aria-label="Cap tag" />
                   <input name={`cap_${i}_label`} className="field py-1" defaultValue={c?.label ?? ""} placeholder="label" aria-label="Cap label" />
                   <input name={`cap_${i}_unit`} className="field py-1" defaultValue={c?.unit ?? ""} placeholder="oz" aria-label="Cap unit" />
-                  <input name={`cap_${i}_soft`} type="number" step="any" min={0} className="field py-1 tabular" defaultValue={c?.soft ?? ""} placeholder="default" aria-label="Cap default" />
-                  <input name={`cap_${i}_hard`} type="number" step="any" min={0} className="field py-1 tabular" defaultValue={c?.hard ?? ""} placeholder="flex top" aria-label="Cap flex top" />
+                  <input name={`cap_${i}_soft`} type="text" autoComplete="off" inputMode="decimal" className="field py-1 tabular" defaultValue={c?.soft ?? ""} placeholder="default" aria-label="Cap default" />
+                  <input name={`cap_${i}_hard`} type="text" autoComplete="off" inputMode="decimal" className="field py-1 tabular" defaultValue={c?.hard ?? ""} placeholder="flex top" aria-label="Cap flex top" />
                   <select name={`cap_${i}_per`} className="field py-1" defaultValue={c?.per ?? "day"} aria-label="Cap per">
                     <option value="day">a day</option>
                     <option value="week">a week</option>
