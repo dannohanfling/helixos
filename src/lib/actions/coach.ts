@@ -22,15 +22,29 @@ import { parseTaskLines, TASK_SOURCES } from "@/lib/engine/notes";
 import { assignTasks } from "@/lib/queries/tasks";
 import { award, totalPoints } from "@/lib/queries/points";
 import { ADJUST_CAP } from "@/lib/engine/points";
+import { PROGRAM_ORDER } from "@/lib/engine/recordings";
 
+/** The wallet pass on or off for one client. The tier is its own form now (rev 442): this never touches it. */
 export async function setClientPassAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
   const membershipId = str(formData, "membershipId");
   const enabled = str(formData, "enabled") === "1";
-  const tier = str(formData, "programTier");
   await db
     .update(schema.memberships)
-    .set({ passEnabled: enabled, ...(tier ? { programTier: tier } : {}) })
+    .set({ passEnabled: enabled })
+    .where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
+  refresh();
+}
+
+/** A client's program tier, saved on change from the coach's table (rev 442). Only the four tiers; only the coach's own workspace. */
+export async function setClientTierAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const membershipId = str(formData, "membershipId");
+  const tier = PROGRAM_ORDER.find((t) => t === str(formData, "programTier"));
+  if (!tier) return;
+  await db
+    .update(schema.memberships)
+    .set({ programTier: tier })
     .where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
   refresh();
 }

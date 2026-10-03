@@ -22,6 +22,7 @@ export const GHL_SCOPES: GhlScope[] = [
   { scope: "medias.write", why: "POST /medias/upload-file: putting a rendered graphic into the client's Media Storage for the Social Planner to reference", use: "next" },
   { scope: "emails/builder.readonly", why: "GET /emails/builder: the client's email templates", use: "next" },
   { scope: "emails/builder.write", why: "POST /emails/builder and /emails/builder/data: HelixOS writes the client's marketing email template", use: "next" },
+  { scope: "contacts.readonly", why: "GET /contacts/ (the search's total): a client's contact count for the 10 Million Lives tracker, pulled only when the member confirms it; not called today, on the list now while no client has connected (Danno, rev 464)", use: "next" },
   { scope: "contacts.write", why: "POST /contacts/upsert: booked calls and new clients become contacts in the sub-account", use: "now" },
   { scope: "locations.readonly", why: "GET /locations/{locationId}: the sub-account's name, shown in the green Connected state so the client sees which account is connected", use: "now" },
   { scope: "locations/customFields.write", why: "POST /locations/{locationId}/customFields: creating the helixos_user_ns custom field that carries a chatbot lead's id; not called today, on the list so the Community Loyalty path never needs a new token", use: "next" },

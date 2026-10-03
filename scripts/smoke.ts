@@ -259,11 +259,34 @@ async function main() {
   await page.goto(`${base}/join/ACADEMY1`);
   await expectText(page, "Join Evolve Omega Academy", "join");
   const stamp = Date.now();
-  await page.fill('input[name="name"]', "Smoke Tester");
-  await page.fill('input[name="email"]', `smoke+${stamp}@example.com`);
+  // Sign-up (rev 387): first and last name, no business name, a confirmed password; a refusal keeps every box as typed.
+  if (await page.locator('input[name="businessName"]').count()) throw new Error("sign-up asks no business name");
+  await page.fill('input[name="firstName"]', "Smoke");
+  await page.fill('input[name="lastName"]', "Tester");
+  await page.fill('input[name="email"]', "client@demo.helixos.app");
   await page.fill('input[name="password"]', "password123");
+  await page.fill('input[name="confirm"]', "password12");
+  await page.locator('[data-testid="join-mismatch"]').waitFor({ timeout: 5000 });
+  if (!(await page.locator('[data-testid="join-mismatch"]').innerText()).includes("The two passwords don't match.")) throw new Error("the mismatch is said under the second box as it is typed");
+  await page.click('button:has-text("Join and start Day 1")');
+  await page.waitForTimeout(500);
+  if (!page.url().includes("/join/")) throw new Error("a mismatch is refused before anything is sent");
+  await page.click('[data-testid="join-show-password"]');
+  if ((await page.locator('input[name="password"]').getAttribute("type")) !== "text" || (await page.locator('input[name="confirm"]').getAttribute("type")) !== "text") throw new Error("Show shows both passwords");
+  await page.fill('input[name="confirm"]', "password123");
+  if (await page.locator('[data-testid="join-mismatch"]').count()) throw new Error("the line goes once the two match");
+  // An email that has an account, with another password: refused, and nothing typed is lost.
+  await page.click('button:has-text("Join and start Day 1")');
+  await expectText(page, "An account with that email exists", "join refused for a used email");
+  for (const [field, want] of [["firstName", "Smoke"], ["lastName", "Tester"], ["email", "client@demo.helixos.app"], ["password", "password123"], ["confirm", "password123"]] as const) {
+    if ((await page.inputValue(`input[name="${field}"]`)) !== want) throw new Error(`a refusal keeps ${field} as typed`);
+  }
+  await page.fill('input[name="email"]', `smoke+${stamp}@example.com`);
   await page.click('button:has-text("Join and start Day 1")');
   await page.waitForURL(/\/today/);
+  const joined = await db.query.users.findFirst({ where: eq(schema.users.email, `smoke+${stamp}@example.com`) });
+  if (joined?.name !== "Smoke Tester") throw new Error(`first and last are kept as the one name: ${joined?.name}`);
+  console.log("✓ sign-up: first and last name kept as one, no business name, the mismatch said and refused before sending, Show for both, a refusal keeps every box");
   await expectText(page, "Lock in your day", "new client today");
   await shot(page, "15-new-client-day-one");
 

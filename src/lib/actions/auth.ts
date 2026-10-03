@@ -34,11 +34,12 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
 }
 
 const joinSchema = z.object({
-  code: z.string().min(4),
-  name: z.string().min(1).max(80),
-  email: z.string().email(),
+  code: z.string().min(4, "Enter the invite code from your coach."),
+  firstName: z.string().min(1, "Enter your first name.").max(40),
+  lastName: z.string().min(1, "Enter your last name.").max(40),
+  email: z.string().email("Enter your email address."),
   password: z.string().min(8, "Use at least 8 characters."),
-  businessName: z.string().max(120).optional(),
+  confirm: z.string(),
 });
 
 /** The browser's IANA zone from the join form, when it's one the runtime knows. */
@@ -55,13 +56,17 @@ function browserTimezone(tz: string): string | null {
 export async function joinAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const parsed = joinSchema.safeParse({
     code: String(formData.get("code") ?? "").trim().toUpperCase(),
-    name: String(formData.get("name") ?? "").trim(),
+    firstName: String(formData.get("firstName") ?? "").trim(),
+    lastName: String(formData.get("lastName") ?? "").trim(),
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
     password: formData.get("password"),
-    businessName: String(formData.get("businessName") ?? "").trim() || undefined,
+    confirm: String(formData.get("confirm") ?? ""),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
-  const { code, name, email, password, businessName } = parsed.data;
+  const { code, firstName, lastName, email, password, confirm } = parsed.data;
+  if (confirm !== password) return { error: "The two passwords don't match." };
+  // One name, as every account before this one has it (rev 387): first and last are asked for apart and kept together.
+  const name = `${firstName} ${lastName}`;
   const ip = await clientIp();
   if (!(await allow(`join:ip:${ip}`, 20, 15 * 60000))) return { error: "Too many attempts. Wait 15 minutes and try again." };
   const workspace = await db.query.workspaces.findFirst({
@@ -82,7 +87,7 @@ export async function joinAction(_prev: AuthState, formData: FormData): Promise<
   });
   if (!existing) {
     const membershipId = newId();
-    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: workspace.id, userId: user.id, role, businessName, timezone: browserTimezone(String(formData.get("timezone") ?? "")) });
+    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: workspace.id, userId: user.id, role, timezone: browserTimezone(String(formData.get("timezone") ?? "")) });
     if (role === "client") await seedNewClient(workspace.id, user.id);
   }
   await markSignedIn(user.id);

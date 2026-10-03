@@ -50,9 +50,11 @@ async function main() {
     await anonCtx.close();
     console.log("✓ brand on the join screen; invite page noindex with a shareable card; robots.txt disallows the app");
     const email = `firstday-${Date.now()}@example.com`;
-    await page.fill('input[name="name"]', "Priya Natarajan");
+    await page.fill('input[name="firstName"]', "Priya");
+    await page.fill('input[name="lastName"]', "Natarajan");
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', "firstday-pass-123");
+    await page.fill('input[name="confirm"]', "firstday-pass-123");
     await Promise.all([page.waitForURL(/\/today/, { timeout: 20000 }), page.click('button[type="submit"]')]);
 
     // Welcome card, not raw operational data; nothing behind the login is indexable

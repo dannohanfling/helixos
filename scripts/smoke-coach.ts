@@ -113,6 +113,25 @@ async function main() {
     if ((await page.locator('[data-testid="brand-aliases"]').inputValue()) !== "Turas") throw new Error("the permitted name is read back");
     console.log("✓ brand kit (§6.1): faces from the list or typed under Other with the who-will-not-see line; the preview draws the kit as typed and marks the slide that cannot read; the check proposes an ink with Apply; ash grey on cream still refused on the server with the ratio; the Turas kit saved and read back; the accent pair warns with its ratio");
     await page.goto(`${base}/coach`);
+    // The tier (rev 442): its own form, saved the moment it changes with the green, never touching the pass; read in full.
+    const mayaRow = page.locator("tr", { has: page.locator('[data-testid="client-link"]', { hasText: "Maya" }) }).first();
+    const heads = await page.locator("table", { has: page.locator('[data-testid="client-link"]') }).first().locator("thead th").allInnerTexts();
+    if (heads.filter((h) => /^tier$/i.test(h.trim())).length !== 1 || !heads.some((h) => /^level$/i.test(h.trim()))) throw new Error(`one Tier column and a Level column: ${heads.join(" | ")}`);
+    const passBefore = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.passEnabled;
+    const nextTier = mm.programTier === "Luxe" ? "Elite" : "Luxe";
+    const tierBox = mayaRow.locator('[data-testid="tier-select"]');
+    const shown = await tierBox.evaluate((el: HTMLSelectElement) => ({ box: el.clientWidth, text: (() => { const c = document.createElement("canvas").getContext("2d")!; c.font = getComputedStyle(el).font; return Math.max(...Array.from(el.options).map((o) => c.measureText(o.text).width)); })() }));
+    // The box's own width less the arrow's room (about 24 px) must hold the longest tier's words.
+    if (shown.box - 24 < shown.text) throw new Error(`the tier reads in full: box ${shown.box}px for ${Math.round(shown.text)}px of text`);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), tierBox.selectOption(nextTier)]);
+    await mayaRow.locator('[data-testid="tier-form"] [data-testid="save-confirm"]').waitFor({ timeout: 15000 });
+    const after = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!;
+    if (after.programTier !== nextTier || after.passEnabled !== passBefore) throw new Error(`the tier saved on change and the pass stayed: ${after.programTier}, pass ${after.passEnabled}`);
+    const passLabel = (await mayaRow.locator('[data-testid="pass-toggle"]').innerText()).trim();
+    if (!/^🎟️ Pass: (on|off)$/.test(passLabel) || !(await mayaRow.locator('[data-testid="pass-toggle"]').getAttribute("title"))?.includes("wallet pass")) throw new Error(`the pass says it is the pass: "${passLabel}"`);
+    await db.update(schema.memberships).set({ programTier: mm.programTier }).where(eq(schema.memberships.id, mm.id));
+    console.log(`✓ tier: saved on change to ${nextTier} with the green, the pass untouched; read in full; Level and Tier columns; "${passLabel}" with its line`);
+    await page.reload();
     await page.locator('[data-testid="client-link"]', { hasText: "Maya" }).first().click();
     await page.waitForURL(new RegExp(`/coach/${mm.id}$`));
     for (const t of ["Tier", "Streak", "Last active", "Goal", "In their words", "Call notes", "Pathway", "Claimed rewards", "What they've built", "Revenue by pillar"]) await expectText(page, t, `detail: ${t}`);

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 73,
+    date: "2026-10-03",
+    title: "A simpler sign-up, and tiers that save",
+    lines: [
+      "Signing up now asks for your first and last name and your password twice, with Show passwords to check them; if something is refused, everything you typed stays in the form. Your business name is added later on Settings.",
+      "For coaches: a client's tier on the Coach page saves the moment you pick it, shows in full, and no longer touches the pass. The points column is now called Level, and the pass button reads \"Pass: on\" or \"Pass: off\".",
+      "Connecting GoHighLevel asks for one more permission, contacts.readonly, for the impact tracker that's coming.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 72,
     date: "2026-10-03",
     title: "Past feedback and Office Hours, brought over from Airtable",

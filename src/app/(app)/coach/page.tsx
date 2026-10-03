@@ -30,6 +30,8 @@ import { loadRewardsConfig } from "@/lib/rewards-config";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
+import { TierSelect } from "@/components/tier-select";
+import { PROGRAM_ORDER } from "@/lib/engine/recordings";
 
 export const metadata = { title: "Coach" };
 
@@ -163,7 +165,7 @@ export default async function CoachPage() {
                     <th className="py-2 pr-3">Today</th>
                     <th className="py-2 pr-3">Streak</th>
                     <th className="py-2 pr-3" title="Days in band this week · last weigh-in · sessions this week, for clients sharing HumanOS with you">HumanOS</th>
-                    <th className="py-2 pr-3">Tier</th>
+                    <th className="py-2 pr-3" title="The points level they have earned">Level</th>
                     <th className="py-2 pr-3 text-right">Pathway</th>
                     <th className="py-2 pr-3 text-right">Last active</th>
                     <th className="py-2 text-right">Tier</th>
@@ -226,19 +228,17 @@ export default async function CoachPage() {
                         )}
                       </td>
                       <td className="py-2 text-right text-xs">
-                        <form action={setClientPassAction} className="flex items-center justify-end gap-1">
+                        <div className="flex flex-wrap items-center justify-end gap-1">
                           {/* Who has turned coach working access off (on by default since 1 Oct): the one mark, nothing beside anyone else. */}
                           {!r.m.coachCanWork ? <span title="Turned off coach working access" className="text-ink-3" data-testid="coach-work-off">⊘</span> : null}
-                          <input type="hidden" name="membershipId" value={r.m.id} />
-                          <select className="field w-auto py-1 text-xs" name="programTier" defaultValue={r.m.programTier}>
-                            {["Accelerator", "Academy", "Elite", "Luxe"].map((t) => (
-                              <option key={t}>{t}</option>
-                            ))}
-                          </select>
-                          <SubmitButton className={`btn btn-xs ${r.m.passEnabled ? "btn-accent" : "btn-ghost"}`} name="enabled" value={r.m.passEnabled ? "0" : "1"} title="Community Pass" pendingText="Saving…">
-                            🎟️ {r.m.passEnabled ? "on" : "off"}
-                          </SubmitButton>
-                        </form>
+                          <TierSelect membershipId={r.m.id} value={r.m.programTier} tiers={PROGRAM_ORDER} name={r.u?.name ?? "This client"} />
+                          <form action={setClientPassAction}>
+                            <input type="hidden" name="membershipId" value={r.m.id} />
+                            <SubmitButton className={`btn btn-xs whitespace-nowrap ${r.m.passEnabled ? "btn-accent" : "btn-ghost"}`} name="enabled" value={r.m.passEnabled ? "0" : "1"} title={`The ${v.workspace.name} wallet pass. Not wired up yet, so turning it on or off sends nothing.`} pendingText="Saving…" data-testid="pass-toggle">
+                              🎟️ Pass: {r.m.passEnabled ? "on" : "off"}
+                            </SubmitButton>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   ))}
