@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fadeOf, gymGroup, nextFor, sameTopRun, stepFor, topReps, trendOf, workoutRead, type ReadExercise } from "@/lib/engine/body-reads";
+import { dayRead, fadeOf, gymGroup, nextFor, sameTopRun, stepFor, topReps, trendOf, workoutRead, type ReadExercise } from "@/lib/engine/body-reads";
 
 const ex = (o: Partial<ReadExercise>): ReadExercise => ({ exerciseId: "e1", name: "Bench press", kind: "weight", targetSets: 3, targetReps: "8-12", targetWeight: null, today: [], last: [], lastDate: null, pr: null, sameTopSessions: 1, ...o });
 const sets = (w: number, ...reps: number[]) => reps.map((r) => ({ weight: w, reps: r }));
@@ -73,5 +73,41 @@ describe("the post-workout read (rev 471)", () => {
     expect(g.others.map((a) => a.sport)).toEqual(["Walking"]);
     expect(g.minutes).toBe(120);
     expect(gymGroup(acts.filter((a) => a.sport !== "Weightlifting"), (s) => /weightlift/i.test(s)).lift).toBeNull();
+  });
+});
+
+describe("the end-of-day read (rev 471)", () => {
+  const base = {
+    isToday: false,
+    hour: 21,
+    training: "Push A: 9 of 9 planned sets done · 76 min, strain 10.2.",
+    dayType: "Lift",
+    logged: true,
+    totals: { cal: 1420, p: 165, f: 58, c: 20 },
+    bands: { cal: { min: 1400, max: 1500 }, p: { min: 180, max: 200 }, f: { min: 55, max: 65 } },
+    sleepH: 7.25,
+    recovery: 67,
+    strain: 10.2,
+    habits: { kept: 4, due: 6 },
+    weight: { avg: 150.44, weekAgo: 151.2, unit: "lb" as const },
+  };
+  it("ties the day together, protein first, the weight by its average", () => {
+    const r = dayRead(base);
+    expect(r.lines).toEqual([
+      "Push A: 9 of 9 planned sets done · 76 min, strain 10.2.",
+      "Fuel for a Lift day: protein 165 g (180–200 g), calories 1,420 (1,400–1,500), fat 58 g (55–65 g).",
+      "Recovery: 7.3 h sleep, recovery 67%, strain 10.2.",
+      "Habits: 4 of 6 kept.",
+      "Weight trend: 150.4 lb on the 7-day average, down 0.8 over the week.",
+    ]);
+    expect(r.tomorrow).toBe("Tomorrow: the same again.");
+  });
+  it("says what's still to go while the evening is early, and picks one thing for tomorrow", () => {
+    expect(dayRead({ ...base, isToday: true, hour: 17 }).lines).toContain("Still to go: 15 g protein.");
+    expect(dayRead({ ...base, totals: { ...base.totals, p: 120 } }).tomorrow).toMatch(/^Tomorrow: protein first\. 180 g/);
+    expect(dayRead({ ...base, sleepH: 5.5 }).tomorrow).toMatch(/sleep/);
+    expect(dayRead({ ...base, totals: { ...base.totals, cal: 1800 } }).tomorrow).toMatch(/plan dinner first/);
+    expect(dayRead({ ...base, habits: { kept: 1, due: 6 } }).tomorrow).toMatch(/habit that matters most/);
+    expect(dayRead({ ...base, training: null, logged: false }).lines.slice(0, 2)).toEqual(["No workout logged.", "No food logged."]);
   });
 });

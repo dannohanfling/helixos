@@ -26,7 +26,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
-import { todayBody, workoutReadFor } from "@/lib/queries/body";
+import { dayReadFor, todayBody, workoutReadFor } from "@/lib/queries/body";
 import { WorkoutReadCard } from "@/components/body/workout-read";
 import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
@@ -72,6 +72,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const bonusIfClosedNow = streakBonus(streakDayIfClosedNow);
   const morningDone = Boolean(d.log?.morningDoneAt);
   const eveningDone = Boolean(d.log?.eveningDoneAt);
+  // HumanOS's end-of-day read (rev 471): in Close the day from the evening on, beside the business numbers. Private to the member.
+  const bodyDayRead = body && (eveningDone || v.hour >= EVENING_HOUR) ? await dayReadFor(v.workspace.id, v.user.id, v.today, v.today, v.hour) : null;
   const openFocus = d.focusTasks.filter((t) => t.status !== "done");
   const doneFocus = d.focusTasks.filter((t) => t.status === "done");
   const boardTasks = [...d.overdueTasks, ...d.dueTasks].filter((t) => t.focusDate !== v.today);
@@ -398,6 +400,19 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             ) : (
               <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} />
             )}
+            {bodyDayRead ? (
+              <div className="mt-4 rounded-lg bg-humanos-soft p-3 text-sm" data-testid="today-day-read">
+                <p className="text-xs font-semibold text-humanos-ink">Your body today</p>
+                <ul className="mt-1 space-y-0.5" data-testid="day-read-lines">
+                  {bodyDayRead.lines.map((l) => (
+                    <li key={l}>{l}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 font-medium" data-testid="day-read-tomorrow">
+                  {bodyDayRead.tomorrow}
+                </p>
+              </div>
+            ) : null}
           </Card>
         </div>
 

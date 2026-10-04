@@ -179,3 +179,62 @@ export function gymGroup<T extends GymActivity>(acts: T[], isLift: (sport: strin
   const end = Math.max(...visit.map((a) => Date.parse(a.endedAt!)));
   return { lift, around, others: acts.filter((a) => a !== lift && !around.includes(a)), minutes: Math.round((end - start) / 60_000) };
 }
+
+/* ───────── The end-of-day read (rev 471) ───────── */
+
+type Macro4 = "cal" | "p" | "f" | "c";
+export type DayInput = {
+  isToday: boolean;
+  /** The member's local hour, for "still to go" before the evening is out. */
+  hour: number;
+  /** The post-workout read's first line, when there was a session. */
+  training: string | null;
+  dayType: string | null;
+  logged: boolean;
+  totals: Record<Macro4, number>;
+  bands: Partial<Record<Macro4, { min: number; max: number }>> | null;
+  sleepH: number | null;
+  recovery: number | null;
+  strain: number | null;
+  habits: { kept: number; due: number };
+  /** The 7-day average weight now and a week before, in the member's unit. */
+  weight: { avg: number | null; weekAgo: number | null; unit: WeightUnit };
+};
+export type DayRead = { lines: string[]; tomorrow: string };
+
+const whole = (n: number) => Math.round(n).toLocaleString("en-US");
+const band = (b: { min: number; max: number }, unit = "") => `${whole(b.min)}–${whole(b.max)}${unit}`;
+
+/**
+ * One card for the day (rev 471): training, fuel against the day type's bands (protein first, and what's still to go while the
+ * evening is early), recovery, habits, and the weight trend by its 7-day average, never one weigh-in. Then one line for tomorrow:
+ * the single most useful change, by a fixed order (protein short, then sleep short, then over on calories, then habits, then a
+ * low recovery after a hard day).
+ */
+export function dayRead(d: DayInput): DayRead {
+  const lines: string[] = [d.training ?? (d.isToday ? "No workout logged today." : "No workout logged.")];
+  const b = d.bands ?? {};
+  if (!d.logged) lines.push("No food logged.");
+  else {
+    const part = (m: Macro4, name: string, unit: string) => `${name} ${whole(d.totals[m])}${unit}${b[m] ? ` (${band(b[m]!, unit)})` : ""}`;
+    lines.push(`Fuel${d.dayType ? ` for a ${d.dayType} day` : ""}: ${[part("p", "protein", " g"), part("cal", "calories", ""), part("f", "fat", " g")].join(", ")}.`);
+    if (d.isToday && d.hour < 20) {
+      const short = [b.p && d.totals.p < b.p.min ? `${whole(b.p.min - d.totals.p)} g protein` : "", b.cal && d.totals.cal < b.cal.min ? `${whole(b.cal.min - d.totals.cal)} calories` : ""].filter(Boolean);
+      if (short.length) lines.push(`Still to go: ${short.join(" and ")}.`);
+    }
+  }
+  const rec = [d.sleepH != null ? `${Math.round(d.sleepH * 10) / 10} h sleep` : "", d.recovery != null ? `recovery ${Math.round(d.recovery)}%` : "", d.strain != null ? `strain ${Math.round(d.strain * 10) / 10}` : ""].filter(Boolean);
+  if (rec.length) lines.push(`Recovery: ${rec.join(", ")}.`);
+  if (d.habits.due) lines.push(`Habits: ${d.habits.kept} of ${d.habits.due} kept.`);
+  if (d.weight.avg != null) {
+    const diff = d.weight.weekAgo != null ? Math.round((d.weight.avg - d.weight.weekAgo) * 10) / 10 : null;
+    lines.push(`Weight trend: ${d.weight.avg.toFixed(1)} ${d.weight.unit} on the 7-day average${diff == null ? "" : diff === 0 ? ", level with a week ago" : `, ${diff < 0 ? "down" : "up"} ${Math.abs(diff).toFixed(1)} over the week`}.`);
+  }
+  let tomorrow = "Tomorrow: the same again.";
+  if (d.logged && b.p && d.totals.p < b.p.min * 0.85 && !(d.isToday && d.hour < 20)) tomorrow = `Tomorrow: protein first. ${whole(b.p.min)} g is the floor, so put some in every meal, starting with breakfast.`;
+  else if (d.sleepH != null && d.sleepH < 6.5) tomorrow = "Tomorrow: protect tonight's sleep. Aim for seven hours or more in bed.";
+  else if (d.logged && b.cal && d.totals.cal > b.cal.max * 1.1 && !(d.isToday && d.hour < 20)) tomorrow = `Tomorrow: plan dinner first, so the day lands inside ${band(b.cal)} calories.`;
+  else if (d.habits.due >= 2 && d.habits.kept * 2 < d.habits.due) tomorrow = "Tomorrow: pick the habit that matters most and do it first thing.";
+  else if (d.recovery != null && d.recovery < 34 && d.strain != null && d.strain >= 14) tomorrow = `Tomorrow: an easier day. Recovery is ${Math.round(d.recovery)}% after a hard one.`;
+  return { lines: lines.slice(0, 7), tomorrow };
+}

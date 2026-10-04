@@ -19,7 +19,7 @@ import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
-import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayTypesFor, medsView, workoutReadFor } from "@/lib/queries/body";
+import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayReadFor, dayTypesFor, medsView, workoutReadFor } from "@/lib/queries/body";
 import { zonesText } from "@/lib/engine/body-whoop";
 import { fmtDistanceIn, habitShown, isMeasures, storedFromShown, weightUnitWord } from "@/lib/engine/body-measures";
 import { fillBoxes, refill, takesFromBottle } from "@/lib/engine/body-meds";
@@ -172,6 +172,22 @@ export const bodyWorkoutRead = defineTool({
     if (!r) return { text: `No workout with sets on ${date === v.today ? "today" : date}.`, data: { date, read: null } };
     const next = r.next.map((n) => `${n.exercise}: ${n.weight ?? "the same"}${n.reps ? ` × ${n.reps}` : ""} (${n.why})`);
     return { text: [...r.lines, ...(r.exercises.length ? ["", ...r.exercises.map((e) => e.line)] : []), ...(next.length ? ["", `Next time: ${next.join("; ")}.`] : [])].join("\n"), data: { date, finished: r.finished, lines: r.lines, exercises: r.exercises, next: r.next } };
+  },
+});
+
+/** The end-of-day read (rev 471): the card in Close the day, by voice. */
+export const bodyDayRead = defineTool({
+  name: "body_day_read",
+  scope: "body",
+  kind: "read",
+  description: "The end-of-day read for a day: the workout in a line, fuel against the day type's bands (protein first, and what's still to go if the evening is early), sleep, recovery and strain, habits kept, the weight trend by its 7-day average, and one line for tomorrow. Read it back plainly; it is never medical advice.",
+  input: { date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const date = dayOf(v, input.date);
+    const r = await dayReadFor(v.workspace.id, v.user.id, date, v.today, v.hour);
+    if (!r) throw new Error("HumanOS isn't set up for this member yet.");
+    return { text: [...r.lines, r.tomorrow].join("\n"), data: { date, lines: r.lines, tomorrow: r.tomorrow } };
   },
 });
 

@@ -19,7 +19,7 @@ import { calendarWeeks, perWeek, stripBounds, type Bounds } from "@/lib/engine/b
 import { change, coachBodyText, goalPace, nutritionWeek, weighWeek, type CoachBodyCell, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, toUnit, weekTally, type WeightUnit } from "@/lib/engine/body-training";
-import { gymGroup, sameTopRun, workoutRead, type ReadExercise, type WorkoutRead } from "@/lib/engine/body-reads";
+import { dayRead, gymGroup, sameTopRun, workoutRead, type DayRead, type ReadExercise, type WorkoutRead } from "@/lib/engine/body-reads";
 import { isLifting } from "@/lib/engine/body-whoop";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 
@@ -1231,4 +1231,39 @@ export async function workoutReadFor(workspaceId: string, userId: string, date: 
     daysSinceRoutine: prev ? daysBetween(prev.date, date) : null,
   });
   return { ...read, date, finished: !!t.completedAt, routineId: t.session.routineId };
+}
+
+/**
+ * The end-of-day read for a day (rev 471): the post-workout read's first line, fuel against the day type's bands, recovery from
+ * WHOOP (or a night logged by hand), habits kept, and the weight trend by the 7-day average of each day's figure. `hour` is the
+ * member's local hour, for "still to go" while today's evening is early. Null while HumanOS isn't set up.
+ */
+export async function dayReadFor(workspaceId: string, userId: string, date: string, today: string, hour: number): Promise<(DayRead & { date: string }) | null> {
+  const day = await bodyDay(workspaceId, userId, date, today);
+  if (!day) return null;
+  const [workout, habits, daily, weights] = await Promise.all([
+    workoutReadFor(workspaceId, userId, date),
+    habitsDay(workspaceId, userId, date, today),
+    db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId), eq(schema.bodyDaily.date, date), inArray(schema.bodyDaily.key, ["sleep_h", "recovery", "strain"])) }),
+    db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId), gte(schema.bodyDaily.date, addDays(date, -13)), lte(schema.bodyDaily.date, date)) }),
+  ]);
+  const unit: WeightUnit = day.settings.weightUnit;
+  const figures = dayFigures(groupReadings(weights)).flatMap((f) => (f.values.weight != null ? [{ date: f.date, value: toUnit(f.values.weight, "lb", unit) }] : []));
+  const value = (key: string) => daily.find((x) => x.key === key)?.value ?? null;
+  const due = habits.habits.filter((h) => h.due);
+  const read = dayRead({
+    isToday: date === today,
+    hour,
+    training: workout?.lines[0] ?? null,
+    dayType: day.dayType?.name ?? null,
+    logged: day.entries.length > 0,
+    totals: day.totals,
+    bands: day.bands,
+    sleepH: value("sleep_h"),
+    recovery: value("recovery"),
+    strain: value("strain"),
+    habits: { kept: due.filter((h) => h.kept).length, due: due.length },
+    weight: { avg: avg7(figures, date, addDays), weekAgo: avg7(figures, addDays(date, -7), addDays), unit },
+  });
+  return { ...read, date };
 }

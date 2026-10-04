@@ -1461,6 +1461,16 @@ async function main() {
     const readTool = await tool("body_workout_read").handler(await viewerFor(), { date: today });
     const readNow = await readFor(mem.workspaceId, maya.id, today);
     if (!readNow || !readTool.text.startsWith(readNow.lines.join("\n"))) throw new Error(`body_workout_read reads the day back: ${readTool.text.slice(0, 300)}`);
+    // The end-of-day read (rev 471): the tool says what the query says; on Today it sits in Close the day from 4pm.
+    const { dayReadFor } = await import("@/lib/queries/body");
+    const vNow = await viewerFor();
+    const dayNow = (await dayReadFor(mem.workspaceId, maya.id, today, today, vNow.hour))!;
+    const dayTool = await tool("body_day_read").handler(vNow, {});
+    if (dayTool.text !== [...dayNow.lines, dayNow.tomorrow].join("\n") || !dayNow.lines.some((l) => l.startsWith("Fuel")) || !dayNow.tomorrow.startsWith("Tomorrow:")) throw new Error(`body_day_read reads the day: ${dayTool.text}`);
+    if (vNow.hour >= 16) {
+      await client.goto(`${base}/today`);
+      if (JSON.stringify(await client.locator('[data-testid="today-day-read"] [data-testid="day-read-lines"] li').allTextContents()) !== JSON.stringify(dayNow.lines)) throw new Error("Close the day carries the end-of-day read");
+    }
     const weighTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.2, bodyFat: 21.5, date: yesterday, time: "07:00" });
     if (!weighTool.text.includes("151.2 lb") || !weighTool.text.includes("21.5%")) throw new Error(`body_log_weigh_in logs the reading: ${weighTool.text}`);
     // Rev 476: the same step read off a RENPHO screenshot takes every number the first lacked and stays one reading, marked

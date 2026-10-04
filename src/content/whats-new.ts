@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 80,
+    date: "2026-10-04",
+    title: "HumanOS: your body's day, in Close the day",
+    lines: [
+      "From the evening on, Close the day on Today carries a short read of your body's day next to your business numbers. It covers the workout in a line, food against your day type's targets (protein first, and what's still to go if it's early), sleep, recovery and strain, the habits you kept, and your weight trend by its 7-day average rather than one weigh-in.",
+      "It ends with one thing to change tomorrow. Your own Claude can read it to you too. It's private: only you see it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 79,
     date: "2026-10-04",
     title: "HumanOS: every scale number, one reading per weigh-in",
