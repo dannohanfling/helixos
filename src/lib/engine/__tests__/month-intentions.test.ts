@@ -17,7 +17,9 @@ describe("the monthly intention (handoff rev 129)", () => {
   });
   it("reads a revenue goal as a number, whatever the typing", () => {
     expect(["$10,000", "10000", "7,500.50", " NZD 2,000 ", "USD5000"].map(parseRevenue)).toEqual([10000, 10000, 7500.5, 2000, 5000]);
-    expect(["", "ten thousand", "0", "-5", "10k", "1.234"].map(parseRevenue)).toEqual([null, null, null, null, null, null]);
+    expect(["", "ten thousand", "0", "-5", "1.234"].map(parseRevenue)).toEqual([null, null, null, null, null]);
+    // Rev 444: money the way people write it.
+    expect(["10k", "3.5K", "3500 USD", "1.2m"].map(parseRevenue)).toEqual([10000, 3500, 3500, 1200000]);
     expect(revenueLabel(10000)).toBe("$10,000");
   });
   it("requires all eleven, the revenue goal a number plus the why; the word a short phrase; the seasons from their lists", () => {
@@ -26,7 +28,7 @@ describe("the monthly intention (handoff rev 129)", () => {
     expect(readMonthIntention({ ...full, word: "x".repeat(41) })).toMatchObject({ field: "word" });
     expect(readMonthIntention({ ...full, personalSeason: "career" })).toMatchObject({ error: "Pick your personal season." });
     expect(readMonthIntention({ ...full, businessSeason: "" })).toMatchObject({ error: "Pick your business's season." });
-    expect(readMonthIntention({ ...full, revenueGoal: "lots" })).toMatchObject({ error: "Write your revenue goal as a number, like 10000." });
+    expect(readMonthIntention({ ...full, revenueGoal: "lots" })).toMatchObject({ error: "Write the amount as a number, like 3500." });
     expect(readMonthIntention({ ...full, revenueWhy: " " })).toMatchObject({ error: "Say why that revenue goal." });
     for (const k of ["fear", "habit", "skill", "impact", "plan", "proudLast", "proudEnd"] as const) expect(readMonthIntention({ ...full, [k]: "" })).toHaveProperty("error");
   });

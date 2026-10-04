@@ -9,6 +9,7 @@ import { FIELD_TASKS, OPEN_LIMIT, SECTION_TASKS, sectionCountLine, simplePath, r
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import type { LibraryTask, PathwayProgress } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
+import { DraftKeeper } from "@/components/draft-keeper";
 
 export const metadata = { title: "Pathway" };
 
@@ -273,6 +274,8 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
               ) : (
                 <form action={submitPathwayTaskAction} className="mt-4 space-y-3">
                   <input type="hidden" name="key" value={selected.key} />
+                  {/* A submission keeps a draft (rev 444): a refusal, a slip or a lost connection never costs what was written. */}
+                  {v.switchedInto ? null : <DraftKeeper id={`pathway.${v.user.id}.${selected.key}`} />}
                   {selected.submissionType !== "checkbox" ? (
                     <>
                       <Field label={selected.submissionType === "link" || selected.submissionType === "screenshot" || selected.submissionType === "video" ? "Link to your proof (post, screenshot, Loom…)" : "Link (optional)"}>

@@ -9,7 +9,7 @@ import { CLIENT_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { addDays, nowIso } from "@/lib/dates";
 import { background, pushContact } from "@/lib/integrations";
-import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { ctx, money, num, opt, refresh, str } from "@/lib/action-helpers";
 
 async function own(id: string, userId: string) {
   const c = await db.query.clientRecords.findFirst({ where: and(eq(schema.clientRecords.id, id), eq(schema.clientRecords.userId, userId)) });
@@ -100,7 +100,7 @@ export async function logCheckinAction(formData: FormData): Promise<void> {
     mindset: score("mindset"),
     energy: score("energy"),
     business: score("business"),
-    cashCollected: num(formData, "cashCollected"),
+    cashCollected: money(formData, "cashCollected", (e) => `/clients/${clientRecordId}?error=${encodeURIComponent(e)}&field=cashCollected`) ?? 0,
     nps: formData.has("nps") && str(formData, "nps") ? Math.max(0, Math.min(10, num(formData, "nps"))) : null,
   });
   const nextCall = opt(formData, "nextCallAt");

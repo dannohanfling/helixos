@@ -1,4 +1,6 @@
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { readMoney } from "@/lib/engine/money";
 import { requireViewer } from "@/lib/auth";
 import { switchedWrite, type WhileSwitched } from "@/lib/switch";
 
@@ -37,4 +39,15 @@ export function num(fd: FormData, key: string): number {
 export function opt(fd: FormData, key: string): string | null {
   const s = str(fd, key);
   return s.length ? s : null;
+}
+
+/**
+ * A money box (rev 444): "3.5k", "$3,500", "3500 USD" read as the amount, blank is null. One that can't be read is refused:
+ * the member goes back to `refuse(error)`, an address naming the error and the box, and the shared button puts back what they
+ * typed and marks that box. Never saved as 0, never as 3.5.
+ */
+export function money(fd: FormData, key: string, refuse: (error: string) => string): number | null {
+  const m = readMoney(str(fd, key));
+  if ("error" in m) redirect(refuse(m.error));
+  return m.value;
 }

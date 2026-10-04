@@ -2,6 +2,7 @@
  * The monthly intention (handoff rev 129): the first-of-the-month version of the 3-1-3, the eleven questions from Danno's September
  * post in the Intentions channel, in his order. Pure: dates are the member's own "YYYY-MM-DD", months "YYYY-MM".
  */
+import { MONEY_HINT, readMoney } from "./money";
 import { WORD_MAX } from "./intentions";
 
 export const PERSONAL_SEASONS = ["self", "wealth", "relationships", "spirituality"] as const;
@@ -32,10 +33,9 @@ export const lateForMonth = (today: string): boolean => Number(today.slice(8)) >
 
 /** A revenue goal as typed ("$10,000", "10000", "7,500.50"): a positive number, or null. */
 export function parseRevenue(text: string): number | null {
-  const t = text.replace(/[$,\s]/g, "").replace(/^(USD|NZD|AUD|CAD|GBP|EUR)/i, "");
-  if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
-  const n = Number(t);
-  return n > 0 ? n : null;
+  // The shared money reader (rev 444): "10k", "$10,000", "10000 USD" all read; a goal is more than nothing.
+  const r = readMoney(text);
+  return "error" in r || r.value == null || r.value <= 0 ? null : r.value;
 }
 /** "$10,000", "$7,500.50". */
 export const revenueLabel = (n: number): string => `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
@@ -68,7 +68,7 @@ export function readMonthIntention(raw: Record<keyof Omit<MonthIntentionInput, "
   const businessSeason = BUSINESS_SEASONS.find((s) => s === t("businessSeason"));
   if (!businessSeason) return { error: "Pick your business's season.", field: "businessSeason" };
   const revenueGoal = parseRevenue(t("revenueGoal"));
-  if (revenueGoal === null) return { error: "Write your revenue goal as a number, like 10000.", field: "revenueGoal" };
+  if (revenueGoal === null) return { error: MONEY_HINT, field: "revenueGoal" };
   if (!t("revenueWhy")) return { error: "Say why that revenue goal.", field: "revenueWhy" };
   if (!t("plan")) return { error: "Write your plan to reach it.", field: "plan" };
   if (!t("proudLast")) return { error: "Say what you're most proud of from last month.", field: "proudLast" };

@@ -1,5 +1,6 @@
 "use server";
 
+import { readMoney } from "@/lib/engine/money";
 import { queueProgress } from "@/lib/chat-progress";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -75,12 +76,18 @@ export async function updateBotFactsAction(formData: FormData): Promise<void> {
 export async function updateGoalAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const title = str(formData, "title") || "Cash collected this month";
-  const target = num(formData, "target") || 5000;
+  // Amounts the way people write them (rev 444): "5k" is 5000, never 5; one that can't be read is refused beside its box.
+  const t = readMoney(str(formData, "target"));
+  if ("error" in t) redirect(`/settings?goalError=${encodeURIComponent(t.error)}&field=target#goal`);
+  const a = readMoney(str(formData, "actual"));
+  if ("error" in a) redirect(`/settings?goalError=${encodeURIComponent(a.error)}&field=actual#goal`);
+  const target = t.value || 5000;
+  const actual = a.value ?? 0;
   const existing = await db.query.goals.findFirst({ where: and(eq(schema.goals.userId, userId), eq(schema.goals.primary, true)) });
   if (existing) {
-    await db.update(schema.goals).set({ title, target, actual: num(formData, "actual"), unit: str(formData, "unit") || "$", period: str(formData, "period") || "This month" }).where(eq(schema.goals.id, existing.id));
+    await db.update(schema.goals).set({ title, target, actual, unit: str(formData, "unit") || "$", period: str(formData, "period") || "This month" }).where(eq(schema.goals.id, existing.id));
   } else {
-    await db.insert(schema.goals).values({ id: newId(), workspaceId, userId, title, target, actual: num(formData, "actual"), unit: str(formData, "unit") || "$", period: str(formData, "period") || "This month", primary: true });
+    await db.insert(schema.goals).values({ id: newId(), workspaceId, userId, title, target, actual, unit: str(formData, "unit") || "$", period: str(formData, "period") || "This month", primary: true });
   }
   await syncFieldTasks(workspaceId, userId);
   queueProgress(workspaceId, userId, "goal_changed");

@@ -83,6 +83,8 @@ export async function lockIn(v: Viewer, input: LockIn): Promise<LockedIn> {
 export const CLOSE_NUMBERS = ["dmsStarted", "conversations", "callsBooked", "callsHeld", "posts", "offersMade", "newLeads", "cashCollected"] as const;
 export const CLOSE_EXTRA = ["webinarRegs", "webinarShows", "replayViews", "applications", "proofPosts", "ctaPosts", "beliefPosts", "storiesCreated", "referralAsks", "revContent", "revWebinar", "revDm"] as const;
 export const CLOSE_TEXT = ["start", "stop", "keep", "win", "gratitude"] as const;
+/** The close's money boxes (rev 444): read the way people write them ("1.2k", "$1,200"); the rest of the numbers are counts. */
+export const CLOSE_MONEY: readonly string[] = ["cashCollected", "revContent", "revWebinar", "revDm"];
 export type CloseNumber = (typeof CLOSE_NUMBERS)[number] | (typeof CLOSE_EXTRA)[number];
 export type CloseText = (typeof CLOSE_TEXT)[number];
 /** A field left out keeps what the day's log already holds; the form sends every field, the connector only what was said. */

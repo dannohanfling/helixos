@@ -7,11 +7,13 @@ import { createOfferAction } from "@/lib/actions/offers";
 import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
 import { scoreOffer } from "@/lib/engine/offer-score";
 import { SubmitButton } from "@/components/submit-button";
+import { MoneyInput } from "@/components/money-input";
 
 export const metadata = { title: "Offers" };
 
-export default async function OffersPage() {
+export default async function OffersPage({ searchParams }: { searchParams: Promise<{ error?: string; field?: string }> }) {
   const v = await requireViewer();
+  const sp = await searchParams;
   const list = await db.query.offers.findMany({ where: eq(schema.offers.userId, v.user.id), orderBy: desc(schema.offers.createdAt) });
   const comps = list.length ? await db.query.offerComponents.findMany({ where: inArray(schema.offerComponents.offerId, list.map((o) => o.id)) }) : [];
   return (
@@ -20,13 +22,18 @@ export default async function OffersPage() {
         title="Offers"
         subtitle="One clear promise, a named method, a stack worth 5x the price."
         action={
-          <Disclosure summary={<span className="btn btn-primary btn-sm">+ New offer</span>}>
+          <Disclosure open={Boolean(sp.error)} summary={<span className="btn btn-primary btn-sm">+ New offer</span>}>
             <form action={createOfferAction} className="card grid gap-3 p-4 sm:grid-cols-[1fr_1fr_auto]">
+              {sp.error ? (
+                <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm sm:col-span-3" role="alert" data-testid="offer-error">
+                  {sp.error}
+                </p>
+              ) : null}
               <Field label="Name">
                 <input className="field" name="name" required placeholder="90-Day Reset" autoFocus />
               </Field>
               <Field label="Price ($)">
-                <input className="field tabular" name="price" type="number" min={0} placeholder="1500" />
+                <MoneyInput name="price" placeholder="1500" />
               </Field>
               <div className="flex items-end">
                 <SubmitButton className="btn btn-primary" pendingText="Opening…">

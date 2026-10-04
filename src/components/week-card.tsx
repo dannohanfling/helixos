@@ -6,18 +6,22 @@ import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
 import { ShareButton } from "@/components/share-button";
 import { WeekLists } from "@/components/week-lists";
+import { DraftKeeper } from "@/components/draft-keeper";
+import { weekOf } from "@/lib/engine/intentions";
 
 type Sp = { weekError?: string; weekSaved?: string; weekReviewed?: string };
 
 /** The 3-1-3 form, empty to set the week or filled to edit it. The third key result and the third task may stay blank. */
 export type Share = { text: string; link: string | null; reason: string | null; shared: boolean };
 export type Back = "/today" | "/intentions";
-function WeekForm({ week, back }: { week: WeeklyIntention | null; back: Back }) {
+function WeekForm({ week, back, owner, today }: { week: WeeklyIntention | null; back: Back; owner: string | null; today: string }) {
   const kr = (i: number) => week?.keyResults[i]?.text ?? "";
   const task = (i: number) => week?.tasks[i]?.title ?? "";
   return (
     <form action={saveIntentionAction} className="space-y-3" data-testid="week-form">
       <input type="hidden" name="back" value={back} />
+      {/* Keyed by the week the answers are for (rev 444): a refusal or a slip never costs the 3-1-3. */}
+      {owner ? <DraftKeeper id={`week.${owner}.${week?.weekOf ?? weekOf(today)}`} /> : null}
       <label className="block text-sm font-medium">
         ONE word (or a short phrase) to embody this week
         <input className="field mt-1" name="word" defaultValue={week?.word ?? ""} placeholder="Consistent, or Show up daily" maxLength={60} data-testid="week-word" />
@@ -39,7 +43,7 @@ function WeekForm({ week, back }: { week: WeeklyIntention | null; back: Back }) 
  * The weekly 3-1-3 on Today (handoff rev 124): "Set your week" until it is set, then the week at the top. From Friday to Sunday
  * it asks, once, which key results got done.
  */
-export function WeekCard({ week, today, taskDone, sp, back = "/intentions", share = null }: { week: WeeklyIntention | null; today: string; taskDone: Record<string, boolean>; sp: Sp; back?: Back; share?: Share | null }) {
+export function WeekCard({ week, today, taskDone, sp, back = "/intentions", share = null, owner = null }: { week: WeeklyIntention | null; today: string; taskDone: Record<string, boolean>; sp: Sp; back?: Back; share?: Share | null; owner?: string | null }) {
   const state = intentionPrompt(today, week);
   const notes = (
     <>
@@ -54,7 +58,7 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
         <Card title="Set your week" action={<Badge tone="accent">3-1-3</Badge>}>
           {notes}
           <p className="mb-3 text-sm text-ink-2">Choose ONE word (or a short phrase) to embody this week, then THREE key results you can track, ONE initiative toward your bigger goal, and THREE tasks that move the needle.</p>
-          <WeekForm week={null} back={back} />
+          <WeekForm week={null} back={back} owner={owner} today={today} />
         </Card>
       </section>
     );
@@ -133,7 +137,7 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
         <details className="mt-4">
           <summary className="cursor-pointer text-xs text-ink-3" data-testid="week-edit">Edit this week</summary>
           <div className="mt-3">
-            <WeekForm week={week} back={back} />
+            <WeekForm week={week} back={back} owner={owner} today={today} />
           </div>
         </details>
       </Card>

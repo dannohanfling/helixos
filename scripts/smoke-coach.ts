@@ -120,6 +120,8 @@ async function main() {
     const passBefore = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mm.id) }))!.passEnabled;
     const nextTier = mm.programTier === "Luxe" ? "Elite" : "Luxe";
     const tierBox = mayaRow.locator('[data-testid="tier-select"]');
+    // Measured once the page has shown it: a streamed page holds rows in a hidden boundary until they're placed.
+    await tierBox.waitFor({ state: "visible", timeout: 15000 });
     const shown = await tierBox.evaluate((el: HTMLSelectElement) => ({ box: el.clientWidth, text: (() => { const c = document.createElement("canvas").getContext("2d")!; c.font = getComputedStyle(el).font; return Math.max(...Array.from(el.options).map((o) => c.measureText(o.text).width)); })() }));
     // The box's own width less the arrow's room (about 24 px) must hold the longest tier's words.
     if (shown.box - 24 < shown.text) throw new Error(`the tier reads in full: box ${shown.box}px for ${Math.round(shown.text)}px of text`);

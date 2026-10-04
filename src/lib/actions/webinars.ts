@@ -1,5 +1,6 @@
 "use server";
 
+import { readMoney } from "@/lib/engine/money";
 import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -308,6 +309,9 @@ export async function updateRunAction(formData: FormData): Promise<void> {
   // Ready or scheduled is refused while a must-check is open, and the Run step says which; the other fields still save.
   const { build } = await buildFor(w);
   const held = (chosen === "ready" || chosen === "scheduled") && chosen !== w.status && build.must.length > 0;
+  // Revenue the way people write it (rev 444): "4.5k" is 4500, never 4.5; one that can't be read is refused beside its box.
+  const revenue = readMoney(str(formData, "revenue"));
+  if ("error" in revenue) redirect(`/webinars/${id}?step=run&runError=${encodeURIComponent(revenue.error)}&field=revenue`);
   const status = held ? w.status : chosen;
   await db
     .update(schema.webinars)
@@ -321,7 +325,7 @@ export async function updateRunAction(formData: FormData): Promise<void> {
       offersMade: optNum(formData, "offersMade"),
       callsBooked: optNum(formData, "callsBooked"),
       sales: optNum(formData, "sales"),
-      revenue: optNum(formData, "revenue"),
+      revenue: revenue.value,
       debriefLeak: opt(formData, "debriefLeak"),
       debriefFix: opt(formData, "debriefFix"),
       debriefWins: opt(formData, "debriefWins"),

@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { TARGET_METRICS } from "@/lib/engine/targets";
-import { ctx, num, refresh, str } from "@/lib/action-helpers";
+import { ctx, money, num, refresh, str } from "@/lib/action-helpers";
 
 /** Saves the month's targets. Zero clears a target. */
 export async function setTargetsAction(formData: FormData): Promise<void> {
@@ -12,7 +12,8 @@ export async function setTargetsAction(formData: FormData): Promise<void> {
   const month = str(formData, "month");
   if (!/^\d{4}-\d{2}$/.test(month)) return;
   for (const m of TARGET_METRICS) {
-    const target = num(formData, m.key);
+    // Cash the way people write it (rev 444): "20k" is 20000, never 20; one that can't be read is refused beside its box.
+    const target = m.money ? (money(formData, m.key, (e) => `/numbers?targetsError=${encodeURIComponent(e)}&field=${m.key}`) ?? 0) : num(formData, m.key);
     const existing = await db.query.targets.findFirst({ where: and(eq(schema.targets.userId, userId), eq(schema.targets.month, month), eq(schema.targets.metric, m.key)) });
     if (!target && existing) await db.delete(schema.targets).where(eq(schema.targets.id, existing.id));
     else if (target && existing) await db.update(schema.targets).set({ target }).where(eq(schema.targets.id, existing.id));

@@ -10,6 +10,7 @@ import { logsBetween } from "@/lib/queries/daily";
 import { TARGET_METRICS, daysInMonth, monthOf, monthProgress } from "@/lib/engine/targets";
 import { PILLARS, lastMonths, pillarSummary } from "@/lib/engine/pillars";
 import { SubmitButton } from "@/components/submit-button";
+import { MoneyInput } from "@/components/money-input";
 
 export const metadata = { title: "Numbers" };
 
@@ -24,7 +25,7 @@ const METRICS: { key: Metric; label: string; money?: boolean }[] = [
   { key: "cashCollected", label: "Cash collected", money: true },
 ];
 
-export default async function NumbersPage({ searchParams }: { searchParams: Promise<{ metric?: string; week?: string }> }) {
+export default async function NumbersPage({ searchParams }: { searchParams: Promise<{ metric?: string; week?: string; targetsError?: string; field?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const metric = (METRICS.find((m) => m.key === sp.metric)?.key ?? "dmsStarted") as Metric;
@@ -125,14 +126,23 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
         ) : (
           <p className="text-sm text-ink-2">Pick two or three numbers that matter this month. The scoreboard tells you if you&apos;re on pace, not just what you did.</p>
         )}
-        <Disclosure summary={<span className="text-xs text-ink-3 underline">{hasTargets ? "Edit targets" : "Set this month's targets"}</span>} className="mt-3">
+        <Disclosure open={Boolean(sp.targetsError)} summary={<span className="text-xs text-ink-3 underline">{hasTargets ? "Edit targets" : "Set this month's targets"}</span>} className="mt-3">
           <form action={setTargetsAction} className="mt-2 space-y-3">
+            {sp.targetsError ? (
+              <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="targets-error">
+                {sp.targetsError}
+              </p>
+            ) : null}
             <input type="hidden" name="month" value={month} />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               {TARGET_METRICS.map((m) => (
                 <label key={m.key} className="block">
                   <span className="label">{m.label}</span>
-                  <input className="field tabular py-1 text-sm" name={m.key} type="number" min={0} defaultValue={targetMap[m.key] ?? ""} placeholder="0" />
+                  {m.money ? (
+                    <MoneyInput className="field tabular py-1 text-sm" name={m.key} defaultValue={targetMap[m.key] ?? ""} placeholder="0" data-testid={`target-${m.key}`} />
+                  ) : (
+                    <input className="field tabular py-1 text-sm" name={m.key} type="number" min={0} defaultValue={targetMap[m.key] ?? ""} placeholder="0" />
+                  )}
                 </label>
               ))}
             </div>

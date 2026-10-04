@@ -12,10 +12,12 @@ import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { SubmitButton } from "@/components/submit-button";
+import { MoneyInput } from "@/components/money-input";
 
-export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; field?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
+  const sp = await searchParams;
   const c = await db.query.clientRecords.findFirst({ where: and(eq(schema.clientRecords.id, id), eq(schema.clientRecords.userId, v.user.id)) });
   if (!c) notFound();
   const [checkins, offers, points] = await Promise.all([
@@ -62,6 +64,11 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <Card title="Log a check-in">
             <form action={logCheckinAction} className="space-y-3">
               <input type="hidden" name="clientRecordId" value={c.id} />
+              {sp.error ? (
+                <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="checkin-error">
+                  {sp.error}
+                </p>
+              ) : null}
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 {[
                   ["checkin", "Check-in"],
@@ -98,7 +105,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 ].map(([k, l]) => (
                   <label key={k} className="block">
                     <span className="label">{l}</span>
-                    <input className="field tabular" name={k} type="number" min={0} max={k === "cashCollected" ? undefined : 10} />
+                    {k === "cashCollected" ? <MoneyInput name={k} data-testid="checkin-cash" /> : <input className="field tabular" name={k} type="number" min={0} max={10} />}
                   </label>
                 ))}
                 <label className="block">

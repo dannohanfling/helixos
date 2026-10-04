@@ -19,6 +19,8 @@ import { TIER_ICONS } from "@/lib/engine/tiers";
 import { shareFor } from "@/lib/community";
 import { ShareButton } from "@/components/share-button";
 import { Top3Picker } from "@/components/top3-picker";
+import { DraftKeeper } from "@/components/draft-keeper";
+import { MoneyInput } from "@/components/money-input";
 import { closedDates } from "@/lib/queries/daily";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -26,7 +28,7 @@ import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
 import { todayBody } from "@/lib/queries/body";
 import { logHabitAction, takeMedAction } from "@/lib/actions/body";
-import { ENERGY_WORDS } from "@/lib/daily-core";
+import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 
 export const metadata = { title: "Today" };
@@ -50,7 +52,7 @@ function greeting(hour: number, name: string): string {
 
 const ENERGY = ["", ...ENERGY_WORDS];
 
-export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string }> }) {
+export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string; closeError?: string; field?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const d = await todayData(v);
@@ -378,20 +380,20 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                     <span className="font-semibold">Win:</span> {d.log.win}
                   </p>
                 ) : null}
-                <details>
+                <details open={Boolean(sp.closeError)}>
                   <summary className="text-xs text-ink-3 underline">Edit today&apos;s numbers</summary>
-                  <CloseForm log={d.log} activity={d.activity} />
+                  <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} />
                 </details>
               </div>
             ) : v.hour < EVENING_HOUR ? (
-              <details data-testid="close-early">
+              <details data-testid="close-early" open={Boolean(sp.closeError)}>
                 <summary className="cursor-pointer text-sm text-ink-2">
                   It&apos;s not evening yet. Come back after {EVENING_HOUR - 12}pm to log your numbers, or <span className="underline">close the day early</span>.
                 </summary>
-                <CloseForm log={d.log} activity={d.activity} />
+                <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} />
               </details>
             ) : (
-              <CloseForm log={d.log} activity={d.activity} />
+              <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} />
             )}
           </Card>
         </div>
@@ -580,18 +582,32 @@ function LockInForm({ openTasks, stillOpen, today, defaultIntention }: { openTas
   );
 }
 
-function CloseForm({ log, activity }: { log: DailyLog | null; activity: TodayActivity }) {
+function CloseForm({ log, activity, owner, today, error }: { log: DailyLog | null; activity: TodayActivity; owner: string | null; today: string; error?: string }) {
   // First close: start from what the app already saw today. Editing a close shows what was saved.
   const prefill: Partial<Record<keyof DailyLog, number>> = log?.eveningDoneAt ? {} : { dmsStarted: activity.dmsStarted, conversations: activity.conversations, posts: activity.posts, newLeads: activity.newLeads };
-  const n = (key: keyof DailyLog, label: string, hint: string) => (
-    <label key={key} className="block">
-      <span className="label">{label}</span>
-      <input className="field tabular" name={key} type="number" min={0} step={key === "cashCollected" ? 1 : 1} inputMode="numeric" defaultValue={log?.eveningDoneAt ? Number(log[key] ?? 0) : (prefill[key] ?? (log ? Number(log[key] ?? 0) : 0))} />
-      <span className="mt-0.5 block text-[11px] text-ink-3">{hint}</span>
-    </label>
-  );
+  const n = (key: keyof DailyLog, label: string, hint: string) => {
+    const value = log?.eveningDoneAt ? Number(log[key] ?? 0) : (prefill[key] ?? (log ? Number(log[key] ?? 0) : 0));
+    return (
+      <label key={key} className="block">
+        <span className="label">{label}</span>
+        {CLOSE_MONEY.includes(key) ? (
+          <MoneyInput name={key} defaultValue={value || ""} placeholder="0" data-testid={`close-${key}`} />
+        ) : (
+          <input className="field tabular" name={key} type="number" min={0} step={1} inputMode="numeric" defaultValue={value} data-testid={`close-${key}`} />
+        )}
+        <span className="mt-0.5 block text-[11px] text-ink-3">{hint}</span>
+      </label>
+    );
+  };
   return (
-    <form action={eveningCloseAction} className="mt-2 space-y-4">
+    <form action={eveningCloseAction} className="mt-2 space-y-4" data-testid="close-form">
+      {/* A day's close keeps a draft (rev 444): a refusal, a slip or a lost connection never costs the day's numbers and words. */}
+      {owner ? <DraftKeeper id={`close.${owner}.${today}`} /> : null}
+      {error ? (
+        <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="close-error">
+          {error}
+        </p>
+      ) : null}
       {!log?.eveningDoneAt && (activity.dmsStarted || activity.conversations || activity.posts || activity.newLeads) ? (
         <p className="rounded-lg bg-surface-2 p-2 text-xs text-ink-2" data-testid="close-prefill">Filled in from what you logged today ({[activity.dmsStarted ? `${activity.dmsStarted} DMs` : "", activity.conversations ? `${activity.conversations} replies` : "", activity.posts ? `${activity.posts} posted` : "", activity.newLeads ? `${activity.newLeads} new leads` : ""].filter(Boolean).join(", ")}). Correct anything, then close. Points already earned during the day aren&apos;t counted twice.</p>
       ) : null}

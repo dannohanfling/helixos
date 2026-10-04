@@ -6,10 +6,12 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { POINTS } from "@/lib/engine/points";
 import { closedDates, repairsUsed } from "@/lib/queries/daily";
-import { CLOSE_EXTRA, CLOSE_NUMBERS, CLOSE_TEXT, closeDay, lockIn, upsertLog, type Close } from "@/lib/daily-core";
+import { CLOSE_EXTRA, CLOSE_MONEY, CLOSE_NUMBERS, CLOSE_TEXT, closeDay, lockIn, upsertLog, type Close } from "@/lib/daily-core";
 import { brokenStreak } from "@/lib/engine/streak";
 import { isWeekday } from "@/lib/dates";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { redirect } from "next/navigation";
+import { readMoney } from "@/lib/engine/money";
 
 export async function morningCheckinAction(formData: FormData): Promise<void> {
   const { v } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
@@ -23,7 +25,16 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
   const { v } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
   // The form sends every field: optional groups left collapsed simply stay at zero, a blank line is cleared.
   const input: Close = {};
-  for (const k of [...CLOSE_NUMBERS, ...CLOSE_EXTRA]) input[k] = num(formData, k);
+  for (const k of [...CLOSE_NUMBERS, ...CLOSE_EXTRA]) {
+    if (!CLOSE_MONEY.includes(k)) {
+      input[k] = num(formData, k);
+      continue;
+    }
+    // Money the way people write it (rev 444): "1.2k" is 1200, never 1.2; one that can't be read is refused beside its box.
+    const m = readMoney(str(formData, k));
+    if ("error" in m) redirect(`/today?closeError=${encodeURIComponent(m.error)}&field=${k}#close`);
+    input[k] = m.value ?? 0;
+  }
   for (const k of CLOSE_TEXT) input[k] = opt(formData, k);
   await closeDay(v, input);
   refresh();

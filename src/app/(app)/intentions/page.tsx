@@ -60,7 +60,7 @@ export default async function IntentionsPage({ searchParams }: { searchParams: P
           </a>
         ) : null}
       </div>
-      <WeekCard week={week ?? null} today={v.today} taskDone={taskDone} sp={sp} back="/intentions" share={share} />
+      <WeekCard week={week ?? null} today={v.today} taskDone={taskDone} sp={sp} back="/intentions" share={share} owner={v.switchedInto ? null : v.user.id} />
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-3">This month</h2>
         {/* Where the month's thread is (1 Oct), set or not: only to look, so no points and no share count. */}

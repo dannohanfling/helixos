@@ -20,6 +20,7 @@ import { getIntegration, onboardingOpen } from "@/lib/integrations";
 import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 import { SubmitButton } from "@/components/submit-button";
+import { MoneyInput } from "@/components/money-input";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
 import { setHumanosAction } from "@/lib/actions/body";
 import { linkedChats } from "@/lib/chat";
@@ -33,14 +34,14 @@ export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string }> }) {
   const v = await requireViewer();
   // The storage figure counts rows; an object without a row (an upload that never finished recording) is reconciled away
   // here, the one place the workspace's holdings are looked at, so the figure and the store agree. After the response:
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   const savedKit = v.role === "coach" ? await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) }) : null;
@@ -63,15 +64,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const goalCard = (
     <Card id="goal" title="Your one goal">
       <form action={updateGoalAction} className="space-y-3">
+        {goalError ? (
+          <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="goal-error">
+            {goalError}
+          </p>
+        ) : null}
         <Field label="Goal">
           <input className="field" name="title" defaultValue={goal?.title ?? "Cash collected this month"} />
         </Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="Target">
-            <input className="field tabular" name="target" type="number" min={1} defaultValue={goal?.target ?? 5000} />
+            <MoneyInput name="target" plain defaultValue={goal?.target ?? 5000} data-testid="goal-target" />
           </Field>
           <Field label="So far">
-            <input className="field tabular" name="actual" type="number" min={0} defaultValue={goal?.actual ?? 0} />
+            <MoneyInput name="actual" plain defaultValue={goal?.actual ?? 0} data-testid="goal-actual" />
           </Field>
           <Field label="Unit">
             <select className="field" name="unit" defaultValue={goal?.unit ?? "$"}>

@@ -7,6 +7,7 @@ import { Badge, Card } from "@/components/ui";
 import type { Back, Share } from "@/components/week-card";
 import { ShareButton } from "@/components/share-button";
 import { DraftKeeper } from "@/components/draft-keeper";
+import { MoneyInput } from "@/components/money-input";
 
 type Sp = { monthError?: string; monthSaved?: string };
 const Q = Object.fromEntries(MONTH_QUESTIONS.map((q, i) => [q.key, `${i + 1}. ${q.q}`])) as Record<(typeof MONTH_QUESTIONS)[number]["key"], string>;
@@ -48,7 +49,9 @@ function MonthForm({ m, month, back, owner }: { m: MonthlyIntention | null; mont
       {seasons("businessSeason", Q.businessSeason, BUSINESS_SEASONS)}
       <fieldset className="space-y-2 text-sm">
         <legend className="font-medium">{Q.revenue}</legend>
-        <input className="field tabular" name="revenueGoal" inputMode="decimal" defaultValue={m ? String(m.revenueGoal) : ""} placeholder="10000" data-testid="month-revenueGoal" />
+        <div>
+          <MoneyInput name="revenueGoal" defaultValue={m ? m.revenueGoal : ""} placeholder="10000, or 10k" data-testid="month-revenueGoal" />
+        </div>
         <textarea className="field" name="revenueWhy" rows={2} defaultValue={m?.revenueWhy ?? ""} placeholder="Why this number" data-testid="month-revenueWhy" />
       </fieldset>
       {area("plan", Q.plan, 3)}

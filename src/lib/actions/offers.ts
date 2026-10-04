@@ -8,7 +8,7 @@ import { db, schema } from "@/db";
 import { CURRENCIES } from "@/lib/engine/offer-score";
 import { OFFER_CONTAINERS } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
+import { ctx, money, opt, refresh, str } from "@/lib/action-helpers";
 import { BOT_ROLES } from "@/lib/engine/bot-fields";
 
 async function own(id: string, userId: string) {
@@ -20,7 +20,7 @@ async function own(id: string, userId: string) {
 export async function createOfferAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const id = newId();
-  await db.insert(schema.offers).values({ id, workspaceId, userId, name: str(formData, "name") || "New offer", promise: opt(formData, "promise"), price: num(formData, "price") });
+  await db.insert(schema.offers).values({ id, workspaceId, userId, name: str(formData, "name") || "New offer", promise: opt(formData, "promise"), price: money(formData, "price", (e) => `/offers?error=${encodeURIComponent(e)}&field=price`) ?? 0 });
   queueProgress(workspaceId, userId, "offer_changed");
   refresh();
   redirect(`/offers/${id}`);
@@ -45,7 +45,7 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       container: OFFER_CONTAINERS.find((c) => c === str(formData, "container")) ?? "",
       currency: CURRENCIES.find((c) => c === str(formData, "currency").toUpperCase()) ?? "USD",
       length: opt(formData, "length"),
-      price: num(formData, "price"),
+      price: money(formData, "price", (e) => `/offers/${id}?error=${encodeURIComponent(e)}&field=price`) ?? 0,
       paymentPlan: opt(formData, "paymentPlan"),
       guarantee: opt(formData, "guarantee"),
       scarcity: opt(formData, "scarcity"),
@@ -63,7 +63,7 @@ export async function updateOfferAction(formData: FormData): Promise<void> {
       botName: opt(formData, "botName"),
       botFor: opt(formData, "botFor"),
       botTerms: opt(formData, "botTerms"),
-      depositAmount: str(formData, "depositAmount") ? num(formData, "depositAmount") : null,
+      depositAmount: money(formData, "depositAmount", (e) => `/offers/${id}?error=${encodeURIComponent(e)}&field=depositAmount`),
       refundableIfNotFit: formData.get("refundableIfNotFit") === "on",
       botRefundLine: opt(formData, "botRefundLine"),
       botTermsWhen: opt(formData, "botTermsWhen"),
@@ -99,7 +99,7 @@ export async function addComponentAction(formData: FormData): Promise<void> {
     name,
     type: (["core", "bonus", "guarantee"] as const).find((t) => t === str(formData, "type")) ?? "core",
     description: opt(formData, "description"),
-    perceivedValue: num(formData, "perceivedValue"),
+    perceivedValue: money(formData, "perceivedValue", (e) => `/offers/${offerId}?error=${encodeURIComponent(e)}&field=perceivedValue#stack`) ?? 0,
     order: existing.length + 1,
     beliefBreak: (["vehicle", "internal", "external", "none"] as const).find((b) => b === str(formData, "beliefBreak")) ?? "none",
     problemItSolves: opt(formData, "problemItSolves"),
@@ -122,7 +122,7 @@ export async function updateComponentAction(formData: FormData): Promise<void> {
       .set({
         name: str(formData, "name") || comp.name,
         type: (["core", "bonus", "guarantee"] as const).find((t) => t === str(formData, "type")) ?? comp.type,
-        perceivedValue: num(formData, "perceivedValue"),
+        perceivedValue: money(formData, "perceivedValue", (e) => `/offers/${comp.offerId}?error=${encodeURIComponent(e)}&field=perceivedValue#stack`) ?? 0,
         beliefBreak: (["vehicle", "internal", "external", "none"] as const).find((b) => b === str(formData, "beliefBreak")) ?? comp.beliefBreak,
         description: opt(formData, "description"),
       })

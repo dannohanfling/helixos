@@ -75,6 +75,8 @@ import { ProofPicker, type ProofImage } from "@/components/proof-picker";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { SubmitButton } from "@/components/submit-button";
+import { DraftKeeper } from "@/components/draft-keeper";
+import { MoneyInput } from "@/components/money-input";
 
 const ACT_ICON: Record<string, string> = {
   opening: "🎬",
@@ -98,6 +100,8 @@ export default async function WebinarWizardPage({
     held?: string;
     example?: string;
     confirmed?: string;
+    runError?: string;
+    field?: string;
   }>;
 }) {
   const v = await requireViewer();
@@ -349,6 +353,7 @@ export default async function WebinarWizardPage({
               className="grid gap-3 sm:grid-cols-2"
             >
               <input type="hidden" name="id" value={w.id} />
+              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.foundation`} />
               <div className="sm:col-span-2">
                 <Field label="Title">
                   <input
@@ -554,6 +559,7 @@ export default async function WebinarWizardPage({
       {step === "beliefs" ? (
         <form action={updateWebinarBeliefsAction} className="space-y-4">
           <input type="hidden" name="id" value={w.id} />
+          <DraftKeeper id={`webinar.${v.user.id}.${w.id}.beliefs`} />
           <p className="text-sm text-ink-2">
             {WIZARD_STAGES[1]?.description} Fill the three shifts. Each one
             becomes an act.
@@ -883,6 +889,7 @@ export default async function WebinarWizardPage({
             {isUnreviewed(section.origin) ? <UnreviewedMark action={acceptSectionAction} fields={{ id: w.id, sectionKey: section.sectionKey }} className="mt-3" /> : null}
             <form action={updateSectionAction} className="mt-4 space-y-3">
               <input type="hidden" name="id" value={w.id} />
+              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.section-${section.sectionKey}`} />
               <input
                 type="hidden"
                 name="sectionKey"
@@ -1533,6 +1540,12 @@ export default async function WebinarWizardPage({
             ) : null}
             <form action={updateRunAction} className="space-y-4">
               <input type="hidden" name="id" value={w.id} />
+              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.run`} />
+              {sp.runError ? (
+                <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="run-error">
+                  {sp.runError}
+                </p>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Status">
                   <select
@@ -1595,13 +1608,17 @@ export default async function WebinarWizardPage({
                 ].map(([k, label]) => (
                   <label key={k} className="block">
                     <span className="label">{label}</span>
-                    <input
-                      className="field tabular"
-                      name={k}
-                      type="number"
-                      min={0}
-                      defaultValue={w[k as "registered"] ?? ""}
-                    />
+                    {k === "revenue" ? (
+                      <MoneyInput name="revenue" defaultValue={w.revenue} data-testid="run-revenue" />
+                    ) : (
+                      <input
+                        className="field tabular"
+                        name={k}
+                        type="number"
+                        min={0}
+                        defaultValue={w[k as "registered"] ?? ""}
+                      />
+                    )}
                   </label>
                 ))}
               </div>

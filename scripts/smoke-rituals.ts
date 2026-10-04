@@ -98,6 +98,12 @@ async function main() {
     const kept = { word: await page.locator('[data-testid="week-word"]').last().inputValue(), kr: await Promise.all([1, 2, 3].map((i) => page.locator(`[data-testid="week-kr${i}"]`).last().inputValue())), initiative: await page.locator('[data-testid="week-initiative"]').last().inputValue(), tasks: await Promise.all([1, 2, 3].map((i) => page.locator(`[data-testid="week-task${i}"]`).last().inputValue())) };
     if (JSON.stringify(kept) !== JSON.stringify(typed)) throw new Error(`a refused 3-1-3 keeps every typed value: ${JSON.stringify(kept)}`);
     if ((await page.locator('[data-testid="week-kr2"]').last().getAttribute("aria-invalid")) !== "true" || !(await page.locator('[data-testid="week-kr2"]').last().evaluate((el) => el === document.activeElement))) throw new Error("the key result at fault is marked beside it and focused");
+    // Rev 444: the 3-1-3 keeps a draft too, so a refresh after a refusal costs nothing.
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.locator('[data-testid="week-form"] [data-testid="draft-restored"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="week-initiative"]').last().inputValue()) !== typed.initiative || (await page.locator('[data-testid="week-kr1"]').last().inputValue()) !== typed.kr[0]) throw new Error("a refresh brings the week's typed answers back as a draft");
+    console.log("✓ rev 444: the 3-1-3 keeps a draft through a refresh");
     // A task written as a result: a nudge, with Move it to my tasks.
     await page.locator('[data-testid="week-kr2"]').last().fill("Post 5 times");
     await page.locator('[data-testid="week-kr2-nudge"]').waitFor({ timeout: 10000 });
@@ -189,11 +195,24 @@ async function main() {
     if ((await page.locator('[data-testid="month-plan"]').last().inputValue()) !== "Two webinars and daily DMs." || !(await page.locator('[data-testid="month-businessSeason-sales"]').last().isChecked())) throw new Error("a refresh brings the month's typed answers back as a draft");
     await submit(page, '[data-testid="month-save"]');
     await page.locator('[data-testid="month-form"] [data-testid="field-error"]').waitFor({ timeout: 20000 });
-    if ((await page.locator('[data-testid="month-error"]').innerText()).trim() !== "Write your revenue goal as a number, like 10000." || (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) }))) throw new Error("a revenue goal that isn't a number is refused, and nothing saved");
+    if ((await page.locator('[data-testid="month-error"]').innerText()).trim() !== "Write the amount as a number, like 3500." || (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) }))) throw new Error("a revenue goal that isn't a number is refused, and nothing saved");
     // Every answer typed is still there, the seasons too, and the revenue goal is marked and focused.
     const monthKept = await Promise.all(MONTH_TEXT.map(async ([k]) => page.locator(`[data-testid="month-${k}"]`).last().inputValue()));
     if (JSON.stringify(monthKept) !== JSON.stringify(MONTH_TEXT.map(([, t]) => t)) || (await page.locator('[data-testid="month-word"]').last().inputValue()) !== "Rooted and ready" || !(await page.locator('[data-testid="month-personalSeason-wealth"]').last().isChecked()) || !(await page.locator('[data-testid="month-businessSeason-sales"]').last().isChecked()) || (await page.locator('[data-testid="month-revenueGoal"]').last().inputValue()) !== "lots") throw new Error("a refused month keeps every typed answer");
     if (!(await page.locator('[data-testid="month-revenueGoal"]').last().evaluate((el) => el === document.activeElement && el.getAttribute("aria-invalid") === "true"))) throw new Error("the revenue goal is marked beside it and focused");
+    // Rev 444: "3.5k" reads as money, shown before Save; with one required answer left blank, the refusal marks only that one
+    // and every other answer stays, the goal still reading $3,500.
+    await page.locator('[data-testid="month-revenueGoal"]').last().fill("3.5k");
+    if ((await page.locator('[data-testid="month-form"] [data-testid="money-read"]').last().innerText()).trim() !== "Reads as $3,500") throw new Error("the goal says what it understood before Save");
+    await page.locator('[data-testid="month-plan"]').last().fill("");
+    await submit(page, '[data-testid="month-save"]');
+    await page.locator('[data-testid="month-form"] [data-testid="field-error"]').waitFor({ timeout: 20000 });
+    const marked = await page.locator('[data-testid="month-form"] [aria-invalid="true"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).name));
+    if (JSON.stringify(marked) !== JSON.stringify(["plan"])) throw new Error(`only the blank answer is marked: ${marked.join(",")}`);
+    const keptAfter = await Promise.all(MONTH_TEXT.filter(([k]) => k !== "plan").map(async ([k]) => page.locator(`[data-testid="month-${k}"]`).last().inputValue()));
+    if (JSON.stringify(keptAfter) !== JSON.stringify(MONTH_TEXT.filter(([k]) => k !== "plan").map(([, t]) => t)) || (await page.locator('[data-testid="month-revenueGoal"]').last().inputValue()) !== "3.5k" || (await page.locator('[data-testid="month-form"] [data-testid="money-read"]').last().innerText()).trim() !== "Reads as $3,500") throw new Error("every other answer stays, and the goal still reads $3,500");
+    await page.locator('[data-testid="month-plan"]').last().fill("Two webinars and daily DMs.");
+    console.log("✓ rev 444: \"3.5k\" reads as $3,500 before Save; a blank answer marks only itself and everything else stays");
     await page.locator('[data-testid="month-revenueGoal"]').last().fill("$10,000");
     // A save that never answers (3 Oct: a member lost his month's answers to a glitch): the connection drops as Save is pressed.
     // The page says so and keeps the typing; a reload brings every answer back, marked as a save that didn't go through.

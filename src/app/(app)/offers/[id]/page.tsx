@@ -14,6 +14,7 @@ import { moveLegacyObjectionAction } from "@/lib/actions/objections";
 import { LEGACY_OFFER_OBJECTIONS, isSharedObjection, reframesOf } from "@/lib/engine/objections";
 import { BOT_ROLES, BOT_ROLE_LABEL, REFUND_LINE_DEFAULT, TERMS_WHEN_DEFAULT } from "@/lib/engine/bot-fields";
 import { SubmitButton } from "@/components/submit-button";
+import { MoneyInput } from "@/components/money-input";
 import { DraftKeeper } from "@/components/draft-keeper";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
@@ -141,7 +142,9 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                           <option key={c}>{c}</option>
                         ))}
                       </select>
-                      <input className="field tabular" name="price" type="number" min={0} defaultValue={offer.price} />
+                      <div className="min-w-0 flex-1">
+                        <MoneyInput name="price" plain defaultValue={offer.price} data-testid="offer-price" />
+                      </div>
                     </div>
                   </Field>
                 <Field label="Payment plan">
@@ -200,7 +203,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                   </Field>
                 </div>
                 <Field label="Deposit amount">
-                  <input className="field tabular" name="depositAmount" type="number" min={0} step="any" defaultValue={offer.depositAmount ?? ""} data-testid="offer-deposit" />
+                  <MoneyInput name="depositAmount" plain defaultValue={offer.depositAmount} data-testid="offer-deposit" />
                 </Field>
                 <p className="self-end text-xs text-ink-3">The payment link is the one under Links below; an entry or core offer can&apos;t be pushed without it.</p>
                 <label className="flex items-center gap-2 text-sm">
@@ -303,7 +306,9 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                         <option value="bonus">Bonus</option>
                         <option value="guarantee">Guarantee</option>
                       </select>
-                      <input className="field tabular" name="perceivedValue" type="number" min={0} defaultValue={c.perceivedValue} />
+                      <div>
+                        <MoneyInput name="perceivedValue" plain defaultValue={c.perceivedValue} />
+                      </div>
                       <select className="field" name="beliefBreak" defaultValue={c.beliefBreak}>
                         {Object.entries(BREAK_LABEL).map(([k, l]) => (
                           <option key={k} value={k}>
@@ -338,7 +343,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
                 </select>
               </Field>
               <Field label="Value $">
-                <input className="field tabular" name="perceivedValue" type="number" min={0} placeholder="497" />
+                <MoneyInput name="perceivedValue" plain placeholder="497" />
               </Field>
               <Field label="Solves which belief?">
                 <select className="field" name="beliefBreak" defaultValue="none">

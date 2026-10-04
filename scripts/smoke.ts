@@ -129,8 +129,24 @@ async function main() {
   await page.fill('input[name="dmsStarted"]', "3");
   await page.fill('input[name="callsBooked"]', "1");
   await page.fill('input[name="win"]', "Booked a call from a cold DM.");
+  // Rev 444: cash the way people write it. One that can't be read says so before Save and is refused beside its box, everything
+  // else kept; "1.2k" is saved as 1200, never 1.2.
+  await page.fill('[data-testid="close-cashCollected"]', "about a grand");
+  if ((await page.locator('[data-testid="close-form"] [data-testid="money-read"]').first().innerText()).trim() !== "Write the amount as a number, like 3500.") throw new Error("an amount it can't read says so under the box before Save");
+  await submit(page, 'button:has-text("Close the day")');
+  await page.locator('[data-testid="close-error"]').waitFor({ timeout: 15000 });
+  if ((await page.inputValue('input[name="win"]')) !== "Booked a call from a cold DM." || (await page.inputValue('input[name="dmsStarted"]')) !== "3" || (await page.inputValue('[data-testid="close-cashCollected"]')) !== "about a grand") throw new Error("a refused close keeps every box as typed");
+  if ((await page.locator('[data-testid="close-cashCollected"]').getAttribute("aria-invalid")) !== "true") throw new Error("the cash box is the one marked");
+  await page.fill('[data-testid="close-cashCollected"]', "1.2k");
+  if ((await page.locator('[data-testid="close-form"] [data-testid="money-read"]').first().innerText()).trim() !== "Reads as $1,200") throw new Error("the box says what it understood before Save");
   await submit(page, 'button:has-text("Close the day")');
   await expectText(page, "Day closed", "close");
+  {
+    const { todayInTz } = await import("@/lib/dates");
+    const closedLog = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, todayInTz(mayaM.timezone || ws.timezone))) });
+    if (closedLog?.cashCollected !== 1200) throw new Error(`"1.2k" is saved as 1200: ${closedLog?.cashCollected}`);
+  }
+  console.log("✓ rev 444: the close reads \"1.2k\" as $1,200 before Save and saves 1200; an amount it can't read is refused beside its box, everything else kept");
   await shot(page, "03-today-closed");
 
   // Tasks

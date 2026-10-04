@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 75,
+    date: "2026-10-04",
+    title: "Money the way you write it, and nothing typed is lost",
+    lines: [
+      "Every money box takes amounts the way you'd write them: \"3.5k\", \"$3,500\", \"3500 USD\", \"1.2m\". Under the box it says what it understood (\"Reads as $3,500\") before you save, and one it can't read is never saved as 0.",
+      "If a form refuses something, everything you typed stays and only the box to fix is marked. Your week's 3-1-3, Close the day, the webinar steps and your Pathway submissions now keep a draft too, like the month's answers already did.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 74,
     date: "2026-10-04",
     title: "Business name back on sign-up, and the chat bubble out of the way",
