@@ -26,7 +26,8 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { intentionPrompt, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
-import { todayBody } from "@/lib/queries/body";
+import { todayBody, workoutReadFor } from "@/lib/queries/body";
+import { WorkoutReadCard } from "@/components/body/workout-read";
 import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
@@ -65,6 +66,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const closed = await closedDates(v.workspace.id, v.user.id);
   // Body's one line (rev 179): the member's own, only once they've set Body up. It counts toward nothing on this page.
   const body = await todayBody(v);
+  // HumanOS's post-workout read (rev 471): once today's session is finished, its lines sit with the day.
+  const workout = body ? await workoutReadFor(v.workspace.id, v.user.id, v.today) : null;
   const streakDayIfClosedNow = d.log?.eveningDoneAt ? d.log.streakDay : weeklyStreakDay(closed, v.today);
   const bonusIfClosedNow = streakBonus(streakDayIfClosedNow);
   const morningDone = Boolean(d.log?.morningDoneAt);
@@ -496,6 +499,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                         {m.name}: {m.line!.text}
                       </Link>
                     ))}
+                </div>
+              ) : null}
+              {workout?.finished ? (
+                <div data-testid="today-workout-read">
+                  <WorkoutReadCard read={workout} date={v.today} unit="" routineId={workout.routineId} compact />
+                  <Link href="/body/training" className="mt-1 inline-block text-xs text-ink-2 hover:underline">
+                    Next time&apos;s weights on Training →
+                  </Link>
                 </div>
               ) : null}
             </div>

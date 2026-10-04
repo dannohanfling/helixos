@@ -95,3 +95,18 @@ describe("sync window and its line (rev 473)", () => {
     expect(syncWords({ newWorkouts: 0, newNights: 0 })).toBe("Synced: nothing new since the last sync. Recovery and strain are up to date.");
   });
 });
+
+describe("a WHOOP sport ticks a habit whose name holds it (rev 471)", () => {
+  const habits = [
+    { id: "h1", name: "Sauna session", kind: "minutes" as const },
+    { id: "h2", name: "Daily stretching", kind: "done" as const },
+    { id: "h3", name: "Walk", kind: "done" as const },
+    { id: "h4", name: "Saunas booked", kind: "count" as const },
+  ];
+  it("matches the word, not a part of one", () => {
+    expect(habitTick("Sauna", 20, habits)).toEqual({ habitId: "h1", value: 20 });
+    expect(habitTick("Stretching", 12, habits)).toEqual({ habitId: "h2", value: 1 });
+    expect(habitTick("Walking", 30, habits)).toEqual({ habitId: "h3", value: 1 });
+    expect(habitTick("Rowing", 30, habits)).toBeNull();
+  });
+});

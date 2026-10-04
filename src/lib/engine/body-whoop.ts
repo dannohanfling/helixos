@@ -124,7 +124,10 @@ const SPORT_TO_HABIT: Record<string, string> = { walking: "walk / steps", hiking
 export function habitTick(sport: string, minutes: number, habits: { id: string; name: string; kind: HabitKind }[]): { habitId: string; value: number } | null {
   const key = sport.trim().toLowerCase();
   const want = SPORT_TO_HABIT[key] ?? key;
-  const h = habits.find((x) => x.name.trim().toLowerCase() === want);
+  // The habit by its name, or (rev 471) one whose name holds the word: "Sauna session", "Daily stretching", "Walk".
+  const words = want.split(/\s*\/\s*/).filter(Boolean);
+  const holds = (name: string) => words.some((w) => new RegExp(`(^|\\W)${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\W|$)`, "i").test(name));
+  const h = habits.find((x) => x.name.trim().toLowerCase() === want) ?? habits.find((x) => holds(x.name));
   if (!h) return null;
   if (h.kind === "done") return { habitId: h.id, value: 1 };
   if (h.kind === "minutes") return { habitId: h.id, value: Math.round(minutes) };

@@ -21,7 +21,18 @@ export const WHATS_NEW: WhatsNewEntry[] = [
       "A weigh-in logged twice, say typed in the morning and then imported from RENPHO, stays one reading. The second fills in the numbers the first didn't have, and changes nothing that's already there.",
     ],
     audience: "everyone",
+  },  {
+    n: 78,
+    date: "2026-10-04",
+    title: "HumanOS: how the workout went, and next time's weight",
+    lines: [
+      "When you finish a workout, Training reads it back in a few lines: sets done against the plan, time and strain from WHOOP, each exercise up, held or down against last time, new PRs, reps that faded, and anything that hasn't moved for a while. Your note is part of it. Today shows the same lines.",
+      "Where you earned it, it suggests next time's weight: the smallest step up when every set hit the top of your reps, or the same weight again when they faded. Use next time makes it the routine's target, and your first set opens on it.",
+      "Stretching or sauna that WHOOP recorded within an hour of the lift is grouped with it as one gym visit, with the total time. A habit whose name holds the activity, like \"Sauna session\", now gets ticked too.",
+    ],
+    audience: "everyone",
   },
+
   {
     n: 76,
     date: "2026-10-04",

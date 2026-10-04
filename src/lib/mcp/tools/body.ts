@@ -19,7 +19,7 @@ import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
-import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayTypesFor, medsView } from "@/lib/queries/body";
+import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayTypesFor, medsView, workoutReadFor } from "@/lib/queries/body";
 import { zonesText } from "@/lib/engine/body-whoop";
 import { fmtDistanceIn, habitShown, isMeasures, storedFromShown, weightUnitWord } from "@/lib/engine/body-measures";
 import { fillBoxes, refill, takesFromBottle } from "@/lib/engine/body-meds";
@@ -155,6 +155,23 @@ export const bodyWeighIns = defineTool({
       text: `Last ${days} days.\n${cards.join("\n")}\n\nRecent readings:\n${recent.join("\n")}`,
       data: { unit, cards: w.cards.filter((c) => c.stats.latest).map((c) => ({ key: c.metric.key, latest: c.stats.latest, avg7: c.stats.avg7, change7: c.stats.change7, goal: c.goal ? { target: c.goal.target, by: c.goal.by } : null })), readings: w.readings.slice(0, 10).map((r) => ({ date: r.date, time: r.time, source: r.source, values: r.values })) },
     };
+  },
+});
+
+/** The post-workout read (rev 471): the same lines Training shows, by voice. */
+export const bodyWorkoutRead = defineTool({
+  name: "body_workout_read",
+  scope: "body",
+  kind: "read",
+  description: "The post-workout read for a day: plan done, time and strain from WHOOP with what was recorded around the lift, each exercise up, held or down against last time, new PRs, fades and stalls, and next time's weight per exercise where it was earned. Read it back in the member's words; it is never medical advice.",
+  input: { date: z.string().optional().describe("YYYY-MM-DD; today when left out") },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const date = dayOf(v, input.date);
+    const r = await workoutReadFor(v.workspace.id, v.user.id, date);
+    if (!r) return { text: `No workout with sets on ${date === v.today ? "today" : date}.`, data: { date, read: null } };
+    const next = r.next.map((n) => `${n.exercise}: ${n.weight ?? "the same"}${n.reps ? ` × ${n.reps}` : ""} (${n.why})`);
+    return { text: [...r.lines, ...(r.exercises.length ? ["", ...r.exercises.map((e) => e.line)] : []), ...(next.length ? ["", `Next time: ${next.join("; ")}.`] : [])].join("\n"), data: { date, finished: r.finished, lines: r.lines, exercises: r.exercises, next: r.next } };
   },
 });
 

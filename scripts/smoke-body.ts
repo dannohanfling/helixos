@@ -494,6 +494,22 @@ async function main() {
     await press(client, '[data-testid="training-finish"]', async () => (await client.locator('[data-testid="training-finished"]').count()) > 0, "the session finished");
     const finished = await db.query.bodySessions.findFirst({ where: and(mine(schema.bodySessions), eq(schema.bodySessions.date, today)) });
     if (!finished?.completedAt || finished.note !== "Felt strong" || !((await client.locator('[data-testid="training-finished"]').textContent()) ?? "").includes("Felt strong")) throw new Error("Finish stamps the session with its note");
+    // Rev 471: the finished session reads back in plain lines, the query's own, with the member's note; the bench, up to a PR at
+    // one of three sets, keeps 190 for next time, and "Use next time" makes it the routine's target, opening the next first set.
+    const { workoutReadFor } = await import("@/lib/queries/body");
+    const readWant = (await workoutReadFor(mem.workspaceId, maya.id, today))!;
+    const readShown = await client.locator('[data-testid="training-session"] [data-testid="workout-read-lines"] li').allTextContents();
+    if (JSON.stringify(readShown) !== JSON.stringify(readWant.lines) || !readShown.some((l) => l.includes("Felt strong")) || !readShown.includes("New PR: Bench press.")) throw new Error(`the post-workout read is the query's: ${JSON.stringify(readShown)}`);
+    const benchNext = client.locator('[data-testid="workout-read-next-item"][data-exercise="Bench press"]');
+    if ((await benchNext.getAttribute("data-weight")) !== "190" || (await benchNext.getAttribute("data-add")) !== "0") throw new Error("one set of three planned keeps the weight for next time");
+    await press(client, '[data-testid="workout-read-next-item"][data-exercise="Bench press"] [data-testid="workout-read-accept"]', async () => (await client.locator(`${card("Bench press")} [data-testid="training-target-weight"]`).count()) > 0, "the target taken");
+    const pushDay = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.id === readWant.routineId);
+    if (pushDay?.items.find((i) => i.exerciseId === exRows.find((r) => r.name === "Bench press")!.id)?.weight !== 190) throw new Error("Use next time sets the routine's target weight");
+    await client.goto(`${base}/today`);
+    if (!(await client.locator('[data-testid="today-workout-read"] [data-testid="workout-read-lines"] li').count())) throw new Error("Today shows the finished session's read");
+    await client.goto(`${base}/body/training`);
+    await client.locator('[data-testid="training-finished"]').waitFor({ timeout: 30000 });
+    console.log(`✓ post-workout read (rev 471): ${readWant.lines.length} lines, the query's own, the note in them; bench up to a PR keeps 190 for next time and Use next time makes it the routine's target; Today shows the read`);
     await logSet("Pull-up", "", "7");
     if ((await db.query.bodySessions.findFirst({ where: and(mine(schema.bodySessions), eq(schema.bodySessions.date, today)) }))?.completedAt) throw new Error("a set after finishing reopens the session");
     if ((await client.locator('[data-testid="training-finished"]').count()) || (await setsIn("Pull-up").nth(1).getAttribute("data-plan")) !== "under") throw new Error("reopened, and 7 against 8–10 is under plan");
@@ -1181,6 +1197,8 @@ async function main() {
       await client.locator('[data-testid="training-activities"]').waitFor({ timeout: 30000 });
       if ((await client.locator('[data-testid="training-activity"]').count()) !== 2 || !(await client.locator('[data-testid="training-activity"][data-sport="Weightlifting"][data-session="1"]').count())) throw new Error("Training shows the day's two recorded workouts under the session");
       if (!(await client.locator('[data-testid="training-activity"][data-sport="Weightlifting"] [data-testid="training-activity-zones"]').textContent())?.includes("Z2 22")) throw new Error("the lift's zones show on its chip");
+      // Rev 471: the sauna that ended within the hour after the lift is part of the gym visit, 78 minutes from the lift's start.
+      if ((await client.locator('[data-testid="training-gym"]').getAttribute("data-minutes")) !== "78" || !((await client.locator('[data-testid="training-gym"]').textContent()) ?? "").includes("sauna 18 min")) throw new Error("the sauna after the lift is grouped as the gym visit");
       // The Sleep page shows the night's window and stages; Log shows the day's energy estimate beside intake; Settings the max heart rate.
       // The mock dates its newest night by UTC; on the member's clock (Los Angeles) that morning can still be tomorrow, and a night
       // that hasn't ended yet rightly stays off the page. So the stages are read on the newest night that is on or before today.
@@ -1438,6 +1456,11 @@ async function main() {
     await db.delete(schema.bodySets).where(eq(schema.bodySets.id, tieSet.id));
     const setTool = await tool("body_log_set").handler(await viewerFor(), { exercise: "bench", weight: 180, reps: 8, date: yesterday });
     if (!setTool.text.includes("180 × 8") || (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, yesterday)) })).length !== 3) throw new Error(`body_log_set adds a set to yesterday's session: ${setTool.text}`);
+    // The post-workout read by voice (rev 471): the same lines Training shows.
+    const { workoutReadFor: readFor } = await import("@/lib/queries/body");
+    const readTool = await tool("body_workout_read").handler(await viewerFor(), { date: today });
+    const readNow = await readFor(mem.workspaceId, maya.id, today);
+    if (!readNow || !readTool.text.startsWith(readNow.lines.join("\n"))) throw new Error(`body_workout_read reads the day back: ${readTool.text.slice(0, 300)}`);
     const weighTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.2, bodyFat: 21.5, date: yesterday, time: "07:00" });
     if (!weighTool.text.includes("151.2 lb") || !weighTool.text.includes("21.5%")) throw new Error(`body_log_weigh_in logs the reading: ${weighTool.text}`);
     // Rev 476: the same step read off a RENPHO screenshot takes every number the first lacked and stays one reading, marked

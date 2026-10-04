@@ -6,8 +6,10 @@ import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
-import { activitiesOn, requireBodyEnabled, restrictedNow, trainingDay, trainingWeeks, type TrainingDayView } from "@/lib/queries/body";
-import { zonesText } from "@/lib/engine/body-whoop";
+import { activitiesOn, requireBodyEnabled, restrictedNow, trainingDay, trainingWeeks, workoutReadFor, type TrainingDayView } from "@/lib/queries/body";
+import { isLifting, zonesText } from "@/lib/engine/body-whoop";
+import { gymGroup } from "@/lib/engine/body-reads";
+import { WorkoutReadCard } from "@/components/body/workout-read";
 import { fmtDistanceIn, isMeasures } from "@/lib/engine/body-measures";
 import { deleteSetAction, finishSessionAction, logSetAction, reopenSessionAction, setDayOffAction, startSessionAction } from "@/lib/actions/body";
 
@@ -31,6 +33,7 @@ function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exerc
           {x.target ? (
             <span data-testid="training-plan" data-done={x.today.length >= x.target.sets ? "1" : "0"}>
               {x.today.length} of {x.target.sets} sets · {x.target.reps || "?"} reps
+              {x.target.weight ? <span data-testid="training-target-weight"> at {x.target.weight} {unit}</span> : null}
             </span>
           ) : null}
           {x.target && x.pr ? " · " : null}
@@ -90,7 +93,8 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
   requireBodyEnabled(v);
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= v.today ? sp.date : v.today;
-  const [t, weeks, restricted, activities] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), restrictedNow(v.workspace.id, v.user.id, v.today), activitiesOn(v.workspace.id, v.user.id, date)]);
+  const [t, weeks, restricted, activities, read] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), restrictedNow(v.workspace.id, v.user.id, v.today), activitiesOn(v.workspace.id, v.user.id, date), workoutReadFor(v.workspace.id, v.user.id, date)]);
+  const gym = gymGroup(activities, isLifting);
   if (!t) {
     return (
       <>
@@ -131,6 +135,13 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
           </div>
         }
       />
+      {gym.around.length ? (
+        /* Rev 471: what WHOOP recorded within an hour of the lift is one gym visit. */
+        <p className="-mt-2 mb-2 text-xs text-ink-2" data-testid="training-gym" data-minutes={gym.minutes ?? ""}>
+          At the gym: {gym.lift!.sport.toLowerCase()} {Math.round(gym.lift!.minutes)} min, {gym.around.map((a) => `${a.sport.toLowerCase()} ${Math.round(a.minutes)} min`).join(", ")}
+          {gym.minutes ? ` · ${gym.minutes} min in all` : ""}
+        </p>
+      ) : null}
       {activities.length ? (
         /* WHOOP (phase 11): the day's recorded workouts; a lifting one sits with the session rather than beside it. */
         <ul className="-mt-2 mb-3 flex flex-wrap gap-2 text-xs" data-testid="training-activities" data-count={activities.length}>
@@ -259,6 +270,17 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={Math.min(100, Math.round((t.plan.doneSets / t.plan.plannedSets) * 100))} aria-valuemin={0} aria-valuemax={100}>
               <div className="h-full rounded-full bg-humanos transition-[width] duration-500" style={{ width: `${Math.min(100, Math.round((t.plan.doneSets / t.plan.plannedSets) * 100))}%` }} />
             </div>
+          ) : null}
+          {/* The post-workout read (rev 471): open once the session is finished; a look so far while it's going. */}
+          {read ? (
+            t.completedAt ? (
+              <WorkoutReadCard read={read} date={date} unit={t.unit} routineId={read.routineId} />
+            ) : (
+              <details className="mt-2" data-testid="workout-read-so-far">
+                <summary className="cursor-pointer text-xs text-ink-3 underline">How it&apos;s going so far</summary>
+                <WorkoutReadCard read={read} date={date} unit={t.unit} routineId={read.routineId} />
+              </details>
+            )
           ) : null}
           {t.completedAt ? (
             <form action={reopenSessionAction} className="mt-2">

@@ -2,7 +2,7 @@
  * Body reads. Every read of a Body table in the app is here (a unit test holds that), and every read of someone else's Body data
  * goes through bodyAccess first: a coach sees a client's Body only while the client's share switch is on (rev 179, privacy).
  */
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
@@ -18,7 +18,9 @@ import { shoppingList, type ShopFood } from "@/lib/engine/body-shopping";
 import { calendarWeeks, perWeek, stripBounds, type Bounds } from "@/lib/engine/body-range";
 import { change, coachBodyText, goalPace, nutritionWeek, weighWeek, type CoachBodyCell, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
-import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, weekTally, type WeightUnit } from "@/lib/engine/body-training";
+import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, toUnit, weekTally, type WeightUnit } from "@/lib/engine/body-training";
+import { gymGroup, sameTopRun, workoutRead, type ReadExercise, type WorkoutRead } from "@/lib/engine/body-reads";
+import { isLifting } from "@/lib/engine/body-whoop";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 
 /**
@@ -274,7 +276,12 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
       last: last.map((s) => fmtSet(s, unit, exercise.kind)),
       lastDate: last[0]?.date ?? null,
       pr: pr ? { text: fmtSet(pr, unit, exercise.kind), date: pr.date } : null,
-      next: nextSetDefaults(today, last, unit),
+      // A weight the member accepted from a post-workout read (rev 471) opens the session's first set.
+      next: (() => {
+        const n = nextSetDefaults(today, last, unit);
+        const line = routine?.lines.find((l) => l.exerciseId === id);
+        return !today.length && line?.weight ? { ...n, weight: line.weight } : n;
+      })(),
     };
   });
   return {
@@ -1172,4 +1179,56 @@ export async function deviceDay(workspaceId: string, userId: string, date: strin
 /** The device's workouts on a day, for Training: sport, minutes, strain, heart rate. */
 export async function activitiesOn(workspaceId: string, userId: string, date: string) {
   return db.query.bodyActivities.findMany({ where: and(eq(schema.bodyActivities.workspaceId, workspaceId), eq(schema.bodyActivities.userId, userId), eq(schema.bodyActivities.date, date)), orderBy: asc(schema.bodyActivities.startedAt) });
+}
+
+/**
+ * The post-workout read for a day (rev 471): the session's sets against each exercise's last time and PR, the routine's targets,
+ * the member's note, and WHOOP's lift with what it recorded around it. Null when the day has no session with sets.
+ */
+export async function workoutReadFor(workspaceId: string, userId: string, date: string): Promise<(WorkoutRead & { date: string; finished: boolean; routineId: string | null }) | null> {
+  const t = await trainingDay(workspaceId, userId, date);
+  if (!t?.session) return null;
+  const unit = t.unit;
+  const history = await setsOf(workspaceId, userId, t.exercises.map((x) => x.exercise.id));
+  const inUnit = (s: { weight: number | null; unit: string; reps: number }) => ({ weight: s.weight == null ? null : toUnit(s.weight, s.unit === "kg" ? "kg" : "lb", unit), reps: s.reps });
+  const exercises: ReadExercise[] = t.exercises.map((x) => {
+    const all = history.filter((s) => s.exerciseId === x.exercise.id && s.date <= date);
+    const byDate = new Map<string, typeof all>();
+    for (const s of all) byDate.set(s.date, [...(byDate.get(s.date) ?? []), s]);
+    const sessions = [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([, ss]) => ss.map(inUnit));
+    const last = lastTime(all, date);
+    const pr = bestSet(all, unit);
+    return {
+      exerciseId: x.exercise.id,
+      name: x.exercise.name,
+      kind: x.exercise.kind,
+      targetSets: x.target?.sets ?? null,
+      targetReps: x.target?.reps ?? null,
+      targetWeight: x.target?.weight ?? null,
+      today: x.today.map((s) => ({ ...inUnit(s), pr: s.pr })),
+      last: last.map(inUnit),
+      lastDate: last[0]?.date ?? null,
+      pr: pr ? { ...inUnit(pr), date: pr.date } : null,
+      sameTopSessions: byDate.has(date) ? sameTopRun(sessions) : 0,
+    };
+  });
+  if (!exercises.some((x) => x.today.length)) return null;
+  const acts = await activitiesOn(workspaceId, userId, date);
+  const g = gymGroup(acts, isLifting);
+  // When this routine last ran before today, for the "first in N days" line.
+  const prev = t.session.routineId
+    ? await db.query.bodySessions.findFirst({ columns: { date: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), eq(schema.bodySessions.routineId, t.session.routineId), lt(schema.bodySessions.date, date)), orderBy: desc(schema.bodySessions.date) })
+    : null;
+  const read = workoutRead({
+    unit,
+    routineName: t.routineName,
+    note: t.note,
+    plan: t.plan.plannedSets ? { done: t.plan.doneSets, planned: t.plan.plannedSets } : null,
+    lifting: g.lift ? { minutes: g.lift.minutes, strain: g.lift.strain } : null,
+    gym: g.around,
+    gymMinutes: g.around.length ? g.minutes : null,
+    exercises,
+    daysSinceRoutine: prev ? daysBetween(prev.date, date) : null,
+  });
+  return { ...read, date, finished: !!t.completedAt, routineId: t.session.routineId };
 }

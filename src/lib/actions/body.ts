@@ -769,6 +769,28 @@ export async function logSetAction(formData: FormData): Promise<void> {
   await settle();
 }
 
+/**
+ * "Use next time" on a post-workout read (rev 471): the suggested weight becomes the routine's target for that exercise, shown
+ * beside its sets and opening the next session's first set. One tap; the member can change it on Routines.
+ */
+export async function acceptTargetAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date");
+  const at = DATE.test(date) ? trainingAt(date) : TRAINING;
+  const own = and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId));
+  const routine = await db.query.bodyRoutines.findFirst({ where: and(eq(schema.bodyRoutines.id, str(formData, "routineId")), own) });
+  if (!routine) back(at, "That routine isn't there any more.");
+  const exerciseId = str(formData, "exerciseId");
+  const weight = await amount(formData, "weight", null, at);
+  if (weight == null || weight <= 0 || weight > 5000) back(at, "That weight doesn't look right.");
+  if (!routine!.items.some((i) => i.exerciseId === exerciseId)) back(at, "That exercise isn't in the routine.");
+  const items = routine!.items.map((i) => (i.exerciseId === exerciseId ? { ...i, weight } : i));
+  await db.update(schema.bodyRoutines).set({ items }).where(and(eq(schema.bodyRoutines.id, routine!.id), own));
+  refresh();
+  await settle();
+}
+
 /** "Finish workout" (phase 3): the day's session is stamped done, with a note if one was typed. Logging another set reopens it. */
 export async function finishSessionAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });

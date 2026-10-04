@@ -2752,7 +2752,8 @@ export const bodyExercises = sqliteTable(
 export type BodyExercise = typeof bodyExercises.$inferSelect;
 
 /** One line of a routine: the exercise and its target, e.g. 3 sets of "8–10". */
-export type BodyRoutineItem = { exerciseId: string; sets: number; reps: string };
+/** `weight`: a target the member accepted from a post-workout read (rev 471), in their weight unit; none until they do. */
+export type BodyRoutineItem = { exerciseId: string; sets: number; reps: string; weight?: number | null };
 
 /** A routine: exercises in order with targets. Tied to a day type, it's the one Training offers on that type's days. */
 export const bodyRoutines = sqliteTable(
