@@ -153,3 +153,22 @@ export function verifyWebhook(secret: string, timestamp: string | null, signatur
 
 export type WebhookEvent = { user_id?: number | string; id?: string | number; type?: string };
 export const WEBHOOK_TYPES = ["workout.updated", "sleep.updated", "recovery.updated", "workout.deleted", "sleep.deleted", "recovery.deleted"] as const;
+
+/**
+ * How far back "Sync now" and the hourly catch-up pull (rev 473): from two days before the last sync that finished, so a late
+ * edit on the device is caught, at least three days and at most thirty. Never synced pulls the thirty.
+ */
+export function syncWindowDays(lastSyncAt: string | null | undefined, now = Date.now()): number {
+  const last = lastSyncAt ? Date.parse(lastSyncAt) : NaN;
+  if (!Number.isFinite(last)) return 30;
+  return Math.min(30, Math.max(3, Math.ceil((now - last) / 86_400_000) + 2));
+}
+
+/** What a sync did, in a line: "Synced: 2 new workouts and 1 new night." */
+export function syncWords(r: { newWorkouts: number; newNights: number }): string {
+  const parts = [r.newWorkouts ? `${r.newWorkouts} new workout${r.newWorkouts === 1 ? "" : "s"}` : "", r.newNights ? `${r.newNights} new night${r.newNights === 1 ? "" : "s"}` : ""].filter(Boolean);
+  return parts.length ? `Synced: ${parts.join(" and ")}. Recovery and strain are up to date.` : "Synced: nothing new since the last sync. Recovery and strain are up to date.";
+}
+
+/** A sync that started and never recorded how it ended (the request was cut off) leaves this on the device row. */
+export const SYNC_UNFINISHED = "unfinished";

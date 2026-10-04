@@ -14,6 +14,8 @@ import { deleteDayTypeAction, disconnectWhoopAction, eraseBodyAction, saveBodySe
 import type * as schema from "@/db/schema";
 import { MEASURES, MEASURES_LABEL } from "@/lib/engine/body-measures";
 import { EraseBodyForm } from "@/components/body/unit-inputs";
+import { SYNC_UNFINISHED } from "@/lib/engine/body-whoop";
+import { isWhoopProblem, whoopProblem, WhoopError } from "@/lib/whoop";
 
 export const metadata = { title: "HumanOS · Settings" };
 
@@ -52,7 +54,10 @@ function DayTypeFields({ t }: { t?: schema.BodyDayType }) {
   );
 }
 
-export default async function BodySettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; whoop?: string }> }) {
+// "Sync now" runs from this page: a long gap since the last sync is a few pages from WHOOP and a few hundred rows.
+export const maxDuration = 60;
+
+export default async function BodySettingsPage({ searchParams }: { searchParams: Promise<{ error?: string; whoop?: string; said?: string; whoopError?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
@@ -266,7 +271,12 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
               <span className="font-medium">WHOOP connected</span>
               {whoop.connectedAt ? <span className="text-ink-3"> · since {formatDate(whoop.connectedAt.slice(0, 10))}</span> : null}
               {whoop.lastSyncAt ? <span className="text-ink-3"> · synced {formatDateTime(whoop.lastSyncAt, v.tz)}</span> : null}
-              {whoop.lastError ? <span className="text-warn"> · last sync didn&apos;t finish</span> : null}
+              {whoop.lastError ? (
+                <span className="text-warn" data-testid="whoop-last-error" data-code={whoop.lastError}>
+                  {" "}
+                  · {whoop.lastError === SYNC_UNFINISHED ? "the last sync didn't finish" : `the last sync stopped: ${whoopProblem(new WhoopError(isWhoopProblem(whoop.lastError) ? whoop.lastError : "other"))}`}
+                </span>
+              ) : null}
               {whoop.maxHr != null ? <span className="text-ink-3" data-testid="whoop-max-hr"> · max heart rate {whoop.maxHr} bpm</span> : null}
             </span>
             <form action={syncWhoopAction}>
@@ -285,7 +295,12 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
             Connect WHOOP
           </a>
         )}
-        {sp.whoop === "connected" ? <p className="mt-2 text-xs text-good" role="status" data-testid="whoop-just-connected">Connected. The last 30 days are in; Sleep and Training show them.</p> : sp.whoop === "synced" ? <p className="mt-2 text-xs text-good" role="status" data-testid="whoop-just-synced">Synced.</p> : null}
+        {sp.whoop === "connected" ? <p className="mt-2 text-xs text-good" role="status" data-testid="whoop-just-connected">Connected. The last 30 days are in; Sleep and Training show them.</p> : sp.whoop === "synced" ? <p className="mt-2 text-xs text-good" role="status" data-testid="whoop-just-synced">{sp.said?.startsWith("Synced") ? sp.said.slice(0, 200) : "Synced."}</p> : null}
+        {sp.whoopError ? (
+          <p className="mt-2 text-xs text-danger" role="alert" data-testid="whoop-sync-error">
+            Didn&apos;t sync: {sp.whoopError.slice(0, 200)}
+          </p>
+        ) : null}
       </Card>
 
       <Card className="mb-8" title="Download your HumanOS data" id="download">

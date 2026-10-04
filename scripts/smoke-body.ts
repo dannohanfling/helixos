@@ -1128,6 +1128,8 @@ async function main() {
     // refused, Sync now, then Disconnect removes the row and keeps what was pulled. ──
     const { sleepRows: nightRowsOf, activityRow: activityOf } = await import("@/lib/engine/body-whoop");
     const { todayInTz: dateInTz } = await import("@/lib/dates");
+    // A connection to the mock's WHOOP id left by an earlier run that stopped part way would answer this run's webhooks too.
+    await db.delete(schema.bodyDevices).where(eq(schema.bodyDevices.providerUserId, "4242"));
     const whoopMock = spawnMock("npx", ["tsx", "scripts/mock-whoop.ts", "4072"], { stdio: "ignore", detached: true });
     try {
       for (let i = 0; i < 100; i++) {
@@ -1199,11 +1201,41 @@ async function main() {
       const good = await hook(false);
       const bad = await hook(true);
       if (good.status !== 200 || !good.body.includes('"handled":true') || bad.status !== 401) throw new Error(`a signed webhook is handled (${good.status} ${good.body}) and a bad signature refused (${bad.status})`);
+      // Rev 473: a stretch recorded on the device that no webhook announced. Sync now pulls from two days before the last sync,
+      // finds it, and says so; the line counts it as new.
+      const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+      const addWorkout = async (id: string, sport: string, from: number, to: number) => fetch("http://localhost:4072/__add", { method: "POST", body: JSON.stringify({ id, user_id: 4242, start: minsAgo(from), end: minsAgo(to), sport_name: sport, score_state: "SCORED", score: { strain: 2.1, average_heart_rate: 92, max_heart_rate: 110 } }) });
+      const hasActivity = async (id: string) => !!(await db.query.bodyActivities.findFirst({ where: and(mine(schema.bodyActivities), eq(schema.bodyActivities.providerId, id)) }));
+      await addWorkout("wk-stretch-473", "Stretching", 50, 35);
       await client.goto(`${base}/body/settings`);
       await press(client, '[data-testid="whoop-sync"]', async () => /whoop=synced/.test(client.url()), "synced");
+      const syncedLine = (await client.locator('[data-testid="whoop-just-synced"]').textContent()) ?? "";
+      if (!(await hasActivity("wk-stretch-473")) || !syncedLine.includes("Synced: 1 new workout") || (await client.locator('[data-testid="whoop-last-error"]').count())) throw new Error(`Sync now finds the stretch no webhook announced and says so: "${syncedLine}"`);
+      // Three webhooks at once as the access token runs out: WHOOP's refresh token works once, so one request refreshes and the
+      // other two wait for the token it stored. All three are handled.
+      const whoopRow = async () => (await db.query.bodyDevices.findFirst({ where: mine(schema.bodyDevices) }))!;
+      await db.update(schema.bodyDevices).set({ expiresAt: new Date(Date.now() - 60_000).toISOString() }).where(eq(schema.bodyDevices.id, (await whoopRow()).id));
+      const sendHook = async (id: string) => (await (await fetch("http://localhost:4072/__webhook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: `${base}/api/webhooks/whoop`, event: { user_id: 4242, id, type: "workout.updated" } }) })).json()) as { status: number; body: string };
+      const together = await Promise.all(["wk-walk", "wk-stretch-473", "wk-walk"].map(sendHook));
+      if (together.some((h) => !h.body.includes('"handled":true')) || Date.parse((await whoopRow()).expiresAt ?? "") < Date.now()) throw new Error(`three webhooks refreshing at once are all handled: ${together.map((h) => h.body).join(" ")}`);
+      // A webhook whose fetch fails says so on HumanOS settings, in words, instead of vanishing.
+      await fetch("http://localhost:4072/__fail?on=1");
+      await sendHook("wk-walk");
+      await client.goto(`${base}/body/settings`);
+      if ((await client.locator('[data-testid="whoop-last-error"]').getAttribute("data-code")) !== "other" || !((await client.locator('[data-testid="whoop-last-error"]').textContent()) ?? "").includes("WHOOP couldn't answer")) throw new Error("a failed webhook shows on HumanOS settings");
+      // Sync now while WHOOP is down says why beside the button, and keeps the reason on the row.
+      await press(client, '[data-testid="whoop-sync"]', async () => (await client.locator('[data-testid="whoop-sync-error"]').count()) > 0, "the sync refused");
+      await fetch("http://localhost:4072/__fail?on=0");
+      // The hourly catch-up: a sauna no webhook announced, and a last sync two hours old. The cron pulls it and clears the error.
+      await addWorkout("wk-sauna-473", "Sauna", 30, 10);
+      await db.update(schema.bodyDevices).set({ lastSyncAt: new Date(Date.now() - 2 * 3_600_000).toISOString() }).where(eq(schema.bodyDevices.id, (await whoopRow()).id));
+      const unauthorised = await fetch(`${base}/api/cron/whoop`);
+      const cron = (await (await fetch(`${base}/api/cron/whoop`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET ?? "change-me"}` } })).json()) as { synced?: number };
+      if (unauthorised.status !== 401 || !(cron.synced! >= 1) || !(await hasActivity("wk-sauna-473")) || (await whoopRow()).lastError !== null) throw new Error(`the hourly catch-up pulls what no webhook brought: ${JSON.stringify(cron)} ${(await whoopRow()).lastError}`);
+      console.log("✓ WHOOP sync (rev 473): Sync now finds a stretch no webhook announced and says \"1 new workout\"; three webhooks refreshing together are all handled with WHOOP's single-use refresh token; a failed webhook and a failed sync both say why; the hourly catch-up brings in a sauna and clears the error");
       await client.locator('[data-testid="whoop-disconnect"]').waitFor({ timeout: 30000 });
       await press(client, '[data-testid="whoop-disconnect"]', async () => (await client.locator('[data-testid="whoop-connect"]').count()) > 0, "disconnected");
-      if ((await db.query.bodyDevices.findMany({ where: mine(schema.bodyDevices) })).length || (await db.query.bodyActivities.findMany({ where: mine(schema.bodyActivities) })).length !== 3) throw new Error("Disconnect removes the row and keeps what was pulled");
+      if ((await db.query.bodyDevices.findMany({ where: mine(schema.bodyDevices) })).length || (await db.query.bodyActivities.findMany({ where: mine(schema.bodyActivities) })).length !== 5) throw new Error("Disconnect removes the row and keeps what was pulled");
       const { calls: whoopCalls } = (await (await fetch("http://localhost:4072/__calls")).json()) as { calls: { method: string; path: string }[] };
       const whoopCallsHad = (path: string) => whoopCalls.some((c) => c.path === path);
       if (!whoopCallsHad("/developer/v2/user/measurement/body")) throw new Error("the body measurement was read for the max heart rate");
@@ -1599,7 +1631,7 @@ async function main() {
     if (!(own.body_pantry ?? []).length || (own.body_yields ?? []).length !== 1) throw new Error("the member's Body export has their pantry and weighings");
     if ((own.body_habits ?? []).length !== 4 || !(own.body_habit_logs ?? []).length || (own.body_health ?? []).length !== 1) throw new Error("the member's Body export has their habits (the Sauna one WHOOP ticks among them), their logs and their health log");
     if ((own.body_plan ?? []).length !== 1 || (own.body_orders ?? []).length !== 0) throw new Error("the member's Body export has this week's plan, and no pushes while Instacart is closed");
-    if ((own.body_activities ?? []).length !== 3 || (own.body_devices ?? []).length !== 0 || JSON.stringify(own).includes("enc:v1:") || JSON.stringify(own).includes("whoop-access")) throw new Error("the member's Body export has the device's workouts and never a token");
+    if ((own.body_activities ?? []).length !== 5 || (own.body_devices ?? []).length !== 0 || JSON.stringify(own).includes("enc:v1:") || JSON.stringify(own).includes("whoop-access")) throw new Error("the member's Body export has the device's workouts and never a token");
     if ((own.body_entries ?? []).length !== 6 || (own.body_foods ?? []).length !== FOODS.length || !own.body_settings?.length || Object.keys(own).some((k) => k === "leads" || k === "tasks")) throw new Error("the member's Body export has their Body data and only that");
     // ── The Airtable history (B5, rev 237 phase 7): the synthetic HumanOS base through the page. The dry run's numbers are the
     // mapper's own; Approve writes them; a second run finds everything already in; the mock saw GETs alone and never the

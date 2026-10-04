@@ -12,7 +12,9 @@ describe("the crons", () => {
   it("keep an instance warm with the health route every five minutes, and still send the hourly reminders", () => {
     expect(crons).toContainEqual({ path: "/api/health", schedule: "*/5 * * * *" });
     expect(crons).toContainEqual({ path: "/api/cron/reminders", schedule: "0 * * * *" });
-    expect(crons).toHaveLength(2);
+    // The hourly WHOOP catch-up (rev 473), at twenty past so it never shares a minute with the reminders.
+    expect(crons).toContainEqual({ path: "/api/cron/whoop", schedule: "20 * * * *" });
+    expect(crons).toHaveLength(3);
   });
   it("the health route reads the database, so the ping warms the connection too, and returns no data", () => {
     const route = readFileSync(join(process.cwd(), "src/app/api/health/route.ts"), "utf8");

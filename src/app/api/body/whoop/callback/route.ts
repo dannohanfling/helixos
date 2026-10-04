@@ -9,6 +9,9 @@ import { exchangeCode, WhoopError, whoopProblem } from "@/lib/whoop";
  * sealed, the member's WHOOP id read, and the last 30 days pulled. Then Body settings says connected. Nothing of the code or
  * the tokens goes in a URL, a log or an error.
  */
+// The first pull is thirty days of four WHOOP collections: give it the time.
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
   const v = await getViewer();
   const back = (error?: string) => NextResponse.redirect(new URL(`/body/settings${error ? `?error=${encodeURIComponent(error)}` : "?whoop=connected"}#devices`, request.url));

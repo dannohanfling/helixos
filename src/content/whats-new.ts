@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 76,
+    date: "2026-10-04",
+    title: "HumanOS: WHOOP keeps up, and Sync now says what it did",
+    lines: [
+      "Sync now on HumanOS settings is quicker: it picks up from your last sync instead of pulling a whole month. When it's done it tells you what came in (\"Synced: 2 new workouts\"), or why it couldn't.",
+      "WHOOP is now checked every hour as well, so a workout WHOOP didn't tell us about straight away still shows up within the hour.",
+      "If a sync stops part way, HumanOS settings says so, and why.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 75,
     date: "2026-10-04",
     title: "Money the way you write it, and nothing typed is lost",

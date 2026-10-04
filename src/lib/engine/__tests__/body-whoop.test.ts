@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activityRow, cycleRows, fmtDistance, habitTick, isLifting, measurementRows, recoveryRows, signWebhook, sleepRows, verifyWebhook, zoneMinutes, zonesText } from "@/lib/engine/body-whoop";
+import { activityRow, cycleRows, fmtDistance, habitTick, isLifting, measurementRows, recoveryRows, signWebhook, sleepRows, syncWindowDays, syncWords, verifyWebhook, zoneMinutes, zonesText } from "@/lib/engine/body-whoop";
 import { bedtimeDrift, bedtimeMinutes, fmtBedtime, fmtMinutes, fmtWake } from "@/lib/engine/body-recovery";
 
 const dateOf = (iso: string) => iso.slice(0, 10);
@@ -78,5 +78,20 @@ describe("WHOOP (B6, rev 237 phase 11)", () => {
     expect(verifyWebhook("secret", ts, sig, body + " ", now)).toBe(false);
     expect(verifyWebhook("secret", String(now - 10 * 60 * 1000), signWebhook("secret", String(now - 10 * 60 * 1000), body), body, now)).toBe(false);
     expect(verifyWebhook("secret", null, sig, body, now)).toBe(false);
+  });
+});
+
+describe("sync window and its line (rev 473)", () => {
+  const now = Date.parse("2026-10-04T17:00:00.000Z");
+  it("pulls from two days before the last finished sync, three to thirty days", () => {
+    expect(syncWindowDays(null, now)).toBe(30);
+    expect(syncWindowDays("2026-10-04T14:47:00.000Z", now)).toBe(3);
+    expect(syncWindowDays("2026-09-28T14:47:00.000Z", now)).toBe(9);
+    expect(syncWindowDays("2026-01-01T00:00:00.000Z", now)).toBe(30);
+  });
+  it("says what a sync did", () => {
+    expect(syncWords({ newWorkouts: 2, newNights: 1 })).toBe("Synced: 2 new workouts and 1 new night. Recovery and strain are up to date.");
+    expect(syncWords({ newWorkouts: 1, newNights: 0 })).toBe("Synced: 1 new workout. Recovery and strain are up to date.");
+    expect(syncWords({ newWorkouts: 0, newNights: 0 })).toBe("Synced: nothing new since the last sync. Recovery and strain are up to date.");
   });
 });

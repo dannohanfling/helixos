@@ -13,6 +13,7 @@ export const WHOOP_SCOPES = "offline read:profile read:body_measurement read:cyc
 export const whoopConfigured = (): boolean => !!(process.env.WHOOP_CLIENT_ID && process.env.WHOOP_CLIENT_SECRET);
 
 export type WhoopProblem = "not_configured" | "unreachable" | "denied" | "expired" | "busy" | "other";
+export const isWhoopProblem = (s: string): s is WhoopProblem => ["not_configured", "unreachable", "denied", "expired", "busy", "other"].includes(s);
 export class WhoopError extends Error {
   constructor(readonly problem: WhoopProblem) {
     super(`whoop ${problem}`);

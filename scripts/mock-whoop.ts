@@ -3,7 +3,7 @@
  * WHOOP_API_URL=http://localhost:4072, WHOOP_AUTH_URL=http://localhost:4072/oauth/oauth2, WHOOP_CLIENT_ID=test-whoop-client and
  * WHOOP_CLIENT_SECRET=test-whoop-secret. The authorize page sends the member straight back with a code; the token endpoint
  * answers a bearer token; the v2 API serves one member's synthetic nights, recoveries, cycles and workouts, dated relative to
- * today (the walk reads the same records to compute what should land). `GET /__calls` lists every request; `POST /__webhook`
+ * today (the walk reads the same records to compute what should land). `GET /__calls` lists every request; `POST /__add` records a workout no webhook announces, `GET /__fail?on=1|0` makes the API answer 500, refresh tokens work once; `POST /__webhook`
  * makes the mock send a signed webhook to the URL given, for the walk to prove the route.
  */
 import { createHmac } from "node:crypto";
@@ -14,6 +14,11 @@ const calls: { method: string; path: string }[] = [];
 const SECRET = "test-whoop-secret";
 const TOKEN = "whoop-access-1";
 const USER_ID = 4242;
+/** WHOOP's refresh token works once (rev 473): each refresh answers a new one, and the one just used is refused after. */
+let refreshValid = "whoop-refresh-1";
+let refreshes = 1;
+/** While set, the v2 API answers 500, as WHOOP does when it is down. */
+let failing = false;
 
 const day = (back: number, hm: string) => {
   const d = new Date();
@@ -50,9 +55,18 @@ createServer((req, res) => {
   calls.push({ method: req.method ?? "?", path: url.pathname });
   if (url.pathname === "/__calls") return json(200, { calls });
   if (url.pathname === "/__records") return json(200, records);
+  if (url.pathname === "/__fail") {
+    failing = url.searchParams.get("on") === "1";
+    return json(200, { failing });
+  }
   let raw = "";
   req.on("data", (c) => (raw += c));
   req.on("end", async () => {
+    // A workout recorded on the device that no webhook announces (rev 473): only a sync can find it.
+    if (url.pathname === "/__add" && req.method === "POST") {
+      records.workout.push(JSON.parse(raw));
+      return json(200, { ok: true });
+    }
     // The walk asks the mock to send a signed webhook to the app, as WHOOP would.
     if (url.pathname === "/__webhook" && req.method === "POST") {
       const { to, event, badSecret } = JSON.parse(raw || "{}") as { to: string; event: Record<string, unknown>; badSecret?: boolean };
@@ -77,9 +91,16 @@ createServer((req, res) => {
       const form = new URLSearchParams(raw);
       if (form.get("client_secret") !== SECRET) return json(401, { error: "invalid_client" });
       if (form.get("grant_type") === "authorization_code" && form.get("code") !== "good-code") return json(400, { error: "invalid_grant" });
-      return json(200, { access_token: TOKEN, refresh_token: "whoop-refresh-1", expires_in: 3600, scope: "offline read:profile read:recovery read:sleep read:workout read:cycles", token_type: "bearer" });
+      if (form.get("grant_type") === "refresh_token") {
+        // Slow enough that requests refreshing together overlap, as they do in production.
+        await new Promise((r) => setTimeout(r, 300));
+        if (form.get("refresh_token") !== refreshValid) return json(400, { error: "invalid_grant" });
+      }
+      refreshValid = `whoop-refresh-${++refreshes}`;
+      return json(200, { access_token: TOKEN, refresh_token: refreshValid, expires_in: 3600, scope: "offline read:profile read:recovery read:sleep read:workout read:cycles", token_type: "bearer" });
     }
     if ((req.headers.authorization ?? "") !== `Bearer ${TOKEN}`) return json(401, { error: "unauthorized" });
+    if (failing) return json(500, { error: "unavailable" });
     const p = url.pathname;
     if (p === "/developer/v2/user/profile/basic") return json(200, { user_id: USER_ID, email: "member@example.com", first_name: "Demo", last_name: "Member" });
     if (p === "/developer/v2/user/measurement/body") return json(200, { height_meter: 1.8, weight_kilogram: 82.5, max_heart_rate: 188 });

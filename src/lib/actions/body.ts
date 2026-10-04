@@ -36,6 +36,7 @@ import { instacartLines } from "@/lib/engine/body-shopping";
 import { INSTACART_OPEN, INSTACART_SOON_LINE, InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
 import { shoppingView } from "@/lib/queries/body";
 import { disconnectWhoop, syncWhoop } from "@/lib/body-whoop";
+import { syncWords } from "@/lib/engine/body-whoop";
 import { WhoopError, whoopProblem } from "@/lib/whoop";
 import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { addDays, daysBetween, nowIso, startOfWeek, weekday } from "@/lib/dates";
@@ -1479,11 +1480,13 @@ export async function disconnectWhoopAction(): Promise<void> {
 export async function syncWhoopAction(): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
   await setUp(v);
+  // From two days before the last finished sync (rev 473), and it says what it did, or why not, beside the button.
+  let said: string;
   try {
-    await syncWhoop(workspaceId, userId, v.tz, 30);
+    said = syncWords(await syncWhoop(workspaceId, userId, v.tz));
   } catch (e) {
-    throw back("/body/settings", e instanceof WhoopError ? whoopProblem(e) : "WHOOP couldn't answer just now.");
+    redirect(`/body/settings?whoopError=${encodeURIComponent(e instanceof WhoopError ? whoopProblem(e) : "WHOOP couldn't answer just now. Try again in a minute.")}#devices`);
   }
   refresh();
-  redirect(`${DEVICES.replace("#devices", "")}?whoop=synced#devices`);
+  redirect(`${DEVICES.replace("#devices", "")}?whoop=synced&said=${encodeURIComponent(said)}#devices`);
 }
