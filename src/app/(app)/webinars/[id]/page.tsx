@@ -102,6 +102,7 @@ export default async function WebinarWizardPage({
     confirmed?: string;
     runError?: string;
     field?: string;
+    savedSection?: string;
   }>;
 }) {
   const v = await requireViewer();
@@ -889,7 +890,7 @@ export default async function WebinarWizardPage({
             {isUnreviewed(section.origin) ? <UnreviewedMark action={acceptSectionAction} fields={{ id: w.id, sectionKey: section.sectionKey }} className="mt-3" /> : null}
             <form action={updateSectionAction} className="mt-4 space-y-3">
               <input type="hidden" name="id" value={w.id} />
-              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.section-${section.sectionKey}`} />
+              <DraftKeeper id={`webinar.${v.user.id}.${w.id}.section-${section.sectionKey}`} confirms={sp.savedSection && /^[a-z0-9_-]+$/.test(sp.savedSection) ? `webinar.${v.user.id}.${w.id}.section-${sp.savedSection}` : undefined} />
               <input
                 type="hidden"
                 name="sectionKey"

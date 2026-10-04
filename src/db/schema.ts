@@ -1739,6 +1739,29 @@ export const REPORT_SEVERITIES = ["red", "orange", "green"] as const;
 export type ReportSeverity = (typeof REPORT_SEVERITIES)[number];
 
 /**
+ * A form's unsent draft, kept on the server so it follows the member to another device (rev 444, part two). One row per member
+ * per form, named as the browser names it ("month.<who>.<month>"); the snapshot of the form's fields as JSON, never a credential
+ * (the browser leaves those out). Dropped when the save is confirmed, and after 30 days. The member's own: in their export and
+ * deleted with them; never written while a coach is switched in.
+ */
+export const formDrafts = sqliteTable(
+  "form_drafts",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    key: text("key").notNull(),
+    data: text("data").notNull(),
+    /** Sent and not yet confirmed: a save that may not have gone through. */
+    sent: integer("sent", { mode: "boolean" }).notNull().default(false),
+    updatedAt: text("updated_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("form_drafts_user_key").on(t.userId, t.key)],
+);
+export type FormDraft = typeof formDrafts.$inferSelect;
+
+/**
  * What a member sends from "I have an issue or a suggestion" in the menu: their words, the page they were on, how much it gets
  * in their way, and an optional screenshot, kept in the private store under reports/<workspace>/. For an Ask Danno answer, the
  * question and the answer as they pasted them, and whether they want to talk to the coach about it. The coach's inbox marks

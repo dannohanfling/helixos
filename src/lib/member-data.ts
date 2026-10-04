@@ -106,6 +106,8 @@ export const MEMBER_TABLES = {
   recording_steps: schema.recordingSteps,
   // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row).
   member_reports: schema.memberReports,
+  // Rev 444: a form's unsent draft, kept so it follows the member to another device.
+  form_drafts: schema.formDrafts,
 } as const;
 export type MemberLabel = keyof typeof MEMBER_TABLES;
 

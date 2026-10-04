@@ -146,7 +146,8 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
   await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
   refresh();
   const next = str(formData, "next");
-  redirect(`/webinars/${id}?step=script&section=${next || sectionKey}`);
+  // The saved section is named, so its draft is let go though the page moves on to the next one.
+  redirect(`/webinars/${id}?step=script&section=${next || sectionKey}&savedSection=${sectionKey}`);
 }
 
 /** Drafts a section script. With Claude: from the foundation, belief map, chosen asset and the example. Without: adapts the example. */

@@ -182,6 +182,13 @@ async function main() {
       }))!.name !== "Walk offer, edited"
     )
       throw new Error("the coach edits the offer");
+    // Rev 444 part two: a coach's typing in a client's form never becomes the client's draft on the server.
+    await page.fill('#who input[name="name"]', "Coach typing, never saved");
+    await page.waitForTimeout(3500);
+    const coachDrafts = await db.query.formDrafts.findMany({ where: eq(schema.formDrafts.userId, maya.id) });
+    if (coachDrafts.length) throw new Error(`nothing a switched coach types is kept as the client's draft: ${coachDrafts.map((d) => d.key).join(",")}`);
+    await page.fill('#who input[name="name"]', "Walk offer, edited");
+    console.log("✓ rev 444 part two: a coach switched in leaves no draft on the client's account");
     // The client's own: the lock-in is refused, with its reason. Today starts not locked in, so its form is the one on show.
     const { todayInTz } = await import("@/lib/dates");
     const mayaToday = todayInTz(

@@ -236,6 +236,36 @@ async function main() {
     await page.waitForTimeout(800);
     if (await page.locator('[data-testid="draft-restored"]:visible').count()) throw new Error("once saved, no draft comes back");
     const mi = (await db.query.monthlyIntentions.findFirst({ where: eq(schema.monthlyIntentions.userId, maya.id) }))!;
+    // Rev 444 part two: a draft follows the member to another device. The confirmed save above took the server's copy too.
+    const draftKey = `month.${maya.id}.${mi.month}`;
+    if (await db.query.formDrafts.findFirst({ where: and(eq(schema.formDrafts.userId, maya.id), eq(schema.formDrafts.key, draftKey)) })) throw new Error("a confirmed save drops the server's draft too");
+    await page.locator('[data-testid="month-edit"]').click();
+    await page.locator('[data-testid="month-word"]').last().fill("Steady on the phone");
+    {
+      const deadline = Date.now() + 15000;
+      let row = await db.query.formDrafts.findFirst({ where: and(eq(schema.formDrafts.userId, maya.id), eq(schema.formDrafts.key, draftKey)) });
+      while ((!row || !row.data.includes("Steady on the phone")) && Date.now() < deadline) {
+        await page.waitForTimeout(500);
+        row = await db.query.formDrafts.findFirst({ where: and(eq(schema.formDrafts.userId, maya.id), eq(schema.formDrafts.key, draftKey)) });
+      }
+      if (!row?.data.includes("Steady on the phone") || row.workspaceId !== ws.id) throw new Error("the typing reaches the server's copy a moment after it rests");
+    }
+    {
+      // Another device: a browser with nothing kept, the same member.
+      const other = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+      await other.goto(`${base}/login`);
+      await other.click('button:has-text("As a client")');
+      await other.waitForURL(/\/today/);
+      await other.goto(`${base}/intentions`);
+      await other.locator('[data-testid="month-form"] [data-testid="draft-restored"]').filter({ hasText: "Draft restored" }).waitFor({ timeout: 20000 });
+      if ((await other.locator('[data-testid="month-word"]').last().inputValue()) !== "Steady on the phone") throw new Error("the draft typed on one device comes back on another");
+      await other.context().close();
+    }
+    // Put the word back as saved, so nothing differs and no draft line shows on later visits.
+    await page.locator('[data-testid="month-word"]').last().fill(mi.word);
+    await page.waitForTimeout(2800);
+    await db.delete(schema.formDrafts).where(and(eq(schema.formDrafts.userId, maya.id), eq(schema.formDrafts.key, draftKey)));
+    console.log("✓ rev 444 part two: a month draft typed on one device comes back on another (a fresh browser), and a confirmed save drops the server's copy");
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="summary-month-word"]').waitFor({ timeout: 20000 });
     if (mi.month !== thisMonth || mi.word !== "Rooted and ready" || mi.revenueGoal !== 10000 || mi.personalSeason !== "wealth" || mi.businessSeason !== "sales" || (await monthCard.count()) || (await page.locator('[data-testid="summary-month-word"]').innerText()).trim() !== "Rooted and ready") throw new Error(`saved for ${thisMonth}; Today keeps one line with the month's words beside the week's`);

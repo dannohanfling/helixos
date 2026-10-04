@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 81,
+    date: "2026-10-04",
+    title: "Your drafts follow you to your other devices",
+    lines: [
+      "Start your month's answers on your laptop and finish them on your phone: anything you've typed but not saved yet comes back on whichever device you open the form on, with \"Draft restored\".",
+      "A draft goes away once you save, and after 30 days untouched. It's yours alone: your coach never sees it, and it isn't kept while your coach is working in your HelixOS.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 80,
     date: "2026-10-04",
     title: "HumanOS: your body's day, in Close the day",
@@ -42,7 +52,6 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     ],
     audience: "everyone",
   },
-
   {
     n: 76,
     date: "2026-10-04",
