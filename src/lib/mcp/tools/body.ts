@@ -13,7 +13,8 @@ import { newId } from "@/lib/ids";
 import { MACROS, MACRO_LABEL, MARK_ICON, dayTypeIdFor, entryItem, fmtBand, fmtMacro, slotNow, totalsOf, type Macro, type Macros } from "@/lib/engine/body";
 import { convertQty, loggableUnits, storedUnit } from "@/lib/engine/body-units";
 import { fmtSet } from "@/lib/engine/body-training";
-import { METRIC, fmtMetric, inRange, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
+import { METRIC, fmtMetric, inRange, readTime, storedValue, withDerived, type MetricKey } from "@/lib/engine/body-scale";
+import { saveReadings } from "@/lib/body-readings";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
@@ -291,16 +292,28 @@ export const bodyLogWeighIn = defineTool({
   name: "body_log_weigh_in",
   scope: "body",
   kind: "write",
-  description: "Log a weigh-in: weight in the member's unit, body fat % if known, and any other scale numbers (skeletal muscle %, water %, visceral fat, BMR, metabolic age). Today unless a date is given; a time (HH:MM) if known. The day's figure is its lowest reading.",
+  description:
+    "Log a weigh-in: weight in the member's unit, and every other number the scale gave (a RENPHO screenshot or export has them all: body fat %, fat-free mass, body fat mass, skeletal muscle % and mass, muscle % and mass, bone mass, body water %, protein %, subcutaneous fat %, visceral fat, BMR, metabolic age, BMI). Masses in the member's unit unless weightUnit says otherwise. Today unless a date is given; the time (HH:MM) if the scale shows it. Set source to \"renpho\" when the numbers come from a RENPHO screenshot or file. A reading already in at the same minute (or, without a time, the same weight that day) takes the numbers it lacks instead of being logged twice. The day's figure is its lowest reading.",
   input: {
     weight: z.number().positive().describe("In the member's weight unit unless weightUnit says otherwise"),
-    weightUnit: z.string().optional().describe("kg or lb, when the member said the other one (\"70 kg\")"),
+    weightUnit: z.string().optional().describe("kg or lb, when the numbers are in the other one (\"70 kg\")"),
     bodyFat: z.number().positive().optional().describe("Body fat %"),
+    fatFreeMass: z.number().positive().optional().describe("Fat-free mass, same unit as weight"),
+    fatMass: z.number().positive().optional().describe("Body fat mass, same unit as weight"),
     skeletalMuscle: z.number().positive().optional().describe("Skeletal muscle %"),
+    skeletalMuscleMass: z.number().positive().optional().describe("Skeletal muscle mass, same unit as weight"),
+    muscle: z.number().positive().optional().describe("Muscle %"),
+    muscleMass: z.number().positive().optional().describe("Muscle mass, same unit as weight"),
+    boneMass: z.number().positive().optional().describe("Bone mass, same unit as weight"),
     water: z.number().positive().optional().describe("Body water %"),
+    protein: z.number().positive().optional().describe("Protein %"),
+    subcutaneousFat: z.number().positive().optional().describe("Subcutaneous fat %"),
     visceral: z.number().positive().optional(),
     bmr: z.number().positive().optional().describe("kcal"),
     metabolicAge: z.number().positive().optional(),
+    bmi: z.number().positive().optional(),
+    waistHip: z.number().positive().optional().describe("Waist-hip ratio"),
+    source: z.enum(["renpho", "typed"]).optional().describe("renpho when read off a RENPHO screenshot or file; typed (the default) otherwise"),
     date: z.string().optional().describe("YYYY-MM-DD; today when left out"),
     time: z.string().optional().describe("HH:MM"),
   },
@@ -308,23 +321,32 @@ export const bodyLogWeighIn = defineTool({
     const settings = await ready(v);
     const date = dayOf(v, input.date);
     const time = typeof input.time === "string" ? readTime(input.time) : null;
-    const typed: [MetricKey, unknown][] = [["weight", input.weight], ["bf", input.bodyFat], ["smm_pct", input.skeletalMuscle], ["water", input.water], ["visceral", input.visceral], ["bmr", input.bmr], ["met_age", input.metabolicAge]];
-    const readingId = newId();
-    const rows = typed.flatMap(([key, raw]) => {
-      if (raw == null) return [];
+    const typed: [MetricKey, unknown][] = [
+      ["weight", input.weight], ["bf", input.bodyFat], ["ffm", input.fatFreeMass], ["fat_mass", input.fatMass], ["smm_pct", input.skeletalMuscle], ["smm_mass", input.skeletalMuscleMass],
+      ["muscle_pct", input.muscle], ["muscle_mass", input.muscleMass], ["bone_mass", input.boneMass], ["water", input.water], ["protein", input.protein], ["subq_fat", input.subcutaneousFat],
+      ["visceral", input.visceral], ["bmr", input.bmr], ["met_age", input.metabolicAge], ["bmi", input.bmi], ["whr", input.waistHip],
+    ];
+    const values: Partial<Record<MetricKey, number>> = {};
+    for (const [key, raw] of typed) {
+      if (raw == null) continue;
       const n = Number(raw);
-      if (!Number.isFinite(n) || n <= 0) return [];
+      if (!Number.isFinite(n) || n <= 0) continue;
       // Either unit is taken (rev 424): "70 kg" or "154 lb", whatever the member's own.
       const value = storedValue(key, n, weightUnitWord(input.weightUnit) ?? settings.weightUnit);
       if (!inRange(key, value)) throw new Error(`${METRIC[key].label}: ${n} doesn't look right.`);
-      return [{ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, key, value, source: "manual" as const, readingId, time }];
-    });
-    if (!rows.some((r) => r.key === "weight")) throw new Error("Give the weight.");
-    await db.insert(schema.bodyDaily).values(rows);
+      values[key] = value;
+    }
+    if (values.weight == null) throw new Error("Give the weight.");
+    // One reading per step on the scale (rev 476): the same minute, or the same weight without a time, fills in instead.
+    const [saved] = await saveReadings(v.workspace.id, v.user.id, [{ date, time, values }], input.source === "renpho" ? "renpho" : "manual");
     const figure = await dayComposition(v.workspace.id, v.user.id, date);
-    const w = rows.find((r) => r.key === "weight")!.value;
-    const bf = rows.find((r) => r.key === "bf")?.value;
-    return { text: `Logged ${fmtMetric("weight", w, settings.weightUnit)}${bf != null ? `, ${fmtMetric("bf", bf, settings.weightUnit)} body fat` : ""}${date === v.today ? "" : ` for ${date}`}${time ? ` at ${time}` : ""}.${figure?.values.weight != null && figure.values.weight !== w ? ` The day's figure stays its lowest reading, ${fmtMetric("weight", figure.values.weight, settings.weightUnit)}.` : ""}`, data: { date, time, values: Object.fromEntries(rows.map((r) => [r.key, r.value])), dayFigure: figure?.values ?? null } };
+    const w = values.weight;
+    const bf = values.bf;
+    const said = saved.outcome === "new" ? "Logged" : saved.outcome === "filled" ? `Already in; added ${saved.added.length} number${saved.added.length === 1 ? "" : "s"} it didn't have to` : "Already in, with every number:";
+    return {
+      text: `${said} ${fmtMetric("weight", w, settings.weightUnit)}${bf != null ? `, ${fmtMetric("bf", bf, settings.weightUnit)} body fat` : ""}${date === v.today ? "" : ` for ${date}`}${time ? ` at ${time}` : ""}.${figure?.values.weight != null && figure.values.weight !== w ? ` The day's figure stays its lowest reading, ${fmtMetric("weight", figure.values.weight, settings.weightUnit)}.` : ""}`,
+      data: { date, time, outcome: saved.outcome, added: saved.added, values: withDerived(values), dayFigure: figure?.values ?? null },
+    };
   },
 });
 

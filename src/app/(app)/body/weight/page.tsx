@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
@@ -8,7 +9,7 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { ScaleImport } from "@/components/body/scale-import";
 import { TrendLine } from "@/components/body/trend-line";
 import { formatDate } from "@/lib/dates";
-import { METRICS, displayValue, fmtMetric, unitLabel, type MetricKey } from "@/lib/engine/body-scale";
+import { METRICS, displayValue, fmtMetric, unitLabel, withDerived, type MetricKey } from "@/lib/engine/body-scale";
 import { requireBodyEnabled, weighIns, type WeighInsView } from "@/lib/queries/body";
 import { deleteReadingAction, importScaleCsvAction, logWeighInAction, setBodyGoalAction } from "@/lib/actions/body";
 
@@ -73,7 +74,7 @@ function TrendCard({ card, unit, today }: { card: WeighInsView["cards"][number];
   );
 }
 
-export default async function WeighInsPage({ searchParams }: { searchParams: Promise<{ range?: string; error?: string; imported?: string; already?: string; bad?: string; logged?: string }> }) {
+export default async function WeighInsPage({ searchParams }: { searchParams: Promise<{ range?: string; error?: string; imported?: string; already?: string; filled?: string; bad?: string; logged?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
@@ -97,6 +98,7 @@ export default async function WeighInsPage({ searchParams }: { searchParams: Pro
         <p className="mb-4 rounded-xl border p-3 text-sm" role="status" data-testid="scale-imported" data-imported={sp.imported} data-already={sp.already ?? "0"}>
           Imported {sp.imported} reading{sp.imported === "1" ? "" : "s"}
           {Number(sp.already) ? `, ${sp.already} already in` : ""}
+          {Number(sp.filled) ? ` (${sp.filled} of them filled in with numbers they didn't have)` : ""}
           {Number(sp.bad) ? `, ${sp.bad} row${sp.bad === "1" ? "" : "s"} the file couldn't be read from` : ""}.
         </p>
       ) : null}
@@ -214,7 +216,8 @@ export default async function WeighInsPage({ searchParams }: { searchParams: Pro
               </thead>
               <tbody>
                 {w.readings.map((r) => (
-                  <tr key={r.readingId} className="border-t" data-testid="weigh-reading" data-date={r.date} data-source={r.source}>
+                  <Fragment key={r.readingId}>
+                  <tr className="border-t" data-testid="weigh-reading" data-date={r.date} data-source={r.source}>
                     <td className="py-1.5 pr-2 whitespace-nowrap">{formatDate(r.date, { month: "short", day: "numeric" })}</td>
                     <td className="py-1.5 pr-2 tabular text-ink-3">{r.time ?? "—"}</td>
                     <td className="py-1.5 pr-2 text-right tabular whitespace-nowrap">{r.values.weight != null ? fmtMetric("weight", r.values.weight, unit) : "—"}</td>
@@ -228,6 +231,26 @@ export default async function WeighInsPage({ searchParams }: { searchParams: Pro
                       </form>
                     </td>
                   </tr>
+                  {/* Every number the reading holds (rev 476): the list shows three; opening it shows the rest, fat-free and fat mass worked out when the scale didn't say. */}
+                  <tr data-testid="weigh-reading-more" data-reading={r.readingId}>
+                    <td colSpan={7} className="pb-2">
+                      <details>
+                        <summary className="cursor-pointer text-xs text-ink-3 underline">Every number ({Object.keys(withDerived(r.values)).length})</summary>
+                        <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs sm:grid-cols-3">
+                          {METRICS.filter((m) => withDerived(r.values)[m.key] != null).map((m) => (
+                            <div key={m.key} className="flex justify-between gap-2" data-testid="weigh-reading-value" data-key={m.key}>
+                              <dt className="text-ink-3">{m.label}</dt>
+                              <dd className="tabular">
+                                {fmtMetric(m.key, withDerived(r.values)[m.key]!, unit)}
+                                {r.values[m.key] == null ? <span className="text-ink-3"> (worked out)</span> : null}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </details>
+                    </td>
+                  </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 79,
+    date: "2026-10-04",
+    title: "HumanOS: every scale number, one reading per weigh-in",
+    lines: [
+      "Weigh-ins is in the HumanOS menu. Tap Every number under a reading to see all it holds: body fat, fat-free and fat mass, muscle, bone mass, water, protein, subcutaneous and visceral fat, BMR, metabolic age and BMI.",
+      "Logging through your Claude now saves every number a RENPHO screenshot or export shows, and marks it as from RENPHO.",
+      "A weigh-in logged twice, say typed in the morning and then imported from RENPHO, stays one reading. The second fills in the numbers the first didn't have, and changes nothing that's already there.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 76,
     date: "2026-10-04",
     title: "HumanOS: WHOOP keeps up, and Sync now says what it did",

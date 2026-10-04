@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { addDays } from "@/lib/dates";
-import { METRICS, avg7, dayFigure, displayValue, fmtMetric, parseCsvRows, parseScaleCsv, readDate, readHeader, readingKey, storedValue, trendStats, withDerived, type Reading } from "@/lib/engine/body-scale";
+import { METRICS, avg7, dayFigure, displayValue, matchReading, missingValues, fmtMetric, parseCsvRows, parseScaleCsv, readDate, readHeader, readingKey, storedValue, trendStats, withDerived, type Reading } from "@/lib/engine/body-scale";
 
 const fixture = (n: string) => readFileSync(join(process.cwd(), "scripts/fixtures", n), "utf8");
 
@@ -97,5 +97,32 @@ describe("the day's figure and derived numbers (rev 251)", () => {
     expect(t.change7).toBeCloseTo(179.4 - (189 + 188 + 187 + 185) / 4, 6);
     expect(t.changeAll).toBe(176 - 189);
     expect(trendStats([], "2026-09-14", addDays)).toEqual({ latest: null, avg7: null, change7: null, changeAll: null });
+  });
+});
+
+describe("one reading per step on the scale (rev 476)", () => {
+  const stored = [
+    { readingId: "a", date: "2026-10-04", time: "07:12", values: { weight: 150.2, bf: 18 } },
+    { readingId: "b", date: "2026-10-04", time: null, values: { weight: 151.6 } },
+    { readingId: "c", date: "2026-10-03", time: "07:12", values: { weight: 150.2 } },
+  ];
+  it("matches the same minute, or the same weight when either has no time", () => {
+    expect(matchReading(stored, { date: "2026-10-04", time: "07:12", values: { weight: 150.4 } })?.readingId).toBe("a");
+    expect(matchReading(stored, { date: "2026-10-04", time: "07:12:40", values: { weight: 150.2 } })?.readingId).toBe("a");
+    expect(matchReading(stored, { date: "2026-10-04", time: "21:00", values: { weight: 151.7 } })?.readingId).toBe("b");
+    expect(matchReading(stored, { date: "2026-10-04", time: null, values: { weight: 150.3 } })?.readingId).toBe("a");
+    expect(matchReading(stored, { date: "2026-10-04", time: "21:00", values: { weight: 149 } })).toBeNull();
+    expect(matchReading(stored, { date: "2026-10-05", time: "07:12", values: { weight: 150.2 } })).toBeNull();
+  });
+  it("fills in what the stored reading lacks and never overwrites", () => {
+    expect(missingValues({ weight: 150.2, bf: 18 }, { weight: 150.4, bf: 18.3, smm_pct: 51, bone_mass: 6.8 })).toEqual({ smm_pct: 51, bone_mass: 6.8 });
+    expect(missingValues({ weight: 150.2 }, { weight: 150.2 })).toEqual({});
+  });
+  it("reads the rest of a RENPHO export's columns", () => {
+    expect(readHeader("Muscle Mass(lb)")).toEqual({ key: "muscle_mass", unit: "lb" });
+    expect(readHeader("Bone Mass(kg)")).toEqual({ key: "bone_mass", unit: "kg" });
+    expect(readHeader("Protein(%)")).toEqual({ key: "protein" });
+    expect(readHeader("Subcutaneous Fat(%)")).toEqual({ key: "subq_fat" });
+    expect(readHeader("BMI")).toEqual({ key: "bmi" });
   });
 });

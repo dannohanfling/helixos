@@ -9,7 +9,7 @@
  */
 import { toUnit, type WeightUnit } from "@/lib/engine/body-training";
 
-export type MetricKey = "weight" | "bf" | "ffm" | "smm_pct" | "visceral" | "water" | "bmr" | "met_age" | "fat_mass" | "muscle_pct" | "smm_mass" | "whr";
+export type MetricKey = "weight" | "bf" | "ffm" | "smm_pct" | "visceral" | "water" | "bmr" | "met_age" | "fat_mass" | "muscle_pct" | "smm_mass" | "whr" | "muscle_mass" | "bone_mass" | "protein" | "subq_fat" | "bmi";
 export type MetricUnit = "mass" | "pct" | "count" | "kcal" | "years" | "ratio";
 export type Metric = { key: MetricKey; label: string; short: string; unit: MetricUnit; decimals: number; /** A trend card of its own (the eight of rev 231); the rest ride along in a reading. */ primary: boolean };
 
@@ -26,6 +26,12 @@ export const METRICS: Metric[] = [
   { key: "muscle_pct", label: "Muscle", short: "Muscle", unit: "pct", decimals: 1, primary: false },
   { key: "smm_mass", label: "Skeletal muscle mass", short: "Skel. muscle mass", unit: "mass", decimals: 1, primary: false },
   { key: "whr", label: "Waist-hip ratio", short: "WHR", unit: "ratio", decimals: 2, primary: false },
+  // The rest of a RENPHO reading (rev 476), kept with it and shown when the reading is opened.
+  { key: "muscle_mass", label: "Muscle mass", short: "Muscle mass", unit: "mass", decimals: 1, primary: false },
+  { key: "bone_mass", label: "Bone mass", short: "Bone", unit: "mass", decimals: 1, primary: false },
+  { key: "protein", label: "Protein", short: "Protein", unit: "pct", decimals: 1, primary: false },
+  { key: "subq_fat", label: "Subcutaneous fat", short: "Subcut. fat", unit: "pct", decimals: 1, primary: false },
+  { key: "bmi", label: "BMI", short: "BMI", unit: "ratio", decimals: 1, primary: false },
 ];
 export const METRIC = Object.fromEntries(METRICS.map((m) => [m.key, m])) as Record<MetricKey, Metric>;
 export const METRIC_KEYS = METRICS.map((m) => m.key);
@@ -134,6 +140,11 @@ export function readHeader(h: string): Col {
   if (/^bmr/.test(n)) return { key: "bmr" };
   if (/^metabolicage/.test(n)) return { key: "met_age" };
   if (n === "whr") return { key: "whr" };
+  if (/^musclemass\((lb|kg)\)$/.test(n)) return mass("muscle_mass");
+  if (/^bonemass\((lb|kg)\)$/.test(n)) return mass("bone_mass");
+  if (/^protein(percentage)?\(%\)$/.test(n)) return { key: "protein" };
+  if (/^subcutaneousfat(percentage)?\(%\)$/.test(n)) return { key: "subq_fat" };
+  if (n === "bmi") return { key: "bmi" };
   return null;
 }
 
@@ -170,7 +181,7 @@ export function readTime(raw: string): string | null {
 }
 
 /** Plausible ranges, so a stray column never lands as a body. */
-export const RANGE: Record<MetricKey, [number, number]> = { weight: [30, 1500], bf: [1, 80], ffm: [20, 1000], smm_pct: [5, 80], visceral: [1, 60], water: [20, 85], bmr: [500, 6000], met_age: [5, 120], fat_mass: [1, 800], muscle_pct: [5, 95], smm_mass: [5, 500], whr: [0.4, 1.6] };
+export const RANGE: Record<MetricKey, [number, number]> = { weight: [30, 1500], bf: [1, 80], ffm: [20, 1000], smm_pct: [5, 80], visceral: [1, 60], water: [20, 85], bmr: [500, 6000], met_age: [5, 120], fat_mass: [1, 800], muscle_pct: [5, 95], smm_mass: [5, 500], whr: [0.4, 1.6], muscle_mass: [10, 800], bone_mass: [1, 60], protein: [5, 40], subq_fat: [1, 70], bmi: [10, 80] };
 
 export const inRange = (key: MetricKey, v: number): boolean => v >= RANGE[key][0] && v <= RANGE[key][1];
 
@@ -216,6 +227,28 @@ export function parseScaleCsv(text: string): ParsedCsv {
 
 /** What makes two readings the same one: the date and time, or with no time the date and weight. Used to skip re-imports. */
 export const readingKey = (x: Reading): string => `${x.date}|${x.time ?? `w${x.values.weight}`}`;
+
+/**
+ * The stored reading an incoming one is (rev 476): on the same day, the one at the same minute; when either has no time, the one
+ * whose weight is within 0.2 lb, so a reading typed or told to Claude and the same step on the scale imported from RENPHO are
+ * one reading, not two. Null when it is a new reading.
+ */
+export function matchReading<T extends Reading>(day: T[], x: Reading): T | null {
+  const same = day.filter((r) => r.date === x.date);
+  const minute = (t: string | null) => (t ? t.slice(0, 5) : null);
+  if (x.time) {
+    const at = same.find((r) => minute(r.time) === minute(x.time));
+    if (at) return at;
+  }
+  const w = x.values.weight;
+  if (w == null) return null;
+  return same.find((r) => (!r.time || !x.time) && r.values.weight != null && Math.abs(r.values.weight - w) <= 0.2) ?? null;
+}
+
+/** What an incoming reading adds to the one it matched: the numbers it lacks. A number already there is never overwritten. */
+export function missingValues(have: Partial<Record<MetricKey, number>>, incoming: Partial<Record<MetricKey, number>>): Partial<Record<MetricKey, number>> {
+  return Object.fromEntries(Object.entries(incoming).filter(([k, v]) => v != null && have[k as MetricKey] == null)) as Partial<Record<MetricKey, number>>;
+}
 
 /* ───────── Trends ───────── */
 

@@ -1440,6 +1440,21 @@ async function main() {
     if (!setTool.text.includes("180 × 8") || (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, yesterday)) })).length !== 3) throw new Error(`body_log_set adds a set to yesterday's session: ${setTool.text}`);
     const weighTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.2, bodyFat: 21.5, date: yesterday, time: "07:00" });
     if (!weighTool.text.includes("151.2 lb") || !weighTool.text.includes("21.5%")) throw new Error(`body_log_weigh_in logs the reading: ${weighTool.text}`);
+    // Rev 476: the same step read off a RENPHO screenshot takes every number the first lacked and stays one reading, marked
+    // RENPHO where it added; told again without a time at the same weight, it adds nothing. The page shows every number on tap.
+    const renphoTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.3, bodyFat: 21.6, muscleMass: 112.4, boneMass: 6.9, protein: 17.2, subcutaneousFat: 16.1, bmi: 22.4, skeletalMuscle: 50.2, source: "renpho", date: yesterday, time: "07:00" });
+    const againTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.2, date: yesterday });
+    const { groupReadings: grouped } = await import("@/lib/queries/body");
+    const sevenAm = grouped(await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.date, yesterday)) })).filter((r) => r.time === "07:00");
+    const sevenRows = await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.readingId, sevenAm[0]?.readingId ?? "")) });
+    if ((renphoTool.data as { outcome?: string }).outcome !== "filled" || (againTool.data as { outcome?: string }).outcome !== "already" || sevenAm.length !== 1 || sevenAm[0].values.weight !== 151.2 || sevenAm[0].values.bf !== 21.5 || sevenAm[0].values.bone_mass !== 6.9 || sevenAm[0].values.bmi !== 22.4 || sevenRows.find((x) => x.key === "protein")?.source !== "renpho" || sevenRows.find((x) => x.key === "weight")?.source !== "manual") throw new Error(`a RENPHO reading of the same step fills in and stays one: ${renphoTool.text} / ${againTool.text} / ${JSON.stringify(sevenAm.map((r) => r.values))}`);
+    await client.goto(`${base}/body/weight`);
+    const more = client.locator(`[data-testid="weigh-reading-more"][data-reading="${sevenAm[0].readingId}"]`);
+    await more.locator("summary").click();
+    const shownKeys = await more.locator('[data-testid="weigh-reading-value"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-key")));
+    for (const k of ["weight", "bf", "ffm", "fat_mass", "muscle_mass", "bone_mass", "protein", "subq_fat", "bmi", "smm_pct"]) if (!shownKeys.includes(k)) throw new Error(`the opened reading shows ${k}: ${shownKeys.join(",")}`);
+    if (!((await more.locator('[data-key="ffm"]').textContent()) ?? "").includes("worked out")) throw new Error("fat-free mass the scale didn't give is shown, worked out");
+    if (!(await client.locator('nav a[href="/body/weight"]').count())) throw new Error("Weigh-ins is in the HumanOS menu");
     const refused = await tool("body_log_food").handler(await viewerFor(), { food: "unicorn", qty: 1 }).then(() => "logged", (e: Error) => e.message);
     if (!refused.startsWith('No food called "unicorn"') || !refused.includes(fx("egg").name)) throw new Error(`an unknown food is refused with the names to pick from: ${refused}`);
     // Setting HumanOS up by voice (Danno, rev 417): a food, a meal from it, a starter habit, an exercise onto a routine, day types read

@@ -38,9 +38,10 @@ import { shoppingView } from "@/lib/queries/body";
 import { disconnectWhoop, syncWhoop } from "@/lib/body-whoop";
 import { syncWords } from "@/lib/engine/body-whoop";
 import { WhoopError, whoopProblem } from "@/lib/whoop";
-import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, readingKey, storedValue, type MetricKey } from "@/lib/engine/body-scale";
+import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, storedValue, type MetricKey } from "@/lib/engine/body-scale";
 import { addDays, daysBetween, nowIso, startOfWeek, weekday } from "@/lib/dates";
-import { bodyAccess, bodySettingsFor, groupReadings } from "@/lib/queries/body";
+import { bodyAccess, bodySettingsFor } from "@/lib/queries/body";
+import { saveReadings } from "@/lib/body-readings";
 import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -906,18 +907,18 @@ export async function logWeighInAction(formData: FormData): Promise<void> {
   const date = str(formData, "date") || v.today;
   if (!DATE.test(date) || date > v.today) back(WEIGHT, "Pick a day up to today.");
   const time = readTime(str(formData, "time"));
-  const readingId = newId();
-  const rows: (typeof schema.bodyDaily.$inferInsert)[] = [];
+  const values: Partial<Record<MetricKey, number>> = {};
   for (const key of METRIC_KEYS) {
     // A mass typed in either unit ("70 kg" for a member in lb) is read in the member's unit first.
     const typed = await amount(formData, key, METRIC[key].unit === "mass" ? settings.weightUnit : null, WEIGHT);
     if (typed == null || typed <= 0) continue;
     const value = storedValue(key, typed, settings.weightUnit);
     if (!inRange(key, value)) back(WEIGHT, `${METRIC[key].label}: that number doesn't look right.`, key);
-    rows.push({ id: newId(), workspaceId, userId, date, key, value, source: "manual" as const, readingId, time });
+    values[key] = value;
   }
-  if (!rows.some((x) => x.key === "weight")) back(WEIGHT, "Enter your weight.", "weight");
-  await db.insert(schema.bodyDaily).values(rows);
+  if (values.weight == null) back(WEIGHT, "Enter your weight.", "weight");
+  // The same step already in (imported from RENPHO, or told to Claude) takes what this adds, and stays one reading (rev 476).
+  await saveReadings(workspaceId, userId, [{ date, time, values }], "manual");
   refresh();
   redirect(`${WEIGHT}?logged=1`);
 }
@@ -944,20 +945,13 @@ export async function importScaleCsvAction(formData: FormData): Promise<void> {
   if (text.length > 4_000_000) back(WEIGHT, "That file is too big to import in one go.");
   const parsed = parseScaleCsv(text);
   if (!parsed.readings.length) back(WEIGHT, `Nothing to import: ${parsed.skipped[0]?.why ?? "no readings in the file"}.`);
-  const have = new Set(groupReadings(await db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId), eq(schema.bodyDaily.source, "renpho")) })).map(readingKey));
-  const rows: (typeof schema.bodyDaily.$inferInsert)[] = [];
-  let fresh = 0;
-  for (const x of parsed.readings) {
-    const k = readingKey(x);
-    if (have.has(k)) continue;
-    have.add(k);
-    fresh++;
-    const readingId = newId();
-    for (const [key, value] of Object.entries(x.values) as [MetricKey, number][]) rows.push({ id: newId(), workspaceId, userId, date: x.date, key, value, source: "renpho", readingId, time: x.time });
-  }
-  for (let i = 0; i < rows.length; i += 400) await db.insert(schema.bodyDaily).values(rows.slice(i, i + 400));
+  // Each reading against every reading already in on its day, whatever its source (rev 476): the same step typed or told to
+  // Claude takes the numbers it lacks; a reading already in adds nothing.
+  const saved = await saveReadings(workspaceId, userId, parsed.readings, "renpho");
+  const fresh = saved.filter((x) => x.outcome === "new").length;
+  const filled = saved.filter((x) => x.outcome === "filled").length;
   refresh();
-  redirect(`${WEIGHT}?imported=${fresh}&already=${parsed.readings.length - fresh}&bad=${parsed.skipped.length}`);
+  redirect(`${WEIGHT}?imported=${fresh}&already=${parsed.readings.length - fresh}&filled=${filled}&bad=${parsed.skipped.length}`);
 }
 
 /** A goal per metric, in the member's unit for masses; a blank target clears it. */
