@@ -592,8 +592,14 @@ async function main() {
     if ((await renphoReadings()) !== older.parsed.readings.length) throw new Error("each imported reading is one readingId");
     const again = await importFile("renpho-older.csv");
     if (again.imported !== 0 || again.already !== older.parsed.readings.length) throw new Error(`a re-import adds nothing: imported ${again.imported}, already ${again.already}`);
+    // Rev 476: a reading of the newer export that is the same step as one already in (the same minute, or the same weight when
+    // one has no time) fills that one in instead of landing twice; the rest import. The count is the engine's own.
+    const { matchReading } = await import("@/lib/engine/body-scale");
+    const { groupReadings: groupedBefore } = await import("@/lib/queries/body");
+    const inBefore = groupedBefore(await db.query.bodyDaily.findMany({ where: mine(schema.bodyDaily) }));
+    const sameStep = parseScaleCsv(readFileSync("scripts/fixtures/renpho-newer.csv", "utf8")).readings.filter((x) => matchReading(inBefore, x)).length;
     const newer = await importFile("renpho-newer.csv");
-    if (newer.imported !== newer.parsed.readings.length || newer.parsed.skipped.length) throw new Error(`the newer export imports every reading (${newer.parsed.readings.length}): got ${newer.imported}`);
+    if (newer.imported !== newer.parsed.readings.length - sameStep || newer.already !== sameStep || newer.parsed.skipped.length) throw new Error(`the newer export imports every new reading (${newer.parsed.readings.length - sameStep}) and fills in the ${sameStep} already in: got ${newer.imported} and ${newer.already}`);
     // 12 Sep has two readings in the newer file: the day's figure is the engine's lowest, whole.
     const twelfth = dayFigure(newer.parsed.readings.filter((x) => x.date === "2026-09-12"))!;
     const stored12 = await dayComposition(mem.workspaceId, maya.id, "2026-09-12");
@@ -1468,8 +1474,10 @@ async function main() {
     const dayTool = await tool("body_day_read").handler(vNow, {});
     if (dayTool.text !== [...dayNow.lines, dayNow.tomorrow].join("\n") || !dayNow.lines.some((l) => l.startsWith("Fuel")) || !dayNow.tomorrow.startsWith("Tomorrow:")) throw new Error(`body_day_read reads the day: ${dayTool.text}`);
     if (vNow.hour >= 16) {
+      const wasOn = client.url();
       await client.goto(`${base}/today`);
       if (JSON.stringify(await client.locator('[data-testid="today-day-read"] [data-testid="day-read-lines"] li').allTextContents()) !== JSON.stringify(dayNow.lines)) throw new Error("Close the day carries the end-of-day read");
+      await client.goto(wasOn);
     }
     const weighTool = await tool("body_log_weigh_in").handler(await viewerFor(), { weight: 151.2, bodyFat: 21.5, date: yesterday, time: "07:00" });
     if (!weighTool.text.includes("151.2 lb") || !weighTool.text.includes("21.5%")) throw new Error(`body_log_weigh_in logs the reading: ${weighTool.text}`);
@@ -1481,6 +1489,7 @@ async function main() {
     const sevenAm = grouped(await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.date, yesterday)) })).filter((r) => r.time === "07:00");
     const sevenRows = await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.readingId, sevenAm[0]?.readingId ?? "")) });
     if ((renphoTool.data as { outcome?: string }).outcome !== "filled" || (againTool.data as { outcome?: string }).outcome !== "already" || sevenAm.length !== 1 || sevenAm[0].values.weight !== 151.2 || sevenAm[0].values.bf !== 21.5 || sevenAm[0].values.bone_mass !== 6.9 || sevenAm[0].values.bmi !== 22.4 || sevenRows.find((x) => x.key === "protein")?.source !== "renpho" || sevenRows.find((x) => x.key === "weight")?.source !== "manual") throw new Error(`a RENPHO reading of the same step fills in and stays one: ${renphoTool.text} / ${againTool.text} / ${JSON.stringify(sevenAm.map((r) => r.values))}`);
+    const wasAt = client.url();
     await client.goto(`${base}/body/weight`);
     const more = client.locator(`[data-testid="weigh-reading-more"][data-reading="${sevenAm[0].readingId}"]`);
     await more.locator("summary").click();
@@ -1488,6 +1497,7 @@ async function main() {
     for (const k of ["weight", "bf", "ffm", "fat_mass", "muscle_mass", "bone_mass", "protein", "subq_fat", "bmi", "smm_pct"]) if (!shownKeys.includes(k)) throw new Error(`the opened reading shows ${k}: ${shownKeys.join(",")}`);
     if (!((await more.locator('[data-key="ffm"]').textContent()) ?? "").includes("worked out")) throw new Error("fat-free mass the scale didn't give is shown, worked out");
     if (!(await client.locator('nav a[href="/body/weight"]').count())) throw new Error("Weigh-ins is in the HumanOS menu");
+    await client.goto(wasAt);
     const refused = await tool("body_log_food").handler(await viewerFor(), { food: "unicorn", qty: 1 }).then(() => "logged", (e: Error) => e.message);
     if (!refused.startsWith('No food called "unicorn"') || !refused.includes(fx("egg").name)) throw new Error(`an unknown food is refused with the names to pick from: ${refused}`);
     // Setting HumanOS up by voice (Danno, rev 417): a food, a meal from it, a starter habit, an exercise onto a routine, day types read

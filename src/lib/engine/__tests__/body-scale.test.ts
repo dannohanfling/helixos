@@ -126,3 +126,12 @@ describe("one reading per step on the scale (rev 476)", () => {
     expect(readHeader("BMI")).toEqual({ key: "bmi" });
   });
 });
+
+describe("the new scale numbers format (rev 476)", () => {
+  it("shows BMI to one place and the waist-hip ratio to two", () => {
+    expect(fmtMetric("bmi", 22.43, "lb")).toBe("22.4");
+    expect(fmtMetric("whr", 0.9, "lb")).toBe("0.90");
+    expect(fmtMetric("bone_mass", 6.9, "lb")).toBe("6.9 lb");
+    expect(fmtMetric("protein", 17.2, "lb")).toBe("17.2%");
+  });
+});

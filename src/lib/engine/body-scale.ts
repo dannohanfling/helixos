@@ -54,7 +54,7 @@ export function storedValue(key: MetricKey, typed: number, unit: WeightUnit): nu
 export function fmtMetric(key: MetricKey, value: number, unit: WeightUnit): string {
   const m = METRIC[key];
   const v = displayValue(key, value, unit);
-  const n = v.toLocaleString("en-US", { minimumFractionDigits: m.unit === "ratio" ? 2 : 0, maximumFractionDigits: m.decimals });
+  const n = v.toLocaleString("en-US", { minimumFractionDigits: m.unit === "ratio" ? m.decimals : 0, maximumFractionDigits: m.decimals });
   return m.unit === "mass" ? `${n} ${unit}` : m.unit === "pct" ? `${n}%` : m.unit === "kcal" ? `${n} kcal` : m.unit === "years" ? `${n} y` : n;
 }
 export const unitLabel = (key: MetricKey, unit: WeightUnit): string => ({ mass: unit, pct: "%", count: "", kcal: "kcal", years: "years", ratio: "" })[METRIC[key].unit];
