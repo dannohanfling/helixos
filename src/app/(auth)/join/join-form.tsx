@@ -7,7 +7,7 @@ import { SubmitButton } from "@/components/submit-button";
 /**
  * Sign-up (rev 387): first and last name, both required, joined into the one name every account already has; email; a password
  * and its confirmation, shown or hidden together, the mismatch said under the second box as it is typed and refused before
- * anything is sent. No business name: that is asked for where the business details live. Every box holds what was typed
+ * anything is sent. The business name is required and is the one Settings → Business shows and edits (rev 469). Every box holds what was typed
  * through a refusal (a wrong code, a used email), so nothing has to be typed twice.
  */
 export function JoinForm({ code }: { code?: string }) {
@@ -21,7 +21,7 @@ export function JoinForm({ code }: { code?: string }) {
     return joinAction(prev, formData);
   }, undefined);
   // Held here, not in the boxes alone: React empties a form after its action answers, and a refusal must not cost the typing.
-  const [v, setV] = useState({ code: code ?? "", firstName: "", lastName: "", email: "", password: "", confirm: "" });
+  const [v, setV] = useState({ code: code ?? "", firstName: "", lastName: "", businessName: "", email: "", password: "", confirm: "" });
   const [show, setShow] = useState(false);
   const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement>) => setV((x) => ({ ...x, [k]: e.target.value }));
   const mismatch = v.confirm.length > 0 && v.confirm !== v.password;
@@ -47,6 +47,10 @@ export function JoinForm({ code }: { code?: string }) {
           <input className="field" name="lastName" value={v.lastName} onChange={set("lastName")} required maxLength={40} placeholder="Torres" autoComplete="family-name" />
         </label>
       </div>
+      <label className="block">
+        <span className="label">Business name</span>
+        <input className="field" name="businessName" value={v.businessName} onChange={set("businessName")} required maxLength={120} placeholder="Torres Nutrition Coaching" autoComplete="organization" />
+      </label>
       <label className="block">
         <span className="label">Email</span>
         <input className="field" name="email" type="email" value={v.email} onChange={set("email")} required autoComplete="email" />

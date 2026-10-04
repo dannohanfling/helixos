@@ -18,7 +18,7 @@ import type { ChatWidgetProps } from "@/lib/chat";
 export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, coachFirst = null, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; coachFirst?: string | null; children: ReactNode }) {
   const tier = tierProgress(points);
   return (
-    <div className="min-h-screen md:flex">
+    <div className="min-h-screen md:flex" data-app-shell>
       {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold. */}
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-surface py-4 md:flex md:sticky md:top-0 md:h-screen">
         <Link href="/today" className="mb-5 flex items-center gap-2.5 px-5">

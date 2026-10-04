@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 74,
+    date: "2026-10-04",
+    title: "Business name back on sign-up, and the chat bubble out of the way",
+    lines: [
+      "Signing up asks for your business name again, and it's required. It's the same name Settings → Business shows, so you can change it there any time.",
+      "On a phone, the Ask Danno bubble now sits just above the buttons at the bottom of the screen instead of on top of them.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 73,
     date: "2026-10-03",
     title: "A simpler sign-up, and tiers that save",

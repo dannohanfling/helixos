@@ -37,6 +37,7 @@ const joinSchema = z.object({
   code: z.string().min(4, "Enter the invite code from your coach."),
   firstName: z.string().min(1, "Enter your first name.").max(40),
   lastName: z.string().min(1, "Enter your last name.").max(40),
+  businessName: z.string().min(1, "Enter your business name.").max(120),
   email: z.string().email("Enter your email address."),
   password: z.string().min(8, "Use at least 8 characters."),
   confirm: z.string(),
@@ -58,12 +59,13 @@ export async function joinAction(_prev: AuthState, formData: FormData): Promise<
     code: String(formData.get("code") ?? "").trim().toUpperCase(),
     firstName: String(formData.get("firstName") ?? "").trim(),
     lastName: String(formData.get("lastName") ?? "").trim(),
+    businessName: String(formData.get("businessName") ?? "").trim(),
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
     password: formData.get("password"),
     confirm: String(formData.get("confirm") ?? ""),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
-  const { code, firstName, lastName, email, password, confirm } = parsed.data;
+  const { code, firstName, lastName, businessName, email, password, confirm } = parsed.data;
   if (confirm !== password) return { error: "The two passwords don't match." };
   // One name, as every account before this one has it (rev 387): first and last are asked for apart and kept together.
   const name = `${firstName} ${lastName}`;
@@ -87,7 +89,7 @@ export async function joinAction(_prev: AuthState, formData: FormData): Promise<
   });
   if (!existing) {
     const membershipId = newId();
-    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: workspace.id, userId: user.id, role, timezone: browserTimezone(String(formData.get("timezone") ?? "")) });
+    await db.insert(schema.memberships).values({ id: membershipId, workspaceId: workspace.id, userId: user.id, role, businessName, timezone: browserTimezone(String(formData.get("timezone") ?? "")) });
     if (role === "client") await seedNewClient(workspace.id, user.id);
   }
   await markSignedIn(user.id);

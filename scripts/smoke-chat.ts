@@ -137,6 +137,64 @@ async function main() {
       if (by !== (loaded ? "loaded" : "ready")) throw new Error(`the shell says how it was identified: ${by}`);
       await ctxt.close();
     }
+    // The bubble on a phone (rev 468): the real launcher can't load here, so a stand-in is added the way the script adds its
+    // own, outside HelixOS's shell: a small fixed box at the bottom right. It must rise clear of the tab bar, and of a sticky row
+    // of buttons above it; go back when the screen is wider than a phone, and when it opens into the chat.
+    {
+      const ctxt = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      const ph = await ctxt.newPage();
+      await ph.goto(`${base}/login`);
+      await ph.click('button:has-text("As a client")');
+      await ph.waitForURL(/\/today/);
+      await ph.locator('[data-testid="chat-widget"]').waitFor({ state: "attached" });
+      await ph.evaluate(() => {
+        const d = document.createElement("div");
+        d.id = "walk-launcher";
+        d.setAttribute("style", "position:fixed;right:16px;bottom:16px;width:60px;height:60px;z-index:2147483000;");
+        document.body.appendChild(d);
+      });
+      const gap = async (bar: string) =>
+        ph.evaluate((sel) => {
+          const l = document.getElementById("walk-launcher")!.getBoundingClientRect();
+          const b = document.querySelector(sel)!.getBoundingClientRect();
+          return Math.round(b.top - l.bottom);
+        }, bar);
+      await ph.waitForFunction(() => document.getElementById("walk-launcher")?.hasAttribute("data-helix-lifted"), null, { timeout: 5000 });
+      const overNav = await gap('[data-testid="bottom-nav"]');
+      // 12 px, give or take the pixel a fractional bar height rounds to.
+      if (Math.abs(overNav - 12) > 1) throw new Error(`on a phone the bubble sits 12 px above the tab bar, not on it: ${overNav}px`);
+      // A sticky row of buttons above the tab bar: the bubble clears that too.
+      await ph.evaluate(() => {
+        const bar = document.createElement("div");
+        bar.id = "walk-sticky";
+        bar.setAttribute("data-bottom-bar", "");
+        bar.setAttribute("style", "position:fixed;left:0;right:0;bottom:56px;height:64px;");
+        document.querySelector("main")!.appendChild(bar);
+      });
+      await ph.waitForFunction(() => {
+        const l = document.getElementById("walk-launcher")!.getBoundingClientRect();
+        return Math.abs(document.getElementById("walk-sticky")!.getBoundingClientRect().top - l.bottom - 12) <= 1;
+      }, null, { timeout: 5000 });
+      await ph.evaluate(() => document.getElementById("walk-sticky")!.remove());
+      // Opened into the chat: tall, so it goes back where the script put it and covers nothing it can't close.
+      await ph.evaluate(() => {
+        const l = document.getElementById("walk-launcher")!;
+        l.style.height = "760px";
+        l.style.width = "370px";
+      });
+      await ph.waitForFunction(() => !document.getElementById("walk-launcher")!.hasAttribute("data-helix-lifted") && document.getElementById("walk-launcher")!.style.bottom === "16px", null, { timeout: 5000 });
+      await ph.evaluate(() => {
+        const l = document.getElementById("walk-launcher")!;
+        l.style.height = "60px";
+        l.style.width = "60px";
+      });
+      await ph.waitForFunction(() => document.getElementById("walk-launcher")!.hasAttribute("data-helix-lifted"), null, { timeout: 5000 });
+      // Wider than a phone: back where the script put it, untouched.
+      await ph.setViewportSize({ width: 1280, height: 900 });
+      await ph.waitForFunction(() => !document.getElementById("walk-launcher")!.hasAttribute("data-helix-lifted") && document.getElementById("walk-launcher")!.style.bottom === "16px", null, { timeout: 5000 });
+      await ctxt.close();
+    }
+    console.log("✓ the bubble on a phone: 12 px above the tab bar and above a sticky row of buttons; back in place once opened, and on a wide screen");
     await logout(page);
     console.log("✓ a member's page: the widget with the identifier hash, the CSP naming its host, no secret in the page; setUser called once the SDK has loaded (at once, or on chatbot:ready), and the shell says so");
 

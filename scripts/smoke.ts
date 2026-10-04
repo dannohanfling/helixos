@@ -259,8 +259,8 @@ async function main() {
   await page.goto(`${base}/join/ACADEMY1`);
   await expectText(page, "Join Evolve Omega Academy", "join");
   const stamp = Date.now();
-  // Sign-up (rev 387): first and last name, no business name, a confirmed password; a refusal keeps every box as typed.
-  if (await page.locator('input[name="businessName"]').count()) throw new Error("sign-up asks no business name");
+  // Sign-up (rev 387, rev 469): first and last name, the business name required, a confirmed password; a refusal keeps every box.
+  if ((await page.locator('label:has(input[name="businessName"]) .label').innerText()).trim().toLowerCase() !== "business name") throw new Error("sign-up asks the business name, with no (optional)");
   await page.fill('input[name="firstName"]', "Smoke");
   await page.fill('input[name="lastName"]', "Tester");
   await page.fill('input[name="email"]', "client@demo.helixos.app");
@@ -271,6 +271,22 @@ async function main() {
   await page.click('button:has-text("Join and start Day 1")');
   await page.waitForTimeout(500);
   if (!page.url().includes("/join/")) throw new Error("a mismatch is refused before anything is sent");
+  await page.fill('input[name="confirm"]', "password123");
+  await page.click('button:has-text("Join and start Day 1")');
+  await page.waitForTimeout(500);
+  if (!page.url().includes("/join/") || !(await page.locator('input[name="businessName"]').evaluate((el: HTMLInputElement) => el.validity.valueMissing))) throw new Error("an empty business name is refused before anything is sent");
+  // The server says the same if the browser's check is ever skipped.
+  await page.evaluate(() => {
+    (document.querySelector('[data-testid="join-form"]') as HTMLFormElement).noValidate = true;
+  });
+  await page.click('button:has-text("Join and start Day 1")');
+  await expectText(page, "Enter your business name.", "the server refuses an empty business name");
+  if ((await page.inputValue('input[name="firstName"]')) !== "Smoke" || (await page.inputValue('input[name="password"]')) !== "password123") throw new Error("the business name refusal keeps the rest as typed");
+  await page.evaluate(() => {
+    (document.querySelector('[data-testid="join-form"]') as HTMLFormElement).noValidate = false;
+  });
+  await page.fill('input[name="businessName"]', "Smoke Test Coaching");
+  await page.fill('input[name="confirm"]', "password12");
   await page.click('[data-testid="join-show-password"]');
   if ((await page.locator('input[name="password"]').getAttribute("type")) !== "text" || (await page.locator('input[name="confirm"]').getAttribute("type")) !== "text") throw new Error("Show shows both passwords");
   await page.fill('input[name="confirm"]', "password123");
@@ -286,7 +302,12 @@ async function main() {
   await page.waitForURL(/\/today/);
   const joined = await db.query.users.findFirst({ where: eq(schema.users.email, `smoke+${stamp}@example.com`) });
   if (joined?.name !== "Smoke Tester") throw new Error(`first and last are kept as the one name: ${joined?.name}`);
-  console.log("✓ sign-up: first and last name kept as one, no business name, the mismatch said and refused before sending, Show for both, a refusal keeps every box");
+  const joinedM = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, joined.id) });
+  if (joinedM?.businessName !== "Smoke Test Coaching") throw new Error(`the business name lands where Settings reads it: ${joinedM?.businessName}`);
+  await page.goto(`${base}/settings`);
+  if ((await page.inputValue('input[name="businessName"]')) !== "Smoke Test Coaching") throw new Error("Settings shows the business name given at sign-up");
+  await page.goto(`${base}/today`);
+  console.log("✓ sign-up: first and last name kept as one, the business name required (browser and server) and shown on Settings, the mismatch said and refused before sending, Show for both, a refusal keeps every box");
   await expectText(page, "Lock in your day", "new client today");
   await shot(page, "15-new-client-day-one");
 

@@ -52,6 +52,7 @@ async function main() {
     const email = `firstday-${Date.now()}@example.com`;
     await page.fill('input[name="firstName"]', "Priya");
     await page.fill('input[name="lastName"]', "Natarajan");
+    await page.fill('input[name="businessName"]', "Natarajan Wellness");
     await page.fill('input[name="email"]', email);
     await page.fill('input[name="password"]', "firstday-pass-123");
     await page.fill('input[name="confirm"]', "firstday-pass-123");

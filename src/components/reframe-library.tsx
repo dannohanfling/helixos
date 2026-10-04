@@ -51,7 +51,7 @@ export function ReframeLibrary({ groups, principles }: { groups: { group: string
         </section>
       ))}
       {selected.length ? (
-        <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3 shadow" data-testid="reframe-copy-bar">
+        <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3 shadow" data-testid="reframe-copy-bar" data-bottom-bar>
           <span className="text-sm">{selected.length} selected{selected.length > 1 ? ": each copies under its objection and name" : ""}</span>
           <span className="flex gap-2">
             <button type="button" className="btn btn-ghost btn-xs" onClick={() => setPicked([])}>Clear</button>
