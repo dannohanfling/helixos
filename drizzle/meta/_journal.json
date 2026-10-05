@@ -778,6 +778,13 @@
       "when": 1791241968839,
       "tag": "0117_avatars",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "6",
+      "when": 1791241975719,
+      "tag": "0118_health_tokens",
+      "breakpoints": true
     }
   ]
 }

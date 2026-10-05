@@ -3176,6 +3176,27 @@ export const bodyDevices = sqliteTable(
 );
 export type BodyDevice = typeof bodyDevices.$inferSelect;
 
+/**
+ * A member's key for sending weigh-ins in from outside (rev 508 §4: Apple Health through an iOS Shortcut). Only its hash is
+ * stored; the key itself is shown once, when made, and never logged, shown again or exported. Revoke stops it for good.
+ * Body table: the member's export (without the hash) and delete-all, never a coach's export.
+ */
+export const bodyIngestTokens = sqliteTable(
+  "body_ingest_tokens",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    label: text("label").notNull().default("Apple Health"),
+    tokenHash: text("token_hash").notNull(),
+    lastUsedAt: text("last_used_at"),
+    revokedAt: text("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("body_ingest_tokens_hash").on(t.tokenHash), index("body_ingest_tokens_member").on(t.workspaceId, t.userId)],
+);
+export type BodyIngestToken = typeof bodyIngestTokens.$inferSelect;
+
 /** A workout the device recorded, by its sport: when, how long, strain and heart rate. One row per provider id; replaced when updated. */
 export const bodyActivities = sqliteTable(
   "body_activities",

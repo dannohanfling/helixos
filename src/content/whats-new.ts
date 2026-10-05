@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 97,
+    date: "2026-10-05",
+    title: "HumanOS: weigh-ins from Apple Health",
+    lines: [
+      "Your morning weigh-in can now arrive on its own. In HumanOS settings, under Devices, Connect Apple Health makes a key for a Shortcut on your iPhone that runs each morning with no tap and sends your weight, body fat %, lean body mass and BMI from Health. The steps to set it up are right there.",
+      "The key is shown once. Revoke stops it at once, and Make a new key replaces it. The same weigh-in sent twice, or one you already typed or brought in from the RENPHO export, stays one row on Weigh-ins. RENPHO's other numbers (visceral fat, water, bone and the rest) stay in RENPHO, so its export is still the way to bring those in.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 96,
     date: "2026-10-05",
     title: "Avatars: the buyers you serve, matched to your offers",

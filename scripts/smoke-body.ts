@@ -1307,6 +1307,38 @@ async function main() {
       if (whoopMock.pid) process.kill(-whoopMock.pid);
     }
 
+    // ── Apple Health (rev 508 §4): a key shown once, a Shortcut's post saved and merged, refused when wrong or revoked. ──
+    {
+      const { hashKey } = await import("@/lib/body-health");
+      await client.goto(`${base}/body/settings#devices`);
+      await press(client, '[data-testid="health-make-key"]', async () => client.locator('[data-testid="health-key-value"]').isVisible(), "the key is shown");
+      const key = (await client.locator('[data-testid="health-key-value"]').innerText()).trim();
+      if (client.url().includes(key)) throw new Error("the key is never in the address");
+      const rows = await db.query.bodyIngestTokens.findMany({ where: mine(schema.bodyIngestTokens) });
+      if (rows.length !== 1 || rows[0].tokenHash !== hashKey(key) || JSON.stringify(rows).includes(key)) throw new Error("only the key's hash is stored");
+      const post = (body: unknown, k = key) => fetch(`${base}/api/body/health-weigh-in`, { method: "POST", headers: { authorization: `Bearer ${k}`, "content-type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) });
+      // A day of the last three weeks with no reading yet, so this one stands alone.
+      const had = new Set((await db.query.bodyDaily.findMany({ where: mine(schema.bodyDaily), columns: { date: true } })).map((r) => r.date));
+      const day = Array.from({ length: 20 }, (_, i) => addDays(today, -(i + 2))).find((d) => !had.has(d))!;
+      const sample = { weight: "82,5", weight_unit: "kg", body_fat: 0.2, lean_mass: "66 kg", lean_unit: "", bmi: "24.9", at: `${day}T06:41:12-07:00` };
+      const first = await post(sample);
+      const said = await first.text();
+      if (first.status !== 200 || !said.startsWith(`Saved to HumanOS. ${day} 06:41:`)) throw new Error(`the post is saved and says so: ${first.status} ${said}`);
+      const got = await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.date, day)) });
+      const val = Object.fromEntries(got.map((r) => [r.key, r.value]));
+      if (got.some((r) => r.source !== "health" || r.time?.slice(0, 5) !== "06:41") || val.weight !== 181.9 || val.bf !== 20 || val.ffm !== 145.5 || val.bmi !== 24.9) throw new Error(`stored in lb as Apple Health's, at the phone's minute, lean as fat-free: ${JSON.stringify(val)}`);
+      const again = await (await post(sample)).text();
+      if (!again.includes("already in HumanOS") || (await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.date, day)) })).length !== got.length) throw new Error(`the same weigh-in twice is one: ${again}`);
+      if ((await post("not json")).status !== 400 || (await post({ body_fat: 22 })).status !== 422 || (await post(sample, `${key}x`)).status !== 401) throw new Error("not JSON, no weight and a wrong key are refused");
+      // A reload: the same address with only its #devices would stay on the page as it was.
+      await client.reload();
+      if (!/last weigh-in sent/.test(await client.locator('[data-testid="health-connected"]').innerText())) throw new Error("Devices says when a weigh-in last came");
+      if (await client.locator('[data-testid="health-key-value"]').count()) throw new Error("the key isn't shown again");
+      await press(client, '[data-testid="health-revoke"]', async () => (await client.locator('[data-testid="health-connected"]').count()) === 0, "revoked");
+      if ((await post(sample)).status !== 401) throw new Error("a revoked key is refused");
+      console.log(`✓ Apple Health: a key shown once and stored only as its hash; a Shortcut's post for ${day} 06:41 saved as Apple Health's (82,5 kg → 181.9 lb, 0.2 → 20%, lean 66 kg as fat-free 145.5 lb, BMI 24.9); sent again it's one reading; not JSON, no weight and a wrong key refused; Revoke stops it`);
+    }
+
     // ── Private: the coach sees nothing, and a coach's export never has Body. ──
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("the client page shows no Body card while private");

@@ -44,6 +44,7 @@ import { bodyAccess, bodySettingsFor } from "@/lib/queries/body";
 import { saveReadings } from "@/lib/body-readings";
 import { saveNextWeight } from "@/lib/body-next";
 import { mergeExercises, undoMerge } from "@/lib/body-merge";
+import { makeHealthKey, revokeHealthKey } from "@/lib/body-health";
 import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -1061,6 +1062,7 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
     db.delete(schema.bodyYields).where(and(eq(schema.bodyYields.workspaceId, workspaceId), eq(schema.bodyYields.userId, userId))),
     db.delete(schema.bodyDaily).where(and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId))),
     db.delete(schema.bodyGoals).where(and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId))),
+    db.delete(schema.bodyIngestTokens).where(and(eq(schema.bodyIngestTokens.workspaceId, workspaceId), eq(schema.bodyIngestTokens.userId, userId))),
     db.delete(schema.bodySets).where(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId))),
     db.delete(schema.bodySessions).where(and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))),
     db.delete(schema.bodyRoutines).where(and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId))),
@@ -1510,6 +1512,26 @@ export async function disconnectWhoopAction(): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
   await setUp(v);
   await disconnectWhoop(workspaceId, userId);
+  refresh();
+  redirect(DEVICES);
+}
+
+/**
+ * Apple Health (rev 508 §4): a new key for the Shortcut, returned to the page that asked and shown there once. Never in a URL,
+ * a log or the database (only its hash). Making one revokes the one before.
+ */
+export async function makeHealthKeyAction(): Promise<{ key: string } | { error: string }> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const key = await makeHealthKey({ workspaceId, userId });
+  refresh();
+  return { key };
+}
+
+export async function revokeHealthKeyAction(): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await revokeHealthKey({ workspaceId, userId });
   refresh();
   redirect(DEVICES);
 }

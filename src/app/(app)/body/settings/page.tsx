@@ -16,6 +16,9 @@ import { MEASURES, MEASURES_LABEL } from "@/lib/engine/body-measures";
 import { EraseBodyForm } from "@/components/body/unit-inputs";
 import { SYNC_UNFINISHED } from "@/lib/engine/body-whoop";
 import { isWhoopProblem, whoopProblem, WhoopError } from "@/lib/whoop";
+import { HealthConnect } from "@/components/body/health-connect";
+import { healthKeyStatus } from "@/lib/body-health";
+import { appUrl } from "@/lib/branded-email";
 
 export const metadata = { title: "HumanOS · Settings" };
 
@@ -63,6 +66,9 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
   const sp = await searchParams;
   const s = await bodySettingsFor(v.workspace.id, v.user.id);
   const whoop = await whoopStatus(v.workspace.id, v.user.id);
+  const health = await healthKeyStatus({ workspaceId: v.workspace.id, userId: v.user.id });
+  // Danno's ready-made Shortcut, once he's built and shared it (an iCloud link only; set in Vercel as HEALTH_SHORTCUT_URL).
+  const shortcutUrl = /^https:\/\/www\.icloud\.com\/shortcuts\/[\w-]+$/.test(process.env.HEALTH_SHORTCUT_URL ?? "") ? process.env.HEALTH_SHORTCUT_URL! : null;
   if (!s) redirect("/body");
   const [types, history, sends] = await Promise.all([dayTypesFor(v.workspace.id, v.user.id), shareHistory(v.workspace.id, v.user.id), templateSendsFor(v.workspace.id, v.user.id, "day_type")]);
   const refeedNext = nextRefeed(v.today, { dayTypeId: s.refeedDayTypeId, anchor: s.refeedAnchor, everyDays: s.refeedEveryDays });
@@ -301,6 +307,7 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
             Didn&apos;t sync: {sp.whoopError.slice(0, 200)}
           </p>
         ) : null}
+        <HealthConnect status={health ? { made: formatDate(health.createdAt.slice(0, 10)), lastUsed: health.lastUsedAt ? formatDateTime(health.lastUsedAt, v.tz) : null } : null} endpoint={`${appUrl()}/api/body/health-weigh-in`} shortcutUrl={shortcutUrl} />
       </Card>
 
       <Card className="mb-8" title="Download your HumanOS data" id="download">

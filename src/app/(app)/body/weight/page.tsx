@@ -223,7 +223,7 @@ export default async function WeighInsPage({ searchParams }: { searchParams: Pro
                     <td className="py-1.5 pr-2 text-right tabular whitespace-nowrap">{r.values.weight != null ? fmtMetric("weight", r.values.weight, unit) : "—"}</td>
                     <td className="py-1.5 pr-2 text-right tabular">{r.values.bf != null ? fmtMetric("bf", r.values.bf, unit) : "—"}</td>
                     <td className="hidden py-1.5 pr-2 text-right tabular sm:table-cell">{r.values.ffm != null ? fmtMetric("ffm", r.values.ffm, unit) : "—"}</td>
-                    <td className="py-1.5 pr-2 text-xs text-ink-3">{r.source === "renpho" ? "RENPHO" : r.source === "manual" ? "typed" : r.source}</td>
+                    <td className="py-1.5 pr-2 text-xs text-ink-3">{r.source === "renpho" ? "RENPHO" : r.source === "manual" ? "typed" : r.source === "health" ? "Apple Health" : r.source}</td>
                     <td className="py-1.5 text-right">
                       <form action={deleteReadingAction}>
                         <input type="hidden" name="id" value={r.readingId} />

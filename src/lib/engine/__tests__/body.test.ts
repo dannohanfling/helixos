@@ -294,7 +294,7 @@ describe("AI and Body data (rev 219)", () => {
 describe("Body tables are read in one place, and no Body value reaches a log", () => {
   const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
   const files = walk(join(process.cwd(), "src")).filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes("__tests__"));
-  const ALLOWED = ["src/db/schema.ts", "src/lib/queries/body.ts", "src/lib/actions/body.ts", "src/lib/mcp/tools/body.ts", "src/lib/body-pantry.ts", "src/lib/body-import.ts", "src/lib/body-whoop.ts", "src/lib/body-readings.ts", "src/lib/body-next.ts", "src/lib/body-merge.ts", "src/lib/member-data.ts", "src/lib/export.ts"];
+  const ALLOWED = ["src/db/schema.ts", "src/lib/queries/body.ts", "src/lib/actions/body.ts", "src/lib/mcp/tools/body.ts", "src/lib/body-pantry.ts", "src/lib/body-import.ts", "src/lib/body-whoop.ts", "src/lib/body-readings.ts", "src/lib/body-next.ts", "src/lib/body-merge.ts", "src/lib/body-health.ts", "src/lib/member-data.ts", "src/lib/export.ts"];
   it("nothing of Danno's protocol ships as app data: no app module imports the fixture or carries its names (rev 192)", () => {
     expect(files.length).toBeGreaterThan(100);
     const names = ["body-phase2v4", "Phase 2 V4", ...V4.meals.map((m) => m.name), ...V4.foods.map((f) => f.name)];
@@ -376,7 +376,8 @@ describe("the product is called HumanOS (rev 324)", () => {
       "src/lib/integrations.ts",
       ...listFiles("src/lib/engine").filter((f) => /\/body[^/]*\.ts$/.test(f)),
     ];
-    const noun = /Body (fat|water|face|is now HumanOS)|Body[A-Z]|group: "Body"|"Body" \|/;
+    // Apple's own labels in the Shortcut steps (rev 508 §4) are named as the phone shows them: "Body Fat Percentage", "Request Body".
+    const noun = /Body (fat|water|face|is now HumanOS)|Body[A-Z]|group: "Body"|"Body" \||Body Fat Percentage|Body Mass Index|Request Body/;
     const offenders: string[] = [];
     for (const f of files) {
       const lines = readFileSync(f, "utf8").split("\n");
