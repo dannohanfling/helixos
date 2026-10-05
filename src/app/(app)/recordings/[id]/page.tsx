@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
-import { stepsFor, visibleRecording } from "@/lib/recordings";
+import { clientMembers, coachEmailsOf, markSeen, stepsFor, visibleRecording } from "@/lib/recordings";
+import { groupActionItems, itemMoment, type ItemGroup } from "@/lib/engine/recording-members";
 import { programLine, shownTitle } from "@/lib/engine/recordings";
 import { deepLink } from "@/lib/engine/fathom";
 import { dismissStepAction, makeStepTaskAction, viewTranscriptAction } from "@/lib/actions/recordings";
@@ -24,8 +25,14 @@ export default async function RecordingPage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const r = await visibleRecording(v.workspace.id, id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role });
   if (!r) notFound();
-  const steps = await stepsFor(v.user.id, [r.id]);
+  const [steps, members, coachEmails] = await Promise.all([stepsFor(v.user.id, [r.id]), clientMembers(v.workspace.id), coachEmailsOf(v.workspace.id)]);
+  // Opening it here is seeing it (rev 498); a coach switched in marks nothing for the member.
+  if (!v.switchedInto) await markSeen(v.workspace.id, v.user.id, r.id);
   const watch = r.shareUrl || r.url;
+  const watchHref = `/recordings/${r.id}/watch`;
+  // Who each item is for, by email (rev 496): the member's own first as "Yours", the others folded. A coach's email is named by
+  // the name Fathom gave, since only members are listed here.
+  const groups = groupActionItems(r.actionItems, [...members.map((m) => ({ name: m.name, email: m.email })), ...coachEmails.map((e) => ({ name: r.actionItems.find((i) => (i.assigneeEmail ?? "").toLowerCase() === e.toLowerCase())?.assigneeName ?? "Your coach", email: e }))], { email: v.user.email, name: v.user.name, role: "client" });
   const showTranscript = Boolean(r.transcript) && sp.transcript === "1";
   const switched = Boolean(v.switchedInto);
   return (
@@ -41,7 +48,7 @@ export default async function RecordingPage({ params, searchParams }: { params: 
         action={
           <span className="flex flex-wrap gap-2">
             {watch ? (
-              <a href={watch} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" data-testid="recording-watch">
+              <a href={watchHref} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" data-testid="recording-watch">
                 Watch in Fathom ↗
               </a>
             ) : null}
@@ -102,49 +109,73 @@ export default async function RecordingPage({ params, searchParams }: { params: 
             </p>
           ) : null}
           {r.actionItems.length ? (
-            <ul className="space-y-3 text-sm" data-testid="recording-steps">
-              {r.actionItems.map((it, i) => {
-                const step = steps.get(`${r.id}:${i}`);
-                const mine = (it.assigneeEmail ?? "").toLowerCase() === v.user.email.toLowerCase();
-                return (
-                  <li key={i} className="rounded-lg border p-3" data-testid="recording-step" data-state={step?.state ?? (mine ? "mine" : "open")}>
-                    <p className="break-words">{it.description}</p>
-                    <p className="mt-1 text-xs text-ink-3">
-                      {it.assigneeName ? `Fathom's guess: ${mine ? "you" : it.assigneeName}` : "Nobody named"}
-                      {it.timestamp ? ` · at ${it.timestamp}` : ""}
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {step?.taskId ? (
-                        <Link href="/tasks" className="text-xs font-medium text-good" data-testid="recording-step-done">
-                          In your tasks ✓
-                        </Link>
-                      ) : switched ? (
-                        <span className="text-xs text-ink-3">Steps are {v.user.name.split(" ")[0]}&apos;s to take.</span>
-                      ) : (
-                        <>
-                          <form action={makeStepTaskAction}>
-                            <input type="hidden" name="recordingId" value={r.id} />
-                            <input type="hidden" name="itemIndex" value={i} />
-                            <SubmitButton className="btn btn-primary btn-xs" data-testid="recording-step-make-task" pendingText="Adding…">
-                              Make this my task
-                            </SubmitButton>
-                          </form>
-                          {step?.state === "suggested" ? (
-                            <form action={dismissStepAction}>
-                              <input type="hidden" name="stepId" value={step.id} />
-                              <SubmitButton className="btn btn-ghost btn-xs" data-testid="recording-step-dismiss" pendingText="Letting go…">
-                                Not mine
-                              </SubmitButton>
-                            </form>
+            <div className="space-y-3 text-sm" data-testid="recording-steps">
+              {groups.map((g: ItemGroup) => {
+                const list = (
+                  <ul className="mt-2 space-y-3">
+                    {g.items.map(({ item: it, index: i }) => {
+                      const step = steps.get(`${r.id}:${i}`);
+                      const mine = (it.assigneeEmail ?? "").toLowerCase() === v.user.email.toLowerCase();
+                      const moment = itemMoment(it, watch);
+                      return (
+                        <li key={i} className="rounded-lg border p-3" data-testid="recording-step" data-state={step?.state ?? (mine ? "mine" : "open")}>
+                          <p className="break-words">{it.description}</p>
+                          {moment ? (
+                            <a href={moment.href} target="_blank" rel="noreferrer" className="mt-1 inline-block font-mono text-xs text-accent hover:underline" data-testid="recording-step-moment">
+                              {moment.label}
+                            </a>
                           ) : null}
-                          {step?.state === "dismissed" ? <Badge tone="neutral">let go</Badge> : null}
-                        </>
-                      )}
-                    </div>
-                  </li>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {step?.taskId ? (
+                              <Link href="/tasks" className="text-xs font-medium text-good" data-testid="recording-step-done">
+                                In your tasks ✓
+                              </Link>
+                            ) : switched ? (
+                              <span className="text-xs text-ink-3">Steps are {v.user.name.split(" ")[0]}&apos;s to take.</span>
+                            ) : (
+                              <>
+                                <form action={makeStepTaskAction}>
+                                  <input type="hidden" name="recordingId" value={r.id} />
+                                  <input type="hidden" name="itemIndex" value={i} />
+                                  <SubmitButton className="btn btn-primary btn-xs" data-testid="recording-step-make-task" pendingText="Adding…">
+                                    Make this my task
+                                  </SubmitButton>
+                                </form>
+                                {step?.state === "suggested" ? (
+                                  <form action={dismissStepAction}>
+                                    <input type="hidden" name="stepId" value={step.id} />
+                                    <SubmitButton className="btn btn-ghost btn-xs" data-testid="recording-step-dismiss" pendingText="Letting go…">
+                                      Not mine
+                                    </SubmitButton>
+                                  </form>
+                                ) : null}
+                                {step?.state === "dismissed" ? <Badge tone="neutral">let go</Badge> : null}
+                              </>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+                const heading = (
+                  <span className="font-semibold">
+                    {g.label} ({g.items.length})
+                  </span>
+                );
+                return g.own ? (
+                  <section key={g.key} data-testid="recording-group-items" data-own="yes">
+                    {heading}
+                    {list}
+                  </section>
+                ) : (
+                  <details key={g.key} data-testid="recording-group-items" data-own="no">
+                    <summary className="cursor-pointer">{heading}</summary>
+                    {list}
+                  </details>
                 );
               })}
-            </ul>
+            </div>
           ) : (
             <p className="text-sm text-ink-3">Fathom found no action items in this call.</p>
           )}

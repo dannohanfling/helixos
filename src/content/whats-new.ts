@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 87,
+    date: "2026-10-05",
+    title: "Recordings: what's new, what's yours, and the moment it was said",
+    lines: [
+      "Recordings lists your coaching calls newest first, by week, with a yellow dot on each one you haven't opened yet and the count on the menu. Mark all as seen clears them.",
+      "On a call, the action items sit under the person each is for, yours first, and each one's ▶ time opens Fathom at that moment. Today's Then panel names the calls that still have an item for you.",
+      "Coaches: Published shows \"Seen by N of M\" for each call, and a new Action items tab lists your last two weeks' items by person, drafts included.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 86,
     date: "2026-10-05",
     title: "The Monday post: the right thread link, and @everyone where you wrote it",

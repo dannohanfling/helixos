@@ -61,6 +61,7 @@ const ROUTES: Record<string, Route> = {
   "/offers/[id]": { kind: "owned", table: "offers" },
   "/proof/[id]": { kind: "owned", table: "proofs" },
   "/recordings/[id]": { kind: "owned", table: "recordings" },
+  "/recordings/[id]/watch": { kind: "owned", table: "recordings" },
   "/rewards/book/[claimId]": { kind: "owned", table: "rewardClaims" },
   "/socrates/scripts/[id]": { kind: "owned", table: "socratesScripts" },
   "/socrates/scripts/[id]/sheet": { kind: "owned", table: "socratesScripts" },

@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { BY_RULES, audienceOf, reviewContext, reviewOf, workspaceFathom } from "@/lib/recordings";
+import { BY_RULES, COACH_ITEMS_DAYS, audienceOf, coachItems, reviewContext, reviewOf, seenBy, workspaceFathom } from "@/lib/recordings";
+import { CoachActionItems } from "@/components/coach-action-items";
 import { AUDIENCE_LABEL, shownTitle } from "@/lib/engine/recordings";
 import { fewNames, type Group } from "@/lib/engine/recording-review";
 import { bulkRecordingsAction, prefetchTranscriptAction, restoreRecordingAction, setTranscriptHiddenAction, syncRecordingsNowAction, unpublishRecordingAction } from "@/lib/actions/recordings";
@@ -36,7 +37,11 @@ export default async function CoachRecordingsPage({ searchParams }: { searchPara
   const drafts = rows.filter((r) => r.status === "draft");
   const published = rows.filter((r) => r.status === "published");
   const skipped = rows.filter((r) => r.status === "skipped");
-  const tab = sp.tab === "published" || sp.tab === "skipped" ? sp.tab : "review";
+  const tab = sp.tab === "published" || sp.tab === "skipped" || sp.tab === "items" ? sp.tab : "review";
+  // Rev 497: the action items of the last two weeks' calls, drafts included; rev 498: who has seen each published call.
+  const [items, seen] = await Promise.all([coachItems(v.workspace.id, addDays(v.today, -COACH_ITEMS_DAYS)), seenBy(published.map((r) => r.id))]);
+  const openItems = items.reduce((a, x) => a + x.open.length, 0);
+  const handledSteps = tab === "items" && items.length ? await db.query.recordingSteps.findMany({ where: and(eq(schema.recordingSteps.workspaceId, v.workspace.id), inArray(schema.recordingSteps.recordingId, items.map((x) => x.recording.id))) }) : [];
   const stepCounts = new Map<string, number>();
   if (published.length) {
     const steps = await db.query.recordingSteps.findMany({ where: and(eq(schema.recordingSteps.workspaceId, v.workspace.id), eq(schema.recordingSteps.state, "accepted")) });
@@ -121,6 +126,7 @@ export default async function CoachRecordingsPage({ searchParams }: { searchPara
           { key: "review", label: "To review", href: "/coach/recordings", count: drafts.length },
           { key: "published", label: "Published", href: "/coach/recordings?tab=published", count: published.length },
           { key: "skipped", label: "Skipped", href: "/coach/recordings?tab=skipped", count: skipped.length },
+          { key: "items", label: "Action items", href: "/coach/recordings?tab=items", count: openItems },
         ]}
       />
       <div className="mt-4 space-y-4">
@@ -187,6 +193,33 @@ export default async function CoachRecordingsPage({ searchParams }: { searchPara
           </Card>
         ) : null}
 
+        {tab === "items" ? (
+          <Card title={`Action items from the last ${COACH_ITEMS_DAYS} days`} action={<Badge tone={openItems ? "warn" : "neutral"}>{openItems}</Badge>}>
+            {items.length ? (
+              <ul className="divide-y" data-testid="recordings-items">
+                {items.map(({ recording: r }) => (
+                  <li key={r.id} className="py-3" data-testid="recordings-items-call">
+                    <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+                      <Link href={`/coach/recordings/${r.id}`} className="font-medium break-words hover:underline">{shownTitle(r)}</Link>
+                      <Badge tone={r.status === "published" ? "good" : "warn"}>{r.status === "published" ? "published" : "draft"}</Badge>
+                      <span className="text-xs text-ink-3">{when(r)}</span>
+                    </div>
+                    <CoachActionItems
+                      items={r.actionItems}
+                      people={members.map((m) => ({ name: m.name, email: m.email }))}
+                      coach={{ email: v.user.email, name: v.user.name }}
+                      watch={r.shareUrl || r.url}
+                      handled={new Map(handledSteps.filter((s) => s.recordingId === r.id && s.state !== "suggested").map((s) => [s.itemIndex, s.state as "accepted" | "dismissed"]))}
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-3">No action items from your calls in the last {COACH_ITEMS_DAYS} days.</p>
+            )}
+          </Card>
+        ) : null}
+
         {tab === "skipped" ? (
           <Card title="Skipped: not for members" action={<Badge tone="neutral">{skipped.length}</Badge>}>
             {skipped.length ? (
@@ -216,6 +249,7 @@ export default async function CoachRecordingsPage({ searchParams }: { searchPara
             <ul className="divide-y" data-testid="recordings-published">
               {published.map((r) => {
                 const audience = audienceOf(r, members);
+                const saw = audience.filter((m) => seen.get(r.id)?.has(m.userId));
                 return (
                   <li key={r.id} id={`r-${r.id}`} className="py-3 text-sm" data-testid="recording-published" data-audience={r.audience ?? ""}>
                     <div className="flex flex-wrap items-center gap-2">
@@ -230,6 +264,14 @@ export default async function CoachRecordingsPage({ searchParams }: { searchPara
                       {when(r)} · reaches {audience.length} member{audience.length === 1 ? "" : "s"}{audience.length ? `: ${audience.map((m) => m.name).join(", ")}` : ""}
                       {stepCounts.get(r.id) ? ` · ${stepCounts.get(r.id)} step${stepCounts.get(r.id) === 1 ? "" : "s"} made tasks` : ""}
                     </p>
+                    {audience.length ? (
+                      <details className="mt-1 text-xs" data-testid="recording-seen">
+                        <summary className="cursor-pointer text-ink-2" data-testid="recording-seen-line">
+                          Seen by {saw.length} of {audience.length}
+                        </summary>
+                        <p className="mt-1 text-ink-3">{saw.length ? `Seen: ${saw.map((m) => m.name).join(", ")}.` : "Nobody has opened it yet."}{audience.length > saw.length ? ` Not yet: ${audience.filter((m) => !saw.includes(m)).map((m) => m.name).join(", ")}.` : ""}</p>
+                      </details>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       {r.shareUrl || r.url ? (
                         <a href={r.shareUrl || r.url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-xs">

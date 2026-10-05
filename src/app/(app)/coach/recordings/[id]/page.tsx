@@ -12,6 +12,7 @@ import { Badge, Card, PageHeader } from "@/components/ui";
 import { RecordingSummary } from "@/components/recording-summary";
 import { SubmitButton } from "@/components/submit-button";
 import { MemberPicker } from "@/components/member-picker";
+import { CoachActionItems } from "@/components/coach-action-items";
 
 export const metadata = { title: "Review a recording" };
 
@@ -31,6 +32,7 @@ export default async function ReviewRecordingPage({ params, searchParams }: { pa
   const rc = await reviewContext(v.workspace.id);
   const { group, onCall, suggestion, clearTitle, attendees, minutes } = reviewOf(r, rc);
   const nameOf = new Map(rc.members.map((m) => [m.userId, m.name]));
+  const handled = new Map((await db.query.recordingSteps.findMany({ where: eq(schema.recordingSteps.recordingId, r.id) })).filter((s) => s.state !== "suggested").map((s) => [s.itemIndex, s.state as "accepted" | "dismissed"]));
   const suggestedWho = suggestion ? (suggestion.audience === "members" ? fewNames(suggestion.userIds.map((u) => nameOf.get(u) ?? "a member"), 5) : AUDIENCE_LABEL[suggestion.audience]) : null;
   const ready = Boolean(suggestion && (suggestion.audience !== "members" || suggestion.userIds.length));
   const picked = suggestion?.audience ?? (onCall.length ? "members" : null);
@@ -57,12 +59,8 @@ export default async function ReviewRecordingPage({ params, searchParams }: { pa
             {r.summary ? <RecordingSummary markdown={r.summary} /> : <p className="text-ink-3">Fathom hasn&apos;t sent a summary for this call.</p>}
             {r.actionItems.length ? (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-2">Action items</p>
-                <ul className="mt-1 list-disc pl-5 text-xs text-ink-2">
-                  {r.actionItems.map((it, i) => (
-                    <li key={i}>{it.description}{it.assigneeName ? ` (${it.assigneeName})` : ""}</li>
-                  ))}
-                </ul>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-2">Action items</p>
+                <CoachActionItems items={r.actionItems} people={rc.members.map((m) => ({ name: m.name, email: m.email }))} coach={{ email: v.user.email, name: v.user.name }} watch={r.shareUrl || r.url} handled={handled} />
               </div>
             ) : null}
             {r.note ? <p className="text-xs text-warn">{r.note}</p> : null}

@@ -1874,6 +1874,26 @@ export const recordingSteps = sqliteTable(
 );
 export type RecordingStep = typeof recordingSteps.$inferSelect;
 
+/**
+ * When a member first saw a published recording (rev 498): opened it in HelixOS, or pressed Watch in Fathom (HelixOS can't see
+ * playback inside Fathom, so the tap is what counts). Until then it is new for them: a yellow dot, and a count on the menu. The
+ * member's own: in their export and erased with them. Never written while a coach is switched in.
+ */
+export const recordingViews = sqliteTable(
+  "recording_views",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    recordingId: text("recording_id")
+      .notNull()
+      .references(() => recordings.id, { onDelete: "cascade" }),
+    seenAt: text("seen_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("recording_views_rec_user").on(t.recordingId, t.userId), index("recording_views_user").on(t.userId)],
+);
+
 /** One row per AI call: who, which key, which feature, how many tokens, what it probably cost. */
 export const aiUsage = sqliteTable(
   "ai_usage",

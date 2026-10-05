@@ -15,7 +15,7 @@ import { TRANSCRIPT_PRESSES_PER_HOUR, shownTitle } from "@/lib/engine/recordings
 import { TASK_SOURCES } from "@/lib/engine/notes";
 import { rulesFromForm, type RulesForm } from "@/lib/engine/recording-rules";
 import { taskPoints } from "@/lib/engine/points";
-import { fetchTranscript, paceKeyFor, publishRecording, restoreRecording, reviewContext, reviewOf, skipRecording, syncRecordings, unpublishRecording, visibleRecording, workspaceFathom } from "@/lib/recordings";
+import { fetchTranscript, markAllSeen, paceKeyFor, publishRecording, restoreRecording, reviewContext, reviewOf, skipRecording, syncRecordings, unpublishRecording, visibleRecording, workspaceFathom } from "@/lib/recordings";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 
 const INTEGRATIONS = "/integrations#fathom-recordings";
@@ -241,6 +241,14 @@ export async function viewTranscriptAction(formData: FormData): Promise<void> {
   const t = await fetchTranscript(r!, userId, "member");
   refresh();
   redirect(t.ok ? `/recordings/${id}?transcript=1#transcript` : `/recordings/${id}?error=${encodeURIComponent(t.error)}#transcript`);
+}
+
+/** "Mark all as seen" (rev 498): every recording the member can see stops being new for them. Refused while switched. */
+export async function markAllSeenAction(): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: OWN });
+  const n = await markAllSeen(workspaceId, { userId, programTier: v.membership.programTier, role: v.role });
+  refresh();
+  redirect(`/recordings?seen=${n}`);
 }
 
 /** One tap turns an action item into the member's own task (source fathom). Nothing is created without the tap. */

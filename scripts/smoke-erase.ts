@@ -92,6 +92,7 @@ async function main() {
     await db.insert(schema.recordings).values({ id: recordingId, workspaceId: ws, fathomRecordingId: `erase-${who}-${RUN}`, title: `Erase recording ${who} ${RUN}`, source: "sync" });
     const special: Record<string, Record<string, unknown>> = {
       recording_steps: { recordingId },
+      recording_views: { recordingId },
       pathway_progress: { libraryTaskKey: taskKey },
       lesson_progress: { lessonId },
       certification_submissions: { deliverableId },

@@ -104,6 +104,8 @@ export const MEMBER_TABLES = {
   mcp_calls: schema.mcpCalls,
   // Recordings R1: a step from a recorded call on this member's plate (suggested, accepted as their task, or dismissed).
   recording_steps: schema.recordingSteps,
+  // Rev 498: when the member first saw a published recording (opened it, or pressed Watch in Fathom).
+  recording_views: schema.recordingViews,
   // Rev 432: what the member sent from "I have an issue or a suggestion" (their words; the screenshot goes with the row).
   member_reports: schema.memberReports,
   // Rev 444: a form's unsent draft, kept so it follows the member to another device.

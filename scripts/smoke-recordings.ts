@@ -278,11 +278,31 @@ async function main() {
     await page.locator('[data-testid="recordings-list"]').waitFor({ timeout: 20000 });
     const mayaTitles = await page.locator('[data-testid="recording-title"]').allInnerTexts();
     must(mayaTitles.length === 2 && mayaTitles.includes(payload.title) && mayaTitles.includes(titleOf(9104)), `Maya sees the week 4 call and her one-to-one: ${mayaTitles.join(" | ")}`);
+    // Revs 496 to 498 from her side: newest first under "This week", both new (a yellow dot each, the count on the menu), and
+    // Today's Then panel naming each call with an action item still for her, and the new ones to watch.
+    must(mayaTitles[0] === payload.title && (await page.locator('[data-testid="recordings-week"] h2').first().innerText()).trim().toLowerCase() === "this week", "newest first, under This week");
+    must((await page.locator('[data-testid="recording-row"][data-new="yes"] [data-testid="recording-new"]').count()) === 2, "both calls carry the yellow dot until she opens them");
+    must((await page.locator('aside a[href="/recordings"] [data-testid="due-badge"]').innerText()).trim() === "2", "the menu counts the two new calls");
+    await page.goto(`${base}/today`);
+    const thenLines = (await page.locator('[data-testid="then-recording"]').allInnerTexts()).map((t) => t.trim());
+    must(thenLines.filter((t) => / 1 action item for you →$/.test(t)).length === 2 && thenLines.some((t) => t.startsWith("2 new recordings to watch")), `Today's Then names each call with an item for her, and the new ones: ${thenLines.join(" | ")}`);
+    must(thenLines.some((t) => t.includes("Accelerator call")) && thenLines.some((t) => t.includes("one-to-one")), "each line says which call");
     await page.goto(`${base}/recordings/${week4.id}`);
     await page.locator('[data-testid="recording-steps"]').waitFor({ timeout: 20000 });
     must((await page.locator('[data-testid="recording-program"]').first().innerText()) === "Accelerator", "the program line");
     await expectText(page, "One offer", "summary rendered");
-    must((await page.locator('[data-testid="recording-watch"]').getAttribute("href")) === payload.share_url, "Watch in Fathom opens the share link");
+    // Watch in Fathom goes through HelixOS, which marks the call seen and sends her on to the share link (rev 498).
+    must((await page.locator('[data-testid="recording-watch"]').getAttribute("href")) === `/recordings/${week4.id}/watch`, "Watch in Fathom goes through HelixOS first");
+    const watched = await page.request.get(`${base}/recordings/${oneToOne.id}/watch`, { maxRedirects: 0 });
+    must(watched.status() === 303 && watched.headers().location === oneToOne.shareUrl, `the tap sends her on to the call's share link (${watched.status()} ${watched.headers().location})`);
+    const seenRows = await db.query.recordingViews.findMany({ where: eq(schema.recordingViews.userId, maya.id) });
+    must(seenRows.length === 2 && seenRows.some((r) => r.recordingId === week4.id) && seenRows.some((r) => r.recordingId === oneToOne.id), "opening one and pressing Watch on the other marks both seen");
+    // The action items under the person each is for (rev 496): hers first as "Yours", the others folded; each with its ▶ moment.
+    const groupHeads = await page.locator('[data-testid="recording-group-items"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-own")}:${(e.querySelector("span") as HTMLElement).textContent?.trim()}:${e.tagName === "DETAILS" ? ((e as HTMLDetailsElement).open ? "open" : "folded") : "shown"}`));
+    must(groupHeads[0] === "yes:Yours (1):shown" && groupHeads.slice(1).every((g) => g.startsWith("no:") && g.endsWith(":folded")) && groupHeads.some((g) => g.includes("Jordan Lee (1)")), `her items first as Yours, the others folded under their names: ${groupHeads.join(" | ")}`);
+    must(!((await page.locator('[data-testid="recording-steps"]').textContent()) ?? "").includes("@"), "no email address among the action items");
+    const moment = page.locator('[data-testid="recording-group-items"][data-own="yes"] [data-testid="recording-step-moment"]').first();
+    must((await moment.innerText()).trim() === "▶ 9:12" && (await moment.getAttribute("href")) === payload.action_items[0].recording_playback_url, "the item's timestamp is a ▶ link to that moment in Fathom");
     const steps = page.locator('[data-testid="recording-step"]');
     must((await steps.count()) === payload.action_items.length, "every action item shown");
     const mine = steps.filter({ hasText: "Record the offer in one sentence" });
@@ -306,8 +326,13 @@ async function main() {
     await expectText(page, "Mine is the 90-Day Reset", "transcript line");
     const fetchedRows = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, mayaM.workspaceId), eq(schema.syncEvents.event, "recordings.transcript")) });
     must(fetchedRows.length === 1 && fetchedRows[0].userId === maya.id && fetchedRows[0].status === "received", "the fetch is one sync_events row naming who asked");
+    await page.goto(`${base}/recordings`);
+    must(!(await page.locator('[data-testid="recording-new"]').count()) && !(await page.locator('aside a[href="/recordings"] [data-testid="due-badge"]').count()), "seen, the dots and the menu count are gone");
+    await page.goto(`${base}/today`);
+    const thenAfter = (await page.locator('[data-testid="then-recording"]').allInnerTexts()).map((t) => t.trim());
+    must(thenAfter.length === 1 && thenAfter[0].includes("one-to-one"), `the call whose item she made a task leaves Then; the one-to-one's item is still hers to decide: ${thenAfter.join(" | ")}`);
     await logout(page);
-    console.log("✓ Maya: the menu item, both calls, the summary, Watch in Fathom, one tap to a task with source fathom, the transcript fetched once and logged");
+    console.log("✓ Maya: the menu item and its count, newest first with the yellow dot, Today's Then lines, Watch in Fathom through HelixOS, her items first with ▶ moments, one tap to a task, the transcript fetched once and logged");
 
     // ── 7. Jordan: only the week 4 call, the one-to-one not reachable, the transcript opened from HelixOS with no second fetch, a step let go. ──
     await loginAs(page, jordan.email);
@@ -337,6 +362,19 @@ async function main() {
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), w4row.locator('[data-testid="recording-toggle-transcript"]').click()]);
     await page.waitForTimeout(600);
     must((await page.locator(`[data-testid="recording-published"]#r-${week4.id}`).innerText()).includes("transcript hidden"), "Hide transcript marks the row");
+    // Rev 498: who has caught up, a count with the names behind a tap. Maya and Jordan both opened the week 4 call.
+    must((await page.locator(`[data-testid="recording-published"]#r-${week4.id} [data-testid="recording-seen-line"]`).innerText()).trim() === "Seen by 2 of 2", "Seen by 2 of 2 on the week 4 call");
+    // Rev 497: the coach's line on Today and the Action items tab, grouped by person with his own first, drafts included.
+    await page.goto(`${base}/today`);
+    must((await page.locator('[data-testid="then-recording"]').allInnerTexts()).some((t) => /^Action items from your calls: \d+ →$/.test(t.trim())), "the coach's Then names the action items from his calls");
+    await page.goto(`${base}/coach/recordings?tab=items`);
+    const itemCalls = page.locator('[data-testid="recordings-items-call"]');
+    must((await itemCalls.count()) >= 2 && (await itemCalls.filter({ hasText: "draft" }).count()) >= 1, "the Action items tab lists the calls with items, drafts among them");
+    const w4items = itemCalls.filter({ hasText: payload.title });
+    const w4groups = await w4items.locator('[data-testid="coach-item-group"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-own")}:${e.querySelector("p")?.textContent?.trim()}`));
+    must(w4groups.includes("no:Maya Torres (1)") && w4groups.includes("no:Jordan Lee (1)"), `the week 4 items under each member by name: ${w4groups.join(" | ")}`);
+    must(((await w4items.textContent()) ?? "").includes("made a task") && ((await w4items.textContent()) ?? "").includes("let go") && !((await w4items.textContent()) ?? "").includes("@"), "what each member did with theirs, and no email address");
+    await page.goto(`${base}/coach/recordings?tab=published`);
     await page.goto(`${base}/coach/${mayaM.id}`);
     await submit(page, '[data-testid="switch-view"]');
     await page.locator('[data-testid="switch-banner"]').waitFor({ timeout: 20000 });

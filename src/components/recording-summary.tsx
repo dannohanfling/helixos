@@ -1,11 +1,35 @@
 import type { ReactNode } from "react";
+import { summaryMoment } from "@/lib/engine/recording-members";
 
 /**
  * Fathom's summary is markdown: "## " headings, "- " or "* " bullets, numbered lines and **bold**. This renders those and nothing
- * else; any other syntax shows as the plain text it is. Links are not followed: a summary is a model's reading of a call.
+ * else; any other syntax shows as the plain text it is. A link's words stay; only a link into the call itself (fathom.video) is
+ * followed, as its moment.
+ */
+function bold(text: string, key: string): ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => (part.startsWith("**") && part.endsWith("**") ? <strong key={`${key}-${i}`}>{part.slice(2, -2)}</strong> : <span key={`${key}-${i}`}>{part}</span>));
+}
+/**
+ * A markdown link keeps its words; when it points into the call on fathom.video it also gets a small "▶ 12:34" that opens that
+ * moment (rev 496). Any other address is never a link here: the words stand alone.
  */
 function inline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) => (part.startsWith("**") && part.endsWith("**") ? <strong key={i}>{part.slice(2, -2)}</strong> : <span key={i}>{part}</span>));
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)) {
+    out.push(...bold(text.slice(last, m.index), `t${last}`));
+    out.push(...bold(m[1], `l${m.index}`));
+    const moment = summaryMoment(m[2]);
+    if (moment)
+      out.push(
+        <a key={`m${m.index}`} href={moment.href} target="_blank" rel="noreferrer" className="ml-1 font-mono text-xs text-accent hover:underline" data-testid="summary-moment">
+          {moment.label}
+        </a>,
+      );
+    last = (m.index ?? 0) + m[0].length;
+  }
+  out.push(...bold(text.slice(last), `t${last}`));
+  return out;
 }
 
 export function RecordingSummary({ markdown, className = "" }: { markdown: string; className?: string }) {

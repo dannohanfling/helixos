@@ -17,6 +17,8 @@ import { addDays, formatDate, relativeDay } from "@/lib/dates";
 import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
 import { TIER_ICONS } from "@/lib/engine/tiers";
 import { shareFor } from "@/lib/community";
+import { COACH_ITEMS_DAYS, coachItems, newRecordings, openItemsFor } from "@/lib/recordings";
+import { programLine } from "@/lib/engine/recordings";
 import { ShareButton } from "@/components/share-button";
 import { Top3Picker } from "@/components/top3-picker";
 import { DraftKeeper } from "@/components/draft-keeper";
@@ -80,6 +82,22 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const goalPct = d.goal ? Math.round((d.goal.actual / Math.max(d.goal.target, 1)) * 100) : 0;
   const primary = d.actions[0];
   const rest = d.actions.slice(1, 6);
+  // Rev 497: the recordings' action items in Then. A member gets a line per call (the two newest) with items still for them to
+  // decide, and a line for calls not yet opened (rev 498); the coach one line for the items from the last two weeks' calls.
+  const seer = { userId: v.user.id, programTier: v.membership.programTier, role: v.role };
+  const recLines: { key: string; title: string; href: string }[] = [];
+  if (v.role === "client") {
+    const [open, fresh] = await Promise.all([openItemsFor(v.workspace.id, { ...seer, email: v.user.email }), newRecordings(v.workspace.id, seer)]);
+    const day = (iso: string | null) => (iso ? new Intl.DateTimeFormat("en-US", { timeZone: v.tz, weekday: "short" }).format(new Date(iso)) : "a recent");
+    const callName = (a: string | null) => (a === "members" || !a ? "one-to-one" : `${programLine(a as "academy")} call`);
+    for (const o of open.slice(0, 2)) recLines.push({ key: `rec-${o.recording.id}`, title: `From ${day(o.recording.startedAt)}'s ${callName(o.recording.audience)}: ${o.count} action item${o.count === 1 ? "" : "s"} for you`, href: `/recordings/${o.recording.id}#steps` });
+    if (open.length > 2) recLines.push({ key: "rec-more", title: `+${open.length - 2} more call${open.length - 2 === 1 ? "" : "s"} with action items`, href: "/recordings" });
+    if (fresh.length) recLines.push({ key: "rec-new", title: `${fresh.length} new recording${fresh.length === 1 ? "" : "s"} to watch`, href: "/recordings" });
+  } else if (!v.switchedInto) {
+    const items = await coachItems(v.workspace.id, addDays(v.today, -COACH_ITEMS_DAYS));
+    const n = items.reduce((a, x) => a + x.open.length, 0);
+    if (n) recLines.push({ key: "rec-coach", title: `Action items from your calls: ${n}`, href: "/coach/recordings?tab=items" });
+  }
 
   // The coach's notice (rev 432 item 4): new monthly feedback and issues not yet opened, so neither can be missed.
   const coachNew = v.role === "coach" && !v.switchedInto ? await Promise.all([newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt), unseenReports(v.workspace.id)]) : null;
@@ -215,7 +233,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         <div className="card p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Then</div>
           <ul className="mt-2 space-y-2">
-            {rest.length ? (
+            {recLines.map((a) => (
+              <li key={a.key} data-testid="then-recording">
+                <Link href={a.href} className="flex items-start gap-2 text-sm hover:underline">
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />
+                  <span>{a.title} →</span>
+                </Link>
+              </li>
+            ))}
+            {rest.length || recLines.length ? (
               rest.map((a) => (
                 <li key={a.key}>
                   <Link href={a.href} className="flex items-start gap-2 text-sm hover:underline">

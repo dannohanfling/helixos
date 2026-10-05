@@ -288,3 +288,74 @@ export async function skipRecording(r: schema.Recording): Promise<void> {
 export async function restoreRecording(r: schema.Recording): Promise<void> {
   await db.update(schema.recordings).set({ status: "draft" }).where(and(eq(schema.recordings.id, r.id), eq(schema.recordings.status, "skipped")));
 }
+
+/* ───────────── Recordings for members (revs 496 to 498): seen, new, and the action items still to decide ───────────── */
+
+/** Seen (rev 498): opened in HelixOS or Watch in Fathom pressed. The first time is kept; a switched coach never marks it. */
+export async function markSeen(workspaceId: string, userId: string, recordingId: string): Promise<void> {
+  await db.insert(schema.recordingViews).values({ id: newId(), workspaceId, userId, recordingId, seenAt: nowIso() }).onConflictDoNothing();
+}
+
+/** Which of these recordings the member has seen. */
+export async function seenIds(userId: string, recordingIds: string[]): Promise<Set<string>> {
+  if (!recordingIds.length) return new Set();
+  const rows = await db.query.recordingViews.findMany({ where: and(eq(schema.recordingViews.userId, userId), inArray(schema.recordingViews.recordingId, recordingIds)) });
+  return new Set(rows.map((r) => r.recordingId));
+}
+
+/** The published recordings this member hasn't seen yet: the menu's count and Today's line. */
+export async function newRecordings(workspaceId: string, seer: Seer): Promise<schema.Recording[]> {
+  const rows = await visibleRecordings(workspaceId, seer);
+  const seen = await seenIds(seer.userId, rows.map((r) => r.id));
+  return rows.filter((r) => !seen.has(r.id));
+}
+
+/** "Mark all as seen": every recording this member can see, now. */
+export async function markAllSeen(workspaceId: string, seer: Seer): Promise<number> {
+  const fresh = await newRecordings(workspaceId, seer);
+  for (const r of fresh) await markSeen(workspaceId, seer.userId, r.id);
+  return fresh.length;
+}
+
+/** Who has seen each recording, for the coach's "Seen by N of M". */
+export async function seenBy(recordingIds: string[]): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  if (!recordingIds.length) return out;
+  const rows = await db.query.recordingViews.findMany({ where: inArray(schema.recordingViews.recordingId, recordingIds) });
+  for (const r of rows) out.set(r.recordingId, (out.get(r.recordingId) ?? new Set()).add(r.userId));
+  return out;
+}
+
+/**
+ * The member's action items still to decide (rev 497): per published call they can see, the items Fathom assigned to their
+ * email that they have neither made a task nor let go. Newest call first.
+ */
+export async function openItemsFor(workspaceId: string, seer: Seer & { email: string }): Promise<{ recording: schema.Recording; count: number }[]> {
+  const rows = (await visibleRecordings(workspaceId, seer)).filter((r) => r.actionItems.some((i) => (i.assigneeEmail ?? "").toLowerCase() === seer.email.toLowerCase()));
+  if (!rows.length) return [];
+  const steps = await stepsFor(seer.userId, rows.map((r) => r.id));
+  return rows
+    .map((r) => ({
+      recording: r,
+      count: r.actionItems.filter((i, idx) => {
+        if ((i.assigneeEmail ?? "").toLowerCase() !== seer.email.toLowerCase()) return false;
+        const s = steps.get(`${r.id}:${idx}`);
+        return !s || s.state === "suggested";
+      }).length,
+    }))
+    .filter((x) => x.count > 0);
+}
+
+/** How far back the coach's action items reach: the calls of the last two weeks. */
+export const COACH_ITEMS_DAYS = 14;
+/**
+ * The coach's action items (rev 497): every item on the calls of the last two weeks, drafts included (only the coach sees those),
+ * skipped calls left out, and the member items already made tasks or let go not counted.
+ */
+export async function coachItems(workspaceId: string, sinceIso: string): Promise<{ recording: schema.Recording; open: number[] }[]> {
+  const rows = (await db.query.recordings.findMany({ where: and(eq(schema.recordings.workspaceId, workspaceId), inArray(schema.recordings.status, ["draft", "published"])), orderBy: [desc(schema.recordings.startedAt), desc(schema.recordings.createdAt)] })).filter((r) => (r.startedAt ?? r.createdAt) >= sinceIso && r.actionItems.length);
+  if (!rows.length) return [];
+  const handled = await db.query.recordingSteps.findMany({ where: and(inArray(schema.recordingSteps.recordingId, rows.map((r) => r.id)), inArray(schema.recordingSteps.state, ["accepted", "dismissed"])) });
+  const done = new Set(handled.map((s) => `${s.recordingId}:${s.itemIndex}`));
+  return rows.map((r) => ({ recording: r, open: r.actionItems.map((_, i) => i).filter((i) => !done.has(`${r.id}:${i}`)) }));
+}
