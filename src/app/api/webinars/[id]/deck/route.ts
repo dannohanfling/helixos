@@ -1,32 +1,21 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
-import { COVER_LOGO_BOX, LOGO_BOX, PLACEHOLDER_TEXT_SIZE, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
+import { COVER_LOGO_BOX, COVER_LOGO_PLACEHOLDER, LOGO_BOX, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, logoBadgeFrame, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
 import { applyKitTheme } from "@/lib/deck-theme";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
 import { pictureAltText } from "@/lib/engine/deck-slot";
 import { placeImage } from "@/lib/engine/deck-fit";
-import { contextFor } from "@/lib/queries/webinar";
+import { contextFor, ownerBrandName } from "@/lib/queries/webinar";
 import { droppedSlides, filledSlides, resolveDeckSlots } from "@/lib/queries/deck-slots";
-import { readProofObject } from "@/lib/proof-storage";
+import { deckLogos, readDeckBytes } from "@/lib/deck-logo";
 import { sameItems, sectionGate } from "@/lib/engine/provenance";
 import { confirmFor } from "@/lib/provenance";
 
 export const dynamic = "force-dynamic";
 
-/** The private object's bytes, or null when they can't be read (the slide then shows the slot's red placeholder). */
-async function readBytes(url: string): Promise<Buffer | null> {
-  try {
-    const res = await readProofObject(url);
-    if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
-  } catch {
-    return null;
-  }
-}
-/** The footer bar's logo box, right of the band; and the cover's, top left (§4). */
 
 /**
  * GET /api/webinars/{id}/deck?format=pptx|txt
@@ -66,24 +55,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const kindOf = new Map(deck.slides.map((s) => [s.n, s.kind]));
   const bySlide = new Map<number, PreparedImage & { alt: string }>();
   const bytesByUrl = new Map<string, Promise<Buffer | null>>();
-  const readOnce = (url: string) => bytesByUrl.get(url) ?? bytesByUrl.set(url, readBytes(url)).get(url)!;
+  const readOnce = (url: string) => bytesByUrl.get(url) ?? bytesByUrl.set(url, readDeckBytes(url)).get(url)!;
   await Promise.all(resolved.filter((r) => r.image).map(async (r) => {
     const bytes = await readOnce(r.image!.url);
     const prepared = bytes ? await prepareDeckImage(bytes, r.image!.kind, slotFrame(kindOf.get(r.slide) ?? "section")) : null;
     if (prepared) bySlide.set(r.slide, { ...prepared, alt: pictureAltText(r.image!.caption, r.slot.what) });
     else filled.delete(r.slide); // The bytes wouldn't read back or decode: the slide shows the slot's placeholder, never a broken picture.
   }));
-  // The logo (§4): the kit's pick first; failing that, the newest logo in the owner's own library. On the cover, and in the footer
-  // bar when the bar is on, each contained whole in its box. No logo means the brand line set as type.
-  const logoRow =
-    (kit?.logoImageId ? await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, kit.logoImageId), eq(schema.deckImages.workspaceId, w.workspaceId)) }) : null) ??
-    (await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] })) ??
-    null;
-  const logoBytes = logoRow ? await readOnce(logoRow.blobUrl) : null;
+  const plans = renderPlan(deck, filled, droppedSlides(resolved));
+  // The logos (§4, first-deck §3): the kit's pick, else the newest logo in the owner's own library. On the cover, contained whole
+  // in its box: the kit's dark logo on a dark cover, or the one logo on a ground badge when it would not read there; in the footer
+  // bar, when the bar is on, the one logo. No logo at all: a red "Your logo here" on the cover, and the brand line as type.
+  const coverPlan = plans.find((p) => p.boxes.some((b) => b.role === "cover-title"));
+  const logos = await deckLogos({ workspaceId: w.workspaceId, userId: w.userId }, kit ?? null, { background: coverPlan?.background ?? deck.kit.ground, ground: deck.kit.ground }, readOnce);
+  const logoBytes = logos.logo ? await readOnce(logos.logo.blobUrl) : null;
+  const coverBytes = logos.cover ? await readOnce(logos.cover.blobUrl) : null;
   const logo = logoBytes && deck.footerBar ? await prepareDeckImage(logoBytes, "logo", LOGO_BOX) : null;
-  const coverLogo = logoBytes ? await prepareDeckImage(logoBytes, "logo", COVER_LOGO_BOX) : null;
+  const coverLogo = coverBytes ? await prepareDeckImage(coverBytes, "logo", COVER_LOGO_BOX) : null;
   // The footer's brand line (§4): this webinar's own, else the kit's name, else the workspace's when no kit is applied.
-  const brand = w.footerBrand?.trim() || (deck.kitApplied ? deck.kit.name : v.workspace.name);
+  const brand = w.footerBrand?.trim() || (deck.kitApplied ? deck.kit.name : await ownerBrandName(w, v.workspace.name));
 
   const { default: PptxGenJS } = await import("pptxgenjs");
   const pptx = new PptxGenJS();
@@ -109,8 +99,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       objects: [...ph("title", "title", g.boxes["cover-title"] ?? g.boxes.headline), ...ph("presenter", "body", g.boxes["cover-presenter"]), ...ph("eyebrow", "body", g.boxes.eyebrow), ...ph("body", "body", g.body ?? undefined), ...ph("footer", "body", g.boxes.footer)],
     });
   }
-  const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: brand, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo, coverLogo };
-  for (const plan of renderPlan(deck, filled, droppedSlides(resolved))) draw(pptx, plan, bySlide.get(plan.n) ?? null, chrome);
+  const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: brand, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo, coverLogo, coverBadge: logos.badge, noLogo: !logos.logo && !logos.dark };
+  for (const plan of plans) draw(pptx, plan, bySlide.get(plan.n) ?? null, chrome);
   // The same picture on several slides (and the logo on every content slide) is one media file in the finished zip.
   const written = (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
   const themed = await applyKitTheme(written, { ground: deck.kit.ground, ink: deck.kit.ink, accent: deck.kit.accent, muted: deck.kit.muted, surface: deck.kit.surface, inverseGround: deck.kit.inverseGround, inverseInk: deck.kit.inverseInk, placeholder: deck.kit.placeholder, displayFont: deck.kit.displayFont, bodyFont: deck.kit.bodyFont });
@@ -122,7 +112,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 const normalise = (v: string): string => (v ?? "").replace(/^#/, "").toUpperCase();
 
-type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; company: string; muted: string; surface: string; accent: string; body: string; logo: PreparedImage | null; coverLogo: PreparedImage | null };
+type Chrome = { footerBar: boolean; ctaBar: boolean; ctaFooter: string | null; company: string; muted: string; surface: string; accent: string; body: string; logo: PreparedImage | null; coverLogo: PreparedImage | null; /** The kit's ground behind a cover logo that would not read on the dark cover (§3). */ coverBadge: string | null; noLogo: boolean };
 
 /**
  * One slide from its plan: a mapping, nothing decided here. Every colour and face is the plan's. A filled slot's picture is
@@ -145,7 +135,13 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
   const cover = plan.boxes.some((b) => b.role === "cover-title");
   const at = (b: BoxGeometry) => ({ x: b.x, y: b.y, w: b.w, h: b.h, align: b.align, valign: b.valign });
   if (cover) {
-    // The logo on the cover (§4), top left, contained whole in its box.
+    // The logo on the cover (§4, first-deck §3), top left, contained whole in its box: on its ground badge when it needs one,
+    // and with none at all, the red dashed "Your logo here" in the same box.
+    if (chrome.coverLogo && chrome.coverBadge) {
+      const b = logoBadgeFrame(chrome.coverLogo.placement.box);
+      slide.addShape(pptx.ShapeType.roundRect, { x: b.x, y: b.y, w: b.w, h: b.h, rectRadius: 0.08, fill: { color: chrome.coverBadge }, line: { color: chrome.coverBadge, width: 0 } });
+    }
+    if (!chrome.coverLogo && chrome.noLogo) drawPlaceholder(pptx, slide, { frame: COVER_LOGO_BOX, text: COVER_LOGO_PLACEHOLDER, color: PLACEHOLDER_RED }, chrome.body);
     if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: chrome.coverLogo.placement.box.x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h, altText: `${chrome.company} logo` });
     const title = plan.boxes.find((b) => b.role === "cover-title");
     const presenter = plan.boxes.find((b) => b.role === "cover-presenter");
@@ -214,8 +210,9 @@ function drawBars(pptx: PptxGenJS, slide: PptxGenJS.Slide, chrome: Chrome, cover
   const bandY = 5.32;
   if (chrome.footerBar) {
     slide.addShape(pptx.ShapeType.rect, { x: 0, y: bandY, w: 10, h: 0.3, fill: { color: chrome.surface } });
-    // The boxes never collide (§4): the brand line to 3.9 in, the CTA from 4.0 to 8.8, the logo from 9.0.
-    slide.addText(chrome.company, { x: 0.4, y: bandY, w: 3.5, h: 0.3, fontSize: 9, color: chrome.muted, fontFace: chrome.body, valign: "middle" });
+    // The boxes never collide (§4): the brand line to 3.9 in, the CTA from 4.0 to 8.8, the logo from 9.0. With a logo the brand
+    // line goes (first-deck §3): the footer said the brand twice.
+    if (!chrome.logo) slide.addText(chrome.company, { x: 0.4, y: bandY, w: 3.5, h: 0.3, fontSize: 9, color: chrome.muted, fontFace: chrome.body, valign: "middle" });
     // The logo whole at its own ratio inside its box, never stretched; a small one at its own size.
     if (chrome.logo) slide.addImage({ data: chrome.logo.data, x: chrome.logo.placement.box.x, y: chrome.logo.placement.box.y, w: chrome.logo.placement.box.w, h: chrome.logo.placement.box.h, altText: `${chrome.company} logo` });
   }

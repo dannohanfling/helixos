@@ -1,0 +1,1 @@
+ALTER TABLE `brand_kits` ADD `logo_dark_image_id` text;

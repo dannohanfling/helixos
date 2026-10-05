@@ -10,6 +10,15 @@ export async function knownFor(userId: string, workspaceId: string): Promise<Kno
   return (await subjectFor({ userId, workspaceId, name: "" })).known;
 }
 
+/**
+ * The footer's brand line with no kit of the member's own (first-deck brief §1): their business name, else the workspace's.
+ * Never the starter kit's name: the deck is theirs.
+ */
+export async function ownerBrandName(w: { userId: string; workspaceId: string }, fallback: string): Promise<string> {
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, w.userId), eq(schema.memberships.workspaceId, w.workspaceId)), columns: { businessName: true } });
+  return m?.businessName?.trim() || fallback;
+}
+
 /** Who presents this webinar: the presenter field, else the subject's own name. */
 export const presenterOf = (w: { presenter: string | null }, subjectName: string): string => w.presenter?.trim() || subjectName;
 

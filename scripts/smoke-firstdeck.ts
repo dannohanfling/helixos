@@ -5,12 +5,16 @@
  * offer's own price; "2 a.m." stays "2 a.m."; an answer cut off at the output budget is never saved; a section with a script
  * and no key points is named on the Deck step and gets its slides from "Make slides from my script"; the Key points box
  * carries no other coach's example. Runs against scripts/mock-ai.ts (the dev server must have AI_BASE_URL=http://localhost:4020).
+ * §1, the house starter kit, and §3, the logo: with none, a red "Your logo here" on the cover; a dark wordmark on the dark cover
+ * sits on a ground badge; the kit's "Logo for dark backgrounds" takes its place there; with a logo the footer drops the brand
+ * line; a logo uploaded in the kit editor lists at its real size. Runs against scripts/mock-blob.ts too.
  */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const aiPort = 4020;
+const blobPort = 4050;
 const must = (ok: unknown, msg: string) => {
   if (!ok) throw new Error(msg);
 };
@@ -23,7 +27,9 @@ async function submit(page: Page, selector: string) {
 
 async function main() {
   const ai = spawn("npx", ["tsx", "scripts/mock-ai.ts", String(aiPort)], { stdio: "ignore", detached: true });
+  const blob = spawn("npx", ["tsx", "scripts/mock-blob.ts", String(blobPort)], { stdio: "ignore", detached: true });
   await new Promise((r) => setTimeout(r, 2500));
+  await fetch(`http://localhost:${blobPort}/__reset`);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
@@ -42,6 +48,8 @@ async function main() {
     await page.click('button:has-text("As a client")');
     await page.waitForURL(/\/today/);
     const user = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
+    // The walk drafts some 25 times; a second run on the same day would meet the client's daily cap (40 calls) partway through.
+    await db.delete(schema.aiUsage).where(eq(schema.aiUsage.userId, user.id));
     await page.goto(`${base}/settings`);
     await page.selectOption('select[name="provider"]', "anthropic");
     await page.fill('input[name="key"]', "sk-ant-good");
@@ -89,12 +97,13 @@ async function main() {
     must(drafted.every((s) => s.script?.includes("2 a.m.") && !/\b2 m\./.test(s.script ?? "")), '"2 a.m." stays "2 a.m." in every script');
     const lines = drafted.flatMap((s) => (s.keyPoints ?? "").split("\n"));
     must(!lines.some((l) => l.includes("47%")), "a deck line with a figure the record never gave is dropped");
-    must(lines.some((l) => l.includes("[PROOF PLACEHOLDER]")), "the proof placeholder is kept as its own line");
+    // The proof placeholder stays in the script, never on a proof slide: there it would refuse the whole export.
+    must(drafted.filter((s) => /proof block/i.test(s.name)).every((s) => s.script?.includes("[PROOF PLACEHOLDER]") && !(s.keyPoints ?? "").includes("[PROOF PLACEHOLDER]") && (s.keyPoints ?? "").trim()), "each proof block keeps [PROOF PLACEHOLDER] in its script, and slides without it");
     for (const s of drafted) must((s.keyPoints ?? "").split("\n").length <= slideCountFor(s.durationMin) + 2, `${s.name}: about one line per two minutes`);
     const price = `$${offer.price.toLocaleString("en-US")}`;
     const stack = drafted.find((s) => s.act === "closing" && /offer stack/i.test(s.name))!;
     must(stack.script?.includes(price) && (stack.keyPoints ?? "").includes(price), `the closing frame's draft names the linked offer's own price, ${price}, in the script and on a slide`);
-    console.log(`✓ ${drafted.length} sections drafted with ✨: each has its slides; a made-up figure dropped; the proof placeholder kept; "2 a.m." intact; the offer stack names ${price}`);
+    console.log(`✓ ${drafted.length} sections drafted with ✨: each has its slides; a made-up figure dropped; the proof placeholder kept in the script and off the proof slides; "2 a.m." intact; the offer stack names ${price}`);
 
     // ── The export has slides in every act, and none of them invents a result. ──
     const deck = deckSlides(await contextFor(await w()), null);
@@ -103,10 +112,11 @@ async function main() {
       must(n > 0, `the deck has slides in the ${act} act (${n})`);
     }
     must(!deck.slides.some((s) => [s.headline, ...s.body].join(" ").includes("47%")), "no slide carries the made-up figure");
+    must(deck.refused.length === 0, `a drafted deck exports: nothing refused (${deck.refused.join(" | ")})`);
     await page.goto(`${base}/webinars/${webinarId}?step=deck`);
     await page.locator('[data-testid="deck-pace"]').waitFor({ timeout: 20000 });
     must(!(await page.locator('[data-testid="deck-partial"]').count()) && !(await page.locator('[data-testid="deck-script-only"]').count()), "the Deck step says nothing is missing");
-    console.log(`✓ the export: ${deck.slides.length} slides with teaching in every act and no made-up figure; the Deck step names nothing missing`);
+    console.log(`✓ the export: ${deck.slides.length} slides with teaching in every act, no made-up figure, nothing refused; the Deck step names nothing missing`);
 
     // ── A section with a script and no key points is named on the Deck step, and Make slides gives it its lines. ──
     const bare = drafted.find((s) => s.act === "vehicle")!;
@@ -125,13 +135,127 @@ async function main() {
     must(!(await page.locator('[data-testid="make-slides"]').count()), "with key points, Make slides is no longer offered");
     console.log("✓ a section with a script and no slides is named on the Deck step; Make slides from my script gives it two lines, the made-up figure dropped");
 
+    // ── §1, the house starter kit: a workspace with no kit of its own renders in the starter, named as such; Settings shows it
+    //    pre-filled to edit; a saved kit takes over; Reset to the starter kit brings it back. ──
+    // A run that failed partway may have left its kit or its footer bar: §1 starts from no kit of the workspace's own.
+    await db.delete(schema.brandKits).where(eq(schema.brandKits.workspaceId, (await w()).workspaceId));
+    await db.update(schema.webinars).set({ footerBar: false }).where(eq(schema.webinars.id, webinarId));
+    must(deck.kit.name === "House starter kit" && !deck.kitApplied && deck.kit.displayFont === "Montserrat" && deck.refused.length === 0, "with no kit of its own, the deck renders in the house starter kit");
+    await page.goto(`${base}/webinars/${webinarId}?step=deck`);
+    must((await page.locator('[data-testid="deck-kit-name"]').innerText()).includes("house starter kit"), "the Deck step says it is the house starter kit");
+    const { ownerBrandName } = await import("@/lib/queries/webinar");
+    must((await ownerBrandName(await w(), "the workspace")) !== "House starter kit", "the footer names the member's business, never the starter kit");
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As the coach")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/settings#brand-kit`);
+    await page.locator('[data-testid="brand-starter"]').waitFor({ timeout: 20000 });
+    must((await page.locator('[data-testid="brand-hex-ground"]').inputValue()) === "F7F5F0" && (await page.locator('[data-testid="brand-form"] input[name="displayFont"]').inputValue()) === "Montserrat", "Settings shows the starter kit pre-filled, to edit rather than start blank");
+    await page.fill('[data-testid="brand-form"] input[name="name"]', "Rooted Rest");
+    await submit(page, '[data-testid="brand-form"] button[type="submit"]');
+    await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 20000 });
+    const ws = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, user.id) }))!.workspaceId;
+    must((await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, ws) }))?.name === "Rooted Rest", "a saved kit takes over");
+    must(!(await page.locator('[data-testid="brand-starter"]').count()), "with a kit of its own, the starter line goes");
+    page.once("dialog", (d) => d.accept());
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button:has-text("Reset to the starter kit")').click()]);
+    await page.locator('[data-testid="brand-reset"]').waitFor({ timeout: 20000 });
+    must(!(await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, ws) })) && (await page.locator('[data-testid="brand-starter"]').count()) === 1, "Reset to the starter kit clears the saved kit, with a confirm, and the starter is back");
+    console.log("✓ §1: no kit of its own renders in the house starter kit, named on the Deck step, the footer the member's business; Settings shows it pre-filled; a saved kit takes over; Reset brings the starter back");
+
+    // ── §3, the logo. A logo uploaded in the kit editor lists at its real size, never 0×0. ──
+    const { default: sharp } = await import("sharp");
+    const { newId } = await import("@/lib/ids");
+    const { logoColor } = await import("@/lib/deck-media");
+    const wordmark = (rgb: { r: number; g: number; b: number }) =>
+      sharp({ create: { width: 300, height: 100, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+        .composite([{ input: { create: { width: 240, height: 60, channels: 4, background: { ...rgb, alpha: 1 } } }, left: 30, top: 20 }])
+        .png()
+        .toBuffer();
+    const AUBERGINE = { r: 0x3b, g: 0x1f, b: 0x3a };
+    const CREAM = { r: 0xf7, g: 0xf5, b: 0xf0 };
+    await page.locator('[data-testid="brand-logo-upload"] summary').click();
+    await page.setInputFiles('[data-testid="brand-logo-upload"] [data-testid="deck-image-file"]', { name: "wordmark.png", mimeType: "image/png", buffer: await wordmark(AUBERGINE) });
+    await page.click('[data-testid="brand-logo-upload"] [data-testid="deck-image-send"]');
+    await page.waitForFunction(() => (document.querySelector('[data-testid="brand-logo"]') as HTMLSelectElement | null)?.selectedOptions[0]?.textContent?.includes("300×100"), null, { timeout: 20000 });
+    must(!(await page.locator('[data-testid="brand-logo"] option, [data-testid="brand-logo-dark"] option').allInnerTexts()).some((t) => t.includes("0×0")), "no logo in the kit editor lists as 0×0");
+    must((await page.locator('[data-testid="brand-logo-dark"] option').allInnerTexts()).some((t) => t.includes("300×100")), "the new logo is offered as the dark-background logo too");
+    console.log("✓ §3: a logo uploaded in the kit editor lists at its real size (300×100), in both pickers");
+
+    // The client's own deck: no logo anywhere, then a dark wordmark, then the kit's dark-background logo. The drafts are marked
+    // reviewed so the export goes (the provenance gate has its own walk).
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As a client")');
+    await page.waitForURL(/\/today/);
+    const wsId = (await w()).workspaceId;
+    await db.update(schema.webinarSections).set({ origin: "ai_accepted" }).where(eq(schema.webinarSections.webinarId, webinarId));
+    await db.delete(schema.deckImages).where(and(eq(schema.deckImages.userId, user.id), eq(schema.deckImages.kind, "logo")));
+    const putLogo = async (name: string, bytes: Buffer) => {
+      const pathname = `deck/${wsId}/${user.id}/${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
+      const res = await fetch(`http://localhost:${blobPort}/?pathname=${encodeURIComponent(pathname)}`, { method: "PUT", headers: { authorization: `Bearer ${process.env.PROOF_BLOB_READ_WRITE_TOKEN ?? "vercel_blob_rw_PROOFSTORE_testsecret"}`, "x-vercel-blob-access": "private", "x-content-type": "image/png", "x-allow-overwrite": "1" }, body: new Uint8Array(bytes) });
+      const { url } = (await res.json()) as { url: string };
+      const [row] = await db.insert(schema.deckImages).values({ id: newId(), workspaceId: wsId, userId: user.id, kind: "logo", blobKey: pathname, blobUrl: url, mime: "image/png", width: 300, height: 100, caption: name }).returning();
+      return row;
+    };
+    const JSZip = (await import("jszip")).default;
+    const exportCover = async () => {
+      const res = await page.request.get(`${base}/api/webinars/${webinarId}/deck?format=pptx`);
+      must(res.ok(), `the deck exports: ${res.status()} ${(await res.text().catch(() => "")).slice(0, 200)}`);
+      const zip = await JSZip.loadAsync(await res.body());
+      const cover = await zip.file("ppt/slides/slide1.xml")!.async("string");
+      const rels = await zip.file("ppt/slides/_rels/slide1.xml.rels")!.async("string");
+      const content = await zip.file("ppt/slides/slide3.xml")!.async("string");
+      const media = [...rels.matchAll(/Target="\.\.\/media\/([^"]+)"/g)].map((m) => `ppt/media/${m[1]}`);
+      const pics = await Promise.all(media.map(async (m) => logoColor(await zip.file(m)!.async("nodebuffer"))));
+      return { cover, content, pics, badge: (cover.match(/prst="roundRect"/g) ?? []).length, placeholder: cover.includes("Your logo here") };
+    };
+    const thumbCover = async () => {
+      await page.goto(`${base}/webinars/${webinarId}?step=deck`);
+      const t = page.locator('[data-testid="deck-thumb"][data-n="1"]').first();
+      await t.waitFor({ timeout: 20000 });
+      return { placeholder: await t.locator('[data-testid="deck-thumb-logo-placeholder"]').count(), badge: await t.locator('[data-testid="deck-thumb-logo-badge"]').count(), src: await t.locator('[data-testid="deck-thumb-cover-logo"]').getAttribute("src").catch(() => null) };
+    };
+    // No logo at all: the cover says what to add, in red, and nothing else carries a placeholder for it.
+    let x = await exportCover();
+    must(x.placeholder && x.cover.includes('prstDash val="dash"') && !x.pics.length && !x.content.includes("Your logo here"), "with no logo, the cover alone carries a red dashed \"Your logo here\"");
+    let t = await thumbCover();
+    must(t.placeholder === 1 && !t.src, "the Deck step's cover thumbnail shows the same \"Your logo here\"");
+    must((await page.locator('[data-testid="deck-check"]').innerText()).includes("Your logo here"), "the check before download says the cover shows the placeholder");
+    // A dark wordmark: on the dark starter cover it would read at about 1.2:1, so it sits on a ground badge.
+    const dark = await putLogo("Aubergine wordmark", await wordmark(AUBERGINE));
+    x = await exportCover();
+    must(!x.placeholder && x.badge === 1 && x.pics.length === 1, `a dark logo on the dark cover sits on one badge, the placeholder gone: ${JSON.stringify({ badge: x.badge, pics: x.pics })}`);
+    t = await thumbCover();
+    must(t.badge === 1 && t.placeholder === 0 && t.src === `/api/deck-images/${dark.id}`, "the cover thumbnail shows the logo on its badge");
+    // The kit's "Logo for dark backgrounds": the cream one takes the cover, bare; the footer bar keeps the dark one.
+    const light = await putLogo("Cream wordmark", await wordmark(CREAM));
+    const { STARTER_KIT } = await import("@/lib/engine/deck");
+    const k = STARTER_KIT;
+    await db.insert(schema.brandKits).values({ id: newId(), workspaceId: wsId, name: "Walk kit", ground: k.ground, ink: k.ink, accent: k.accent, muted: k.muted, surface: k.surface, inverseGround: k.inverseGround, inverseInk: k.inverseInk, displayFont: k.displayFont, bodyFont: k.bodyFont, quoteFont: k.quoteFont, fontFallback: k.fontFallback, logoImageId: dark.id, logoDarkImageId: light.id });
+    await db.update(schema.webinars).set({ footerBar: true }).where(eq(schema.webinars.id, webinarId));
+    x = await exportCover();
+    // With a logo in the footer bar, the brand line beside it goes: the footer said the brand twice.
+    must(x.content.includes("<p:pic>") && !x.content.includes("<a:t>Walk kit</a:t>"), "with a logo, the footer bar carries the logo and no brand line");
+    must(x.badge === 0 && x.pics.length === 1 && [0, 2, 4].every((i) => Math.abs(parseInt(x.pics[0]?.slice(i, i + 2) ?? "0", 16) - parseInt("F7F5F0".slice(i, i + 2), 16)) <= 8), `the cover carries the kit's dark-background logo, bare: ${JSON.stringify(x.pics)}`);
+    t = await thumbCover();
+    must(t.badge === 0 && t.src === `/api/deck-images/${light.id}`, "the cover thumbnail shows the dark-background logo");
+    await db.delete(schema.brandKits).where(eq(schema.brandKits.workspaceId, wsId));
+    await db.update(schema.webinars).set({ footerBar: false }).where(eq(schema.webinars.id, webinarId));
+    console.log("✓ §3: no logo, a red \"Your logo here\" on the cover only; a dark wordmark on the dark cover sits on a ground badge; the kit's dark-background logo takes the cover bare; the footer bar's logo stands without the brand line; the thumbnails agree");
+
     console.log("\nsmoke-firstdeck: all checks passed");
   } finally {
     await browser.close();
-    try {
-      process.kill(-ai.pid!);
-    } catch {
-      /* already gone */
+    for (const child of [ai, blob]) {
+      try {
+        process.kill(-child.pid!);
+      } catch {
+        /* already gone */
+      }
     }
   }
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);

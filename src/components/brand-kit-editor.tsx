@@ -19,6 +19,7 @@ export type KitDraft = {
   quoteFont: string;
   fontFallback: string;
   logoImageId: string;
+  logoDarkImageId: string;
 };
 type Logo = { id: string; caption: string | null; width: number; height: number };
 type ColourRole = (typeof BRAND_COLOR_ROLES)[number] | "inverseGround" | "inverseInk";
@@ -105,12 +106,26 @@ export function BrandKitEditor({ kit, logos, workspaceId, userId }: { kit: KitDr
               fixedKind="logo"
               compact
               onRecorded={(img) => {
-                setLibrary((l) => [{ id: img.id, caption: img.caption || null, width: 0, height: 0 }, ...l]);
+                setLibrary((l) => [{ id: img.id, caption: img.caption || null, width: img.width, height: img.height }, ...l]);
                 set({ logoImageId: img.id });
               }}
             />
           </div>
         </details>
+      </div>
+      <div className="sm:col-span-2">
+        <label className="block">
+          <span className="label">Logo for dark backgrounds (optional)</span>
+          <select className="field" name="logoDarkImageId" value={draft.logoDarkImageId} data-testid="brand-logo-dark" onChange={(e) => set({ logoDarkImageId: e.currentTarget.value })}>
+            <option value="">None: use the logo above</option>
+            {library.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.caption ? l.caption : "Logo"} · {l.width}×{l.height}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-ink-3">The cover sits on your dark ground, where a dark wordmark disappears. With none, a logo that wouldn&apos;t read there sits on a small light badge.</span>
+        </label>
       </div>
       <KitPreview draft={draft} logo={logo} />
     </>

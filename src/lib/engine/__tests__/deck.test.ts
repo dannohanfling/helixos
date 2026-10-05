@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -220,9 +220,12 @@ describe("the brand kit on the file", () => {
     const bad = deckSlides(ctx(base()), { ...kit, ink: "9CA3AF" });
     expect(bad.refused).toEqual(["Brand kit: ink on ground is 2.4:1; it needs 4.5:1 to read on a slide.", "Brand kit: ink on placeholder is 2.25:1; it needs 4.5:1, or the unfilled slot cannot be read."]);
     const none = deckSlides(ctx(base()), null);
-    expect(none.kit).toBe(NEUTRAL_KIT);
+    expect(none.kit).toBe(STARTER_KIT);
     expect(none.kitApplied).toBe(false);
-    expect(none.warnings).toContain("No brand kit on this workspace: rendered black on white with no brand applied. Add the kit on Settings.");
+    expect(none.warnings).toContain("No brand kit of your own yet: the deck uses the house starter kit. Replace it with your colours, faces and logo on Settings.");
+    // The house starter kit reads on every pair it uses: nothing refused, and ink well past 4.5:1 on its ground.
+    expect(deckSlides(ctx(base()), STARTER_KIT).refused).toEqual([]);
+    expect(none.refused).toEqual([]);
     const noSlot = deckSlides(ctx(base({ hook: { keyPoints: "Send them to [SALES PAGE URL]" } })), { ...kit, placeholder: null });
     expect(noSlot.warnings).toContain(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
     expect(renderPlan(noSlot)[1].boxes.find((b) => b.role === "headline")?.fill).toBe(PLACEHOLDER_FALLBACK);
@@ -465,3 +468,33 @@ describe("§6.4: the boxes' geometry lives in the plan", () => {
   });
 });
 
+
+describe("first-deck §3: the cover's logo", () => {
+  const cover = { coverBackground: "1F2A37", ground: "F7F5F0" };
+  it("is at least 2.5 in wide and clear of the title", () => {
+    expect(COVER_LOGO_BOX.w).toBeGreaterThanOrEqual(2.5);
+    const title = slideGeometry({ boxes: [{ slide: 1, role: "cover-title", text: "", size: 40, color: "", fill: null, face: "", bold: true, italic: false, bullet: false, placeholder: false }], layout: "cover", imageFrame: null, placeholderSlot: null, pictureOnly: false }).boxes["cover-title"]!;
+    expect(COVER_LOGO_BOX.y + COVER_LOGO_BOX.h).toBeLessThanOrEqual(title.y);
+  });
+  it("takes the kit's dark logo on a dark cover, and the one logo on a light one", () => {
+    expect(coverLogoPlan({ ...cover, hasLogo: true, hasDark: true, logoColor: "3B1F3A" })).toEqual({ use: "dark", badge: null });
+    expect(coverLogoPlan({ coverBackground: "F7F5F0", ground: "F7F5F0", hasLogo: true, hasDark: true, logoColor: "3B1F3A" })).toEqual({ use: "logo", badge: null });
+    expect(coverLogoPlan({ ...cover, hasLogo: false, hasDark: true, logoColor: null })).toEqual({ use: "dark", badge: null });
+  });
+  it("puts a dark wordmark on a ground badge when it would not read at 3:1, and leaves a light one bare", () => {
+    expect(coverLogoPlan({ ...cover, hasLogo: true, hasDark: false, logoColor: "3B1F3A" })).toEqual({ use: "logo", badge: "F7F5F0" });
+    expect(coverLogoPlan({ ...cover, hasLogo: true, hasDark: false, logoColor: "FFFFFF" })).toEqual({ use: "logo", badge: null });
+    // A logo the measure could not read stands bare rather than guessed at.
+    expect(coverLogoPlan({ ...cover, hasLogo: true, hasDark: false, logoColor: null })).toEqual({ use: "logo", badge: null });
+  });
+  it("says none when there is no logo at all, so the cover shows the red placeholder", () => {
+    expect(coverLogoPlan({ ...cover, hasLogo: false, hasDark: false, logoColor: null })).toEqual({ use: "none", badge: null });
+  });
+  it("draws the badge round the placed logo with a margin, inside the slide", () => {
+    const b = logoBadgeFrame({ x: 0.5, y: 0.3, w: 2.6, h: 0.5 });
+    for (const [k, v] of Object.entries({ x: 0.4, y: 0.2, w: 2.8, h: 0.7 })) expect(b[k as keyof typeof b]).toBeCloseTo(v);
+    const edge = logoBadgeFrame({ x: 0.08, y: 0.08, w: 1, h: 0.5 });
+    expect(edge.x).toBeGreaterThanOrEqual(0.05);
+    expect(edge.x + edge.w).toBeCloseTo(1.18);
+  });
+});

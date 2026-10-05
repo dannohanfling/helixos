@@ -49,7 +49,7 @@ export function DeckImageUpload({
   /** The slot the first recorded picture fills (§6.2). */
   attach?: SlotAttach;
   /** Told each new row, so a picker beside this can select it at once. */
-  onRecorded?: (image: { id: string; caption: string }) => void;
+  onRecorded?: (image: { id: string; caption: string; width: number; height: number }) => void;
   compact?: boolean;
 }) {
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -92,7 +92,7 @@ export function DeckImageUpload({
             continue;
           }
           if (attach && !attached) attached = true;
-          onRecorded?.({ id: r.id, caption: d.caption.trim() });
+          onRecorded?.({ id: r.id, caption: d.caption.trim(), width: r.width, height: r.height });
           done.push(d.id);
         } catch (e) {
           console.error("[deck-image-upload]", redactUrls(e instanceof Error ? `${e.name}: ${e.message}` : String(e)));

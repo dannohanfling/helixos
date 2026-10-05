@@ -114,6 +114,14 @@ export async function rotateInviteAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/** Back to the house starter kit (first-deck brief §1): the saved kit goes; decks use the starter until a new one is saved. */
+export async function resetBrandKitAction(): Promise<void> {
+  const coach = await requireCoach();
+  await db.delete(schema.brandKits).where(eq(schema.brandKits.workspaceId, coach.workspace.id));
+  refresh();
+  redirect("/settings?brand=reset#brand-kit");
+}
+
 /** The workspace's brand kit: refused with each problem named when a pair cannot read on a slide or a colour is one the brand bans. */
 export async function saveBrandKitAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
@@ -133,6 +141,13 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
     // The logo (deck visuals §4): one of the coach's own library images of kind logo, or none.
     logoImageId: await (async () => {
       const id = str(formData, "logoImageId").trim();
+      if (!id) return null;
+      const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, coach.workspace.id), eq(schema.deckImages.kind, "logo")) });
+      return img ? img.id : null;
+    })(),
+    // The dark-ground logo (first-deck brief §3): the same rule, one of the coach's own logos or none.
+    logoDarkImageId: await (async () => {
+      const id = str(formData, "logoDarkImageId").trim();
       if (!id) return null;
       const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, coach.workspace.id), eq(schema.deckImages.kind, "logo")) });
       return img ? img.id : null;

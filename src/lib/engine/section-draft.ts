@@ -5,6 +5,7 @@
  * placeholder ("[PROOF PLACEHOLDER]") stays, so the deck shows the red box rather than a result nobody had.
  */
 import type { ResolvedOffer } from "./webinar-context";
+import { placeholderHits, pointKindFor } from "./deck";
 
 export const SLIDES_MARK = "---SLIDES---";
 /** The longest deck line kept: a slide holds one idea, and the deck's longest headline tier is about this long. */
@@ -60,6 +61,16 @@ export function checkSlides(lines: string[], known: string): { kept: string[]; d
     else if (!kept.some((k) => k.toLowerCase() === line.toLowerCase())) kept.push(line);
   }
   return { kept, dropped };
+}
+
+/**
+ * Only lines the deck can export (found 5 Oct, the first-deck walk): a placeholder on a proof or price slide, or inside a
+ * sentence with a number, refuses the whole export. Such a line stays out of the slides; the script keeps its placeholder, and
+ * the check panel still names what is missing.
+ */
+export function deckSafe(lines: string[], sectionName: string): string[] {
+  const kind = pointKindFor(sectionName);
+  return lines.filter((l) => !placeholderHits(kind, [l]).some((h) => h.refuse));
 }
 
 /** As the Key points box stores them: one bullet per line. */

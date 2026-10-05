@@ -757,6 +757,13 @@
       "when": 1791226821908,
       "tag": "0115_recording_views",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "6",
+      "when": 1791237582221,
+      "tag": "0120_logo_dark",
+      "breakpoints": true
     }
   ]
 }

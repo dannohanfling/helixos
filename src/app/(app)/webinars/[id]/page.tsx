@@ -55,11 +55,12 @@ import {
 } from "@/lib/engine/webinar";
 import { needsSlides } from "@/lib/engine/section-draft";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
-import { contextFor, presenterOf } from "@/lib/queries/webinar";
+import { contextFor, ownerBrandName, presenterOf } from "@/lib/queries/webinar";
 import {HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry } from "@/lib/engine/deck";
 import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
 import { droppedSlides, filledSlides, resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
 import { DeckCheck, type ThumbChrome, type ThumbSlide } from "@/components/deck-thumbs";
+import { deckLogos } from "@/lib/deck-logo";
 import { isListedFont } from "@/lib/engine/fonts";
 import { fitModeFor } from "@/lib/engine/deck-fit";
 import { shotCountLine, shotList } from "@/lib/engine/shot-list";
@@ -194,8 +195,6 @@ export default async function WebinarWizardPage({
   ]);
 
   // The slides as the export lays them out (§6.4): the same plan and geometry the route draws, drawn by the browser.
-  const hasLogo = Boolean(brandKit?.logoImageId) || deckLibrary.some((i) => i.kind === "logo");
-  const logoId = brandKit?.logoImageId ?? deckLibrary.filter((i) => i.kind === "logo").sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0]?.id ?? null;
   const imageBySlide = new Map(deckSlotsResolved.filter((r) => r.image).map((r) => [r.slide, r.image!]));
   const labelBySlide = new Map(deck.slides.map((sl) => [sl.n, sl.section || "Cover"]));
   const thumbs: ThumbSlide[] = renderPlan(deck, filledSlides(deckSlotsResolved), droppedSlides(deckSlotsResolved)).map((plan) => {
@@ -207,15 +206,21 @@ export default async function WebinarWizardPage({
       label: plan.pictureOnly ? `${labelBySlide.get(plan.n) ?? ""} · picture` : (labelBySlide.get(plan.n) ?? ""),
     };
   });
+  // The logos as the export picks them (first-deck §3): the same rows, the same cover choice, the same badge.
+  const coverThumb = thumbs.find((t) => t.plan.boxes.some((b) => b.role === "cover-title"));
+  const logos = await deckLogos({ workspaceId: w.workspaceId, userId: w.userId }, brandKit ?? null, { background: coverThumb?.plan.background ?? deck.kit.ground, ground: deck.kit.ground });
+  const hasLogo = Boolean(logos.logo || logos.dark);
   const thumbChrome: ThumbChrome = {
     faces: { display: deck.kit.displayFont, body: deck.kit.bodyFont, quote: deck.kit.quoteFont ?? null, fallback: deck.kit.fontFallback },
     footerBar: deck.footerBar,
     ctaBar: deck.ctaBar,
     ctaFooter: deck.ctaFooter,
-    company: w.footerBrand?.trim() || (deck.kitApplied ? deck.kit.name : v.workspace.name),
+    company: w.footerBrand?.trim() || (deck.kitApplied ? deck.kit.name : await ownerBrandName(w, v.workspace.name)),
     muted: deck.kit.muted.replace(/^#/, "").toUpperCase(),
     surface: deck.kit.surface.replace(/^#/, "").toUpperCase(),
-    logoUrl: logoId ? `/api/deck-images/${logoId}` : null,
+    logoUrl: logos.logo ? `/api/deck-images/${logos.logo.id}` : null,
+    coverLogoUrl: logos.cover ? `/api/deck-images/${logos.cover.id}` : null,
+    coverBadge: logos.badge,
     logoBox: LOGO_BOX,
     coverLogoBox: COVER_LOGO_BOX,
   };
@@ -525,7 +530,7 @@ export default async function WebinarWizardPage({
             </form>
           </Card>
           <div className="space-y-4">
-            <ShotListCard webinarId={w.id} resolved={deckSlotsResolved} hasLogo={Boolean(brandKit?.logoImageId) || deckLibrary.some((i) => i.kind === "logo")} />
+            <ShotListCard webinarId={w.id} resolved={deckSlotsResolved} hasLogo={hasLogo} />
             <Card title="The structure you're building">
               <ol className="space-y-2 text-sm">
                 {ACTS.map((a) => (
@@ -1818,8 +1823,7 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
         </div>
       ) : null}
       <p className="mb-3 text-sm text-ink-2" data-testid="deck-honesty">
-        A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in {deck.kit.name}
-        {deck.kitApplied ? "" : " (no brand kit on this workspace yet)"}.
+        A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in <span data-testid="deck-kit-name">{deck.kitApplied ? deck.kit.name : "the house starter kit, until a kit of your own is saved on Settings"}</span>.
       </p>
       {deck.openingOmitted.length ? (
         <p className="mb-2 text-sm text-ink-2" data-testid="deck-opening-omitted">

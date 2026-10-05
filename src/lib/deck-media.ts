@@ -30,6 +30,30 @@ export async function prepareDeckImage(bytes: Buffer, kind: DeckImageKind | "pro
 }
 
 /**
+ * A logo's own colour (first-deck brief §3): the mean of its opaque pixels, as six-digit hex, so the engine can say whether it
+ * reads on the dark cover. Transparent pixels are not the logo; a logo with a solid background of its own is that background
+ * mostly, and reads as such. Null when the bytes won't decode or nothing is opaque.
+ */
+export async function logoColor(bytes: Buffer): Promise<string | null> {
+  try {
+    const { data, info } = await sharp(bytes, { animated: false }).resize({ width: 96, height: 96, fit: "inside", withoutEnlargement: true }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+    const srgb = (v: number) => Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055));
+    const sum = [0, 0, 0];
+    let n = 0;
+    for (let i = 0; i < data.length; i += info.channels) {
+      if (data[i + 3] < 128) continue;
+      for (let c = 0; c < 3; c++) sum[c] += lin(data[i + c]);
+      n++;
+    }
+    if (!n) return null;
+    return sum.map((v) => srgb(v / n).toString(16).padStart(2, "0")).join("").toUpperCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * pptxgenjs writes one media file per picture placed, even when the same bytes sit on several slides (it matches by file path,
  * which a data: image never has). After the file is written, identical media are folded into one: each slide's relationships
  * are pointed at the first copy and the rest are dropped. The slides' XML never changes, only their .rels.

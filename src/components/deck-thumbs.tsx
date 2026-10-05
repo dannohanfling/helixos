@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { BoxGeometry, SlideGeometry, SlidePlan } from "@/lib/engine/deck";
+import { COVER_LOGO_PLACEHOLDER, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, type BoxGeometry, type SlideGeometry, type SlidePlan } from "@/lib/engine/deck";
 
 /** What one thumbnail needs, computed on the server from the same plan the export draws. */
 export type ThumbSlide = {
@@ -20,7 +20,12 @@ export type ThumbChrome = {
   company: string;
   muted: string;
   surface: string;
+  /** The footer bar's logo. */
   logoUrl: string | null;
+  /** The cover's (first-deck §3): the kit's dark logo on a dark cover, else the one logo; null when there is none. */
+  coverLogoUrl: string | null;
+  /** The kit's ground behind a cover logo that would not read on the dark cover; null when it stands bare. */
+  coverBadge: string | null;
   logoBox: BoxGeometry | { x: number; y: number; w: number; h: number };
   coverLogoBox: { x: number; y: number; w: number; h: number };
 };
@@ -116,9 +121,18 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
   return (
     <figure className="m-0" data-testid="deck-thumb" data-n={plan.n} data-overflow={overflow ? 1 : 0} data-empty={plan.placeholderSlot ? 1 : 0} data-nologo={missingLogo ? 1 : 0} data-layout={plan.layout}>
       <div className={`relative w-full overflow-hidden rounded border ${problems.length ? "border-warn ring-1 ring-warn" : "border-line"}`} style={{ aspectRatio: "16 / 9", backgroundColor: `#${plan.background}`, containerType: "inline-size" }}>
-        {cover && chrome.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={chrome.logoUrl} alt="" className="absolute object-contain object-left" style={place(chrome.coverLogoBox)} />
+        {cover && chrome.coverLogoUrl ? (
+          <div className="absolute" style={place(chrome.coverLogoBox)}>
+            {/* The badge hugs the drawn logo, as the export's does: an inline-block around the contained picture. */}
+            <span className="inline-block max-h-full max-w-full" style={chrome.coverBadge ? { backgroundColor: `#${chrome.coverBadge}`, borderRadius: "0.8cqw", padding: "1cqw" } : undefined} data-testid={chrome.coverBadge ? "deck-thumb-logo-badge" : undefined}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={chrome.coverLogoUrl} alt="" className="block object-contain object-left" style={{ maxWidth: "100%", maxHeight: `${chrome.coverLogoBox.h * (100 / SLIDE_W) - (chrome.coverBadge ? 2 : 0)}cqw` }} data-testid="deck-thumb-cover-logo" />
+            </span>
+          </div>
+        ) : cover && missingLogo ? (
+          <div className="absolute flex items-center justify-center border border-dashed text-center" style={{ ...place(chrome.coverLogoBox), borderColor: `#${PLACEHOLDER_RED}`, color: `#${PLACEHOLDER_RED}`, fontSize: `${PLACEHOLDER_TEXT_SIZE * PT}cqw`, fontFamily: face(chrome.faces.body, chrome.faces.fallback) }} data-testid="deck-thumb-logo-placeholder">
+            {COVER_LOGO_PLACEHOLDER}
+          </div>
         ) : null}
         {box("cover-title")}
         {box("cover-presenter")}
@@ -152,7 +166,7 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
         ) : null}
         {!cover && chrome.footerBar ? (
           <div className="absolute" style={{ left: 0, top: pct(bandY, SLIDE_H), width: "100%", height: pct(0.3, SLIDE_H), backgroundColor: `#${chrome.surface}` }}>
-            <div className="absolute flex items-center" style={{ left: pct(0.4, SLIDE_W), width: pct(3.5, SLIDE_W), height: "100%", color: `#${chrome.muted}`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), fontSize: `${9 * PT}cqw` }}>{chrome.company}</div>
+            {chrome.logoUrl ? null : <div className="absolute flex items-center" style={{ left: pct(0.4, SLIDE_W), width: pct(3.5, SLIDE_W), height: "100%", color: `#${chrome.muted}`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), fontSize: `${9 * PT}cqw` }} data-testid="deck-thumb-footer-brand">{chrome.company}</div>}
             {chrome.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={chrome.logoUrl} alt="" className="absolute object-contain object-right" style={{ left: pct(chrome.logoBox.x, SLIDE_W), top: pct(chrome.logoBox.y - bandY, 0.3), width: pct(chrome.logoBox.w, SLIDE_W), height: pct(chrome.logoBox.h, 0.3) }} />
@@ -187,7 +201,7 @@ export function DeckCheck({ counts, slides, chrome, hasLogo, downloads }: { coun
   const items: { key: string; n: number; text: string }[] = [
     { key: "empty", n: counts.emptySlots, text: counts.emptySlots === 1 ? "1 empty picture slot: that slide exports with a red placeholder" : `${counts.emptySlots} empty picture slots: those slides export with red placeholders` },
     { key: "overflow", n: overflow ?? 0, text: overflow === null ? "measuring the text against its boxes…" : overflow === 1 ? "1 slide with text past its box" : `${overflow} slides with text past their box` },
-    { key: "logo", n: counts.missingLogo ? 1 : 0, text: "no logo: the brand line stands as type on the cover and in the footer bar" },
+    { key: "logo", n: counts.missingLogo ? 1 : 0, text: "no logo: the cover shows a red “Your logo here” box, and the footer bar sets the brand line as type" },
     { key: "face", n: counts.licensedNoFallback, text: "a licensed face with no fallback: readers without it will see their app's own substitute" },
     { key: "placeholders", n: counts.placeholders, text: counts.placeholders === 1 ? "1 unfilled [placeholder] in the text" : `${counts.placeholders} unfilled [placeholders] in the text` },
   ];

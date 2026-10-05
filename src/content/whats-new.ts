@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 93,
+    date: "2026-10-05",
+    title: "Your first deck: a starter kit, and a logo that shows",
+    lines: [
+      "With no brand kit of your own yet, your deck uses a house starter kit (warm off-white, deep slate, teal, Montserrat headings) instead of plain grey. Settings shows it filled in, ready to change, and Reset to the starter kit takes you back to it.",
+      "Your logo is bigger on the cover. A dark logo that would vanish on the dark cover now sits on a small light badge, or add a \"Logo for dark backgrounds\" to your kit and it goes there instead. With no logo at all, the cover shows a red \"Your logo here\" box, so you can see what to add.",
+      "With a logo in the footer bar, the footer no longer also spells out your brand name beside it. A webinar drafted with ✨ before it has any proof now exports: the proof slides wait for your proof instead of blocking the download.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 87,
     date: "2026-10-05",
     title: "Recordings: what's new, what's yours, and the moment it was said",

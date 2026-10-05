@@ -6,9 +6,11 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { formatDateTime } from "@/lib/dates";
 import { setCoachCanWorkAction } from "@/lib/actions/switch";
-import { rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
+import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { BrandKitEditor } from "@/components/brand-kit-editor";
+import { ConfirmButton } from "@/components/confirm-button";
+import { STARTER_KIT } from "@/lib/engine/deck";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
@@ -407,23 +409,29 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   ))}
                 </ul>
               ) : null}
-              {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
+              {!savedKit ? (
+                <p className="mb-3 rounded-lg border border-accent bg-accent-soft p-2 text-sm" data-testid="brand-starter">
+                  <strong>House starter kit: replace with your own.</strong> Your decks use these colours and faces until you save your own. Change any of them, give the kit your business name, and save.
+                </p>
+              ) : null}
+              {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice === "reset" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-reset" role="status">Back to the house starter kit.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
               <form action={saveBrandKitAction} className="grid gap-3 sm:grid-cols-2" data-testid="brand-form">
                 <BrandKitEditor
                   kit={{
                     name: brandKit?.name ?? "",
-                    ground: brandKit?.ground ?? "",
-                    ink: brandKit?.ink ?? "",
-                    accent: brandKit?.accent ?? "",
-                    muted: brandKit?.muted ?? "",
-                    surface: brandKit?.surface ?? "",
-                    inverseGround: brandKit?.inverseGround ?? "",
-                    inverseInk: brandKit?.inverseInk ?? "",
-                    displayFont: brandKit?.displayFont ?? "",
-                    bodyFont: brandKit?.bodyFont ?? "",
-                    quoteFont: brandKit?.quoteFont ?? "",
-                    fontFallback: brandKit?.fontFallback ?? "Arial",
+                    ground: brandKit ? (brandKit.ground ?? "") : (STARTER_KIT.ground ?? ""),
+                    ink: brandKit ? (brandKit.ink ?? "") : (STARTER_KIT.ink ?? ""),
+                    accent: brandKit ? (brandKit.accent ?? "") : (STARTER_KIT.accent ?? ""),
+                    muted: brandKit ? (brandKit.muted ?? "") : (STARTER_KIT.muted ?? ""),
+                    surface: brandKit ? (brandKit.surface ?? "") : (STARTER_KIT.surface ?? ""),
+                    inverseGround: brandKit ? (brandKit.inverseGround ?? "") : (STARTER_KIT.inverseGround ?? ""),
+                    inverseInk: brandKit ? (brandKit.inverseInk ?? "") : (STARTER_KIT.inverseInk ?? ""),
+                    displayFont: brandKit ? (brandKit.displayFont ?? "") : (STARTER_KIT.displayFont ?? ""),
+                    bodyFont: brandKit ? (brandKit.bodyFont ?? "") : (STARTER_KIT.bodyFont ?? ""),
+                    quoteFont: brandKit ? (brandKit.quoteFont ?? "") : (STARTER_KIT.quoteFont ?? ""),
+                    fontFallback: brandKit?.fontFallback ?? STARTER_KIT.fontFallback,
                     logoImageId: brandKit?.logoImageId ?? "",
+                    logoDarkImageId: brandKit?.logoDarkImageId ?? "",
                   }}
                   logos={logos.map((l) => ({ id: l.id, caption: l.caption, width: l.width, height: l.height }))}
                   workspaceId={v.workspace.id}
@@ -452,6 +460,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <SubmitButton className="btn btn-primary" pendingText="Saving…">Save brand kit</SubmitButton>
                 </div>
               </form>
+              {savedKit ? (
+                <form action={resetBrandKitAction} className="mt-3 border-t pt-3">
+                  <ConfirmButton message="Go back to the house starter kit? Your saved colours, faces and logo choice are cleared from the kit; your logo stays in Images." className="btn btn-ghost btn-sm" pendingText="Resetting…">
+                    Reset to the starter kit
+                  </ConfirmButton>
+                </form>
+              ) : null}
             </Card>
             <Card title="Invite links">
               <div className="space-y-3 text-sm">

@@ -26,6 +26,7 @@ const PHOTO_RGB = { r: 46, g: 134, b: 222 };
 /** A picture frame on the slide, inches (the engine's slotFrame for the cover; read back here, never retyped elsewhere). */
 const COVER_FRAME = { x: 5.2, y: 0.9, w: 4.3, h: 3.85 };
 const LOGO_BOX = { w: 0.9, h: 0.24 };
+const COVER_LOGO_BOX = { w: 2.6, h: 0.9 };
 const within = (a: number, b: number, tol = 0.01) => Math.abs(a - b) / b <= tol;
 // Construction language that must never reach a speaker note: how the deck is built in code, not what the presenter says.
 const CONSTRUCTION = ["renderPlan", "deckSlides", "SlidePlan", "TextBox", "slotFrame", "imageFrame", "data-testid", "placeholder colour", "the slot", "SLOT_WHAT", "pptxgenjs", "EMU"];
@@ -380,7 +381,7 @@ async function main() {
     const coverPics = pics1.filter((p) => p.slide === "ppt/slides/slide1.xml");
     const coverPic = coverPics.find((p) => within(p.cx / EMU, COVER_FRAME.w))!;
     const coverLogo = coverPics.find((p) => p !== coverPic)!;
-    if (coverPics.length !== 2 || !coverLogo || coverLogo.crop || !within(coverLogo.cx / coverLogo.cy, LOGO_PX.width / LOGO_PX.height) || coverLogo.cy / EMU > 0.55 + 1e-3) throw new Error(`the cover carries the photo in its frame and the logo whole, top left: ${JSON.stringify(coverPics)}`);
+    if (coverPics.length !== 2 || !coverLogo || coverLogo.crop || !within(coverLogo.cx / coverLogo.cy, LOGO_PX.width / LOGO_PX.height) || coverLogo.cy / EMU > COVER_LOGO_BOX.h + 1e-3 || coverLogo.cx / EMU < 2.5 - 1e-3) throw new Error(`the cover carries the photo in its frame and the logo whole, top left, at least 2.5 in wide (first-deck §3): ${JSON.stringify(coverPics)}`);
     // §6.8: every picture's alt text is the caption (the photo was captioned "Me on stage"), the logo's names the brand; never "preencoded.png".
     if (coverPic.descr !== "Me on stage" || !/logo$/.test(coverLogo.descr) || pics1.some((p) => /preencoded|\.png$|\.jpe?g$/i.test(p.descr))) throw new Error(`alt text is the caption or the brand's logo, never a file name: ${JSON.stringify(pics1.map((p) => p.descr))}`);
     const coverNative = await nativeOf(zip, coverPic.media);
@@ -403,12 +404,13 @@ async function main() {
     if (body.length > 3 * 1024 * 1024) throw new Error(`the deck stays small: ${body.length} bytes`);
     console.log(`✓ §1 off the XML: the photo covers the cover's frame, cropped left and right only, as a ${coverNative.width}×${coverNative.height} JPEG; the logo is whole in its box on ${logoPics.length} slides as one PNG and on the cover (§4); ${media.length} media files, ${Math.round(body.length / 1024)}KB`);
 
-    // The footer bar the webinar turned on: the workspace name is drawn on a content slide, and the logo is a second embedded image.
+    // The footer bar the webinar turned on: the logo is a second embedded image, and with a logo the brand line goes (first-deck
+    // §3: the footer said the brand twice).
     const contentSlides = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide[2-9]\d*\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")))).join("\n");
-    if (!contentSlides.includes(workspace.name)) throw new Error("the footer bar draws the workspace name on the content slides");
+    if (contentSlides.includes(`<a:t>${workspace.name}</a:t>`) || contentSlides.includes(`<a:off x="${Math.round(0.4 * EMU)}" y="${Math.round(5.32 * EMU)}"/>`)) throw new Error("with a logo, the footer bar no longer sets the brand line as type beside it");
     if (media.length < 2) throw new Error("the footer bar's logo is embedded as its own image");
     for (const b of boxes(contentSlides.split("</p:sld>")[0] + "</p:sld>")) if (b.x < 0 || b.y < 0 || b.x + b.cx > SLIDE_W + 1 || b.y + b.cy > SLIDE_H + 1) throw new Error(`a box on an opening slide runs off the slide: ${JSON.stringify(b)}`);
-    console.log(`✓ the footer bar draws the workspace name and the coach's logo, both inside the slide`);
+    console.log(`✓ the footer bar draws the coach's logo inside the slide, and no brand line beside it`);
 
     const noteFiles = Object.keys(zip.files).filter((f) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(f));
     const notes = (await Promise.all(noteFiles.map((f) => zip.file(f)!.async("string")))).join("\n");
@@ -457,7 +459,9 @@ async function main() {
     //    acceptance: change the theme's accent in the file, re-render, and the rule on a content slide takes the new colour with no
     //    per-slide edit. ──
     const kitRow = await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, wsId) });
-    const kitAccent = (kitRow?.accent ?? "555555").replace(/^#/, "").toUpperCase();
+    // No kit of the workspace's own renders in the house starter kit (first-deck §1).
+    const { STARTER_KIT } = await import("@/lib/engine/deck");
+    const kitAccent = (kitRow?.accent ?? STARTER_KIT.accent).replace(/^#/, "").toUpperCase();
     const themeXml = await zip.file("ppt/theme/theme1.xml")!.async("string");
     if (!themeXml.includes(`<a:accent1><a:srgbClr val="${kitAccent}"/></a:accent1>`)) throw new Error(`the theme's accent1 is the kit's accent (${kitAccent}): ${themeXml.match(/<a:accent1>.*?<\/a:accent1>/)?.[0]}`);
     const slide2 = await zip.file("ppt/slides/slide2.xml")!.async("string");

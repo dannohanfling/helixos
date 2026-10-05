@@ -6,14 +6,20 @@
  */
 import { formatPrice } from "./offer-score";
 import { FACE_CLASS_LABEL, cleanFace, currenciesIn, currencyConflicts, type FaceClass, type KeptOff } from "./deck-face";
-import { brandKitProblems, normaliseHex } from "./subject";
+import { brandKitProblems, contrastRatio, normaliseHex } from "./subject";
 import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type ResolvedProof, type SectionContext, type WebinarContext } from "./webinar-context";
 import { COVER_WHAT, STORY_WHAT, originWhat, slotForLine, spreadSlots } from "./deck-slot-rules";
 import { fitSize } from "./deck-fit-text";
 
 /** The brand as the renderer reads it. Null renders the neutral kit and says so. */
-export type DeckKit = { name: string; logoImageId?: string | null; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
-/** With no kit on the workspace: black on white, the accent a plain grey, and the export note says no brand was applied. */
+export type DeckKit = { name: string; logoImageId?: string | null; logoDarkImageId?: string | null; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
+/**
+ * The house starter kit (first-deck brief §1, Danno 5 Oct): every workspace without a kit of its own gets a designed deck on day
+ * one, neutral on purpose (never Evolve Omega's gold, never our name: it is the client's deck), until they save their own on
+ * Settings. Ink reads 13.3:1 on the ground; the accent 5.0:1, used for rules only on the dark ground.
+ */
+export const STARTER_KIT: DeckKit = { name: "House starter kit", ground: "F7F5F0", ink: "1F2A37", accent: "0F766E", muted: "5B6472", surface: "ECE8E1", inverseGround: "1F2A37", inverseInk: "F7F5F0", displayFont: "Montserrat", bodyFont: "Arial", quoteFont: "Playfair Display", fontFallback: "Arial", bannedColors: [] };
+/** A plain black-on-white kit, for tests that want no styling in the way. */
 export const NEUTRAL_KIT: DeckKit = { name: "No brand kit", ground: "FFFFFF", ink: "111111", accent: "555555", muted: "555555", surface: "F2F2F2", displayFont: "Arial", bodyFont: "Arial", fontFallback: "Arial", bannedColors: [] };
 /** The one colour an unfilled [text] placeholder is ever drawn in when the kit reserves none: unmissable, and named in the export note. */
 export const PLACEHOLDER_FALLBACK = "FFF3A3";
@@ -133,6 +139,8 @@ const BELIEF_ACTS = new Set(["vehicle", "internal", "external"]);
 const isProofBlock = (s: SectionContext) => /proof block/i.test(s.name);
 const isCaseStudy = (s: SectionContext) => /case study/i.test(s.name);
 const isOfferStack = (s: SectionContext) => /offer stack/i.test(s.name);
+/** The kind of slide a section's key points become (proof, price or plain): what decides whether a placeholder may sit on one. */
+export const pointKindFor = (sectionName: string): SlideKind => (/proof block/i.test(sectionName) ? "proof" : /offer stack/i.test(sectionName) ? "offer" : "section");
 const isOrigin = (s: SectionContext) => /credibility|origin/i.test(s.name);
 /** The fit slides' lines: the Offer form's own labels for the two fields they read. */
 export const FIT_HEADLINES = { forYouIf: "This is for you if…", notForYouIf: "This is not for you if…" };
@@ -262,7 +270,7 @@ export function offerBuild(o: ResolvedOffer, showPriceAnchor = true): { headline
 
 /** The slides for one webinar: one read of the resolver, nothing invented, nothing narrated. One idea per slide. */
 export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult {
-  const kit = kitIn ?? NEUTRAL_KIT;
+  const kit = kitIn ?? STARTER_KIT;
   const slides: Slide[] = [];
   const warnings: string[] = [];
   let n = 1;
@@ -451,7 +459,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   }
   const kitProblems = kitIn ? brandKitProblems(kitIn) : [];
   for (const p of kitProblems) refused.push(`Brand kit: ${p}`);
-  if (!kitIn) warnings.push("No brand kit on this workspace: rendered black on white with no brand applied. Add the kit on Settings.");
+  if (!kitIn) warnings.push("No brand kit of your own yet: the deck uses the house starter kit. Replace it with your colours, faces and logo on Settings.");
   if (kitIn && !normaliseHex(kitIn.placeholder)) warnings.push(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
   // The spread (§3): never more than two picture slots in a row; the cover and a testimonial are never dropped.
   slides.splice(0, slides.length, ...spreadSlots(slides));
@@ -524,7 +532,34 @@ export const TEXT_LEFT_ZONE = { x: 0.5, w: 4.5 };
 
 /** The footer bar's logo box and the cover's (§4), inches: the route and the thumbnail both place the logo here. */
 export const LOGO_BOX: Frame = { x: 9.0, y: 5.35, w: 0.9, h: 0.24 };
-export const COVER_LOGO_BOX: Frame = { x: 0.5, y: 0.35, w: 1.8, h: 0.55 };
+/** At least 2.5 in wide (first-deck brief §3, 5 Oct: at 1.8 by 0.55 a wordmark read as a smudge); still clear of the title. */
+export const COVER_LOGO_BOX: Frame = { x: 0.5, y: 0.3, w: 2.6, h: 0.9 };
+/** No logo anywhere (§3, Danno's decision): the cover says what to add, in the picture placeholders' style. Never the footer. */
+export const COVER_LOGO_PLACEHOLDER = "Your logo here";
+/** The contrast a logo needs against the cover before it stands on it bare; under it, it sits on a small badge of the kit's ground. */
+export const LOGO_MIN_CONTRAST = 3;
+
+/**
+ * Which logo the cover carries, and on what (§3). The cover sits on the inverse ground when the kit has one, where a dark
+ * wordmark vanishes: the kit's "Logo for dark backgrounds" goes there when it has one. With only the one logo, its measured
+ * colour decides: under 3:1 on the cover's background, it sits on a badge of the kit's ground, unless the ground reads no
+ * better (a white logo on a light kit stays bare). On a light cover the one logo stands as it is.
+ */
+export function coverLogoPlan(o: { coverBackground: string; ground: string; hasLogo: boolean; hasDark: boolean; logoColor: string | null }): { use: "logo" | "dark" | "none"; badge: string | null } {
+  if (!o.hasLogo && !o.hasDark) return { use: "none", badge: null };
+  const dark = normaliseHex(o.coverBackground) !== normaliseHex(o.ground);
+  if (dark && o.hasDark) return { use: "dark", badge: null };
+  if (!o.hasLogo) return { use: "none", badge: null };
+  if (!dark || !o.logoColor) return { use: "logo", badge: null };
+  const onCover = contrastRatio(o.logoColor, o.coverBackground);
+  return { use: "logo", badge: onCover < LOGO_MIN_CONTRAST && contrastRatio(o.logoColor, o.ground) > onCover ? normaliseHex(o.ground) : null };
+}
+/** The badge behind a logo placed in its box: the drawn picture with a margin, never past the slide's edge. */
+export function logoBadgeFrame(placed: Frame, pad = 0.1): Frame {
+  const x = Math.max(0.05, placed.x - pad);
+  const y = Math.max(0.05, placed.y - pad);
+  return { x, y, w: placed.w + (placed.x - x) + pad, h: placed.h + (placed.y - y) + pad };
+}
 
 /** The file's layouts (§6.6): one master, a layout per slide family, each with real placeholders where slideGeometry puts them. */
 export const SLIDE_MASTERS = ["COVER", "COVER_PICTURE", "CONTENT", "CONTENT_PICTURE", "STATEMENT", "STATEMENT_PICTURE", "PICTURE_ONLY"] as const;

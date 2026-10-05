@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SLIDES_MARK, checkSlides, keyPointsText, needsSlides, offerBlock, parseSectionDraft, slideCountFor, slideLines } from "../section-draft";
+import { SLIDES_MARK, checkSlides, deckSafe, keyPointsText, needsSlides, offerBlock, parseSectionDraft, slideCountFor, slideLines } from "../section-draft";
 import { sentencesIn, stripFabricated } from "../blacklist";
 
 describe("the draft writes the slides too (first-deck brief §2)", () => {
@@ -17,6 +17,11 @@ describe("the draft writes the slides too (first-deck brief §2)", () => {
     expect(r.kept).toEqual(["The 30-Day Sleep Reset", "Yours for $1,997", "[PROOF PLACEHOLDER]"]);
     expect(r.dropped.map((d) => d.why)).toEqual(["figure", "long"]);
     expect(keyPointsText(["A", "B"])).toBe("• A\n• B");
+  });
+  it("keeps only lines the deck can export: no placeholder on a proof or price slide, none inside a number", () => {
+    expect(deckSafe(["What changed for them", "[PROOF PLACEHOLDER]"], "Proof Block (Internal)")).toEqual(["What changed for them"]);
+    expect(deckSafe(["Yours today for $297", "[OFFER PLACEHOLDER]"], "Offer Stack + CTA")).toEqual(["Yours today for $297"]);
+    expect(deckSafe(["[STORY PLACEHOLDER]", "Clients gained [X]% in a week"], "Hook")).toEqual(["[STORY PLACEHOLDER]"]);
   });
   it("asks for about one slide per two minutes, two to six", () => {
     expect([1, 4, 5, 8, 30].map(slideCountFor)).toEqual([2, 2, 3, 4, 6]);

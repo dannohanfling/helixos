@@ -1168,6 +1168,8 @@ export const brandKits = sqliteTable("brand_kits", {
   fontFallback: text("font_fallback").notNull().default("Arial"),
   /** The brand's logo (deck visuals §4): a deck_images row of kind logo, shown on the cover and in the footer bar. None means the kit's name set as type. */
   logoImageId: text("logo_image_id"),
+  /** A second logo for dark grounds (first-deck brief §3): the cover sits on the inverse ground, where a dark wordmark vanishes. */
+  logoDarkImageId: text("logo_dark_image_id"),
   bannedColors: text("banned_colors", { mode: "json" }).$type<string[]>().notNull().default([]),
   /** Reserved for an unfilled slot on a slide, and nothing else: unmissable when flipping through. */
   placeholder: text("placeholder"),

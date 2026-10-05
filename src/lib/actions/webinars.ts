@@ -18,7 +18,7 @@ import { ctx, num, opt, optNum, refresh, str } from "@/lib/action-helpers";
 import { originAfterAccept, originAfterSave, sectionGate } from "@/lib/engine/provenance";
 import { recordConfirm } from "@/lib/provenance";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
-import { checkSlides, keyPointsText, offerBlock, parseSectionDraft, SLIDES_MARK, slideLines, slidesInstruction, slidesOnlyTask } from "@/lib/engine/section-draft";
+import { checkSlides, deckSafe, keyPointsText, offerBlock, parseSectionDraft, SLIDES_MARK, slideLines, slidesInstruction, slidesOnlyTask } from "@/lib/engine/section-draft";
 import { evidenceLines, insertText } from "@/lib/engine/evidence";
 import { essenceFor } from "@/lib/queries/essence";
 import { citableEvidence } from "@/lib/queries/evidence";
@@ -232,7 +232,7 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   const stripped = stripFabricated(parsed.script);
   const note = stripNote(stripped.removed);
   // The deck lines: only where the coach had none, each through the same checks as the script, a figure only from the record.
-  const lines = ownPoints || !parsed.slides ? [] : checkSlides(parsed.slides.filter((l) => !stripFabricated(l).removed.length), `${material}\n${stripped.text}`).kept;
+  const lines = ownPoints || !parsed.slides ? [] : deckSafe(checkSlides(parsed.slides.filter((l) => !stripFabricated(l).removed.length), `${material}\n${stripped.text}`).kept, section?.name ?? tpl.name);
   await db
     .update(schema.webinarSections)
     .set({ script: stripped.text, status: "drafted", keyPoints: ownPoints ? section!.keyPoints : lines.length ? keyPointsText(lines) : null, origin: "ai_unreviewed" })
@@ -273,7 +273,7 @@ export async function makeSlidesAction(formData: FormData): Promise<void> {
   const out = await draftCompletely(slidesOnlyTask(section.durationMin), `Webinar: ${w.title}\n\nSection: ${section.name}\n\nScript:\n${section.script}`, "webinar_section", 1500);
   if (out === "cut" || !out) redirect(`${back}&draftError=${encodeURIComponent(out === "cut" ? "The slides came back cut off twice, so nothing was saved. Press it again." : "No AI key is working for you right now: type one idea per line in Key points instead.")}`);
   const at = out.indexOf(SLIDES_MARK);
-  const lines = checkSlides(slideLines(at >= 0 ? out.slice(at + SLIDES_MARK.length) : out).filter((l) => !stripFabricated(l).removed.length), section.script).kept;
+  const lines = deckSafe(checkSlides(slideLines(at >= 0 ? out.slice(at + SLIDES_MARK.length) : out).filter((l) => !stripFabricated(l).removed.length), section.script).kept, section.name);
   if (!lines.length) redirect(`${back}&draftError=${encodeURIComponent("Nothing usable came back. Press it again, or type one idea per line in Key points.")}`);
   await db.update(schema.webinarSections).set({ keyPoints: keyPointsText(lines) }).where(eq(schema.webinarSections.id, section.id));
   await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, w.id));
