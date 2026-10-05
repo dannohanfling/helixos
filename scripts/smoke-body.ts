@@ -46,7 +46,11 @@ async function openDisclosure(page: Page, summary: string, inside: string) {
   const sum = page.locator("summary", { hasText: summary });
   await sum.waitFor({ timeout: 30000 });
   const field = page.locator(`${inside} input[name="name"]`).first();
-  if (!(await field.isVisible())) await sum.click();
+  // A click that lands before the page hydrates can be undone by it (right after a reload on a busy server): try again.
+  for (let i = 0; i < 4 && !(await field.isVisible()); i++) {
+    await sum.click();
+    await field.waitFor({ state: "visible", timeout: 3000 }).catch(() => undefined);
+  }
   await field.waitFor({ state: "visible", timeout: 10000 });
 }
 const entryCount = (page: Page) => page.locator('[data-testid="body-entry"]').count();
@@ -670,6 +674,41 @@ async function main() {
     const weightLine = (await client.locator('[data-testid="body-weight-line"]').textContent()) ?? "";
     if (!weightLine.includes("150.4 lb") || !weightLine.includes("21%")) throw new Error(`Log carries the latest weigh-in: "${weightLine}"`);
     console.log(`✓ weigh-ins: two typed today (the lighter kept whole as the day's figure), the older export imported (${older.imported} readings, its bad row skipped) then re-imported for nothing new, the newer export (${newer.imported}) with 12 Sep's lowest as its figure; 8 trend cards with the engine's 7-day average; a goal line; a reading deleted; the Log line`);
+
+    // ── Goals (rev 508 §5): the weight goal carries over; a workouts goal and a waist goal; archive and bring back; Today's two. ──
+    await client.goto(`${base}/body/goals`);
+    const goalTitles = await client.locator('[data-testid="goal-title"]').allInnerTexts();
+    if (!goalTitles.some((t) => t.startsWith("Weight to 145 lb by "))) throw new Error(`the weight goal set on Weigh-ins is on Goals: ${goalTitles.join("; ")}`);
+    const weightGoalRow = (await db.query.bodyGoals.findFirst({ where: and(mine(schema.bodyGoals), eq(schema.bodyGoals.key, "weight")) }))!;
+    if (weightGoalRow.kind !== "scale" || weightGoalRow.startDate !== today) throw new Error("a weight goal is a scale goal, started today");
+    await client.selectOption('[data-testid="goal-kind"]', "training");
+    await fillExact(client, '[data-testid="goal-target"]', "3");
+    await press(client, '[data-testid="goal-save"]', async () => (await client.locator('[data-testid="goal-card"][data-kind="training"]').count()) === 1, "the workouts goal");
+    const trainCard = client.locator('[data-testid="goal-card"][data-kind="training"]');
+    const trainedDays = new Set((await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), gte(schema.bodySets.date, addDays(today, -6))) })).map((x) => x.date)).size;
+    if (!(await trainCard.locator('[data-testid="goal-title"]').innerText()).startsWith("Train 3 times a week") || !(await trainCard.locator('[data-testid="goal-line"]').innerText()).includes(`${trainedDays} this week`)) throw new Error(`the workouts goal counts days with a set this week (${trainedDays})`);
+    await fillExact(client, '[data-testid="waist-value"]', "34");
+    await press(client, '[data-testid="waist-save"]', async () => ((await client.locator('[data-testid="waist-last"]').textContent()) ?? "").includes("34 in"), "the waist saved");
+    if ((await db.query.bodyDaily.findMany({ where: and(mine(schema.bodyDaily), eq(schema.bodyDaily.key, "waist")) })).map((r) => r.value).join() !== "34") throw new Error("the waist is stored in inches, its own entry");
+    await client.selectOption('[data-testid="goal-kind"]', "waist");
+    await fillExact(client, '[data-testid="goal-target"]', "32");
+    await fillExact(client, '[data-testid="goal-by"]', addDays(today, 90));
+    await press(client, '[data-testid="goal-save"]', async () => (await client.locator('[data-testid="goal-card"][data-kind="waist"]').count()) === 1, "the waist goal");
+    if (!/^Waist to 32 in by /.test(await client.locator('[data-testid="goal-card"][data-kind="waist"] [data-testid="goal-title"]').innerText())) throw new Error("the waist goal's title");
+    if ((await db.query.bodyGoals.findFirst({ where: and(mine(schema.bodyGoals), eq(schema.bodyGoals.key, "waist")) }))!.startValue !== 34) throw new Error("the waist goal starts from today's waist");
+    // A date before today is refused in words.
+    await client.selectOption('[data-testid="goal-kind"]', "sleep");
+    await fillExact(client, '[data-testid="goal-target"]', "7.5");
+    await client.locator('[data-testid="goal-by"]').evaluate((el: HTMLInputElement, d: string) => { el.removeAttribute("min"); el.value = d; }, addDays(today, -1));
+    await press(client, '[data-testid="goal-save"]', async () => (await client.locator('[data-testid="body-error"]').count()) > 0, "the past date refused");
+    if (!(await client.locator('[data-testid="body-error"]').innerText()).includes("after today")) throw new Error("a past date is refused in words");
+    await client.goto(`${base}/body/goals`);
+    await press(client, '[data-testid="goal-card"][data-kind="training"] button:has-text("Archive")', async () => (await client.locator('[data-testid="goal-card"][data-kind="training"]').count()) === 0, "the workouts goal archived");
+    await client.locator('summary:has-text("Archived")').click();
+    await press(client, '[data-testid="goals-archived"] button:has-text("Bring back")', async () => (await client.locator('[data-testid="goal-card"][data-kind="training"]').count()) === 1, "brought back");
+    await client.goto(`${base}/today`);
+    if ((await client.locator('[data-testid="today-goal"]').count()) !== 2) throw new Error("Today shows the two goals that need it most");
+    console.log(`✓ goals: the Weigh-ins goal carries over as a scale goal started today; Train 3 times a week counts ${trainedDays} day(s) this week; the waist (34 in) logged and a 32 in goal started from it; a past date refused; archived and brought back; Today shows two`);
     // ── Pantry (phase 5): items on the shelf, use soon on Pantry and Log, a par level and the gap to buy, a raw → cooked weighing
     // and the yield learned, 8 oz logged raw against a cooked food (converted, off the shelf), and an item used up by hand. ──
     await client.goto(`${base}/body/pantry`);
@@ -1541,6 +1580,11 @@ async function main() {
     const setsBeforeMergeTool = (await db.query.bodySets.findMany({ where: mine(schema.bodySets) })).map((x) => x.exerciseId).join();
     const mergeTool = await tool("body_merge_exercises").handler(await viewerFor(), { from: "pull-up", into: "bench press" });
     if (!mergeTool.text.startsWith("Move ") || (mergeTool.data as { merged?: boolean }).merged !== false || (await db.query.bodySets.findMany({ where: mine(schema.bodySets) })).map((x) => x.exerciseId).join() !== setsBeforeMergeTool) throw new Error(`body_merge_exercises previews and changes nothing: ${mergeTool.text}`);
+    // Goals by voice (rev 508 §5): read them, and set a lift goal by the exercise's name.
+    const goalsTool = await tool("body_goals").handler(await viewerFor(), {});
+    if (!goalsTool.text.includes("Weight to 145 lb") || !goalsTool.text.includes("Waist to 32 in")) throw new Error(`body_goals lists the goals with their lines: ${goalsTool.text}`);
+    const liftGoal = await tool("body_goal_set").handler(await viewerFor(), { kind: "lift", name: "bench", target: 225, reps: 5 });
+    if (!/^Set: Bench press 225 lb × 5\./i.test(liftGoal.text)) throw new Error(`body_goal_set sets a lift goal by name: ${liftGoal.text}`);
     // Next time's weight by voice (rev 486): the bench's routine target becomes 200.
     const nextTool = await tool("body_set_next_weight").handler(await viewerFor(), { exercise: "bench", weight: 200 });
     const benchRoutine = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.items.some((i) => i.weight === 200));
@@ -1762,7 +1806,7 @@ async function main() {
     await press(client, '[data-testid="checkin-delete"]', async () => (await client.locator('[data-testid="checkin-sent"]').count()) === 0, "check-in deleted");
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-checkin"]').count()) throw new Error("a deleted check-in is gone for the coach");
-    if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== 1) throw new Error("the member's Body export has their weigh-ins and goals");
+    if (!(own.body_daily ?? []).length || (own.body_goals ?? []).length !== (await db.query.bodyGoals.findMany({ where: mine(schema.bodyGoals) })).length) throw new Error("the member's Body export has their weigh-ins and goals");
     // Phase 16b: the device's workouts on a day with no session made one, "From WHOOP"; how many depends on the member's clock against the mock's UTC dates.
     const fromWhoop = ((own.body_sessions ?? []) as { routineName: string | null }[]).filter((s) => s.routineName === "From WHOOP").length;
     if ((own.body_sets ?? []).length !== 6 || (own.body_exercises ?? []).length !== 3 || (own.body_routines ?? []).length !== 2 || fromWhoop > 2 || (own.body_sessions ?? []).length !== 2 + fromWhoop) throw new Error(`the member's Body export has their workouts (${(own.body_sessions ?? []).length} sessions, ${fromWhoop} from WHOOP; B9 added Coach row and Coach push day)`);

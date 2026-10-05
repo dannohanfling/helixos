@@ -22,6 +22,8 @@ import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFla
 import { dayRead, defaultStep, gymGroup, learnedStep, sameTopRun, workoutRead, type DayRead, type ReadExercise, type WorkoutRead } from "@/lib/engine/body-reads";
 import { isLifting } from "@/lib/engine/body-whoop";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
+import { goalsNow } from "@/lib/body-goals";
+import { goalTomorrow } from "@/lib/engine/body-goals";
 
 /**
  * Body ships dark (rev 195): a member whose Body is off gets a 404 from every Body page and from the Body export, as if Body did
@@ -463,7 +465,7 @@ export async function latestComposition(workspaceId: string, userId: string): Pr
 export async function weighIns(workspaceId: string, userId: string, today: string, rangeDays: number | null) {
   const settings = await bodySettingsFor(workspaceId, userId);
   if (!settings) return null;
-  const [all, goals] = await Promise.all([scaleReadings(workspaceId, userId), db.query.bodyGoals.findMany({ where: and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)) })]);
+  const [all, goals] = await Promise.all([scaleReadings(workspaceId, userId), db.query.bodyGoals.findMany({ where: and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId), isNull(schema.bodyGoals.archivedAt)) })]);
   const figures = dayFigures(all).filter((f) => f.date <= today);
   const from = rangeDays ? addDays(today, -(rangeDays - 1)) : null;
   const inView = from ? figures.filter((f) => f.date >= from) : figures;
@@ -563,7 +565,7 @@ export async function bodyWeek(workspaceId: string, userId: string, monday: stri
     trainingWeek(workspaceId, userId, monday, settings),
     trainingWeek(workspaceId, userId, prevMonday, settings),
     scaleReadings(workspaceId, userId, addDays(today, -40) < prevMonday ? addDays(today, -40) : prevMonday),
-    db.query.bodyGoals.findMany({ where: and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)) }),
+    db.query.bodyGoals.findMany({ where: and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId), isNull(schema.bodyGoals.archivedAt)) }),
     recoveryWeek(workspaceId, userId, monday, today),
   ]);
   const asWeekDay = (d: (typeof days)[number]): WeekDay => ({ date: d.date, logged: d.logged, totals: d.totals, bands: d.bands, worst: d.worst, final: d.final });
@@ -636,7 +638,9 @@ export async function shareHistory(workspaceId: string, userId: string) {
 export async function coachBodySummary(v: Viewer, memberUserId: string, today: string) {
   if ((await bodyAccess(v, memberUserId)) !== "coach") return null;
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.userId, memberUserId)) });
-  return { membershipId: m!.id, days: await recentDays(v.workspace.id, memberUserId, today) };
+  // Their goals as they stand (rev 508 §5), only while they share: title, how it's pacing, and the line under its bar.
+  const goals = (await goalsNow({ workspaceId: v.workspace.id, userId: memberUserId }, today, 10)).map((g) => ({ id: g.goal.id, title: g.title, state: g.status.state, line: g.line }));
+  return { membershipId: m!.id, days: await recentDays(v.workspace.id, memberUserId, today), goals };
 }
 
 /**
@@ -1267,6 +1271,7 @@ export async function dayReadFor(workspaceId: string, userId: string, date: stri
     habits: { kept: due.filter((h) => h.kept).length, due: due.length },
     weight: { avg: avg7(figures, date, addDays), weekAgo: avg7(figures, addDays(date, -7), addDays), unit },
     correlation: await dayCorrelation(workspaceId, userId, date, tz),
+    goalTomorrow: goalTomorrow((await goalsNow({ workspaceId, userId }, today, 10)).map((g) => ({ title: g.title, kind: g.goal.kind, state: g.status.state }))),
   });
   return { ...read, date };
 }

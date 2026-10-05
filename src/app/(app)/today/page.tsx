@@ -33,6 +33,8 @@ import { WorkoutReadCard } from "@/components/body/workout-read";
 import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
+import { goalsNow } from "@/lib/body-goals";
+import { STATE_WORDS } from "@/lib/engine/body-goals";
 
 export const metadata = { title: "Today" };
 
@@ -68,6 +70,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const closed = await closedDates(v.workspace.id, v.user.id);
   // Body's one line (rev 179): the member's own, only once they've set Body up. It counts toward nothing on this page.
   const body = await todayBody(v);
+  // Goals (rev 508 §5): the two that need it most, under the HumanOS line.
+  const goals = body ? await goalsNow({ workspaceId: v.workspace.id, userId: v.user.id }, v.today) : [];
   // HumanOS's post-workout read (rev 471): once today's session is finished, its lines sit with the day.
   const workout = body ? await workoutReadFor(v.workspace.id, v.user.id, v.today) : null;
   const streakDayIfClosedNow = d.log?.eveningDoneAt ? d.log.streakDay : weeklyStreakDay(closed, v.today);
@@ -531,6 +535,17 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                     ),
                   )}
                 </div>
+              ) : null}
+              {goals.length ? (
+                <Link href="/body/goals" className="w-full space-y-1 hover:underline" data-testid="today-goals">
+                  <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-3">Health goals</span>
+                  {goals.map((g) => (
+                    <span key={g.goal.id} className="block text-xs text-ink-2" data-testid="today-goal" data-state={g.status.state}>
+                      🎯 <span className="font-medium text-ink">{g.title}</span> · {STATE_WORDS[g.status.state].toLowerCase()}
+                      {g.status.projected && g.status.state !== "done" ? `, lands ${formatDate(g.status.projected, { month: "short", day: "numeric" })} at this rate` : ""}
+                    </span>
+                  ))}
+                </Link>
               ) : null}
               {body.meds.length ? (
                 /* Supplements and meds (rev 424): a Take chip per dose due today, like habits, and the one line that needs doing. */

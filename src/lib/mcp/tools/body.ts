@@ -33,6 +33,8 @@ import { INSTACART_OPEN, INSTACART_SOON, INSTACART_SOON_LINE, InstacartError, cr
 import { KIND_LABEL, STARTER_HABITS, daysFrom, fmtDays, fmtHabitValue, fmtTarget, kept } from "@/lib/engine/body-habits";
 import { fmtBedtime, fmtHours, fmtWake, parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { startOfWeek } from "@/lib/dates";
+import { goalKey, goalsFor, setGoal } from "@/lib/body-goals";
+import { storedTarget } from "@/lib/engine/body-goals";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -1027,5 +1029,60 @@ defineTool({
     if (!Number.isFinite(n) || n < 0) throw new Error("Give how many are left.");
     await db.update(schema.bodyMeds).set({ onHand: n }).where(own);
     return { text: `${m.name}: count ${m.onHand ?? "not set"} → ${n}.`, data: { onHand: n } };
+  },
+});
+
+/* ───────── Goals (rev 508 §5) ───────── */
+
+export const bodyGoalsTool = defineTool({
+  name: "body_goals",
+  scope: "body",
+  kind: "read",
+  description: "The member's HumanOS goals as the Health goals page shows them: each with its target and date, where it started and stands on the 7-day average, the rate a week it needs and has done over the last 3 weeks, on track, a little behind or behind, and when it lands at this rate. An aggressive date is named with a gentler one; never suggest eating less.",
+  input: {},
+  handler: async (v): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const goals = await goalsFor({ workspaceId: v.workspace.id, userId: v.user.id }, v.today, settings.weightUnit);
+    if (!goals.length) return { text: "No goals yet. Set one with body_goal_set.", data: { goals: [] } };
+    return {
+      text: goals.map((g) => `${g.title}. ${g.line}`).join("\n"),
+      data: { goals: goals.map((g) => ({ title: g.title, kind: g.goal.kind, state: g.status.state, by: g.goal.by, progress: Math.round(g.status.progress * 100), projected: g.status.projected, aggressive: Boolean(g.status.aggressive), line: g.line })) },
+    };
+  },
+});
+
+export const bodyGoalSet = defineTool({
+  name: "body_goal_set",
+  scope: "body",
+  kind: "write",
+  description: "Sets one of the member's HumanOS goals (one per thing; setting it again changes it): a scale number (weight, body fat and the other trend cards), the waist, a lift (an exercise by name, a weight for reps), a habit by name or workouts (days or sessions a week), or average sleep (hours). Targets in the member's units (their weight unit; inches, or cm in metric, for the waist). An optional date after today and an optional start; else it starts from today's 7-day average.",
+  input: {
+    kind: z.enum(["scale", "waist", "lift", "habit", "training", "sleep"]).describe("What the goal is of"),
+    metric: z.string().optional().describe("For scale: weight (the default), bf, ffm, smm_pct, visceral, water, bmr or met_age"),
+    name: z.string().optional().describe("For lift: the exercise's name; for habit: the habit's name"),
+    target: z.number().positive().describe("In the member's units"),
+    reps: z.number().int().min(1).max(50).optional().describe("For lift: the reps the weight is for (1 when left out)"),
+    by: z.string().optional().describe("YYYY-MM-DD, after today"),
+    start: z.number().positive().optional().describe("Where it starts, in the member's units; else today's 7-day average"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const unit = settings.weightUnit;
+    const m = { workspaceId: v.workspace.id, userId: v.user.id };
+    const kind = input.kind as schema.BodyGoalKind;
+    const metric = kind === "scale" ? String(input.metric ?? "weight") : null;
+    if (metric && (!(metric in METRIC) || !METRIC[metric as MetricKey].primary)) throw new Error(`"${metric}" isn't a trend card; use weight, bf, ffm, smm_pct, visceral, water, bmr or met_age.`);
+    let refId: string | null = null;
+    if (kind === "lift") refId = byName("exercise", (await trainingLibrary(v.workspace.id, v.user.id)).exercises, String(input.name ?? "")).id;
+    if (kind === "habit") refId = byName("habit", await db.query.bodyHabits.findMany({ where: and(eq(schema.bodyHabits.workspaceId, v.workspace.id), eq(schema.bodyHabits.userId, v.user.id)) }), String(input.name ?? "")).id;
+    const g = { kind, key: goalKey(kind, metric, refId) };
+    const target = storedTarget(g, Number(input.target), unit);
+    if (metric && !inRange(metric as MetricKey, target)) throw new Error(`${METRIC[metric as MetricKey].label}: ${input.target} doesn't look right.`);
+    if ((kind === "habit" || kind === "training") && (target > 7 || !Number.isInteger(target))) throw new Error("A week has seven days: a whole number from 1 to 7.");
+    const by = typeof input.by === "string" && input.by ? input.by : null;
+    if (by && (!DATE.test(by) || by <= v.today)) throw new Error(`The date must be after today (${v.today}), as YYYY-MM-DD.`);
+    const saved = await setGoal(m, { kind, metric, refId, reps: kind === "lift" ? ((input.reps as number) ?? 1) : null, target, by, startValue: input.start != null ? storedTarget(g, Number(input.start), unit) : null }, v.today);
+    const view = (await goalsFor(m, v.today, unit)).find((x) => x.goal.id === saved.id)!;
+    return { text: `Set: ${view.title}. ${view.line}`, data: { title: view.title, state: view.status.state, aggressive: view.status.aggressive ? { gentlerBy: view.status.aggressive.gentlerBy } : null } };
   },
 });

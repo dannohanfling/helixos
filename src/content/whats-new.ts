@@ -22,6 +22,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 102,
+    date: "2026-10-06",
+    title: "HumanOS: Health goals that tell you if you're on pace",
+    lines: [
+      "HumanOS has a Health goals page now, and you can have several at once: a number on the scale, your waist, a lift (say 225 lb for 5), a habit or workouts so many days a week, or average sleep. Your weight goals carry over.",
+      "Each goal runs from where you started to your target on the 7-day average. It shows the pace a week it needs, the pace you've kept over the last three weeks, whether you're on track, a little behind or behind, and when you'll land at this rate. If a date asks for more than about 1% of bodyweight a week, or half a point of body fat, it says that's an aggressive pace and suggests a gentler date.",
+      "The two that need you most show on Today. They're also in the week's rollup and in the end-of-day read's line for tomorrow when one is behind, and your coach sees them if you share HumanOS. Your own Claude can read and set them too.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 101,
     date: "2026-10-06",
     title: "Your deck says each thing once",

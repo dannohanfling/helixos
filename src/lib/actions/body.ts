@@ -45,6 +45,8 @@ import { saveReadings } from "@/lib/body-readings";
 import { saveNextWeight } from "@/lib/body-next";
 import { mergeExercises, undoMerge } from "@/lib/body-merge";
 import { makeHealthKey, revokeHealthKey } from "@/lib/body-health";
+import { archiveGoal, goalKey, logWaist, setGoal } from "@/lib/body-goals";
+import { storedTarget } from "@/lib/engine/body-goals";
 import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -1007,18 +1009,80 @@ export async function setBodyGoalAction(formData: FormData): Promise<void> {
   if (!(key in METRIC) || !METRIC[key as MetricKey].primary) return;
   const typed = await amount(formData, "target", METRIC[key as MetricKey].unit === "mass" ? settings.weightUnit : null, WEIGHT);
   const by = str(formData, "by");
-  const existing = await db.query.bodyGoals.findFirst({ where: and(and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)), eq(schema.bodyGoals.key, key)) });
+  const m = { workspaceId, userId };
   if (typed == null || typed <= 0) {
-    if (existing) await db.delete(schema.bodyGoals).where(eq(schema.bodyGoals.id, existing.id));
+    // Blank clears it: archived, so Goals keeps it under Archived (rev 508 §5).
+    const existing = await db.query.bodyGoals.findFirst({ where: and(and(eq(schema.bodyGoals.workspaceId, workspaceId), eq(schema.bodyGoals.userId, userId)), eq(schema.bodyGoals.key, key)) });
+    if (existing && !existing.archivedAt) await archiveGoal(m, existing.id);
   } else {
     const target = storedValue(key as MetricKey, typed, settings.weightUnit);
     if (!inRange(key as MetricKey, target)) back(WEIGHT, `${METRIC[key as MetricKey].label} goal: that number doesn't look right.`, "target");
-    const values = { target, by: DATE.test(by) ? by : null };
-    if (existing) await db.update(schema.bodyGoals).set(values).where(eq(schema.bodyGoals.id, existing.id));
-    else await db.insert(schema.bodyGoals).values({ id: newId(), workspaceId, userId, key, ...values });
+    if (DATE.test(by) && by <= v.today) back(WEIGHT, "Pick a date after today, or leave it blank.", "by");
+    await setGoal(m, { kind: "scale", metric: key, target, by: DATE.test(by) ? by : null }, v.today);
   }
   refresh();
   await settle();
+}
+
+/* ───────── Goals (rev 508 §5) ───────── */
+
+const GOALS = "/body/goals";
+
+/**
+ * A goal from the Goals page: a scale number, the waist, a lift (a weight for reps), a habit or workouts (a count a week), or
+ * average sleep. Targets typed in the member's units; an optional start (else the 7-day average today) and date.
+ */
+export async function saveGoalAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  const settings = await setUp(v);
+  const unit = settings.weightUnit;
+  const kind = schema.BODY_GOAL_KINDS.find((k) => k === str(formData, "kind"));
+  if (!kind) back(GOALS, "Pick what the goal is of.", "kind");
+  const metric = kind === "scale" ? str(formData, "metric") : null;
+  if (kind === "scale" && (!metric || !(metric in METRIC) || !METRIC[metric as MetricKey].primary)) back(GOALS, "Pick the number on the scale.", "metric");
+  const refId = kind === "lift" || kind === "habit" ? str(formData, "refId") : null;
+  if (kind === "lift" && !(await db.query.bodyExercises.findFirst({ where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId), eq(schema.bodyExercises.id, refId ?? "")) }))) back(GOALS, "Pick the lift.", "refId");
+  if (kind === "habit" && !(await db.query.bodyHabits.findFirst({ where: and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId), eq(schema.bodyHabits.id, refId ?? "")) }))) back(GOALS, "Pick the habit.", "refId");
+  const massLike = (kind === "scale" && METRIC[metric as MetricKey]?.unit === "mass") || kind === "lift";
+  const typed = await amount(formData, "target", massLike ? unit : null, GOALS);
+  if (typed == null || typed <= 0) back(GOALS, "Give the goal a target.", "target");
+  const g = { kind: kind!, key: goalKey(kind!, metric, refId) };
+  const target = storedTarget(g, typed!, unit);
+  if (kind === "scale" && !inRange(metric as MetricKey, target)) back(GOALS, `${METRIC[metric as MetricKey].label}: that target doesn't look right.`, "target");
+  if ((kind === "habit" || kind === "training") && (target > 7 || !Number.isInteger(target))) back(GOALS, "A week has seven days: a whole number from 1 to 7.", "target");
+  if (kind === "sleep" && target > 12) back(GOALS, "Sleep: a target in hours, up to 12.", "target");
+  if (kind === "waist" && (target < 15 || target > 80)) back(GOALS, "Waist: that number doesn't look right.", "target");
+  const reps = kind === "lift" ? Math.round(Number(str(formData, "reps")) || 1) : null;
+  if (reps != null && (reps < 1 || reps > 50)) back(GOALS, "Reps: from 1 to 50.", "reps");
+  const by = str(formData, "by");
+  if (by && (!DATE.test(by) || by <= v.today)) back(GOALS, "Pick a date after today, or leave it blank.", "by");
+  const startTyped = str(formData, "start") ? await amount(formData, "start", massLike ? unit : null, GOALS) : null;
+  await setGoal({ workspaceId, userId }, { kind: kind!, metric, refId, reps, target, by: by || null, startValue: startTyped != null ? storedTarget(g, startTyped, unit) : null }, v.today);
+  refresh();
+  redirect(`${GOALS}?saved=1`);
+}
+
+export async function archiveGoalAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  await archiveGoal({ workspaceId, userId }, str(formData, "id"), str(formData, "back") === "1");
+  refresh();
+  redirect(GOALS);
+}
+
+/** A waist measurement in the member's length (inches, or cm in metric), for the waist goal. */
+export async function logWaistAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  const settings = await setUp(v);
+  const date = str(formData, "date") || v.today;
+  if (!DATE.test(date) || date > v.today) back(GOALS, "Pick a day up to today.", "date");
+  const typed = await amount(formData, "waist", null, GOALS);
+  if (typed == null || typed <= 0) back(GOALS, "Enter the measurement.", "waist");
+  const inches = storedTarget({ kind: "waist", key: "waist" }, typed!, settings.weightUnit);
+  if (inches < 15 || inches > 80) back(GOALS, "Waist: that number doesn't look right.", "waist");
+  await logWaist({ workspaceId, userId }, date, inches);
+  refresh();
+  redirect(`${GOALS}?waist=1`);
 }
 
 /* ───────── The coach, when shared ───────── */

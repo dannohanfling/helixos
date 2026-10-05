@@ -12,6 +12,7 @@ import { fmtMetric } from "@/lib/engine/body-scale";
 import { fmtHours } from "@/lib/engine/body-recovery";
 import { bodyRange, bodyWeek, requireBodyEnabled, checkinsFor } from "@/lib/queries/body";
 import { CheckinCard } from "@/components/body/checkin-card";
+import { goalsFor } from "@/lib/body-goals";
 import { weekNumbers } from "@/lib/engine/body-week";
 import { BarChart, StreakCalendar } from "@/components/charts";
 import { RangePicker } from "@/components/body/range-picker";
@@ -94,6 +95,8 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
   const w = await bodyWeek(v.workspace.id, v.user.id, monday, v.today);
   if (!w) redirect("/body");
   const unit = w.settings.weightUnit;
+  // Goals (rev 508 §5) as they stand today, on this week's page only.
+  const goals = w.isCurrent ? await goalsFor({ workspaceId: v.workspace.id, userId: v.user.id }, v.today, unit) : [];
   const n = w.nutrition;
   const pn = w.prevNutrition;
   const label = w.isCurrent ? "This week" : `Week of ${formatDate(monday, { month: "short", day: "numeric" })}`;
@@ -164,6 +167,19 @@ export default async function BodyWeekPage({ searchParams }: { searchParams: Pro
         <Stat label="Habits kept" value={w.habits.due ? `${w.habits.kept} of ${w.habits.due}` : "—"} sub={w.habits.due ? <Delta value={w.habits.prevDue ? Math.round((w.habits.kept / w.habits.due) * 100) - Math.round((w.habits.prevKept / w.habits.prevDue) * 100) : null} unit="%" better="up" /> : "Pick habits on Practices"} />
         {w.burn.avg != null ? <Stat label="Burned a day (estimate)" value={`${w.burn.avg.toLocaleString("en-US")} cal`} sub={`your device's estimate over ${w.burn.days} day${w.burn.days === 1 ? "" : "s"}${w.nutrition.avgCal != null ? ` · intake ${fmtMacro("cal", w.nutrition.avgCal)}` : ""}`} /> : null}
       </div>
+
+      {goals.length ? (
+        <Card title="Health goals" className="mb-4" action={<Link href="/body/goals" className="text-xs text-ink-2 hover:underline">Health goals →</Link>}>
+          <ul className="space-y-2 text-sm" data-testid="week-goals">
+            {goals.map((g) => (
+              <li key={g.goal.id} data-state={g.status.state}>
+                <span className="font-medium">{g.title}</span>
+                <span className="block text-xs text-ink-2">{g.line}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       <Card title="The days">
         <ul className="divide-y text-sm" data-testid="week-days">

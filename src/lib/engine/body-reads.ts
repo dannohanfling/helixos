@@ -225,6 +225,8 @@ export type DayInput = {
   weight: { avg: number | null; weekAgo: number | null; unit: WeightUnit };
   /** One correlation sentence when a link clears the bar (rev 507), else null. */
   correlation?: string | null;
+  /** Rev 508 §5: the line for tomorrow when a goal is behind (goalTomorrow), else null. Last in the order, never eating less. */
+  goalTomorrow?: string | null;
 };
 export type DayRead = { lines: string[]; tomorrow: string };
 
@@ -235,7 +237,7 @@ const band = (b: { min: number; max: number }, unit = "") => `${whole(b.min)}–
  * One card for the day (rev 471): training, fuel against the day type's bands (protein first, and what's still to go while the
  * evening is early), recovery, habits, and the weight trend by its 7-day average, never one weigh-in. Then one line for tomorrow:
  * the single most useful change, by a fixed order (protein short, then sleep short, then over on calories, then habits, then a
- * low recovery after a hard day).
+ * low recovery after a hard day, then a goal that's behind).
  */
 export function dayRead(d: DayInput): DayRead {
   const lines: string[] = [d.training ?? (d.isToday ? "No workout logged today." : "No workout logged.")];
@@ -263,5 +265,6 @@ export function dayRead(d: DayInput): DayRead {
   else if (d.logged && b.cal && d.totals.cal > b.cal.max * 1.1 && !(d.isToday && d.hour < 20)) tomorrow = `Tomorrow: plan dinner first, so the day lands inside ${band(b.cal)} calories.`;
   else if (d.habits.due >= 2 && d.habits.kept * 2 < d.habits.due) tomorrow = "Tomorrow: pick the habit that matters most and do it first thing.";
   else if (d.recovery != null && d.recovery < 34 && d.strain != null && d.strain >= 14) tomorrow = `Tomorrow: an easier day. Recovery is ${Math.round(d.recovery)}% after a hard one.`;
+  else if (d.goalTomorrow) tomorrow = d.goalTomorrow;
   return { lines: lines.slice(0, 8), tomorrow };
 }

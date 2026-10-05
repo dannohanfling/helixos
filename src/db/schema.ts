@@ -2981,7 +2981,16 @@ export const bodyDaily = sqliteTable(
 );
 export type BodyDailyRow = typeof bodyDaily.$inferSelect;
 
-/** A goal per metric: the target (in the metric's stored unit) and, optionally, by when. One per key. */
+/** What a goal is of (rev 508 §5): a scale number, the waist, a lift, a habit, workouts a week, or average sleep. */
+export const BODY_GOAL_KINDS = ["scale", "waist", "lift", "habit", "training", "sleep"] as const;
+export type BodyGoalKind = (typeof BODY_GOAL_KINDS)[number];
+
+/**
+ * A goal: the target (in the stored unit: lb, inches, hours, a count a week) and, optionally, by when. One per key: a scale
+ * goal's key is its metric ("weight"), the others "waist", "lift:<exercise>", "habit:<habit>", "training", "sleep". A lift is a
+ * weight for `reps`; a habit and training count days or sessions a week. The start is where the line begins (the 7-day average
+ * the day it was set, unless the member gave one). Goals from before rev 508 are scale goals with no start: the engine reads it.
+ */
 export const bodyGoals = sqliteTable(
   "body_goals",
   {
@@ -2989,8 +2998,14 @@ export const bodyGoals = sqliteTable(
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
     key: text("key").notNull(),
+    kind: text("kind", { enum: BODY_GOAL_KINDS }).notNull().default("scale"),
+    refId: text("ref_id"),
+    reps: integer("reps"),
     target: real("target").notNull(),
     by: text("by"),
+    startValue: real("start_value"),
+    startDate: text("start_date"),
+    archivedAt: text("archived_at"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("body_goals_member_key").on(t.workspaceId, t.userId, t.key)],

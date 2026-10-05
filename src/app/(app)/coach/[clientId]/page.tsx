@@ -471,6 +471,16 @@ export default async function CoachClientPage({ params, searchParams }: { params
                   </li>
                 ))}
               </ul>
+              {body.goals.length ? (
+                <ul className="mt-3 space-y-1 border-t border-line pt-2 text-xs" data-testid="coach-body-goals">
+                  <li className="text-[11px] font-semibold uppercase tracking-wide text-ink-3">Health goals</li>
+                  {body.goals.map((g) => (
+                    <li key={g.id} data-state={g.state}>
+                      🎯 <span className="font-medium text-ink">{g.title}</span> <span className="text-ink-2">{g.line}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </Card>
           ) : null}
           <Card title="Pathway" action={<Badge tone="neutral">{verified} verified</Badge>}>
