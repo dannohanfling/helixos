@@ -1,29 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { assignSteps, canSee, intake, inviteeMembers, meetingFields, programInAudience, signStandardWebhook, titleMatch, verifyStandardWebhook } from "@/lib/engine/recordings";
-
-describe("title matching (rev 261: exact phrases, case-insensitive; near misses are drafts with a note)", () => {
-  it("publishes the two exact phrases to their audiences", () => {
-    expect(titleMatch("Evolve Omega Accelerator – Week 3")).toMatchObject({ match: "exact", audience: "accelerator_academy", program: "Accelerator" });
-    expect(titleMatch("evolve omega ACADEMY Q&A")).toMatchObject({ match: "exact", audience: "academy", program: "Academy" });
-    expect(titleMatch("Monday call: Evolve   Omega Academy")).toMatchObject({ match: "exact", audience: "academy" });
-  });
-  it("Accelerator wins when both phrases appear, since its audience includes Academy", () => {
-    expect(titleMatch("Evolve Omega Accelerator and Evolve Omega Academy")).toMatchObject({ audience: "accelerator_academy" });
-  });
-  it("a near miss after the brand is close, with the note naming the title", () => {
-    const close = titleMatch("Evolve Omega Accel");
-    expect(close.match).toBe("close");
-    if (close.match === "close") expect(close.note).toContain('title didn\'t match: "Evolve Omega Accel"');
-    expect(titleMatch("Evolve Omega Acadamy call").match).toBe("close");
-    expect(titleMatch("Evolve Omega Accelerater").match).toBe("close");
-  });
-  it("everything else is none: one-to-ones, the brand alone, unrelated words after it", () => {
-    expect(titleMatch("Jess and Evolve Omega").match).toBe("none");
-    expect(titleMatch("Evolve Omega").match).toBe("none");
-    expect(titleMatch("Evolve Omega strategy session").match).toBe("none");
-    expect(titleMatch("Team sync").match).toBe("none");
-  });
-});
+import { assignSteps, canSee, intake, inviteeMembers, meetingFields, programInAudience, shownTitle, signStandardWebhook, verifyStandardWebhook } from "@/lib/engine/recordings";
+import { DEFAULT_RULES } from "@/lib/engine/recording-rules";
 
 describe("audience by program (rev 263; Elite and Luxe are Academy and above)", () => {
   it("Accelerator calls go to everyone, Academy calls to Academy and above", () => {
@@ -43,20 +20,27 @@ describe("audience by program (rev 263; Elite and Luxe are Academy and above)", 
   });
 });
 
-describe("intake: what an arriving meeting becomes", () => {
-  const on = "2026-10-01T00:00:00Z";
-  it("an exact title after switch-on publishes at once", () => {
-    expect(intake({ title: "Evolve Omega Academy", startedAt: "2026-10-02T17:00:00Z", createdAt: null }, on)).toEqual({ status: "published", audience: "academy", titleMatch: "exact", note: null });
+describe("intake: what an arriving meeting becomes (rev 491: Danno's series and slots)", () => {
+  const from = "2026-10-01T00:00:00Z";
+  const coach = ["coach@evolve.test"];
+  const group = [{ name: "Maya", email: "maya@x.test" }, { name: "Danno", email: "coach@evolve.test" }];
+  const at = (title: string, startedAt: string, invitees = group) => intake({ title, startedAt, createdAt: null, invitees }, from, DEFAULT_RULES, coach);
+  it("a series named in the title publishes at once, whatever the punctuation", () => {
+    expect(at("Evolve Omega: Automation Accelerator", "2026-10-06T17:00:00Z")).toEqual({ status: "published", audience: "accelerator_academy", titleMatch: "exact", note: null, clearTitle: null });
+    expect(at("evolve omega | COMMUNITY-BUILDING", "2026-10-06T17:00:00Z")).toMatchObject({ status: "published", audience: "academy" });
   });
-  it("an exact title from before switch-on is a draft that says why, with the audience ready to publish", () => {
-    const r = intake({ title: "Evolve Omega Accelerator", startedAt: "2026-09-02T17:00:00Z", createdAt: null }, on);
-    expect(r.status).toBe("draft");
-    expect(r.audience).toBe("accelerator_academy");
-    expect(r.note).toContain("before Recordings was switched on");
+  it("a call no series names publishes by its slot, with HelixOS's clear title", () => {
+    // Monday 9:07 AM in Los Angeles: the Accelerator slot.
+    expect(at("Impromptu Zoom Meeting", "2026-10-05T16:07:00Z")).toEqual({ status: "published", audience: "accelerator_academy", titleMatch: "slot", note: null, clearTitle: "Evolve Omega Accelerator · Mon 9 AM" });
   });
-  it("a close title is a draft with the title note; anything else a plain draft", () => {
-    expect(intake({ title: "Evolve Omega Accel", startedAt: "2026-10-02T17:00:00Z", createdAt: null }, on)).toMatchObject({ status: "draft", audience: null, titleMatch: "close" });
-    expect(intake({ title: "Jess and Evolve Omega", startedAt: "2026-10-02T17:00:00Z", createdAt: null }, on)).toEqual({ status: "draft", audience: null, titleMatch: "none", note: null });
+  it("only the coach on the call stays a draft, even inside a slot; so does anything recorded before the rules", () => {
+    expect(at("Impromptu Zoom Meeting", "2026-10-05T16:07:00Z", [{ name: "Danno", email: "coach@evolve.test" }])).toMatchObject({ status: "draft", audience: null });
+    expect(at("Evolve Omega: Business Strategy", "2026-09-20T17:00:00Z")).toEqual({ status: "draft", audience: null, titleMatch: "exact", note: null, clearTitle: null });
+    expect(at("Team sync", "2026-10-06T23:00:00Z")).toEqual({ status: "draft", audience: null, titleMatch: "none", note: null, clearTitle: null });
+  });
+  it("shows HelixOS's title when a slot gave one, else Fathom's", () => {
+    expect(shownTitle({ title: "Impromptu Zoom Meeting", clearTitle: "Evolve Omega Academy · Fri 1 PM" })).toBe("Evolve Omega Academy · Fri 1 PM");
+    expect(shownTitle({ title: "Team sync", clearTitle: null })).toBe("Team sync");
   });
 });
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { visibleRecordings } from "@/lib/recordings";
-import { programLine } from "@/lib/engine/recordings";
+import { programLine, shownTitle } from "@/lib/engine/recordings";
 import { formatDateTime } from "@/lib/dates";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 
@@ -27,7 +27,7 @@ export default async function RecordingsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1 basis-0">
                     <Link href={`/recordings/${r.id}`} className="font-semibold break-words hover:underline" data-testid="recording-title">
-                      {r.title}
+                      {shownTitle(r)}
                     </Link>
                     <p className="mt-1 text-xs text-ink-3">
                       {r.startedAt ? formatDateTime(r.startedAt, v.tz) : "Date unknown"} · <span data-testid="recording-program">{programLine(r.audience)}</span>

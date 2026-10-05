@@ -12,7 +12,7 @@ import { SubmitButton } from "@/components/submit-button";
 /**
  * Integrations: the workspace's Fathom connection for Recordings (R1): the coach's own key, sealed and shown as its last four;
  * Register webhook, which asks Fathom to call HelixOS when a recording is ready; Sync now for the days a webhook was missed; and
- * the switch-on date, from which title matching publishes group calls on its own.
+ * the switch-on date, from which the publishing rules (rev 491) publish group calls on their own.
  */
 export async function FathomWorkspaceCard({ v, notice, synced }: { v: Viewer; notice?: string; synced?: string }) {
   const conn = await workspaceFathom(v.workspace.id);
@@ -22,7 +22,7 @@ export async function FathomWorkspaceCard({ v, notice, synced }: { v: Viewer; no
   const good = notice === "removed" ? "Fathom disconnected. The recordings already here stay." : notice === "webhook-on" ? "Webhook registered: Fathom will send each new recording here." : notice === "webhook-off" ? "Webhook removed." : null;
   const syncLine = synced ? (() => {
     const [seen, created, published] = synced.split("-").map(Number);
-    return `Synced: ${seen} listed, ${created} new, ${published} published by title.`;
+    return `Synced: ${seen} listed, ${created} new, ${published} published by your rules.`;
   })() : null;
   const hook = conn ? `${appUrl()}/api/webhooks/fathom/${conn.id}` : null;
   return (
@@ -32,7 +32,8 @@ export async function FathomWorkspaceCard({ v, notice, synced }: { v: Viewer; no
       action={conn && !conn.lastError ? <Badge tone="good">connected · ····{conn.last4}</Badge> : conn ? <Badge tone="danger">key problem</Badge> : <Badge tone="neutral">not connected</Badge>}
     >
       <p className="mb-3 text-sm text-ink-2">
-        Your coaching calls, from your own Fathom, shown to your members under Recordings. A call titled <strong>Evolve Omega Accelerator</strong> publishes itself to Accelerator and Academy members; <strong>Evolve Omega Academy</strong> to Academy members (Elite and Luxe see what Academy sees). Every other call lands as a draft for you on{" "}
+        Your coaching calls, from your own Fathom, shown to your members under Recordings. A call your{" "}
+        <Link href="/coach/recordings/rules" className="underline">publishing rules</Link> place, by its series name or the time slot it started in, publishes itself to that program (Elite and Luxe see what Academy sees). Every other call lands as a draft for you on{" "}
         <Link href="/coach/recordings" className="underline">Recordings</Link>. Summaries and action items come with the call; a transcript is read only when someone asks for it. This key is yours, for the workspace; the per-member key on Settings stays for the testimonial harvest.
       </p>
       <form action={saveFathomWorkspaceKeyAction} className="space-y-3" data-testid="fathom-ws-form">

@@ -28,6 +28,10 @@ export const workspaces = sqliteTable("workspaces", {
   /** Open Office Hours (rev 124): the categories a member picks from, and who can be responsible for a request. Coach-edited. */
   oohCategories: text("ooh_categories", { mode: "json" }).$type<string[]>().notNull().default(OOH_CATEGORIES_DEFAULT),
   oohHosts: text("ooh_hosts", { mode: "json" }).$type<string[]>().notNull().default(OOH_HOSTS_DEFAULT),
+  /** Recordings' publishing rules (rev 491): series names and time slots, coach-edited. Null keeps the defaults in recording-rules.ts. */
+  recordingRules: text("recording_rules", { mode: "json" }).$type<unknown>(),
+  /** When the rules took effect: a call recorded before it is never published by them on its own, only suggested. */
+  recordingRulesFrom: text("recording_rules_from"),
   createdAt: createdAt(),
 });
 
@@ -1793,7 +1797,8 @@ export const memberReports = sqliteTable(
 export type MemberReport = typeof memberReports.$inferSelect;
 
 export const RECORDING_SOURCES = ["webhook", "sync", "backfill"] as const;
-export const TITLE_MATCHES = ["exact", "close", "none"] as const;
+/** exact: the title names a series (rev 491; rev 261 phrases before); slot: placed by its start time; close: rev 261 only, kept for old rows. */
+export const TITLE_MATCHES = ["exact", "close", "slot", "none"] as const;
 /** Who a published recording is for: every Accelerator and Academy member (and above), Academy members (and above), or the named members. */
 export const RECORDING_AUDIENCES = ["accelerator_academy", "academy", "members"] as const;
 export type RecordingAudience = (typeof RECORDING_AUDIENCES)[number];
@@ -1812,7 +1817,10 @@ export const recordings = sqliteTable(
     id: id(),
     workspaceId: text("workspace_id").notNull(),
     fathomRecordingId: text("fathom_recording_id").notNull(),
+    /** Fathom's title, as Fathom has it. */
     title: text("title").notNull(),
+    /** HelixOS's own title when a time slot placed the call (rev 491): "Evolve Omega Accelerator · Mon 9 AM". Fathom's stays under it. */
+    clearTitle: text("clear_title"),
     /** The meeting's own address (fathom.video/calls/<id>) and the share link; Watch in Fathom opens the share link when there is one. */
     url: text("url").notNull().default(""),
     shareUrl: text("share_url"),
@@ -1827,7 +1835,8 @@ export const recordings = sqliteTable(
     note: text("note"),
     audience: text("audience", { enum: RECORDING_AUDIENCES }),
     audienceUserIds: text("audience_user_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
-    status: text("status", { enum: ["draft", "published"] }).notNull().default("draft"),
+    /** Skipped (rev 488): not for members; kept, recoverable, never deleted from Fathom, and a sync leaves it skipped. */
+    status: text("status", { enum: ["draft", "published", "skipped"] }).notNull().default("draft"),
     publishedAt: text("published_at"),
     publishedBy: text("published_by"),
     transcript: text("transcript", { mode: "json" }).$type<RecordingTranscriptEntry[]>(),

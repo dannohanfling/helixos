@@ -11,7 +11,9 @@ import { nowIso } from "@/lib/dates";
 import { open } from "@/lib/crypto";
 import { logSync } from "@/lib/integrations";
 import { listMeetingsFull, readTranscript, type FathomResult } from "@/lib/fathom";
-import { assignSteps, canSee, intake, meetingFields, type Member, type RawMeeting } from "@/lib/engine/recordings";
+import { assignSteps, canSee, intake, inviteeMembers, meetingFields, type Member, type RawMeeting } from "@/lib/engine/recordings";
+import { JUST_YOU, attendeeSummary, groupKey, groupOf, minutesOf, suggestAudience, type PublishedBefore, type Suggestion } from "@/lib/engine/recording-review";
+import { readRules, ruleMatch, type RecordingRules } from "@/lib/engine/recording-rules";
 
 export const FATHOM_PROVIDER = "fathom";
 /** The first Sync now reaches back this far before switch-on, so the coach has recent calls to publish by hand on day one. */
@@ -47,6 +49,22 @@ export async function clientMembers(workspaceId: string): Promise<ClientMember[]
   });
 }
 
+/** The workspace's publishing rules (rev 491; the defaults until the coach edits them) and when they took effect. */
+export async function workspaceRules(workspaceId: string): Promise<{ rules: RecordingRules; from: string | null }> {
+  const ws = await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, workspaceId), columns: { recordingRules: true, recordingRulesFrom: true } });
+  return { rules: readRules(ws?.recordingRules ?? null), from: ws?.recordingRulesFrom ?? null };
+}
+
+/** The coaches' emails: a call with nobody else on it is "Just you". */
+export async function coachEmailsOf(workspaceId: string): Promise<string[]> {
+  const ms = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.role, "coach")) });
+  if (!ms.length) return [];
+  return (await db.query.users.findMany({ where: inArray(schema.users.id, ms.map((m) => m.userId)) })).map((u) => u.email);
+}
+
+/** Who published a recording when no person did: the rules (rev 491), or the rev 261 title phrases before them. */
+export const BY_RULES = new Set(["rules", "title"]);
+
 /** The members a published recording reaches. */
 export function audienceOf(r: schema.Recording, members: ClientMember[]): ClientMember[] {
   return members.filter((m) => canSee(r, { userId: m.userId, programTier: m.programTier, role: "client" }));
@@ -68,16 +86,22 @@ async function suggestSteps(r: schema.Recording, members: ClientMember[]): Promi
 }
 
 export type IntakeOutcome = { recording: schema.Recording; created: boolean; steps: number };
+export type IntakeContext = { members: ClientMember[]; rules: RecordingRules; rulesFrom: string | null; coachEmails: string[] };
+export async function intakeContext(workspaceId: string): Promise<IntakeContext> {
+  const [members, wr, coachEmails] = await Promise.all([clientMembers(workspaceId), workspaceRules(workspaceId), coachEmailsOf(workspaceId)]);
+  return { members, rules: wr.rules, rulesFrom: wr.from, coachEmails };
+}
 
 /**
- * One meeting in: new rows take the intake decision (published at once on an exact title after switch-on, otherwise a draft); a
+ * One meeting in: new rows take the intake decision (published at once by the coach's rules after switch-on, otherwise a draft); a
  * meeting already here keeps its status and audience and only refreshes what Fathom may have filled in since (summary, items).
  */
-export async function ingestMeeting(conn: schema.FathomWorkspaceConnection, raw: RawMeeting, source: "webhook" | "sync" | "backfill", members?: ClientMember[]): Promise<IntakeOutcome | null> {
+export async function ingestMeeting(conn: schema.FathomWorkspaceConnection, raw: RawMeeting, source: "webhook" | "sync" | "backfill", context?: IntakeContext): Promise<IntakeOutcome | null> {
   const f = meetingFields(raw);
   if (!f) return null;
   const existing = await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, conn.workspaceId), eq(schema.recordings.fathomRecordingId, f.fathomRecordingId)) });
-  const ms = members ?? (await clientMembers(conn.workspaceId));
+  const ctx = context ?? (await intakeContext(conn.workspaceId));
+  const ms = ctx.members;
   if (existing) {
     const patch: Partial<typeof schema.recordings.$inferInsert> = {};
     if (f.summary && !existing.summary) patch.summary = f.summary;
@@ -89,12 +113,15 @@ export async function ingestMeeting(conn: schema.FathomWorkspaceConnection, raw:
     const steps = fresh.status === "published" ? await suggestSteps(fresh, ms) : 0;
     return { recording: fresh, created: false, steps };
   }
-  const d = intake(f, conn.enabledAt);
+  // The rules publish only what was recorded after both the switch-on and the rules themselves.
+  const from = ctx.rulesFrom && ctx.rulesFrom > conn.enabledAt ? ctx.rulesFrom : conn.enabledAt;
+  const d = intake(f, from, ctx.rules, ctx.coachEmails);
   const row: typeof schema.recordings.$inferInsert = {
     id: newId(),
     workspaceId: conn.workspaceId,
     fathomRecordingId: f.fathomRecordingId,
     title: f.title,
+    clearTitle: d.clearTitle,
     url: f.url,
     shareUrl: f.shareUrl,
     startedAt: f.startedAt,
@@ -108,8 +135,8 @@ export async function ingestMeeting(conn: schema.FathomWorkspaceConnection, raw:
     audience: d.audience,
     status: d.status,
     publishedAt: d.status === "published" ? nowIso() : null,
-    // Published by the rule, not a person.
-    publishedBy: d.status === "published" ? "title" : null,
+    // Published by the rules, not a person.
+    publishedBy: d.status === "published" ? "rules" : null,
   };
   await db.insert(schema.recordings).values(row);
   const recording = (await db.query.recordings.findFirst({ where: eq(schema.recordings.id, row.id) }))!;
@@ -126,7 +153,7 @@ export async function syncRecordings(workspaceId: string, by: string | null): Pr
   if (!wk) return { ok: false, error: "Fathom isn't connected for this workspace, or its key failed its last check." };
   const { key, conn } = wk;
   const since = conn.lastSyncAt ? new Date(new Date(conn.lastSyncAt).getTime() - RESYNC_OVERLAP_MS).toISOString() : new Date(new Date(conn.enabledAt).getTime() - FIRST_SYNC_DAYS * 86400000).toISOString();
-  const members = await clientMembers(workspaceId);
+  const ctx = await intakeContext(workspaceId);
   let cursor: string | null = null;
   let created = 0;
   let seen = 0;
@@ -139,7 +166,7 @@ export async function syncRecordings(workspaceId: string, by: string | null): Pr
       return { ok: false, error: r.error };
     }
     for (const m of r.data.meetings) {
-      const out = await ingestMeeting(conn, m, "sync", members);
+      const out = await ingestMeeting(conn, m, "sync", ctx);
       if (!out) continue;
       seen++;
       if (out.created) created++;
@@ -148,7 +175,7 @@ export async function syncRecordings(workspaceId: string, by: string | null): Pr
     cursor = r.data.nextCursor;
     if (!cursor) break;
   }
-  const note = `${seen} listed, ${created} new, ${published} published by title`;
+  const note = `${seen} listed, ${created} new, ${published} published by your rules`;
   await db.update(schema.fathomWorkspaceConnections).set({ lastSyncAt: nowIso(), lastSyncNote: note }).where(eq(schema.fathomWorkspaceConnections.id, conn.id));
   await logSync({ workspaceId, userId: by, provider: FATHOM_PROVIDER, direction: "in", event: "recordings.sync", payload: { since, seen, created, published }, status: "received", note });
   return { ok: true, created, seen, published };
@@ -158,7 +185,9 @@ export async function syncRecordings(workspaceId: string, by: string | null): Pr
 export async function publishRecording(r: schema.Recording, audience: RecordingAudience, userIds: string[], byUserId: string): Promise<schema.Recording> {
   const members = await clientMembers(r.workspaceId);
   const named = audience === "members" ? userIds.filter((id) => members.some((m) => m.userId === id)) : [];
-  await db.update(schema.recordings).set({ status: "published", audience, audienceUserIds: named, publishedAt: r.publishedAt ?? nowIso(), publishedBy: byUserId, note: null }).where(eq(schema.recordings.id, r.id));
+  // A call its slot placed keeps HelixOS's clear title once published (rev 491); one already given stays.
+  const clearTitle = r.clearTitle ?? ruleMatch(r.title, r.startedAt, (await workspaceRules(r.workspaceId)).rules)?.clearTitle ?? null;
+  await db.update(schema.recordings).set({ status: "published", audience, audienceUserIds: named, clearTitle, publishedAt: r.publishedAt ?? nowIso(), publishedBy: byUserId, note: null }).where(eq(schema.recordings.id, r.id));
   const fresh = (await db.query.recordings.findFirst({ where: eq(schema.recordings.id, r.id) }))!;
   await suggestSteps(fresh, members);
   return fresh;
@@ -217,4 +246,45 @@ export async function stepsFor(userId: string, recordingIds: string[]): Promise<
   if (!recordingIds.length) return new Map();
   const rows = await db.query.recordingSteps.findMany({ where: and(eq(schema.recordingSteps.userId, userId), inArray(schema.recordingSteps.recordingId, recordingIds)) });
   return new Map(rows.map((s) => [`${s.recordingId}:${s.itemIndex}`, s]));
+}
+
+/** What reviewing the drafts needs once per page (rev 488): the members, the coaches' emails, the rules, and where each group went before. */
+export type ReviewContext = { members: ClientMember[]; coachEmails: string[]; rules: RecordingRules; before: PublishedBefore[] };
+export async function reviewContext(workspaceId: string): Promise<ReviewContext> {
+  const [members, coachEmails, wr, published] = await Promise.all([
+    clientMembers(workspaceId),
+    coachEmailsOf(workspaceId),
+    workspaceRules(workspaceId),
+    db.query.recordings.findMany({ where: and(eq(schema.recordings.workspaceId, workspaceId), eq(schema.recordings.status, "published")) }),
+  ]);
+  const rules = wr.rules;
+  const before: PublishedBefore[] = published
+    .filter((r) => r.audience && !BY_RULES.has(r.publishedBy ?? ""))
+    .map((r) => ({ key: groupKey(groupOf(r.title, r.invitees, coachEmails, ruleMatch(r.title, r.startedAt, rules), rules), r.title), audience: r.audience!, audienceUserIds: r.audienceUserIds, publishedAt: r.publishedAt ?? r.createdAt }));
+  return { members, coachEmails, rules, before };
+}
+
+/**
+ * One call, read for review: its group, who was on it (names, never a guest's email), its length, the suggested audience and,
+ * when its slot placed it, HelixOS's clear title (Fathom's stays under it).
+ */
+export function reviewOf(r: schema.Recording, c: ReviewContext) {
+  const match = ruleMatch(r.title, r.startedAt, c.rules);
+  const group = groupOf(r.title, r.invitees, c.coachEmails, match, c.rules);
+  const key = groupKey(group, r.title);
+  const onCall = inviteeMembers(r.invitees, c.members);
+  // The coach's rules first; then an audience the rev 261 title phrases set on arrival; then what was done before.
+  const preset: Suggestion | null = group.key !== JUST_YOU.key && !match && r.audience && r.audience !== "members" ? { audience: r.audience, userIds: [], why: "title" } : null;
+  const suggestion = preset ?? suggestAudience(group, key, match, onCall, c.before);
+  const clearTitle = r.clearTitle ?? (group.key !== JUST_YOU.key ? (match?.clearTitle ?? null) : null);
+  return { group, key, match, onCall, suggestion, clearTitle, attendees: attendeeSummary(r.invitees, c.members, c.coachEmails), minutes: minutesOf(r.startedAt, r.endedAt) };
+}
+
+/** Skipped: not for members, kept and recoverable. A published call is unpublished first, so nothing of it stays with members. */
+export async function skipRecording(r: schema.Recording): Promise<void> {
+  if (r.status === "published") await unpublishRecording(r);
+  await db.update(schema.recordings).set({ status: "skipped", note: null }).where(eq(schema.recordings.id, r.id));
+}
+export async function restoreRecording(r: schema.Recording): Promise<void> {
+  await db.update(schema.recordings).set({ status: "draft" }).where(and(eq(schema.recordings.id, r.id), eq(schema.recordings.status, "skipped")));
 }

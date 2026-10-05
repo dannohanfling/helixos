@@ -1,8 +1,9 @@
 /**
  * Recordings from Fathom, R1 (handoff revs 254 to 265): the coach's own key on Integrations with the switch-on date, Register
  * webhook (registered at the mock with no transcript asked for), Sync now (the last thirty days as drafts, no transcript read),
- * a signed webhook delivery that publishes an exact "Evolve Omega Accelerator" title on its own and refuses a tampered or stale
- * one, a close title held as a draft with "title didn't match", a one-to-one published to the member on the call, the member's
+ * a signed webhook delivery that publishes a series title ("Automation Accelerator") on its own and refuses a tampered or stale
+ * one, Publishing rules edited (a refused row, a new slot) and a call with no useful title published by its slot under HelixOS's
+ * clear title (rev 491), a call with only the coach on it held, a one-to-one published to the member on the call, the member's
  * Recordings tab (hidden until something is published), the summary, one tap to make an action item a task (source fathom),
  * View transcript fetched once and opened from HelixOS for the next member, Hide transcript, Unpublish, and nothing fetched
  * while the coach is switched in. Runs against scripts/mock-fathom.ts; the dev server must have FATHOM_BASE_URL=http://localhost:4030.
@@ -63,6 +64,7 @@ async function main() {
   const { db, schema } = await import("@/db");
   const { and, eq } = await import("drizzle-orm");
   const { signStandardWebhook } = await import("@/lib/engine/recordings");
+  const { readRules, ruleMatch, wallOf, DAY_LONG } = await import("@/lib/engine/recording-rules");
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
@@ -118,23 +120,41 @@ async function main() {
     await submit(page, '[data-testid="fathom-ws-sync"]');
     await page.locator('[data-testid="fathom-ws-synced"]').waitFor({ timeout: 30000 });
     const syncLine = await page.locator('[data-testid="fathom-ws-synced"]').innerText();
-    must(syncLine.includes(`${listed.length} listed, ${listed.length} new, 0 published by title`), `the sync line counts what the mock lists: ${syncLine}`);
+    must(syncLine.includes(`${listed.length} listed, ${listed.length} new, 0 published by your rules`), `the sync line counts what the mock lists: ${syncLine}`);
     must((await reads()).length === 0, `sync must read no transcript, read: ${(await reads()).join(",")}`);
     await page.goto(`${base}/coach/recordings`);
     await page.locator('[data-testid="recordings-drafts"]').waitFor({ timeout: 20000 });
     must((await page.locator('[data-testid="recording-draft"]').count()) === listed.length, "every synced call is a draft");
     must(!(await page.locator('[data-testid="recording-published"]').count()), "nothing published by a sync before switch-on");
-    const exactBefore = page.locator('[data-testid="recording-draft"][data-title-match="exact"]').first();
-    must((await exactBefore.locator('[data-testid="recording-draft-note"]').innerText()).includes("before Recordings was switched on"), "an exact title from before switch-on says why it is a draft");
-    const close = page.locator('[data-testid="recording-draft"][data-title-match="close"]');
-    must((await close.count()) === 1 && (await close.first().innerText()).includes("title didn't match"), "the close title is a draft with the note");
-    console.log(`✓ Sync now: ${listed.length} calls in as drafts, the exact title from before switch-on explained, the close title flagged, no transcript read`);
+    // Rev 491: what was recorded before stays a draft, with Danno's rules as the suggestion: the series by its title, the call with
+    // no useful title by its Friday 1 PM slot, renamed clearly with Fathom's title under it.
+    const seriesRow = page.locator('[data-testid="recording-draft"]').filter({ hasText: titleOf(9101) });
+    must((await seriesRow.getAttribute("data-suggested")) === "accelerator_academy" && (await seriesRow.getAttribute("data-title-match")) === "exact", "a series title suggests its program");
+    const slotRow = page.locator('[data-testid="recording-draft"]').filter({ hasText: "In Fathom: Impromptu Zoom Meeting" });
+    must((await slotRow.count()) === 1 && (await slotRow.locator('[data-testid="recording-draft-title"]').innerText()) === "Evolve Omega Academy · Fri 1 PM" && (await slotRow.getAttribute("data-suggested")) === "academy", "the call with no useful title is named by its slot and suggests Academy");
+    console.log(`✓ Sync now: ${listed.length} calls in as drafts, a series title and a Friday slot suggested by Danno's rules with the clear title, no transcript read`);
+    // Rev 488: a list to scan, not a wall. Grouped by series with counts; the call with nobody but the coach folded under Just
+    // you; one compact row each with a Review button; no member picker on the list; no guest's email anywhere on the page.
+    const listText = (await page.locator('[data-testid="recordings-drafts"]').textContent()) ?? "";
+    must(!listText.includes("@"), "no email address on the drafts list");
+    must(!(await page.locator('[data-testid="recording-member-picks"]').count()) && !(await page.locator('[data-testid="recording-publish-form"]').count()), "the list has no publish form or member picker: Review opens one call");
+    const groupSeries = await page.locator('[data-testid="recording-group"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-series")}:${(e as HTMLDetailsElement).open ? "open" : "folded"}`));
+    must(groupSeries.includes("just_you:folded") && groupSeries.includes("series-automation-accelerator:open") && groupSeries.includes("slot-evolve-omega-academy:open") && groupSeries.includes("one_to_one:open"), `grouped by series and slot, Just you folded: ${groupSeries.join(", ")}`);
+    must((await page.locator('[data-testid="recording-review"]').count()) === listed.length, "one Review button per call");
+    const oneRowMeta = await page.locator('[data-testid="recording-draft"]').filter({ hasText: titleOf(9104) }).locator('[data-testid="recording-draft-meta"]').innerText();
+    must(/30 min · 2 on the call · Maya Torres · sync/.test(oneRowMeta), `a row says when, how long, how many, which members and where from: ${oneRowMeta}`);
+    must((await page.locator('[data-testid="recording-draft"]').filter({ hasText: titleOf(9104) }).getAttribute("data-suggested")) === "members", "the one-to-one suggests its member");
+    await page.goto(`${base}/coach/recordings?series=one_to_one`);
+    must((await page.locator('[data-testid="recording-draft"]').count()) === 1, "the series filter leaves only that series");
+    await page.goto(`${base}/coach/recordings?members=1`);
+    must((await page.locator('[data-testid="recording-group"][data-series="just_you"]').count()) === 0, "Has members on it leaves out the calls with no member");
+    console.log("✓ rev 488: drafts grouped by series with counts, Just you folded, one compact row each with Review, filters by series and members, no email on the page");
 
-    // ── 4. A webhook delivery, signed the way Fathom signs: an exact title after switch-on publishes itself; tampered or stale calls are refused. ──
+    // ── 4. A webhook delivery, signed the way Fathom signs: a series title after switch-on publishes itself; tampered or stale calls are refused. ──
     const now = new Date();
     const payload = {
       recording_id: 9201,
-      title: "Evolve Omega Accelerator – Week 4",
+      title: "Evolve Omega: Automation Accelerator – Week 4",
       url: "https://fathom.video/calls/815301900",
       share_url: "https://fathom.video/share/acc-9201",
       created_at: now.toISOString(),
@@ -165,39 +185,91 @@ async function main() {
     must(ok.status() === 200, `a signed delivery lands (got ${ok.status()}: ${await ok.text()})`);
     const again = await deliver(body);
     must(again.status() === 200 && ((await again.json()) as { note: string }).note.startsWith("Known"), "the same recording delivered twice is one row");
-    const closeBody = JSON.stringify({ ...payload, recording_id: 9202, title: "Evolve Omega Acadamy, Thursday", url: "https://fathom.video/calls/815301901", share_url: "https://fathom.video/share/aca-9202", action_items: [] });
-    must((await deliver(closeBody)).status() === 200, "a close title lands");
     const week4 = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9201")) }))!;
-    must(week4.status === "published" && week4.audience === "accelerator_academy" && week4.publishedBy === "title" && week4.source === "webhook", "the exact title after switch-on published itself to Accelerator and Academy");
-    const acadamy = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9202")) }))!;
-    must(acadamy.status === "draft" && acadamy.titleMatch === "close" && (acadamy.note ?? "").includes("title didn't match"), "the close title is a draft with the note");
+    must(week4.status === "published" && week4.audience === "accelerator_academy" && week4.publishedBy === "rules" && week4.source === "webhook" && week4.clearTitle === null, "the series title after switch-on published itself to Accelerator and Academy");
     const refused = await db.query.syncEvents.findMany({ where: and(eq(schema.syncEvents.workspaceId, mayaM.workspaceId), eq(schema.syncEvents.event, "recordings.webhook"), eq(schema.syncEvents.status, "failed")) });
     must(refused.length === 3, `every refused call is logged (${refused.length})`);
     must((await reads()).length === 0, "a webhook delivery reads no transcript");
-    await page.goto(`${base}/coach/recordings`);
+    await page.goto(`${base}/coach/recordings?tab=published`);
     await page.locator('[data-testid="recordings-published"]').waitFor({ timeout: 20000 });
     const pub = page.locator('[data-testid="recording-published"]');
     must((await pub.count()) === 1 && (await pub.first().getAttribute("data-audience")) === "accelerator_academy", "the coach's Published list has the week 4 call for Accelerator and Academy");
+    must((await pub.first().innerText()).includes("by your rules"), "it says the rules published it");
     must((await pub.first().locator('[data-testid="recording-published-reach"]').innerText()).includes("reaches 2 members"), "it reaches both demo clients");
-    must((await page.locator('[data-testid="recording-draft"]').count()) === listed.length + 1, "the close title joined the drafts");
-    console.log("✓ Webhook: tampered, stale and unsigned calls refused and logged; the exact title published itself; the close title held with its note; delivered twice is one row");
+    console.log("✓ Webhook: tampered, stale and unsigned calls refused and logged; the series title published itself; delivered twice is one row");
 
-    // ── 5. The coach publishes the one-to-one to the member on the call, pre-ticked. ──
+    // ── 4b. Publishing rules (rev 491): a refused row keeps the typing and marks the box; a new slot at this very minute; then a call
+    //    with no useful title, delivered now, publishes by that slot under its clear title, and one with only the coach stays a draft. ──
+    await page.goto(`${base}/coach/recordings`);
+    await page.locator('[data-testid="recordings-rules"]').click();
+    await page.waitForURL(/\/coach\/recordings\/rules$/);
+    must((await page.locator('[data-testid="series-name-0"]').inputValue()) === "Automation Accelerator" && (await page.locator('[data-testid="rules-timezone"]').inputValue()) === "America/Los_Angeles", "the defaults are Danno's series, in Los Angeles time");
+    must((await page.locator('[data-testid="rules-slot-row"]').count()) === 9, "seven slots and two empty rows");
+    await fillExact(page, '[data-testid="series-name-4"]', "ok");
+    await submit(page, '[data-testid="rules-save"]');
+    await page.locator('[data-testid="rules-error"]').waitFor({ timeout: 20000 });
+    must((await page.locator('[data-testid="rules-error"]').innerText()).includes("too short"), "a two-letter series name is refused in plain words");
+    must((await page.locator('[data-testid="series-name-4"]').inputValue()) === "ok" && (await page.locator('[data-testid="series-name-4"]').getAttribute("aria-invalid")) === "true", "the typing is kept and the box marked");
+    const startNow = new Date();
+    const wall = wallOf(startNow.toISOString(), "America/Los_Angeles")!;
+    const hhmm = `${String(Math.floor(wall.minute / 60)).padStart(2, "0")}:${String(wall.minute % 60).padStart(2, "0")}`;
+    await fillExact(page, '[data-testid="series-name-4"]', "Hot Seat");
+    await fillExact(page, '[data-testid="slot-name-7"]', "Walk slot");
+    await page.selectOption('[data-testid="slot-day-7"]', String(wall.day));
+    await fillExact(page, '[data-testid="slot-time-7"]', hhmm);
+    await page.selectOption('select[name="slot_audience_7"]', "academy");
+    await submit(page, '[data-testid="rules-save"]');
+    await page.locator('[data-testid="rules-saved"]').waitFor({ timeout: 20000 });
+    const savedRules = readRules((await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mayaM.workspaceId) }))!.recordingRules);
+    must(savedRules.series.length === 5 && savedRules.series.some((x) => x.name === "Hot Seat") && savedRules.slots.some((x) => x.name === "Walk slot" && x.day === wall.day && x.time === hhmm), `the new series and slot are saved (${DAY_LONG[wall.day]} ${hhmm})`);
+    const zoom = { ...payload, title: "Impromptu Zoom Meeting", recording_start_time: startNow.toISOString(), created_at: startNow.toISOString(), action_items: [] };
+    must((await deliver(JSON.stringify({ ...zoom, recording_id: 9202, url: "https://fathom.video/calls/815301901", share_url: "https://fathom.video/share/zoom-9202" }))).status() === 200, "the slot call lands");
+    must((await deliver(JSON.stringify({ ...zoom, recording_id: 9203, url: "https://fathom.video/calls/815301902", share_url: "https://fathom.video/share/zoom-9203", calendar_invitees: [{ name: "Danno Hanfling", email: "coach@demo.helixos.app" }] }))).status() === 200, "the call with only the coach lands");
+    const bySlot = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9202")) }))!;
+    const expected = ruleMatch("Impromptu Zoom Meeting", startNow.toISOString(), savedRules)!;
+    must(expected.by === "slot" && bySlot.status === "published" && bySlot.titleMatch === "slot" && bySlot.audience === expected.audience && bySlot.clearTitle === expected.clearTitle, `the call with no useful title published by its slot, clearly named: ${bySlot.status} ${bySlot.clearTitle}`);
+    if (expected.rule.name !== "Walk slot") console.log(`  (the walk runs near one of Danno's own slots, so ${expected.rule.name} placed it)`);
+    const lone = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9203")) }))!;
+    must(lone.status === "draft" && lone.clearTitle === null, "only the coach on it: a draft, even inside the slot");
+    await page.goto(`${base}/coach/recordings?tab=published`);
+    const slotPub = page.locator(`[data-testid="recording-published"]#r-${bySlot.id}`);
+    must((await slotPub.locator('[data-testid="recording-published-title"]').innerText()) === expected.clearTitle && (await slotPub.innerText()).includes("In Fathom: Impromptu Zoom Meeting"), "Published shows the clear title with Fathom's under it");
+    // Tidy for the member checks below: unpublish it, then Skip it from Review.
+    page.once("dialog", (d) => d.accept());
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), slotPub.locator('button:has-text("Unpublish")').click()]);
+    await page.locator('[data-testid="recordings-unpublished-notice"]').waitFor({ timeout: 20000 });
+    await page.goto(`${base}/coach/recordings/${bySlot.id}`);
+    must((await page.locator("h1").first().innerText()).includes(expected.clearTitle ?? "—"), "Review keeps the clear title");
+    await submit(page, '[data-testid="review-skip"]');
+    must((await db.query.recordings.findFirst({ where: eq(schema.recordings.id, bySlot.id) }))!.status === "skipped", "skipped");
+    await page.goto(`${base}/coach/recordings`);
+    must((await page.locator('[data-testid="recording-draft"]').count()) === listed.length + 1, "the call with only the coach joined the drafts");
+    console.log("✓ Publishing rules: a refused row kept and marked, a new series and slot saved; a call with no useful title published by its slot under the clear title, one with only the coach held");
+
+    // ── 5. Review opens one call: the summary, who was on it folded away without emails, and Publish as suggested to its member. ──
     const oneToOne = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9104")) }))!;
     must(oneToOne.title === titleOf(9104), "the one-to-one is here under its Fathom title");
-    const row = page.locator(`#r-${oneToOne.id}`);
-    must(await row.locator('[data-testid="recording-audience-members"]').isChecked(), "a draft with no program defaults to named members");
-    const mayaTick = row.locator(`[data-testid="recording-member"][value="${maya.id}"]`);
-    const jordanTick = row.locator(`[data-testid="recording-member"][value="${jordan.id}"]`);
-    must((await mayaTick.getAttribute("data-on-call")) === "1" && (await mayaTick.isChecked()), "the member on the call is pre-ticked");
-    must((await jordanTick.getAttribute("data-on-call")) === "0" && !(await jordanTick.isChecked()), "a member not on the call is not");
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), row.locator('[data-testid="recording-publish"]').click()]);
+    await page.locator('[data-testid="recording-draft"]').filter({ hasText: titleOf(9104) }).locator('[data-testid="recording-review"]').click();
+    await page.waitForURL(new RegExp(`/coach/recordings/${oneToOne.id}$`));
+    await expectText(page, "launch plan", "the summary on Review");
+    must((await page.locator('[data-testid="review-attendees-line"]').innerText()).trim() === "2 people: 1 member, 0 guests, and you", `who was on it, folded: ${await page.locator('[data-testid="review-attendees-line"]').innerText()}`);
+    must(!(await page.locator('[data-testid="review-attendees"]').evaluate((d) => (d as HTMLDetailsElement).open)), "the attendee list starts folded");
+    must(!((await page.locator("main").textContent()) ?? "").includes("@"), "no email address on Review");
+    must((await page.locator('[data-testid="review-suggested-who"]').innerText()).trim() === "Maya Torres", "suggested: the member on the call");
+    must(!(await page.locator('[data-testid="review-change"]').evaluate((d) => (d as HTMLDetailsElement).open)), "the full choice stays folded under Change");
+    await page.locator('[data-testid="review-change"] > summary').click();
+    await page.fill('[data-testid="member-search"]', "jord");
+    const visibleNames = await page.locator('[data-testid="recording-member-picks"] label:visible').allInnerTexts();
+    must(visibleNames.length === 1 && visibleNames[0].includes("Jordan Lee"), `the member search narrows the list: ${visibleNames.join(" | ")}`);
+    must((await page.locator(`[data-testid="recording-member"][value="${maya.id}"]`).isChecked()) && !(await page.locator(`[data-testid="recording-member"][value="${jordan.id}"]`).isChecked()), "a tick is kept when the search hides it; only the member on the call is ticked");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="review-publish-suggested"]').click()]);
     await page.locator('[data-testid="recordings-published-notice"]').waitFor({ timeout: 20000 });
+    await page.goto(`${base}/coach/recordings?tab=published`);
     must((await page.locator('[data-testid="recording-published"]').count()) === 2, "two published now");
     const oneRow = page.locator(`[data-testid="recording-published"]#r-${oneToOne.id}`);
     must((await oneRow.getAttribute("data-audience")) === "members" && (await oneRow.locator('[data-testid="recording-published-reach"]').innerText()).includes("reaches 1 member: Maya Torres"), "the one-to-one reaches Maya alone");
     await logout(page);
-    console.log("✓ The coach publishes a one-to-one with one tap, to the member on the call, pre-ticked");
+    console.log("✓ Review: the summary, who was on it folded and without emails, the member search, and Publish as suggested to the member on the call");
 
     // ── 6. Maya: the Recordings item appears, both calls listed, the summary, one tap to a task, the transcript fetched once. ──
     await login(page, "As a client");
@@ -260,7 +332,7 @@ async function main() {
 
     // ── 8. The coach hides the transcript, then a switched view fetches nothing; Unpublish takes the call away and the menu item with it. ──
     await login(page, "As the coach");
-    await page.goto(`${base}/coach/recordings`);
+    await page.goto(`${base}/coach/recordings?tab=published`);
     const w4row = page.locator(`[data-testid="recording-published"]#r-${week4.id}`);
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), w4row.locator('[data-testid="recording-toggle-transcript"]').click()]);
     await page.waitForTimeout(600);
@@ -275,7 +347,7 @@ async function main() {
     await page.locator('[data-testid="recording-transcript-switched"]').waitFor({ timeout: 20000 });
     must(!(await page.locator('[data-testid="recording-view-transcript"]').count()), "a switched coach can't fetch a transcript under the client's name");
     await submit(page, '[data-testid="switch-back"]');
-    await page.goto(`${base}/coach/recordings`);
+    await page.goto(`${base}/coach/recordings?tab=published`);
     page.once("dialog", (d) => d.accept());
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(`[data-testid="recording-published"]#r-${week4.id} button:has-text("Unpublish")`).click()]);
     await page.locator('[data-testid="recordings-unpublished-notice"]').waitFor({ timeout: 20000 });
@@ -288,6 +360,44 @@ async function main() {
     await expectText(page, "No recordings yet", "Jordan's empty page");
     await logout(page);
     console.log("✓ Hide transcript honoured, nothing fetched or taken while switched, Unpublish takes the call and the menu item away and leaves the task");
+
+    // ── 9. Rev 488 in bulk: tick the two program calls, Publish as suggested; tick the call with nobody else on it, Skip; a sync leaves
+    //    it skipped; Back to review restores it. On a phone the list fits the screen. ──
+    await login(page, "As the coach");
+    await page.goto(`${base}/coach/recordings`);
+    const acc = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9101")) }))!;
+    const aca = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9102")) }))!;
+    const alone = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9103")) }))!;
+    await page.locator(`#r-${acc.id} [data-testid="recording-tick"]`).check();
+    await page.locator(`#r-${aca.id} [data-testid="recording-tick"]`).check();
+    const fri = (await db.query.recordings.findFirst({ where: and(eq(schema.recordings.workspaceId, mayaM.workspaceId), eq(schema.recordings.fathomRecordingId, "9105")) }))!;
+    await page.locator(`#r-${fri.id} [data-testid="recording-tick"]`).check();
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="bulk-publish"]').click()]);
+    await page.locator('[data-testid="recordings-bulk-notice"]').waitFor({ timeout: 20000 });
+    must((await page.locator('[data-testid="recordings-bulk-notice"]').innerText()).startsWith("Published 3 as suggested."), `the bulk line counts what it published: ${await page.locator('[data-testid="recordings-bulk-notice"]').innerText()}`);
+    const [accAfter, acaAfter] = await Promise.all([acc.id, aca.id].map((id) => db.query.recordings.findFirst({ where: eq(schema.recordings.id, id) })));
+    must(accAfter!.status === "published" && accAfter!.audience === "accelerator_academy" && acaAfter!.status === "published" && acaAfter!.audience === "academy", "each went to the audience its series names");
+    const friAfter = (await db.query.recordings.findFirst({ where: eq(schema.recordings.id, fri.id) }))!;
+    must(friAfter.status === "published" && friAfter.audience === "academy" && friAfter.clearTitle === "Evolve Omega Academy · Fri 1 PM", `the Friday call went to Academy and keeps its clear title once published: ${friAfter.clearTitle}`);
+    await page.locator('[data-testid="recording-group"][data-series="just_you"] > summary').click();
+    await page.locator(`#r-${alone.id} [data-testid="recording-tick"]`).check();
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="bulk-skip"]').click()]);
+    await page.locator('[data-testid="recordings-bulk-notice"]').waitFor({ timeout: 20000 });
+    must((await db.query.recordings.findFirst({ where: eq(schema.recordings.id, alone.id) }))!.status === "skipped", "skipped, not deleted");
+    await submit(page, '[data-testid="recordings-sync"]');
+    must((await db.query.recordings.findFirst({ where: eq(schema.recordings.id, alone.id) }))!.status === "skipped", "a sync leaves a skipped call skipped");
+    await page.goto(`${base}/coach/recordings?tab=skipped`);
+    must((await page.locator('[data-testid="recording-skipped"]').count()) === 2, "Skipped lists it, with the slot call skipped earlier");
+    await submit(page, `#r-${alone.id} [data-testid="recording-restore"]`);
+    must((await db.query.recordings.findFirst({ where: eq(schema.recordings.id, alone.id) }))!.status === "draft", "Back to review restores it");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${base}/coach/recordings`);
+    await page.locator('[data-testid="recordings-drafts"]').waitFor({ timeout: 20000 });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    must(overflow <= 1, `the list fits a phone, no sideways scroll (${overflow}px over)`);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await logout(page);
+    console.log("✓ rev 488 in bulk: three calls published as suggested to their programs (the Friday one under its clear title), the lone call skipped and kept through a sync, restored; the list fits a phone");
 
     console.log("\nsmoke-recordings: all checks passed");
   } finally {

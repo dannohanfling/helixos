@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { RECORDING_AUDIENCES, type RecordingAudience } from "@/db/schema";
@@ -11,10 +11,11 @@ import { open, seal } from "@/lib/crypto";
 import { appUrl } from "@/lib/branded-email";
 import { allow } from "@/lib/rate-limit";
 import { createWebhook, deleteWebhook, validateFathomKey } from "@/lib/fathom";
-import { TRANSCRIPT_PRESSES_PER_HOUR } from "@/lib/engine/recordings";
+import { TRANSCRIPT_PRESSES_PER_HOUR, shownTitle } from "@/lib/engine/recordings";
 import { TASK_SOURCES } from "@/lib/engine/notes";
+import { rulesFromForm, type RulesForm } from "@/lib/engine/recording-rules";
 import { taskPoints } from "@/lib/engine/points";
-import { fetchTranscript, paceKeyFor, publishRecording, syncRecordings, unpublishRecording, visibleRecording, workspaceFathom } from "@/lib/recordings";
+import { fetchTranscript, paceKeyFor, publishRecording, restoreRecording, reviewContext, reviewOf, skipRecording, syncRecordings, unpublishRecording, visibleRecording, workspaceFathom } from "@/lib/recordings";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 
 const INTEGRATIONS = "/integrations#fathom-recordings";
@@ -111,12 +112,86 @@ export async function publishRecordingAction(formData: FormData): Promise<void> 
   const r = await recordingIn(v.workspace.id, str(formData, "recordingId"));
   if (!r) return;
   const audience = RECORDING_AUDIENCES.find((a) => a === str(formData, "audience")) as RecordingAudience | undefined;
-  if (!audience) redirect(`/coach/recordings?error=${encodeURIComponent("Pick who the recording is for.")}#r-${r.id}`);
+  // Refused back where it was chosen: the call's own Review page, or the list.
+  const back = str(formData, "from") === "review" ? `/coach/recordings/${r.id}` : "/coach/recordings";
+  if (!audience) redirect(`${back}?error=${encodeURIComponent("Pick who the recording is for.")}&field=audience`);
   const members = formData.getAll("members").map(String).filter(Boolean);
-  if (audience === "members" && !members.length) redirect(`/coach/recordings?error=${encodeURIComponent("Tick at least one member for a one-to-one.")}#r-${r.id}`);
+  if (audience === "members" && !members.length) redirect(`${back}?error=${encodeURIComponent("Tick at least one member for a one-to-one.")}&field=members`);
   await publishRecording(r, audience!, members, v.user.id);
   refresh();
-  redirect(`/coach/recordings?published=${r.id}#r-${r.id}`);
+  redirect(`/coach/recordings?published=${r.id}`);
+}
+
+/** Skip (rev 488): not for members. Kept, recoverable from Skipped, never deleted from Fathom; a published call is unpublished first. */
+export async function skipRecordingAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const r = await recordingIn(v.workspace.id, str(formData, "recordingId"));
+  if (!r) return;
+  await skipRecording(r);
+  refresh();
+  redirect(`/coach/recordings?skipped=1`);
+}
+
+export async function restoreRecordingAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const r = await recordingIn(v.workspace.id, str(formData, "recordingId"));
+  if (!r) return;
+  await restoreRecording(r);
+  refresh();
+  redirect(`/coach/recordings?tab=skipped&restored=1`);
+}
+
+/**
+ * Publishing rules (rev 491): the series names and time slots, as the coach edits them. A refused row comes back with the
+ * field marked and the typing kept; a saved list applies to every draft's suggestion at once, and to new calls from now on.
+ */
+export async function saveRecordingRulesAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const count = (k: "series_count" | "slot_count") => Math.min(60, Math.max(0, Number(str(formData, k)) || 0));
+  const f: RulesForm = {
+    timezone: str(formData, "timezone"),
+    series: Array.from({ length: count("series_count") }, (_, i) => ({ name: str(formData, `series_name_${i}`), audience: str(formData, `series_audience_${i}`), remove: formData.get(`series_remove_${i}`) === "1" })),
+    slots: Array.from({ length: count("slot_count") }, (_, i) => ({ name: str(formData, `slot_name_${i}`), day: str(formData, `slot_day_${i}`), time: str(formData, `slot_time_${i}`), audience: str(formData, `slot_audience_${i}`), remove: formData.get(`slot_remove_${i}`) === "1" })),
+  };
+  const r = rulesFromForm(f);
+  if (!r.ok) redirect(`/coach/recordings/rules?error=${encodeURIComponent(r.error)}&field=${r.field}`);
+  await db.update(schema.workspaces).set({ recordingRules: r.rules }).where(eq(schema.workspaces.id, v.workspace.id));
+  refresh();
+  redirect(`/coach/recordings/rules?saved=1`);
+}
+
+/**
+ * The ticked drafts at once (rev 488): Publish as suggested publishes each to its suggested audience and leaves the ones with
+ * no suggestion for the coach to choose; Skip skips them all. Only drafts of the coach's own workspace.
+ */
+export async function bulkRecordingsAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const workspaceId = v.workspace.id;
+  const ids = [...new Set(formData.getAll("ids").map(String).filter(Boolean))].slice(0, 200);
+  const what = str(formData, "bulk");
+  if (!ids.length || (what !== "publish" && what !== "skip")) redirect(`/coach/recordings?error=${encodeURIComponent("Tick at least one call first.")}`);
+  const rows = await db.query.recordings.findMany({ where: and(eq(schema.recordings.workspaceId, workspaceId), inArray(schema.recordings.id, ids), eq(schema.recordings.status, "draft")) });
+  let done = 0;
+  let left = 0;
+  if (what === "skip") {
+    for (const r of rows) {
+      await skipRecording(r);
+      done++;
+    }
+  } else {
+    const c = await reviewContext(workspaceId);
+    for (const r of rows) {
+      const s = reviewOf(r, c).suggestion;
+      if (!s || (s.audience === "members" && !s.userIds.length)) {
+        left++;
+        continue;
+      }
+      await publishRecording(r, s.audience, s.userIds, v.user.id);
+      done++;
+    }
+  }
+  refresh();
+  redirect(`/coach/recordings?bulk=${what}-${done}-${left}`);
 }
 
 export async function unpublishRecordingAction(formData: FormData): Promise<void> {
@@ -184,7 +259,7 @@ export async function makeStepTaskAction(formData: FormData): Promise<void> {
     workspaceId,
     userId,
     title: item!.description,
-    details: `From the recording "${r!.title}"`,
+    details: `From the recording "${shownTitle(r!)}"`,
     urgency: "medium",
     category: "system",
     dueDate: v.today,

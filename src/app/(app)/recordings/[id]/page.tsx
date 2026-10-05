@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { stepsFor, visibleRecording } from "@/lib/recordings";
-import { programLine } from "@/lib/engine/recordings";
+import { programLine, shownTitle } from "@/lib/engine/recordings";
 import { deepLink } from "@/lib/engine/fathom";
 import { dismissStepAction, makeStepTaskAction, viewTranscriptAction } from "@/lib/actions/recordings";
 import { formatDateTime } from "@/lib/dates";
@@ -31,9 +31,10 @@ export default async function RecordingPage({ params, searchParams }: { params: 
   return (
     <>
       <PageHeader
-        title={r.title}
+        title={shownTitle(r)}
         subtitle={
           <span>
+            {r.clearTitle ? <span className="block text-xs text-ink-3" data-testid="recording-fathom-title">In Fathom: {r.title}</span> : null}
             {r.startedAt ? formatDateTime(r.startedAt, v.tz) : "Date unknown"} · <span data-testid="recording-program">{programLine(r.audience)}</span>
           </span>
         }

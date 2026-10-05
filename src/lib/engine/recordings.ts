@@ -1,41 +1,12 @@
 /**
- * Recordings from Fathom (handoff revs 254 to 265), the rules with no database in them: which title publishes itself and to whom,
+ * Recordings from Fathom (handoff revs 254 to 265), the rules with no database in them: what an arriving call becomes (by Danno's
+ * series and time slots, rev 491, in recording-rules.ts),
  * who may see a published recording, which members were on a call, which action items land on whose plate, and whether a webhook
  * call is Fathom's. Everything here is covered by src/lib/engine/__tests__/recordings.test.ts.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { RecordingActionItem, RecordingAudience, RecordingInvitee } from "@/db/schema";
-
-/** The two phrases Danno keeps exact in Fathom from now on (rev 261), matched case-insensitively as whole phrases. */
-export const PROGRAM_PHRASES = { accelerator: "evolve omega accelerator", academy: "evolve omega academy" } as const;
-const BRAND = "evolve omega";
-
-export type TitleMatch = { match: "exact"; audience: RecordingAudience; program: "Accelerator" | "Academy" } | { match: "close"; note: string } | { match: "none" };
-
-const edit = (a: string, b: string): number => {
-  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0][j] = j;
-  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-  return d[a.length][b.length];
-};
-
-/**
- * Exact: the title contains "Evolve Omega Accelerator" or "Evolve Omega Academy". Close: it carries "Evolve Omega" and the word
- * after it is a near miss of either program word (a prefix of four letters or more, or within three edits: "Accel", "Acadamy"),
- * which lands as a draft with "title didn't match". Anything else is none: a draft with no note about its title.
- */
-export function titleMatch(title: string): TitleMatch {
-  const t = title.toLowerCase().replace(/\s+/g, " ").trim();
-  if (t.includes(PROGRAM_PHRASES.accelerator)) return { match: "exact", audience: "accelerator_academy", program: "Accelerator" };
-  if (t.includes(PROGRAM_PHRASES.academy)) return { match: "exact", audience: "academy", program: "Academy" };
-  const at = t.indexOf(BRAND);
-  if (at < 0) return { match: "none" };
-  const next = t.slice(at + BRAND.length).trim().split(/[^a-z]+/)[0] ?? "";
-  if (!next) return { match: "none" };
-  const near = (word: string) => (next.length >= 4 && word.startsWith(next)) || edit(next, word) <= 3;
-  if (near("accelerator") || near("academy")) return { match: "close", note: `title didn't match: "${title.trim()}" is close to Evolve Omega ${near("accelerator") ? "Accelerator" : "Academy"} but not exact` };
-  return { match: "none" };
-}
+import { ruleMatch, type RecordingRules } from "./recording-rules";
 
 /** Programs, lowest first. Elite and Luxe are Academy and above (rev 265, default taken): they see what Academy sees. */
 export const PROGRAM_ORDER = ["Accelerator", "Academy", "Elite", "Luxe"] as const;
@@ -136,19 +107,19 @@ export function meetingFields(m: RawMeeting): MeetingFields | null {
 }
 
 /**
- * What happens to a meeting that arrives: made after switch-on with an exact title, it publishes to its program audience at once;
- * a close title is a draft with the note; a title before switch-on is a draft (the backfill, R2, handles those by time slot).
+ * What happens to a meeting that arrives (rev 491): a call whose title names one of the coach's series, or that started in one of
+ * their time slots, publishes itself to that audience when it was recorded after the rules took effect; a slot match also gets
+ * HelixOS's clear title. A call with nobody but the coach on it ("Just you") stays a draft, even inside a slot. Anything recorded
+ * earlier is a draft, and Review suggests the same audience and title for the coach to publish.
  */
-export function intake(fields: { title: string; startedAt: string | null; createdAt: string | null }, enabledAt: string): { status: "draft" | "published"; audience: RecordingAudience | null; titleMatch: TitleMatch["match"]; note: string | null } {
-  const tm = titleMatch(fields.title);
+export function intake(fields: { title: string; startedAt: string | null; createdAt: string | null; invitees: RecordingInvitee[] }, from: string, rules: RecordingRules, coachEmails: string[]): { status: "draft" | "published"; audience: RecordingAudience | null; titleMatch: "exact" | "slot" | "none"; note: string | null; clearTitle: string | null } {
+  const coaches = new Set(coachEmails.map((e) => e.trim().toLowerCase()));
+  const justYou = !fields.invitees.some((i) => !coaches.has((i.email ?? "").trim().toLowerCase()));
+  const m = ruleMatch(fields.title, fields.startedAt, rules);
+  const titleMatch = m ? (m.by === "series" ? "exact" : "slot") : "none";
   const made = fields.startedAt ?? fields.createdAt;
-  const afterSwitchOn = Boolean(made && made >= enabledAt);
-  if (tm.match === "exact") {
-    if (afterSwitchOn) return { status: "published", audience: tm.audience, titleMatch: "exact", note: null };
-    return { status: "draft", audience: tm.audience, titleMatch: "exact", note: "recorded before Recordings was switched on: publish it yourself, or let the backfill place it" };
-  }
-  if (tm.match === "close") return { status: "draft", audience: null, titleMatch: "close", note: tm.note };
-  return { status: "draft", audience: null, titleMatch: "none", note: null };
+  if (m && !justYou && made && made >= from) return { status: "published", audience: m.audience, titleMatch, note: null, clearTitle: m.clearTitle };
+  return { status: "draft", audience: null, titleMatch, note: null, clearTitle: null };
 }
 
 /**
@@ -192,3 +163,6 @@ export function signStandardWebhook(secret: string, id: string, timestamp: strin
 
 /** The hour window for View transcript presses, per member (rev 265): ten an hour. */
 export const TRANSCRIPT_PRESSES_PER_HOUR = 10;
+
+/** The title HelixOS shows: its own clear title when a time slot placed the call (rev 491), else Fathom's. */
+export const shownTitle = (r: { title: string; clearTitle: string | null }): string => r.clearTitle ?? r.title;

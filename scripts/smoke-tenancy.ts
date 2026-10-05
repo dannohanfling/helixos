@@ -48,6 +48,7 @@ const ROUTES: Record<string, Route> = {
   "/coach/[clientId]/body": { kind: "coach" },
   "/coach/[clientId]/bot": { kind: "coach" },
   "/coach/[clientId]/delete": { kind: "coach" },
+  "/coach/recordings/[id]": { kind: "coach" },
   "/content/[id]": { kind: "owned", table: "contentItems" },
   "/content/[id]/compose": { kind: "owned", table: "contentItems" },
   "/content/[id]/repurpose": { kind: "owned", table: "contentItems" },

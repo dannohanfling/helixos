@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 84,
+    date: "2026-10-05",
+    title: "Recordings: your publishing rules and a list you can scan",
+    lines: [
+      "Coach → Recordings → Publishing rules: a call whose Fathom title names one of your series (Automation Accelerator, Community Building, Business Strategy, Open Office Hours) publishes itself to that program. A call with no useful title goes by the time it started (Los Angeles time, within 15 minutes) and gets a clear name like \"Evolve Omega Accelerator · Mon 9 AM\", with Fathom's title under it. Edit both lists there.",
+      "To review shows one short row per call, grouped by series and time slot with a count, with filters. Calls with only you on them wait folded under \"Just you\", and never publish themselves. Review opens one call: the summary, who was on it (no email addresses), and Publish as suggested.",
+      "Calls already here follow the same rules as suggestions: tick several to publish them all as suggested, or Skip them (kept under Skipped, never deleted from Fathom).",
+    ],
+    audience: "coach",
+  },
+  {
     n: 83,
     date: "2026-10-05",
     title: "HumanOS: held means held, and next time's weights fit your machines",
