@@ -154,6 +154,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                 <span className="mt-1 block text-xs text-ink-3">The title is set each week: &ldquo;{mondayTitle(next)}&rdquo;.</span>
               </label>
               <GraphicPicker name="mondayImageId" label="Graphic for the Monday post (optional)" value={s?.mondayImageId ?? null} library={library} testid="community-monday-image" />
+              {s?.mondayOn && !s.mondayImageId ? (
+                <p className="rounded-lg border border-warn bg-warn-soft p-2 text-xs" data-testid="community-monday-no-graphic">
+                  No graphic set: the post goes out without an image.
+                </p>
+              ) : null}
               {/* The first-of-the-month post (1 Oct): the same channel and Posted as, its own switch, time and text. */}
               <fieldset className="min-w-0 space-y-3 rounded-lg border p-3" data-testid="community-month-setup">
                 <legend className="px-1 text-sm font-semibold">The first of the month</legend>
@@ -175,6 +180,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                   <span className="mt-1 block text-xs text-ink-3">The title is set each month: &ldquo;{monthTitle(nextMonthOf)}&rdquo;.</span>
                 </label>
                 <GraphicPicker name="monthImageId" label="Graphic for the month post" value={s?.monthImageId ?? null} library={library} testid="community-month-image" />
+                {s?.monthOn && !s.monthImageId ? (
+                  <p className="rounded-lg border border-warn bg-warn-soft p-2 text-xs" data-testid="community-month-no-graphic">
+                    No graphic set: the post goes out without an image.
+                  </p>
+                ) : null}
               </fieldset>
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="block text-sm font-medium">

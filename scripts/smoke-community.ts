@@ -153,7 +153,9 @@ async function main() {
     await page.locator('[data-testid="community-saved"]').waitFor({ timeout: 20000 });
     const saved = (await db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, ws.id) }))!;
     if (saved.channelAccountId !== `${LOC}_community_test` || saved.channelName !== "HelixOS test" || !saved.mondayOn || saved.mondayText !== null || saved.postTime !== "08:00") throw new Error(`the setup is saved, with Danno's text kept as the default: ${JSON.stringify({ ...saved, id: undefined })}`);
-    console.log("✓ the channel is picked from the accounts list (community ones first); the Monday post can't be on without one");
+    // Rev 499: the Monday post on with no graphic says so, since it goes out without an image.
+    if ((await page.locator('[data-testid="community-monday-no-graphic"]').innerText()).trim() !== "No graphic set: the post goes out without an image.") throw new Error("the Monday post on with no graphic warns that it goes out without an image");
+    console.log("✓ the channel is picked from the accounts list (community ones first); the Monday post can't be on without one; on with no graphic, it says so");
 
     // ── 3. The test post. With no "Posted as", nothing falls back to the staff user on Publishing (28 Sep: it never works). ──
     await submit(page, '[data-testid="community-test"]');
@@ -245,7 +247,7 @@ async function main() {
     await submit(page, `[data-testid="community-log-row"][data-week="${lastWeek}"] [data-testid="community-retry"]`);
     const titled = async (t: string) => (await mockPosts()).filter((p) => (p.communityPostDetails as { title?: string } | undefined)?.title === t);
     const sentOnce = await titled(mondayTitle(lastWeek));
-    if (sentOnce.length !== 1 || sentOnce[0].summary !== communityHtml(DEFAULT_MONDAY_TEXT, { mentionEveryone: true }) || !String(sentOnce[0].summary).includes('data-mention-type="broadcast"') || !(sentOnce[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that week once, with the Monday text, to the Intentions channel");
+    if (sentOnce.length !== 1 || sentOnce[0].summary !== communityHtml(DEFAULT_MONDAY_TEXT) || String(sentOnce[0].summary).includes("data-mention-type") || !String(sentOnce[0].summary).includes("Share below @everyone") || !(sentOnce[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that week once, with the Monday text (@everyone as words, where it was written: rev 499), to the Intentions channel");
     if ((sentOnce[0].communityPostDetails as { notifyAllGroupMembers?: boolean }).notifyAllGroupMembers !== true) throw new Error("the Monday post notifies all members, as the setting says by default (rev 187)");
     await cron(page);
     await cron(page);
@@ -285,6 +287,22 @@ async function main() {
     await page.goto(`${base}/coach/community?view=again#log`);
     if (!(await page.locator(`[data-testid="community-log-row"][data-week="${failWeek}"] [data-testid="community-retry"]`).count())) throw new Error("after a failure, Post now is offered again");
     console.log("✓ a create reply with no id: found in the planner's list, read back as posted with its link; a post the planner failed: Failed in GoHighLevel's words, with Post now offered again");
+
+    // Rev 499 (5 Oct, live): the first automatic Monday post was linked on the planner's id and opened "Post not available".
+    // GoHighLevel's first read hands back the planner's id; HelixOS waits for the community's own, and links on that alone.
+    const lateWeek = addDays(startOfWeek(today), -77);
+    await db.insert(schema.communityPosts).values({ id: newId(), workspaceId: ws.id, coachUserId: coach.id, kind: "monday", weekOf: lateWeek, title: mondayTitle(lateWeek), body: "The week's post [late-id]", status: "failed", error: "earlier" });
+    await page.goto(`${base}/coach/community?view=late#log`);
+    await submit(page, `[data-testid="community-log-row"][data-week="${lateWeek}"] [data-testid="community-retry"]`);
+    await submit(page, `[data-testid="community-log-row"][data-week="${lateWeek}"] [data-testid="community-check"]`);
+    const lateFirst = (await rowFor(lateWeek))!;
+    if (lateFirst.status !== "sent" || lateFirst.link || lateFirst.platformPostId || !lateFirst.checkNote?.includes("waiting for the community's own post id")) throw new Error(`the planner's own id is never taken for the community's: still on its way, no link: ${JSON.stringify(lateFirst)}`);
+    await submit(page, `[data-testid="community-log-row"][data-week="${lateWeek}"] [data-testid="community-check"]`);
+    const lateRow = (await rowFor(lateWeek))!;
+    const linkedId = lateRow.link?.split("/posts/")[1];
+    if (lateRow.status !== "posted" || !lateRow.platformPostId || lateRow.platformPostId === lateRow.ghlPostId || linkedId !== lateRow.platformPostId) throw new Error(`the link is built on the community's own id, the one shown on the row: ${JSON.stringify(lateRow)}`);
+    if (!(await page.locator(`[data-testid="community-log-row"][data-week="${lateWeek}"]`).innerText()).includes(`Community id ${lateRow.platformPostId}`)) throw new Error("the row shows the community id the link uses");
+    console.log("✓ rev 499: a read that hands back the planner's id waits, with no link; the link is then built on the community's own id, the one the row shows");
 
     // 28 Sep, 11:40: a post HelixOS can't find is never Failed on that alone (it may be live: Post now would post it twice). It
     // reads "unknown" with no Post now, until the coach says whether it went out.
@@ -530,7 +548,7 @@ async function main() {
     await page.goto(`${base}/coach/community?view=month3#month`);
     await submit(page, `[data-testid="community-month-row"][data-month="${lastMonth}"] [data-testid="community-month-retry"]`);
     const sentMonth = await titled(monthTitle(lastMonth));
-    if (sentMonth.length !== 1 || sentMonth[0].summary !== communityHtml(DEFAULT_MONTH_TEXT, { mentionEveryone: true }) || !String(sentMonth[0].summary).includes('data-mention-type="broadcast"') || !(sentMonth[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that month once, with the month text and the tag, to the Intentions channel");
+    if (sentMonth.length !== 1 || sentMonth[0].summary !== communityHtml(DEFAULT_MONTH_TEXT) || String(sentMonth[0].summary).includes("data-mention-type") || !(sentMonth[0].accountIds as string[]).includes(`${LOC}_community_intentions`)) throw new Error("Post now sends that month once, with the month text (@everyone as words), to the Intentions channel");
     if (((sentMonth[0].media ?? []) as { url: string }[]).length !== 1 || !(await monthRow(lastMonth))!.imageUrl) throw new Error("the real month post goes out with its graphic, and the row keeps the URL");
     if ((sentMonth[0].communityPostDetails as Details).notifyAllGroupMembers !== true) throw new Error("the month post notifies all members, as its setting says by default");
     await cron(page);

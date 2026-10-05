@@ -14,7 +14,7 @@ import { logSync } from "@/lib/integrations";
 import { readProofObject } from "@/lib/proof-storage";
 import { putPublicMagnet } from "@/lib/storage";
 import { redactSecrets } from "@/lib/engine/redact";
-import { HOLD_REASON, TEST_TITLE, UNKNOWN_REASON, communityDetails, communityHtml, mondayTestText, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, monthDue, monthShareTarget, monthShareText, monthTestText, monthText, monthTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
+import { HOLD_REASON, TEST_TITLE, UNKNOWN_REASON, communityDetails, communityHtml, communityLink, communityPostId, mondayTestText, failedReason, fromPlanner, isAccountHold, mondayDue, mondayText, mondayTitle, monthDue, monthShareTarget, monthShareText, monthTestText, monthText, monthTitle, patternFor, pickPlannerPost, postLink, shareTarget, shareText, testText } from "@/lib/engine/community";
 
 export const settingsFor = (workspaceId: string) => db.query.communitySettings.findFirst({ where: eq(schema.communitySettings.workspaceId, workspaceId) });
 
@@ -83,10 +83,12 @@ async function pauseForHold(s: CommunitySettings): Promise<void> {
 /** Sends a claimed row and records the outcome on it. */
 async function sendRow(s: CommunitySettings, row: CommunityPost, title: string, body: string): Promise<CommunityPost> {
   // Only a real post (Monday's or the month's) ever notifies, and only as the row says (set when it was claimed): a test never does.
-  // @everyone as a real mention on the real posts only (rev 203); a test keeps it as words. Independent of the notify flag.
+  // @everyone goes out as words, where the coach wrote it (rev 499, 5 Oct). Sent as the composer's broadcast mention (rev 203),
+  // GoHighLevel lifted it to a tag under the title and dropped the word from the sentence ("Share below everyone so…"). Notify
+  // all members is what reaches everyone; the words keep the sentence whole.
   const real = row.kind !== "test";
   const graphic = await graphicFor(s, row);
-  const r = await send(s, title, body, real && row.notifyAll, real, graphic.media);
+  const r = await send(s, title, body, real && row.notifyAll, false, graphic.media);
   const now = nowIso();
   if (graphic.note) await db.update(schema.communityPosts).set({ checkNote: graphic.note, updatedAt: now }).where(eq(schema.communityPosts.id, row.id));
   const period = row.kind === "month" ? { monthOf: row.monthOf ?? undefined } : { weekOf: row.weekOf ?? undefined };
@@ -211,16 +213,19 @@ export async function checkPost(s: CommunitySettings, row: CommunityPost): Promi
     await db.update(schema.communityPosts).set({ checkNote: `Reading it back failed: ${fail.error}`, updatedAt: now }).where(waiting);
     return reread();
   }
-  const status = fromPlanner(r.data.status);
-  const checkNote = `The planner says: ${r.data.status}${r.data.postId ? `, community post ${r.data.postId}` : ""}.`;
-  const platformPostId = r.data.postId ?? row.platformPostId;
+  const said = fromPlanner(r.data.status);
+  // The community's own id only (rev 499): GoHighLevel may hand back the planner's id before the community post has its own.
+  const platformPostId = communityPostId(r.data.postId, ghlPostId) ?? communityPostId(row.platformPostId, ghlPostId);
+  // Published with no community id yet: still on its way, read again next time, never linked on the planner's id.
+  const status = said === "posted" && !platformPostId ? row.status : said;
+  const checkNote = `The planner says: ${r.data.status}${platformPostId ? `, community post ${platformPostId}` : said === "posted" ? "; waiting for the community's own post id before the link is made" : ""}.`;
   const pattern = patternFor(s.linkPatterns, { pattern: s.linkPattern, channel: s.channelAccountId }, row.accountId);
   await db
     .update(schema.communityPosts)
     .set({
       status,
       platformPostId,
-      link: row.link ?? postLink(pattern, platformPostId),
+      link: communityLink(row.link, ghlPostId) ?? postLink(pattern, platformPostId),
       authorShown: r.data.author ?? row.authorShown,
       postedAt: status === "posted" ? (r.data.publishedAt ?? now) : row.postedAt,
       // The coach sees GoHighLevel's own reason (this page is theirs), with anything token-shaped taken out.
@@ -298,7 +303,7 @@ export async function shareFor(workspaceId: string, userId: string, week: { week
  */
 export async function threadLinkFor(workspaceId: string, weekOf: string): Promise<string | null> {
   const post = await db.query.communityPosts.findFirst({ where: and(eq(schema.communityPosts.workspaceId, workspaceId), eq(schema.communityPosts.kind, "monday"), eq(schema.communityPosts.weekOf, weekOf)) });
-  return post?.status === "posted" && post.link ? post.link : null;
+  return post?.status === "posted" ? communityLink(post.link, post.ghlPostId) : null;
 }
 
 /**

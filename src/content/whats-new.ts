@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 86,
+    date: "2026-10-05",
+    title: "The Monday post: the right thread link, and @everyone where you wrote it",
+    lines: [
+      "The weekly post's link now always opens the post itself in the community. HelixOS waits for the community's own post id before it makes the link, so \"copy and open this week's thread\" never lands on \"Post not available\".",
+      "@everyone stays in your sentence, where you wrote it (\"Share below @everyone so…\"). Notify all members is what reaches everyone, as before.",
+      "Coach → Community warns \"No graphic set: the post goes out without an image\" when the Monday or month post is on with no graphic chosen.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 85,
     date: "2026-10-05",
     title: "Webinars: drafting a section writes its slides too",

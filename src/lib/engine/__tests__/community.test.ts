@@ -239,3 +239,15 @@ describe("@everyone as a real mention (rev 203)", () => {
     expect(plainOf(communityHtml(text, { mentionEveryone: true }))).toBe("Declare your goals here. Share below @everyone so we can check in.");
   });
 });
+
+describe("the thread link is built on the community's own id, never the planner's (rev 499)", () => {
+  it("takes no planner id for a community id, and no link built on one", async () => {
+    const { communityPostId, communityLink } = await import("../community");
+    expect(communityPostId("6ac3bba803fb94462ce208db", "6ac3bba803fb94462ce208db")).toBeNull();
+    expect(communityPostId("6ac3bbc49450b46e8c4fe62e", "6ac3bba803fb94462ce208db")).toBe("6ac3bbc49450b46e8c4fe62e");
+    expect(communityPostId(null, "x")).toBeNull();
+    expect(communityLink("https://c.example.com/posts/6ac3bba803fb94462ce208db", "6ac3bba803fb94462ce208db")).toBeNull();
+    expect(communityLink("https://c.example.com/posts/6ac3bbc49450b46e8c4fe62e", "6ac3bba803fb94462ce208db")).toBe("https://c.example.com/posts/6ac3bbc49450b46e8c4fe62e");
+    expect(shareTarget({ weekOf: "2026-10-05", status: "posted", link: "https://c.example.com/posts/planner1", ghlPostId: "planner1" }, "2026-10-05")).toEqual({ reason: "This week's post isn't up yet. Check back later today." });
+  });
+});

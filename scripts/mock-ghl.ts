@@ -157,7 +157,10 @@ createServer((req, res) => {
       const community = Array.isArray(p.accountIds) && p.accountIds.some((a) => String(a).includes("_community_"));
       // A walk hook: the planner fails a post at the platform, with the words GoHighLevel gave on 28 Sep.
       if (String(p.summary ?? "").includes("[fail]")) return json(200, { success: true, statusCode: 200, message: "Fetched Post", results: { post: { ...p, status: "failed", error: "The channel or group is either deleted or inactive, please select another or re-sync connected group to post successfully." } } });
-      const flipped = due ? { ...p, status: "published", postId: `${community ? "cm" : "fb"}_${id}`, publishedAt: new Date().toISOString() } : p;
+      // A walk hook (rev 499, seen live on 5 Oct): the first read of a published post hands back the planner's own id as postId.
+      const late = String(p.summary ?? "").includes("[late-id]") && !p.lateIdRead;
+      if (late && due) posts.set(id, { ...p, lateIdRead: true });
+      const flipped = due ? { ...p, status: "published", postId: late ? id : `${community ? "cm" : "fb"}_${id}`, publishedAt: new Date().toISOString() } : p;
       return json(200, { success: true, statusCode: 200, message: "Fetched Post", results: { post: flipped } });
     }
     return json(404, { message: "Not found" });
