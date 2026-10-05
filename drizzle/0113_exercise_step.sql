@@ -1,0 +1,1 @@
+ALTER TABLE `body_exercises` ADD `step` real;

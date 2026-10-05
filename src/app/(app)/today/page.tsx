@@ -518,9 +518,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               ) : null}
               {workout?.finished ? (
                 <div data-testid="today-workout-read">
-                  <WorkoutReadCard read={workout} date={v.today} unit="" routineId={workout.routineId} compact />
+                  <WorkoutReadCard read={workout} date={v.today} unit={workout.unit} routineId={workout.routineId} compact />
                   <Link href="/body/training" className="mt-1 inline-block text-xs text-ink-2 hover:underline">
-                    Next time&apos;s weights on Training →
+                    Each exercise on Training →
                   </Link>
                 </div>
               ) : null}

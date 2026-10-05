@@ -42,6 +42,7 @@ import { METRIC, METRIC_KEYS, inRange, parseScaleCsv, readTime, storedValue, typ
 import { addDays, daysBetween, nowIso, startOfWeek, weekday } from "@/lib/dates";
 import { bodyAccess, bodySettingsFor } from "@/lib/queries/body";
 import { saveReadings } from "@/lib/body-readings";
+import { saveNextWeight } from "@/lib/body-next";
 import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -672,9 +673,14 @@ export async function saveExerciseAction(formData: FormData): Promise<void> {
   const id = str(formData, "id");
   const name = str(formData, "name").slice(0, 80);
   const kind = str(formData, "kind") === "bodyweight" ? "bodyweight" : "weight";
-  if (!name) back(`${TRAINING}/routines`, "An exercise needs a name.");
-  if (id) await db.update(schema.bodyExercises).set({ name, kind }).where(and(eq(schema.bodyExercises.id, id), and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))));
-  else await db.insert(schema.bodyExercises).values({ id: newId(), workspaceId, userId, name, kind });
+  if (!name) back(`${TRAINING}/routines`, "An exercise needs a name.", "name");
+  // How far it steps up, in the member's unit (rev 486); blank lets it be learned again.
+  const settings = await bodySettingsFor(workspaceId, userId);
+  const stepTyped = await amount(formData, "step", settings?.weightUnit ?? "lb", `${TRAINING}/routines`);
+  if (stepTyped != null && !(stepTyped > 0 && stepTyped <= 100)) back(`${TRAINING}/routines`, "A step is a weight above 0, up to 100.", "step");
+  const step = stepTyped == null ? null : Math.round(stepTyped * 100) / 100;
+  if (id) await db.update(schema.bodyExercises).set({ name, kind, step }).where(and(eq(schema.bodyExercises.id, id), and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId))));
+  else await db.insert(schema.bodyExercises).values({ id: newId(), workspaceId, userId, name, kind, step });
   refresh();
   await settle();
 }
@@ -778,15 +784,11 @@ export async function acceptTargetAction(formData: FormData): Promise<void> {
   await setUp(v);
   const date = str(formData, "date");
   const at = DATE.test(date) ? trainingAt(date) : TRAINING;
-  const own = and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId));
-  const routine = await db.query.bodyRoutines.findFirst({ where: and(eq(schema.bodyRoutines.id, str(formData, "routineId")), own) });
-  if (!routine) back(at, "That routine isn't there any more.");
-  const exerciseId = str(formData, "exerciseId");
+  // The weight the member will actually load (rev 486): the suggestion, or what they typed over it.
   const weight = await amount(formData, "weight", null, at);
-  if (weight == null || weight <= 0 || weight > 5000) back(at, "That weight doesn't look right.");
-  if (!routine!.items.some((i) => i.exerciseId === exerciseId)) back(at, "That exercise isn't in the routine.");
-  const items = routine!.items.map((i) => (i.exerciseId === exerciseId ? { ...i, weight } : i));
-  await db.update(schema.bodyRoutines).set({ items }).where(and(eq(schema.bodyRoutines.id, routine!.id), own));
+  if (weight == null) back(at, "Give the weight for next time.", "weight");
+  const saved = await saveNextWeight(workspaceId, userId, { routineId: str(formData, "routineId"), exerciseId: str(formData, "exerciseId"), weight: weight!, suggested: await amount(formData, "suggested", null, at), top: await amount(formData, "top", null, at) });
+  if ("error" in saved) back(at, saved.error, "weight");
   refresh();
   await settle();
 }

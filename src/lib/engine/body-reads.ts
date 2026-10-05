@@ -16,8 +16,10 @@ export type ReadExercise = {
   targetSets: number | null;
   /** The routine's reps target as written: "8", "8-12", "8–12", "AMRAP". */
   targetReps: string | null;
-  /** A weight the member accepted for next time (the routine's own). */
+  /** A weight the member set for next time (the routine's own). */
   targetWeight: number | null;
+  /** How far this exercise steps up, in the member's unit (rev 486): theirs, else learned, else the default. */
+  step: number;
   today: ReadSet[];
   last: ReadSet[];
   lastDate: string | null;
@@ -41,7 +43,8 @@ export type WorkoutInput = {
   /** Days since this routine last ran before today. */
   daysSinceRoutine: number | null;
 };
-export type NextTarget = { exerciseId: string; exercise: string; weight: number | null; reps: string | null; why: string; add: boolean };
+/** `from`: today's top weight, so a weight the member sets over the suggestion can teach the exercise its step. */
+export type NextTarget = { exerciseId: string; exercise: string; weight: number | null; reps: string | null; why: string; add: boolean; from: number | null };
 export type WorkoutRead = { lines: string[]; exercises: { exerciseId: string; name: string; trend: "up" | "held" | "down" | "first"; line: string }[]; next: NextTarget[]; care: boolean };
 
 const num = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 1 });
@@ -54,16 +57,17 @@ export function topSet(sets: ReadSet[]): ReadSet | null {
 }
 export const volume = (sets: ReadSet[], x: ReadExercise): number => sets.reduce((a, s) => a + (loaded(x) ? (s.weight ?? 0) * s.reps : s.reps), 0);
 
-/** Up, held or down against last time: the top set first (weight, then reps at that weight), then the volume. */
-export function trendOf(today: ReadSet[], last: ReadSet[], x: ReadExercise): "up" | "held" | "down" | "first" {
+/**
+ * Up, held or down against last time, by the top set alone (rev 486): heavier, or the same weight for more reps, is up; the same
+ * top set is held; lighter, or fewer reps at that weight, is down. A fade or less volume is said on its own line, never as down.
+ */
+export function trendOf(today: ReadSet[], last: ReadSet[]): "up" | "held" | "down" | "first" {
   if (!last.length) return "first";
   const a = topSet(today)!;
   const b = topSet(last)!;
   if ((a.weight ?? 0) !== (b.weight ?? 0)) return (a.weight ?? 0) > (b.weight ?? 0) ? "up" : "down";
   if (a.reps !== b.reps) return a.reps > b.reps ? "up" : "down";
-  const va = volume(today, x);
-  const vb = volume(last, x);
-  return va > vb * 1.02 ? "up" : va < vb * 0.98 ? "down" : "held";
+  return "held";
 }
 
 /** Reps falling across sets at one weight, by three or more first to last: "12, 10, 7". Null when the sets held. */
@@ -84,9 +88,25 @@ export const topReps = (target: string | null): number | null => {
   return ns.length ? Math.max(...ns) : null;
 };
 
-const SMALL = /cable|dumbbell|\bdb\b|curl|raise|fly|flye|extension|pushdown|kickback|face ?pull|lateral|rear delt|shrug/i;
-/** The smallest sensible step: 2.5 lb (1 kg) on a cable or dumbbell, 5 lb (2.5 kg) on a machine or barbell. */
-export const stepFor = (name: string, unit: WeightUnit): number => (SMALL.test(name) ? (unit === "kg" ? 1 : 2.5) : unit === "kg" ? 2.5 : 5);
+/** With nothing learned (rev 486): 2.5 lb (1 kg) when the name says dumbbell or DB, else 5 lb (2.5 kg) for a machine, cable or bar. */
+export const defaultStep = (name: string, unit: WeightUnit): number => (/dumbbell|\bdb\b/i.test(name) ? (unit === "kg" ? 1 : 2.5) : unit === "kg" ? 2.5 : 5);
+
+/** The step a stack shows in what was logged on it: the smallest gap between the distinct weights used (145, 165, 185 → 20). */
+export function learnedStep(weights: (number | null)[]): number | null {
+  const ws = [...new Set(weights.filter((w): w is number => w != null && w > 0).map((w) => Math.round(w * 2) / 2))].sort((a, b) => a - b);
+  let gap: number | null = null;
+  for (let i = 1; i < ws.length; i++) {
+    const g = Math.round((ws[i] - ws[i - 1]) * 2) / 2;
+    if (g > 0 && (gap == null || g < gap)) gap = g;
+  }
+  return gap;
+}
+
+/** The step from a weight the member set over a suggestion: what they load next minus what they lifted (50 → 60 is 10). */
+export function stepFromEdit(top: number | null, chosen: number, suggested: number | null): number | null {
+  if (top == null || suggested == null || chosen === suggested || chosen <= top) return null;
+  return Math.round((chosen - top) * 2) / 2;
+}
 
 /**
  * Next time, where earned: every set at the top weight reached the top of the reps target (and the planned sets were done) →
@@ -99,12 +119,12 @@ export function nextFor(x: ReadExercise, unit: WeightUnit): NextTarget | null {
   const atTop = x.today.filter((s) => (s.weight ?? 0) === (top.weight ?? 0));
   const allSets = x.targetSets == null || x.today.length >= x.targetSets;
   const earned = allSets && atTop.every((s) => s.reps >= goal) && !fadeOf(x.today);
-  if (!loaded(x) || top.weight == null) return earned ? { exerciseId: x.exerciseId, exercise: x.name, weight: top.weight, reps: x.targetReps, why: `every set reached ${goal}: add a rep or a little load`, add: false } : null;
+  if (!loaded(x) || top.weight == null) return earned ? { exerciseId: x.exerciseId, exercise: x.name, weight: top.weight, reps: x.targetReps, why: `every set reached ${goal}: add a rep or a little load`, add: false, from: top.weight } : null;
   if (earned) {
-    const w = Math.round((top.weight + stepFor(x.name, unit)) * 10) / 10;
-    return { exerciseId: x.exerciseId, exercise: x.name, weight: w, reps: x.targetReps, why: `every set reached ${goal} reps at ${num(top.weight)} ${unit}`, add: true };
+    const w = Math.round((top.weight + x.step) * 10) / 10;
+    return { exerciseId: x.exerciseId, exercise: x.name, weight: w, reps: x.targetReps, why: `every set reached ${goal} reps at ${num(top.weight)} ${unit}: up one step of ${num(x.step)}`, add: true, from: top.weight };
   }
-  return { exerciseId: x.exerciseId, exercise: x.name, weight: top.weight, reps: x.targetReps, why: fadeOf(x.today) ? "the reps faded: the same weight again" : `not every set reached ${goal}: the same weight again`, add: false };
+  return { exerciseId: x.exerciseId, exercise: x.name, weight: top.weight, reps: x.targetReps, why: fadeOf(x.today) ? "the reps faded: the same weight again" : `not every set reached ${goal}: the same weight again`, add: false, from: top.weight };
 }
 
 const CARE = /\bpain|hurt|injur|tweak|sprain|strain(ed)? (my|a|the)|sharp|twinge|pulled (a|my)/i;
@@ -121,27 +141,31 @@ export function workoutRead(w: WorkoutInput): WorkoutRead {
   if (w.note?.trim()) lines.push(`You wrote: “${w.note.trim().slice(0, 140)}”.`);
 
   const exercises = done.map((x) => {
-    const trend = trendOf(x.today, x.last, x);
+    const trend = trendOf(x.today, x.last);
     const top = topSet(x.today)!;
     const prToday = x.today.some((s) => s.pr);
     const vs = x.last.length ? ` (last ${setText(topSet(x.last)!, w.unit, x)})` : "";
     const fromPr = !prToday && x.pr ? `; PR ${setText({ weight: x.pr.weight, reps: x.pr.reps }, w.unit, x)}` : "";
-    return { exerciseId: x.exerciseId, name: x.name, trend, line: `${x.name}: ${trend === "first" ? "first time" : trend} at ${setText(top, w.unit, x)}${vs}${prToday ? ", a new PR" : fromPr}.` };
+    // The weight the member set for today (rev 486), against what they did.
+    const planned = x.targetWeight != null && loaded(x) ? `; planned ${num(x.targetWeight)}, did ${setText(top, w.unit, x)}` : "";
+    return { exerciseId: x.exerciseId, name: x.name, trend, line: `${x.name}: ${trend === "first" ? "first time" : trend} at ${setText(top, w.unit, x)}${vs}${prToday ? ", a new PR" : fromPr}${planned}.` };
   });
   // The few worth saying first: new PRs, then what dropped, faded or has stood still.
   const notes: string[] = [];
   const prs = done.filter((x) => x.today.some((s) => s.pr)).map((x) => x.name);
   if (prs.length) notes.push(`New PR${prs.length === 1 ? "" : "s"}: ${prs.join(", ")}.`);
-  const up = exercises.filter((e) => e.trend === "up").map((e) => e.name);
-  const down = exercises.filter((e) => e.trend === "down").map((e) => e.name);
-  if (up.length || down.length) notes.push([up.length ? `Up on ${up.join(", ")}` : "", down.length ? `down on ${down.join(", ")}` : ""].filter(Boolean).join("; ").replace(/^d/, "D") + ".");
+  const by = (t: string) => exercises.filter((e) => e.trend === t).map((e) => e.name);
+  const summary = [by("up").length ? `up on ${by("up").join(", ")}` : "", by("held").length ? `held on ${by("held").join(", ")}` : "", by("down").length ? `down on ${by("down").join(", ")}` : ""].filter(Boolean).join("; ");
+  if (summary) notes.push(`${summary[0].toUpperCase()}${summary.slice(1)}.`);
   for (const x of done) {
     const f = fadeOf(x.today);
     if (f) notes.push(`${x.name} faded: ${f.reps.join(", ")}${f.weight ? ` at ${num(f.weight)} ${w.unit}` : ""}.`);
   }
+  // Less work at the same top set (a fade, a set fewer) is its own line, not a "down".
+  for (const x of done) if (x.last.length && trendOf(x.today, x.last) === "held" && !fadeOf(x.today) && volume(x.today, x) < volume(x.last, x) * 0.9) notes.push(`${x.name}: less volume than last time.`);
   for (const x of done) if (x.sameTopSessions >= 3) notes.push(`${x.name} has stayed at ${setText(topSet(x.today)!, w.unit, x)} for ${x.sameTopSessions} sessions.`);
   if (w.daysSinceRoutine != null && w.daysSinceRoutine >= 14) notes.push(`The first ${w.routineName ?? "session of this routine"} in ${w.daysSinceRoutine} days.`);
-  lines.push(...notes.slice(0, 3));
+  lines.push(...notes.slice(0, 4));
   const care = !!w.note && CARE.test(w.note);
   if (care) lines.push("Noted. If it keeps up, check with a professional.");
   const next = done.map((x) => nextFor(x, w.unit)).filter((n): n is NextTarget => !!n);

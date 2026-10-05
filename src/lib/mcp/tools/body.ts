@@ -5,14 +5,15 @@
  * rules. Nothing here returns photos, injuries or what a coach wrote (revs 219 and 251), and nothing of a call is logged.
  */
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { newId } from "@/lib/ids";
 import { MACROS, MACRO_LABEL, MARK_ICON, dayTypeIdFor, entryItem, fmtBand, fmtMacro, slotNow, totalsOf, type Macro, type Macros } from "@/lib/engine/body";
 import { convertQty, loggableUnits, storedUnit } from "@/lib/engine/body-units";
-import { fmtSet } from "@/lib/engine/body-training";
+import { fmtSet, toUnit } from "@/lib/engine/body-training";
+import { saveNextWeight } from "@/lib/body-next";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, withDerived, type MetricKey } from "@/lib/engine/body-scale";
 import { saveReadings } from "@/lib/body-readings";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
@@ -188,6 +189,34 @@ export const bodyDayRead = defineTool({
     const r = await dayReadFor(v.workspace.id, v.user.id, date, v.today, v.hour);
     if (!r) throw new Error("HumanOS isn't set up for this member yet.");
     return { text: [...r.lines, r.tomorrow].join("\n"), data: { date, lines: r.lines, tomorrow: r.tomorrow } };
+  },
+});
+
+/**
+ * Next time's weight by voice (rev 486): what the member will actually load on an exercise becomes its routine's target, and a
+ * weight other than the post-workout read's suggestion teaches the exercise its step.
+ */
+export const bodySetNextWeight = defineTool({
+  name: "body_set_next_weight",
+  scope: "body",
+  kind: "write",
+  description: "Set next time's weight for an exercise: the weight the member will actually load (it may differ from the post-workout read's suggestion). It becomes the routine's target for that exercise and opens the next session's first set; when it differs from the suggestion, the step taken is remembered for that exercise. The routine is the one the exercise was last done in unless one is named.",
+  input: { exercise: z.string().describe("The exercise's name"), weight: z.number().positive().describe("In the member's weight unit unless weightUnit says otherwise"), weightUnit: z.string().optional().describe("kg or lb, when the member said the other one"), routine: z.string().optional().describe("The routine's name, when the exercise is in more than one") },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const lib = await trainingLibrary(v.workspace.id, v.user.id);
+    const exercise = byName("exercise", lib.exercises, String(input.exercise ?? ""));
+    const weight = Math.round(toUnit(Number(input.weight), weightUnitWord(input.weightUnit) ?? settings.weightUnit, settings.weightUnit) * 10) / 10;
+    // The last session the exercise was in: its read gives the suggestion and the weight lifted, and its routine is the default.
+    const lastSet = await db.query.bodySets.findFirst({ columns: { date: true }, where: and(eq(schema.bodySets.workspaceId, v.workspace.id), eq(schema.bodySets.userId, v.user.id), eq(schema.bodySets.exerciseId, exercise.id)), orderBy: desc(schema.bodySets.date) });
+    const read = lastSet ? await workoutReadFor(v.workspace.id, v.user.id, lastSet.date) : null;
+    const holding = lib.routines.filter((r) => r.items.some((i) => i.exerciseId === exercise.id));
+    const routine = input.routine ? byName("routine", holding, String(input.routine)) : (holding.find((r) => r.id === read?.routineId) ?? holding[0]);
+    if (!routine) throw new Error(`${exercise.name} isn't in a routine yet: add it to one on Routines first.`);
+    const next = read?.next.find((n) => n.exerciseId === exercise.id) ?? null;
+    const saved = await saveNextWeight(v.workspace.id, v.user.id, { routineId: routine.id, exerciseId: exercise.id, weight, suggested: next?.weight ?? null, top: next?.from ?? null });
+    if ("error" in saved) throw new Error(saved.error);
+    return { text: `${saved.exerciseName} next time in ${saved.routineName}: ${weight} ${settings.weightUnit}.${saved.learnedStep != null ? ` It steps up by ${saved.learnedStep} ${settings.weightUnit} from now on.` : ""}`, data: { exercise: saved.exerciseName, routine: saved.routineName, weight, unit: settings.weightUnit, learnedStep: saved.learnedStep } };
   },
 });
 

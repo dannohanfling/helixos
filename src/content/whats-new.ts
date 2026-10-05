@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 83,
+    date: "2026-10-05",
+    title: "HumanOS: held means held, and next time's weights fit your machines",
+    lines: [
+      "The workout read judges each exercise by its top set: heavier, or more reps at the same weight, is up; the same top set is held; lighter or fewer reps is down. A fade or less volume gets its own line instead of counting as down.",
+      "Next time's weight goes up one step that fits the machine. HumanOS learns the step from the weights you've logged on it, or from the number you type when you change a suggestion. You can also set it under Steps up by on the exercise.",
+      "Use next time now opens the weight so you can type what you'll actually load, on Training, on Today, or by telling your Claude. Next session, the read shows what you planned beside what you did.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 81,
     date: "2026-10-04",
     title: "Your drafts follow you to your other devices",

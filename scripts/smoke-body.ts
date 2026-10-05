@@ -502,14 +502,18 @@ async function main() {
     if (JSON.stringify(readShown) !== JSON.stringify(readWant.lines) || !readShown.some((l) => l.includes("Felt strong")) || !readShown.includes("New PR: Bench press.")) throw new Error(`the post-workout read is the query's: ${JSON.stringify(readShown)}`);
     const benchNext = client.locator('[data-testid="workout-read-next-item"][data-exercise="Bench press"]');
     if ((await benchNext.getAttribute("data-weight")) !== "190" || (await benchNext.getAttribute("data-add")) !== "0") throw new Error("one set of three planned keeps the weight for next time");
-    await press(client, '[data-testid="workout-read-next-item"][data-exercise="Bench press"] [data-testid="workout-read-accept"]', async () => (await client.locator(`${card("Bench press")} [data-testid="training-target-weight"]`).count()) > 0, "the target taken");
+    // Rev 486: the suggestion opens as a number; the member loads 195 instead, and the step they took (5) is the bench's from now on.
+    await fillExact(client, '[data-testid="workout-read-next-item"][data-exercise="Bench press"] [data-testid="workout-read-weight"]', "195");
+    await press(client, '[data-testid="workout-read-next-item"][data-exercise="Bench press"] [data-testid="workout-read-accept"]', async () => ((await client.locator(`${card("Bench press")} [data-testid="training-target-weight"]`).textContent()) ?? "").includes("195"), "the target taken");
+    const benchId = exRows.find((r) => r.name === "Bench press")!.id;
     const pushDay = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.id === readWant.routineId);
-    if (pushDay?.items.find((i) => i.exerciseId === exRows.find((r) => r.name === "Bench press")!.id)?.weight !== 190) throw new Error("Use next time sets the routine's target weight");
+    if (pushDay?.items.find((i) => i.exerciseId === benchId)?.weight !== 195) throw new Error("Use next time saves the weight the member typed");
+    if ((await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.id, benchId) }))?.step !== 5) throw new Error("a weight set over the suggestion teaches the bench its step");
     await client.goto(`${base}/today`);
     if (!(await client.locator('[data-testid="today-workout-read"] [data-testid="workout-read-lines"] li').count())) throw new Error("Today shows the finished session's read");
     await client.goto(`${base}/body/training`);
     await client.locator('[data-testid="training-finished"]').waitFor({ timeout: 30000 });
-    console.log(`✓ post-workout read (rev 471): ${readWant.lines.length} lines, the query's own, the note in them; bench up to a PR keeps 190 for next time and Use next time makes it the routine's target; Today shows the read`);
+    console.log(`✓ post-workout read (revs 471, 486): ${readWant.lines.length} lines, the query's own, the note in them; bench up to a PR keeps 190 for next time; the member types 195 over it, it becomes the routine's target and the bench learns a step of 5; Today shows the read`);
     await logSet("Pull-up", "", "7");
     if ((await db.query.bodySessions.findFirst({ where: and(mine(schema.bodySessions), eq(schema.bodySessions.date, today)) }))?.completedAt) throw new Error("a set after finishing reopens the session");
     if ((await client.locator('[data-testid="training-finished"]').count()) || (await setsIn("Pull-up").nth(1).getAttribute("data-plan")) !== "under") throw new Error("reopened, and 7 against 8–10 is under plan");
@@ -1073,7 +1077,8 @@ async function main() {
       if ((await db.query.bodyDays.findFirst({ where: and(mine(schema.bodyDays), eq(schema.bodyDays.date, yesterday)) }))?.flag !== "travel") throw new Error("the mark is on the day's row");
       const excludedAfter = (await correlateQ(mem.workspaceId, maya.id, today, mem.timezone || "UTC", corrArgs))!.excluded;
       if (excludedAfter < excludedBefore + 1) throw new Error(`a marked day leaves Patterns when asked: ${excludedBefore} before, ${excludedAfter} after`);
-      await client.goto(`${base}/body/week`);
+      // The week that holds yesterday (on a Monday, that is last week).
+      await client.goto(`${base}/body/week?week=${startOfWeek(yesterday)}`);
       await client.locator('[data-testid="week-day-flag"]').first().waitFor({ timeout: 30000 });
       await client.goto(`${base}/body?date=${yesterday}`);
       await openFlagFold();
@@ -1292,7 +1297,9 @@ async function main() {
     const coachWs = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }))!;
     const asCoach = { user: coachUser0, workspace: coachWs, membership: coachMem0, role: "coach" as const, tz: coachMem0.timezone || coachWs.timezone, today, hour: 12, actor: coachUser0, switchedInto: null };
     const expectedCell = (await coachBodyColumn(asCoach, [{ userId: maya.id, today }])).get(maya.id);
-    if (!expectedCell || expectedCell.judged < 1 || !expectedCell.lastWeighIn || expectedCell.sessions < 1) throw new Error(`the query has a cell with judged days, a weigh-in and sessions for a sharing client: ${JSON.stringify(expectedCell)}`);
+    // On a Monday the week has no finished day to judge yet; any other day it has.
+    const firstDayOfWeek = (await import("@/lib/dates")).startOfWeek(today) === today;
+    if (!expectedCell || (!firstDayOfWeek && expectedCell.judged < 1) || !expectedCell.lastWeighIn || expectedCell.sessions < 1) throw new Error(`the query has a cell with judged days, a weigh-in and sessions for a sharing client: ${JSON.stringify(expectedCell)}`);
     await coach.goto(`${base}/coach`);
     if ((await bodyCell()) !== expectedCell.short) throw new Error(`the client table's Body cell reads "${await bodyCell()}", the query says "${expectedCell.short}"`);
     await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] a`).click();
@@ -1465,6 +1472,10 @@ async function main() {
     // The post-workout read by voice (rev 471): the same lines Training shows.
     const { workoutReadFor: readFor } = await import("@/lib/queries/body");
     const readTool = await tool("body_workout_read").handler(await viewerFor(), { date: today });
+    // Next time's weight by voice (rev 486): the bench's routine target becomes 200.
+    const nextTool = await tool("body_set_next_weight").handler(await viewerFor(), { exercise: "bench", weight: 200 });
+    const benchRoutine = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.items.some((i) => i.weight === 200));
+    if (!nextTool.text.startsWith("Bench press next time in") || !benchRoutine) throw new Error(`body_set_next_weight sets the routine's target: ${nextTool.text}`);
     const readNow = await readFor(mem.workspaceId, maya.id, today);
     if (!readNow || !readTool.text.startsWith(readNow.lines.join("\n"))) throw new Error(`body_workout_read reads the day back: ${readTool.text.slice(0, 300)}`);
     // The end-of-day read (rev 471): the tool says what the query says; on Today it sits in Close the day from 4pm.

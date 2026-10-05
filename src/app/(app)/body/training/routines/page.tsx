@@ -30,6 +30,11 @@ function ExerciseFields({ exercise }: { exercise?: schema.BodyExercise }) {
           <option value="bodyweight">Bodyweight (reps, + any added)</option>
         </select>
       </label>
+      {/* Rev 486: how far this machine or stack steps up; blank learns it from the weights logged (or uses 5, 2.5 for a dumbbell). */}
+      <label className="w-28">
+        <span className="label">Steps up by</span>
+        <input name="step" type="text" inputMode="decimal" autoComplete="off" className="field py-1 text-sm tabular" defaultValue={exercise?.step ?? ""} placeholder="learned" data-testid="exercise-step" />
+      </label>
     </div>
   );
 }

@@ -19,7 +19,7 @@ import { calendarWeeks, perWeek, stripBounds, type Bounds } from "@/lib/engine/b
 import { change, coachBodyText, goalPace, nutritionWeek, weighWeek, type CoachBodyCell, type WeekDay } from "@/lib/engine/body-week";
 import { METRICS, avg7, dayFigure, fmtMetric, isMetricKey, trendStats, withDerived, type MetricKey, type Reading } from "@/lib/engine/body-scale";
 import { bestSet, fmtSet, heatLevel, historyOf, lastTime, nextSetDefaults, prFlags, routineForDay, sessionPlan, toUnit, weekTally, type WeightUnit } from "@/lib/engine/body-training";
-import { dayRead, gymGroup, sameTopRun, workoutRead, type DayRead, type ReadExercise, type WorkoutRead } from "@/lib/engine/body-reads";
+import { dayRead, defaultStep, gymGroup, learnedStep, sameTopRun, workoutRead, type DayRead, type ReadExercise, type WorkoutRead } from "@/lib/engine/body-reads";
 import { isLifting } from "@/lib/engine/body-whoop";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 
@@ -1185,7 +1185,7 @@ export async function activitiesOn(workspaceId: string, userId: string, date: st
  * The post-workout read for a day (rev 471): the session's sets against each exercise's last time and PR, the routine's targets,
  * the member's note, and WHOOP's lift with what it recorded around it. Null when the day has no session with sets.
  */
-export async function workoutReadFor(workspaceId: string, userId: string, date: string): Promise<(WorkoutRead & { date: string; finished: boolean; routineId: string | null }) | null> {
+export async function workoutReadFor(workspaceId: string, userId: string, date: string): Promise<(WorkoutRead & { date: string; finished: boolean; routineId: string | null; unit: WeightUnit }) | null> {
   const t = await trainingDay(workspaceId, userId, date);
   if (!t?.session) return null;
   const unit = t.unit;
@@ -1205,6 +1205,8 @@ export async function workoutReadFor(workspaceId: string, userId: string, date: 
       targetSets: x.target?.sets ?? null,
       targetReps: x.target?.reps ?? null,
       targetWeight: x.target?.weight ?? null,
+      // The member's step, else what their logged weights show, else the default (rev 486).
+      step: x.exercise.step ?? learnedStep(all.map((s) => inUnit(s).weight)) ?? defaultStep(x.exercise.name, unit),
       today: x.today.map((s) => ({ ...inUnit(s), pr: s.pr })),
       last: last.map(inUnit),
       lastDate: last[0]?.date ?? null,
@@ -1230,7 +1232,7 @@ export async function workoutReadFor(workspaceId: string, userId: string, date: 
     exercises,
     daysSinceRoutine: prev ? daysBetween(prev.date, date) : null,
   });
-  return { ...read, date, finished: !!t.completedAt, routineId: t.session.routineId };
+  return { ...read, date, finished: !!t.completedAt, routineId: t.session.routineId, unit };
 }
 
 /**

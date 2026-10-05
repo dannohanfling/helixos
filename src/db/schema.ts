@@ -2767,6 +2767,8 @@ export const bodyExercises = sqliteTable(
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
     kind: text("kind", { enum: ["weight", "bodyweight"] }).notNull().default("weight"),
+    /** How far this machine or stack steps up, in the member's weight unit (rev 486): set by the member, or learned from a next-time weight they changed. Null: learned from what they've logged, else 5 (2.5 for a dumbbell). */
+    step: real("step"),
     archivedAt: text("archived_at"),
     createdAt: createdAt(),
   },
