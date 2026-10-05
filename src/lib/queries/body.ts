@@ -13,7 +13,7 @@ import { habitShown, isMeasures, measuresOf, shownValue, unitsFor, type Measures
 import { dosesOn, medLines, refillOpens, runsOut, scriptExpired, todayLine } from "@/lib/engine/body-meds";
 import { bedtimeDrift, fmtHours, isRecoveryKey, RECOVERY, sleepAverages, sleepWeek, type Night, type RecoveryKey } from "@/lib/engine/body-recovery";
 import { weekday } from "@/lib/dates";
-import { METRIC_DEFS, habitKey, isHabitKey, pairUp, verdict, type Fold, type Grain, type MetricDef, type Point } from "@/lib/engine/body-correlate";
+import { DAY_PAIRS, METRIC_DEFS, correlationLine, habitKey, isHabitKey, pairUp, rotationFor, verdict, type Fold, type Grain, type MetricDef, type Point } from "@/lib/engine/body-correlate";
 import { shoppingList, type ShopFood } from "@/lib/engine/body-shopping";
 import { calendarWeeks, perWeek, stripBounds, type Bounds } from "@/lib/engine/body-range";
 import { change, coachBodyText, goalPace, nutritionWeek, weighWeek, type CoachBodyCell, type WeekDay } from "@/lib/engine/body-week";
@@ -1240,7 +1240,7 @@ export async function workoutReadFor(workspaceId: string, userId: string, date: 
  * WHOOP (or a night logged by hand), habits kept, and the weight trend by the 7-day average of each day's figure. `hour` is the
  * member's local hour, for "still to go" while today's evening is early. Null while HumanOS isn't set up.
  */
-export async function dayReadFor(workspaceId: string, userId: string, date: string, today: string, hour: number): Promise<(DayRead & { date: string }) | null> {
+export async function dayReadFor(workspaceId: string, userId: string, date: string, today: string, hour: number, tz = "UTC"): Promise<(DayRead & { date: string }) | null> {
   const day = await bodyDay(workspaceId, userId, date, today);
   if (!day) return null;
   const [workout, habits, daily, weights] = await Promise.all([
@@ -1266,6 +1266,25 @@ export async function dayReadFor(workspaceId: string, userId: string, date: stri
     strain: value("strain"),
     habits: { kept: due.filter((h) => h.kept).length, due: due.length },
     weight: { avg: avg7(figures, date, addDays), weekAgo: avg7(figures, addDays(date, -7), addDays), unit },
+    correlation: await dayCorrelation(workspaceId, userId, date, tz),
   });
   return { ...read, date };
+}
+
+/**
+ * The end-of-day read's one correlation sentence (rev 507): today's turn of the rotation (sleep, strain and recovery, food,
+ * habits, the business), each pair over the last 12 weeks by day with flagged days left out, the first that is steady at
+ * |r| 0.4 or more. Null when nothing clears the bar, or fewer than 21 days pair up.
+ */
+async function dayCorrelation(workspaceId: string, userId: string, date: string, tz: string): Promise<string | null> {
+  const metrics = await insightMetrics(workspaceId, userId);
+  const habitKeys = metrics.filter((m) => isHabitKey(m.key)).map((m) => m.key);
+  const pairs = rotationFor(DAY_PAIRS, date).flatMap((p) => (p.a === "habits" ? habitKeys.map((a) => ({ ...p, a })) : [p])).slice(0, 10);
+  for (const p of pairs) {
+    const c = await correlate(workspaceId, userId, date, tz, { a: p.a, b: p.b, lag: p.lag, window: 12, grain: "daily", excludeFlagged: true });
+    if (!c) continue;
+    const line = correlationLine([{ ...p, labelA: c.a.label, labelB: c.b.label, verdict: c.verdict }]);
+    if (line) return line;
+  }
+  return null;
 }

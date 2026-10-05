@@ -1518,7 +1518,7 @@ async function main() {
     // The end-of-day read (rev 471): the tool says what the query says; on Today it sits in Close the day from 4pm.
     const { dayReadFor } = await import("@/lib/queries/body");
     const vNow = await viewerFor();
-    const dayNow = (await dayReadFor(mem.workspaceId, maya.id, today, today, vNow.hour))!;
+    const dayNow = (await dayReadFor(mem.workspaceId, maya.id, today, today, vNow.hour, vNow.tz))!;
     const dayTool = await tool("body_day_read").handler(vNow, {});
     if (dayTool.text !== [...dayNow.lines, dayNow.tomorrow].join("\n") || !dayNow.lines.some((l) => l.startsWith("Fuel")) || !dayNow.tomorrow.startsWith("Tomorrow:")) throw new Error(`body_day_read reads the day: ${dayTool.text}`);
     if (vNow.hour >= 16) {

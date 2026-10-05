@@ -187,7 +187,7 @@ export const bodyDayRead = defineTool({
   handler: async (v, input): Promise<ToolResult> => {
     await ready(v);
     const date = dayOf(v, input.date);
-    const r = await dayReadFor(v.workspace.id, v.user.id, date, v.today, v.hour);
+    const r = await dayReadFor(v.workspace.id, v.user.id, date, v.today, v.hour, v.tz);
     if (!r) throw new Error("HumanOS isn't set up for this member yet.");
     return { text: [...r.lines, r.tomorrow].join("\n"), data: { date, lines: r.lines, tomorrow: r.tomorrow } };
   },

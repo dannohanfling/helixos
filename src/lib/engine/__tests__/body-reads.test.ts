@@ -134,3 +134,17 @@ describe("the plan against what was done (rev 486)", () => {
     expect(r.lines).toContain("High row: less volume than last time.");
   });
 });
+
+describe("the end-of-day read's correlation line (rev 507)", async () => {
+  const { correlationLine, rotationFor } = await import("@/lib/engine/body-correlate");
+  const v = (kind: "steady" | "unsteady" | "none", r: number | null, n: number) => ({ kind, r, n, early: false, halves: [r, r] as [number | null, number | null], words: "" });
+  it("says one steady link of 0.4 or more, never a cause, and nothing below the bar", () => {
+    expect(correlationLine([{ a: "sleep_h", b: "callsBooked", lag: 1, labelA: "Sleep hours", labelB: "Calls booked", verdict: v("steady", 0.52, 34) }])).toBe("More sleep tends to go with more calls booked the next day (r 0.52 over 34 days).");
+    expect(correlationLine([{ a: "strain", b: "recovery", lag: 1, labelA: "Strain", labelB: "Recovery %", verdict: v("steady", -0.45, 40) }])).toBe("More strain tends to go with less recovery the next day (r -0.45 over 40 days).");
+    expect(correlationLine([{ a: "sleep_h", b: "callsBooked", lag: 1, labelA: "", labelB: "", verdict: v("steady", 0.35, 34) }, { a: "cal", b: "weight", lag: 1, labelA: "", labelB: "", verdict: v("unsteady", 0.6, 30) }])).toBeNull();
+    expect(correlationLine([{ a: "habit:sauna", b: "energy", lag: 1, labelA: "Sauna (min)", labelB: "Lock-in energy", verdict: v("steady", 0.41, 22) }])).toBe("More sauna tends to go with more lock-in energy the next day (r 0.41 over 22 days).");
+  });
+  it("turns the rotation one step a day", () => {
+    expect(rotationFor([1, 2, 3], "2026-10-05")[0]).not.toBe(rotationFor([1, 2, 3], "2026-10-06")[0]);
+  });
+});

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 95,
+    date: "2026-10-05",
+    title: "HumanOS: one pattern in your day's read",
+    lines: [
+      "Once you have three weeks of days to compare, the end-of-day read in Close the day can add one sentence about a pattern in your numbers. For example: \"More sleep tends to go with more calls booked the next day (r 0.52 over 34 days).\"",
+      "It covers sleep, strain and recovery, food, habits and your business numbers, a different pairing each day. It only speaks up when the link is clear and held over time, and it says \"tends to go with\", never that one causes the other.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 94,
     date: "2026-10-05",
     title: "HumanOS: merge duplicate exercises",

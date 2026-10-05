@@ -133,3 +133,44 @@ export const METRIC_DEFS: MetricDef[] = [
 ];
 export const habitKey = (name: string) => `habit:${name.trim().toLowerCase()}`;
 export const isHabitKey = (key: string) => key.startsWith("habit:");
+
+/* ───────── The end-of-day read's correlation line (rev 507) ───────── */
+
+/** The pairs the end-of-day read rotates through, one a day: sleep, strain and recovery, food, habits, and the business. */
+export const DAY_PAIRS: { a: string; b: string; lag: number }[] = [
+  { a: "sleep_h", b: "callsBooked", lag: 1 },
+  { a: "strain", b: "recovery", lag: 1 },
+  { a: "cal", b: "weight", lag: 1 },
+  { a: "p", b: "energy", lag: 1 },
+  { a: "sleep_h", b: "cashCollected", lag: 1 },
+  { a: "session", b: "energy", lag: 1 },
+  { a: "habits", b: "energy", lag: 1 },
+];
+/** The bar for saying anything at all in the day's read: |r| of 0.4, steady in both halves, 21 or more paired days. */
+export const DAY_R = 0.4;
+
+const SHORT: Record<string, string> = { sleep_h: "sleep", callsBooked: "calls booked", cashCollected: "cash collected", strain: "strain", recovery: "recovery", cal: "calories", weight: "weight", p: "protein", energy: "lock-in energy", session: "a workout" };
+const shortName = (key: string, label: string) => SHORT[key] ?? (isHabitKey(key) ? key.slice(6) : label.toLowerCase());
+
+/**
+ * One sentence, or nothing (rev 507): the first pair, in today's turn of the rotation, whose link is steady and at least 0.4.
+ * Always "tends to go with", never a cause: "More sleep tends to go with more calls booked the next day (r 0.52 over 34 days)."
+ */
+export function correlationLine(results: { a: string; b: string; lag: number; labelA: string; labelB: string; verdict: Verdict }[]): string | null {
+  for (const x of results) {
+    const v = x.verdict;
+    if (v.kind !== "steady" || v.r == null || Math.abs(v.r) < DAY_R || v.n < MIN_PAIRS) continue;
+    const a = shortName(x.a, x.labelA);
+    const b = shortName(x.b, x.labelB);
+    const more = x.a === "session" ? "A workout" : `More ${a}`;
+    return `${more} tends to go with ${v.r > 0 ? "more" : "less"} ${b}${x.lag === 1 ? " the next day" : ""} (r ${v.r.toFixed(2)} over ${v.n} days).`;
+  }
+  return null;
+}
+
+/** Today's turn of the rotation: the pairs in order, starting with today's. */
+export function rotationFor<T>(list: T[], date: string): T[] {
+  const day = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
+  const at = ((day % list.length) + list.length) % list.length;
+  return [...list.slice(at), ...list.slice(0, at)];
+}

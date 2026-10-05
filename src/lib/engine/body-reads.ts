@@ -223,6 +223,8 @@ export type DayInput = {
   habits: { kept: number; due: number };
   /** The 7-day average weight now and a week before, in the member's unit. */
   weight: { avg: number | null; weekAgo: number | null; unit: WeightUnit };
+  /** One correlation sentence when a link clears the bar (rev 507), else null. */
+  correlation?: string | null;
 };
 export type DayRead = { lines: string[]; tomorrow: string };
 
@@ -254,11 +256,12 @@ export function dayRead(d: DayInput): DayRead {
     const diff = d.weight.weekAgo != null ? Math.round((d.weight.avg - d.weight.weekAgo) * 10) / 10 : null;
     lines.push(`Weight trend: ${d.weight.avg.toFixed(1)} ${d.weight.unit} on the 7-day average${diff == null ? "" : diff === 0 ? ", level with a week ago" : `, ${diff < 0 ? "down" : "up"} ${Math.abs(diff).toFixed(1)} over the week`}.`);
   }
+  if (d.correlation) lines.push(d.correlation);
   let tomorrow = "Tomorrow: the same again.";
   if (d.logged && b.p && d.totals.p < b.p.min * 0.85 && !(d.isToday && d.hour < 20)) tomorrow = `Tomorrow: protein first. ${whole(b.p.min)} g is the floor, so put some in every meal, starting with breakfast.`;
   else if (d.sleepH != null && d.sleepH < 6.5) tomorrow = "Tomorrow: protect tonight's sleep. Aim for seven hours or more in bed.";
   else if (d.logged && b.cal && d.totals.cal > b.cal.max * 1.1 && !(d.isToday && d.hour < 20)) tomorrow = `Tomorrow: plan dinner first, so the day lands inside ${band(b.cal)} calories.`;
   else if (d.habits.due >= 2 && d.habits.kept * 2 < d.habits.due) tomorrow = "Tomorrow: pick the habit that matters most and do it first thing.";
   else if (d.recovery != null && d.recovery < 34 && d.strain != null && d.strain >= 14) tomorrow = `Tomorrow: an easier day. Recovery is ${Math.round(d.recovery)}% after a hard one.`;
-  return { lines: lines.slice(0, 7), tomorrow };
+  return { lines: lines.slice(0, 8), tomorrow };
 }

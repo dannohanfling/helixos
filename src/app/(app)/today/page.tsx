@@ -75,7 +75,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const morningDone = Boolean(d.log?.morningDoneAt);
   const eveningDone = Boolean(d.log?.eveningDoneAt);
   // HumanOS's end-of-day read (rev 471): in Close the day from the evening on, beside the business numbers. Private to the member.
-  const bodyDayRead = body && (eveningDone || v.hour >= EVENING_HOUR) ? await dayReadFor(v.workspace.id, v.user.id, v.today, v.today, v.hour) : null;
+  const bodyDayRead = body && (eveningDone || v.hour >= EVENING_HOUR) ? await dayReadFor(v.workspace.id, v.user.id, v.today, v.today, v.hour, v.tz) : null;
   const openFocus = d.focusTasks.filter((t) => t.status !== "done");
   const doneFocus = d.focusTasks.filter((t) => t.status === "done");
   const boardTasks = [...d.overdueTasks, ...d.dueTasks].filter((t) => t.focusDate !== v.today);
