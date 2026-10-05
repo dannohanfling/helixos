@@ -382,6 +382,28 @@ async function main() {
     // exercises one update and one delete per owned table at runtime. The rest are named there, not skipped here.
     console.log(`· runtime action coverage: ${probes.map((p) => p.action).filter((v, i, a) => a.indexOf(v) === i).length} distinct actions across ${new Set(probes.map((p) => p.table)).size} tables; the remainder are pinned by src/lib/engine/__tests__/tenancy.test.ts`);
 
+    // Rev 511 (5 Oct): the library bank. Every member's own story and objection carries the workspace too, and the scope once
+    // read "the workspace's" as "everyone's in it". B's private entries must never reach A: not in A's library, not in what
+    // A's deck, run sheet and drafts read (the subject), not on A's Socrates objections page.
+    const { assetsFor } = await import("@/lib/queries/library");
+    const { subjectFor } = await import("@/lib/queries/subject");
+    const bStory = `B's Private Story ${newId().slice(0, 6)}`;
+    const bObjection = `B's Private Objection ${newId().slice(0, 6)}`;
+    await db.insert(schema.libraryAssets).values([
+      { id: newId(), workspaceId: ws, userId: B.id, type: "story", name: bStory, body: "B only." },
+      { id: newId(), workspaceId: ws, userId: B.id, type: "objection", name: bObjection, body: "B only.", reframe: "B only." },
+    ]);
+    const aLibrary = await assetsFor(ws, A.id);
+    const strangers = aLibrary.filter((x) => x.userId && x.userId !== A.id);
+    if (strangers.length) failures.push(`LIBRARY: A's library holds ${strangers.length} entries of other members (${strangers.map((x) => x.name).slice(0, 3).join(", ")})`);
+    const aSubject = await subjectFor({ userId: A.id, workspaceId: ws, name: A.name });
+    if (aSubject.assets.some((x) => x.userId && x.userId !== A.id)) failures.push("LIBRARY: what A's deck and drafts read holds another member's entries");
+    if (!(await assetsFor(ws, B.id)).some((x) => x.name === bStory)) failures.push("LIBRARY: B no longer sees B's own story");
+    await page.goto(`${base}/socrates/objections`);
+    const objectionsHtml = await page.content();
+    if (objectionsHtml.includes(bObjection) || objectionsHtml.includes(bStory)) failures.push("LIBRARY: B's private objection is on A's Socrates objections page");
+    if (!failures.some((f) => f.startsWith("LIBRARY"))) console.log(`✓ the library bank: A reads the shared and workspace banks and A's own (${aLibrary.length} entries), none of B's, in the library, the deck and drafts, and Socrates`);
+
     if (failures.length) throw new Error("TENANCY LEAK:\n" + failures.join("\n"));
     console.log("Tenancy walk passed.");
   } finally {

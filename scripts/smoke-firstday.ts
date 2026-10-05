@@ -65,6 +65,8 @@ async function main() {
     if (!(await page.locator('meta[name="robots"][content^="noindex"]').first().waitFor({ state: "attached", timeout: 15000 }).then(() => true, () => false))) throw new Error("an authenticated page is indexable");
     const mark = page.locator('header img[data-testid="app-logo"]').first();
     if (!(await mark.count()) || (await mark.getAttribute("alt")) !== "Evolve Omega" || (await mark.getAttribute("width")) !== "40") throw new Error("the header mark must be the real logo at 40px with real alt text");
+    // currentSrc is empty until the browser has picked and loaded a candidate (a cold first page can take a moment): wait for it.
+    await mark.evaluate((el) => new Promise<void>((done) => { const img = el as HTMLImageElement; if (img.complete && img.currentSrc) done(); else { img.addEventListener("load", () => done(), { once: true }); setTimeout(done, 10000); } }));
     if (!/app-logo-(light|ondark)-80\.png$/.test(await mark.evaluate((el) => (el as HTMLImageElement).currentSrc))) throw new Error("a 40px logo must be served from the 80px file");
     await expectText(page, "Lock in your first day", "welcome cta");
     const body = await page.locator("main").innerText();

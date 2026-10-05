@@ -246,6 +246,8 @@ async function main() {
     await submit(page, '[data-testid="ai-accept"]');
     const m2 = await magnet();
     if (m2.origin !== "ai_accepted" || JSON.stringify(m2.content) !== JSON.stringify(m1.content)) throw new Error("Accept marks the magnet accepted and changes no words");
+    // The Accept redirects and the page re-renders: give the label its moment to go before calling it stuck.
+    await page.locator('[data-testid="ai-unreviewed"]').first().waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
     if (await page.locator('[data-testid="ai-unreviewed"]').count()) throw new Error("the label goes with the Accept");
     await submit(page, '[data-testid="magnet-publish"]');
     await page.waitForURL(/published=1/);

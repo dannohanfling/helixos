@@ -2,9 +2,14 @@ import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { LibraryAsset } from "@/db/schema";
 
-/** Everything this member may read: the shared bank (no workspace), their workspace's bank, and their own entries. */
-function scopeFor(workspaceId: string, userId: string) {
-  return or(isNull(schema.libraryAssets.workspaceId), eq(schema.libraryAssets.workspaceId, workspaceId), eq(schema.libraryAssets.userId, userId));
+/**
+ * Everything this member may read: the shared bank (no workspace, no owner), their workspace's bank (the workspace's, no
+ * owner), and their own entries in this workspace. Never another member's (rev 511, 5 Oct): every member's own entry carries
+ * the workspace too, so "the workspace's" alone handed each member everyone else's stories and objections.
+ */
+export function scopeFor(workspaceId: string, userId: string) {
+  const a = schema.libraryAssets;
+  return or(and(isNull(a.workspaceId), isNull(a.userId)), and(eq(a.workspaceId, workspaceId), isNull(a.userId)), and(eq(a.workspaceId, workspaceId), eq(a.userId, userId)));
 }
 
 export async function assetsFor(workspaceId: string, userId: string, type?: LibraryAsset["type"]): Promise<LibraryAsset[]> {
