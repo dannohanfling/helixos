@@ -4,6 +4,11 @@ import { actPresence, buildChecks, type BuildResult, type KnownRefs } from "@/li
 import { resolveSections, type WebinarContext } from "@/lib/engine/webinar-context";
 import { deckPace, deckSlides } from "@/lib/engine/deck";
 import { subjectFor } from "@/lib/queries/subject";
+import { draftAvatar } from "@/lib/avatars";
+import { fitFromAvatar } from "@/lib/engine/avatars";
+
+/** "Who it is for" off the offer's main avatar (else the Primary), for an offer whose own lines are empty; the owner's only. */
+const avatarFitFor = async (w: schema.Webinar, offerId: string | undefined) => (offerId ? fitFromAvatar(await draftAvatar({ workspaceId: w.workspaceId, userId: w.userId }, offerId)) : null);
 
 /** Every id that still resolves for the workspace owner: the subject's known set, for callers with no viewer in hand. */
 export async function knownFor(userId: string, workspaceId: string): Promise<KnownRefs> {
@@ -39,7 +44,7 @@ export async function buildFor(w: schema.Webinar): Promise<{ build: BuildResult;
   const derived: DerivedInput = { proofs: count("proofs"), stories: count("stories"), offer: { linked: Boolean(offer), components: components.length, mapped: components.filter((c) => c.beliefBreak !== "none").length, price: offer?.price ?? 0 } };
   // The deck the export would make, so the twelfth check reads the same slides the Deck step shows.
   const presenter = presenterOf(w, subject.name);
-  const context = resolveSections({ webinar: w, presenter, sections, beliefs, proofs: subject.proofs, assets: subject.assets, essenceStories: subject.essenceStories, citable: subject.citable, offer: offer ? { offer, components } : null });
+  const context = resolveSections({ webinar: w, presenter, sections, beliefs, proofs: subject.proofs, assets: subject.assets, essenceStories: subject.essenceStories, citable: subject.citable, offer: offer ? { offer, components } : null, avatarFit: await avatarFitFor(w, offer?.id) });
   const deck = deckSlides(context, subject.brandKit);
   return { build: buildChecks({ webinar: w, sections, beliefs, components, known: subject.known, presenter, presenterAliases: subject.brandKit?.aliases ?? [], deck: { refused: deck.refused.length, rate: deckPace(context, deck).rate }, review: review ?? null }), review: review ?? null, derived };
 }
@@ -59,5 +64,5 @@ export async function contextFor(w: schema.Webinar): Promise<WebinarContext> {
   const offer = w.offerId ? subject.offers.find((o) => o.id === w.offerId) : undefined;
   const components = offer ? await db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, offer.id), orderBy: asc(schema.offerComponents.order) }) : [];
   // The presenter field, else the subject's own name: never a name from outside the subject.
-  return resolveSections({ webinar: w, presenter: presenterOf(w, subject.name), sections, beliefs, proofs: subject.proofs, assets: subject.assets, essenceStories: subject.essenceStories, citable: subject.citable, offer: offer ? { offer, components } : null });
+  return resolveSections({ webinar: w, presenter: presenterOf(w, subject.name), sections, beliefs, proofs: subject.proofs, assets: subject.assets, essenceStories: subject.essenceStories, citable: subject.citable, offer: offer ? { offer, components } : null, avatarFit: await avatarFitFor(w, offer?.id) });
 }

@@ -10,6 +10,8 @@ import { syncFieldTasks } from "@/lib/queries/pathway";
 import type { LibraryTask, PathwayProgress } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 import { DraftKeeper } from "@/components/draft-keeper";
+import { DefineAvatar } from "@/components/define-avatar";
+import { avatarData } from "@/lib/avatars";
 
 export const metadata = { title: "Pathway" };
 
@@ -78,7 +80,7 @@ function StagePreview({ stage, tasks, relation, statusOf, back }: { stage: { key
   );
 }
 
-export default async function PathwayPage({ searchParams }: { searchParams: Promise<{ task?: string; stage?: string; view?: string }> }) {
+export default async function PathwayPage({ searchParams }: { searchParams: Promise<{ task?: string; stage?: string; view?: string; error?: string; saved?: string }> }) {
   const v = await requireViewer();
   await syncFieldTasks(v.workspace.id, v.user.id);
   const sp = await searchParams;
@@ -112,6 +114,9 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
   });
   const doneDays = new Set(curriculumDone.map((c) => c.day));
   const nextDay = curriculum.find((c) => !doneDays.has(c.day));
+  // Day 1, "Define Your Buyer Avatar", writes into the Primary avatar (rev 501 §5).
+  const definesAvatar = Boolean(nextDay && /buyer avatar/i.test(nextDay.title));
+  const primaryAvatar = definesAvatar ? ((await avatarData({ workspaceId: v.workspace.id, userId: v.user.id })).rows.find((a) => a.primary && !a.archivedAt) ?? null) : null;
   const totalVerified = progress.filter((p) => p.status === "verified").length;
   const pathDone = stageStats.reduce((a, s) => a + s.done, 0);
   const pathTotal = stageStats.reduce((a, s) => a + s.total, 0);
@@ -312,6 +317,7 @@ export default async function PathwayPage({ searchParams }: { searchParams: Prom
                 <div className="mt-1 font-semibold">{nextDay.title}</div>
                 <p className="mt-1 whitespace-pre-line text-sm text-ink-2">{nextDay.instructions}</p>
                 {nextDay.why ? <p className="mt-2 text-xs text-ink-3">{nextDay.why}</p> : null}
+                {definesAvatar ? <DefineAvatar primary={primaryAvatar} from="/pathway" error={sp.error} saved={sp.saved === "primary"} /> : null}
                 <form action={completeCurriculumDayAction} className="mt-3">
                   <input type="hidden" name="day" value={nextDay.day} />
                   <SubmitButton className="btn btn-accent btn-sm" pendingText="Saving…">

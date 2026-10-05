@@ -34,6 +34,9 @@ export const MEMBER_TABLES = {
   lesson_progress: schema.lessonProgress,
   certification_submissions: schema.certSubmissions,
   offers: schema.offers,
+  // Buyer avatars and which offers each is for (rev 501, built by Body): the member's own, in their export and erased with them.
+  avatars: schema.avatars,
+  avatar_offers: schema.avatarOffers,
   pathways: schema.pathways,
   webinars: schema.webinars,
   client_records: schema.clientRecords,

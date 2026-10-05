@@ -40,6 +40,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/images", label: "Images", icon: "🖼️", line: "Your deck pictures" },
       { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent" },
       { href: "/offers", label: "Offers", icon: "🎁", hint: "wizard" },
+      { href: "/avatars", label: "Avatars", icon: "🧭", line: "Who each offer is for" },
       { href: "/pathway", label: "Pathway", icon: "🛣️" },
       { href: "/courses", label: "Courses", icon: "📚" },
       { href: "/recordings", label: "Recordings", icon: "🎥", line: "Your coaching calls", recordingsOnly: true },

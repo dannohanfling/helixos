@@ -17,6 +17,7 @@ import { citableEvidence } from "@/lib/queries/evidence";
 import { pushSocialPost } from "@/lib/integrations";
 import { staleScheduledFor } from "@/lib/queries/ladders";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
+import { draftAvatarBrief } from "@/lib/avatars";
 
 /**
  * The publish gate. Anything that pushes a ladder outward (to the composer, to ready/live/done, a rung marked posted)
@@ -119,7 +120,9 @@ async function generate(workspaceId: string, userId: string, brief: Brief): Prom
   ]);
   const member = { name: user?.name ?? "the coach", businessName: membership?.businessName, bigPromise: membership?.bigPromise };
   const system = `${masterBlock(profile ?? null, proofs, member, evidenceLines(evidence))}\n\n${outputContract()}`;
-  const text = await draft(system, perPostInput(brief), 8000, { feature: "ladder" });
+  // Who the post is for: the member's Primary avatar in their own words, when they've written one (rev 501 §6).
+  const avatar = await draftAvatarBrief({ workspaceId, userId }, null);
+  const text = await draft(system, [perPostInput(brief), avatar].filter(Boolean).join("\n\n"), 8000, { feature: "ladder" });
   if (text) {
     const parsed = scrub(parseLadderOutput(text));
     if (parsed.rungs.length >= 3 && parsed.copy) return { parsed, generatedBy: "claude" };

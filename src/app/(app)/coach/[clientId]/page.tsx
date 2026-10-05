@@ -37,6 +37,8 @@ import { MARK_ICON, fmtMacro } from "@/lib/engine/body";
 import { coachCheckins, coachSendsTo, coachTemplateLibrary } from "@/lib/queries/body";
 import { sendTemplateAction } from "@/lib/actions/body";
 import { KIND_LABEL, templateSummary, type TemplatePayload } from "@/lib/engine/body-templates";
+import { avatarData } from "@/lib/avatars";
+import { avatarTree, coachLine, offersOf } from "@/lib/engine/avatars";
 
 export const metadata = { title: "Client" };
 
@@ -95,6 +97,9 @@ export default async function CoachClientPage({ params, searchParams }: { params
     db.query.contentItems.findMany({ where: and(eq(schema.contentItems.workspaceId, ws), eq(schema.contentItems.userId, m.userId)), orderBy: desc(schema.contentItems.createdAt) }),
   ]);
   const noteTasks = await tasksFromNotes(ws, notes.map((n) => n.id));
+  // Their buyer avatars and which offers each is for, read-only (rev 501 §7).
+  const avatars = await avatarData({ workspaceId: ws, userId: m.userId });
+  const avatarTop = avatarTree(avatars.rows);
   const adjustments = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, ws), eq(schema.pointsLedger.userId, m.userId), isNotNull(schema.pointsLedger.adjustedBy)), orderBy: desc(schema.pointsLedger.createdAt), limit: 10 });
   const tier = tierProgress(points);
   const streak = runningStreak(closed, today);
@@ -553,6 +558,22 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 </li>
               ))}
             </ul>
+          </Card>
+
+          <Card title="Avatars" action={<span className="text-xs text-ink-3" data-testid="coach-avatars-line">{coachLine(avatars.rows, avatars.links)}</span>}>
+            {avatarTop.length ? (
+              <ul className="space-y-1.5 text-sm" data-testid="coach-avatars">
+                {avatarTop.flatMap((n) => [n.avatar, ...n.children]).map((a) => (
+                  <li key={a.id} className={a.parentId && avatarTop.some((t) => t.avatar.id === a.parentId) ? "pl-4 text-ink-2" : ""}>
+                    {a.primary ? "★ " : ""}
+                    {a.name}
+                    <span className="text-xs text-ink-3"> → {offersOf(a.id, avatars.links, avatars.offers).map((o) => `${o.name}${o.main ? " (main)" : ""}`).join(", ") || "no offer"}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-2">No avatars yet.</p>
+            )}
           </Card>
 
           <Card title={`Revenue by pillar · ${formatDate(`${month}-01`, { month: "long" })}`}>

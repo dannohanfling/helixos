@@ -22,6 +22,7 @@ import { checkSlides, deckSafe, keyPointsText, offerBlock, parseSectionDraft, SL
 import { evidenceLines, insertText } from "@/lib/engine/evidence";
 import { essenceFor } from "@/lib/queries/essence";
 import { citableEvidence } from "@/lib/queries/evidence";
+import { draftAvatarBrief } from "@/lib/avatars";
 
 async function own(webinarId: string, userId: string) {
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, webinarId), eq(schema.webinars.userId, userId)) });
@@ -190,6 +191,8 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   const ownPoints = Boolean(section?.keyPoints?.trim());
   // The closing frame presents the offer: it gets the record's own stack and price, the same the deck shows, or a placeholder.
   const offerLine = tpl.act === "closing" ? offerBlock((await contextFor(w)).sections.find((s) => s.offer)?.offer ?? null) : "";
+  // Who it's for: the offer's main avatar (else the Primary), in the member's own words, never added to (rev 501 §6).
+  const avatarLine = await draftAvatarBrief({ workspaceId, userId }, w.offerId);
   let text: string | null = null;
   let material = "";
   if (str(formData, "mode") !== "example") {
@@ -199,6 +202,7 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
         `Presenter: ${presenter}. Write as ${presenter}.`,
         `Session runtime: ${runtime} minutes in total; this section has ${section?.durationMin ?? tpl.durationMin} minutes.`,
         `Audience: ${w.audience ?? "(not set)"}`,
+        avatarLine,
         `Core problem: ${w.coreProblem ?? "(not set)"}`,
         `Promise: ${w.promise ?? "(not set)"}`,
         `Named mechanism: ${w.mechanismName ?? "(not set)"}`,

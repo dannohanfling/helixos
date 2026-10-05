@@ -17,6 +17,7 @@ import { evidenceLines } from "@/lib/engine/evidence";
 import { citableEvidence } from "@/lib/queries/evidence";
 import { deleteObject, putPublicMagnet, recordPublicMagnet } from "@/lib/storage";
 import { renderMagnetPdf } from "@/lib/pdf";
+import { draftAvatarBrief } from "@/lib/avatars";
 
 const typeOf = (raw: string): MagnetType => (MAGNET_TYPES as readonly string[]).includes(raw) ? (raw as MagnetType) : "checklist";
 
@@ -113,6 +114,7 @@ export async function generateMagnetAction(formData: FormData): Promise<void> {
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }),
     citableEvidence(userId),
   ]);
+  const avatarLine = await draftAvatarBrief({ workspaceId, userId }, offer?.id ?? null);
   const info = MAGNET_TYPE_INFO[m.type];
   const evidence = evidenceLines(citable);
   const task = `You write a lead magnet for a coach: the thing a reader comments a keyword to receive. Type: ${info.label}. ${info.shape} Write it as the coach, for their audience, from the facts given and nothing else. Output only a JSON object with keys "intro", "sections" (an array of objects with "heading", "items" (an array of strings)${m.type === "guide" ? ', "why", "how"' : ""}), "closing", and the five hand-over messages, each with one job: "personalReply" is the public comment reply on the coach's personal profile, and its job is to move them off the comment thread, short, with no link (a link in a comment suppresses reach); "personalDm" is the message the coach sends by hand, and its job is to deliver, then open a conversation: the link, then one question that invites a reply, because a DM that only delivers is a dead end; "chatbotAnswer" is what the automation on the business page says when someone comments the keyword, and it has the same two jobs, unattended: deliver, then ask the first qualifying question; "chatbotDelivery" is what arrives with the file: one line on what to do with it first, not a description of what it is, they already know; "chatbotQuestions" is an array of up to five qualifying questions in the order the automation asks them. The DM and the chatbot answer both end in a question. Proof may be used only verbatim as given. Studies may be cited only from the list given, claim and citation together. No other statistics, studies or results. Where a fact is missing, leave it out rather than invent it. The keyword is never in the intro or the sections.`;
@@ -120,6 +122,7 @@ export async function generateMagnetAction(formData: FormData): Promise<void> {
     `TITLE: ${m.title}`,
     `PROMISE: ${m.promise || "(not set)"}`,
     `AUDIENCE: ${m.audience || "(not set)"}`,
+    avatarLine,
     `KEYWORD (for the hand-over messages only): ${m.keyword}`,
     `BIG PROMISE: ${membership?.bigPromise ?? "(not set)"}`,
     membership?.businessName ? `BUSINESS: ${membership.businessName}` : "",

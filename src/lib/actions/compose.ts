@@ -21,6 +21,7 @@ import { background, pushSocialPost } from "@/lib/integrations";
 import { ctx, str } from "@/lib/action-helpers";
 import { carriesUnreviewed, gateLine, originAfterSave, variantName, type Gate } from "@/lib/engine/provenance";
 import { recordConfirm } from "@/lib/provenance";
+import { draftAvatarBrief } from "@/lib/avatars";
 
 export type ComposePayload = {
   id?: string | null;
@@ -174,9 +175,11 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
     const rules = g ? `Facebook group "${g.name}". Mission: ${g.mission ?? ""}. Admin values: ${g.adminValues ?? ""}. Rules: ${g.rules ?? ""}. Norms: ${g.postingNorms ?? ""}. ${g.kind === "own" ? "This is the author's own group: full CTA welcome." : "Guest post: value first, no links, no pitch."}${formatClause(spec)} Max ${spec?.maxChars} chars. Links: ${readRules(g).noLinks ? "none" : spec?.links}.` : `${spec?.label}.${toneClause(spec)}${formatClause(spec)} Max ${spec?.maxChars} chars. Links: ${spec?.links}.`;
     return `- ${t.key}: ${rules}\n  Current draft:\n${t.body}`;
   });
+  // Who it's for: the Primary avatar, in the member's own words (rev 501 §6); nothing when none is written.
+  const avatar = await draftAvatarBrief({ workspaceId: v.workspace.id, userId }, null);
   const text = await draft(
     `You adapt one coaching post for several channels so each version is native to where it's read and built to earn comments, shares and DMs. Return ONLY a JSON object keyed by target key, each value {"body": string, "subject"?: string (email only)}. Keep every version inside its character limit.`,
-    `Author: ${v.user.name}. Business: ${v.membership.businessName ?? ""}. Promise: ${v.membership.bigPromise ?? ""}\n\nSource title: ${input.title}\nHook: ${input.hook}\nBody:\n${input.body}\nHas CTA: ${input.hasCta}${input.cta?.trim() ? `\nCTA (the closing line, once, where a CTA belongs): ${input.cta.trim()}` : ""}\n\nTargets:\n${lines.join("\n\n")}`,
+    `Author: ${v.user.name}. Business: ${v.membership.businessName ?? ""}. Promise: ${v.membership.bigPromise ?? ""}\n\nSource title: ${input.title}\nHook: ${input.hook}\nBody:\n${input.body}\nHas CTA: ${input.hasCta}${input.cta?.trim() ? `\nCTA (the closing line, once, where a CTA belongs): ${input.cta.trim()}` : ""}${avatar ? `\n\n${avatar}` : ""}\n\nTargets:\n${lines.join("\n\n")}`,
     8000,
     { feature: "composer_polish" },
   );

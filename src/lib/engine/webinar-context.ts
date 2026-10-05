@@ -118,7 +118,7 @@ export function resolveEvidence(b: BeliefRow | undefined, citable: CitableRow[])
 
 const objection = (a: AssetRow): ResolvedObjection => ({ id: a.id, name: a.name, body: a.body, reframe: a.reframe ?? null, proof: a.proof ?? null });
 
-export function resolveSections(input: { webinar: { title: string; stayLine?: string | null; originStory?: Record<string, string> | null; promiseLine?: string | null; chatPrompt?: string | null; groundRule?: string | null; outcomes?: string[] | null; sessionGoal?: string | null; permissionLine?: string | null; reflectionPrompt?: string | null; footerBar?: boolean; ctaBar?: boolean }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null }): WebinarContext {
+export function resolveSections(input: { webinar: { title: string; stayLine?: string | null; originStory?: Record<string, string> | null; promiseLine?: string | null; chatPrompt?: string | null; groundRule?: string | null; outcomes?: string[] | null; sessionGoal?: string | null; permissionLine?: string | null; reflectionPrompt?: string | null; footerBar?: boolean; ctaBar?: boolean }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null; avatarFit?: { forYouIf: string | null; notForYouIf: string | null } | null }): WebinarContext {
   // Left out on purpose means left out: no clock, no slide, no row on the run sheet.
   const ordered = input.sections.filter((s) => s.status !== "omitted").slice().sort((a, b) => a.order - b.order);
   const offer: ResolvedOffer | null = input.offer
@@ -187,7 +187,8 @@ export function resolveSections(input: { webinar: { title: string; stayLine?: st
     presenter: input.presenter,
     stayLine: input.webinar.stayLine?.trim() || null,
     originStory: ORIGIN_BEATS.map((b) => ({ key: b.key, label: b.label, text: (input.webinar.originStory?.[b.key] ?? "").trim() })).filter((b) => b.text),
-    fit: { forYouIf: offer?.forYouIf ?? null, notForYouIf: offer?.notForYouIf ?? null },
+    // The offer's own lines, else its main avatar's (who they are, and not for), so the room hears who it's for without retyping.
+    fit: { forYouIf: offer?.forYouIf ?? input.avatarFit?.forYouIf ?? null, notForYouIf: offer?.notForYouIf ?? input.avatarFit?.notForYouIf ?? null },
     opening: {
       promiseLine: input.webinar.promiseLine?.trim() || null,
       chatPrompt: input.webinar.chatPrompt?.trim() || null,

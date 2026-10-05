@@ -952,6 +952,66 @@ export const offerComponents = sqliteTable(
   (t) => [index("offer_components_offer").on(t.offerId, t.order)],
 );
 
+/* ───────────────────────── Avatars (rev 501, built by Body at rev 508) ───────────────────────── */
+
+/** The ten optional fields of an avatar, in the order the page asks them (rev 501 §2). */
+export const AVATAR_FIELDS = ["who", "pains", "wants", "tried", "objections", "hangouts", "phrases", "trigger", "framework", "notFor"] as const;
+export type AvatarField = (typeof AVATAR_FIELDS)[number];
+
+/**
+ * One buyer avatar of a member's: a name, a one-line description and the ten optional fields. `parentId` makes it a
+ * sub-segment of another (one level). One per member may be Primary. `imported` marks one made from an offer's free-text
+ * avatar, kept until the member saves it. Archived ones are kept, never deleted, until the member deletes their data.
+ */
+export const avatars = sqliteTable(
+  "avatars",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    parentId: text("parent_id"),
+    name: text("name").notNull(),
+    oneLine: text("one_line"),
+    who: text("who"),
+    pains: text("pains"),
+    wants: text("wants"),
+    tried: text("tried"),
+    objections: text("objections"),
+    hangouts: text("hangouts"),
+    phrases: text("phrases"),
+    trigger: text("trigger"),
+    framework: text("framework"),
+    notFor: text("not_for"),
+    primary: integer("primary", { mode: "boolean" }).notNull().default(false),
+    imported: integer("imported", { mode: "boolean" }).notNull().default(false),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [index("avatars_member").on(t.workspaceId, t.userId), index("avatars_parent").on(t.parentId)],
+);
+export type Avatar = typeof avatars.$inferSelect;
+
+/** Which of a member's avatars an offer is for: many to many, with at most one `main` per offer. Owned like the avatar. */
+export const avatarOffers = sqliteTable(
+  "avatar_offers",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    avatarId: text("avatar_id")
+      .notNull()
+      .references(() => avatars.id, { onDelete: "cascade" }),
+    offerId: text("offer_id")
+      .notNull()
+      .references(() => offers.id, { onDelete: "cascade" }),
+    main: integer("main", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("avatar_offers_pair").on(t.avatarId, t.offerId), index("avatar_offers_member").on(t.workspaceId, t.userId), index("avatar_offers_offer").on(t.offerId)],
+);
+export type AvatarOffer = typeof avatarOffers.$inferSelect;
+
 /* ───────────────────────── Webinars ───────────────────────── */
 
 export const ACT_KEYS = ["opening", "vehicle", "internal", "external", "closing"] as const;

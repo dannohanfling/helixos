@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 96,
+    date: "2026-10-05",
+    title: "Avatars: the buyers you serve, matched to your offers",
+    lines: [
+      "Avatars, under Build next to Offers, keeps several buyer avatars in one place, with sub-segments under each. For each one you can write who they are, their pains, what they want, what they've tried, their objections, where they hang out, the words they use, why now, how your framework helps and who it's not for. Star one as your Primary.",
+      "Link each avatar to the offers they'd buy. On an offer, \"Who it's for\" shows its avatars with one as the main, and says so gently when none is linked. The first time you open Avatars, each offer's \"one person this is for\" comes in as an avatar marked \"imported, please review\".",
+      "Drafts write to the right buyer. Webinar sections, lead magnets, ladders and the composer's polish use the offer's main avatar (else your Primary) in your own words and add nothing to them. A webinar's \"Who it is for\" slides use the avatar when the offer's own lines are empty. Day 1 of the 30-day build saves straight into your Primary, and your own Claude can list, add and update avatars and link them to offers.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 95,
     date: "2026-10-05",
     title: "HumanOS: one pattern in your day's read",

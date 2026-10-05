@@ -16,6 +16,8 @@ import { BOT_ROLES, BOT_ROLE_LABEL, REFUND_LINE_DEFAULT, TERMS_WHEN_DEFAULT } fr
 import { SubmitButton } from "@/components/submit-button";
 import { MoneyInput } from "@/components/money-input";
 import { DraftKeeper } from "@/components/draft-keeper";
+import { OfferAvatars } from "@/components/offer-avatars";
+import { avatarData } from "@/lib/avatars";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
   return (
@@ -33,10 +35,11 @@ export default async function OfferWizardPage({ params, searchParams }: { params
   const { id } = await params;
   const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, v.user.id)) });
   if (!offer) notFound();
-  const [components, objections, proofs] = await Promise.all([
+  const [components, objections, proofs, avatars] = await Promise.all([
     db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, id), orderBy: asc(schema.offerComponents.order) }),
     assetsFor(v.workspace.id, v.user.id, "objection"),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
+    avatarData({ workspaceId: v.workspace.id, userId: v.user.id }),
   ]);
   // The optimiser counts the bank's objections this offer links that carry a reframe, plus any older fixed answers still filled.
   const answered = objections.filter((o) => offer.objectionAssetIds.includes(o.id) && reframesOf(o).length > 0).length;
@@ -362,6 +365,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
         </div>
 
         <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <OfferAvatars offerId={offer.id} rows={avatars.rows} links={avatars.links} />
           <Card title="Optimizer">
             <div className="flex items-end gap-3">
               <div className="text-5xl font-semibold leading-none">{r.score}</div>

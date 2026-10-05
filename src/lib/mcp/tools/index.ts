@@ -3,3 +3,4 @@ import "./whoami";
 import "./body";
 import "./tasks";
 import "./today";
+import "./avatars";

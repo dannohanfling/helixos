@@ -58,6 +58,7 @@ const ROUTES: Record<string, Route> = {
   "/groups/[id]": { kind: "owned", table: "groups" },
   "/library/[id]": { kind: "owned", table: "libraryPosts" },
   "/magnets/[id]": { kind: "owned", table: "leadMagnets" },
+  "/avatars/[id]": { kind: "owned", table: "avatars" },
   "/offers/[id]": { kind: "owned", table: "offers" },
   "/proof/[id]": { kind: "owned", table: "proofs" },
   "/recordings/[id]": { kind: "owned", table: "recordings" },
@@ -215,7 +216,11 @@ async function main() {
     }
     return r;
   };
-  await Promise.all([ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording(), ensureReport()]);
+  // Avatars (rev 501): a B-owned buyer avatar for /avatars/[id].
+  const ensureAvatar = async () => {
+    if (!(await db.query.avatars.findFirst({ where: eq(schema.avatars.userId, B.id) }))) await db.insert(schema.avatars).values({ id: newId(), workspaceId: ws, userId: B.id, name: "B's Private Avatar", pains: "B only." });
+  };
+  await Promise.all([ensureAvatar(), ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording(), ensureReport()]);
 
   // One B-owned id per table the routes name, so the walk can substitute B's id into A's request.
   const first = async <T>(q: Promise<T | undefined>): Promise<T> => {
@@ -224,6 +229,7 @@ async function main() {
     return r;
   };
   const bId: Record<string, string> = {
+    avatars: (await first(db.query.avatars.findFirst({ where: eq(schema.avatars.userId, B.id) }))).id,
     clientRecords: (await first(db.query.clientRecords.findFirst({ where: eq(schema.clientRecords.userId, B.id) }))).id,
     contentItems: (await first(db.query.contentItems.findFirst({ where: eq(schema.contentItems.userId, B.id) }))).id,
     ladders: (await first(db.query.ladders.findFirst({ where: eq(schema.ladders.userId, B.id) }))).id,
