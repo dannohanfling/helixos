@@ -12,7 +12,7 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 97,
+    n: 98,
     date: "2026-10-05",
     title: "HumanOS: weigh-ins from Apple Health",
     lines: [
@@ -22,7 +22,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
-    n: 96,
+    n: 97,
     date: "2026-10-05",
     title: "Avatars: the buyers you serve, matched to your offers",
     lines: [
@@ -33,7 +33,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
-    n: 95,
+    n: 96,
     date: "2026-10-05",
     title: "HumanOS: one pattern in your day's read",
     lines: [
@@ -43,7 +43,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
-    n: 94,
+    n: 95,
     date: "2026-10-05",
     title: "HumanOS: merge duplicate exercises",
     lines: [
