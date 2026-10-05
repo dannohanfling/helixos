@@ -514,6 +514,39 @@ async function main() {
     await client.goto(`${base}/body/training`);
     await client.locator('[data-testid="training-finished"]').waitFor({ timeout: 30000 });
     console.log(`✓ post-workout read (revs 471, 486): ${readWant.lines.length} lines, the query's own, the note in them; bench up to a PR keeps 190 for next time; the member types 195 over it, it becomes the routine's target and the bench learns a step of 5; Today shows the read`);
+    // ── Merge exercises (rev 507): an import's "Bench" with two old sets folds into Bench press after a preview that is the
+    // module's own; the sets move with their dates, the duplicate is archived and listed with Undo; Undo puts it all back. ──
+    {
+      const { newId: mid } = await import("@/lib/ids");
+      const { previewMerge } = await import("@/lib/body-merge");
+      const benchPressId = exRows.find((r) => r.name === "Bench press")!.id;
+      const dupId = mid();
+      await db.insert(schema.bodyExercises).values({ id: dupId, workspaceId: mem.workspaceId, userId: maya.id, name: "Bench (import)", kind: "weight" });
+      const oldSession = mid();
+      await db.insert(schema.bodySessions).values({ id: oldSession, workspaceId: mem.workspaceId, userId: maya.id, date: "2026-03-21", routineId: null, routineName: "From Airtable" });
+      await db.insert(schema.bodySets).values([
+        { id: mid(), workspaceId: mem.workspaceId, userId: maya.id, sessionId: oldSession, exerciseId: dupId, date: "2026-03-21", weight: 200, unit: "lb", reps: 5 },
+        { id: mid(), workspaceId: mem.workspaceId, userId: maya.id, sessionId: oldSession, exerciseId: dupId, date: "2026-03-21", weight: 195, unit: "lb", reps: 6 },
+      ]);
+      const want = await previewMerge(mem.workspaceId, maya.id, dupId, benchPressId);
+      if ("error" in want || !want.text.includes("PR becomes 200 × 5")) throw new Error(`the preview names the moved sets and the new PR: ${JSON.stringify(want)}`);
+      await client.goto(`${base}/body/training/routines?merge=${dupId}&into=${benchPressId}`);
+      if ((await client.locator('[data-testid="merge-preview-text"]').textContent())?.trim() !== want.text) throw new Error("the page's preview is the module's");
+      await press(client, '[data-testid="merge-confirm"]', async () => (await client.locator('[data-testid="merge-row"][data-merged="Bench (import)"]').count()) > 0, "the merge listed");
+      const moved = await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, "2026-03-21")) });
+      if (moved.length !== 2 || moved.some((x) => x.exerciseId !== benchPressId) || !(await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.id, dupId) }))?.archivedAt) throw new Error("the sets move with their dates and the duplicate is archived");
+      await press(client, '[data-testid="merge-row"][data-merged="Bench (import)"] [data-testid="merge-undo"]', async () => /Undone/.test((await client.locator('[data-testid="merge-said"]').textContent().catch(() => "")) ?? ""), "the merge undone");
+      const back2 = await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.date, "2026-03-21")) });
+      if (back2.some((x) => x.exerciseId !== dupId) || (await db.query.bodyExercises.findFirst({ where: eq(schema.bodyExercises.id, dupId) }))?.archivedAt) throw new Error("Undo puts the sets and the exercise back");
+      // Back out the walk's own duplicate, so the counts below hold.
+      await db.delete(schema.bodySets).where(eq(schema.bodySets.sessionId, oldSession));
+      await db.delete(schema.bodySessions).where(eq(schema.bodySessions.id, oldSession));
+      await db.delete(schema.bodyExerciseMerges).where(eq(schema.bodyExerciseMerges.mergedId, dupId));
+      await db.delete(schema.bodyExercises).where(eq(schema.bodyExercises.id, dupId));
+      await client.goto(`${base}/body/training`);
+      await client.locator('[data-testid="training-session"]').waitFor({ timeout: 30000 });
+      console.log(`✓ merge exercises (rev 507): "${want.text}" previewed as the module says, merged (sets moved with their dates, the duplicate archived and listed), then undone`);
+    }
     await logSet("Pull-up", "", "7");
     if ((await db.query.bodySessions.findFirst({ where: and(mine(schema.bodySessions), eq(schema.bodySessions.date, today)) }))?.completedAt) throw new Error("a set after finishing reopens the session");
     if ((await client.locator('[data-testid="training-finished"]').count()) || (await setsIn("Pull-up").nth(1).getAttribute("data-plan")) !== "under") throw new Error("reopened, and 7 against 8–10 is under plan");
@@ -1472,6 +1505,10 @@ async function main() {
     // The post-workout read by voice (rev 471): the same lines Training shows.
     const { workoutReadFor: readFor } = await import("@/lib/queries/body");
     const readTool = await tool("body_workout_read").handler(await viewerFor(), { date: today });
+    // A merge by voice (rev 507) previews without confirm, and changes nothing.
+    const setsBeforeMergeTool = (await db.query.bodySets.findMany({ where: mine(schema.bodySets) })).map((x) => x.exerciseId).join();
+    const mergeTool = await tool("body_merge_exercises").handler(await viewerFor(), { from: "pull-up", into: "bench press" });
+    if (!mergeTool.text.startsWith("Move ") || (mergeTool.data as { merged?: boolean }).merged !== false || (await db.query.bodySets.findMany({ where: mine(schema.bodySets) })).map((x) => x.exerciseId).join() !== setsBeforeMergeTool) throw new Error(`body_merge_exercises previews and changes nothing: ${mergeTool.text}`);
     // Next time's weight by voice (rev 486): the bench's routine target becomes 200.
     const nextTool = await tool("body_set_next_weight").handler(await viewerFor(), { exercise: "bench", weight: 200 });
     const benchRoutine = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.items.some((i) => i.weight === 200));

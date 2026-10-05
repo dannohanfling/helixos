@@ -43,6 +43,7 @@ import { addDays, daysBetween, nowIso, startOfWeek, weekday } from "@/lib/dates"
 import { bodyAccess, bodySettingsFor } from "@/lib/queries/body";
 import { saveReadings } from "@/lib/body-readings";
 import { saveNextWeight } from "@/lib/body-next";
+import { mergeExercises, undoMerge } from "@/lib/body-merge";
 import { logSync } from "@/lib/integrations";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -773,6 +774,25 @@ export async function logSetAction(formData: FormData): Promise<void> {
   if (session.completedAt) await db.update(schema.bodySessions).set({ completedAt: null }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
   refresh();
   await settle();
+}
+
+/** Merge one exercise into another (rev 507), after the preview: everything moves, and Undo is open for 7 days. */
+export async function mergeExercisesAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const r = await mergeExercises(workspaceId, userId, str(formData, "merge"), str(formData, "into"));
+  if ("error" in r) back(`${TRAINING}/routines`, r.error);
+  refresh();
+  redirect(`${TRAINING}/routines?said=${encodeURIComponent((r as { text: string }).text)}#exercises`);
+}
+
+export async function undoMergeAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const r = await undoMerge(workspaceId, userId, str(formData, "id"));
+  if ("error" in r) back(`${TRAINING}/routines`, r.error);
+  refresh();
+  redirect(`${TRAINING}/routines?said=${encodeURIComponent((r as { text: string }).text)}#exercises`);
 }
 
 /**

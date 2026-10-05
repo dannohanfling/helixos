@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 94,
+    date: "2026-10-05",
+    title: "HumanOS: merge duplicate exercises",
+    lines: [
+      "If the same exercise shows up twice, say \"Leg Curl\" from an import beside \"Seated Leg Curl\", open Edit on the one to let go and choose Merge into…. A preview first says what moves (\"Move 9 sets (Mar 21 to Apr 12) into Seated Leg Curl; PR becomes 105 × 10\").",
+      "Merge moves every set with its date onto the exercise you keep, and your routines follow. The merged one is archived, not deleted, and Undo stays open for 7 days. Your own Claude can do it too, and asks before it merges.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 93,
     date: "2026-10-05",
     title: "Your first deck: a starter kit, and a logo that shows",

@@ -2807,6 +2807,30 @@ export const bodyExercises = sqliteTable(
 );
 export type BodyExercise = typeof bodyExercises.$inferSelect;
 
+/**
+ * An exercise merged into another (rev 507): what moved, so Undo can put it back for 7 days. `setIds` are the merged exercise's
+ * sets now on the kept one; `routines` and `health` hold the items and restrictions as they were before; `keptStep` the kept
+ * exercise's step before it took the merged one's. The member's own: in their export and erased with them.
+ */
+export const bodyExerciseMerges = sqliteTable(
+  "body_exercise_merges",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    keptId: text("kept_id").notNull(),
+    mergedId: text("merged_id").notNull(),
+    setIds: text("set_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    routines: text("routines", { mode: "json" }).$type<{ routineId: string; items: BodyRoutineItem[] }[]>().notNull().default([]),
+    health: text("health", { mode: "json" }).$type<{ healthId: string; restricted: string[] }[]>().notNull().default([]),
+    keptStep: real("kept_step"),
+    undoneAt: text("undone_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("body_exercise_merges_member").on(t.workspaceId, t.userId), index("body_exercise_merges_merged").on(t.mergedId)],
+);
+export type BodyExerciseMerge = typeof bodyExerciseMerges.$inferSelect;
+
 /** One line of a routine: the exercise and its target, e.g. 3 sets of "8–10". */
 /** `weight`: a target the member accepted from a post-workout read (rev 471), in their weight unit; none until they do. */
 export type BodyRoutineItem = { exerciseId: string; sets: number; reps: string; weight?: number | null };

@@ -14,6 +14,7 @@ import { MACROS, MACRO_LABEL, MARK_ICON, dayTypeIdFor, entryItem, fmtBand, fmtMa
 import { convertQty, loggableUnits, storedUnit } from "@/lib/engine/body-units";
 import { fmtSet, toUnit } from "@/lib/engine/body-training";
 import { saveNextWeight } from "@/lib/body-next";
+import { mergeExercises, previewMerge } from "@/lib/body-merge";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, withDerived, type MetricKey } from "@/lib/engine/body-scale";
 import { saveReadings } from "@/lib/body-readings";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
@@ -217,6 +218,29 @@ export const bodySetNextWeight = defineTool({
     const saved = await saveNextWeight(v.workspace.id, v.user.id, { routineId: routine.id, exerciseId: exercise.id, weight, suggested: next?.weight ?? null, top: next?.from ?? null });
     if ("error" in saved) throw new Error(saved.error);
     return { text: `${saved.exerciseName} next time in ${saved.routineName}: ${weight} ${settings.weightUnit}.${saved.learnedStep != null ? ` It steps up by ${saved.learnedStep} ${settings.weightUnit} from now on.` : ""}`, data: { exercise: saved.exerciseName, routine: saved.routineName, weight, unit: settings.weightUnit, learnedStep: saved.learnedStep } };
+  },
+});
+
+/** Merging a duplicate exercise by voice (rev 507): the preview first; with confirm, the merge (Undo on Routines for 7 days). */
+export const bodyMergeExercises = defineTool({
+  name: "body_merge_exercises",
+  scope: "body",
+  kind: "write",
+  description: "Merge one exercise into another (a duplicate, such as an import's \"Leg Curl\" into \"Seated Leg Curl\"): every set moves onto the kept exercise with its date, routines and the PR follow, and the merged one is archived, with Undo on Routines for 7 days. Without confirm it only previews (\"Move 9 sets (Mar 21 to Apr 12) into Seated Leg Curl; PR becomes 105 × 10\"): read that to the member and merge only when they say yes.",
+  input: { from: z.string().describe("The exercise to merge away"), into: z.string().describe("The exercise to keep"), confirm: z.boolean().optional().describe("true only after the member agreed to the preview") },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const lib = await trainingLibrary(v.workspace.id, v.user.id);
+    const from = byName("exercise", lib.exercises, String(input.from ?? ""));
+    const into = byName("exercise", lib.exercises, String(input.into ?? ""));
+    if (input.confirm !== true) {
+      const p = await previewMerge(v.workspace.id, v.user.id, from.id, into.id);
+      if ("error" in p) throw new Error(p.error);
+      return { text: `${p.text} Say yes to merge; Undo stays open on Routines for 7 days.`, data: { preview: p, merged: false } };
+    }
+    const r = await mergeExercises(v.workspace.id, v.user.id, from.id, into.id);
+    if ("error" in r) throw new Error(r.error);
+    return { text: `${r.text} Undo is on Routines for 7 days.`, data: { merged: true, mergeId: r.mergeId } };
   },
 });
 

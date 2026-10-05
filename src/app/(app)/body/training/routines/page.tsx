@@ -9,7 +9,8 @@ import { ConfirmDelete } from "@/components/confirm-delete";
 import { fmtTarget } from "@/lib/engine/body-training";
 import { bodySettingsFor, dayTypesFor, requireBodyEnabled, trainingLibrary, type TrainingLibrary, templateSendsFor } from "@/lib/queries/body";
 import { CoachSends } from "@/components/body/coach-sends";
-import { archiveExerciseAction, archiveRoutineAction, saveExerciseAction, saveRoutineAction } from "@/lib/actions/body";
+import { archiveExerciseAction, archiveRoutineAction, mergeExercisesAction, saveExerciseAction, saveRoutineAction, undoMergeAction } from "@/lib/actions/body";
+import { openMerges, previewMerge } from "@/lib/body-merge";
 import type * as schema from "@/db/schema";
 
 export const metadata = { title: "HumanOS · Exercises & routines" };
@@ -96,7 +97,7 @@ function RoutineForm({ owner, routine, lib, types, rowCount }: { owner: string; 
   );
 }
 
-export default async function TrainingRoutinesPage({ searchParams }: { searchParams: Promise<{ error?: string; rows?: string }> }) {
+export default async function TrainingRoutinesPage({ searchParams }: { searchParams: Promise<{ error?: string; rows?: string; merge?: string; into?: string; said?: string }> }) {
   const v = await requireViewer();
   requireBodyEnabled(v);
   const sp = await searchParams;
@@ -104,6 +105,8 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
   if (!(await bodySettingsFor(v.workspace.id, v.user.id))) redirect("/body");
   const [lib, types, sends] = await Promise.all([trainingLibrary(v.workspace.id, v.user.id), dayTypesFor(v.workspace.id, v.user.id), templateSendsFor(v.workspace.id, v.user.id, "routine")]);
   const typeName = new Map(types.map((t) => [t.id, t.name]));
+  // Merging (rev 507): a preview when one is asked for, and the merges still open to undo.
+  const [preview, merges] = await Promise.all([sp.merge && sp.into ? previewMerge(v.workspace.id, v.user.id, sp.merge, sp.into) : null, openMerges(v.workspace.id, v.user.id)]);
 
   return (
     <>
@@ -112,6 +115,58 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="body-error">
           {sp.error}
         </p>
+      ) : null}
+
+      {sp.said ? (
+        <p className="mb-4 rounded-xl border border-good bg-good-soft p-3 text-sm" role="status" data-testid="merge-said">
+          {sp.said.slice(0, 300)}
+        </p>
+      ) : null}
+      {preview ? (
+        "error" in preview ? (
+          <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="merge-error">
+            {preview.error}
+          </p>
+        ) : (
+          <section className="card mb-4 border-l-4 border-l-humanos p-4" data-testid="merge-preview" data-sets={preview.sets}>
+            <p className="text-sm font-semibold">Merge {preview.mergedName} into {preview.keptName}?</p>
+            <p className="mt-1 text-sm" data-testid="merge-preview-text">
+              {preview.text}
+            </p>
+            <p className="mt-1 text-xs text-ink-3">Routines and the health log point at {preview.keptName} from then on, and {preview.mergedName} is archived, not deleted. Undo is open for 7 days.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <form action={mergeExercisesAction}>
+                <input type="hidden" name="merge" value={sp.merge} />
+                <input type="hidden" name="into" value={sp.into} />
+                <SubmitButton className="btn btn-humanos btn-sm" pendingText="Merging…" data-testid="merge-confirm">
+                  Merge
+                </SubmitButton>
+              </form>
+              <Link href="/body/training/routines#exercises" className="btn btn-ghost btn-sm">
+                Cancel
+              </Link>
+            </div>
+          </section>
+        )
+      ) : null}
+      {merges.length ? (
+        <Card className="mb-4" title="Merged lately">
+          <ul className="space-y-1 text-sm" data-testid="merges">
+            {merges.map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center justify-between gap-2" data-testid="merge-row" data-merged={m.mergedName}>
+                <span>
+                  {m.mergedName} <span className="text-ink-3">· merged into {m.keptName}, {m.setIds.length} set{m.setIds.length === 1 ? "" : "s"}</span>
+                </span>
+                <form action={undoMergeAction}>
+                  <input type="hidden" name="id" value={m.id} />
+                  <SubmitButton className="btn btn-ghost btn-xs" pendingText="…" data-testid="merge-undo">
+                    Undo
+                  </SubmitButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </Card>
       ) : null}
 
       <Card className="mb-4" title="Exercises" id="exercises">
@@ -139,6 +194,30 @@ export default async function TrainingRoutinesPage({ searchParams }: { searchPar
                       Save
                     </SubmitButton>
                   </form>
+                  {/* Rev 507: a duplicate (an import's "Leg Curl" beside "Seated Leg Curl") folds into the one to keep, after a preview. */}
+                  {lib.exercises.length > 1 ? (
+                    <form method="get" action="/body/training/routines" className="mt-3 flex flex-wrap items-end gap-2 border-t pt-2" data-testid="merge-form">
+                      <input type="hidden" name="merge" value={e.id} />
+                      <label className="min-w-0 flex-1">
+                        <span className="label">Merge into…</span>
+                        <select name="into" className="field py-1 text-sm" required defaultValue="">
+                          <option value="" disabled>
+                            Pick the exercise to keep…
+                          </option>
+                          {lib.exercises
+                            .filter((o) => o.id !== e.id)
+                            .map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <button type="submit" className="btn btn-ghost btn-sm" data-testid="merge-preview-go">
+                        Preview
+                      </button>
+                    </form>
+                  ) : null}
                 </Disclosure>
               </li>
             ))}

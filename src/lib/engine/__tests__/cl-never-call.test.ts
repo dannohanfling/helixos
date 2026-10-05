@@ -49,11 +49,11 @@ describe("HelixOS never deletes a bot field", () => {
 });
 
 describe("every send shows that it is working", () => {
-  it("no plain submit button is left: each is the shared pending button, except the six filter pages that only change the address", () => {
+  it("no plain submit button is left: each is the shared pending button, except the seven pages whose GET forms only change the address (a filter, or the merge preview of rev 507)", () => {
     const tsx = files(SRC).filter((f) => f.endsWith(".tsx") && !f.endsWith("components/submit-button.tsx"));
     const plain = tsx.flatMap((f) => (readFileSync(f, "utf8").match(/<button\b[^>]*type="submit"/g) ?? []).map((b) => `${f.slice(SRC.length)}: ${b.slice(0, 60)}`));
-    expect([...new Set(plain.map((p) => p.split(":")[0]))].sort()).toEqual(["/app/(app)/body/foods/find/page.tsx", "/app/(app)/body/insights/page.tsx", "/app/(app)/body/training/page.tsx", "/app/(app)/coach/move/page.tsx", "/app/(app)/library/page.tsx", "/app/(app)/socrates/questions/page.tsx"]);
-    for (const f of ["app/(app)/body/foods/find/page.tsx", "app/(app)/body/insights/page.tsx", "app/(app)/body/training/page.tsx", "app/(app)/coach/move/page.tsx", "app/(app)/library/page.tsx", "app/(app)/socrates/questions/page.tsx"]) expect(readFileSync(join(SRC, f), "utf8")).toMatch(/<form[^>]*method="get"/);
+    expect([...new Set(plain.map((p) => p.split(":")[0]))].sort()).toEqual(["/app/(app)/body/foods/find/page.tsx", "/app/(app)/body/insights/page.tsx", "/app/(app)/body/training/page.tsx", "/app/(app)/body/training/routines/page.tsx", "/app/(app)/coach/move/page.tsx", "/app/(app)/library/page.tsx", "/app/(app)/socrates/questions/page.tsx"]);
+    for (const f of ["app/(app)/body/foods/find/page.tsx", "app/(app)/body/insights/page.tsx", "app/(app)/body/training/page.tsx", "app/(app)/body/training/routines/page.tsx", "app/(app)/coach/move/page.tsx", "app/(app)/library/page.tsx", "app/(app)/socrates/questions/page.tsx"]) expect(readFileSync(join(SRC, f), "utf8")).toMatch(/<form[^>]*method="get"/);
     const pending = tsx.reduce((n, f) => n + (readFileSync(f, "utf8").match(/<SubmitButton\b/g) ?? []).length, 0);
     expect(pending).toBeGreaterThan(150);
   });
