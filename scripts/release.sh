@@ -13,8 +13,11 @@ main() {
 
   scripts/verify.sh --build
   # The build above replaces .next; the auth walk's helper servers run `next start` from it, so restart the dev server
-  # afterwards rather than before.
-  scripts/dev-server.sh restart
+  # afterwards rather than before. From a clean .next/dev: the dev server's cache kept from before a build can lose a route
+  # (5 Oct: /socrates/scripts/<id>/sheet answered 404 after every build until .next/dev was cleared, twice in a row in the gate).
+  scripts/dev-server.sh stop
+  rm -rf .next/dev
+  scripts/dev-server.sh start
   if [[ $# -gt 0 ]]; then
     scripts/smoke.sh "$@"
   else
