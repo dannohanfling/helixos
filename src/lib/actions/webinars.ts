@@ -8,9 +8,9 @@ import { db, schema } from "@/db";
 import { WEBINAR_STATUSES } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
-import { draft } from "@/lib/ai";
+import { draftFull } from "@/lib/ai";
 import { ACTS, applyOverride, DERIVED_DIMENSIONS, derivedGrades, draftShape, freeTextProofUsable, ORIGIN_BEATS, READINESS_DIMENSIONS, readinessScore, readyDecision, SECTION_TEMPLATES, type Override } from "@/lib/engine/webinar";
-import { buildFor, presenterOf } from "@/lib/queries/webinar";
+import { buildFor, contextFor, presenterOf } from "@/lib/queries/webinar";
 import { fillRuntime } from "@/lib/engine/subject";
 import { award } from "@/lib/queries/points";
 import { assetFor } from "@/lib/queries/library";
@@ -18,6 +18,7 @@ import { ctx, num, opt, optNum, refresh, str } from "@/lib/action-helpers";
 import { originAfterAccept, originAfterSave, sectionGate } from "@/lib/engine/provenance";
 import { recordConfirm } from "@/lib/provenance";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
+import { checkSlides, keyPointsText, offerBlock, parseSectionDraft, SLIDES_MARK, slideLines, slidesInstruction, slidesOnlyTask } from "@/lib/engine/section-draft";
 import { evidenceLines, insertText } from "@/lib/engine/evidence";
 import { essenceFor } from "@/lib/queries/essence";
 import { citableEvidence } from "@/lib/queries/evidence";
@@ -183,11 +184,17 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
   // A free-text proof reaches the script only with tick two, or when written before the tick existed.
   const freeText = belief && freeTextProofUsable(belief) ? belief.proof : null;
   const proofLine = picked ? `Approved proof, use it verbatim with first name and last initial: ${picked.who ?? picked.name}: "${picked.longVersion ?? picked.shortVersion ?? picked.resultAfter ?? ""}"` : freeText ? `Proof${belief?.proofWho ? ` (${belief.proofWho})` : ""}: ${freeText}` : "No usable proof for this act: write [PROOF PLACEHOLDER] where one belongs. Never invent one.";
+  // A section the coach already gave key points keeps them: the draft writes only the script. Otherwise it writes the deck lines too
+  // (first-deck brief §2), so a drafted webinar exports with slides in every act.
+  const minutes = section?.durationMin ?? tpl.durationMin;
+  const ownPoints = Boolean(section?.keyPoints?.trim());
+  // The closing frame presents the offer: it gets the record's own stack and price, the same the deck shows, or a placeholder.
+  const offerLine = tpl.act === "closing" ? offerBlock((await contextFor(w)).sections.find((s) => s.offer)?.offer ?? null) : "";
   let text: string | null = null;
+  let material = "";
   if (str(formData, "mode") !== "example") {
-    text = await draft(
-      `You write webinar scripts using the Perfect Webinar structure (Opening Frame, Vehicle, Internal, External, Closing Frame). Output only the spoken script for one section, 120 to 260 words, no headings. The script is spoken by the presenter named below, in their first person; never introduce anyone else, and never state a credential, a number of years or a statistic that is not in the material given.`,
-      [
+    const task = `You write webinar scripts using the Perfect Webinar structure (Opening Frame, Vehicle, Internal, External, Closing Frame). Output the spoken script for one section, 120 to 260 words, no headings. The script is spoken by the presenter named below, in their first person; never introduce anyone else, and never state a credential, a number of years or a statistic that is not in the material given.${ownPoints ? " Output only the script." : ` ${slidesInstruction(minutes)}`}`;
+    material = [
         `Webinar: ${w.title}`,
         `Presenter: ${presenter}. Write as ${presenter}.`,
         `Session runtime: ${runtime} minutes in total; this section has ${section?.durationMin ?? tpl.durationMin} minutes.`,
@@ -203,13 +210,17 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
         // The example's shape, never its words: nothing of the Leaky Webinar's script is in the prompt to be echoed.
         ...draftShape(tpl, section?.durationMin ?? tpl.durationMin, act, fillRuntime(tpl.prompt, { runtime, openingMinutes })),
         asset ? `Use this ${asset.type} from the library, adapted to the audience:\n${asset.body}` : "",
+        offerLine,
         section?.keyPoints ? `Key points the coach wants covered:\n${section.keyPoints}` : "",
       ]
-        .filter(Boolean)
-        .join("\n\n"),
-      2000,
-      { feature: "webinar_section" },
-    );
+      .filter(Boolean)
+      .join("\n\n");
+    const out = await draftCompletely(task, material, "webinar_section");
+    if (out === "cut") {
+      refresh();
+      redirect(`/webinars/${id}?step=script&section=${sectionKey}&draftError=${encodeURIComponent("The draft came back cut off twice, so nothing was saved. Press it again, or write this section yourself.")}`);
+    }
+    text = out;
   }
   // No model, or the example asked for: nothing is written. The example is shown beside the field, for shape, and never becomes a value.
   if (!text) {
@@ -217,15 +228,57 @@ export async function draftSectionAction(formData: FormData): Promise<void> {
     redirect(`/webinars/${id}?step=script&section=${sectionKey}&example=1`);
   }
   // A fabricated statistic the model wrote comes out, and the page says what went and why. The coach's own words are never edited here.
-  const stripped = stripFabricated(text);
+  const parsed = parseSectionDraft(text);
+  const stripped = stripFabricated(parsed.script);
   const note = stripNote(stripped.removed);
+  // The deck lines: only where the coach had none, each through the same checks as the script, a figure only from the record.
+  const lines = ownPoints || !parsed.slides ? [] : checkSlides(parsed.slides.filter((l) => !stripFabricated(l).removed.length), `${material}\n${stripped.text}`).kept;
   await db
     .update(schema.webinarSections)
-    .set({ script: stripped.text, status: "drafted", keyPoints: section?.keyPoints ?? null, origin: "ai_unreviewed" })
+    .set({ script: stripped.text, status: "drafted", keyPoints: ownPoints ? section!.keyPoints : lines.length ? keyPointsText(lines) : null, origin: "ai_unreviewed" })
     .where(and(eq(schema.webinarSections.webinarId, id), eq(schema.webinarSections.sectionKey, sectionKey)));
   await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, id));
   refresh();
   redirect(`/webinars/${id}?step=script&section=${sectionKey}${note ? `&stripped=${encodeURIComponent(note)}` : ""}`);
+}
+
+/** Output budgets for a section draft: the first ask, and the one retry when an answer comes back cut off at the budget. */
+const DRAFT_BUDGET = 4000;
+const DRAFT_RETRY_BUDGET = 8000;
+
+/**
+ * A draft that is whole or nothing: an answer cut off at the output budget is asked for once more with a larger one, and if that
+ * is cut too the caller says so rather than keep half a sentence (the Offer Stack draft that ended "…what I've built, and").
+ */
+async function draftCompletely(task: string, material: string, feature: string, budget = DRAFT_BUDGET): Promise<string | null | "cut"> {
+  let out = await draftFull(task, material, budget, { feature });
+  if (out?.cut) out = await draftFull(task, material, Math.max(DRAFT_RETRY_BUDGET, budget * 2), { feature });
+  if (!out) return null;
+  return out.cut ? "cut" : out.text;
+}
+
+/**
+ * "Make slides from my script" (first-deck brief §2): a section with words to speak and no key points gets its deck lines from
+ * its own script, one per slide, a figure only where the script has it. A section that has key points keeps them.
+ */
+export async function makeSlidesAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx();
+  const id = str(formData, "id");
+  const sectionKey = str(formData, "sectionKey");
+  const w = await own(id, userId);
+  const section = await db.query.webinarSections.findFirst({ where: and(eq(schema.webinarSections.webinarId, w.id), eq(schema.webinarSections.sectionKey, sectionKey)) });
+  const back = `/webinars/${w.id}?step=script&section=${sectionKey}`;
+  if (!section?.script?.trim()) redirect(`${back}&draftError=${encodeURIComponent("This section has no script yet to make slides from.")}`);
+  if (section.keyPoints?.trim()) redirect(`${back}&draftError=${encodeURIComponent("This section already has key points; the deck reads those.")}`);
+  const out = await draftCompletely(slidesOnlyTask(section.durationMin), `Webinar: ${w.title}\n\nSection: ${section.name}\n\nScript:\n${section.script}`, "webinar_section", 1500);
+  if (out === "cut" || !out) redirect(`${back}&draftError=${encodeURIComponent(out === "cut" ? "The slides came back cut off twice, so nothing was saved. Press it again." : "No AI key is working for you right now: type one idea per line in Key points instead.")}`);
+  const at = out.indexOf(SLIDES_MARK);
+  const lines = checkSlides(slideLines(at >= 0 ? out.slice(at + SLIDES_MARK.length) : out).filter((l) => !stripFabricated(l).removed.length), section.script).kept;
+  if (!lines.length) redirect(`${back}&draftError=${encodeURIComponent("Nothing usable came back. Press it again, or type one idea per line in Key points.")}`);
+  await db.update(schema.webinarSections).set({ keyPoints: keyPointsText(lines) }).where(eq(schema.webinarSections.id, section.id));
+  await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, w.id));
+  refresh();
+  redirect(`${back}&slides=${lines.length}`);
 }
 
 /** Accept: the coach has read this one AI-drafted script and keeps it as it is. One section per click; nothing accepts more than one. */

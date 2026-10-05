@@ -13,6 +13,7 @@ import {
   confirmDeckExportAction,
   deleteWebinarAction,
   draftSectionAction,
+  makeSlidesAction,
   linkOfferAction,
   saveReadinessAction,
   updateRunAction,
@@ -52,6 +53,7 @@ import {
   derivedGrades,
   type StepKey,
 } from "@/lib/engine/webinar";
+import { needsSlides } from "@/lib/engine/section-draft";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, presenterOf } from "@/lib/queries/webinar";
 import {HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry } from "@/lib/engine/deck";
@@ -103,6 +105,8 @@ export default async function WebinarWizardPage({
     runError?: string;
     field?: string;
     savedSection?: string;
+    draftError?: string;
+    slides?: string;
   }>;
 }) {
   const v = await requireViewer();
@@ -940,9 +944,20 @@ export default async function WebinarWizardPage({
                   className="field min-h-20"
                   name="keyPoints"
                   defaultValue={section.keyPoints ?? ""}
-                  placeholder={tpl.exampleKeyPoints}
+                  placeholder={"One idea per line. Each line is one slide."}
+                  data-testid="section-key-points"
                 />
               </Field>
+              {needsSlides(section) ? (
+                <p className="rounded-lg border border-warn bg-warn-soft p-2 text-xs" data-testid="needs-slides">
+                  This section has a script but no key points, so the deck has no slide for it. {ai ? <>Press <strong>Make slides from my script</strong> below, or type one idea per line here.</> : <>Type one idea per line here: each line is one slide.</>}
+                </p>
+              ) : null}
+              {sp.slides ? (
+                <p className="rounded-lg bg-good-soft p-2 text-xs" role="status" data-testid="slides-made">
+                  {sp.slides} slide lines made from your script. Read them over: each line is one slide.
+                </p>
+              ) : null}
               {sp.stripped ? (
                 <p
                   className="whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-xs"
@@ -1099,9 +1114,24 @@ export default async function WebinarWizardPage({
                 />
                 <AiPromise enabled={ai}>
                   Returns the spoken script for this section, 120 to 260 words,
-                  written to this act and the belief it has to move.
+                  written to this act and the belief it has to move, and its
+                  slides, one line each, when Key points is empty.
                 </AiPromise>
               </form>
+              {ai && needsSlides(section) ? (
+                <form action={makeSlidesAction} id="make-slides">
+                  <input type="hidden" name="id" value={w.id} />
+                  <input type="hidden" name="sectionKey" value={section.sectionKey} />
+                  <SubmitButton className="btn btn-soft btn-sm" pendingText="Making slides…" data-testid="make-slides">
+                    ✨ Make slides from my script
+                  </SubmitButton>
+                </form>
+              ) : null}
+              {sp.draftError ? (
+                <p className="w-full rounded-lg border border-danger bg-danger-soft p-2 text-xs" role="alert" data-testid="draft-error">
+                  {sp.draftError}
+                </p>
+              ) : null}
               <details className="text-xs">
                 <summary className="text-ink-3 underline">
                   See the Leaky Webinar version
@@ -1374,7 +1404,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} thumbs={thumbs} thumbChrome={thumbChrome} hasLogo={hasLogo} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
+        <DeckStep scriptOnly={sections.filter((x) => needsSlides(x)).map((x) => ({ key: x.sectionKey, name: x.name }))} presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} thumbs={thumbs} thumbChrome={thumbChrome} hasLogo={hasLogo} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
       ) : null}
 
       {step === "review" ? (
@@ -1716,7 +1746,7 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter }: { webinarId: string; owner: { workspaceId: string; userId: string }; thumbs: ThumbSlide[]; thumbChrome: ThumbChrome; hasLogo: boolean; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
+function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter, scriptOnly }: { scriptOnly: { key: string; name: string }[]; webinarId: string; owner: { workspaceId: string; userId: string }; thumbs: ThumbSlide[]; thumbChrome: ThumbChrome; hasLogo: boolean; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
   const fallbacks = slotFallbacks(resolvedSlots);
   const bySlide = new Map(resolvedSlots.map((r) => [r.slide, r]));
@@ -1770,6 +1800,22 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
         <p className="mb-2 text-sm text-ink-2" data-testid="deck-partial">
           {pace.sectionsWithPoints} of {pace.sections} sections have key points; the deck reads only those.
         </p>
+      ) : null}
+      {scriptOnly.length ? (
+        <div className="mb-3 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="deck-script-only">
+          <p>
+            {scriptOnly.length === 1 ? "This section has" : `These ${scriptOnly.length} sections have`} a script but no slides yet. Open each and press Make slides from my script, or type one idea per line in Key points:
+          </p>
+          <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+            {scriptOnly.map((x) => (
+              <li key={x.key}>
+                <Link href={`/webinars/${webinarId}?step=script&section=${x.key}#make-slides`} className="underline" data-testid="deck-script-only-link">
+                  {x.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       <p className="mb-3 text-sm text-ink-2" data-testid="deck-honesty">
         A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in {deck.kit.name}

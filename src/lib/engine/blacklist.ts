@@ -53,7 +53,16 @@ export function explainFabricated(matches: FabricatedMatch[], context?: { text: 
     .join("\n\n");
 }
 
-const SENTENCE = /[^.!?\n]+[.!?]?(?:\s+|$)/g;
+/**
+ * A sentence ends at a full stop, "!" or "?" that is followed by a space or the end; one inside a word ("2 a.m.", "e.g.", "U.S.")
+ * does not end it. Every character belongs to some sentence, so splitting and joining gives back exactly the line it was given.
+ */
+const SENTENCE = /(?:[^.!?\n]|[.!?](?!\s|$))+[.!?]*(?:\s+|$)|[.!?]+(?:\s+|$)/g;
+/** The line's sentences, or the whole line as one if they would not add back up to it (nothing is ever lost in the split). */
+export function sentencesIn(line: string): string[] {
+  const parts = line.match(SENTENCE) ?? [];
+  return parts.join("") === line ? parts : line.trim() ? [line] : [];
+}
 
 /**
  * Strips the sentences carrying a blacklisted claim from generated copy and says what went and why. Only for copy a model
@@ -63,7 +72,7 @@ export function stripFabricated(text: string): { text: string; removed: { senten
   const removed: { sentence: string; entry: BlacklistEntry }[] = [];
   const kept: string[] = [];
   for (const line of text.split("\n")) {
-    const parts = line.match(SENTENCE) ?? (line.trim() ? [line] : []);
+    const parts = sentencesIn(line);
     const keep = parts.filter((sentence) => {
       const hit = BLACKLIST.find((e) => regexFor(e).test(sentence));
       if (hit) removed.push({ sentence: sentence.trim(), entry: hit });

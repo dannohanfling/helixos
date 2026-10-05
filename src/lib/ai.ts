@@ -65,7 +65,8 @@ export async function hasAiKey(): Promise<boolean> {
   return s.hasKey && !s.blocked;
 }
 
-type Result = { text: string; inputTokens: number; outputTokens: number; cacheWriteTokens: number; cacheReadTokens: number };
+/** `cut`: the answer stopped at the output budget, mid-thought, rather than where the model ended it. */
+type Result = { text: string; inputTokens: number; outputTokens: number; cacheWriteTokens: number; cacheReadTokens: number; cut: boolean };
 
 /** The Essence block carries a cache marker: it is the same prefix on every call, which is what prompt caching is for. */
 async function callAnthropic(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number, images?: DraftImage[]): Promise<Result | null> {
@@ -80,7 +81,7 @@ async function callAnthropic(key: string, model: string, system: SystemBlock[], 
     .map((b) => b.text)
     .join("\n")
     .trim();
-  return { text, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0, cacheReadTokens: message.usage.cache_read_input_tokens ?? 0 };
+  return { text, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens, cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0, cacheReadTokens: message.usage.cache_read_input_tokens ?? 0, cut: message.stop_reason === "max_tokens" };
 }
 
 /** OpenAI caches a repeated prefix on its own (no marker); the voice leads the instructions so that prefix is the Essence. */
@@ -89,7 +90,8 @@ async function callOpenAI(key: string, model: string, system: SystemBlock[], use
   const res = await client.responses.create({ model, instructions: system.map((b) => b.text).join("\n\n"), input: openaiInput(user, images) as OpenAI.Responses.ResponseInput | string, max_output_tokens: maxTokens });
   const text = (res.output_text ?? "").trim();
   const cached = res.usage?.input_tokens_details?.cached_tokens ?? 0;
-  return { text, inputTokens: Math.max(0, (res.usage?.input_tokens ?? 0) - cached), outputTokens: res.usage?.output_tokens ?? 0, cacheWriteTokens: 0, cacheReadTokens: cached };
+  // A reasoning model spends the same budget on its hidden thinking: a long think can leave the visible answer cut short.
+  return { text, inputTokens: Math.max(0, (res.usage?.input_tokens ?? 0) - cached), outputTokens: res.usage?.output_tokens ?? 0, cacheWriteTokens: 0, cacheReadTokens: cached, cut: res.status === "incomplete" };
 }
 
 /**
@@ -108,6 +110,11 @@ export class AiImageError extends Error {}
  * caller keeps its rule-based path. Logs usage, cache tokens included, on every completed call.
  */
 export async function draft(task: string, user: string, maxTokens = 4000, opts: DraftOptions = {}): Promise<string | null> {
+  return (await draftFull(task, user, maxTokens, opts))?.text ?? null;
+}
+
+/** As draft(), saying also whether the answer was cut off at the output budget, for a caller that must never keep half a sentence. */
+export async function draftFull(task: string, user: string, maxTokens = 4000, opts: DraftOptions = {}): Promise<{ text: string; cut: boolean } | null> {
   const v = await getViewer();
   if (!v) return null;
   const cred = await credentialFor(v.workspace.id, aiUserId(v));
@@ -135,7 +142,7 @@ export async function draft(task: string, user: string, maxTokens = 4000, opts: 
   }
   if (!r) return null;
   await db.insert(schema.aiUsage).values({ id: newId(), workspaceId: v.workspace.id, userId: aiUserId(v), provider: cred.provider, model, feature, inputTokens: r.inputTokens, outputTokens: r.outputTokens, cacheWriteTokens: r.cacheWriteTokens, cacheReadTokens: r.cacheReadTokens, estimatedCostUsd: estimateCost(model, r.inputTokens, r.outputTokens, r.cacheWriteTokens, r.cacheReadTokens) ?? 0 });
-  return r.text || null;
+  return r.text ? { text: r.text, cut: r.cut } : null;
 }
 
 /** A cheap real call that proves the key works and billing is on. Returns the reason in plain words when it doesn't. */

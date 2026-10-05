@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 85,
+    date: "2026-10-05",
+    title: "Webinars: drafting a section writes its slides too",
+    lines: [
+      "✨ Draft this section for me now writes the slides as well as the script: one short line per slide in Key points, so a webinar you draft from scratch exports with slides in every act. Key points you already typed are never overwritten.",
+      "A section with a script and no key points gets a Make slides from my script button, and the Deck step lists every such section so none is skipped. A slide line never quotes a number your webinar doesn't have, and a missing proof stays a red placeholder.",
+      "The offer section's draft now uses your linked offer's own stack and price. A draft that comes back cut off is no longer saved, and \"2 a.m.\" no longer turns into \"2 m.\"",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 84,
     date: "2026-10-05",
     title: "Recordings: your publishing rules and a list you can scan",

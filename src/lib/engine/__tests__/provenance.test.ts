@@ -89,7 +89,7 @@ describe("the provenance mark", () => {
 describe("where the mark is set and where the gate stands (read off the source)", () => {
   it("each of the four store-on-return AI paths stores the model's text as ai_unreviewed", () => {
     const paths = [
-      ["src/lib/actions/webinars.ts", /status: "drafted", keyPoints: section\?\.keyPoints \?\? null, origin: "ai_unreviewed"/],
+      ["src/lib/actions/webinars.ts", /status: "drafted", keyPoints: ownPoints \? section!\.keyPoints : lines\.length \? keyPointsText\(lines\) : null, origin: "ai_unreviewed"/],
       ["src/lib/actions/magnets.ts", /generatedBy: "claude", origin: "ai_unreviewed"/],
       ["src/lib/actions/doctrine.ts", /origin = "ai_unreviewed"/],
       ["src/lib/actions/groups.ts", /by === "claude" \? \("ai_unreviewed" as const\) : \("rule" as const\)/],

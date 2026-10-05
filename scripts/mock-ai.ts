@@ -11,7 +11,22 @@ let last: { system: { text: string; cached: boolean }[]; instructions: string | 
 /** Milliseconds to hold every reply, so a walk can see the status line while a call is in flight. */
 const delayMs = Number(process.argv[3] ?? process.env.MOCK_AI_DELAY_MS ?? 0);
 
+/** A prompt carrying this word is answered as if the output budget ran out: the walk proves a cut answer is never saved. */
+const CUT = "MOCK-CUT";
+
 function reply(system: string, user: string): string {
+  // A webinar section (first-deck brief §2): a script with "2 a.m." in it, the proof placeholder when there is no proof, and,
+  // when asked, the deck lines after the marker: one with a figure the record never gave, which the app must drop.
+  if (/Perfect Webinar structure/.test(system)) {
+    const section = user.match(/^Section: ([^(\n]+)/m)?.[1]?.trim() ?? "this section";
+    const noProof = /\[PROOF PLACEHOLDER\]/.test(user);
+    const price = user.match(/^Price: (\S+)/m)?.[1];
+    const script = `Mock AI script for ${section}. You know the feeling: the same ceiling at 2 a.m. again.${noProof ? " [PROOF PLACEHOLDER]" : ""}${price ? ` It's ${price} today.` : ""} Here's what changes tonight.`;
+    if (!/---SLIDES---/.test(system)) return script;
+    return `${script}\n\n---SLIDES---\n- ${section}: the one idea\n- The ceiling at 2 a.m. is a signal\n- Clients sleep 47% better in a week${noProof ? "\n- [PROOF PLACEHOLDER]" : ""}${price ? `\n- Yours today for ${price}` : ""}`;
+  }
+  // "Make slides from my script": lines from the script, one with a figure the script never had.
+  if (/turn one section of a spoken webinar script into deck lines/i.test(system)) return "- Your first line from the script\n- A second idea, said plainly\n- 99% of people get this wrong";
   // The week summary (rev 237 phase 15): a paragraph that quotes the first line of the numbers it was given.
   if (/week summary/i.test(system)) return `Mock AI week summary: a steady week. ${user.split("\n")[0]} Keep the protein floor in sight and add one session next week.`;
   // The meal photo (rev 237 phase 14): foods and portions as JSON lines, for the member to check before anything is logged.
@@ -83,7 +98,8 @@ createServer((req, res) => {
       const sysBlocks = Array.isArray(body.system) ? (body.system as { text?: string; cache_control?: unknown }[]).map((b) => ({ text: String(b.text ?? ""), cached: Boolean(b.cache_control) })) : [{ text: String(body.system ?? ""), cached: false }];
       last = { system: sysBlocks, instructions: null, images: images.length, imageBytes: images.reduce((n, b) => n + (b.source?.data?.length ?? 0), 0), user: user.slice(0, 4000) };
       const systemText = sysBlocks.map((b) => b.text).join("\n\n");
-      const text = reply(systemText, user);
+      const cut = user.includes(CUT);
+      const text = cut ? "Mock AI draft that stops at the budget, mid-sentence, what I've built, and" : reply(systemText, user);
       const cachedChars = sysBlocks.filter((b) => b.cached).reduce((n, b) => n + b.text.length, 0);
       const cacheWrite = Math.ceil(cachedChars / 4);
       const inTok = Math.ceil((systemText.length - cachedChars + user.length) / 4);
@@ -95,11 +111,11 @@ createServer((req, res) => {
         ev("content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
         ev("content_block_delta", { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } });
         ev("content_block_stop", { type: "content_block_stop", index: 0 });
-        ev("message_delta", { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: outTok } });
+        ev("message_delta", { type: "message_delta", delta: { stop_reason: cut ? "max_tokens" : "end_turn", stop_sequence: null }, usage: { output_tokens: outTok } });
         ev("message_stop", { type: "message_stop" });
         return res.end();
       }
-      return json(200, { id: "msg_mock", type: "message", role: "assistant", model: body.model, content: [{ type: "text", text }], stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: inTok, output_tokens: outTok, cache_creation_input_tokens: cacheWrite, cache_read_input_tokens: 0 } });
+      return json(200, { id: "msg_mock", type: "message", role: "assistant", model: body.model, content: [{ type: "text", text }], stop_reason: cut ? "max_tokens" : "end_turn", stop_sequence: null, usage: { input_tokens: inTok, output_tokens: outTok, cache_creation_input_tokens: cacheWrite, cache_read_input_tokens: 0 } });
     }
     if (url.startsWith("/v1/responses")) {
       const auth = (req.headers.authorization ?? "").replace("Bearer ", "");
@@ -110,8 +126,9 @@ createServer((req, res) => {
       const inputText = parts ? parts.filter((p) => p.type === "input_text").map((p) => p.text ?? "").join("\n") : String(body.input ?? "");
       const inputImages = parts ? parts.filter((p) => p.type === "input_image") : [];
       last = { system: [], instructions: String(body.instructions ?? ""), images: inputImages.length, imageBytes: inputImages.reduce((n, p) => n + (p.image_url?.length ?? 0), 0), user: inputText.slice(0, 4000) };
-      const text = reply(String(body.instructions ?? ""), inputText);
-      return json(200, { id: "resp_mock", object: "response", model: body.model, status: "completed", output: [{ type: "message", id: "m1", role: "assistant", status: "completed", content: [{ type: "output_text", text, annotations: [] }] }], output_text: text, usage: { input_tokens: 120, input_tokens_details: { cached_tokens: 0 }, output_tokens: 40, total_tokens: 160 } });
+      const cut = inputText.includes(CUT);
+      const text = cut ? "Mock AI draft that stops at the budget, mid-sentence, what I've built, and" : reply(String(body.instructions ?? ""), inputText);
+      return json(200, { id: "resp_mock", object: "response", model: body.model, status: cut ? "incomplete" : "completed", ...(cut ? { incomplete_details: { reason: "max_output_tokens" } } : {}), output: [{ type: "message", id: "m1", role: "assistant", status: "completed", content: [{ type: "output_text", text, annotations: [] }] }], output_text: text, usage: { input_tokens: 120, input_tokens_details: { cached_tokens: 0 }, output_tokens: 40, total_tokens: 160 } });
     }
     return json(404, { error: "not found" });
   };
