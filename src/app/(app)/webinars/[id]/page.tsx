@@ -1930,7 +1930,7 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
               </p>
             ) : null}
             {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-body">{s.body.join("\n")}</p> : null}
-            {s.figure ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-figure">{figureLines(s).join("\n")}</p> : null}
+            {s.figure || s.stack ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-figure">{figureLines(s).join("\n")}</p> : null}
             {bySlide.get(s.n) ? <SlotControl webinarId={webinarId} owner={owner} resolved={bySlide.get(s.n)!} library={library} /> : null}
             <div className="mt-2 flex items-center justify-end gap-2">
               <CopyButton text={`${s.headline}\n${s.body.join("\n")}`} label="Copy" className="btn btn-ghost btn-xs" />

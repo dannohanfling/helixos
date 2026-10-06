@@ -127,7 +127,7 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
         data-w={at.w}
         data-h={at.h}
         className="absolute flex overflow-hidden leading-[1.2]"
-        style={{ ...place(at), alignItems: at.valign === "middle" ? "center" : "flex-start", justifyContent: at.align === "center" ? "center" : "flex-start", textAlign: at.align, color: `#${b.color}`, fontFamily: faceFor(b), fontSize: `${b.size * PT}cqw`, fontWeight: b.bold ? 700 : 400, fontStyle: b.italic ? "italic" : "normal", textDecoration: b.strike ? "line-through" : undefined, whiteSpace: "pre-line", backgroundColor: b.fill ? `#${b.fill}` : undefined }}
+        style={{ ...place(at), alignItems: at.valign === "middle" ? "center" : "flex-start", justifyContent: at.align === "center" ? "center" : at.align === "right" ? "flex-end" : "flex-start", textAlign: at.align, color: `#${b.color}`, fontFamily: faceFor(b), fontSize: `${b.size * PT}cqw`, fontWeight: b.bold ? 700 : 400, fontStyle: b.italic ? "italic" : "normal", textDecoration: b.strike ? "line-through" : undefined, whiteSpace: "pre-line", backgroundColor: b.fill ? `#${b.fill}` : undefined }}
       >
         <span>{b.text}</span>
       </div>
@@ -153,7 +153,7 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
           </div>
         ) : null}
         {(plan.panels ?? []).map((p, i) => (
-          <div key={`panel:${i}`} className="absolute rounded" style={{ ...place(p.frame), backgroundColor: `#${p.color}` }} data-testid="deck-thumb-panel" />
+          <div key={`panel:${i}`} className={`absolute ${p.ring ? "rounded-full" : "rounded"}`} style={{ ...place(p.frame), ...(p.ring ? { border: `${p.ring * PT}cqw solid #${p.color}` } : { backgroundColor: `#${p.color}` }) }} data-testid={p.ring ? "deck-thumb-seal" : "deck-thumb-panel"} />
         ))}
         {plan.boxes.map((b, i) => (b.role === "body" || b.role === "attribution" || b.role === "footer" ? null : boxEl(b, i)))}
         {lines.length && g.body ? (

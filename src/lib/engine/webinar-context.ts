@@ -13,7 +13,7 @@ export type AssetRow = { id: string; type: string; name: string; body: string; s
 export type EssenceStory = { name: string; summary: string; when_to_use?: string };
 export type CitableRow = { id: string; source: "own" | "shared"; claim: string; authors: string; year: number | null; title: string; url?: string | null; doi?: string | null };
 export type OfferRow = { name: string; price: number; currency?: string | null; container: string; guarantee?: string | null; paymentPlan?: string | null; scarcity?: string | null; urgency?: string | null; ctaFooter?: string | null; forYouIf?: string | null; notForYouIf?: string | null; objectionAssetIds?: string[] };
-export type ComponentRow = { name: string; type: string; description?: string | null; oneLiner?: string | null; perceivedValue: number; beliefBreak: string };
+export type ComponentRow = { name: string; type: string; description?: string | null; oneLiner?: string | null; problemItSolves?: string | null; perceivedValue: number; beliefBreak: string };
 export type BeliefRow = { type: string; fromBelief: string | null; toBelief: string | null; proofId?: string | null; proof?: string | null; proofWho?: string | null; proofPermissionAt?: string | null; proofChangedAt?: string | null; storyAssetId?: string | null; evidenceId?: string | null; proofRepeat?: boolean | null };
 export type SectionRow = { sectionKey: string; act: ActKey; order: number; name: string; status: string; buildStyle?: string | null; keyPoints: string | null; script: string | null; transitionIn: string | null; transitionOut: string | null; deliveryNote?: string | null; assetId: string | null; durationMin: number; origin?: string | null };
 

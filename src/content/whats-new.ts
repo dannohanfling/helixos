@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 104,
+    date: "2026-10-06",
+    title: "Your deck: the offer builds as a table",
+    lines: [
+      "Each part of your offer adds its row to one table, with a check, its name and its value, so the room watches the stack grow; each bonus gets its own slide with its value large.",
+      "Then one slide lists everything with the total value struck through and an arrow to your price, and your guarantee gets its own slide beside a seal.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 103,
     date: "2026-10-06",
     title: "Your deck: big numbers, cards, and From → To",

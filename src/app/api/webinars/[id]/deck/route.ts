@@ -149,10 +149,14 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     if (presenter && g.boxes["cover-presenter"]) slide.addText(presenter.text, { placeholder: "presenter", ...at(g.boxes["cover-presenter"]), fontSize: presenter.size, color: presenter.color, fontFace: presenter.face });
     const date = plan.boxes.find((b) => b.role === "cover-date");
     if (date && g.boxes["cover-date"]) slide.addText(date.text, { ...at(g.boxes["cover-date"]), fontSize: date.size, color: date.color, fontFace: date.face });
-  } else if (plan.layout === "figure" || plan.layout === "bignum" || plan.layout === "shift" || plan.layout === "cards") {
-    // The laid-out slides (first-deck §5's figure; deck layouts 1, 3, 11): the cards' surface panels first, then every box where
-    // the plan's geometry puts it, in its column when it sits in a row. Nothing is placed here that the thumbnail doesn't place.
-    for (const p of plan.panels ?? []) slide.addShape(pptx.ShapeType.roundRect, { x: p.frame.x, y: p.frame.y, w: p.frame.w, h: p.frame.h, rectRadius: 0.08, fill: { color: p.color }, line: { color: p.color, width: 0 } });
+  } else if (plan.layout !== "content" && plan.layout !== "statement") {
+    // The laid-out slides (first-deck §5's figure; deck layouts 1, 3, 5, 11): the cards' surface panels and the guarantee's seal
+    // first, then every box where the plan's geometry puts it, in its column or row when it sits in one. Nothing is placed here
+    // that the thumbnail doesn't place.
+    for (const p of plan.panels ?? []) {
+      if (p.ring) slide.addShape(pptx.ShapeType.ellipse, { x: p.frame.x, y: p.frame.y, w: p.frame.w, h: p.frame.h, line: { color: p.color, width: p.ring } });
+      else slide.addShape(pptx.ShapeType.roundRect, { x: p.frame.x, y: p.frame.y, w: p.frame.w, h: p.frame.h, rectRadius: 0.08, fill: { color: p.color }, line: { color: p.color, width: 0 } });
+    }
     for (const b of plan.boxes) {
       const at_ = boxAt(g, b);
       if (!at_) continue;

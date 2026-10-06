@@ -93,25 +93,35 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
       { name: "Template library", type: "bonus", description: "You pick.", perceivedValue: 497, beliefBreak: "internal" },
       { name: "Free until you lose 10", type: "guarantee", perceivedValue: 0, beliefBreak: "none" },
     ] };
-    // Each item's own value large, the running total small under it; then the price huge, the total struck through, the saving small.
+    // A core item adds its row to the table, the running total under it; a bonus is its own slide, its value large; then every
+    // item in one table with the total struck through to the price; then the price itself, and the guarantee with its seal.
     expect(offerBuild(o)).toEqual([
-      { headline: "The program", body: ["12 weeks"], figure: { value: "NZD $3,000 value", size: "value", struck: null, small: ["Total value so far: NZD $3,000"] } },
-      { headline: "Template library", body: ["You pick."], figure: { value: "NZD $497 value", size: "value", struck: null, small: ["Total value so far: NZD $3,497"] } },
+      { headline: "The program", body: ["12 weeks"], stack: { rows: [{ name: "The program", value: "NZD $3,000" }], newest: 0, runningTotal: "NZD $3,000", total: null, price: null } },
+      { headline: "Template library", eyebrow: "Bonus", body: ["You pick."], figure: { value: "NZD $497 value", size: "value", struck: null, small: ["Total value so far: NZD $3,497"] } },
+      { headline: "Everything you get", body: [], stack: { rows: [{ name: "The program", value: "NZD $3,000" }, { name: "Template library", value: "NZD $497" }], newest: null, runningTotal: null, total: "NZD $3,497", price: "NZD $1,997" } },
       { headline: "Get started today", eyebrow: "The 90-Day Reset", body: [], price: true, figure: { value: "NZD $1,997", size: "price", struck: "Total value NZD $3,497", small: ["You save NZD $1,500", "Payment plan: 3 x $700"] } },
-      { headline: "Free until you lose 10.", body: [] },
+      { headline: "Free until you lose 10.", body: [], seal: true },
       { headline: "Doors close Friday.", body: [] },
     ]);
-    // The anchor off: the running totals still build, the price stands on its own, and nothing else changes
+    // A bonus's line is the problem it solves when the offer has one, else its own line.
+    expect(offerBuild({ ...o, components: [o.components[0], { ...o.components[1], problemItSolves: "No more blank pages." }] })[1].body).toEqual(["No more blank pages."]);
+    // A second core item: the table grows, the first row still there, the new row the newest.
+    const two = offerBuild({ ...o, components: [o.components[0], { name: "Weekly calls", type: "core", oneLiner: "Live", perceivedValue: 1000, beliefBreak: "vehicle" }] });
+    expect(two[1].stack).toEqual({ rows: [{ name: "The program", value: "NZD $3,000" }, { name: "Weekly calls", value: "NZD $1,000" }], newest: 1, runningTotal: "NZD $4,000", total: null, price: null });
+    // The anchor off: the running totals still build, the price stands on its own, the summary draws no total, and nothing else changes
     const noAnchor = offerBuild(o, false);
-    expect(noAnchor.map((x) => x.figure?.small ?? [])).toEqual([["Total value so far: NZD $3,000"], ["Total value so far: NZD $3,497"], ["Payment plan: 3 x $700"], [], []]);
-    expect(noAnchor[2].figure).toMatchObject({ value: "NZD $1,997", struck: null });
+    expect(noAnchor.map((x) => x.figure?.small ?? [])).toEqual([[], ["Total value so far: NZD $3,497"], [], ["Payment plan: 3 x $700"], [], []]);
+    expect(noAnchor[3].figure).toMatchObject({ value: "NZD $1,997", struck: null });
+    expect(noAnchor[2].stack).toMatchObject({ total: null, price: null });
     expect(JSON.stringify(noAnchor)).not.toMatch(/Total value NZD|save/);
     const kitOff = deckSlides(ctx(base()), { ...kit, showPriceAnchor: false });
     expect(bySection(kitOff, "offer_stack_cta").map((s) => s.headline)).toEqual(["Diagnostic", "Get started today"]);
     // An item without a value: no total anywhere, each valued item still shows its own value.
     const zero = offerBuild({ ...o, components: [o.components[0], { ...o.components[1], perceivedValue: 0 }, o.components[2]] });
-    expect(zero.map((x) => x.figure ?? null)).toEqual([{ value: "NZD $3,000 value", size: "value", struck: null, small: [] }, null, { value: "NZD $1,997", size: "price", struck: null, small: ["Payment plan: 3 x $700"] }, null, null]);
-    expect(JSON.stringify(zero)).not.toMatch(/Total|save/);
+    expect(zero.map((x) => x.figure ?? null)).toEqual([null, null, null, { value: "NZD $1,997", size: "price", struck: null, small: ["Payment plan: 3 x $700"] }, null, null]);
+    expect(zero.map((x) => x.stack?.rows ?? null)).toEqual([[{ name: "The program", value: "NZD $3,000" }], null, [{ name: "The program", value: "NZD $3,000" }, { name: "Template library", value: null }], null, null, null]);
+    expect(zero.map((x) => [x.stack?.runningTotal ?? null, x.stack?.total ?? null])).toEqual(Array(6).fill([null, null]));
+    expect(JSON.stringify(zero)).not.toMatch(/Total value|save/);
   });
   it("a divider opens each belief act with the shift from the record, on the kit's inverse pair; a recap closes it with each section's first line", () => {
     const d = deckSlides(ctx(base({ problem_frame: { keyPoints: "Name the enemy\nSecond" }, mechanism_reveal: { keyPoints: "Draw the hub" } }), [{ type: "vehicle", fromBelief: "Diets are all the same.", toBelief: "It was the plan." }]), kit);
@@ -215,7 +225,8 @@ describe("the brand kit on the file", () => {
     expect(hook.boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Open the loop", size: 60, color: "6E6256", fill: null, face: "Red Hat Display", bold: true });
     // The second key point is its own slide; its headline is the unfilled slot, drawn on the kit's placeholder colour
     expect(plan[2].boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Send them to [SALES PAGE URL]", fill: "FFF3A3", face: "Red Hat Display", placeholder: true });
-    expect(plan.flatMap((p) => p.boxes).find((b) => b.role === "body")?.size).toBe(BODY_SIZE);
+    const reveal = renderPlan(deckSlides(ctx(base({ problem_frame: { keyPoints: "Name the enemy\nShow the cost", buildStyle: "reveal" } })), kit));
+    expect(reveal.flatMap((p) => (p.layout === "content" ? p.boxes : [])).find((b) => b.role === "body")).toMatchObject({ text: "Show the cost", size: BODY_SIZE });
     const proof = plan.find((p) => d.slides[p.n - 1].kind === "proof")!;
     expect(proof.boxes.find((b) => b.role === "headline")).toMatchObject({ face: "Libre Baskerville", italic: true, bold: false });
     expect(proof.boxes.find((b) => b.role === "attribution")).toMatchObject({ text: "— Kate A.", color: "4B5563" });
@@ -635,5 +646,80 @@ describe("deck layouts 1, 3 and 11, in the plan", () => {
     expect(p.boxes.find((b) => b.role === "small")?.text).toBe("I need more followers");
     expect(p.boxes.find((b) => b.role === "headline")?.text).toBe("I need more conversations");
     expect(slideGeometry(p).rules.w).toBeLessThan(3);
+  });
+});
+
+describe("deck layouts 5: the offer, argued visually", () => {
+  const stacked = (components: { name: string; type: string; oneLiner?: string; perceivedValue: number; beliefBreak: string }[], guarantee: string | null = "Your money back in 30 days if you did the work and it didn't help.") => {
+    const d = deckSlides(resolveSections({ webinar: { title: "t" }, presenter: "L", sections: base(), beliefs: [], proofs, assets, essenceStories: [], citable, offer: { offer: { ...offer.offer, guarantee }, components } }), kit);
+    return { d, plans: renderPlan(d) };
+  };
+  const three = [
+    { name: "The program", type: "core", oneLiner: "12 weeks, one step a week", perceivedValue: 2000, beliefBreak: "vehicle" },
+    { name: "Weekly calls", type: "core", oneLiner: "Live, every Tuesday", perceivedValue: 1000, beliefBreak: "vehicle" },
+    { name: "Templates", type: "bonus", oneLiner: "You pick.", perceivedValue: 744, beliefBreak: "internal" },
+  ];
+  const inside = (p: ReturnType<typeof renderPlan>[number]) => {
+    const g = slideGeometry(p);
+    for (const b of p.boxes) {
+      const at = boxAt(g, b);
+      expect(at, `${b.role} has a place`).not.toBeNull();
+      expect(at!.x).toBeGreaterThanOrEqual(0);
+      expect(at!.x + at!.w).toBeLessThanOrEqual(10);
+      expect(at!.y + at!.h).toBeLessThanOrEqual(5.625);
+    }
+  };
+  it("the build: each core item adds its row, the earlier rows muted, the new row large in ink, the running total under the table", () => {
+    const { d, plans } = stacked(three);
+    const builds = plans.filter((p) => p.layout === "stack" && !p.boxes.some((b) => b.role === "headline"));
+    expect(builds).toHaveLength(2);
+    const second = builds[1];
+    expect(second.boxes.filter((b) => b.role === "row-name").map((b) => [b.text, b.col, b.color])).toEqual([["The program", 0, "4B5563"], ["Weekly calls", 1, "6E6256"]]);
+    const [first, last] = second.boxes.filter((b) => b.role === "row-name");
+    expect(last.size).toBeGreaterThan(first.size);
+    expect(last.bold).toBe(true);
+    expect(second.boxes.filter((b) => b.role === "row-value").map((b) => b.text)).toEqual(["NZD $2,000", "NZD $1,000"]);
+    expect(second.boxes.find((b) => b.role === "body")?.text).toBe("Live, every Tuesday");
+    expect(second.boxes.find((b) => b.role === "source")?.text).toBe("Total value so far: NZD $3,000");
+    // The value column is set right, the row's check sits left of its name; every box inside the slide.
+    const g = slideGeometry(second);
+    expect(boxAt(g, { role: "row-value", col: 1 })!.align).toBe("right");
+    expect(boxAt(g, { role: "row-check", col: 1 })!.x).toBeLessThan(boxAt(g, { role: "row-name", col: 1 })!.x);
+    for (const p of builds) inside(p);
+    // The accent draws the rule only, never a letter.
+    for (const b of second.boxes) expect(b.color).not.toBe("DD2727");
+    expect(outlineText("t", d)).toContain("✓ Weekly calls · NZD $1,000");
+  });
+  it("the bonus is its own slide, its value large; the summary lists every item and strikes the total through to the price", () => {
+    const { plans } = stacked(three);
+    const bonus = plans.find((p) => p.boxes.some((b) => b.role === "figure" && b.text === "NZD $744 value"))!;
+    expect(bonus.layout).toBe("figure");
+    expect(bonus.boxes.find((b) => b.role === "headline")?.text).toBe("Templates");
+    const summary = plans.find((p) => p.layout === "stack" && p.boxes.some((b) => b.role === "headline"))!;
+    expect(summary.boxes.find((b) => b.role === "headline")?.text).toBe("Everything you get");
+    expect(summary.boxes.filter((b) => b.role === "row-name").map((b) => b.text)).toEqual(["The program", "Weekly calls", "Templates"]);
+    expect(new Set(summary.boxes.filter((b) => b.role === "row-name").map((b) => `${b.size}:${b.color}`)).size).toBe(1);
+    expect(summary.boxes.find((b) => b.role === "struck")).toMatchObject({ text: "Total value NZD $3,744", strike: true, color: "4B5563" });
+    expect(summary.boxes.find((b) => b.role === "figure")).toMatchObject({ text: "→ NZD $1,997", bold: true, color: "6E6256" });
+    inside(summary);
+    // Eight items still fit: the rows share the table's height.
+    const many = stacked(Array.from({ length: 8 }, (_, i) => ({ name: `Module ${i + 1}: the long name of a module`, type: "core", perceivedValue: 100, beliefBreak: "vehicle" })));
+    const big = many.plans.find((p) => p.layout === "stack" && p.boxes.some((b) => b.role === "headline"))!;
+    inside(big);
+    const rows = big.boxes.filter((b) => b.role === "row-name").map((b) => boxAt(slideGeometry(big), b)!);
+    for (let i = 1; i < rows.length; i++) expect(rows[i].y).toBeGreaterThanOrEqual(rows[i - 1].y + rows[i - 1].h - 1e-9);
+    expect(rows.at(-1)!.y + rows.at(-1)!.h).toBeLessThanOrEqual(slideGeometry(big).boxes.struck!.y);
+  });
+  it("the guarantee has its own slide: the words large beside a seal drawn in the accent", () => {
+    const { plans } = stacked(three);
+    const g = plans.find((p) => p.layout === "guarantee")!;
+    expect(g.boxes.find((b) => b.role === "headline")).toMatchObject({ text: "Your money back in 30 days if you did the work and it didn't help.", color: "6E6256" });
+    expect(g.boxes.find((b) => b.role === "headline")!.size).toBeGreaterThanOrEqual(28);
+    expect(g.panels?.map((p) => [p.color, p.ring])).toEqual([["DD2727", 6], ["DD2727", 1.5]]);
+    const at = boxAt(slideGeometry(g), { role: "headline" })!;
+    for (const p of g.panels!) expect(p.frame.x + p.frame.w).toBeLessThan(at.x);
+    inside(g);
+    // No guarantee on the offer: no seal anywhere.
+    expect(stacked(three, null).plans.some((p) => p.layout === "guarantee")).toBe(false);
   });
 });

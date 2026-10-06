@@ -273,6 +273,19 @@ async function main() {
   // The price slide (first-deck §5): "Get started today", the price huge, the total struck through, the saving small.
   const priceSlide = faces.split("</p:sld>").find((x) => x.includes("Get started today")) ?? "";
   if (!/Total value USD \$4,994/.test(priceSlide) || !/You save USD \$3,494/.test(priceSlide) || !/strike="sngStrike"[^>]*>(?:(?!<\/a:r>)[\s\S])*Total value USD \$4,994/.test(priceSlide)) throw new Error("the price slide carries the total struck through and the saving by default");
+  // Deck layouts 5: the stack as a table (the core item's row, its running total), the summary with every item and the total
+  // struck through to the price, and the guarantee on its own slide beside a seal of two accent rings.
+  const slidesList = faces.split("</p:sld>");
+  const summarySlide = slidesList.find((x) => x.includes("Everything you get")) ?? "";
+  for (const name of ["The 90-Day Reset program", "Every-meal template library", "Weekend &amp; Wine Playbook", "Daily check-in with me"]) if (!summarySlide.includes(name)) throw new Error(`the summary lists every item: ${name}`);
+  if (!/strike="sngStrike"[^>]*>(?:(?!<\/a:r>)[\s\S])*Total value USD \$4,994/.test(summarySlide) || !summarySlide.includes("→ USD $1,500") || (summarySlide.match(/<a:t>✓<\/a:t>/g) ?? []).length !== 4) throw new Error("the summary has a check per item, the total struck through and an arrow to the price");
+  const buildSlide = slidesList.find((x) => x.includes("The 90-Day Reset program") && x.includes("Total value so far")) ?? "";
+  if (!buildSlide.includes("USD $3,000") || buildSlide.includes("Everything you get")) throw new Error("the core item's slide is its row in the table with the running total");
+  const sealSlide = slidesList.find((x) => x.includes("I coach you free until you do")) ?? "";
+  if ((sealSlide.match(/prst="ellipse"/g) ?? []).length !== 2) throw new Error("the guarantee stands beside a seal of two rings");
+  await page.locator('[data-testid="deck-thumb"]').first().waitFor({ timeout: 20000 });
+  if ((await page.locator('[data-testid="deck-thumb"][data-layout="stack"]').count()) !== 2 || (await page.locator('[data-testid="deck-thumb"][data-layout="guarantee"] [data-testid="deck-thumb-seal"]').count()) !== 2) throw new Error("the thumbnails draw the build, the summary and the seal");
+  console.log("✓ layouts 5: the core item builds the table, the summary strikes USD $4,994 through to USD $1,500, the guarantee has its seal, in the file and the thumbnails");
   const coach2 = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   await coach2.goto(`${base}/login`);
   await coach2.click('button:has-text("As the coach")');
