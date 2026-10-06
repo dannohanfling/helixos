@@ -11,6 +11,7 @@ import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type ResolvedProof,
 import { COVER_WHAT, STORY_WHAT, originWhat, slotForLine, spreadSlots } from "./deck-slot-rules";
 import { fitSize } from "./deck-fit-text";
 import { bigNumbers, isCardList, shiftFrom } from "./deck-layouts";
+import { figureClashes, talkLines, talkTrack, type FigureClash, type Talk } from "./deck-notes";
 
 /** The brand as the renderer reads it. Null renders the neutral kit and says so. */
 export type DeckKit = { name: string; logoImageId?: string | null; logoDarkImageId?: string | null; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
@@ -124,6 +125,8 @@ export type Slide = {
   stack?: StackTable | null;
   /** The guarantee's own slide, with its seal (deck layouts 5). */
   seal?: boolean;
+  /** The talk track (deck layouts 14): what to say from the section's script, and the time. Null off a section. */
+  talk?: Talk | null;
   /** The picture slot this slide suggests, or null. Filled by the coach from the image library; empty here, listed on the Deck step. */
   slot: Slot | null;
   /** What the record's text carried that no face may (deck-face.ts): kept off this slide, in its notes and on the Deck step. */
@@ -157,6 +160,8 @@ export type DeckResult = {
    * slides 3 and 8, the origin story twice). Each comes off its section, named with the line it repeats, never silently.
    */
   echoes: { section: string; text: string; sameAs: string }[];
+  /** The same thing named with two figures close to each other, across the slides and the scripts (deck layouts 15). Never a block. */
+  numberClashes: FigureClash[];
   /** Per-webinar chrome the renderer draws, carried so renderPlan stays pure over the result. */
   footerBar: boolean;
   ctaBar: boolean;
@@ -585,7 +590,17 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   if (kitIn && !normaliseHex(kitIn.placeholder)) warnings.push(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
   // The spread (§3): never more than two picture slots in a row; the cover and a testimonial are never dropped.
   slides.splice(0, slides.length, ...spreadSlots(slides));
-  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, keptOff, repeats, echoes: echoed, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
+  // The talk track (layouts 14): each sectioned slide's notes open with what to say and the time; the section and the art
+  // direction follow, short. The numbers check (layouts 15) reads the faces and the scripts.
+  const live = c.sections.filter((x) => x.status !== "omitted");
+  const talk = talkTrack(slides, live);
+  for (const sl of slides) {
+    const t = talk.get(sl.n);
+    sl.talk = t ?? null;
+    if (t) sl.notes.unshift(...talkLines(t));
+  }
+  const numberClashes = figureClashes([...slides.map((sl) => ({ text: [sl.headline, ...sl.body].join("\n"), where: `slide ${sl.n}` })), ...live.filter((x) => x.script).map((x) => ({ text: x.script!, where: `the ${x.name} script` }))]);
+  return { numberClashes, slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, keptOff, repeats, echoes: echoed, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
 }
 
 /**

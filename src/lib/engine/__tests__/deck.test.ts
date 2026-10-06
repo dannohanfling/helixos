@@ -164,7 +164,15 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
     const d = deckSlides(ctx(base({ hook: { keyPoints: "Open the loop", deliveryNote: "Wait for the chat." } })), kit);
     expect(d.slides[0]).toMatchObject({ kind: "cover", headline: "Your Edge, Uncovered", body: ["Lindsey Brittain"] });
     const hook = bySection(d, "hook")[0];
-    expect(hook.notes).toEqual(["Section: Hook", "Visual direction: One line, lots of air.", "Delivery: Wait for the chat."]);
+    // The talk track first (layouts 14): no script yet, so the time alone; then the section and the art direction, short.
+    expect(hook.notes).toEqual([expect.stringMatching(/^Time: about \d+(\.5)? minutes? on this slide; \d+ minutes? in at its end\.$/), "Section: Hook", "Visual direction: One line, lots of air.", "Delivery: Wait for the chat."]);
+    const scripted = bySection(deckSlides(ctx(base({ hook: { keyPoints: "Open the loop\nClose it on the call", script: "Tonight you open the loop. Then you close it on the call, every time." } })), kit), "hook");
+    expect(scripted.map((x) => x.notes[0])).toEqual(["What to say: Tonight you open the loop.", "What to say: Then you close it on the call, every time."]);
+    expect(scripted.every((x) => x.talk && x.talk.minutes > 0)).toBe(true);
+    // The numbers check (layouts 15): a key point and a script naming the same week with two close figures, each named where it sits.
+    const clash = deckSlides(ctx(base({ hook: { keyPoints: "My first $5,043 week", script: "I hit my first $5,000 week in March." } })), kit);
+    const at = bySection(clash, "hook")[0].n;
+    expect(clash.numberClashes).toEqual([{ unit: "week", figures: [{ text: "$5,043 week", where: `slide ${at}` }, { text: "$5,000 week", where: "the Hook script" }] }]);
     const faces = renderPlan(d).flatMap((p) => p.boxes.map((b) => b.text)).join("\n");
     expect(faces).not.toMatch(/Visual|Delivery:/);
     expect(outlineText("Your Edge, Uncovered", d)).not.toMatch(/Visual/);

@@ -1,10 +1,29 @@
 /** Socrates Domain: seven lessons in order with no task machinery, the question library filtered by beat and script type plus a client's own question, the grouped reframes with the restored credit, and the pick-or-write script wizard to a finished, copyable script. Run with the dev server up. */
 import { chromium, type Page } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, utimesSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 const base = process.argv[2] ?? "http://localhost:3000";
+
+const SHEET_PAGE = "src/app/(sheet)/socrates/scripts/[id]/sheet/page.tsx";
+/**
+ * The call sheet, past a dev-server fault (5 Oct, Danno's OK to work round it in the walk): partway through a gate the dev
+ * server can answer this one route 404 until its page recompiles. It never happens under `next start`, and the page's own
+ * lookup is the builder's. On a 404, and only then, the walk touches the page file (its time, never its words), reloads once
+ * and says so; a sheet that still answers 404 fails as before, and anything but a 404 fails at once.
+ */
+async function sheetLoaded(page: Page) {
+  const sheet = page.locator('[data-testid="call-sheet"]');
+  if (await sheet.waitFor({ timeout: 30000 }).then(() => true, () => false)) return;
+  const body = await page.locator("body").innerText().catch(() => "");
+  if (!/\b404\b|could not be found/i.test(body)) throw new Error(`the call sheet did not load: ${body.slice(0, 120)}`);
+  const now = new Date();
+  utimesSync(SHEET_PAGE, now, now);
+  console.log("  (the dev server answered the call sheet 404; its page was touched and reloaded once)");
+  await page.reload();
+  await sheet.waitFor({ timeout: 60000 });
+}
 mkdirSync("screenshots", { recursive: true });
 
 async function expectText(page: Page, text: string, label: string) {
@@ -214,6 +233,7 @@ async function main() {
     // Output one: the call sheet, no letters, YOU largest, listen-for italic, branches under their conditions, blanks filled or marked
     await page.click('[data-testid="open-sheet"]');
     await page.waitForURL(/\/sheet$/);
+    await sheetLoaded(page);
     if (await page.locator("aside, header nav").count()) throw new Error("the sheet has no chrome around it");
     const sheetText = await page.locator('[data-testid="call-sheet"]').innerText();
     if (/[[\]]/.test(sheetText)) throw new Error("the sheet carries no square brackets");
@@ -255,6 +275,7 @@ async function main() {
     await page.fill('[data-testid="fill"][data-key="their pain phrase"]', "never having a plan by Thursday");
     await submit(page, '[data-testid="fill-form"] button:has-text("Save")');
     await page.goto(`${base}/socrates/scripts/${scriptId}/sheet`);
+    await sheetLoaded(page);
     if (await page.locator('[data-testid="sheet-unfilled"]').count()) throw new Error("every blank filled, nothing marked");
     await page.screenshot({ path: "screenshots/s04-script.png", fullPage: true });
     console.log("✓ script wizard: the question and its follow-ups, listen-for, branches on at T and Y only and never a principle, blanks asked once with the offer prefilled, the call sheet in both clipboard flavours without a <br>, the copy block bare");

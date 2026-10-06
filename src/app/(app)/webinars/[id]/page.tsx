@@ -1860,6 +1860,20 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
           </ul>
         </div>
       ) : null}
+      {deck.numberClashes.length ? (
+        <div className="mb-3 rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="deck-numbers">
+          <p>
+            {deck.numberClashes.length === 1 ? "One figure is" : `${deck.numberClashes.length} figures are`} named with two different numbers. Check which is right before you present; the deck downloads either way.
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {deck.numberClashes.map((c, i) => (
+              <li key={i} data-testid="deck-number-clash">
+                {c.figures.map((f) => `“${f.text}” (${f.where})`).join(", ")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {deck.keptOff.length ? (
         <div className="mb-3 rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="deck-kept-off">
           <p>
@@ -1931,6 +1945,14 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
             ) : null}
             {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-body">{s.body.join("\n")}</p> : null}
             {s.figure || s.stack ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-figure">{figureLines(s).join("\n")}</p> : null}
+            {s.talk ? (
+              <details className="mt-1 text-xs text-ink-2" data-testid="deck-talk">
+                <summary className="cursor-pointer text-ink-3">
+                  What to say · about {s.talk.minutes} min · {s.talk.endMin} min in
+                </summary>
+                {s.talk.say ? <p className="mt-1 whitespace-pre-line" data-testid="deck-talk-say">{s.talk.say}</p> : <p className="mt-1 text-ink-3">No script for this section yet.</p>}
+              </details>
+            ) : null}
             {bySlide.get(s.n) ? <SlotControl webinarId={webinarId} owner={owner} resolved={bySlide.get(s.n)!} library={library} /> : null}
             <div className="mt-2 flex items-center justify-end gap-2">
               <CopyButton text={`${s.headline}\n${s.body.join("\n")}`} label="Copy" className="btn btn-ghost btn-xs" />

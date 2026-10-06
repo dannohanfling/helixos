@@ -325,6 +325,20 @@ async function main() {
     must((await page.locator('[data-testid="deck-thumb"][data-layout="bignum"]').count()) >= 1 && (await page.locator('[data-testid="deck-thumb"][data-layout="cards"] [data-testid="deck-thumb-panel"]').count()) === 3, "the thumbnails draw the big number and the three cards");
     console.log("✓ layouts 1 and 3: a key point with a figure is a big number at 72pt or more in the file and the thumbnail; the outcomes are three cards");
 
+    // ── Deck layouts 14 and 15: the notes are a talk track from the section's script; figures that disagree are named. ──
+    await db.update(schema.webinarSections).set({ script: `I got 600 comments on my post in 48 hours. ${problem.script ?? ""}`.trim() }).where(eq(schema.webinarSections.id, problem.id));
+    const talkRes = await page.request.get(`${base}/api/webinars/${webinarId}/deck?format=pptx`);
+    const talkZip = await JSZip.loadAsync(await talkRes.body());
+    const notesFiles = Object.keys(talkZip.files).filter((f) => /^ppt\/notesSlides\/notesSlide\d+\.xml$/.test(f));
+    const notesXml = await Promise.all(notesFiles.map((f) => talkZip.file(f)!.async("string")));
+    must(notesXml.some((x) => /What to say: I got 600 comments on my post in 48 hours\./.test(x) && /Time: about [\d.]+ minutes? on this slide; \d+ minutes? in at its end\./.test(x)), "the big number's notes open with its line from the script and its time");
+    must(notesXml.filter((x) => x.includes("What to say:")).every((x) => x.indexOf("What to say:") < (x.indexOf("Section:") === -1 ? Infinity : x.indexOf("Section:"))), "what to say comes before the section and the art direction");
+    await page.goto(`${base}/webinars/${webinarId}?step=deck`);
+    const clash = (await page.locator('[data-testid="deck-number-clash"]').allInnerTexts()).join("\n");
+    must(clash.includes("“602 comments”") && clash.includes(`“600 comments” (the ${problem.name} script)`), `the numbers check names 602 against 600 comments, with where each sits: ${clash}`);
+    must((await page.locator('[data-testid="deck-talk-say"]').allTextContents()).some((t) => t.startsWith("I got 600 comments")), "the Deck step shows what to say on the slide's card");
+    console.log("✓ layouts 14 and 15: the notes open with what to say from the script and the time; 602 against 600 comments is named on the Deck step");
+
     console.log("\nsmoke-firstdeck: all checks passed");
   } finally {
     await browser.close();

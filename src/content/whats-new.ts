@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 105,
+    date: "2026-10-06",
+    title: "Your deck: speaker notes you can talk from",
+    lines: [
+      "Each slide's speaker notes now start with what to say, taken from that section's script, and how long the slide gets, with how far into the webinar you'll be at its end. The Deck step shows the same under each slide.",
+      "Before you download, the Deck step lists any figure you've written two ways, such as \"$5,043 week\" on one slide and \"$5,000 week\" in a script, so you can pick the right one.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 104,
     date: "2026-10-06",
     title: "Your deck: the offer builds as a table",
