@@ -85,7 +85,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
         </header>
         </PinToViewport>
         <NavProgress />
-        <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-5 sm:px-6 md:pb-10 md:pt-8">
+        <main className="mx-auto w-full max-w-5xl px-4 2xl:max-w-6xl pb-24 pt-5 sm:px-6 md:pb-10 md:pt-8">
           {/* After a delete: the one line saying what went, on the list the person was sent back to. */}
           <Suspense fallback={null}>
             <DeletedNotice />

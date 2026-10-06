@@ -74,8 +74,23 @@ async function main() {
   await shot(page, "01-today-before-lockin");
 
   // Morning lock-in (expand the form if today is already locked in)
-  const redo = page.locator('summary:has-text("Redo lock-in")');
+  const redo = page.locator('summary:has-text("Edit lock-in")');
   if (await redo.isVisible()) await redo.click();
+  // The layout (rev 531): before lock-in the lock-in is the hero at the content's full width; titles are whole, energy labels fit.
+  if (!(await redo.count())) {
+    const hero = page.locator('[data-testid="lockin-hero"]');
+    const heroBox = (await hero.boundingBox())!;
+    const thenBox = (await page.locator("text=Then").first().boundingBox())!;
+    if (heroBox.width < 600 || thenBox.y < heroBox.y + heroBox.height) throw new Error(`the lock-in is the hero, full width, with Then below it: ${JSON.stringify({ heroBox, thenBox })}`);
+    if (await page.locator('[data-testid="lockin-summary"]').count()) throw new Error("no lock-in summary before the lock-in");
+    const fits = async (sel: string) => page.locator(sel).evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
+    const spill = await fits('[data-testid="energy-segment"]');
+    if (spill.length) throw new Error(`every energy label fits its segment: ${spill.join(", ")}`);
+    const titleRows = await page.locator('[data-testid="top3-item"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+    if (titleRows.some((w) => w < 400)) throw new Error(`the top 3 is one column of full-width rows: ${titleRows.join(", ")}`);
+    if (!/of 3 picked/.test(await page.locator('[data-testid="top3-count"]').innerText())) throw new Error("the picker counts the picks");
+    console.log(`✓ Today before lock-in: the lock-in is the hero (${Math.round(heroBox.width)}px), the top 3 one column of whole titles, energy labels fit, "n of 3 picked"`);
+  }
   await page.locator('label:has(input[name="energy"][value="4"])').click();
   await page.fill('input[name="intention"]', "Three real conversations before noon.");
   // Several new tasks before locking in (rev 157): Add or Enter puts each in the list, ticked up to three, and clears the box.
@@ -110,6 +125,16 @@ async function main() {
   if (await page.locator('#checkin [data-testid="task-row"] [data-testid="task-category"]').count()) throw new Error("the Top 3 rows carry no category");
   if (!(await page.locator('[data-testid="task-row"]', { hasText: CARRIED.dueToday }).locator('[data-testid="task-category"]').count())) throw new Error("the board's rows keep their category");
   console.log("✓ lock-in: four tasks added (Add and Enter), three ticked, the fourth unticked with a quiet line, one taken back, three locked in");
+  // After lock-in: the hero is gone, a compact summary holds the picks with Edit, and the 30-day build sits under it.
+  if (await page.locator('[data-testid="lockin-hero"]').count()) throw new Error("after lock-in the hero no longer holds the form");
+  if (!(await page.locator('[data-testid="lockin-summary"] summary:has-text("Edit lock-in")').count())) throw new Error("the summary offers Edit");
+  // At phone width the page is one column and nothing runs off the side.
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.reload();
+  const overflowX = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  if (overflowX > 1) throw new Error(`Today fits a phone's width: ${overflowX}px over`);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  console.log("✓ Today after lock-in: a compact summary with Edit, no hero form; one column at 375px with nothing off the side");
   const errors = await page.locator("nextjs-portal").count();
   console.log(`dev overlay portals: ${errors}`);
   await shot(page, "02-today-locked-in");

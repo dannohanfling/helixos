@@ -164,7 +164,7 @@ async function main() {
     // Lock in typing the same task (it exists: star it, don't clone it), then redo the lock-in with it typed again
     for (const pass of ["first lock-in", "redone lock-in"]) {
       await page.goto(`${base}/today`);
-      const redo = page.locator('summary:has-text("Redo lock-in")');
+      const redo = page.locator('summary:has-text("Edit lock-in")');
       if (await redo.count()) await redo.evaluate((el) => (el as HTMLElement).click()); // may sit under the fixed bottom nav on a phone
       await page.fill('[data-testid="top3-new"]', "Double tap test");
       await page.click('[data-testid="top3-add"]');
@@ -258,7 +258,7 @@ async function main() {
 
     // Small buttons are 40px on a phone. Unconditional: lock a task into Today first, so its controls are always there to measure.
     await page.goto(`${base}/today`);
-    const redoForTouch = page.locator('summary:has-text("Redo lock-in")');
+    const redoForTouch = page.locator('summary:has-text("Edit lock-in")');
     if (await redoForTouch.count()) await redoForTouch.evaluate((el) => (el as HTMLElement).click());
     await page.fill('[data-testid="top3-new"]', "Touch target test");
     await page.press('[data-testid="top3-new"]', "Enter");

@@ -200,7 +200,7 @@ async function main() {
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
     await db.delete(schema.dailyLogs).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, mayaToday)));
     await page.goto(`${base}/today`);
-    const redo = page.locator('summary:has-text("Redo lock-in")');
+    const redo = page.locator('summary:has-text("Edit lock-in")');
     if (await redo.isVisible()) await redo.click();
     await page.locator('label:has(input[name="energy"][value="4"])').click();
     await page.fill('input[name="intention"]', "Not mine to set");

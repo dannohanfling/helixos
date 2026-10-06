@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { addTodayTaskAction, removeTodayTaskAction } from "@/lib/actions/daily";
 
-type Item = { id: string; title: string; late: boolean; added?: boolean };
+type Item = { id: string; title: string; late: boolean; added?: boolean; /** "today", or the day it is due ("3 Oct"). */ due?: string };
 export const TOP3 = 3;
 
 /**
@@ -51,13 +51,16 @@ export function Top3Picker({ candidates, initiallyChecked, carried }: { candidat
     });
   };
 
+  // One row per task, the whole title (two lines, then … with the rest on hover or a long press), its late tag and due day
+  // (rev 531: two columns of chips cut every title to eight letters, so tasks couldn't be told apart).
   const row = (t: Item) => (
-    <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-1.5 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent-soft" data-testid="top3-item" data-added={t.added ? "yes" : "no"}>
-      <input type="checkbox" name="focus" value={t.id} checked={checked.includes(t.id)} onChange={(e) => toggle(t.id, e.target.checked)} />
-      <span className="truncate">{t.title}</span>
-      {t.late ? <span className="ml-auto shrink-0 text-[10px] font-semibold text-danger">late</span> : null}
+    <label key={t.id} className="flex cursor-pointer items-start gap-2 rounded-lg border bg-surface px-2.5 py-2 text-sm has-[:checked]:border-accent has-[:checked]:bg-accent-soft" data-testid="top3-item" data-added={t.added ? "yes" : "no"}>
+      <input type="checkbox" className="mt-0.5" name="focus" value={t.id} checked={checked.includes(t.id)} onChange={(e) => toggle(t.id, e.target.checked)} />
+      <span className="min-w-0 flex-1 line-clamp-2" title={t.title} data-testid="top3-title">{t.title}</span>
+      {t.late ? <span className="shrink-0 text-[10px] font-semibold uppercase text-danger">late</span> : null}
+      {t.due ? <span className="shrink-0 text-[11px] text-ink-3" data-testid="top3-due">{t.due === "today" ? "due today" : `due ${t.due}`}</span> : null}
       {t.added ? (
-        <button type="button" className={`${t.late ? "" : "ml-auto"} shrink-0 rounded px-1 text-ink-3 hover:text-danger`} aria-label={`Remove ${t.title}`} onClick={(e) => { e.preventDefault(); remove(t.id); }} data-testid="top3-remove">
+        <button type="button" className="shrink-0 rounded px-1 text-ink-3 hover:text-danger" aria-label={`Remove ${t.title}`} onClick={(e) => { e.preventDefault(); remove(t.id); }} data-testid="top3-remove">
           ×
         </button>
       ) : null}
@@ -67,19 +70,24 @@ export function Top3Picker({ candidates, initiallyChecked, carried }: { candidat
 
   return (
     <div data-testid="top3-picker">
-      <div className="label">Pick your top 3</div>
+      <div className="flex items-baseline justify-between">
+        <div className="label">Pick your top 3</div>
+        <span className={`text-xs ${checked.length === TOP3 ? "font-semibold text-good" : "text-ink-3"}`} data-testid="top3-count">
+          {checked.length} of {TOP3} picked
+        </span>
+      </div>
       {carried && carriedItems.length ? (
         <>
           <div className="mb-1 text-xs font-medium text-ink-2" data-testid="top3-carried-label">
             {carried.label}
           </div>
-          <div className="mb-2 grid grid-cols-1 gap-1 sm:grid-cols-2" data-testid="top3-carried">
+          <div className="mb-2 grid grid-cols-1 gap-1" data-testid="top3-carried">
             {carriedItems.map(row)}
           </div>
           <div className="mb-1 text-xs font-medium text-ink-2">Everything else</div>
         </>
       ) : null}
-      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-1">
         {items.filter((t) => !carried?.ids.includes(t.id)).map(row)}
       </div>
       <div className="mt-2 flex gap-2">

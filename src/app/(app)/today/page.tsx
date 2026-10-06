@@ -82,6 +82,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const goalPct = d.goal ? Math.round((d.goal.actual / Math.max(d.goal.target, 1)) * 100) : 0;
   const primary = d.actions[0];
   const rest = d.actions.slice(1, 6);
+  // Before lock-in the hero is the lock-in itself, so Then lists everything else, the lock-in left out.
+  const thenList = morningDone ? rest : d.actions.filter((a) => a.key !== "checkin").slice(0, 5);
   // Rev 497: the recordings' action items in Then. A member gets a line per call (the two newest) with items still for them to
   // decide, and a line for calls not yet opened (rev 498); the coach one line for the items from the last two weeks' calls.
   const seer = { userId: v.user.id, programTier: v.membership.programTier, role: v.role };
@@ -217,9 +219,25 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </section>
       ) : null}
 
+      {/* Before lock-in, the lock-in is the hero, at the content's full width (rev 531: squeezed into the left column it truncated
+          the top 3 to eight letters, under a tall hero that only said "Start lock-in"). */}
+      {!morningDone ? (
+        <section id="checkin" className="card mb-5 border-accent p-5" style={{ background: "var(--accent-soft)" }} data-testid="lockin-hero">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Next best action</div>
+              <h2 className="mt-1 text-xl font-bold">Lock in your day</h2>
+              <p className="mt-1 text-sm text-ink-2">Pick your top 3 and set your energy. 60 seconds.</p>
+            </div>
+            <Badge tone="accent">+10 pts</Badge>
+          </div>
+          <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention="" />
+        </section>
+      ) : null}
+
       {/* Next best action */}
-      <section className="mb-5 grid gap-3 md:grid-cols-[1.4fr_1fr]">
-        <div className={`card p-5 ${primary.tone === "warning" ? "border-warn" : "border-accent"}`} style={{ background: primary.tone === "warning" ? "var(--warn-soft)" : "var(--accent-soft)" }}>
+      <section className={`mb-5 grid gap-3 ${morningDone ? "md:grid-cols-[1.4fr_1fr]" : ""}`}>
+        {morningDone ? <div className={`card p-5 ${primary.tone === "warning" ? "border-warn" : "border-accent"}`} style={{ background: primary.tone === "warning" ? "var(--warn-soft)" : "var(--accent-soft)" }}>
           <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Next best action</div>
           <div className="mt-1 text-xl font-bold">{primary.title}</div>
           <div className="mt-1 text-sm text-ink-2">{primary.why}</div>
@@ -229,7 +247,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Link>
             {primary.points ? <span className="text-sm font-semibold text-accent-ink">+{primary.points} pts</span> : null}
           </div>
-        </div>
+        </div> : null}
         <div className="card p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-ink-2">Then</div>
           <ul className="mt-2 space-y-2">
@@ -241,8 +259,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                 </Link>
               </li>
             ))}
-            {rest.length || recLines.length ? (
-              rest.map((a) => (
+            {thenList.length || recLines.length ? (
+              thenList.map((a) => (
                 <li key={a.key}>
                   <Link href={a.href} className="flex items-start gap-2 text-sm hover:underline">
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${a.tone === "warning" ? "bg-warn" : a.tone === "primary" ? "bg-accent" : "bg-ink-3"}`} />
@@ -281,10 +299,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-4">
-          {/* Morning lock-in */}
-          <Card id="checkin" title={morningDone ? "Today's lock-in" : "Morning lock-in"} action={morningDone ? <Badge tone="good">Done · +10</Badge> : <Badge tone="accent">+10 pts</Badge>}>
-            {morningDone ? (
-              <div className="space-y-3">
+          {/* After lock-in: a compact summary (energy, the win line, the 3 picks to tick, Edit), with the 30-day build under it. */}
+          {morningDone ? (
+            <Card id="checkin" title="Today's lock-in" action={<Badge tone="good">Done · +10</Badge>}>
+              <div className="space-y-3" data-testid="lockin-summary">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="badge">⚡ {ENERGY[d.log?.energy ?? 3]}</span>
                   {d.log?.intention ? <span className="text-ink-2">“{d.log.intention}”</span> : null}
@@ -304,14 +322,32 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                   )}
                 </div>
                 <details>
-                  <summary className="text-xs text-ink-3 underline">Redo lock-in</summary>
+                  <summary className="text-xs text-ink-3 underline">Edit lock-in</summary>
                   <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention={d.log?.intention ?? ""} />
                 </details>
               </div>
-            ) : (
-              <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention="" />
-            )}
-          </Card>
+            </Card>
+          ) : null}
+          {d.curriculumDay ? (
+            <Card title={`30-day build · Day ${d.curriculumDay.day}`} action={<Badge tone="accent">+{d.curriculumDay.points}</Badge>}>
+              <p className="mb-2 text-xs text-ink-3" data-testid="onramp">The on-ramp into Stage 1 of your Pathway. One day, one step.</p>
+              <div className="font-semibold">{d.curriculumDay.title}</div>
+              <p className="mt-1 whitespace-pre-line text-sm text-ink-2">{d.curriculumDay.instructions}</p>
+              <div className="mt-2 text-xs text-ink-3">
+                {d.curriculumDay.week} · {d.curriculumDay.estTime}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {exerciseLink(d.curriculumDay.day) ? (
+                  exerciseLink(d.curriculumDay.day)!.startsWith("http") ? (
+                    <a href={exerciseLink(d.curriculumDay.day)!} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" data-testid="exercise-link">
+                      Open the lesson ↗
+                    </a>
+                  ) : (
+                    <PendingLink href={exerciseLink(d.curriculumDay.day)!} className="btn btn-primary btn-sm" data-testid="exercise-link">
+                      Do it in the app →
+                    </PendingLink>
+                  )
+                ) : null}
 
           {/* Today's board */}
           <Card title="Also on your plate" action={<NewTaskForm today={v.today} />}>
@@ -443,26 +479,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         </div>
 
         <div className="space-y-4">
-          {d.curriculumDay ? (
-            <Card title={`30-day build · Day ${d.curriculumDay.day}`} action={<Badge tone="accent">+{d.curriculumDay.points}</Badge>}>
-              <p className="mb-2 text-xs text-ink-3" data-testid="onramp">The on-ramp into Stage 1 of your Pathway. One day, one step.</p>
-              <div className="font-semibold">{d.curriculumDay.title}</div>
-              <p className="mt-1 whitespace-pre-line text-sm text-ink-2">{d.curriculumDay.instructions}</p>
-              <div className="mt-2 text-xs text-ink-3">
-                {d.curriculumDay.week} · {d.curriculumDay.estTime}
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {exerciseLink(d.curriculumDay.day) ? (
-                  exerciseLink(d.curriculumDay.day)!.startsWith("http") ? (
-                    <a href={exerciseLink(d.curriculumDay.day)!} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm" data-testid="exercise-link">
-                      Open the lesson ↗
-                    </a>
-                  ) : (
-                    <PendingLink href={exerciseLink(d.curriculumDay.day)!} className="btn btn-primary btn-sm" data-testid="exercise-link">
-                      Do it in the app →
-                    </PendingLink>
-                  )
-                ) : null}
                 <form action={completeCurriculumDayAction}>
                   <input type="hidden" name="day" value={d.curriculumDay.day} />
                   <SubmitButton className="btn btn-accent btn-sm" pendingText="Logging…">
@@ -607,23 +623,24 @@ function LockInForm({ openTasks, stillOpen, today, defaultIntention }: { openTas
     <form action={morningCheckinAction} className="mt-2 space-y-4">
       <div>
         <div className="label">How&apos;s your energy?</div>
-        <div className="grid grid-cols-5 gap-1.5">
+        {/* Five equal segments, the emoji over a label that stays on one line (rev 531: "Dragging" spilled, "On fire" wrapped). */}
+        <div className="grid grid-cols-5 gap-1.5" data-testid="energy-segments">
           {[1, 2, 3, 4, 5].map((n) => (
-            <label key={n} className="cursor-pointer">
+            <label key={n} className="min-w-0 cursor-pointer">
               <input type="radio" name="energy" value={n} defaultChecked={n === 3} className="peer sr-only" />
-              <span className="block rounded-lg border px-1 py-2 text-center text-xs font-medium peer-checked:border-accent peer-checked:bg-accent-soft">
-                <span className="block text-base">{["", "😮‍💨", "😐", "🙂", "😃", "🔥"][n]}</span>
-                {ENERGY[n]}
+              <span className="block rounded-lg border px-0.5 py-2 text-center font-medium peer-checked:border-accent peer-checked:bg-white/60 peer-checked:ring-1 peer-checked:ring-accent" data-testid="energy-segment">
+                <span className="block text-lg leading-none">{["", "😮‍💨", "😐", "🙂", "😃", "🔥"][n]}</span>
+                <span className="mt-1 block whitespace-nowrap text-[11px] leading-tight sm:text-xs">{ENERGY[n]}</span>
               </span>
             </label>
           ))}
         </div>
       </div>
       <Field label="One line: what would make today a win?">
-        <input className="field" name="intention" defaultValue={defaultIntention} placeholder="Three real conversations before noon." />
+        <input className="field w-full" name="intention" defaultValue={defaultIntention} placeholder="Three real conversations before noon." data-testid="lockin-win" />
       </Field>
       <Top3Picker
-        candidates={candidates.map((t) => ({ id: t.id, title: t.title, late: Boolean(t.dueDate && t.dueDate < today) }))}
+        candidates={candidates.map((t) => ({ id: t.id, title: t.title, late: Boolean(t.dueDate && t.dueDate < today), due: t.dueDate ? (t.dueDate === today ? "today" : formatDate(t.dueDate, { day: "numeric", month: "short" })) : undefined }))}
         initiallyChecked={candidates.filter((t) => t.focusDate === today).map((t) => t.id)}
         carried={carriedLabel ? { label: carriedLabel, ids: [...carriedIds] } : undefined}
       />

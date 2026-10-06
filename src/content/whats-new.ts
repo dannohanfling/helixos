@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 100,
+    date: "2026-10-06",
+    title: "Today: the lock-in up top, and your tasks in full",
+    lines: [
+      "Before you lock in, the morning lock-in is the big card at the top of Today, at full width, instead of a slim card lower down.",
+      "Pick your top 3 is one list with each task's whole title, its late tag and its due date, and a count of how many you've picked. The energy buttons each fit their label.",
+      "Once you're locked in, it folds into a short summary (your energy, your win line, your three picks to tick off, and Edit), with the 30-day build right under it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 98,
     date: "2026-10-05",
     title: "HumanOS: weigh-ins from Apple Health",
