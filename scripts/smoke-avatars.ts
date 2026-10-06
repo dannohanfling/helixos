@@ -74,7 +74,7 @@ async function main() {
     const firstOffer = offers.find((o) => o.id === plan[0].offerIds[0])!;
     if (!chips.includes(`★ ${firstOffer.name}`)) throw new Error(`the import is the offer's main: ${chips}`);
     await page.goto(`${base}/avatars`);
-    if (await page.locator('[data-testid="avatar-imported"]').count()) throw new Error("the import runs once");
+    if (!(await page.locator('[data-testid="avatar-imported"]').innerText()).startsWith(`Brought in ${plan.length} avatar`)) throw new Error("the import runs once: the banner still counts the same, waiting for review");
     if ((await page.locator('[data-testid="avatar-card"]').count()) !== plan.length) throw new Error("a second visit adds nothing");
     console.log(`✓ the first visit brings ${plan.length} offer avatar(s) in once, marked ${IMPORTED_NOTE}, as the offer's main`);
 

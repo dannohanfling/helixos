@@ -41,9 +41,12 @@ export default async function AvatarsPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
   // The first visit brings each offer's free-text avatar in, once; a coach looking in never writes it for them.
-  const imported = v.switchedInto ? 0 : await importFromOffers(m);
+  if (!v.switchedInto) await importFromOffers(m);
   const { rows, links, offers } = await avatarData(m);
   const tree = avatarTree(rows);
+  // What the import brought in and the member hasn't saved yet, read from the rows: the same on every render, so a page drawn
+  // twice (a cold server) still says it, until each is reviewed.
+  const imported = rows.filter((a) => a.imported && !a.archivedAt).length;
   const archived = rows.filter((a) => a.archivedAt);
   const tops = rows.filter((a) => !a.archivedAt && !a.parentId);
   const justArchived = sp.archived ? rows.find((a) => a.id === sp.archived && a.archivedAt) : undefined;
@@ -97,7 +100,7 @@ export default async function AvatarsPage({ searchParams }: { searchParams: Prom
       ) : null}
       {imported ? (
         <p className="card mb-3 p-3 text-sm" data-testid="avatar-imported">
-          Brought in {imported} avatar{imported === 1 ? "" : "s"} from your offers&apos; &ldquo;one person this is for&rdquo;. Each is marked {IMPORTED_NOTE}: open it, fill in the rest and save. The text stays on the offer.
+          Brought in {imported} avatar{imported === 1 ? "" : "s"} from your offers&apos; &ldquo;one person this is for&rdquo;, waiting for your review. Each is marked {IMPORTED_NOTE}: open it, fill in the rest and save. The text stays on the offer.
         </p>
       ) : null}
       {tree.length ? (
