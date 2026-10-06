@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 101,
+    date: "2026-10-06",
+    title: "Your deck says each thing once",
+    lines: [
+      "A key point that repeats your opening (the chat prompt, the promise, an outcome) or a beat of your origin story is now one slide, not two. The Deck step lists each one it left out and what it repeats, so you can change it if you meant something new.",
+      "A testimonial that starts mid-sentence (\"ran a five-day challenge…\") now reads with the person's first name in front (\"Terri ran a five-day challenge…\").",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 100,
     date: "2026-10-06",
     title: "Today: the lock-in up top, and your tasks in full",

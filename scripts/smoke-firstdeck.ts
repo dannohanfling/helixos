@@ -302,6 +302,15 @@ async function main() {
     must((await db.query.deckSlots.findMany({ where: eq(schema.deckSlots.webinarId, webinarId) })).filter((r) => slotKeys.includes(r.slotKey)).length === 2, "both slots hold their uploads, the second as the first");
     console.log(`✓ §6: the thumbnails load Montserrat and Playfair Display from Google, the CSP names exactly those hosts; uploads into two slots in a row both attach (${slotKeys.join(", ")})`);
 
+    // ── Deck layouts 16: a key point that repeats the opening's chat prompt is said once, and the Deck step names it. ──
+    const hookPoint = (await sections()).find((x) => x.sectionKey === "hook")!.keyPoints!.split("\n")[0].replace(/^•\s*/, "");
+    await db.update(schema.webinars).set({ chatPrompt: hookPoint }).where(eq(schema.webinars.id, webinarId));
+    const echoDeck = deckSlides(await contextFor(await w()), null);
+    must(echoDeck.slides.filter((sl) => sl.headline === hookPoint).length === 1 && echoDeck.echoes.some((e) => e.text === hookPoint && e.sameAs === "the chat prompt"), `a key point that repeats the chat prompt is one slide, named: ${JSON.stringify(echoDeck.echoes)}`);
+    await page.goto(`${base}/webinars/${webinarId}?step=deck`);
+    must((await page.locator('[data-testid="deck-echo"]').allInnerTexts()).some((t) => t.includes(hookPoint) && t.includes("the chat prompt")), "the Deck step names the repeated key point and what it repeats");
+    console.log("✓ layouts 16: a key point repeating the chat prompt is one slide, and the Deck step names it");
+
     console.log("\nsmoke-firstdeck: all checks passed");
   } finally {
     await browser.close();

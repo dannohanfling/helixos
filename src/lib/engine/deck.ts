@@ -144,6 +144,11 @@ export type DeckResult = {
    * a slide (slide null); a repeat that was a line comes off that slide. Each names whose proof and the slide it is shown on.
    */
   repeats: { slide: number | null; section: string; who: string; shownOn: number; text: string }[];
+  /**
+   * Key points that say again what the opening or the origin story already said (deck layouts 16, round 1: the emoji ask on
+   * slides 3 and 8, the origin story twice). Each comes off its section, named with the line it repeats, never silently.
+   */
+  echoes: { section: string; text: string; sameAs: string }[];
   /** Per-webinar chrome the renderer draws, carried so renderPlan stays pure over the result. */
   footerBar: boolean;
   ctaBar: boolean;
@@ -218,6 +223,29 @@ const proofKeyOf = (p: ResolvedProof): string => (p.source === "bank" ? p.id : `
 const normQuote = (t: string): string => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 /** Shorter than this, a match is a common phrase, not a quotation. */
 const QUOTE_MIN = 30;
+
+/** Whether a key point says again what a line already on the slides says: the same words, or one inside the other when long enough to be more than a common phrase. */
+export function echoes(point: string, line: string): boolean {
+  const a = normQuote(point);
+  const b = normQuote(line);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return Math.min(a.length, b.length) >= QUOTE_MIN && (a.includes(b) || b.includes(a));
+}
+
+/**
+ * A quote that starts mid-sentence ("ran a five-day challenge…") reads with no one doing it (deck layouts 16, round 1): it
+ * takes the person's first name ("Terri ran a five-day challenge…"). A quote that starts with a capital, or a person with no
+ * name on the record, stands as stored.
+ */
+export function quoteWithSubject(quote: string, who: string): string {
+  const q = quote.trim();
+  const first = who.replace(/^[—–-]\s*/, "").trim().split(/\s+/)[0]?.replace(/[^\p{L}'-]/gu, "") ?? "";
+  const lead = q.match(/^[“"'‘…\.\s]*/)?.[0] ?? "";
+  const rest = q.slice(lead.length);
+  if (!first || !/^\p{Ll}/u.test(rest) || /^i\b/.test(rest)) return q;
+  return `${first} ${rest}`;
+}
 /** The proof a line quotes, if any: what sits inside its quotation marks, or the whole line, found inside one of a proof's versions (or containing one). */
 function quotedProof(line: string, proofs: Map<string, { texts: string[] }>): string | null {
   const inside = [...line.matchAll(/[“"]([^”"]+)[”"]/g)].map((m) => m[1]);
@@ -332,6 +360,14 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     if (!text) { openingOmitted.push(label); return; }
     slides.push(slideOf({ n: n++, kind: "opening", s: null, act: "opening", eyebrow: `Opening · ${label}`, headline: headline ?? text, body: body ?? [] }));
   };
+  // What the opening and the origin story say on their own slides, so a section's key point never says it a second time.
+  const alreadySaid: { label: string; text: string }[] = [
+    ...([["the promise", c.opening.promiseLine], ["the chat prompt", c.opening.chatPrompt], ["the ground rule", c.opening.groundRule], ["your goal today", c.opening.sessionGoal], ["the permission line", c.opening.permissionLine], ["the stay line", c.stayLine]] as [string, string | null][]).flatMap(([label, text]) => (text ? [{ label, text }] : [])),
+    ...c.opening.outcomes.map((text) => ({ label: "an outcome", text })),
+    // The beats are slides only where an origin section runs; without one, a key point that tells the story is the only telling.
+    ...(c.sections.some((x) => x.status !== "omitted" && isOrigin(x)) ? c.originStory.map((b) => ({ label: `the origin story's ${b.label.toLowerCase()} beat`, text: b.text })) : []),
+  ];
+  const echoed: DeckResult["echoes"] = [];
   openSlide("The promise", c.opening.promiseLine);
   openSlide("Say hi in the chat", c.opening.chatPrompt);
   openSlide("Ground rule", c.opening.groundRule);
@@ -349,7 +385,12 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     if (BELIEF_ACTS.has(act.key) && shift) slides.push(slideOf({ n: n++, kind: "divider", s: null, headline: shift, body: belief?.to?.trim() && belief.from?.trim() ? [`From: ${belief.from.trim()}`] : [], eyebrow: act.label, act: act.key, inverse: true }));
     for (const s of act.sections) {
       if (s.status === "omitted") continue;
-      const points = s.keyPoints;
+      // A key point the opening or the origin story already put on a slide comes off here, named on the Deck step (layouts 16).
+      const points = s.keyPoints.filter((p) => {
+        const hit = alreadySaid.find((l) => echoes(p, l.text));
+        if (hit) echoed.push({ section: s.name, text: p, sameAs: hit.label });
+        return !hit;
+      });
       const footer = footerFor(s);
       // One key point per slide, each under the section's eyebrow: the builder's own rule, kept by the exporter. A section set to
       // reveal builds instead: the first point as the line, then the same line with each further point added beneath it.
@@ -369,7 +410,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
       if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer, slot: { key: `${s.sectionKey}:${b.key}:photo`, kind: "photo", what: originWhat(b.label) } }));
       if (isProofBlock(s)) {
         // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
-        if (s.proof) slides.push({ ...slideOf({ n: n++, kind: "proof", s, headline: `“${s.proof.quote}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial, proofId: s.proof.source === "bank" ? s.proof.id : undefined } }), proofKey: proofKeyOf(s.proof) });
+        if (s.proof) slides.push({ ...slideOf({ n: n++, kind: "proof", s, headline: `“${quoteWithSubject(s.proof.quote, s.proof.who)}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial, proofId: s.proof.source === "bank" ? s.proof.id : undefined } }), proofKey: proofKeyOf(s.proof) });
         else if (s.evidence) slides.push(slideOf({ n: n++, kind: "evidence", s, headline: s.evidence.claim, body: [s.evidence.citation], footer, slot: { key: `${s.sectionKey}:screenshot_callout`, kind: "screenshot_callout", what: SLOT_WHAT.screenshot_callout } }));
         pointSlides("proof");
         continue;
@@ -515,7 +556,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   if (kitIn && !normaliseHex(kitIn.placeholder)) warnings.push(`The brand kit reserves no placeholder colour, so unfilled slots are drawn in ${PLACEHOLDER_FALLBACK}.`);
   // The spread (§3): never more than two picture slots in a row; the cover and a testimonial are never dropped.
   slides.splice(0, slides.length, ...spreadSlots(slides));
-  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, keptOff, repeats, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
+  return { slides, refused, warnings, placeholderCount: slides.reduce((a, sl) => a + sl.placeholders.length, 0), kit, kitApplied: Boolean(kitIn), openingOmitted, keptOff, repeats, echoes: echoed, footerBar: c.footerBar, ctaBar: c.ctaBar, ctaFooter: offer?.ctaFooter ?? null };
 }
 
 /**

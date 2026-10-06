@@ -1846,6 +1846,20 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
           </ul>
         </div>
       ) : null}
+      {deck.echoes.length ? (
+        <div className="mb-3 rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="deck-echoes">
+          <p>
+            {deck.echoes.length === 1 ? "One key point says" : `${deck.echoes.length} key points say`} again what the opening or your origin story already shows, so {deck.echoes.length === 1 ? "it isn't a slide" : "they aren't slides"}. Change the key point if you meant something new.
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {deck.echoes.map((e, i) => (
+              <li key={i} data-testid="deck-echo">
+                {e.section}: &ldquo;{e.text}&rdquo;, the same as {e.sameAs}.
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {deck.keptOff.length ? (
         <div className="mb-3 rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="deck-kept-off">
           <p>

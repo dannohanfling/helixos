@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame, eventLine, BODY_FIT_SIZES, PLACEHOLDER_TEXT_SIZE } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame, eventLine, BODY_FIT_SIZES, PLACEHOLDER_TEXT_SIZE, echoes, quoteWithSubject } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -562,5 +562,35 @@ describe("first-deck §4 and §5: readable sizes, the CTA once, the price and th
     const item = plans.find((p) => p.boxes.some((b) => b.role === "figure" && b.text === "NZD $744 value"))!;
     expect(item.boxes.find((b) => b.role === "small")?.text).toBe("Total value so far: NZD $2,744");
     expect(outlineText("t", d)).toContain("Total value NZD $2,744 (struck through)");
+  });
+});
+
+describe("deck layouts 16: the two round-1 defects", () => {
+  it("a key point that repeats an opening line or an origin beat is said once, and named", () => {
+    expect(echoes("Drop an emoji in the chat if you're here!", "drop an emoji in the chat if you're here")).toBe(true);
+    expect(echoes("I was working 70-hour weeks in a job I hated", "By 2019 I was working 70-hour weeks in a job I hated.")).toBe(true);
+    expect(echoes("Say hi", "Say hi in the chat")).toBe(false);
+    const c = resolveSections({
+      webinar: { title: "t", chatPrompt: "Drop an emoji in the chat if you're here!", originStory: { wall: "By 2019 I was working 70-hour weeks in a job I hated." } },
+      presenter: "L",
+      sections: base({ hook: { keyPoints: "Drop an emoji in the chat if you're here!\nMost people quit in week three." }, credibility_origin: { keyPoints: "I was working 70-hour weeks in a job I hated\nThen I found the method." } }),
+      beliefs: [], proofs, assets, essenceStories: [], citable, offer,
+    });
+    const d = deckSlides(c, kit);
+    const faces = d.slides.map((sl) => sl.headline);
+    expect(faces.filter((h) => /Drop an emoji/.test(h))).toHaveLength(1);
+    expect(faces.filter((h) => /70-hour weeks/.test(h))).toHaveLength(1);
+    expect(faces).toContain("Most people quit in week three.");
+    expect(d.echoes.map((e) => e.sameAs)).toEqual(["the chat prompt", expect.stringMatching(/^the origin story's .* beat$/)]);
+  });
+  it("without an origin section, a key point that tells the story stays: it is the only telling", () => {
+    const c = resolveSections({ webinar: { title: "t", originStory: { wall: "By 2019 I was working 70-hour weeks in a job I hated." } }, presenter: "L", sections: base({ hook: { keyPoints: "By 2019 I was working 70-hour weeks in a job I hated." }, credibility_origin: { status: "omitted" } }), beliefs: [], proofs, assets, essenceStories: [], citable, offer });
+    expect(deckSlides(c, kit).echoes).toEqual([]);
+  });
+  it("a quote that starts mid-sentence takes the person's first name; one with a capital stands as stored", () => {
+    expect(quoteWithSubject("ran a five-day challenge and booked 9 calls", "Terri M.")).toBe("Terri ran a five-day challenge and booked 9 calls");
+    expect(quoteWithSubject("…ran a five-day challenge", "— Terri")).toBe("Terri ran a five-day challenge");
+    expect(quoteWithSubject("I ran a five-day challenge", "Terri")).toBe("I ran a five-day challenge");
+    expect(quoteWithSubject("ran it", "")).toBe("ran it");
   });
 });

@@ -137,7 +137,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
                 )}
               </div>
               {harvested ? <div className="label pt-1">Their words, trimmed only</div> : null}
-              <Field label={harvested ? "Short version (trim)" : "One-liner (for a slide or a comment)"} hint={harvested ? "An excerpt of the quote, an ellipsis for what you cut." : "Leave blank and it's built from before and after."}>
+              <Field label={harvested ? "Short version (trim)" : "One-liner (for a slide or a comment)"} hint={harvested ? "An excerpt of the quote, an ellipsis for what you cut. One that starts mid-sentence (\"ran a five-day challenge…\") gets their first name in front on a slide." : "Leave blank and it's built from before and after. Start with who did it; a line that starts mid-sentence gets their first name in front on a slide."}>
                 <input className="field" name="shortVersion" defaultValue={p.shortVersion ?? ""} data-testid="short-version" />
               </Field>
               <Field label={harvested ? "Long version (trim)" : "Long version (the full story)"}>
