@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame, eventLine, BODY_FIT_SIZES, PLACEHOLDER_TEXT_SIZE, echoes, quoteWithSubject } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame, eventLine, BODY_FIT_SIZES, PLACEHOLDER_TEXT_SIZE, echoes, quoteWithSubject, boxAt } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -416,8 +416,12 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
     expect(statement.layout).toBe("statement");
     expect(statement.boxes.find((b) => b.role === "headline")!.size).toBeGreaterThanOrEqual(44);
     const outcomes = plans.find((p) => p.n === d.slides.find((s) => s.headline === "By the end you'll have")!.n)!;
-    expect(outcomes.layout).toBe("content");
-    expect(outcomes.boxes.filter((b) => b.role === "body").every((b) => b.size === BODY_SIZE)).toBe(true);
+    // The outcomes are cards (deck layouts 3): one per outcome on the surface, every card's text at one size.
+    expect(outcomes.layout).toBe("cards");
+    const cardSizes = new Set(outcomes.boxes.filter((b) => b.role === "card").map((b) => b.size));
+    expect(cardSizes.size).toBe(1);
+    expect([...cardSizes][0]).toBeLessThanOrEqual(BODY_SIZE);
+    expect(outcomes.panels?.length).toBe(outcomes.boxes.filter((b) => b.role === "card").length);
     // A case-study slide with a long body beside a picture: the body shrinks, then the picture takes the next slide.
     const longBody = Array(7).fill("A long bullet about the thing we did that week and what it changed for the team").join("\n");
     const c = ctx(base({ problem_frame: { keyPoints: `Six things happened\n${longBody}`, buildStyle: "reveal" } }), [{ type: "vehicle", fromBelief: "a", toBelief: "b", proofId: "p1", storyAssetId: "s1" }]);
@@ -592,5 +596,44 @@ describe("deck layouts 16: the two round-1 defects", () => {
     expect(quoteWithSubject("…ran a five-day challenge", "— Terri")).toBe("Terri ran a five-day challenge");
     expect(quoteWithSubject("I ran a five-day challenge", "Terri")).toBe("I ran a five-day challenge");
     expect(quoteWithSubject("ran it", "")).toBe("ran it");
+  });
+});
+
+describe("deck layouts 1, 3 and 11, in the plan", () => {
+  const planOf = (keyPoints: string, extra: Record<string, unknown> = {}) => {
+    const c = resolveSections({ webinar: { title: "t", ...extra }, presenter: "L", sections: base({ problem_frame: { keyPoints } }), beliefs: [], proofs, assets, essenceStories: [], citable, offer });
+    const d = deckSlides(c, kit);
+    return { d, plans: renderPlan(d) };
+  };
+  it("a key point with one figure is a big number: the figure huge, its label under it", () => {
+    const { d, plans } = planOf("602 comments on my post in 48 hours");
+    const sl = d.slides.find((s) => s.headline.startsWith("602 comments"))!;
+    const p = plans.find((x) => x.n === sl.n)!;
+    expect(p.layout).toBe("bignum");
+    expect(p.boxes.find((b) => b.role === "figure")).toMatchObject({ text: "602" });
+    expect(p.boxes.find((b) => b.role === "figure")!.size).toBeGreaterThanOrEqual(72);
+    expect(p.boxes.find((b) => b.role === "small")?.text).toBe("comments on my post in 48 hours");
+  });
+  it("two figures make a row at one size, each in its own column, inside the slide", () => {
+    const { d, plans } = planOf("1,838 sent, 98.2% opened");
+    const p = plans.find((x) => x.n === d.slides.find((s) => s.headline.startsWith("1,838"))!.n)!;
+    const figs = p.boxes.filter((b) => b.role === "figure");
+    expect(figs.map((b) => [b.text, b.col])).toEqual([["1,838", 0], ["98.2%", 1]]);
+    expect(new Set(figs.map((b) => b.size)).size).toBe(1);
+    const g = slideGeometry(p);
+    for (const b of p.boxes) {
+      const at = boxAt(g, b);
+      if (at) expect(at.x + at.w).toBeLessThanOrEqual(10);
+    }
+  });
+  it("a belief divider with its From line is From → To: the old belief small, a short accent rule, the new belief large", () => {
+    const c = ctx(base(), [{ type: "vehicle", fromBelief: "I need more followers", toBelief: "I need more conversations", proofId: null, storyAssetId: null }]);
+    const d = deckSlides(c, kit);
+    const div = d.slides.find((s) => s.kind === "divider")!;
+    const p = renderPlan(d).find((x) => x.n === div.n)!;
+    expect(p.layout).toBe("shift");
+    expect(p.boxes.find((b) => b.role === "small")?.text).toBe("I need more followers");
+    expect(p.boxes.find((b) => b.role === "headline")?.text).toBe("I need more conversations");
+    expect(slideGeometry(p).rules.w).toBeLessThan(3);
   });
 });

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 103,
+    date: "2026-10-06",
+    title: "Your deck: big numbers, cards, and From → To",
+    lines: [
+      "A key point with a number in it (\"602 comments on my post in 48 hours\") now shows the number huge with the words under it; two or three numbers in one line sit side by side.",
+      "Your outcomes and \"This is for you if…\" are now cards side by side instead of a bulleted list, and each belief divider shows the old belief small, then the new one large.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 101,
     date: "2026-10-06",
     title: "Your deck says each thing once",

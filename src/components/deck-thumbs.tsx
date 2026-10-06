@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { googleFontHref } from "@/lib/engine/fonts";
-import { COVER_LOGO_PLACEHOLDER, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, type BoxGeometry, type SlideGeometry, type SlidePlan } from "@/lib/engine/deck";
+import { boxAt, COVER_LOGO_PLACEHOLDER, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, type BoxGeometry, type SlideGeometry, type SlidePlan, type TextBox } from "@/lib/engine/deck";
 
 /** What one thumbnail needs, computed on the server from the same plan the export draws. */
 export type ThumbSlide = {
@@ -111,15 +111,17 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
   const cover = plan.boxes.some((b) => b.role === "cover-title");
   const problems = [plan.placeholderSlot ? "empty slot" : null, overflow ? "overflow" : null, missingLogo ? "no logo" : null].filter(Boolean) as string[];
   const faceFor = (b: { face: string }) => face(b.face, chrome.faces.fallback);
-  const box = (role: keyof SlideGeometry["boxes"]) => {
-    const b = plan.boxes.find((x) => x.role === role);
-    const at = g.boxes[role];
-    if (!b || !at) return null;
+  // Every box where the plan's geometry puts it, in its column when it sits in a row (big numbers, cards): the export's own rule.
+  const boxEl = (b: TextBox, i: number) => {
+    const at = boxAt(g, b);
+    if (!at) return null;
+    const role = b.role;
     return (
       <div
-        key={role}
+        key={`${role}:${b.col ?? ""}:${i}`}
         data-measure={plan.n}
         data-role={role}
+        data-col={b.col}
         data-x={at.x}
         data-y={at.y}
         data-w={at.w}
@@ -150,14 +152,10 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
             {COVER_LOGO_PLACEHOLDER}
           </div>
         ) : null}
-        {box("cover-title")}
-        {box("cover-presenter")}
-        {box("cover-date")}
-        {box("struck")}
-        {box("figure")}
-        {box("small")}
-        {box("eyebrow")}
-        {box("headline")}
+        {(plan.panels ?? []).map((p, i) => (
+          <div key={`panel:${i}`} className="absolute rounded" style={{ ...place(p.frame), backgroundColor: `#${p.color}` }} data-testid="deck-thumb-panel" />
+        ))}
+        {plan.boxes.map((b, i) => (b.role === "body" || b.role === "attribution" || b.role === "footer" ? null : boxEl(b, i)))}
         {lines.length && g.body ? (
           <div data-measure={plan.n} data-role="body" data-x={g.body.x} data-y={g.body.y} data-w={g.body.w} data-h={g.body.h} className="absolute overflow-hidden leading-[1.2]" style={{ ...place(g.body), textAlign: "left" }}>
             {lines.map((b, i) => (
@@ -168,7 +166,7 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
             ))}
           </div>
         ) : null}
-        {box("footer")}
+        {plan.boxes.map((b, i) => (b.role === "footer" ? boxEl(b, i) : null))}
         {plan.rules.map((r, i) => (
           <div key={i} className="absolute" style={{ left: pct(g.rules.x, SLIDE_W), top: pct(r.y, SLIDE_H), width: pct(g.rules.w, SLIDE_W), height: "1.5px", backgroundColor: `#${r.color}` }} />
         ))}

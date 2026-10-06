@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { getViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
-import { COVER_LOGO_BOX, COVER_LOGO_PLACEHOLDER, LOGO_BOX, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, logoBadgeFrame, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
+import { boxAt, COVER_LOGO_BOX, COVER_LOGO_PLACEHOLDER, LOGO_BOX, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, logoBadgeFrame, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
 import { applyKitTheme } from "@/lib/deck-theme";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
 import { pictureAltText } from "@/lib/engine/deck-slot";
@@ -149,14 +149,15 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     if (presenter && g.boxes["cover-presenter"]) slide.addText(presenter.text, { placeholder: "presenter", ...at(g.boxes["cover-presenter"]), fontSize: presenter.size, color: presenter.color, fontFace: presenter.face });
     const date = plan.boxes.find((b) => b.role === "cover-date");
     if (date && g.boxes["cover-date"]) slide.addText(date.text, { ...at(g.boxes["cover-date"]), fontSize: date.size, color: date.color, fontFace: date.face });
-  } else if (plan.layout === "figure") {
-    // A figure slide (first-deck §5): the price huge with the total struck through and the saving small, or an item's value.
-    for (const role of ["headline", "body", "struck", "figure", "small", "footer"] as const) {
-      const b = plan.boxes.find((x) => x.role === role);
-      const at_ = role === "body" ? g.body : g.boxes[role];
-      if (!b || !at_) continue;
-      const ph = role === "headline" ? { placeholder: "title" } : role === "footer" ? { placeholder: "footer" } : {};
-      slide.addText(b.text, { ...ph, ...at(at_), fontSize: b.size, bold: b.bold, color: b.color, fontFace: b.face, ...(b.strike ? { strike: "sngStrike" as const } : {}) });
+  } else if (plan.layout === "figure" || plan.layout === "bignum" || plan.layout === "shift" || plan.layout === "cards") {
+    // The laid-out slides (first-deck §5's figure; deck layouts 1, 3, 11): the cards' surface panels first, then every box where
+    // the plan's geometry puts it, in its column when it sits in a row. Nothing is placed here that the thumbnail doesn't place.
+    for (const p of plan.panels ?? []) slide.addShape(pptx.ShapeType.roundRect, { x: p.frame.x, y: p.frame.y, w: p.frame.w, h: p.frame.h, rectRadius: 0.08, fill: { color: p.color }, line: { color: p.color, width: 0 } });
+    for (const b of plan.boxes) {
+      const at_ = boxAt(g, b);
+      if (!at_) continue;
+      const ph = b.role === "headline" ? { placeholder: "title" } : b.role === "footer" ? { placeholder: "footer" } : {};
+      slide.addText(b.text, { ...ph, ...at(at_), fontSize: b.size, bold: b.bold, italic: b.italic, color: b.color, fontFace: b.face, ...(b.fill ? { fill: { color: b.fill } } : {}), ...(b.strike ? { strike: "sngStrike" as const } : {}) });
     }
   } else {
     const eyebrow = plan.boxes.find((b) => b.role === "eyebrow");

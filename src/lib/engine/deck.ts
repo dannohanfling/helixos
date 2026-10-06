@@ -10,6 +10,7 @@ import { brandKitProblems, contrastRatio, normaliseHex } from "./subject";
 import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type ResolvedProof, type SectionContext, type WebinarContext } from "./webinar-context";
 import { COVER_WHAT, STORY_WHAT, originWhat, slotForLine, spreadSlots } from "./deck-slot-rules";
 import { fitSize } from "./deck-fit-text";
+import { bigNumbers, isCardList, shiftFrom } from "./deck-layouts";
 
 /** The brand as the renderer reads it. Null renders the neutral kit and says so. */
 export type DeckKit = { name: string; logoImageId?: string | null; logoDarkImageId?: string | null; ground: string; ink: string; accent: string; muted: string; surface: string; inverseGround?: string | null; inverseInk?: string | null; displayFont: string; bodyFont: string; quoteFont?: string | null; fontFallback: string; bannedColors: string[]; placeholder?: string | null; /** The price against the total (the anchor). Undefined means on: the control. */ showPriceAnchor?: boolean | null };
@@ -58,6 +59,9 @@ export const COVER_LINE_SIZE = 20;
 export const PRICE_SIZES = [96, 80, 66, 54];
 export const VALUE_SIZES = [60, 54, 44, 36];
 export const STRUCK_SIZE = 28;
+/** The big number (layouts 1): one figure from 160pt down until it fits; a row of two or three at one size from 120pt. */
+export const BIG_SIZES = [160, 140, 120, 100, 88, 72];
+export const ROW_SIZES = [120, 100, 88, 72, 60, 48];
 export const SMALL_SIZE = 20;
 /** A statement slide (one line, no body, §4): the line sits vertically centred, large by its length. */
 export const STATEMENT_SIZES: { maxChars: number; size: number }[] = [
@@ -598,7 +602,7 @@ export function suggestedSlots(d: DeckResult): { slide: number; section: string;
 
 /* ───────────── The render plan ───────────── */
 
-export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter" | "cover-date" | "figure" | "struck" | "small"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean; /** Struck through: the total the price is set against (first-deck §5). */ strike?: boolean };
+export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter" | "cover-date" | "figure" | "struck" | "small" | "source" | "card-num" | "card"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean; /** Struck through: the total the price is set against (first-deck §5). */ strike?: boolean; /** Which column of a row (big numbers, cards) the box sits in. */ col?: number };
 /** A rule drawn in the accent: the one thing the accent draws besides a fill. Never under text. */
 export type Rule = { slide: number; color: string; y: number };
 /** A picture's frame in inches on the 10×5.625 slide. A photo fills it, cropped (cover); evidence sits whole inside it (contain); nothing is ever stretched (src/lib/engine/deck-fit.ts). */
@@ -608,8 +612,8 @@ export type PlaceholderSlot = { frame: Frame; text: string; color: string };
 /** Every label of the deck's own that may never reach a face (§9): the act names, the deck's section-less eyebrows, and the words of a label. The walk reads every face against this list and the record's section names. */
 export const FACE_LABELS_NEVER = [...Object.values(ACT_LABEL), "Act 1", "Act 2", "Act 3", "Opening ·", "What you'll leave with", "Who it is for", "Stay to the end", "A moment before we go on", "· recap", "· story", "Vehicle Story", "Internal Story", "External Story"];
 /** The slide's layout family (§4): the cover, a content slide, or a statement (one line, no body, vertically centred and large). */
-export type SlideLayout = "cover" | "content" | "statement" | "figure";
-export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; layout: SlideLayout; /** The CTA bar's line on this slide (first-deck §5): the offer and Q&A slides and the close, with the bar on; it then replaces the footer's CTA. */ ctaBar?: string | null; /** A slide that carries only the picture of the slide before it (§4: its text would not fit beside the picture even at the floor). */ pictureOnly: boolean; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
+export type SlideLayout = "cover" | "content" | "statement" | "figure" | "bignum" | "shift" | "cards";
+export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; layout: SlideLayout; /** Filled panels behind the text: the cards' surface (layouts 3). */ panels?: { frame: Frame; color: string }[]; /** The CTA bar's line on this slide (first-deck §5): the offer and Q&A slides and the close, with the bar on; it then replaces the footer's CTA. */ ctaBar?: string | null; /** A slide that carries only the picture of the slide before it (§4: its text would not fit beside the picture even at the floor). */ pictureOnly: boolean; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
 
 /**
  * The frame a filled picture occupies, by the slide's kind. The cover's picture fills the right half; every content slide's
@@ -677,7 +681,24 @@ export function masterGeometry(master: SlideMaster): SlideGeometry {
 /** Where a text box sits on the 10 by 5.625 in slide, and how its text is set inside it. */
 export type BoxGeometry = Frame & { align: "left" | "center"; valign: "top" | "middle" };
 /** Every box's place on one slide (§6.4): the route draws from this and the Deck step's thumbnail draws the same, so the two cannot drift. */
-export type SlideGeometry = { boxes: Partial<Record<TextBox["role"], BoxGeometry>>; /** The body lines share one box. */ body: BoxGeometry | null; rules: { x: number; w: number } };
+/** One column of a row: a big number with its label, or a card with its number and line. */
+export type ColumnGeometry = { figure?: BoxGeometry; label?: BoxGeometry; num?: BoxGeometry; text?: BoxGeometry; panel?: Frame };
+export type SlideGeometry = { boxes: Partial<Record<TextBox["role"], BoxGeometry>>; /** The body lines share one box. */ body: BoxGeometry | null; rules: { x: number; w: number }; /** The columns of a row, in order. */ cols?: ColumnGeometry[] };
+/** Where a box sits: its column's slot when it is in a row, else its role's box (the body lines share the body's). */
+export function boxAt(g: SlideGeometry, b: Pick<TextBox, "role" | "col">): BoxGeometry | null {
+  if (b.col !== undefined) {
+    const c = g.cols?.[b.col];
+    const slot = b.role === "figure" ? c?.figure : b.role === "small" ? c?.label : b.role === "card-num" ? c?.num : b.role === "card" ? c?.text : undefined;
+    return slot ?? null;
+  }
+  if (b.role === "body" || b.role === "attribution") return g.body;
+  return g.boxes[b.role] ?? null;
+}
+/** A row of `n` equal columns across a zone, with a gap between. */
+const columns = (zone: { x: number; w: number }, n: number, gap: number) => {
+  const w = (zone.w - (n - 1) * gap) / n;
+  return Array.from({ length: n }, (_, i) => ({ x: zone.x + i * (w + gap), w }));
+};
 
 /**
  * The geometry of a planned slide. A filled slot's frame, or the empty slot's, puts the text in the left column; without one
@@ -706,6 +727,38 @@ export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageF
     boxes.small = { x: 0.5, y: 3.75, w: 9, h: 1.15, align: "center", valign: "top" };
     if (plan.boxes.some((b) => b.role === "body")) body = { x: 0.5, y: 1.65, w: 9, h: 0.55, align: "center", valign: "top" };
     boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
+  } else if (plan.layout === "bignum") {
+    // The big number (layouts 1): the figure huge, its label under it, the source small at the foot; two or three in a row.
+    // Beside a picture it keeps to the left column, set left like the cover's title.
+    const n = new Set(plan.boxes.filter((b) => b.col !== undefined).map((b) => b.col)).size;
+    const align = frame ? "left" : "center";
+    if (n > 1) {
+      const cols = columns(zone, n, 0.3).map((c) => ({ figure: { ...c, y: 1.3, h: 1.8, align: "center" as const, valign: "middle" as const }, label: { ...c, y: 3.2, h: 1.0, align: "center" as const, valign: "top" as const } }));
+      boxes.source = { x: zone.x, y: 4.45, w: zone.w, h: 0.4, align, valign: "top" };
+      boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
+      return { boxes, body, rules: { x: 0.5, w: frame ? zone.w : 9 }, cols };
+    }
+    boxes.figure = { x: zone.x, y: 0.95, w: zone.w, h: 2.35, align, valign: "middle" };
+    boxes.small = { x: zone.x, y: 3.4, w: zone.w, h: 1.0, align, valign: "top" };
+    boxes.source = { x: zone.x, y: 4.45, w: zone.w, h: 0.4, align, valign: "top" };
+    boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
+  } else if (plan.layout === "shift") {
+    // From → To (layouts 11): the old belief small and muted, a short accent rule, the new belief large.
+    boxes.small = { x: 0.5, y: 0.9, w: 9, h: 0.9, align: "left", valign: "middle" };
+    boxes.headline = { x: 0.5, y: 2.15, w: 9, h: 2.5, align: "left", valign: "top" };
+    boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
+    return { boxes, body, rules: { x: 0.5, w: 1.6 } };
+  } else if (plan.layout === "cards") {
+    // Cards (layouts 3): the line at the top, then 2 to 4 equal cards on the surface, each a number and one line, centred.
+    const n = new Set(plan.boxes.filter((b) => b.col !== undefined).map((b) => b.col)).size;
+    boxes.headline = { x: 0.5, y: 0.8, w: 9, h: 1.2, align: "left", valign: "top" };
+    boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
+    const cols = columns({ x: 0.5, w: 9 }, n, 0.25).map((c) => ({
+      panel: { x: c.x, y: 2.15, w: c.w, h: 2.65 },
+      num: { x: c.x + 0.2, y: 2.3, w: c.w - 0.4, h: 0.55, align: "center" as const, valign: "top" as const },
+      text: { x: c.x + 0.2, y: 2.9, w: c.w - 0.4, h: 1.75, align: "center" as const, valign: "top" as const },
+    }));
+    return { boxes, body, rules: { x: 0.5, w: 9 }, cols };
   } else {
     boxes.eyebrow = { x: zone.x, y: 0.25, w: zone.w, h: 0.4, align: "left", valign: "top" };
     boxes.headline = plan.layout === "statement" ? { x: zone.x, y: 1.0, w: zone.w, h: 3.4, align: "left", valign: "middle" } : { x: zone.x, y: 0.8, w: zone.w, h: 1.5, align: "left", valign: "top" };
@@ -736,6 +789,15 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     const dark = s.inverse && hasInverse;
     const ink = dark ? hex(k.inverseInk!) : hex(k.ink);
     const muted = dark ? hex(k.inverseInk!) : hex(k.muted);
+    // The layouts beyond headline and body (deck layouts 1, 3 and 11), each picked by a rule from the slide's own words.
+    const special: "bignum" | "shift" | "cards" | null =
+      s.kind === "divider" && shiftFrom(s.body)
+        ? "shift"
+        : (s.kind === "section" || s.kind === "evidence") && s.sectionKey && !s.overflow && !mark(s.headline) && (s.body.length === 0 || (s.kind === "evidence" && s.body.length === 1)) && bigNumbers(s.headline)
+          ? "bignum"
+          : !s.sectionKey && (s.kind === "opening" || s.kind === "section") && isCardList(s.body) && !s.body.some(mark) && !imageFrame && !placeholderSlot
+            ? "cards"
+            : null;
     if (s.kind === "cover") {
       boxes.push({ slide: s.n, role: "cover-title", text: s.headline, size: s.headlineSize, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
       boxes.push({ slide: s.n, role: "cover-presenter", text: s.body[0] ?? "", size: COVER_LINE_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
@@ -748,6 +810,38 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
       if (f.struck) boxes.push({ slide: s.n, role: "struck", text: f.struck, size: STRUCK_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false, strike: true });
       boxes.push({ slide: s.n, role: "figure", text: f.value, size: fitSize(f.value, { w: 9, h: 1.5 }, f.size === "price" ? PRICE_SIZES : VALUE_SIZES) ?? (f.size === "price" ? PRICE_SIZES : VALUE_SIZES).at(-1)!, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
       if (f.small.length) boxes.push({ slide: s.n, role: "small", text: f.small.join("\n"), size: SMALL_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+    } else if (special === "shift") {
+      // From → To (layouts 11): the old belief small and muted over a short accent rule, the new belief large under it.
+      const from = shiftFrom(s.body)!;
+      boxes.push({ slide: s.n, role: "small", text: from, size: fitSize(from, { w: 9, h: 0.9 }, [24, 22, 20, 18]) ?? 18, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, { w: 9, h: 2.5 }, [60, 52, 44, 40, 32, 26, HEADLINE_FLOOR]) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+    } else if (special === "bignum") {
+      // The big number (layouts 1): the figure huge in the display face, its label small under it; two or three side by side at
+      // one size. An evidence slide's citation is the source line. Ink and muted only.
+      const nums = bigNumbers(s.headline)!;
+      const zoneW = imageFrame || placeholderSlot ? TEXT_LEFT_ZONE.w : 9;
+      if (nums.length === 1) {
+        boxes.push({ slide: s.n, role: "figure", text: nums[0].value, size: fitSize(nums[0].value, { w: zoneW, h: 2.35 }, BIG_SIZES) ?? BIG_SIZES.at(-1)!, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+        boxes.push({ slide: s.n, role: "small", text: nums[0].label, size: fitSize(nums[0].label, { w: zoneW, h: 1.0 }, [BODY_SIZE, 22, 20, 18, 16]) ?? 16, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+      } else {
+        const colW = (zoneW - (nums.length - 1) * 0.3) / nums.length;
+        const size = Math.min(...nums.map((x) => fitSize(x.value, { w: colW, h: 1.8 }, ROW_SIZES) ?? ROW_SIZES.at(-1)!));
+        nums.forEach((x, col) => {
+          boxes.push({ slide: s.n, role: "figure", col, text: x.value, size, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+          boxes.push({ slide: s.n, role: "small", col, text: x.label, size: 20, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+        });
+      }
+      if (s.kind === "evidence" && s.body[0]) boxes.push({ slide: s.n, role: "source", text: s.body[0], size: 14, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+    } else if (special === "cards") {
+      // Cards (layouts 3): the line at the top, one card per item on the surface, every card's text at the size the longest needs.
+      const tiers = [...new Set([s.headlineSize, ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z < s.headlineSize), HEADLINE_FLOOR])].sort((a, b) => b - a);
+      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, { w: 9, h: 1.2 }, tiers) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+      const colW = (9 - (s.body.length - 1) * 0.25) / s.body.length;
+      const size = Math.min(...s.body.map((l) => fitSize(l, { w: colW - 0.4, h: 1.75 }, [BODY_SIZE, 22, 20, 18, 16]) ?? 16));
+      s.body.forEach((line, col) => {
+        boxes.push({ slide: s.n, role: "card-num", col, text: String(col + 1), size: 28, color: muted, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+        boxes.push({ slide: s.n, role: "card", col, text: line, size, color: ink, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+      });
     } else {
       // No eyebrow on any face (§9, Danno): the section and act names live in the notes and on the Deck step. The accent rule stays.
       boxes.push({ slide: s.n, role: "headline", text: s.headline, size: s.headlineSize, color: ink, fill: mark(s.headline) ? placeholderColor : null, face: s.kind === "proof" && k.quoteFont ? k.quoteFont : k.displayFont, bold: s.kind !== "proof", italic: s.kind === "proof", bullet: false, placeholder: mark(s.headline) });
@@ -766,13 +860,13 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     // and this one keeps the full width. A one-line slide with no body is a statement: centred, large by its length.
     const background = dark ? hex(k.inverseGround!) : hex(k.ground);
     const notes = s.notes.join("\n");
-    const rules = s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }];
+    const rules = s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: special === "shift" ? 1.95 : 0.68 }];
     const headlineBox = boxes.find((b) => b.role === "headline");
     const bodyBoxes = boxes.filter((b) => b.role === "body" || b.role === "attribution");
-    let layout: SlideLayout = s.kind === "cover" ? "cover" : s.figure ? "figure" : "content";
+    let layout: SlideLayout = s.kind === "cover" ? "cover" : s.figure ? "figure" : (special ?? "content");
     let pictureOnly = false;
     const ctaBar = ctaAsBar ? s.footer : null;
-    if (s.kind !== "cover" && !s.figure) {
+    if (s.kind !== "cover" && !s.figure && !special) {
       const narrow = Boolean(imageFrame || placeholderSlot);
       const zoneW = narrow ? TEXT_LEFT_ZONE.w : 9;
       if (headlineBox && !bodyBoxes.length) {
@@ -803,7 +897,8 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
       plans.push({ n: s.n, background, boxes: [], rules: [], notes: "The picture for the slide before: its text would not fit beside it.", layout: "content", ctaBar: null, pictureOnly: true, ...picture });
       continue;
     }
-    plans.push({ n: s.n, background, boxes, rules, notes, layout, ctaBar, pictureOnly, imageFrame, placeholderSlot });
+    const panels = special === "cards" ? s.body.map((_, col) => ({ col, color: hex(k.surface) })) : [];
+    plans.push({ n: s.n, background, boxes, rules, notes, layout, ctaBar, pictureOnly, imageFrame, placeholderSlot, ...(panels.length ? { panels: panels.map((p) => ({ frame: slideGeometry({ boxes, layout, imageFrame, placeholderSlot, pictureOnly }).cols![p.col].panel!, color: p.color })) } : {}) });
   }
   return plans;
 }

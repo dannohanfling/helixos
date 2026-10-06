@@ -19,7 +19,7 @@ import type { Slot, SlotKind } from "./deck";
 
 export const MAX_SLOT_RUN = 2;
 
-const FIGURE = /(?:[$£€]\s?\d[\d,]*(?:\.\d+)?(?:\s?[kKmM])?|\d[\d,]*(?:\.\d+)?\s?%|\b\d[\d,]*(?:\.\d+)?\s?(?:k|K)\b|\b\d[\d,]*\s+(?:comments?|leads?|subscribers?|sent|opened|clients?|calls?|sales?|booked|replies|signups?|sign-ups?|members?|views?|downloads?|emails?|DMs?|messages?|orders?|customers?|days?|weeks?|months?|hours?|minutes?)\b)/i;
+export const FIGURE = /(?:[$£€]\s?\d[\d,]*(?:\.\d+)?(?:\s?[kKmM])?|\d[\d,]*(?:\.\d+)?\s?%|\b\d[\d,]*(?:\.\d+)?\s?(?:k|K)\b|\b\d[\d,]*\s+(?:comments?|leads?|subscribers?|sent|opened|clients?|calls?|sales?|booked|replies|signups?|sign-ups?|members?|views?|downloads?|emails?|DMs?|messages?|orders?|customers?|days?|weeks?|months?|hours?|minutes?)\b)/i;
 const MECHANISM = /(?<![-\w])(framework|system|method|process|steps?|map|model|funnel|pillars?|blueprint|playbook|flywheel|loop|ladder)\b/i;
 const BEFORE_AFTER = /\bbefore\b[^.]*\bafter\b|\bafter\b[^.]*\bbefore\b/i;
 const WALL = /\b(comments|DMs|messages|reviews|testimonials|replies|screenshots)\b/i;

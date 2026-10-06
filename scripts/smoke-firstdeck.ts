@@ -311,6 +311,20 @@ async function main() {
     must((await page.locator('[data-testid="deck-echo"]').allInnerTexts()).some((t) => t.includes(hookPoint) && t.includes("the chat prompt")), "the Deck step names the repeated key point and what it repeats");
     console.log("✓ layouts 16: a key point repeating the chat prompt is one slide, and the Deck step names it");
 
+    // ── Deck layouts 1 and 3, off the file: a key point with a figure is a big number; the outcomes are cards on the surface. ──
+    const problem = (await sections()).find((x) => x.sectionKey === "problem_frame")!;
+    await db.update(schema.webinarSections).set({ keyPoints: `602 comments on my post in 48 hours\n${problem.keyPoints ?? ""}` }).where(eq(schema.webinarSections.id, problem.id));
+    await db.update(schema.webinars).set({ outcomes: ["A plan for your first 30 days", "A script for every DM", "A number to hit each week"] }).where(eq(schema.webinars.id, webinarId));
+    const layoutXml = await slidesOf();
+    const bigSlide = layoutXml.find((x) => x.includes("<a:t>602</a:t>"));
+    must(bigSlide && /sz="(\d+)"[^>]*>(?:(?!<\/a:rPr>)[\s\S])*?<\/a:rPr>\s*<a:t>602<\/a:t>/.test(bigSlide) && Number(bigSlide.match(/sz="(\d+)"[^>]*>(?:(?!<\/a:rPr>)[\s\S])*?<\/a:rPr>\s*<a:t>602<\/a:t>/)![1]) >= 7200 && bigSlide.includes("comments on my post in 48 hours"), "a key point with a figure is a big number: 602 at 72pt or more, its label under it");
+    const cardSlide = layoutXml.find((x) => x.includes("A script for every DM"));
+    must(cardSlide && (cardSlide.match(/prst="roundRect"/g) ?? []).length === 3, "the three outcomes are three cards on the surface");
+    await page.goto(`${base}/webinars/${webinarId}?step=deck`);
+    await page.locator('[data-testid="deck-thumb"]').first().waitFor({ timeout: 20000 });
+    must((await page.locator('[data-testid="deck-thumb"][data-layout="bignum"]').count()) >= 1 && (await page.locator('[data-testid="deck-thumb"][data-layout="cards"] [data-testid="deck-thumb-panel"]').count()) === 3, "the thumbnails draw the big number and the three cards");
+    console.log("✓ layouts 1 and 3: a key point with a figure is a big number at 72pt or more in the file and the thumbnail; the outcomes are three cards");
+
     console.log("\nsmoke-firstdeck: all checks passed");
   } finally {
     await browser.close();
