@@ -91,7 +91,11 @@ export function DeckImageUpload({
             update(d.id, { error: r.error });
             continue;
           }
-          if (attach && !attached) attached = true;
+          if (attach && !attached) {
+            attached = true;
+            // Said, never silent (first-deck §6): the picture is in the library, and the slide says so if it could not take it.
+            if (r.attached === false) setError("The picture is in your library, but it couldn't be put on this slide. Pick it from the list above, or reload the page and try again.");
+          }
           onRecorded?.({ id: r.id, caption: d.caption.trim(), width: r.width, height: r.height });
           done.push(d.id);
         } catch (e) {
@@ -122,7 +126,11 @@ export function DeckImageUpload({
       <div className="flex flex-wrap items-center gap-2">
         <label className="btn btn-soft btn-sm cursor-pointer">
           {fixedKind ? `Choose a ${fixedKind}` : drafts.length ? "Choose other images" : "Choose images"}
-          <input type="file" multiple className="sr-only" accept={DECK_IMAGE_MIME.join(",")} disabled={pending} data-testid="deck-image-file" onChange={(e) => pick(e.currentTarget.files)} />
+          <input type="file" multiple className="sr-only" accept={DECK_IMAGE_MIME.join(",")} disabled={pending} data-testid="deck-image-file" onChange={(e) => {
+              pick(e.currentTarget.files);
+              // Cleared, so choosing the same file again still counts as a choice (the browser fires no change for an unchanged value).
+              e.currentTarget.value = "";
+            }} />
         </label>
         {drafts.length === 1 ? <span className="text-xs text-ink-2" data-testid="deck-image-name">{drafts[0].file.name}</span> : drafts.length > 1 ? <span className="text-xs text-ink-2" data-testid="deck-image-name">{drafts.length} files, each with its own kind</span> : null}
       </div>

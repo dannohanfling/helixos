@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame, eventLine, BODY_FIT_SIZES, PLACEHOLDER_TEXT_SIZE } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -82,8 +82,9 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
     const d = deckSlides(ctx(base()), kit);
     const [item, anchor] = bySection(d, "offer_stack_cta");
     expect(item).toMatchObject({ kind: "offer", headline: "Diagnostic", body: ["90 minutes, 1:1"] });
-    // The one item carries no value, so no total renders anywhere and the price stands alone
-    expect(anchor).toMatchObject({ kind: "offer", headline: "The 90-Minute Diagnostic", body: ["NZD $1,997"] });
+    // The one item carries no value, so no total renders anywhere and the price stands alone, huge, under "Get started today";
+    // the offer's own name is the eyebrow, never the headline (first-deck §5)
+    expect(anchor).toMatchObject({ kind: "offer", headline: "Get started today", eyebrow: "The 90-Minute Diagnostic", body: [], figure: { value: "NZD $1,997", size: "price", struck: null, small: [] } });
     expect(bySection(deckSlides(ctx(base(), [], false), kit), "offer_stack_cta")).toEqual([]);
   });
   it("the build re-shows the running total after each item and the price against it; any item without a value and no total renders at all", () => {
@@ -92,21 +93,24 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
       { name: "Template library", type: "bonus", description: "You pick.", perceivedValue: 497, beliefBreak: "internal" },
       { name: "Free until you lose 10", type: "guarantee", perceivedValue: 0, beliefBreak: "none" },
     ] };
+    // Each item's own value large, the running total small under it; then the price huge, the total struck through, the saving small.
     expect(offerBuild(o)).toEqual([
-      { headline: "The program", body: ["12 weeks", "Total value so far: NZD $3,000"] },
-      { headline: "Template library", body: ["You pick.", "Total value so far: NZD $3,497"] },
-      { headline: "The 90-Day Reset", body: ["Total value: NZD $3,497", "Your price: NZD $1,997", "You save NZD $1,500", "Payment plan: 3 x $700"] },
+      { headline: "The program", body: ["12 weeks"], figure: { value: "NZD $3,000 value", size: "value", struck: null, small: ["Total value so far: NZD $3,000"] } },
+      { headline: "Template library", body: ["You pick."], figure: { value: "NZD $497 value", size: "value", struck: null, small: ["Total value so far: NZD $3,497"] } },
+      { headline: "Get started today", eyebrow: "The 90-Day Reset", body: [], price: true, figure: { value: "NZD $1,997", size: "price", struck: "Total value NZD $3,497", small: ["You save NZD $1,500", "Payment plan: 3 x $700"] } },
       { headline: "Free until you lose 10.", body: [] },
       { headline: "Doors close Friday.", body: [] },
     ]);
     // The anchor off: the running totals still build, the price stands on its own, and nothing else changes
     const noAnchor = offerBuild(o, false);
-    expect(noAnchor.map((x) => x.body)).toEqual([["12 weeks", "Total value so far: NZD $3,000"], ["You pick.", "Total value so far: NZD $3,497"], ["NZD $1,997", "Payment plan: 3 x $700"], [], []]);
-    expect(JSON.stringify(noAnchor)).not.toMatch(/Total value:|save/);
+    expect(noAnchor.map((x) => x.figure?.small ?? [])).toEqual([["Total value so far: NZD $3,000"], ["Total value so far: NZD $3,497"], ["Payment plan: 3 x $700"], [], []]);
+    expect(noAnchor[2].figure).toMatchObject({ value: "NZD $1,997", struck: null });
+    expect(JSON.stringify(noAnchor)).not.toMatch(/Total value NZD|save/);
     const kitOff = deckSlides(ctx(base()), { ...kit, showPriceAnchor: false });
-    expect(bySection(kitOff, "offer_stack_cta").map((s) => s.headline)).toEqual(["Diagnostic", "The 90-Minute Diagnostic"]);
+    expect(bySection(kitOff, "offer_stack_cta").map((s) => s.headline)).toEqual(["Diagnostic", "Get started today"]);
+    // An item without a value: no total anywhere, each valued item still shows its own value.
     const zero = offerBuild({ ...o, components: [o.components[0], { ...o.components[1], perceivedValue: 0 }, o.components[2]] });
-    expect(zero.map((x) => x.body)).toEqual([["12 weeks"], ["You pick."], ["NZD $1,997", "Payment plan: 3 x $700"], [], []]);
+    expect(zero.map((x) => x.figure ?? null)).toEqual([{ value: "NZD $3,000 value", size: "value", struck: null, small: [] }, null, { value: "NZD $1,997", size: "price", struck: null, small: ["Payment plan: 3 x $700"] }, null, null]);
     expect(JSON.stringify(zero)).not.toMatch(/Total|save/);
   });
   it("a divider opens each belief act with the shift from the record, on the kit's inverse pair; a recap closes it with each section's first line", () => {
@@ -344,9 +348,10 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
 
   it("the price slide joins the moment family; the item slides do not", () => {
     const offerSlides = deckSlides(openCtx(), kit).slides.filter((s) => s.kind === "offer");
-    const price = offerSlides.find((s) => s.headline === offer.offer.name)!;
+    const price = offerSlides.find((s) => s.figure?.size === "price")!;
     expect(price.inverse).toBe(true);
-    expect(offerSlides.filter((s) => s.headline !== offer.offer.name).every((s) => !s.inverse)).toBe(true);
+    expect(price.eyebrow).toBe(offer.offer.name);
+    expect(offerSlides.filter((s) => s !== price).every((s) => !s.inverse)).toBe(true);
   });
 
   it("picture slots are suggested by rule from the slide's words (§3), each naming what to show, never on the price slide, never three in a row", () => {
@@ -447,10 +452,14 @@ describe("§6.4: the boxes' geometry lives in the plan", () => {
   const box = (role: "cover-title" | "cover-presenter" | "eyebrow" | "headline" | "body" | "footer") => ({ slide: 1, role, text: "x", size: 20, color: "111111", fill: null, face: "Arial", bold: false, italic: false, bullet: false, placeholder: false });
   it("a bare cover centres its title; beside a picture the title sits in the left column", () => {
     const bare = slideGeometry({ boxes: [box("cover-title"), box("cover-presenter")], layout: "cover", imageFrame: null, placeholderSlot: null, pictureOnly: false });
-    expect(bare.boxes["cover-title"]).toEqual({ x: 0.5, y: 1.5, w: 9, h: 1.6, align: "center", valign: "middle" });
+    expect(bare.boxes["cover-title"]).toEqual({ x: 0.5, y: 1.35, w: 9, h: 1.6, align: "center", valign: "middle" });
+    // Air between the title and the presenter (first-deck §4: they touched), then the date line under the name.
+    const t = bare.boxes["cover-title"]!, p = bare.boxes["cover-presenter"]!, dt = bare.boxes["cover-date"]!;
+    expect(p.y - (t.y + t.h)).toBeGreaterThanOrEqual(0.35);
+    expect(dt.y).toBeGreaterThanOrEqual(p.y + p.h - 1e-9);
     expect(bare.rules).toEqual({ x: 0.5, w: 9 });
     const beside = slideGeometry({ boxes: [box("cover-title")], layout: "cover", imageFrame: { x: 5.2, y: 0.9, w: 4.3, h: 3.85 }, placeholderSlot: null, pictureOnly: false });
-    expect(beside.boxes["cover-title"]).toEqual({ x: TEXT_LEFT_ZONE.x, y: 1.6, w: TEXT_LEFT_ZONE.w, h: 1.8, align: "left", valign: "middle" });
+    expect(beside.boxes["cover-title"]).toEqual({ x: TEXT_LEFT_ZONE.x, y: 1.4, w: TEXT_LEFT_ZONE.w, h: 1.8, align: "left", valign: "middle" });
     expect(beside.rules.w).toBe(TEXT_LEFT_ZONE.w);
   });
   it("a content slide: eyebrow, headline at the top, the body in its own box, the footer centred; a statement sits centred and tall; an empty slot narrows the text like a picture", () => {
@@ -496,5 +505,62 @@ describe("first-deck §3: the cover's logo", () => {
     const edge = logoBadgeFrame({ x: 0.08, y: 0.08, w: 1, h: 0.5 });
     expect(edge.x).toBeGreaterThanOrEqual(0.05);
     expect(edge.x + edge.w).toBeCloseTo(1.18);
+  });
+});
+
+describe("first-deck §4 and §5: readable sizes, the CTA once, the price and the close", () => {
+  const withFooter = { ...offer, offer: { ...offer.offer, ctaFooter: "DM me the word PLAN" } };
+  const closeCtx = (webinar: Record<string, unknown> = {}) => resolveSections({ webinar: { title: "t", ctaType: "Book a call", ...webinar }, presenter: "L", sections: base({ hook: { keyPoints: "Open" }, q_a_close: { keyPoints: "Ask anything" } }), beliefs: [], proofs, assets, essenceStories: [], citable, offer: withFooter });
+  it("placeholder text and the body read on a projector: 20pt and 24pt, with the old floor", () => {
+    expect(PLACEHOLDER_TEXT_SIZE).toBe(20);
+    expect(BODY_FIT_SIZES[0]).toBe(24);
+    expect(BODY_FIT_SIZES.at(-1)).toBe(14);
+  });
+  it("the cover's date line is the webinar's date and time as typed, and absent without one", () => {
+    expect(eventLine("2026-10-12T18:00")).toBe("Monday 12 October 2026 · 6:00 PM");
+    expect(eventLine("2026-10-12T09:05")).toBe("Monday 12 October 2026 · 9:05 AM");
+    expect(eventLine("2026-10-12")).toBe("Monday 12 October 2026");
+    expect(eventLine(null)).toBeNull();
+    expect(eventLine("2026-02-31T10:00")).toBeNull();
+    const cover = renderPlan(deckSlides(closeCtx({ scheduledAt: "2026-10-12T18:00" }), kit))[0];
+    expect(cover.boxes.find((b) => b.role === "cover-date")?.text).toBe("Monday 12 October 2026 · 6:00 PM");
+    expect(renderPlan(deckSlides(closeCtx(), kit))[0].boxes.some((b) => b.role === "cover-date")).toBe(false);
+  });
+  it("the deck ends on the call to action and a Q&A slide that keeps it on screen, from the record", () => {
+    const d = deckSlides(closeCtx(), kit);
+    const [cta, qa] = d.slides.slice(-2);
+    expect(cta).toMatchObject({ kind: "close", headline: "Book a call", body: ["DM me the word PLAN"], inverse: true, footer: null });
+    expect(qa).toMatchObject({ kind: "close", headline: "Your questions", footer: "DM me the word PLAN" });
+    // With no CTA line on the offer, the Q&A slide keeps the Foundation's call to action on screen instead.
+    const bare = deckSlides(resolveSections({ webinar: { title: "t", ctaType: "Apply" }, presenter: "L", sections: base(), beliefs: [], proofs, assets, essenceStories: [], citable, offer }), kit);
+    expect(bare.slides.at(-1)).toMatchObject({ headline: "Your questions", footer: "Apply" });
+    expect(bare.slides.at(-2)).toMatchObject({ headline: "Apply", body: [] });
+  });
+  it("the CTA sits on the offer and Q&A slides only; with the CTA bar on, the bar replaces the footer's line, never both", () => {
+    const d = deckSlides(closeCtx(), kit);
+    const withCta = d.slides.filter((s) => s.footer === "DM me the word PLAN").map((s) => s.kind === "close" ? "close" : s.sectionKey);
+    expect(new Set(withCta)).toEqual(new Set(["offer_stack_cta", "q_a_close", "close"]));
+    const barred = deckSlides(closeCtx({ ctaBar: true }), kit);
+    for (const p of renderPlan(barred)) {
+      const footer = p.boxes.find((b) => b.role === "footer");
+      expect(Boolean(footer && footer.text === "DM me the word PLAN" && p.ctaBar)).toBe(false);
+    }
+    expect(renderPlan(barred).filter((p) => p.ctaBar === "DM me the word PLAN").length).toBe(withCta.length);
+    expect(renderPlan(d).every((p) => !p.ctaBar)).toBe(true);
+  });
+  it("the price slide: \"Get started today\", the price huge, the total struck through, the saving small; a stack item shows its own value", () => {
+    const priced = { offer: { ...offer.offer, ctaFooter: null }, components: [{ name: "The program", type: "core", oneLiner: "12 weeks", perceivedValue: 2000, beliefBreak: "vehicle" }, { name: "Templates", type: "bonus", oneLiner: "You pick.", perceivedValue: 744, beliefBreak: "internal" }] };
+    const d = deckSlides(resolveSections({ webinar: { title: "t" }, presenter: "L", sections: base(), beliefs: [], proofs, assets, essenceStories: [], citable, offer: priced }), kit);
+    const plans = renderPlan(d);
+    const price = plans.find((p) => p.boxes.some((b) => b.role === "figure" && b.text === "NZD $1,997"))!;
+    expect(price.layout).toBe("figure");
+    expect(price.boxes.find((b) => b.role === "headline")?.text).toBe("Get started today");
+    expect(price.boxes.find((b) => b.role === "struck")).toMatchObject({ text: "Total value NZD $2,744", strike: true });
+    expect(price.boxes.find((b) => b.role === "figure")!.size).toBeGreaterThanOrEqual(80);
+    expect(price.boxes.find((b) => b.role === "small")?.text).toBe("You save NZD $747");
+    expect(price.boxes.some((b) => b.text.includes("The 90-Minute Diagnostic"))).toBe(false);
+    const item = plans.find((p) => p.boxes.some((b) => b.role === "figure" && b.text === "NZD $744 value"))!;
+    expect(item.boxes.find((b) => b.role === "small")?.text).toBe("Total value so far: NZD $2,744");
+    expect(outlineText("t", d)).toContain("Total value NZD $2,744 (struck through)");
   });
 });

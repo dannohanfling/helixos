@@ -25,7 +25,8 @@ async function discard(url: string | null | undefined, why: string): Promise<voi
 }
 
 /** The measured size comes back too (first-deck brief §3): a picker showing the new logo "0×0" read wrong. */
-export type RecordDeckImageResult = { ok: true; id: string; width: number; height: number } | { ok: false; error: string };
+/** `attached`: asked to fill a slot, whether it did (first-deck §6: a refused attach said nothing, and the slot stayed empty). */
+export type RecordDeckImageResult = { ok: true; id: string; width: number; height: number; attached?: boolean } | { ok: false; error: string };
 const TRANSIENT = "Storage couldn't be read back just now. Nothing is saved. Try again in a minute.";
 
 type RecordInput = { key: string; kind: DeckImageKind; caption: string; consentTick: boolean; consentName: string; noPeople: boolean; /** A slot on the coach's own webinar the picture fills as it is recorded (§6.2). */ attach: { webinarId: string; slotKey: string } | null };
@@ -55,7 +56,13 @@ export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckIma
   if (!owner || owner.workspaceId !== workspaceId || owner.userId !== userId) return { ok: false, error: "That file is not under your own deck folder. Choose the image again." };
 
   const already = await db.query.deckImages.findFirst({ where: eq(schema.deckImages.blobKey, input.key) });
-  if (already) return already.userId === userId ? { ok: true, id: already.id, width: already.width, height: already.height } : { ok: false, error: "That file is already in someone else's library." };
+  if (already && already.userId !== userId) return { ok: false, error: "That file is already in someone else's library." };
+  // A repeat of a recorded upload still fills the slot it was sent for: returning the row alone left the slide empty, silently.
+  if (already) {
+    const attached = input.attach ? await attachImageToSlot({ workspaceId, userId }, input.attach.webinarId, input.attach.slotKey, already.id) : undefined;
+    if (attached) refresh();
+    return { ok: true, id: already.id, width: already.width, height: already.height, ...(input.attach ? { attached } : {}) };
+  }
 
   // A screenshot or proof needs the consent tick and a name, or the word that nobody is in it, before the bytes are ever read
   // back, so a refusal costs nothing.
@@ -105,9 +112,10 @@ export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckIma
     return { ok: false, error: "That image couldn't be saved just now. Nothing is kept. Try again in a minute." };
   }
   // Straight into a slot (§6.2): the coach's own webinar only; a slot that is not theirs leaves the picture in the library.
-  if (input.attach) await attachImageToSlot({ workspaceId, userId }, input.attach.webinarId, input.attach.slotKey, id);
+  const attached = input.attach ? await attachImageToSlot({ workspaceId, userId }, input.attach.webinarId, input.attach.slotKey, id) : undefined;
+  if (input.attach && !attached) log("a recorded picture could not fill its slot; it stays in the library", { key: input.key, slotKey: input.attach.slotKey });
   refresh();
-  return { ok: true, id, width, height };
+  return { ok: true, id, width, height, ...(input.attach ? { attached } : {}) };
 }
 
 /** Fills one slot on the owner's webinar with one of their own library images; false when either is not theirs. */

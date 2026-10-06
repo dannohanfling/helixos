@@ -23,5 +23,19 @@ export const OTHER_FONT = "__other";
 
 export const isListedFont = (face: string): boolean => DECK_FONTS.includes(face.trim());
 
+/** Google faces that come in one weight only: asking for a bold one would make Google refuse the whole stylesheet. */
+const ONE_WEIGHT = new Set(["Bebas Neue"]);
+/**
+ * The stylesheet that loads one listed Google face in the browser (first-deck §6: the Deck step's thumbnails drew Playfair
+ * Display as a fallback sans, so the client saw a different deck from the one they download). One stylesheet per face, so a
+ * face Google cannot serve costs only itself. Null for a safe face (already on the machine) or a licensed one, which the
+ * preview keeps drawing in the fallback, as a reader without it sees.
+ */
+export function googleFontHref(face: string): string | null {
+  const name = face.trim();
+  if (!(GOOGLE_FONTS as readonly string[]).includes(name)) return null;
+  return `https://fonts.googleapis.com/css2?family=${name.replace(/ /g, "+")}${ONE_WEIGHT.has(name) ? "" : ":wght@400;700"}&display=swap`;
+}
+
 /** The one line shown under a licensed face: who will not see it, and what they see instead (§4.3, §6.1). */
 export const otherFontLine = (fallback: string): string => `People without this font installed will see ${fallback.trim() || "Arial"}.`;

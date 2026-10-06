@@ -270,7 +270,9 @@ async function main() {
   console.log(`  deck export: pptx ${pptxBody.length} bytes in the Turas kit, txt ok; author, company and subject are the presenter's, the workspace's and the webinar's`);
   // The price anchor is the control: on by default, the stack's total and the saving are on the slides. A house policy turns it off on the kit,
   // and the next export draws the price on its own with the running totals, the payment plan and the guarantee still there.
-  if (!/Total value: USD \$4,994/.test(faces) || !/You save USD \$3,494/.test(faces)) throw new Error("the anchor slide carries the total and the saving by default");
+  // The price slide (first-deck §5): "Get started today", the price huge, the total struck through, the saving small.
+  const priceSlide = faces.split("</p:sld>").find((x) => x.includes("Get started today")) ?? "";
+  if (!/Total value USD \$4,994/.test(priceSlide) || !/You save USD \$3,494/.test(priceSlide) || !/strike="sngStrike"[^>]*>(?:(?!<\/a:r>)[\s\S])*Total value USD \$4,994/.test(priceSlide)) throw new Error("the price slide carries the total struck through and the saving by default");
   const coach2 = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   await coach2.goto(`${base}/login`);
   await coach2.click('button:has-text("As the coach")');
@@ -287,7 +289,7 @@ async function main() {
   if (!offRes.ok()) throw new Error(`export with the anchor off failed: ${offRes.status()}`);
   const zipOff = await JSZip.loadAsync(await offRes.body());
   const facesOff = (await Promise.all(Object.keys(zipOff.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).map((f) => zipOff.file(f)!.async("string")))).join("\n");
-  if (/Total value:|You save/.test(facesOff)) throw new Error("with the anchor off no slide compares the price to the total");
+  if (/Total value USD|You save/.test(facesOff)) throw new Error("with the anchor off no slide compares the price to the total");
   // The guarantee slide is the offer's own guarantee line as seeded, with its apostrophe escaped in the XML
   if (!/USD \$1,500/.test(facesOff) || !/Total value so far/.test(facesOff) || !/I coach you free until you do/.test(facesOff) || !/Payment plan: 3 x \$550/.test(facesOff)) throw new Error("the price, the running totals, the payment plan and the guarantee still render with the anchor off");
   console.log("✓ price anchor: on by default with the total and the saving; off on the kit, the next export draws the price on its own");
@@ -379,7 +381,8 @@ async function main() {
   if (answeredAfter !== answeredBefore) throw new Error(`moving an answer into the bank must not change the count (${answeredBefore} → ${answeredAfter})`);
   if (await page.locator('[data-testid="move-objTime"]').count()) throw new Error("a moved answer should leave the older field");
   console.log(`✓ offer step 6 reads the bank; a legacy answer moved in without changing the optimiser's count (${answeredAfter})`);
-  // The deck footer is one line on the offer: it lands on every slide from the Offer Stack onward and on none before, and a re-export carries it
+  // The deck footer is one line on the offer: it lands on the offer and Q&A slides and the close (first-deck §5), on none before,
+  // and the deck ends on it; a re-export carries it
   await fillField(page, 'textarea[name="ctaFooter"]', "DM me the word PLAN to book your call");
   await submit(page, 'button:has-text("Save offer")');
   const again = await page.request.get(`${base}${deckHref}`);
@@ -388,9 +391,10 @@ async function main() {
   const slideFiles = Object.keys(zip2.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => Number(a.match(/\d+/)![0]) - Number(b.match(/\d+/)![0]));
   const xml = await Promise.all(slideFiles.map((f) => zip2.file(f)!.async("string")));
   const withFooter = xml.map((x, i) => (x.includes("DM me the word PLAN") ? i + 1 : 0)).filter(Boolean);
-  if (!withFooter.length || withFooter[0] < 3 || withFooter[withFooter.length - 1] !== xml.length) throw new Error(`the footer runs from the offer to the last slide, got slides ${withFooter.join(",")} of ${xml.length}`);
+  if (!withFooter.length || withFooter[0] < 3 || withFooter[withFooter.length - 1] !== xml.length) throw new Error(`the footer sits on the offer, the Q&A and the close, the last slide included, got slides ${withFooter.join(",")} of ${xml.length}`);
+  if (!xml[xml.length - 1].includes("Your questions") || !xml[xml.length - 2].includes("DM me the word PLAN")) throw new Error("the deck ends on the call to action, then a Q&A slide that keeps it on screen");
   if (xml[1].includes("DM me the word PLAN")) throw new Error("no footer before the offer");
-  console.log(`✓ deck footer on slides ${withFooter[0]}–${xml.length} of ${xml.length} after a re-export`);
+  console.log(`✓ deck footer on the offer, Q&A and closing slides (${withFooter.join(", ")} of ${xml.length}) after a re-export; the deck ends on the call to action and Q&A`);
   await expectText(page, "Optimizer", "offer wizard");
   await shot(page, "w06-offer-wizard");
   await page.fill('form:has(input[name="offerId"]) input[name="name"]', "Weekend & Wine Playbook v2");

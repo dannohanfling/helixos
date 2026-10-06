@@ -29,7 +29,8 @@ export const PLACEHOLDER_FALLBACK = "FFF3A3";
  * 3.99:1 on the kit surface ECE9E5: large text (14pt) reads at every one of those.
  */
 export const PLACEHOLDER_RED = "D92D20";
-export const PLACEHOLDER_TEXT_SIZE = 14;
+/** Readable on a projector (first-deck §4, 5 Oct: at 14pt in a 4 by 3.5 in frame it was hard to read), centred in its frame. */
+export const PLACEHOLDER_TEXT_SIZE = 20;
 
 /**
  * A headline steps down a tier as it lengthens and is never cut. Characters → points. Past the floor the sentence moves to
@@ -43,10 +44,21 @@ export const HEADLINE_TIERS: { maxChars: number; size: number }[] = [
 ];
 export const HEADLINE_FLOOR = 22;
 export const HEADLINE_MAX_CHARS = 160;
-export const BODY_SIZE = 18;
+/** The reading size where the slide has room (first-deck §4: 18pt under 32 to 44pt headlines read small from the back). */
+export const BODY_SIZE = 24;
 export const EYEBROW_SIZE = 11;
-/** A body shrinks to these before anything else gives (§4): 18 is the reading size, 14 the floor. */
-export const BODY_FIT_SIZES = [BODY_SIZE, 16, 14];
+/** A body shrinks to these before anything else gives (§4): 24 is the reading size, 14 the floor. */
+export const BODY_FIT_SIZES = [BODY_SIZE, 22, 20, 18, 16, 14];
+/** The presenter's name and the event's date on the cover, under the title. */
+export const COVER_LINE_SIZE = 20;
+/**
+ * A figure slide (first-deck §5): the price huge, an item's value large, each stepping down until it fits its box. The total
+ * struck through and the small lines (the saving, the running total, the payment plan) sit around it in muted.
+ */
+export const PRICE_SIZES = [96, 80, 66, 54];
+export const VALUE_SIZES = [60, 54, 44, 36];
+export const STRUCK_SIZE = 28;
+export const SMALL_SIZE = 20;
 /** A statement slide (one line, no body, §4): the line sits vertically centred, large by its length. */
 export const STATEMENT_SIZES: { maxChars: number; size: number }[] = [
   { maxChars: 30, size: 60 },
@@ -56,7 +68,9 @@ export const STATEMENT_SIZES: { maxChars: number; size: number }[] = [
 /** When a picture slide's text cannot fit beside the picture even at the floor, the picture takes the next slide, this big. */
 export const PICTURE_ONLY_FRAME: Frame = { x: 1.5, y: 0.6, w: 7, h: 4.4 };
 
-export type SlideKind = "cover" | "divider" | "recap" | "section" | "proof" | "evidence" | "story" | "offer" | "opening" | "reflection";
+export type SlideKind = "cover" | "divider" | "recap" | "section" | "proof" | "evidence" | "story" | "offer" | "opening" | "reflection" | "close";
+/** A figure on a slide (first-deck §5): the price or an item's value, set large; the anchor struck through; the small lines under it. */
+export type SlideFigure = { value: string; size: "price" | "value"; struck: string | null; small: string[] };
 /** A picture slot the deck suggests by rule from the slide's kind. The coach fills it from their image library; empty, it lists on the Deck step and the slide exports with a red placeholder in the picture's frame (§2). Never on the price slide. */
 export type SlotKind = "photo" | "photo_pair" | "screenshot" | "screenshot_callout" | "proof_wall" | "testimonial" | "diagram";
 /** A testimonial slot carries the bank proof it belongs to, so its photo is that proof's own approved attachment and nothing else. */
@@ -98,8 +112,10 @@ export type Slide = {
   overflow: boolean;
   /** The cover and the act dividers: the dark surfaces, on the kit's inverse pair when it has one. */
   inverse: boolean;
-  /** The offer's one line, on every slide from the offer onward. */
+  /** The offer's one line (first-deck §5): on the offer and Q&A slides and the close, nowhere else. */
   footer: string | null;
+  /** The price or a stack item's value, set as a figure (first-deck §5); null on every other slide. */
+  figure?: SlideFigure | null;
   /** The picture slot this slide suggests, or null. Filled by the coach from the image library; empty here, listed on the Deck step. */
   slot: Slot | null;
   /** What the record's text carried that no face may (deck-face.ts): kept off this slide, in its notes and on the Deck step. */
@@ -218,7 +234,7 @@ const notOnFace = (k: KeptOff) => `Not on the slide (${FACE_CLASS_LABEL[k.cls]})
 /** A slide whose face was nothing but kept-off text: no line to show, so it is not a slide. */
 const emptied = (sl: Slide) => !sl.headline && !sl.body.length && sl.keptOff.length > 0;
 
-type SlideInput = { n: number; kind: SlideKind; s: SectionContext | null; headline: string; body?: string[]; extraNotes?: string[]; eyebrow?: string; act?: string; inverse?: boolean; footer?: string | null; slot?: Slot | null };
+type SlideInput = { n: number; kind: SlideKind; s: SectionContext | null; headline: string; body?: string[]; extraNotes?: string[]; eyebrow?: string; act?: string; inverse?: boolean; footer?: string | null; slot?: Slot | null; figure?: SlideFigure | null };
 function slideOf(i: SlideInput): Slide {
   const { n, kind, s } = i;
   // The face first: every line the record hands a slide is read against deck-face.ts, and what may not stand on a face comes off
@@ -235,11 +251,12 @@ function slideOf(i: SlideInput): Slide {
   const headline = tier.overflow ? (s?.name ?? "") : headlineIn;
   const finalBody = tier.overflow ? [headlineIn, ...body] : body;
   // The section name is in the notes, never on the face (§9): the record's section, or the deck's own label for a slide without one.
-  const notes = [s ? `Section: ${s.name}` : i.eyebrow ? `Section: ${i.eyebrow}` : "", direction(kind, finalBody) ? `Visual direction: ${direction(kind, finalBody)}` : "", s?.deliveryNote ? `Delivery: ${s.deliveryNote}` : "", ...(i.extraNotes ?? []), ...keptOff.map(notOnFace)].filter(Boolean);
+  const art = i.figure ? (i.figure.size === "price" ? "The price huge. The total struck through above it; the saving small beneath." : "The item's value large; the running total small beneath it.") : direction(kind, finalBody);
+  const notes = [s ? `Section: ${s.name}` : i.eyebrow ? `Section: ${i.eyebrow}` : "", art ? `Visual direction: ${art}` : "", s?.deliveryNote ? `Delivery: ${s.deliveryNote}` : "", ...(i.extraNotes ?? []), ...keptOff.map(notOnFace)].filter(Boolean);
   const footer = foot?.face || null;
   // The footer is the offer's line on a price slide: a hole in it refuses as clause (b) does, on every slide it sits on.
   const placeholders = [...placeholderHits(kind, [headline, ...finalBody]), ...(footer ? placeholderHits("offer", [footer]) : [])].filter((h, idx, all) => all.findIndex((x) => x.text === h.text) === idx);
-  return { keptOff, slot: i.slot ?? null, n, kind, sectionKey: s?.sectionKey ?? null, section: s?.name ?? "", act: i.act ?? s?.act ?? "opening", eyebrow: i.eyebrow ?? (s ? `${s.name} · ${ACT_LABEL[s.act] ?? s.act}` : ""), headline, headlineSize: tier.overflow ? HEADLINE_FLOOR : tier.size, body: finalBody, notes, placeholders, overflow: tier.overflow, inverse: Boolean(i.inverse), footer };
+  return { keptOff, slot: i.slot ?? null, n, kind, sectionKey: s?.sectionKey ?? null, section: s?.name ?? "", act: i.act ?? s?.act ?? "opening", eyebrow: i.eyebrow ?? (s ? `${s.name} · ${ACT_LABEL[s.act] ?? s.act}` : ""), headline, headlineSize: tier.overflow ? HEADLINE_FLOOR : tier.size, body: finalBody, notes, placeholders, overflow: tier.overflow, inverse: Boolean(i.inverse), footer, figure: i.figure ?? null };
 }
 
 /**
@@ -249,23 +266,52 @@ function slideOf(i: SlideInput): Slide {
  * total renders anywhere, because a total that quietly leaves an item out is a wrong number. With the kit's price anchor off
  * (a house policy some brands hold), the comparison is not drawn and the price stands on its own; everything else still renders.
  */
-export function offerBuild(o: ResolvedOffer, showPriceAnchor = true): { headline: string; body: string[] }[] {
+export type OfferBuildSlide = { headline: string; body: string[]; eyebrow?: string; figure?: SlideFigure; price?: boolean };
+export function offerBuild(o: ResolvedOffer, showPriceAnchor = true): OfferBuildSlide[] {
   const items = o.components.filter((x) => x.type !== "guarantee");
   const totals = items.length > 0 && items.every((x) => x.perceivedValue > 0);
-  const out: { headline: string; body: string[] }[] = [];
+  const out: OfferBuildSlide[] = [];
   let running = 0;
   for (const x of items) {
     running += x.perceivedValue;
     const line = (x.oneLiner ?? x.description ?? "").trim();
-    out.push({ headline: x.name, body: [...(line ? [line] : []), ...(totals ? [`Total value so far: ${formatPrice(running, o.currency)}`] : [])] });
+    // An item's own value large, the running total small under it (first-deck §5); an item with no value has no figure.
+    const figure: SlideFigure | undefined = x.perceivedValue > 0 ? { value: `${formatPrice(x.perceivedValue, o.currency)} value`, size: "value", struck: null, small: totals ? [`Total value so far: ${formatPrice(running, o.currency)}`] : [] } : undefined;
+    out.push({ headline: x.name, body: line ? [line] : [], figure });
   }
   const saving = totals ? running - o.price : 0;
   const anchor = totals && showPriceAnchor;
-  out.push({ headline: o.name, body: [...(anchor ? [`Total value: ${formatPrice(running, o.currency)}`, `Your price: ${formatPrice(o.price, o.currency)}`, ...(saving > 0 ? [`You save ${formatPrice(saving, o.currency)}`] : [])] : [formatPrice(o.price, o.currency)]), ...(o.paymentPlan ? [`Payment plan: ${o.paymentPlan}`] : [])] });
+  // The price slide (first-deck §5): "Get started today" as the line, the price huge, the total struck through, the saving small.
+  // The offer's name is the eyebrow, never the headline (it is the coach's filing name, "TEST CLIENT – 30-Day Sleep Reset").
+  out.push({
+    headline: "Get started today",
+    eyebrow: o.name,
+    body: [],
+    price: true,
+    figure: { value: formatPrice(o.price, o.currency), size: "price", struck: anchor ? `Total value ${formatPrice(running, o.currency)}` : null, small: [...(anchor && saving > 0 ? [`You save ${formatPrice(saving, o.currency)}`] : []), ...(o.paymentPlan ? [`Payment plan: ${o.paymentPlan}`] : [])] },
+  });
   if (o.guarantee) out.push({ headline: o.guarantee, body: [] });
   if (o.scarcity) out.push({ headline: o.scarcity, body: [] });
   if (o.urgency) out.push({ headline: o.urgency, body: [] });
   return out;
+}
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/**
+ * The cover's date line (first-deck §4) from the webinar's date and time as the coach typed it ("2026-10-12T18:00"): "Monday
+ * 12 October 2026 · 6:00 PM". The time is the coach's own clock, as entered; no zone is added or guessed. Null without a date.
+ */
+export function eventLine(when: string | null | undefined): string | null {
+  const m = (when ?? "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const day = new Date(Date.UTC(y, mo - 1, d));
+  if (day.getUTCMonth() !== mo - 1) return null;
+  const date = `${WEEKDAYS[day.getUTCDay()]} ${d} ${MONTHS[mo - 1]} ${y}`;
+  if (!m[4]) return date;
+  const h = Number(m[4]);
+  return `${date} · ${h % 12 || 12}:${m[5]} ${h < 12 ? "AM" : "PM"}`;
 }
 
 /** The slides for one webinar: one read of the resolver, nothing invented, nothing narrated. One idea per slide. */
@@ -275,10 +321,10 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   const warnings: string[] = [];
   let n = 1;
   const offer = c.sections.find((s) => s.offer)?.offer ?? null;
-  const stackOrder = c.sections.find(isOfferStack)?.order ?? Infinity;
-  // The footer runs from the offer onward: every slide of a section at or after the Offer Stack.
-  const footerFor = (s: SectionContext) => (offer?.ctaFooter && s.order >= stackOrder ? offer.ctaFooter : null);
-  slides.push({ keptOff: [], slot: { key: "cover:photo", kind: "photo", what: COVER_WHAT }, n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
+  // The offer's line sits on the offer and Q&A slides only (first-deck §5: it showed on every slide from the offer onward, and
+  // twice with the CTA bar on); the close carries it too.
+  const footerFor = (s: SectionContext) => (offer?.ctaFooter && (isOfferStack(s) || s.sectionKey === QA_SECTION_KEY) ? offer.ctaFooter : null);
+  slides.push({ keptOff: [], slot: { key: "cover:photo", kind: "photo", what: COVER_WHAT }, n: n++, kind: "cover", sectionKey: null, section: "", act: "opening", eyebrow: "", headline: c.title, headlineSize: headlineTier(c.title).size, body: [c.presenter, ...(eventLine(c.close.when) ? [eventLine(c.close.when)!] : [])], notes: [`Presented by ${c.presenter}.`, `Faces: ${kit.displayFont} for headlines, ${kit.bodyFont} for body. If a face is missing on this machine, use ${kit.fontFallback}.`], placeholders: [], overflow: false, inverse: true, footer: null });
   // The opening contract, before any content: each of the coach's own lines is one slide; a line the coach left empty is not a
   // slide (omitted, listed on the Deck step), never a placeholder on a face. The order is the reference deck's.
   const openingOmitted: string[] = [];
@@ -346,7 +392,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
       if (isOfferStack(s)) {
         // The reflection beat before the offer: the coach's own private question on a moment slide. Its words, or no beat.
         if (s.offer && c.opening.reflectionPrompt) slides.push(slideOf({ n: n++, kind: "reflection", s: null, act: s.act, eyebrow: "A moment before we go on", headline: c.opening.reflectionPrompt, inverse: true }));
-        if (s.offer) for (const b of offerBuild(s.offer, kit.showPriceAnchor !== false)) slides.push(slideOf({ n: n++, kind: "offer", s, headline: b.headline, body: b.body, footer, inverse: b.headline === s.offer.name }));
+        if (s.offer) for (const b of offerBuild(s.offer, kit.showPriceAnchor !== false)) slides.push(slideOf({ n: n++, kind: "offer", s, headline: b.headline, body: b.body, footer, inverse: Boolean(b.price), figure: b.figure ?? null, ...(b.eyebrow ? { eyebrow: b.eyebrow } : {}) }));
         pointSlides("offer");
         continue;
       }
@@ -365,6 +411,12 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     // Its headline is the act's own line (the belief's "To:", else the first line), never "Act 1 · Vehicle · recap" (§9).
     const recapHead = belief?.to?.trim() || lines[0];
     if (BELIEF_ACTS.has(act.key) && lines.length) slides.push(slideOf({ n: n++, kind: "recap", s: null, headline: recapHead, body: lines.filter((l) => l !== recapHead).slice(0, 6), eyebrow: act.label, act: act.key }));
+  }
+  // The close (first-deck §5: the deck ended on "Enrollment closes when the group starts."): always a call-to-action slide from
+  // the Foundation's call to action, then a Q&A slide that keeps it on screen, both from the record whatever the Q&A section holds.
+  if (c.close.cta) {
+    slides.push(slideOf({ n: n++, kind: "close", s: null, act: "closing", eyebrow: "The next step", headline: c.close.cta, body: offer?.ctaFooter ? [offer.ctaFooter] : [], inverse: true }));
+    slides.push(slideOf({ n: n++, kind: "close", s: null, act: "closing", eyebrow: "Q&A", headline: "Your questions", footer: offer?.ctaFooter ?? c.close.cta }));
   }
   // Each proof once (22 Sep: Kate A. on slides 20 and 22, Rachael C. on 21 and 36). A proof's home is its Proof Block slide, the
   // first in deck order; with none, the first line that quotes it. Any later appearance, a second Proof Block slide or a key
@@ -505,7 +557,7 @@ export function suggestedSlots(d: DeckResult): { slide: number; section: string;
 
 /* ───────────── The render plan ───────────── */
 
-export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean };
+export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter" | "cover-date" | "figure" | "struck" | "small"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean; /** Struck through: the total the price is set against (first-deck §5). */ strike?: boolean };
 /** A rule drawn in the accent: the one thing the accent draws besides a fill. Never under text. */
 export type Rule = { slide: number; color: string; y: number };
 /** A picture's frame in inches on the 10×5.625 slide. A photo fills it, cropped (cover); evidence sits whole inside it (contain); nothing is ever stretched (src/lib/engine/deck-fit.ts). */
@@ -515,8 +567,8 @@ export type PlaceholderSlot = { frame: Frame; text: string; color: string };
 /** Every label of the deck's own that may never reach a face (§9): the act names, the deck's section-less eyebrows, and the words of a label. The walk reads every face against this list and the record's section names. */
 export const FACE_LABELS_NEVER = [...Object.values(ACT_LABEL), "Act 1", "Act 2", "Act 3", "Opening ·", "What you'll leave with", "Who it is for", "Stay to the end", "A moment before we go on", "· recap", "· story", "Vehicle Story", "Internal Story", "External Story"];
 /** The slide's layout family (§4): the cover, a content slide, or a statement (one line, no body, vertically centred and large). */
-export type SlideLayout = "cover" | "content" | "statement";
-export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; layout: SlideLayout; /** A slide that carries only the picture of the slide before it (§4: its text would not fit beside the picture even at the floor). */ pictureOnly: boolean; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
+export type SlideLayout = "cover" | "content" | "statement" | "figure";
+export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; layout: SlideLayout; /** The CTA bar's line on this slide (first-deck §5): the offer and Q&A slides and the close, with the bar on; it then replaces the footer's CTA. */ ctaBar?: string | null; /** A slide that carries only the picture of the slide before it (§4: its text would not fit beside the picture even at the floor). */ pictureOnly: boolean; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
 
 /**
  * The frame a filled picture occupies, by the slide's kind. The cover's picture fills the right half; every content slide's
@@ -599,8 +651,20 @@ export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageF
   let body: BoxGeometry | null = null;
   if (plan.pictureOnly) return { boxes, body, rules: { x: 0.5, w: 9 } };
   if (plan.boxes.some((b) => b.role === "cover-title")) {
-    boxes["cover-title"] = frame ? { x: zone.x, y: 1.6, w: zone.w, h: 1.8, align: "left", valign: "middle" } : { x: 0.5, y: 1.5, w: 9, h: 1.6, align: "center", valign: "middle" };
-    boxes["cover-presenter"] = frame ? { x: zone.x, y: 3.5, w: zone.w, h: 0.6, align: "left", valign: "top" } : { x: 0.5, y: 3.3, w: 9, h: 0.6, align: "center", valign: "top" };
+    // The title, then air, then the presenter and the date (first-deck §4: the title and the name touched).
+    boxes["cover-title"] = frame ? { x: zone.x, y: 1.4, w: zone.w, h: 1.8, align: "left", valign: "middle" } : { x: 0.5, y: 1.35, w: 9, h: 1.6, align: "center", valign: "middle" };
+    boxes["cover-presenter"] = frame ? { x: zone.x, y: 3.55, w: zone.w, h: 0.45, align: "left", valign: "top" } : { x: 0.5, y: 3.35, w: 9, h: 0.45, align: "center", valign: "top" };
+    boxes["cover-date"] = frame ? { x: zone.x, y: 4.0, w: zone.w, h: 0.45, align: "left", valign: "top" } : { x: 0.5, y: 3.8, w: 9, h: 0.45, align: "center", valign: "top" };
+  } else if (plan.layout === "figure") {
+    // A figure slide (first-deck §5): the line at the top, the struck total (or the item's line) over the figure, the small
+    // lines under it. Full width: a price or a value slide carries no picture.
+    boxes.eyebrow = { x: 0.5, y: 0.25, w: 9, h: 0.4, align: "left", valign: "top" };
+    boxes.headline = { x: 0.5, y: 0.8, w: 9, h: 0.8, align: "left", valign: "top" };
+    boxes.struck = { x: 0.5, y: 1.65, w: 9, h: 0.55, align: "center", valign: "middle" };
+    boxes.figure = { x: 0.5, y: 2.2, w: 9, h: 1.5, align: "center", valign: "middle" };
+    boxes.small = { x: 0.5, y: 3.75, w: 9, h: 1.15, align: "center", valign: "top" };
+    if (plan.boxes.some((b) => b.role === "body")) body = { x: 0.5, y: 1.65, w: 9, h: 0.55, align: "center", valign: "top" };
+    boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
   } else {
     boxes.eyebrow = { x: zone.x, y: 0.25, w: zone.w, h: 0.4, align: "left", valign: "top" };
     boxes.headline = plan.layout === "statement" ? { x: zone.x, y: 1.0, w: zone.w, h: 3.4, align: "left", valign: "middle" } : { x: zone.x, y: 0.8, w: zone.w, h: 1.5, align: "left", valign: "top" };
@@ -633,7 +697,16 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     const muted = dark ? hex(k.inverseInk!) : hex(k.muted);
     if (s.kind === "cover") {
       boxes.push({ slide: s.n, role: "cover-title", text: s.headline, size: s.headlineSize, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
-      boxes.push({ slide: s.n, role: "cover-presenter", text: s.body[0] ?? "", size: BODY_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "cover-presenter", text: s.body[0] ?? "", size: COVER_LINE_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+      if (s.body[1]) boxes.push({ slide: s.n, role: "cover-date", text: s.body[1], size: COVER_LINE_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+    } else if (s.figure) {
+      // The price or an item's value as a figure (first-deck §5). Ink and muted only, as everywhere: the accent never sets letters.
+      const f = s.figure;
+      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, { w: 9, h: 0.8 }, [...new Set([s.headlineSize, ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z < s.headlineSize), HEADLINE_FLOOR])].sort((a, b) => b - a)) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+      if (s.body[0]) boxes.push({ slide: s.n, role: "body", text: s.body[0], size: SMALL_SIZE + 2, color: ink, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+      if (f.struck) boxes.push({ slide: s.n, role: "struck", text: f.struck, size: STRUCK_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false, strike: true });
+      boxes.push({ slide: s.n, role: "figure", text: f.value, size: fitSize(f.value, { w: 9, h: 1.5 }, f.size === "price" ? PRICE_SIZES : VALUE_SIZES) ?? (f.size === "price" ? PRICE_SIZES : VALUE_SIZES).at(-1)!, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+      if (f.small.length) boxes.push({ slide: s.n, role: "small", text: f.small.join("\n"), size: SMALL_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
     } else {
       // No eyebrow on any face (§9, Danno): the section and act names live in the notes and on the Deck step. The accent rule stays.
       boxes.push({ slide: s.n, role: "headline", text: s.headline, size: s.headlineSize, color: ink, fill: mark(s.headline) ? placeholderColor : null, face: s.kind === "proof" && k.quoteFont ? k.quoteFont : k.displayFont, bold: s.kind !== "proof", italic: s.kind === "proof", bullet: false, placeholder: mark(s.headline) });
@@ -641,7 +714,11 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
         const attribution = s.kind === "proof" && line.startsWith("— ");
         boxes.push({ slide: s.n, role: attribution ? "attribution" : "body", text: line, size: attribution ? EYEBROW_SIZE + 3 : BODY_SIZE, color: attribution ? muted : ink, fill: mark(line) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: !attribution && s.kind !== "offer" && s.kind !== "divider", placeholder: mark(line) });
       }
-      if (s.footer) boxes.push({ slide: s.n, role: "footer", text: s.footer, size: EYEBROW_SIZE, color: muted, fill: mark(s.footer) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: mark(s.footer) });
+    }
+    // The CTA once (first-deck §5): with the CTA bar on, the bar carries the offer's line and the footer does not repeat it.
+    const ctaAsBar = Boolean(d.ctaBar && d.ctaFooter && s.footer === d.ctaFooter);
+    if (s.kind !== "cover") {
+      if (s.footer && !ctaAsBar) boxes.push({ slide: s.n, role: "footer", text: s.footer, size: EYEBROW_SIZE, color: muted, fill: mark(s.footer) ? placeholderColor : null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: mark(s.footer) });
     }
     // The fit (§4): text beside a picture lives in the left column, so the headline steps down its tiers and the body its sizes
     // until each fits its box; when the body cannot fit beside the picture even at the floor, the picture takes the next slide
@@ -651,9 +728,10 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     const rules = s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: 0.68 }];
     const headlineBox = boxes.find((b) => b.role === "headline");
     const bodyBoxes = boxes.filter((b) => b.role === "body" || b.role === "attribution");
-    let layout: SlideLayout = s.kind === "cover" ? "cover" : "content";
+    let layout: SlideLayout = s.kind === "cover" ? "cover" : s.figure ? "figure" : "content";
     let pictureOnly = false;
-    if (s.kind !== "cover") {
+    const ctaBar = ctaAsBar ? s.footer : null;
+    if (s.kind !== "cover" && !s.figure) {
       const narrow = Boolean(imageFrame || placeholderSlot);
       const zoneW = narrow ? TEXT_LEFT_ZONE.w : 9;
       if (headlineBox && !bodyBoxes.length) {
@@ -680,18 +758,21 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
       const picture = { imageFrame: imageFrame ? PICTURE_ONLY_FRAME : null, placeholderSlot: placeholderSlot ? { ...placeholderSlot, frame: PICTURE_ONLY_FRAME } : null };
       imageFrame = null;
       placeholderSlot = null;
-      plans.push({ n: s.n, background, boxes, rules, notes, layout, pictureOnly: false, imageFrame, placeholderSlot });
-      plans.push({ n: s.n, background, boxes: [], rules: [], notes: "The picture for the slide before: its text would not fit beside it.", layout: "content", pictureOnly: true, ...picture });
+      plans.push({ n: s.n, background, boxes, rules, notes, layout, ctaBar, pictureOnly: false, imageFrame, placeholderSlot });
+      plans.push({ n: s.n, background, boxes: [], rules: [], notes: "The picture for the slide before: its text would not fit beside it.", layout: "content", ctaBar: null, pictureOnly: true, ...picture });
       continue;
     }
-    plans.push({ n: s.n, background, boxes, rules, notes, layout, pictureOnly, imageFrame, placeholderSlot });
+    plans.push({ n: s.n, background, boxes, rules, notes, layout, ctaBar, pictureOnly, imageFrame, placeholderSlot });
   }
   return plans;
 }
 
+/** A figure slide's words in reading order, for the outline and the Deck step: the struck total, the figure, the small lines. */
+export const figureLines = (s: Pick<Slide, "figure">): string[] => (s.figure ? [...(s.figure.struck ? [`${s.figure.struck} (struck through)`] : []), s.figure.value, ...s.figure.small] : []);
+
 /** The plain-text outline: what the .txt export and the Deck step's copy carry. Never the notes' art direction on a face. */
 export function outlineText(title: string, d: DeckResult): string {
-  return [title, `Deck outline · ${d.slides.length} slides${d.placeholderCount ? ` · ${d.placeholderCount} unfilled on slides` : ""}`, "", ...d.slides.flatMap((s) => [`${s.n}. ${s.headline}`, s.eyebrow ? `   ${s.eyebrow}` : "", ...s.body.map((b) => `   - ${b}`), ""])].filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n");
+  return [title, `Deck outline · ${d.slides.length} slides${d.placeholderCount ? ` · ${d.placeholderCount} unfilled on slides` : ""}`, "", ...d.slides.flatMap((s) => [`${s.n}. ${s.headline}`, s.eyebrow ? `   ${s.eyebrow}` : "", ...s.body.map((b) => `   - ${b}`), ...figureLines(s).map((b) => `   - ${b}`), ""])].filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n");
 }
 
 /**

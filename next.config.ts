@@ -29,10 +29,11 @@ const chatFrameHosts = "https://sdk.dfktv2.com";
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline' ${chatHosts} ${chatSdkHosts}${dev ? " 'unsafe-eval'" : ""}`,
-  `style-src 'self' 'unsafe-inline' ${chatHosts}`,
+  // The kit's Google faces, for the Deck step's thumbnails (first-deck §6): the stylesheet host and the font files' host, by name.
+  `style-src 'self' 'unsafe-inline' ${chatHosts} https://fonts.googleapis.com`,
   "img-src 'self' data: blob: https:",
   "media-src 'self' https:",
-  `font-src 'self' data: ${chatHosts}`,
+  `font-src 'self' data: ${chatHosts} https://fonts.gstatic.com`,
   `connect-src 'self' ${blobApiSource} ${chatHosts} ${chatSdkHosts} wss://communityloyalty.io wss://*.communityloyalty.io${dev ? " ws: wss:" : ""}`,
   `frame-src 'self' ${chatHosts} ${chatFrameHosts}`,
   "object-src 'none'",

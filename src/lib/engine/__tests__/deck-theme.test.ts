@@ -47,6 +47,6 @@ describe("§6.6: the kit as the file's theme", () => {
     const plan = { boxes: [box("headline"), box("body")], layout: "content" as const, imageFrame: { x: 5.35, y: 1.05, w: 4.15, h: 3.5 }, placeholderSlot: null, pictureOnly: false };
     expect(masterGeometry("CONTENT_PICTURE").boxes.headline).toEqual(slideGeometry(plan).boxes.headline);
     expect(masterGeometry("CONTENT_PICTURE").body).toEqual(slideGeometry(plan).body);
-    expect(masterGeometry("COVER").boxes["cover-title"]).toEqual({ x: 0.5, y: 1.5, w: 9, h: 1.6, align: "center", valign: "middle" });
+    expect(masterGeometry("COVER").boxes["cover-title"]).toEqual({ x: 0.5, y: 1.35, w: 9, h: 1.6, align: "center", valign: "middle" });
   });
 });

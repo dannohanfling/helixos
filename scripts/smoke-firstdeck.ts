@@ -247,6 +247,61 @@ async function main() {
     await db.update(schema.webinars).set({ footerBar: false }).where(eq(schema.webinars.id, webinarId));
     console.log("✓ §3: no logo, a red \"Your logo here\" on the cover only; a dark wordmark on the dark cover sits on a ground badge; the kit's dark-background logo takes the cover bare; the footer bar's logo stands without the brand line; the thumbnails agree");
 
+    // ── §4 and §5, off the file: placeholder text at 20pt, body at 24pt where there is room, the cover's date line; the price
+    //    slide; the CTA once, on the offer and Q&A slides only, the bar replacing the footer's line; the deck ends on the CTA. ──
+    const CTA = "Book your call at the link below";
+    await db.update(schema.offers).set({ ctaFooter: CTA }).where(eq(schema.offers.id, offer.id));
+    await db.update(schema.webinars).set({ scheduledAt: "2026-10-12T18:00", ctaType: "Book a call", ctaBar: false }).where(eq(schema.webinars.id, webinarId));
+    const slidesOf = async () => {
+      const res = await page.request.get(`${base}/api/webinars/${webinarId}/deck?format=pptx`);
+      must(res.ok(), `the deck exports: ${res.status()}`);
+      const zip = await JSZip.loadAsync(await res.body());
+      const files = Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => Number(a.match(/\d+/)![0]) - Number(b.match(/\d+/)![0]));
+      return Promise.all(files.map((f) => zip.file(f)!.async("string")));
+    };
+    let xml = await slidesOf();
+    must(xml[0].includes("Monday 12 October 2026 · 6:00 PM"), "the cover carries the event's date and time under the presenter");
+    const placeholderRuns = xml.join("").match(/<a:rPr[^>]*sz="(\d+)"[^>]*>(?:(?!<\/a:rPr>)[\s\S])*?<\/a:rPr>\s*<a:t>Add [^<]*<\/a:t>/g) ?? [];
+    must(placeholderRuns.length > 0 && placeholderRuns.every((r) => /sz="2000"/.test(r)), `the red placeholder text is 20pt: ${placeholderRuns.slice(0, 2).join(" | ").slice(0, 300)}`);
+    must(xml.some((x) => /sz="2400"/.test(x)), "a body line with room is set at 24pt");
+    const priceXml = xml.find((x) => x.includes("Get started today"));
+    must(priceXml && /strike="sngStrike"/.test(priceXml) && !priceXml.includes(`<a:t>${offer.name}</a:t>`), "the price slide reads Get started today, the total struck through, and never the offer's internal name as the line");
+    const withCta = xml.map((x, i) => (x.includes(CTA) ? i + 1 : 0)).filter(Boolean);
+    must(xml.at(-1)!.includes("Your questions") && xml.at(-2)!.includes("Book a call") && withCta.includes(xml.length), `the deck ends on the call to action, then Q&A with the CTA on screen: ${withCta.join(",")}`);
+    const ctaDeck = deckSlides(await contextFor(await w()), null);
+    const ctaKinds = new Set(ctaDeck.slides.filter((sl) => sl.footer === CTA || sl.body.includes(CTA)).map((sl) => (sl.kind === "close" ? "close" : sl.sectionKey)));
+    must([...ctaKinds].every((k) => k === "close" || k === "offer_stack_cta" || k === "q_a_close"), `the CTA sits on the offer, Q&A and closing slides only: ${[...ctaKinds].join(", ")}`);
+    await db.update(schema.webinars).set({ ctaBar: true }).where(eq(schema.webinars.id, webinarId));
+    xml = await slidesOf();
+    const twice = xml.map((x, i) => ((x.match(new RegExp(CTA, "g")) ?? []).length > 1 ? i + 1 : 0)).filter(Boolean);
+    must(!twice.length && xml.filter((x) => x.includes(CTA)).length === withCta.length, `with the CTA bar on, the bar replaces the footer's line on the same slides, never both: slides ${twice.join(",")}`);
+    await db.update(schema.webinars).set({ ctaBar: false }).where(eq(schema.webinars.id, webinarId));
+    console.log(`✓ §4 and §5: placeholder text at 20pt, body at 24pt, the cover's date line; the price slide with the total struck through; the CTA on slides ${withCta.join(", ")} of ${xml.length} only, once with the bar on; the deck ends on the CTA and Q&A`);
+
+    // ── §6: the thumbnails load the kit's Google faces, and the CSP lets them in; a second upload into another slot attaches. ──
+    await page.goto(`${base}/webinars/${webinarId}?step=deck`);
+    await page.locator('[data-testid="deck-thumb"]').first().waitFor({ timeout: 20000 });
+    await page.waitForFunction(() => document.head.querySelectorAll('link[data-testid="deck-thumb-font"]').length >= 2, null, { timeout: 10000 });
+    const fontHrefs = await page.locator('link[data-testid="deck-thumb-font"]').evaluateAll((els) => els.map((e) => e.getAttribute("href") ?? ""));
+    must((await page.locator('[data-testid="deck-honesty"]').count()) === 1, "the Deck step renders once");
+    must(fontHrefs.some((h) => h.includes("family=Montserrat")) && fontHrefs.some((h) => h.includes("family=Playfair+Display")), `the thumbnails load the starter kit's Google faces: ${fontHrefs.join(" ")}`);
+    const csp = (await page.request.get(`${base}/today`)).headers()["content-security-policy"] ?? "";
+    must(/style-src[^;]*https:\/\/fonts\.googleapis\.com/.test(csp) && /font-src[^;]*https:\/\/fonts\.gstatic\.com/.test(csp), "the CSP names the Google font hosts, and nothing wider");
+    const slotPng = await sharp({ create: { width: 800, height: 400, channels: 3, background: { r: 20, g: 90, b: 200 } } }).png().toBuffer();
+    const openSlots = page.locator('[data-testid="deck-slot"]:has([data-testid="deck-slot-upload"])');
+    const slotKeys = [...new Set(await openSlots.evaluateAll((els) => els.map((e) => e.getAttribute("data-slot-key") ?? "")))].filter((k) => !k.includes("testimonial")).slice(0, 2);
+    must(slotKeys.length === 2, `two empty slots to fill: ${slotKeys.join(", ")}`);
+    for (const key of slotKeys) {
+      const slot = page.locator(`[data-testid="deck-slot"][data-slot-key="${key}"]`);
+      await slot.locator('[data-testid="deck-slot-upload"] summary').click();
+      await slot.locator('[data-testid="deck-image-file"]').setInputFiles({ name: "slide.png", mimeType: "image/png", buffer: slotPng });
+      await slot.locator('[data-testid="deck-image-kind"]').selectOption("photo");
+      await slot.locator('[data-testid="deck-image-send"]').click();
+      await page.locator(`[data-testid="deck-slot"][data-slot-key="${key}"] [data-testid="deck-slot-filled"]`).waitFor({ timeout: 30000 });
+    }
+    must((await db.query.deckSlots.findMany({ where: eq(schema.deckSlots.webinarId, webinarId) })).filter((r) => slotKeys.includes(r.slotKey)).length === 2, "both slots hold their uploads, the second as the first");
+    console.log(`✓ §6: the thumbnails load Montserrat and Playfair Display from Google, the CSP names exactly those hosts; uploads into two slots in a row both attach (${slotKeys.join(", ")})`);
+
     console.log("\nsmoke-firstdeck: all checks passed");
   } finally {
     await browser.close();

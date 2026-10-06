@@ -53,6 +53,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 94,
+    date: "2026-10-05",
+    title: "Your deck: easier to read, a real price slide, and a close",
+    lines: [
+      "Slide text is bigger: body lines are 24pt where the slide has room, and the red \"add a picture\" boxes read at 20pt. The cover has more air between your title and your name, and shows your webinar's date and time when you've set one.",
+      "The price slide now says \"Get started today\" with the price large, your total value struck through and \"You save…\" beneath it. Each stack slide shows that item's own value large, with the running total small under it.",
+      "Your call to action shows only on the offer and Q&A slides, once (the CTA bar replaces the footer line, never both), and every deck ends on your call to action and a Q&A slide that keeps it on screen. The Deck step's previews now use your kit's Google fonts, so they match the file you download.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 93,
     date: "2026-10-05",
     title: "Your first deck: a starter kit, and a logo that shows",

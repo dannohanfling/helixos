@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { googleFontHref } from "@/lib/engine/fonts";
 import { COVER_LOGO_PLACEHOLDER, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, type BoxGeometry, type SlideGeometry, type SlidePlan } from "@/lib/engine/deck";
 
 /** What one thumbnail needs, computed on the server from the same plan the export draws. */
@@ -50,6 +51,21 @@ const face = (name: string, fallback: string) => [name, fallback, "Arial", "sans
 export function DeckThumbs({ slides, chrome, hasLogo, onMeasured }: { slides: ThumbSlide[]; chrome: ThumbChrome; hasLogo: boolean; /** Told the number of slides whose text runs past its box, each time it is measured (§6.5). */ onMeasured?: (overflow: number) => void }) {
   const [overflow, setOverflow] = useState<Set<number>>(new Set());
   const root = useRef<HTMLDivElement>(null);
+  // The kit's Google faces, loaded so the thumbnails draw the faces the file names (first-deck §6); a licensed face stays the
+  // fallback. Added to the head after render, never in it: a stylesheet React waits on would hold the whole step back when the
+  // font host is slow or blocked, and the fallback is the right drawing until the face arrives (the measure runs again then).
+  const fontKey = [chrome.faces.display, chrome.faces.body, chrome.faces.quote ?? ""].join("|");
+  useEffect(() => {
+    for (const href of new Set(fontKey.split("|").map(googleFontHref).filter((h): h is string => Boolean(h)))) {
+      if (document.head.querySelector(`link[data-deck-font="${href}"]`)) continue;
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      link.dataset.deckFont = href;
+      link.dataset.testid = "deck-thumb-font";
+      document.head.appendChild(link);
+    }
+  }, [fontKey]);
   useEffect(() => {
     const measure = () => {
       const out = new Set<number>();
@@ -79,7 +95,7 @@ export function DeckThumbs({ slides, chrome, hasLogo, onMeasured }: { slides: Th
   return (
     <div ref={root}>
       <p className="mb-2 text-xs text-ink-3" data-testid="deck-thumbs-summary" data-overflow={overflow.size} data-empty={empty.length} data-nologo={hasLogo ? 0 : 1}>
-        Laid out as the file will be. {summary.join(" · ")}. Measured here in your browser; a face not installed on this computer is drawn in the fallback, which is what a reader without it sees too.
+        Laid out as the file will be. {summary.join(" · ")}. Measured here in your browser, in your kit&apos;s faces; a licensed face is drawn in the fallback, which is what a reader without it sees too.
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {slides.map((s) => (
@@ -109,7 +125,7 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
         data-w={at.w}
         data-h={at.h}
         className="absolute flex overflow-hidden leading-[1.2]"
-        style={{ ...place(at), alignItems: at.valign === "middle" ? "center" : "flex-start", justifyContent: at.align === "center" ? "center" : "flex-start", textAlign: at.align, color: `#${b.color}`, fontFamily: faceFor(b), fontSize: `${b.size * PT}cqw`, fontWeight: b.bold ? 700 : 400, fontStyle: b.italic ? "italic" : "normal", backgroundColor: b.fill ? `#${b.fill}` : undefined }}
+        style={{ ...place(at), alignItems: at.valign === "middle" ? "center" : "flex-start", justifyContent: at.align === "center" ? "center" : "flex-start", textAlign: at.align, color: `#${b.color}`, fontFamily: faceFor(b), fontSize: `${b.size * PT}cqw`, fontWeight: b.bold ? 700 : 400, fontStyle: b.italic ? "italic" : "normal", textDecoration: b.strike ? "line-through" : undefined, whiteSpace: "pre-line", backgroundColor: b.fill ? `#${b.fill}` : undefined }}
       >
         <span>{b.text}</span>
       </div>
@@ -136,6 +152,10 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
         ) : null}
         {box("cover-title")}
         {box("cover-presenter")}
+        {box("cover-date")}
+        {box("struck")}
+        {box("figure")}
+        {box("small")}
         {box("eyebrow")}
         {box("headline")}
         {lines.length && g.body ? (
@@ -160,7 +180,7 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
             the approved proof&apos;s photo
           </div>
         ) : plan.placeholderSlot ? (
-          <div className="absolute flex items-center justify-center border border-dashed text-center" style={{ ...place(plan.placeholderSlot.frame), borderColor: `#${plan.placeholderSlot.color}`, color: `#${plan.placeholderSlot.color}`, fontSize: `${14 * PT}cqw`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), padding: "4%" }} data-testid="deck-thumb-placeholder">
+          <div className="absolute flex items-center justify-center border border-dashed text-center" style={{ ...place(plan.placeholderSlot.frame), borderColor: `#${plan.placeholderSlot.color}`, color: `#${plan.placeholderSlot.color}`, fontSize: `${PLACEHOLDER_TEXT_SIZE * PT}cqw`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), padding: "4%" }} data-testid="deck-thumb-placeholder">
             {plan.placeholderSlot.text}
           </div>
         ) : null}
@@ -173,8 +193,8 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
             ) : null}
           </div>
         ) : null}
-        {!cover && chrome.ctaBar && chrome.ctaFooter ? (
-          <div className="absolute flex items-center justify-center font-bold" style={{ left: pct(4.0, SLIDE_W), top: pct(bandY, SLIDE_H), width: pct(4.8, SLIDE_W), height: pct(0.3, SLIDE_H), color: `#${chrome.muted}`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), fontSize: `${10 * PT}cqw` }}>{chrome.ctaFooter}</div>
+        {!cover && plan.ctaBar ? (
+          <div className="absolute flex items-center justify-center font-bold" style={{ left: pct(4.0, SLIDE_W), top: pct(bandY, SLIDE_H), width: pct(4.8, SLIDE_W), height: pct(0.3, SLIDE_H), color: `#${chrome.muted}`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), fontSize: `${10 * PT}cqw` }} data-testid="deck-thumb-cta">{plan.ctaBar}</div>
         ) : null}
       </div>
       <figcaption className="mt-1 flex items-center justify-between text-[11px] text-ink-3">

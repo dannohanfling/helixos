@@ -126,7 +126,7 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
   if (plan.pictureOnly) {
     if (image && plan.imageFrame) drawImage(pptx, slide, image, plan.imageFrame, plan.background);
     else if (plan.placeholderSlot) drawPlaceholder(pptx, slide, plan.placeholderSlot, chrome.body);
-    drawBars(pptx, slide, chrome, false);
+    drawBars(pptx, slide, chrome, false, null);
     slide.addNotes(plan.notes);
     return;
   }
@@ -147,6 +147,17 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     const presenter = plan.boxes.find((b) => b.role === "cover-presenter");
     if (title && g.boxes["cover-title"]) slide.addText(title.text, { placeholder: "title", ...at(g.boxes["cover-title"]), fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face });
     if (presenter && g.boxes["cover-presenter"]) slide.addText(presenter.text, { placeholder: "presenter", ...at(g.boxes["cover-presenter"]), fontSize: presenter.size, color: presenter.color, fontFace: presenter.face });
+    const date = plan.boxes.find((b) => b.role === "cover-date");
+    if (date && g.boxes["cover-date"]) slide.addText(date.text, { ...at(g.boxes["cover-date"]), fontSize: date.size, color: date.color, fontFace: date.face });
+  } else if (plan.layout === "figure") {
+    // A figure slide (first-deck §5): the price huge with the total struck through and the saving small, or an item's value.
+    for (const role of ["headline", "body", "struck", "figure", "small", "footer"] as const) {
+      const b = plan.boxes.find((x) => x.role === role);
+      const at_ = role === "body" ? g.body : g.boxes[role];
+      if (!b || !at_) continue;
+      const ph = role === "headline" ? { placeholder: "title" } : role === "footer" ? { placeholder: "footer" } : {};
+      slide.addText(b.text, { ...ph, ...at(at_), fontSize: b.size, bold: b.bold, color: b.color, fontFace: b.face, ...(b.strike ? { strike: "sngStrike" as const } : {}) });
+    }
   } else {
     const eyebrow = plan.boxes.find((b) => b.role === "eyebrow");
     const headline = plan.boxes.find((b) => b.role === "headline");
@@ -167,7 +178,7 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
   if (image && plan.imageFrame) drawImage(pptx, slide, image, plan.imageFrame, plan.background);
   else if (plan.placeholderSlot) drawPlaceholder(pptx, slide, plan.placeholderSlot, chrome.body);
   for (const r of plan.rules) slide.addShape(pptx.ShapeType.line, { x: g.rules.x, y: r.y, w: g.rules.w, h: 0, line: { color: r.color, width: 1.5 } });
-  drawBars(pptx, slide, chrome, cover);
+  drawBars(pptx, slide, chrome, cover, plan.ctaBar ?? null);
   if (plan.notes) slide.addNotes(plan.notes);
 }
 
@@ -205,7 +216,7 @@ function drawImage(pptx: PptxGenJS, slide: PptxGenJS.Slide, image: PreparedImage
  * The optional bottom chrome, both off by default: a footer bar (a thin surface band with the workspace name and, if the coach
  * has one, their logo) and a CTA bar (the offer's one line). They live in the bottom strip only, so they never cross the body.
  */
-function drawBars(pptx: PptxGenJS, slide: PptxGenJS.Slide, chrome: Chrome, cover: boolean) {
+function drawBars(pptx: PptxGenJS, slide: PptxGenJS.Slide, chrome: Chrome, cover: boolean, cta: string | null) {
   if (cover) return; // The cover carries neither bar: it is the title moment.
   const bandY = 5.32;
   if (chrome.footerBar) {
@@ -216,8 +227,9 @@ function drawBars(pptx: PptxGenJS, slide: PptxGenJS.Slide, chrome: Chrome, cover
     // The logo whole at its own ratio inside its box, never stretched; a small one at its own size.
     if (chrome.logo) slide.addImage({ data: chrome.logo.data, x: chrome.logo.placement.box.x, y: chrome.logo.placement.box.y, w: chrome.logo.placement.box.w, h: chrome.logo.placement.box.h, altText: `${chrome.company} logo` });
   }
-  if (chrome.ctaBar && chrome.ctaFooter) {
-    // Footer text is muted (§4: the accent at 10pt failed contrast on the surface); the accent stays on the rule.
-    slide.addText(chrome.ctaFooter, { x: 4.0, y: bandY, w: 4.8, h: 0.3, fontSize: 10, bold: true, color: chrome.muted, fontFace: chrome.body, align: "center", valign: "middle" });
+  if (cta) {
+    // Only on the offer and Q&A slides and the close (first-deck §5), where it replaces the footer's CTA line. Footer text is
+    // muted (§4: the accent at 10pt failed contrast on the surface); the accent stays on the rule.
+    slide.addText(cta, { x: 4.0, y: bandY, w: 4.8, h: 0.3, fontSize: 10, bold: true, color: chrome.muted, fontFace: chrome.body, align: "center", valign: "middle" });
   }
 }

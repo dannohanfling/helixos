@@ -74,6 +74,8 @@ export type WebinarContext = {
   /** Per-webinar chrome: the logo footer bar and the CTA bar, both off unless the coach turned them on. */
   footerBar: boolean;
   ctaBar: boolean;
+  /** The close (first-deck §5): the Foundation's call to action ("Book a call") and the webinar's date and time as typed, or null. */
+  close: { cta: string | null; when: string | null };
   acts: ActContext[];
   sections: SectionContext[];
   totalMin: number;
@@ -118,7 +120,7 @@ export function resolveEvidence(b: BeliefRow | undefined, citable: CitableRow[])
 
 const objection = (a: AssetRow): ResolvedObjection => ({ id: a.id, name: a.name, body: a.body, reframe: a.reframe ?? null, proof: a.proof ?? null });
 
-export function resolveSections(input: { webinar: { title: string; stayLine?: string | null; originStory?: Record<string, string> | null; promiseLine?: string | null; chatPrompt?: string | null; groundRule?: string | null; outcomes?: string[] | null; sessionGoal?: string | null; permissionLine?: string | null; reflectionPrompt?: string | null; footerBar?: boolean; ctaBar?: boolean }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null; avatarFit?: { forYouIf: string | null; notForYouIf: string | null } | null }): WebinarContext {
+export function resolveSections(input: { webinar: { title: string; stayLine?: string | null; originStory?: Record<string, string> | null; promiseLine?: string | null; chatPrompt?: string | null; groundRule?: string | null; outcomes?: string[] | null; sessionGoal?: string | null; permissionLine?: string | null; reflectionPrompt?: string | null; footerBar?: boolean; ctaBar?: boolean; ctaType?: string | null; scheduledAt?: string | null }; presenter: string; sections: SectionRow[]; beliefs: BeliefRow[]; proofs: ProofRow[]; assets: AssetRow[]; essenceStories: EssenceStory[]; citable: CitableRow[]; offer: { offer: OfferRow; components: ComponentRow[] } | null; avatarFit?: { forYouIf: string | null; notForYouIf: string | null } | null }): WebinarContext {
   // Left out on purpose means left out: no clock, no slide, no row on the run sheet.
   const ordered = input.sections.filter((s) => s.status !== "omitted").slice().sort((a, b) => a.order - b.order);
   const offer: ResolvedOffer | null = input.offer
@@ -200,6 +202,7 @@ export function resolveSections(input: { webinar: { title: string; stayLine?: st
     },
     footerBar: Boolean(input.webinar.footerBar),
     ctaBar: Boolean(input.webinar.ctaBar),
+    close: { cta: input.webinar.ctaType?.trim() || null, when: input.webinar.scheduledAt?.trim() || null },
     acts,
     sections,
     totalMin: cursor,

@@ -56,7 +56,7 @@ import {
 import { needsSlides } from "@/lib/engine/section-draft";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, ownerBrandName, presenterOf } from "@/lib/queries/webinar";
-import {HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry } from "@/lib/engine/deck";
+import {HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry, figureLines } from "@/lib/engine/deck";
 import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
 import { droppedSlides, filledSlides, resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
 import { DeckCheck, type ThumbChrome, type ThumbSlide } from "@/components/deck-thumbs";
@@ -1916,6 +1916,7 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
               </p>
             ) : null}
             {s.body.length ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-body">{s.body.join("\n")}</p> : null}
+            {s.figure ? <p className="mt-1 whitespace-pre-line text-xs text-ink-2" data-testid="deck-figure">{figureLines(s).join("\n")}</p> : null}
             {bySlide.get(s.n) ? <SlotControl webinarId={webinarId} owner={owner} resolved={bySlide.get(s.n)!} library={library} /> : null}
             <div className="mt-2 flex items-center justify-end gap-2">
               <CopyButton text={`${s.headline}\n${s.body.join("\n")}`} label="Copy" className="btn btn-ghost btn-xs" />

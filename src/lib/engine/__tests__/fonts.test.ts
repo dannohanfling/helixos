@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DECK_FONTS, GOOGLE_FONTS, OTHER_FONT, SAFE_FONTS, isListedFont, otherFontLine } from "../fonts";
+import { DECK_FONTS, GOOGLE_FONTS, OTHER_FONT, SAFE_FONTS, isListedFont, otherFontLine, googleFontHref } from "../fonts";
 
 describe("§6.1: the faces a kit can pick from", () => {
   it("lists the safe faces first, then the Google faces, no face twice, and knows which are listed", () => {
@@ -16,5 +16,14 @@ describe("§6.1: the faces a kit can pick from", () => {
     expect(otherFontLine("Arial")).toBe("People without this font installed will see Arial.");
     expect(otherFontLine("  ")).toBe("People without this font installed will see Arial.");
     expect(otherFontLine("Georgia")).toBe("People without this font installed will see Georgia.");
+  });
+});
+
+describe("first-deck §6: the Deck step loads the kit's Google faces", () => {
+  it("one stylesheet per listed Google face, regular and bold; none for a safe or licensed face", () => {
+    expect(googleFontHref("Playfair Display")).toBe("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap");
+    expect(googleFontHref("Bebas Neue")).toBe("https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap");
+    expect(googleFontHref("Arial")).toBeNull();
+    expect(googleFontHref("Brandon Grotesque")).toBeNull();
   });
 });

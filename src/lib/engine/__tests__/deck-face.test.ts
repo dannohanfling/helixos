@@ -103,7 +103,7 @@ describe("one currency per deck: the offer's own field, formatted in one place",
     const d = deckSlides(ctx(typed, "USD"), NEUTRAL_KIT);
     const slide = d.slides.find((s) => s.headline === "NZD $1,997, paid once.")!;
     expect(d.refused).toContain(`Slide ${slide.n} (Offer Stack + CTA): it names NZD, but the offer is priced in USD. One currency per deck: set the currency on the Offer, or change the line.`);
-    expect(d.slides.filter((s) => s.kind === "offer" && s.body.some((b) => /USD \$1,997/.test(b))).length).toBeGreaterThan(0);
+    expect(d.slides.filter((s) => s.kind === "offer" && s.figure?.value === "USD $1,997").length).toBeGreaterThan(0);
   });
   it("a dollar sign on a deck priced in pounds refuses; a pound sign on a dollar deck refuses", () => {
     expect(currencyConflicts("Save $500 today", "GBP")).toEqual(["$"]);
