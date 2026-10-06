@@ -316,6 +316,16 @@ describe("Body tables are read in one place, and no Body value reaches a log", (
   });
 });
 
+describe("a habit's first day (rev 555)", () => {
+  it("is read once, in habitsFor, from every log the habit has: the week's tile, Practices and the explorer agree", () => {
+    const q = readFileSync(join(process.cwd(), "src/lib/queries/body.ts"), "utf8");
+    const fn = q.slice(q.indexOf("export async function habitsFor("), q.indexOf("\n}\n", q.indexOf("export async function habitsFor(")));
+    expect(fn).toMatch(/min\(\$\{schema\.bodyHabitLogs\.date\}\)/);
+    expect(fn).toMatch(/groupBy\(schema\.bodyHabitLogs\.habitId\)/);
+    expect(fn).toMatch(/since: first && first < added \? first : added/);
+  });
+});
+
 describe("the unit dropdown (rev 229)", async () => {
   const { convertQty, loggableUnits, readUnit, storedUnit, UNITS } = await import("@/lib/engine/body-units");
   it("free-text units saved before the list read onto it, case and plurals aside; anything else is Other with its text kept", () => {

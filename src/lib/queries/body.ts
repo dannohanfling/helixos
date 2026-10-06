@@ -693,8 +693,19 @@ function withSince<T extends { id: string; since?: string | null }>(habits: T[],
 }
 
 export async function habitsFor(workspaceId: string, userId: string, opts: { archived?: boolean; today?: string } = {}) {
-  // `since` is the day it was added, never after the member's today (createdAt is UTC, which can be a day ahead of them).
-  const rows = (await db.query.bodyHabits.findMany({ where: and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId)), orderBy: [asc(schema.bodyHabits.order), asc(schema.bodyHabits.createdAt)] })).map((h) => ({ ...h, since: opts.today && h.createdAt.slice(0, 10) > opts.today ? opts.today : h.createdAt.slice(0, 10) }));
+  // `since` is the day it was added, never after the member's today (createdAt is UTC, which can be a day ahead of them), or the
+  // first day it was ever logged when that is earlier. Read here, over all of its logs, so every count agrees: the week's tile
+  // once read only the week's own logs and counted one fewer due day than Practices did (rev 555).
+  const [habits, firsts] = await Promise.all([
+    db.query.bodyHabits.findMany({ where: and(eq(schema.bodyHabits.workspaceId, workspaceId), eq(schema.bodyHabits.userId, userId)), orderBy: [asc(schema.bodyHabits.order), asc(schema.bodyHabits.createdAt)] }),
+    db.select({ habitId: schema.bodyHabitLogs.habitId, first: sql<string>`min(${schema.bodyHabitLogs.date})` }).from(schema.bodyHabitLogs).where(and(eq(schema.bodyHabitLogs.workspaceId, workspaceId), eq(schema.bodyHabitLogs.userId, userId))).groupBy(schema.bodyHabitLogs.habitId),
+  ]);
+  const firstLog = new Map(firsts.map((f) => [f.habitId, f.first]));
+  const rows = habits.map((h) => {
+    const added = opts.today && h.createdAt.slice(0, 10) > opts.today ? opts.today : h.createdAt.slice(0, 10);
+    const first = firstLog.get(h.id);
+    return { ...h, since: first && first < added ? first : added };
+  });
   return opts.archived ? rows : rows.filter((h) => !h.archivedAt);
 }
 
