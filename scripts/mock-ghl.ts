@@ -9,6 +9,9 @@ const posts = new Map<string, Record<string, unknown>>();
 const drips: { path: string; body: Record<string, unknown>; at: string }[] = [];
 const contacts = new Map<string, Record<string, unknown>>();
 let n = 0;
+/** A walk hook (rev 567): Instagram reconnected in GoHighLevel. Its composite id gets a new OAuth prefix; the old id is refused with a 422. */
+let igGeneration = 1;
+const igAccountId = (loc: string) => (igGeneration === 1 ? `${loc}_ig_1` : `${loc}_ig_gen${igGeneration}_1`);
 
 createServer((req, res) => {
   const chunks: Buffer[] = [];
@@ -38,7 +41,12 @@ createServer((req, res) => {
       posts.clear();
       drips.length = 0;
       contacts.clear();
+      igGeneration = 1;
       return json(200, { ok: true });
+    }
+    if (url.startsWith("/__rotate-ig") && req.method === "POST") {
+      igGeneration++;
+      return json(200, { ok: true, id: igAccountId("loc_maya") });
     }
     if (url.startsWith("/__contacts") && req.method === "GET") return json(200, { contacts: [...contacts.values()] }); // walk introspection
     if (url.startsWith("/contacts/upsert") && req.method === "POST") {
@@ -87,7 +95,7 @@ createServer((req, res) => {
           accounts: [
             { id: `${loc}_fbpage_1`, name: "Torres Nutrition Coaching", platform: "facebook", type: "page", isExpired: false },
             { id: `${loc}_fbgroup_1`, name: "Busy Moms Who Actually Lose It", platform: "facebook", type: "group", isExpired: false },
-            { id: `${loc}_ig_1`, name: "@torresnutrition", platform: "instagram", type: "business", isExpired: false },
+            { id: igAccountId(loc), name: "@torresnutrition", platform: "instagram", type: "business", isExpired: false },
             { id: `${loc}_li_1`, name: "Maya Torres", platform: "linkedin", type: "profile", isExpired: false },
             { id: `${loc}_li_old`, name: "Old LinkedIn", platform: "linkedin", type: "page", isExpired: true },
             { id: `${loc}_threads_1_profile`, name: "@torresnutrition on Threads", platform: "threads", type: "profile", isExpired: false },
@@ -108,6 +116,8 @@ createServer((req, res) => {
       const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
       if (!Array.isArray(body.accountIds) || !body.accountIds.length || !body.type) return json(422, { statusCode: 422, message: ["accountIds must contain at least 1 elements", "type must be one of the following values: post, story, reel"], error: "Unprocessable Entity" });
       if (typeof body.userId !== "string" || !body.userId) return json(422, { statusCode: 422, message: ["userId must be a string", "userId should not be empty"], error: "Unprocessable Entity" });
+      // An Instagram id from before a reconnect (rev 567): the planner no longer knows it.
+      if ((body.accountIds as string[]).some((a) => /_ig_/.test(String(a)) && String(a) !== igAccountId(loc))) return json(422, { statusCode: 422, message: ["accountIds must be valid connected accounts for this location"], error: "Unprocessable Entity" });
       // A walk hook: this user id is refused as GoHighLevel refuses one it does not know.
       if (body.userId === "user_refused") return json(422, { statusCode: 422, message: ["userId must be a valid user id"], error: "Unprocessable Entity" });
       // A walk hook: the account on hold, as GoHighLevel answered on 26 Sep when it was locked for a failed payment.
@@ -160,7 +170,9 @@ createServer((req, res) => {
       // A walk hook (rev 499, seen live on 5 Oct): the first read of a published post hands back the planner's own id as postId.
       const late = String(p.summary ?? "").includes("[late-id]") && !p.lateIdRead;
       if (late && due) posts.set(id, { ...p, lateIdRead: true });
-      const flipped = due ? { ...p, status: "published", postId: late ? id : `${community ? "cm" : "fb"}_${id}`, publishedAt: new Date().toISOString() } : p;
+      const flipped = due ? { ...p, status: "published", postId: late ? id : `${community ? "cm" : "fb"}_${id}`, publishedAt: String(p.publishedAt ?? new Date().toISOString()) } : p;
+      // As the real planner: once read back as published, the list says published too (a re-posted original is not a scheduled duplicate).
+      if (due) posts.set(id, { ...flipped, lateIdRead: p.lateIdRead || late });
       return json(200, { success: true, statusCode: 200, message: "Fetched Post", results: { post: flipped } });
     }
     return json(404, { message: "Not found" });

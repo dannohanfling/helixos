@@ -13,12 +13,13 @@ import { draft } from "@/lib/ai";
 import { CHANNEL_SPECS, formatClause, toneClause, type Channel } from "@/lib/engine/repurpose";
 import { readRules } from "@/lib/engine/groups";
 import { explainFabricated, findFabricated, stripFabricated, stripNote } from "@/lib/engine/blacklist";
-import { type Target, channelTargets, draftFor, groupTargets, normaliseTargets, staggerSchedule } from "@/lib/engine/compose";
+import { type ScheduleSkip, type Target, channelTargets, draftFor, groupTargets, normaliseTargets, staggerSchedule } from "@/lib/engine/compose";
+import { PUBLISHABLE } from "@/lib/engine/ghl-map";
 import { ILLUSTRATIVE_LABEL, mediaBlock, mediaUrlProblem } from "@/lib/engine/compose-media";
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
-import { background, pushSocialPost } from "@/lib/integrations";
-import { ctx, str } from "@/lib/action-helpers";
+import { background, logSync, pushSocialPost } from "@/lib/integrations";
+import { ctx, refresh, str } from "@/lib/action-helpers";
 import { carriesUnreviewed, gateLine, originAfterSave, variantName, type Gate } from "@/lib/engine/provenance";
 import { recordConfirm } from "@/lib/provenance";
 import { draftAvatarBrief } from "@/lib/avatars";
@@ -48,7 +49,7 @@ export type ComposePayload = {
  * carries. `gate`: nothing was saved either; the post or a version going out is an AI draft nobody has reviewed, named, and
  * the composer offers Review or Continue anyway (the same call again with `confirm`).
  */
-export type ComposeResult = { id: string; scheduled: number; posted: number; pushed: number; blocked?: string; gate?: Gate };
+export type ComposeResult = { id: string; scheduled: number; posted: number; pushed: number; /** Versions left as they were because that channel was already posted (rev 567): named, never silently counted as saved. */ skipped: ScheduleSkip[]; blocked?: string; gate?: Gate };
 
 const isChannel = (c: string): c is Channel => (CHANNELS as readonly string[]).includes(c);
 
@@ -69,28 +70,28 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
   const fabricated = findFabricated(everything);
   if (fabricated.length) {
     const quotes = (await db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) })).flatMap((p) => [p.quote, p.longVersion, p.shortVersion].filter((x): x is string => Boolean(x)));
-    return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: explainFabricated(fabricated, { text: everything, quotes }) };
+    return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, skipped: [], blocked: explainFabricated(fabricated, { text: everything, quotes }) };
   }
   // The picked file, if it is the client's to pick. A file that shows a result carries the dollar-figure rule: the gate is the
   // server's, not only the button's, so scheduling or posting without the marker saves nothing and says why. A draft may hold it.
   const attachment = await pickedAttachment(payload.mediaAttachmentId, workspaceId, userId);
   const mediaBlocked = payload.mode !== "draft" ? mediaBlock(attachment, [payload.body, ...payload.targets.map((t) => t.body)]) : null;
-  if (mediaBlocked) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: mediaBlocked };
+  if (mediaBlocked) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, skipped: [], blocked: mediaBlocked };
   // A typed address goes to the Social Planner as-is: it must be a public web address, never one of our private routes.
   const urlProblem = mediaUrlProblem(payload.mediaUrl, payload.mode !== "draft");
-  if (urlProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: urlProblem };
+  if (urlProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, skipped: [], blocked: urlProblem };
   // While the comment-ladder handoff is on, Threads is Community Loyalty's: the server refuses it as the chip does. The
   // refusal looks at the targets as they will be saved: a group id that is not the member's own is a plain channel post.
   const ownGroups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
   const targets = normaliseTargets(payload.targets, ownGroups.map((g) => g.id));
   const dripOn = dripSetup(v.membership).on;
   const threads = payload.mode !== "draft" ? threadsRefusal(targets, dripOn) : null;
-  if (threads) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: threads };
+  if (threads) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, skipped: [], blocked: threads };
   // A ladder post's first comment is rung 1 and the drip supplies rung 1: the composer locks the field, and the server refuses
   // the same choice, in every mode, so a draft cannot carry one into a later schedule.
   const ladderPost = payload.id ? Boolean(await db.query.ladders.findFirst({ where: and(eq(schema.ladders.contentItemId, payload.id), eq(schema.ladders.userId, userId)), columns: { id: true } })) : false;
   const firstCommentProblem = firstCommentRefusal({ ladderPost, dripOn, firstComment: payload.firstComment });
-  if (firstCommentProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, blocked: firstCommentProblem };
+  if (firstCommentProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, skipped: [], blocked: firstCommentProblem };
   let id = payload.id ?? null;
   const existing = id ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, userId)) }) : null;
   if (!existing) id = null;
@@ -106,7 +107,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
       const was = id ? await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, id), eq(schema.contentVariants.channel, t.channel), eq(schema.contentVariants.groupId, t.groupId)) }) : null;
       if (was && carriesUnreviewed(was.origin, was.body, t.body)) names.push(variantName(t, ownGroups.find((g) => g.id === t.groupId)?.name));
     }
-    if (names.length && !payload.confirm) return { id: id ?? "", scheduled: 0, posted: 0, pushed: 0, gate: { line: gateLine(names.length), items: names } };
+    if (names.length && !payload.confirm) return { id: id ?? "", scheduled: 0, posted: 0, pushed: 0, skipped: [], gate: { line: gateLine(names.length), items: names } };
     if (names.length) await recordConfirm({ workspaceId, userId, userName: v.user.name }, payload.mode === "now" ? "post_now" : "post_schedule", id ?? "", names);
   }
   const firstAt = payload.targets.map((t) => t.postAt).filter(Boolean).sort()[0] ?? null;
@@ -136,13 +137,18 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
   let scheduled = 0;
   let posted = 0;
   let pushed = 0;
+  const skipped: ScheduleSkip[] = [];
   for (const t of targets) {
     if (!isChannel(t.channel)) continue;
     const groupId = t.groupId;
     const vStatus = payload.mode === "now" ? "posted" : payload.mode === "schedule" ? "scheduled" : "draft";
     const row = { body: t.body, subject: t.subject ?? null, status: vStatus as "posted" | "scheduled" | "draft", postAt: payload.mode === "schedule" ? (t.postAt ?? firstAt) : null, postedAt: payload.mode === "now" ? nowIso() : null, generatedBy: "composer" };
     const existing = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, id), eq(schema.contentVariants.channel, t.channel), eq(schema.contentVariants.groupId, groupId)) });
-    if (existing?.status === "posted" && payload.mode !== "now") continue;
+    // A posted channel is never overwritten; the save says so by name (rev 567) rather than counting it or staying silent.
+    if (existing?.status === "posted" && payload.mode !== "now") {
+      skipped.push({ channel: t.channel, label: variantName(t, ownGroups.find((g) => g.id === groupId)?.name), why: "posted" });
+      continue;
+    }
     const variantId = existing?.id ?? newId();
     // A version's text from the composer was in front of the coach at the moment of sending, so saving it is choosing it: a version
     // first written here is coach; a stored AI draft it rewrites becomes edited, and an unchanged one keeps its mark.
@@ -160,9 +166,33 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
       background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId, channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, title, followUpComment: t.channel === "fb_page" || t.channel === "instagram" ? item.firstComment : null }));
     }
   }
-  if (payload.mode === "now") await award({ workspaceId, userId }, "content", contentPoints(payload.hasCta), `Posted: ${title}`, `content:${id}`);
+  // Nothing new went out (every channel was already posted): the post keeps the status it had rather than reading "Scheduled"
+  // for a schedule that scheduled nothing (rev 567).
+  if (existing && payload.mode !== "draft" && scheduled + posted === 0 && skipped.length) await db.update(schema.contentItems).set({ status: existing.status, postAt: existing.postAt, postedAt: existing.postedAt }).where(eq(schema.contentItems.id, id));
+  if (payload.mode === "now" && posted) await award({ workspaceId, userId }, "content", contentPoints(payload.hasCta), `Posted: ${title}`, `content:${id}`);
   void v;
-  return { id, scheduled, posted, pushed };
+  return { id, scheduled, posted, pushed, skipped };
+}
+
+/**
+ * "Post again to this channel" (rev 567): a deliberate second post of one version, now, through the Social Planner. The
+ * ordinary save never overwrites a posted channel, so this is the one way to re-post, and it is a fresh planner post, never
+ * an edit of the one that went out. The row's old planner id is let go (the sync log keeps it); the row then reads what
+ * the new post does.
+ */
+export async function repostChannelAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves.", team: "allow" });
+  const id = str(formData, "variantId");
+  const variant = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.id, id), eq(schema.contentVariants.userId, userId)) });
+  if (!variant) return;
+  const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, variant.contentItemId), eq(schema.contentItems.userId, userId)) });
+  if (!item || variant.groupId || !isChannel(variant.channel) || !PUBLISHABLE[variant.channel]?.via) return;
+  // The post that went out stays known: the sync log names it as superseded, so the planner audit never lists it as untracked.
+  if (variant.externalId) await logSync({ workspaceId, userId, provider: "gohighlevel", direction: "out", event: "social.repost", payload: { channel: variant.channel, supersededId: variant.externalId }, status: "sent", note: `Posted again to ${variant.channel}; the earlier planner post ${variant.externalId} stays as it went out` });
+  await db.update(schema.contentVariants).set({ status: "posted", postedAt: nowIso(), postAt: null, externalId: null, externalStatus: null, externalError: null, externalSyncedAt: null }).where(eq(schema.contentVariants.id, variant.id));
+  background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: variant.id, channel: variant.channel, body: variant.subject ? `${variant.subject}\n\n${variant.body}` : variant.body, postAt: null, mediaUrl: item.mediaUrl, title: item.title, followUpComment: variant.channel === "fb_page" || variant.channel === "instagram" ? item.firstComment : null }));
+  refresh();
+  redirect(`/content/${item.id}/repurpose?reposted=${encodeURIComponent(variant.channel)}`);
 }
 
 /** Claude rewrites each target's draft in the coach's voice, respecting channel limits and group rules. Returns only the targets it improved. */
@@ -239,6 +269,8 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
   if (result.gate) redirect(`/content/${item.id}/repurpose?gate=distribute&items=${encodeURIComponent(result.gate.items.join("\n"))}&startDate=${encodeURIComponent(startDate)}&startTime=${encodeURIComponent(startTime)}`);
   // A block is never silent: the page that offered the button names it.
   if (result.blocked) redirect(`/content/${item.id}/repurpose?blocked=${result.blocked.startsWith(ILLUSTRATIVE_LABEL) ? "media" : mediaUrlProblem(item.mediaUrl ?? "") ? "url" : result.blocked === THREADS_EXCLUSIVE ? "threads" : "fabricated"}`);
+  // Nothing scheduled, because every channel was already posted: the page says so by name (rev 567), never a silent "Scheduled".
+  if (result.scheduled + result.posted === 0 && result.skipped.length) redirect(`/content/${item.id}/repurpose?kept=${encodeURIComponent(result.skipped.map((s) => s.label).join("|"))}`);
   // Back to the page with a clean address: a gate or a block that was answered is not shown again on the next load.
   redirect(`/content/${item.id}/repurpose`);
 }

@@ -202,8 +202,9 @@ export async function pushContact(ctx: { workspaceId: string; userId: string }, 
  * pushing an update never leaves a second copy in the planner.
  */
 export async function pushSocialPost(ctx: { workspaceId: string; userId: string; tz: string }, post: { variantId: string; channel: string; body: string; postAt: string | null; mediaUrl?: string | null; title?: string; followUpComment?: string | null }): Promise<boolean> {
-  const { connectionFor, createPost, updatePost } = await import("@/lib/ghl");
-  const { PUBLISHABLE, mediaTypeFor, postTypeFor } = await import("@/lib/engine/ghl-map");
+  const { connectionFor, createPost, updatePost, freshAccounts } = await import("@/lib/ghl");
+  const { PUBLISHABLE, healAccountId, mediaTypeFor, postTypeFor, shortAccountId } = await import("@/lib/engine/ghl-map");
+  const { refusedField } = await import("@/lib/engine/ghl-errors");
   const channel = post.channel as keyof typeof PUBLISHABLE;
   // "manual" is a channel that is pasted by design; "failed" is something the client can fix, said beside the post: a missing connection, account or user id is a failure, never "paste by hand".
   const skip = async (note: string, as: "manual" | "failed" = "manual") => {
@@ -214,7 +215,26 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   if (!PUBLISHABLE[channel]?.via) return skip(PUBLISHABLE[channel]?.note ?? "This channel is posted by hand");
   const conn = await connectionFor(ctx.userId);
   if (!conn) return skip("Connect your GoHighLevel sub-account in Settings to auto-publish", "failed");
-  const accountId = conn.mapping[post.channel];
+  let accountId = conn.mapping[post.channel];
+  /**
+   * The stored account id can go stale (rev 567): an account reconnected in GoHighLevel gets a new OAuth prefix on its
+   * composite id, and the planner refuses the old one with a 422 while the same account posts fine from GoHighLevel. So the
+   * connected accounts are read again before a publish (at most once a minute), and again on such a 422; the same page or
+   * profile is found by its origin id, the channel map is healed, and the post is sent once more. True when the id changed.
+   */
+  const heal = async (force = false): Promise<boolean> => {
+    if (!accountId) return false;
+    // A 422 reads the accounts again however recent the last read: the planner has just said the stored list is wrong.
+    const fresh = await freshAccounts(conn, force ? 0 : undefined);
+    if (!fresh.ok) return false;
+    const latest = await connectionFor(ctx.userId);
+    const healed = (latest?.mapping[post.channel] && latest.mapping[post.channel] !== accountId ? latest.mapping[post.channel] : null) ?? healAccountId(accountId, fresh.data, channel);
+    if (!healed || healed === accountId) return false;
+    await db.update(schema.socialConnections).set({ mapping: { ...(latest?.mapping ?? conn.mapping), [post.channel]: healed } }).where(eq(schema.socialConnections.id, conn.id));
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.accounts", payload: { channel: post.channel, from: accountId, to: healed }, status: "sent", note: `Channel map healed: ${post.channel} was ${shortAccountId(accountId)}, now ${shortAccountId(healed)} (the same account, reconnected in GoHighLevel)` });
+    accountId = healed;
+    return true;
+  };
   if (channel === "stories" && !post.mediaUrl) return skip("Stories need a photo or video", "failed");
   // The Social Planner requires the posting user (CreatePostDTO: type, accountIds, userId). Without one the post is refused
   // with a validation error, so it is refused here first, with the place to fix it.
@@ -233,12 +253,21 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   }
   const held = variant?.externalId && (variant.externalStatus === "scheduled" || variant.externalStatus === "accepted") ? variant.externalId : null;
   const event = held ? "social.update" : "social.schedule";
-  const draft = { accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: post.mediaUrl ? [{ url: post.mediaUrl, type: mediaTypeFor(post.mediaUrl) }] : [], followUpComment: post.followUpComment };
-  const r = held ? await updatePost(conn, held, draft) : await createPost(conn, draft);
+  await heal();
+  const draftFor = () => ({ accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: post.mediaUrl ? [{ url: post.mediaUrl, type: mediaTypeFor(post.mediaUrl) }] : [], followUpComment: post.followUpComment });
+  const send = () => (held ? updatePost(conn, held, draftFor()) : createPost(conn, draftFor()));
+  let r = await send();
+  if (!r.ok && r.status === 422 && refusedField(r.detail ?? "") === "accountIds") {
+    const sent = accountId;
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId: sent, ghlPostId: held ?? undefined }, status: "failed", note: `${r.error} Account id sent: ${shortAccountId(sent)}. Reading the connected accounts again.` });
+    if (await heal(true)) r = await send();
+  }
   if (!r.ok) {
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: held ?? undefined }, status: "failed", note: r.error });
+    // A refused account names the id that was sent, so the log and the card say which one GoHighLevel no longer knows.
+    const error = r.status === 422 && refusedField(r.detail ?? "") === "accountIds" ? `${r.error} Account id sent: ${shortAccountId(accountId)}.` : r.error;
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: held ?? undefined }, status: "failed", note: error });
     // The post's failure is said on the post (Distribute page) and in the sync log; the connection itself is not marked broken by it.
-    await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: r.error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
+    await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
     return false;
   }
   await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: r.data.id ?? undefined }, status: "sent", note: r.data.id ? `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Accepted by"} Social Planner · ${r.data.id}` : "Accepted by the Social Planner without an id; found from its list on the next check" });

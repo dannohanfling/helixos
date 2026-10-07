@@ -63,6 +63,30 @@ export function autoMap(accounts: Account[], existing: Record<string, string> = 
   return out;
 }
 
+/**
+ * The part of a Social Planner account id that names the page or profile itself: GoHighLevel composes the id as an OAuth
+ * prefix, an underscore and the platform's own id, and the prefix changes whenever the account is reconnected in GoHighLevel
+ * (rev 567: Instagram reconnected, the stored id refused with a 422 while the same account posted fine from the planner).
+ */
+export const originId = (id: string): string => (id.includes("_") ? id.slice(id.lastIndexOf("_") + 1) : id);
+
+/**
+ * The live account that is the same page or profile as a stored id the planner no longer knows: the one fitting the channel
+ * with the same origin id, else the one account that fits the channel at all. Null when the stored id is still live, or
+ * when nothing can be said for sure (two fitting accounts and no origin match: the member picks on Settings).
+ */
+export function healAccountId(stale: string, accounts: Account[], channel: Channel): string | null {
+  const live = accounts.filter((a) => !a.isExpired);
+  if (live.some((a) => a.id === stale)) return null;
+  const fitting = live.filter((a) => fits(channel, a));
+  const same = fitting.filter((a) => originId(a.id) === originId(stale));
+  if (same.length === 1) return same[0].id;
+  return fitting.length === 1 ? fitting[0].id : null;
+}
+
+/** An account id as a log line or a reason may show it: the tail, so a long composite id stays readable and the prefix is not repeated. */
+export const shortAccountId = (id: string): string => (id.length > 20 ? `…${id.slice(-20)}` : id);
+
 /** Candidate accounts for a channel's dropdown. */
 export function candidates(channel: Channel, accounts: Account[]): Account[] {
   return accounts.filter((a) => fits(channel, a));

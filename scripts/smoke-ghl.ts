@@ -298,6 +298,88 @@ async function main() {
     await page.screenshot({ path: "screenshots/g02-distribute-ghl.png", fullPage: true });
     console.log("✓ scheduled through the Social Planner with the member's token and synced status");
 
+    // ── rev 567: a schedule that saves nothing says so; a deliberate re-post; an Instagram reconnected in GoHighLevel ──
+    const mockHeaders = { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" };
+    const itemId = itemUrl.split("/").pop()!;
+    const itemRow = async () => (await dbx.query.contentItems.findFirst({ where: eqx(sx.contentItems.id, itemId) }))!;
+    const connOf = async () => (await dbx.query.socialConnections.findFirst({ where: eqx(sx.socialConnections.userId, client!.id) }))!;
+    type MockPost = { _id: string; status?: string; accountIds?: string[]; summary: string };
+    // (a) Every channel of the first post is posted; Schedule again saves nothing, says so by name, and the status stays.
+    await dbx.update(sx.contentVariants).set({ status: "posted", postedAt: new Date().toISOString() }).where(eqx(sx.contentVariants.contentItemId, itemId));
+    const statusBefore = (await itemRow()).status;
+    const countBefore = (await plannerPosts()).length;
+    await page.goto(`${itemUrl}/compose`);
+    await expectText(page, "Redistribute:", "edit composer, every channel posted");
+    await page.click('button:has-text("Schedule")');
+    await expectText(page, "Nothing scheduled:", "a schedule that saved nothing says so");
+    await expectText(page, "Facebook business page already posted", "a schedule that saved nothing names the channel");
+    if ((await page.locator("body").innerText()).includes("Saved 0 versions")) throw new Error('"Saved 0 versions" is gone');
+    if ((await plannerPosts()).length !== countBefore) throw new Error("a schedule that saved nothing made no planner post");
+    if ((await itemRow()).status !== statusBefore) throw new Error(`the post keeps its status (${statusBefore}) when nothing was scheduled`);
+    // The one-click send says the same on the Distribute page: once every channel it reaches is posted, it schedules nothing and names them.
+    await page.goto(`${itemUrl}/repurpose`);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Schedule everywhere")')]);
+    await page.waitForLoadState("networkidle");
+    await dbx.update(sx.contentVariants).set({ status: "posted", postedAt: new Date().toISOString() }).where(eqx(sx.contentVariants.contentItemId, itemId));
+    const countBeforeAll = (await plannerPosts()).length;
+    await page.goto(`${itemUrl}/repurpose`);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Schedule everywhere")')]);
+    await page.waitForLoadState("networkidle");
+    await expectText(page, "Nothing scheduled:", "the one-click send says so");
+    if ((await plannerPosts()).length !== countBeforeAll) throw new Error("the one-click send that scheduled nothing made no planner post");
+    await expectText(page, "Facebook business page already posted", "the one-click send names what was kept");
+    // (b) "Post again to this channel": one fresh planner post, published now, under the same account.
+    await submit(page, '[data-testid="channel-outcomes"] li[data-channel="fb_page"] [data-testid="repost-channel"]');
+    await expectText(page, "Posting again now", "the re-post says so");
+    await page.waitForTimeout(1500);
+    const afterRepost = (await plannerPosts()) as unknown as MockPost[];
+    if (afterRepost.length !== countBeforeAll + 1) throw new Error(`"Post again" makes one fresh planner post (${countBeforeAll} → ${afterRepost.length})`);
+    const repost = afterRepost[afterRepost.length - 1];
+    if (repost.status !== "published" || !repost.accountIds?.includes("loc_maya_fbpage_1")) throw new Error(`the re-post is published now on the same page: ${JSON.stringify([repost.status, repost.accountIds])}`);
+    await page.reload();
+    await expectOutcome(page, "fb_page", "sending", "the row follows the new post, not the old one");
+    console.log("✓ a schedule that saves nothing says so by name and leaves the status alone; Post again makes one fresh planner post");
+
+    // (c) Instagram reconnected in GoHighLevel: the stored id is stale, the accounts were last read an hour ago. The publish
+    // reads them again first, heals the map by origin id, and the post goes out under the new id.
+    const rotated = (await (await fetch(`http://localhost:${mockPort}/__rotate-ig`, { method: "POST", headers: mockHeaders })).json()) as { id: string };
+    await dbx.update(sx.socialConnections).set({ mapping: { ...(await connOf()).mapping, instagram: "loc_maya_ig_1" }, lastSyncAt: new Date(Date.now() - 3600_000).toISOString() }).where(eqx(sx.socialConnections.userId, client!.id));
+    const igPost = async (title: string) => {
+      await page.goto(`${base}/content/compose`);
+      await page.fill('input[placeholder^="Working title"]', title);
+      await page.fill('input[placeholder^="Hook"]', "Instagram after a reconnect.");
+      await page.fill('textarea[placeholder^="Type content"]', "The same account, a new id in GoHighLevel.");
+      // Instagram is on by default for a fresh post; the chip toggles, so it is pressed only when off.
+      const igChip = page.locator('button[title="Instagram caption"]').first();
+      if (!((await igChip.getAttribute("class")) ?? "").includes("border-accent")) await igChip.click();
+      await page.locator('input[type="date"]').first().fill(new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
+      await page.click('button:has-text("Schedule")');
+      await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
+      await page.click('a:has-text("See every version")');
+      await page.waitForURL(/\/repurpose/);
+      await page.waitForTimeout(1500);
+      await page.reload();
+    };
+    await igPost("Reconnected Instagram, read first");
+    await expectOutcome(page, "instagram", "scheduled", "a stale Instagram id is healed before the publish");
+    if ((await connOf()).mapping.instagram !== rotated.id) throw new Error(`the channel map is healed to the reconnected id: ${(await connOf()).mapping.instagram} vs ${rotated.id}`);
+    let ig = ((await plannerPosts()) as unknown as MockPost[]).filter((p) => p.accountIds?.some((a) => a.includes("_ig_")));
+    if (!ig.length || !ig[ig.length - 1].accountIds?.includes(rotated.id)) throw new Error("the planner post carries the reconnected id");
+    const healedNote = await dbx.query.syncEvents.findMany({ where: andx(eqx(sx.syncEvents.userId, client!.id), eqx(sx.syncEvents.event, "social.accounts")) });
+    if (!healedNote.some((e) => (e.note ?? "").includes("Channel map healed: instagram"))) throw new Error("the heal is on the sync log");
+    // (d) Reconnected again, with the accounts read a moment ago: the planner's 422 is what says the list is wrong. The push
+    // names the id it sent, reads the accounts again, heals, and sends once more.
+    const rotated2 = (await (await fetch(`http://localhost:${mockPort}/__rotate-ig`, { method: "POST", headers: mockHeaders })).json()) as { id: string };
+    await dbx.update(sx.socialConnections).set({ lastSyncAt: new Date().toISOString() }).where(eqx(sx.socialConnections.userId, client!.id));
+    await igPost("Reconnected Instagram, refused once");
+    await expectOutcome(page, "instagram", "scheduled", "a 422 on the account heals the map and the post is sent once more");
+    if ((await connOf()).mapping.instagram !== rotated2.id) throw new Error("the channel map is healed after the 422");
+    ig = ((await plannerPosts()) as unknown as MockPost[]).filter((p) => p.accountIds?.some((a) => a.includes("_ig_")));
+    if (!ig[ig.length - 1].accountIds?.includes(rotated2.id)) throw new Error("the retried planner post carries the newest id");
+    const refused = await dbx.query.syncEvents.findMany({ where: andx(eqx(sx.syncEvents.userId, client!.id), eqx(sx.syncEvents.status, "failed")) });
+    if (!refused.some((e) => (e.note ?? "").includes(`Account id sent: …${rotated.id.slice(-20)}`) || (e.note ?? "").includes(`Account id sent: ${rotated.id}`))) throw new Error(`the refusal names the id sent: ${JSON.stringify(refused.map((e) => e.note))}`);
+    console.log("✓ a reconnected Instagram: healed by origin id before the publish, and on a 422 with the id named and one retry");
+
     // A 2xx with no id (seen live 15 Sep): accepted with the id pending, never "didn't send"; the planner's list gives the id back, no second copy
     const before = (await plannerPosts()).length;
     await page.goto(`${base}/content/compose`);

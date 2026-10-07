@@ -86,6 +86,28 @@ export async function credentials(conn: SocialConnection): Promise<GhlResult<{ t
 
 type RawAccount = { id?: string; _id?: string; name?: string; platform?: string; type?: string; isExpired?: boolean; avatar?: string; meta?: Record<string, unknown> };
 
+/** The sub-account's connected pages and profiles, read from GoHighLevel and nothing written. */
+async function readAccounts(conn: SocialConnection, cred: { token: string; base: string }): Promise<GhlResult<SocialAccount[]>> {
+  const r = await call<{ results?: { accounts?: RawAccount[] } }>(cred.base, cred.token, `/social-media-posting/${conn.locationId}/accounts`);
+  if (!r.ok) return { ok: false, error: explain(r, "accounts"), status: r.status, detail: r.detail };
+  return { ok: true, data: (r.data.results?.accounts ?? []).map((a) => ({ id: String(a.id ?? a._id ?? ""), name: a.name ?? "Account", platform: (a.platform ?? "").toLowerCase(), type: (a.type ?? "").toLowerCase(), isExpired: Boolean(a.isExpired), avatar: a.avatar ?? null })).filter((a) => a.id) };
+}
+
+/**
+ * The connected accounts as of now, for a publish (rev 567): read again from GoHighLevel when the stored list is older than
+ * a minute, and stored with the channel map re-fitted (a stale id drops out, the one live account that fits takes its
+ * place). A read that fails leaves the connection exactly as it was: a publish never marks the card broken.
+ */
+export async function freshAccounts(conn: SocialConnection, maxAgeMs = 60_000): Promise<GhlResult<SocialAccount[]>> {
+  if (conn.accounts.length && conn.lastSyncAt && Date.now() - Date.parse(conn.lastSyncAt) < maxAgeMs) return { ok: true, data: conn.accounts };
+  const cred = await credentials(conn);
+  if (!cred.ok) return cred;
+  const r = await readAccounts(conn, cred.data);
+  if (!r.ok) return r;
+  await db.update(schema.socialConnections).set({ accounts: r.data, mapping: autoMap(r.data, conn.mapping), lastSyncAt: nowIso() }).where(eq(schema.socialConnections.id, conn.id));
+  return r;
+}
+
 /** Validates the token against the sub-account, stores its connected pages and profiles, and fills the channel map where it's obvious. */
 export async function refreshAccounts(conn: SocialConnection): Promise<GhlResult<SocialAccount[]>> {
   const cred = await credentials(conn);
@@ -93,14 +115,14 @@ export async function refreshAccounts(conn: SocialConnection): Promise<GhlResult
     await db.update(schema.socialConnections).set({ lastError: cred.error }).where(eq(schema.socialConnections.id, conn.id));
     return cred;
   }
-  const r = await call<{ results?: { accounts?: RawAccount[] } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/accounts`);
+  const r = await readAccounts(conn, cred.data);
   if (!r.ok) {
-    const error = explain(r, "accounts");
+    const error = r.error;
     await db.update(schema.socialConnections).set({ lastError: error, accounts: [], connectedAt: null }).where(eq(schema.socialConnections.id, conn.id));
     await logSync({ workspaceId: conn.workspaceId, userId: conn.userId, provider: "gohighlevel", direction: "out", event: "social.accounts", status: "failed", note: error });
     return { ok: false, error };
   }
-  const accounts: SocialAccount[] = (r.data.results?.accounts ?? []).map((a) => ({ id: String(a.id ?? a._id ?? ""), name: a.name ?? "Account", platform: (a.platform ?? "").toLowerCase(), type: (a.type ?? "").toLowerCase(), isExpired: Boolean(a.isExpired), avatar: a.avatar ?? null })).filter((a) => a.id);
+  const accounts = r.data;
   const mapping = autoMap(accounts, conn.mapping);
   // The sub-account's name for the Connected card. A token without locations.readonly still connects: the name stays as it was.
   const loc = await call<{ location?: { name?: unknown } }>(cred.data.base, cred.data.token, `/locations/${encodeURIComponent(conn.locationId)}`);

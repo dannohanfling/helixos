@@ -8,7 +8,7 @@ import { acceptVariantAction, generateVariantsAction, updateVariantAction } from
 import { gateLine, isUnreviewed, variantName } from "@/lib/engine/provenance";
 import { GateBlock, UnreviewedMark } from "@/components/provenance";
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
-import { distributeAllAction } from "@/lib/actions/compose";
+import { distributeAllAction, repostChannelAction } from "@/lib/actions/compose";
 import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, PRIVATE_URL_REFUSAL } from "@/lib/engine/compose-media";
 import { checkAllPostStatusAction, syncPostStatusAction } from "@/lib/actions/social";
 import { nowFor, outcomeOf, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
@@ -60,7 +60,7 @@ function VariantForm({ var_, maxChars, email = false, outcome }: { var_: Content
           Save
         </SubmitButton>
       </div>
-      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} compact inForm /> : null}
+      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} repostAction={repostChannelAction} compact inForm /> : null}
       {var_.status === "posted" ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["reactions", "comments", "dms", "leads"] as const).map((k) => (
@@ -109,10 +109,12 @@ function GroupCard({ g, var_, src, slot, outcome }: { g: Group; var_?: ContentVa
   );
 }
 
-export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string; gate?: string; variant?: string; status?: string; items?: string; startDate?: string; startTime?: string }> }) {
+export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string; gate?: string; variant?: string; status?: string; items?: string; startDate?: string; startTime?: string; kept?: string; reposted?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
-  const { blocked, drip, ...sp } = await searchParams;
+  const { blocked, drip, kept, reposted, ...sp } = await searchParams;
+  // The one-click send scheduled nothing because every channel was already posted (rev 567): said by name, never a silent "Scheduled".
+  const keptLine = kept ? `Nothing scheduled: ${kept.split("|").filter(Boolean).map((l) => `${l} already posted`).join("; ")}. A posted channel is never overwritten. To post one again on purpose, use "Post again to this channel" on its row.` : null;
   // The page's own sentences, chosen by a code: a block on the one-click send is never silent and never free text from the address bar.
   const blockedLine = blocked === "threads" ? THREADS_EXCLUSIVE : blocked === "media" ? `${ILLUSTRATIVE_LABEL}\nAn attached file shows a result. Add ${ILLUSTRATIVE_MARK} to the post, in every version that goes out. Nothing was scheduled.` : blocked === "url" ? `${PRIVATE_URL_REFUSAL} Nothing was scheduled.` : blocked === "fabricated" ? "A statistic in this post is on the blacklist, so nothing was scheduled. Open it in the composer to see which one and what to say instead." : null;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
@@ -194,6 +196,12 @@ export default async function RepurposePage({ params, searchParams }: { params: 
             </form>
           ) : null}
         </Card>
+      ) : null}
+      {keptLine ? (
+        <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="distribute-kept" role="status">{keptLine}</p>
+      ) : null}
+      {reposted ? (
+        <p className="mb-4 rounded-lg bg-good-soft p-3 text-sm" data-testid="reposted" role="status">Posting again now. The row below says what happened.</p>
       ) : null}
       {blockedLine ? (
         <p className="mb-4 whitespace-pre-line rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="distribute-blocked" role="alert">{blockedLine}</p>

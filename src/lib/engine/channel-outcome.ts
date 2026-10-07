@@ -43,7 +43,7 @@ export type OutcomeRow = {
 export type Now = { wall: string; iso: string; today: string; tz: string };
 /** Now, in the shape the rule reads: the member's wall time, the instant, their day and zone. */
 export const nowFor = (v: { tz: string; today: string }, at: Date = new Date()): Now => ({ wall: nowWallInTz(v.tz, at), iso: at.toISOString(), today: v.today, tz: v.tz });
-export type ChannelOutcome = { id: string; channel: string; label: string; state: OutcomeState; word: string; when: string | null; reason: string | null; canCheck: boolean };
+export type ChannelOutcome = { id: string; channel: string; label: string; state: OutcomeState; word: string; when: string | null; reason: string | null; canCheck: boolean; /** A published channel the planner posts to: "Post again to this channel" is offered (rev 567). */ canRepost?: boolean };
 
 const wallMs = (wall: string) => {
   const p = wall.match(/\d+/g)?.map(Number) ?? [];
@@ -71,7 +71,7 @@ export function outcomeOf(row: OutcomeRow, now: Now, cutoffMinutes = SENDING_CUT
     if (row.status === "posted") return { ...base, state: "published", word: "Posted by you", when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : null, reason: null };
     return { ...base, state: "manual", word: OUTCOME_WORD.manual, when: null, reason: row.groupId ? "Groups are posted by hand." : (PUBLISHABLE[row.channel as Channel]?.note ?? "Not something we can publish for you.") };
   }
-  if (ext === "published") return { ...base, state: "published", word: OUTCOME_WORD.published, when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : row.externalSyncedAt ? formatDateTime(row.externalSyncedAt, now.tz) : null, reason: null };
+  if (ext === "published") return { ...base, canRepost: true, state: "published", word: OUTCOME_WORD.published, when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : row.externalSyncedAt ? formatDateTime(row.externalSyncedAt, now.tz) : null, reason: null };
   if (ext === "deleted") return { ...base, state: "failed", word: "Deleted", when: null, reason: row.externalError?.trim() || DELETED_IN_PLANNER };
   if (ext === "failed" || (ext === "manual" && fixableSkip(row.externalError))) return { ...base, state: "failed", word: OUTCOME_WORD.failed, when: null, reason: row.externalError?.trim() || UNMAPPED_FAILURE };
   // Accepted or still on its way: scheduled while its time is ahead; sending until the cutoff after it; then lost track.

@@ -6,7 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import { CONTENT_TYPES } from "@/db/schema";
 import { polishTargetsAction, saveComposeAction, type ComposeResult } from "@/lib/actions/compose";
 import { pushLadderUpdateAction } from "@/lib/actions/ladders";
-import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type Draft, type GroupTarget, type Target, type TargetKey } from "@/lib/engine/compose";
+import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type Draft, type GroupTarget, type Target, type TargetKey, scheduleNotice } from "@/lib/engine/compose";
 import { hashtagsFor } from "@/lib/engine/repurpose";
 import { explainFabricated, findFabricated } from "@/lib/engine/blacklist";
 import { PRIVATE_MEDIA_NOTE, STORIES_MEDIA_NOTE, mediaBlock, mediaUrlProblem, mediaWarning, type ComposerMedia } from "@/lib/engine/compose-media";
@@ -156,7 +156,7 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
       setResult(r);
       if (mode === "draft") router.push(`/content/${r.id}/repurpose`);
       // The banner never counts outcomes: the panel beneath it reads them from the one rule, and the two cannot disagree.
-      else setNotice(`Saved ${r.scheduled + r.posted} versions. ${mode === "now" ? "Each channel says below what happened." : "Each channel says below when it goes."}`);
+      else setNotice(scheduleNotice(r, mode));
     });
 
   const polish = () =>

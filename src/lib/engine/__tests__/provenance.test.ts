@@ -129,7 +129,7 @@ describe("where the mark is set and where the gate stands (read off the source)"
     expect(magnets).toMatch(/if \(gate && str\(formData, "confirm"\) !== "1"\) redirect\(`\/magnets\/\$\{m\.id\}\?gate=publish`\)/);
     expect(magnets).toMatch(/recordConfirm\(\{ workspaceId, userId, userName: v\.user\.name \}, "magnet_publish"/);
     const compose = read("src/lib/actions/compose.ts");
-    expect(compose).toMatch(/if \(names\.length && !payload\.confirm\) return \{ id: id \?\? "", scheduled: 0, posted: 0, pushed: 0, gate:/);
+    expect(compose).toMatch(/if \(names\.length && !payload\.confirm\) return \{ id: id \?\? "", scheduled: 0, posted: 0, pushed: 0, skipped: \[\], gate:/);
     expect(compose).toMatch(/recordConfirm\(\{ workspaceId, userId, userName: v\.user\.name \}, payload\.mode === "now" \? "post_now" : "post_schedule"/);
     for (const file of ["src/lib/actions/variants.ts", "src/lib/actions/content.ts"]) {
       const src = read(file);

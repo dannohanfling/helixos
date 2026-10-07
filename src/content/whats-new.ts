@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 109,
+    date: "2026-10-07",
+    title: "Composer: a reconnected Instagram still posts, and \"Schedule\" says when it saved nothing",
+    lines: [
+      "If you reconnect Instagram (or any account) in GoHighLevel, HelixOS finds the same account again before it posts and heals the channel map on its own; a refused post now says which account id was sent.",
+      "Pressing Schedule when every channel was already posted now says so by name (\"Nothing scheduled: Facebook business page already posted\") and leaves the post's status as it was, instead of \"Saved 0 versions\" and \"Scheduled\".",
+      "On the Distribute page, a published channel has \"Post again to this channel\" for a deliberate second post.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 107,
     date: "2026-10-07",
     title: "Team access: invite a VA or team member",

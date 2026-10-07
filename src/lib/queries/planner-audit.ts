@@ -44,8 +44,11 @@ export async function plannerAudit(workspaceId: string): Promise<{ clients: Clie
     const items = variants.length ? await db.query.contentItems.findMany({ where: inArray(schema.contentItems.id, [...new Set(variants.map((v) => v.contentItemId))]) }) : [];
     const titleOf = new Map(items.map((i) => [i.id, i.title]));
     const tracked: TrackedLike[] = variants.map((v) => ({ variantId: v.id, externalId: v.externalId!, channel: v.channel, body: v.subject ? `${v.subject}\n\n${v.body}` : v.body, itemTitle: titleOf.get(v.contentItemId) ?? "(deleted post)", postAt: v.postAt ? (wallTimeToUtc(v.postAt, m.timezone || workspace?.timezone || "UTC") ?? null) : null }));
+    // A post the member deliberately posted again (rev 567) let its row go to the new post; the earlier one went out and is
+    // not untracked, so the ids named as superseded are left out of the candidates.
+    const superseded = new Set(events.filter((e) => e.event === "social.repost" && typeof e.payload.supersededId === "string").map((e) => String(e.payload.supersededId)));
     const logged: LoggedLike[] = events
-      .filter((e) => (e.event === "social.schedule" || e.event === "social.update") && typeof e.payload.ghlPostId === "string" && e.payload.ghlPostId)
+      .filter((e) => (e.event === "social.schedule" || e.event === "social.update") && typeof e.payload.ghlPostId === "string" && e.payload.ghlPostId && !superseded.has(String(e.payload.ghlPostId)))
       .map((e) => ({ ghlPostId: String(e.payload.ghlPostId), channel: typeof e.payload.channel === "string" ? e.payload.channel : null, accountId: typeof e.payload.accountId === "string" ? e.payload.accountId : null, loggedAt: e.createdAt }));
     const listed = await listPosts(conn, "scheduled");
     const planner: PlannerPostLike[] | null = listed.ok ? listed.data : null;

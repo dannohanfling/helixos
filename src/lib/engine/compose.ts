@@ -77,3 +77,21 @@ export function localIso(date: string, time: string): string {
 export function normaliseTargets<T extends { groupId?: string | null }>(targets: T[], ownGroupIds: string[]): (T & { groupId: string })[] {
   return targets.map((t) => ({ ...t, groupId: t.groupId && ownGroupIds.includes(t.groupId) ? t.groupId : "" }));
 }
+
+/** A version the save left alone: that channel was already posted, and a posted channel is never overwritten. */
+export type ScheduleSkip = { channel: string; label: string; why: "posted" };
+
+/**
+ * The composer's one line after a save (rev 567): what was saved, what was left as it was, and, when nothing at all was
+ * saved, that plainly, with the way to re-post on purpose. Never "Saved 0 versions", and never "Scheduled" for nothing.
+ */
+export function scheduleNotice(r: { scheduled: number; posted: number; skipped: ScheduleSkip[] }, mode: "schedule" | "now"): string {
+  const n = r.scheduled + r.posted;
+  const verb = mode === "now" ? "posted" : "scheduled";
+  if (n === 0) {
+    const names = r.skipped.map((s) => `${s.label} already posted`);
+    return `Nothing ${verb}${names.length ? `: ${names.join("; ")}` : ""}. A posted channel is never overwritten. To post one again on purpose, use "Post again to this channel" on the Distribute page.`;
+  }
+  const kept = r.skipped.length ? ` ${r.skipped.map((s) => s.label).join(", ")} already posted, left as ${r.skipped.length === 1 ? "it was" : "they were"}.` : "";
+  return `Saved ${n} version${n === 1 ? "" : "s"}.${kept} ${mode === "now" ? "Each channel says below what happened." : "Each channel says below when it goes."}`;
+}

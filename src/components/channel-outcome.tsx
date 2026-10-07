@@ -26,7 +26,7 @@ export function OutcomeHeadline({ outcomes, className = "" }: { outcomes: Channe
  * `inForm`: the rows sit inside another form (a version's own), so the check is a button with its own action rather than a
  * nested form, which HTML does not allow and which made the browser re-nest the page and React regenerate it on the client.
  */
-export function OutcomeRows({ outcomes, checkAction, compact = false, inForm = false }: { outcomes: ChannelOutcome[]; checkAction?: (formData: FormData) => Promise<void>; compact?: boolean; inForm?: boolean }) {
+export function OutcomeRows({ outcomes, checkAction, repostAction, compact = false, inForm = false }: { outcomes: ChannelOutcome[]; checkAction?: (formData: FormData) => Promise<void>; /** "Post again to this channel" on a published row (rev 567): a deliberate second post, never the ordinary save. */ repostAction?: (formData: FormData) => Promise<void>; compact?: boolean; inForm?: boolean }) {
   if (!outcomes.length) return null;
   return (
     <ul className={`divide-y ${compact ? "text-xs" : "text-sm"}`} data-testid="channel-outcomes">
@@ -39,6 +39,25 @@ export function OutcomeRows({ outcomes, checkAction, compact = false, inForm = f
           {o.reason ? (
             <span className="basis-full text-ink-2 sm:basis-auto" data-testid="outcome-reason">
               {o.reason}
+            </span>
+          ) : null}
+          {repostAction && o.canRepost ? (
+            <span className={checkAction && o.canCheck ? "" : "ml-auto"}>
+              {inForm ? (
+                <>
+                  <input type="hidden" name="variantId" value={o.id} />
+                  <SubmitButton className="btn btn-ghost btn-xs" formAction={repostAction} pendingText="Posting again…" data-testid="repost-channel" title="A second post of this version, now, through the Social Planner">
+                    Post again to this channel
+                  </SubmitButton>
+                </>
+              ) : (
+                <form action={repostAction}>
+                  <input type="hidden" name="variantId" value={o.id} />
+                  <SubmitButton className="btn btn-ghost btn-xs" pendingText="Posting again…" data-testid="repost-channel" title="A second post of this version, now, through the Social Planner">
+                    Post again to this channel
+                  </SubmitButton>
+                </form>
+              )}
             </span>
           ) : null}
           {checkAction && o.canCheck && inForm ? (
