@@ -10,7 +10,7 @@ import { handOffLadder } from "@/lib/rung-drip";
 
 /** Hands one post's comment ladder to Community Loyalty. Refused, with the reason on the page, when the gate says no. */
 export async function handOffLadderAction(formData: FormData): Promise<void> {
-  const { v } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves.", team: "allow" });
   const id = str(formData, "contentId");
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
   if (!item) return;

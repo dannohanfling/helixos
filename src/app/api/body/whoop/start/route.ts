@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { authorizeUrl, whoopConfigured } from "@/lib/whoop";
 
 /**
@@ -9,7 +9,7 @@ import { authorizeUrl, whoopConfigured } from "@/lib/whoop";
  * nonce in an httpOnly cookie, checked on return. The redirect URI is this site's /api/body/whoop/callback.
  */
 export async function GET(request: Request) {
-  const v = await getViewer();
+  const v = await apiViewer();
   if (!v) return NextResponse.redirect(new URL("/login", request.url));
   if (!v.membership.bodyEnabled || v.switchedInto) return NextResponse.redirect(new URL("/today", request.url));
   if (!whoopConfigured()) return NextResponse.redirect(new URL("/body/settings?error=WHOOP%20isn%27t%20set%20up%20on%20this%20server%20yet.", request.url));

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { BODY_EXPORT_TABLES, COACH_EXPORT_TABLES, EXPORT_TABLES, exportAll, exportTable, toCsv, type ExportTable } from "@/lib/export";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * GET /api/export?format=json&scope=body           the member's own HumanOS data alone
  */
 export async function GET(request: Request) {
-  const v = await getViewer();
+  const v = await apiViewer();
   if (!v) return NextResponse.json({ error: "sign in first" }, { status: 401 });
   // A client's export is theirs to ask for: never from a coach switched into their HelixOS (rev 216), in either mode.
   if (v.switchedInto) return NextResponse.json({ error: "A client's export is theirs to download." }, { status: 403 });

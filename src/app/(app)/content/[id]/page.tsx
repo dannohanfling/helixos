@@ -14,7 +14,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
 export default async function ContentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gate?: string; status?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const sp = await searchParams;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });

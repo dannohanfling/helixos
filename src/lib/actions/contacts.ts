@@ -14,7 +14,7 @@ import { clean, identityOf, pushesAt } from "@/lib/engine/contact-sync";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 
 export async function createContactAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const name = str(formData, "name");
   if (!name) return;
   const id = newId();
@@ -45,7 +45,7 @@ export async function createContactAction(formData: FormData): Promise<void> {
 }
 
 export async function logMessageAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves.", team: "allow" });
   const contactId = str(formData, "contactId");
   const body = str(formData, "body");
   const direction = str(formData, "direction") === "in" ? "in" : "out";
@@ -72,7 +72,7 @@ export async function logMessageAction(formData: FormData): Promise<void> {
 }
 
 export async function updateContactAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const contact = await db.query.contacts.findFirst({ where: and(eq(schema.contacts.id, id), eq(schema.contacts.userId, userId)) });
   if (!contact) return;
@@ -109,7 +109,7 @@ export async function updateContactAction(formData: FormData): Promise<void> {
 }
 
 export async function snoozeContactAction(formData: FormData): Promise<void> {
-  const { v, userId } = await ctx();
+  const { v, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const days = Number(str(formData, "days") || "1");
   await db
@@ -120,7 +120,7 @@ export async function snoozeContactAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteContactAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   await db.delete(schema.contacts).where(and(eq(schema.contacts.id, str(formData, "id")), eq(schema.contacts.userId, userId)));
   refresh();
   redirect(deletedTo("/conversations", "contact"));

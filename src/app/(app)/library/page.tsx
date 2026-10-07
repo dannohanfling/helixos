@@ -64,7 +64,7 @@ function Entry({ p, userId }: { p: LibraryPost; userId: string }) {
 }
 
 export default async function LibraryPage({ searchParams }: { searchParams: Promise<{ tab?: string; q?: string; type?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const sp = await searchParams;
   const all = await visibleLibrary(v.workspace.id, v.user.id);
   const tab: Tab = (Object.keys(KIND_META) as Tab[]).find((k) => k === sp.tab) ?? "post";

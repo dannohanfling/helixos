@@ -40,7 +40,8 @@ export async function credentialFor(workspaceId: string, userId: string) {
  * Whose AI this is: the signed-in person's. A coach switched into a client's HelixOS (rev 216) drafts for the client with the
  * coach's own key, counted and capped as the coach's; the client's key is never used or shown.
  */
-const aiUserId = (v: Viewer): string => v.actor.id;
+/** Whose AI key and cap a call uses: a switched coach's own (rev 216); a team member works on the owner's key and under the owner's cap (Danno, 6 Oct). */
+const aiUserId = (v: Viewer): string => (v.team ? v.user.id : v.actor.id);
 const capExempt = (v: Viewer): boolean => (v.switchedInto ? false : v.membership.aiCapExempt);
 
 /** Rows are stamped in UTC by the database; "today" is the workspace day. Close enough for a soft cap. */

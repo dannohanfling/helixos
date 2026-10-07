@@ -10,7 +10,7 @@ import { libraryPostFor } from "@/lib/queries/library-posts";
 import { SubmitButton } from "@/components/submit-button";
 
 export default async function LibraryEntryPage({ params }: { params: Promise<{ id: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const p = await libraryPostFor(id, v.workspace.id, v.user.id);
   if (!p) notFound();

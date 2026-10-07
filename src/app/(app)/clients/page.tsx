@@ -26,7 +26,7 @@ export function checkinDue(c: { lastCheckinAt: string | null; startDate: string 
 }
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { filter = "active" } = await searchParams;
   const [records, offers] = await Promise.all([
     db.query.clientRecords.findMany({ where: eq(schema.clientRecords.userId, v.user.id), orderBy: asc(schema.clientRecords.name) }),

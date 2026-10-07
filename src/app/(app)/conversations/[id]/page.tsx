@@ -17,7 +17,7 @@ import { SubmitButton } from "@/components/submit-button";
 
 export default async function ContactPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ needsIdentity?: string }> }) {
   const { needsIdentity } = await searchParams;
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const contact = await db.query.contacts.findFirst({ where: and(eq(schema.contacts.id, id), eq(schema.contacts.userId, v.user.id)) });
   if (!contact) notFound();

@@ -31,7 +31,7 @@ async function own(webinarId: string, userId: string) {
 }
 
 export async function createWebinarAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = newId();
   const title = str(formData, "title") || "Untitled webinar";
   await db.insert(schema.webinars).values({ id, workspaceId, userId, title, category: str(formData, "category") || "Live", promise: opt(formData, "promise") });
@@ -44,7 +44,7 @@ export async function createWebinarAction(formData: FormData): Promise<void> {
 }
 
 export async function updateWebinarFoundationAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   await db
@@ -81,7 +81,7 @@ export async function updateWebinarFoundationAction(formData: FormData): Promise
 }
 
 export async function updateWebinarBeliefsAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   const existing = await db.query.webinarBeliefs.findMany({ where: eq(schema.webinarBeliefs.webinarId, id) });
@@ -121,7 +121,7 @@ export async function updateWebinarBeliefsAction(formData: FormData): Promise<vo
 }
 
 export async function updateSectionAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const sectionKey = str(formData, "sectionKey");
   await own(id, userId);
@@ -154,7 +154,7 @@ export async function updateSectionAction(formData: FormData): Promise<void> {
 
 /** Drafts a section script. With Claude: from the foundation, belief map, chosen asset and the example. Without: adapts the example. */
 export async function draftSectionAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const sectionKey = str(formData, "sectionKey");
   const w = await own(id, userId);
@@ -266,7 +266,7 @@ async function draftCompletely(task: string, material: string, feature: string, 
  * its own script, one per slide, a figure only where the script has it. A section that has key points keeps them.
  */
 export async function makeSlidesAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const sectionKey = str(formData, "sectionKey");
   const w = await own(id, userId);
@@ -287,7 +287,7 @@ export async function makeSlidesAction(formData: FormData): Promise<void> {
 
 /** Accept: the coach has read this one AI-drafted script and keeps it as it is. One section per click; nothing accepts more than one. */
 export async function acceptSectionAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const sectionKey = str(formData, "sectionKey");
   await own(id, userId);
@@ -304,7 +304,7 @@ export async function acceptSectionAction(formData: FormData): Promise<void> {
  * which the route checks before it serves. A clean webinar needs no confirm and gets none.
  */
 export async function confirmDeckExportAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   const sections = await db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, id) });
@@ -316,7 +316,7 @@ export async function confirmDeckExportAction(formData: FormData): Promise<void>
 }
 
 export async function linkOfferAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   const offerId = opt(formData, "offerId");
@@ -330,7 +330,7 @@ export async function linkOfferAction(formData: FormData): Promise<void> {
 }
 
 export async function saveReadinessAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const w = await own(id, userId);
   const { build, derived } = await buildFor(w);
@@ -359,7 +359,7 @@ export async function saveReadinessAction(formData: FormData): Promise<void> {
 }
 
 export async function updateRunAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const w = await own(id, userId);
   const chosen = WEBINAR_STATUSES.find((s) => s === str(formData, "status")) ?? w.status;
@@ -398,7 +398,7 @@ export async function updateRunAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteWebinarAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   await db.delete(schema.webinars).where(eq(schema.webinars.id, id));
@@ -412,7 +412,7 @@ export async function deleteWebinarAction(formData: FormData): Promise<void> {
  * copied into a record as a value ships later as the coach's own claim, so none is.
  */
 export async function duplicateExampleAction(): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = newId();
   await db.insert(schema.webinars).values({ id, workspaceId, userId, title: "My webinar", status: "building" });
   await db.insert(schema.webinarSections).values(
@@ -424,7 +424,7 @@ export async function duplicateExampleAction(): Promise<void> {
 }
 
 export async function createAssetAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const type = (["story", "analogy", "objection", "belief"] as const).find((t) => t === str(formData, "type")) ?? "story";
   const name = str(formData, "name");
   const body = str(formData, "body");
@@ -436,7 +436,7 @@ export async function createAssetAction(formData: FormData): Promise<void> {
 }
 
 export async function touchWebinarAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   await db.update(schema.webinars).set({ notes: opt(formData, "notes") ?? nowIso() }).where(eq(schema.webinars.id, id));

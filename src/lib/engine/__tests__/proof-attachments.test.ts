@@ -209,7 +209,7 @@ describe("proof attachments: two stores, and the private one's token is explicit
   });
   it("the read route checks membership in the handler and never lets a CDN cache a private object", () => {
     const route = readFileSync(join(SRC, "app", "api", "proofs", "attachments", "[id]", "route.ts"), "utf8");
-    expect(route).toMatch(/getViewer\(\)/);
+    expect(route).toMatch(/apiViewer\(\)/);
     expect(route).toMatch(/workspaceId !== v\.workspace\.id/);
     expect(route).toMatch(/"cache-control": "private, no-store"/);
     expect(route).not.toMatch(/max-age/);

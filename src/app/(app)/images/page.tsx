@@ -22,7 +22,7 @@ const KIND_LABEL: Record<string, string> = { photo: "Photo", screenshot: "Screen
  * reload (deck visuals brief §5). A photo's thumbnail is cropped to the card; every other kind is shown whole.
  */
 export default async function ImagesPage() {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const images = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), orderBy: (t, { desc }) => [desc(t.createdAt)] });
   return (
     <>

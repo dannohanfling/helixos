@@ -17,7 +17,7 @@ import { actionWords, withSwitchError } from "@/lib/engine/switch";
  */
 export type WhileSwitched = "log" | "refuse" | "noop";
 
-/** Sends the coach back to the page they were on, with the reason beside the form (the shared save button shows it). */
+/** Sends the coach (or a team member, src/lib/team.ts) back to the page they were on, with the reason beside the form (the shared save button shows it). */
 export async function refuseSwitched(reason: string): Promise<never> {
   const h = await headers();
   let path = "/today";
@@ -31,7 +31,7 @@ export async function refuseSwitched(reason: string): Promise<never> {
 }
 
 /** The request is a server action: its id, when Next sent one. */
-async function actionId(): Promise<string | null> {
+export async function actionId(): Promise<string | null> {
   return (await headers()).get("next-action");
 }
 
@@ -53,14 +53,14 @@ function loadManifest(): Manifest | null {
  * The build's own map of server action ids to their names, for the log's wording only: nothing is refused on it, and without
  * it the log says "Made a change". A dev server adds actions as they compile, so an id not seen yet reads the map again.
  */
-function actionName(id: string | null): string | null {
+export function actionName(id: string | null): string | null {
   if (!id) return null;
   if (!manifest?.node?.[id]) manifest = loadManifest();
   return manifest?.node?.[id]?.exportedName ?? null;
 }
 
 /** The page the change was made on, as the menu names it, and the item's own name for the pages that edit one item. */
-async function whereFrom(v: Viewer): Promise<{ page: string; item: string | null }> {
+export async function whereFrom(v: Viewer): Promise<{ page: string; item: string | null }> {
   const h = await headers();
   let path = "/";
   try {

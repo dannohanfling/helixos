@@ -15,7 +15,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { MoneyInput } from "@/components/money-input";
 
 export default async function ClientDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; field?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const sp = await searchParams;
   const c = await db.query.clientRecords.findFirst({ where: and(eq(schema.clientRecords.id, id), eq(schema.clientRecords.userId, v.user.id)) });

@@ -11,7 +11,7 @@ import { SubmitButton } from "@/components/submit-button";
 export const metadata = { title: "Ladder facts" };
 
 export default async function LadderProfilePage() {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const [profile, offer, proofs] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
     db.query.offers.findFirst({ where: eq(schema.offers.userId, v.user.id), orderBy: desc(schema.offers.createdAt) }),

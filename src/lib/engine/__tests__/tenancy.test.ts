@@ -52,13 +52,14 @@ const all = files.flatMap((f) => actionsOf(readFileSync(path.join(dir, f), "utf8
 const takesId = (b: string) => /str\(formData, "\w*[iI]d"\)|opt\(formData, "\w*[iI]d"\)|formData\.(?:get|getAll|has)\("\w*[iI]ds?"\)|payload\.id\b|: string\)/.test(b);
 const mutates = (b: string) => /\.(update|delete|insert)\(schema\./.test(b);
 // Derives the caller from the session: ctx() or a require* guard. Never trusts the body for who is calling.
-const sessionScoped = (b: string) => /await ctx\(|requireViewer\(\)|requireCoach\(\)|getViewer\(\)/.test(b);
+const sessionScoped = (b: string) => /await ctx\(|requireViewer\(|requireCoach\(|getViewer\(\)/.test(b);
 
 describe("tenancy: no action trusts the request for who owns the data", () => {
   it("only the auth lifecycle runs without a session; everything else derives the caller from ctx()", () => {
-    // These seven establish or end a session, so they have none to read yet. Named, not skipped; anything else session-less fails here.
+    // These nine establish, end or move a session, so they have none to read yet (chooseMembershipAction reads the cookie's user
+    // and rewrites it whole; joinTeamAction makes it). Named, not skipped; anything else session-less fails here.
     const noSession = all.filter((a) => !sessionScoped(a.body)).map((a) => `${a.file}:${a.name}`).sort();
-    expect(noSession).toEqual(["account.ts:forgotAction", "account.ts:resetAction", "account.ts:setupAction", "auth.ts:demoLoginAction", "auth.ts:joinAction", "auth.ts:loginAction", "auth.ts:logoutAction"]);
+    expect(noSession).toEqual(["account.ts:forgotAction", "account.ts:resetAction", "account.ts:setupAction", "auth.ts:chooseMembershipAction", "auth.ts:demoLoginAction", "auth.ts:joinAction", "auth.ts:joinTeamAction", "auth.ts:loginAction", "auth.ts:logoutAction"]);
     // The surface is large and derived from the files: a floor guards against the glob silently returning nothing (first rule).
     expect(all.length).toBeGreaterThanOrEqual(150);
   });

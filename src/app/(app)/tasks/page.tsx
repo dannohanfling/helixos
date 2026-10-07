@@ -13,7 +13,7 @@ import { SubmitButton } from "@/components/submit-button";
 export const metadata = { title: "Tasks" };
 
 export default async function TasksPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { filter = "open" } = await searchParams;
   const today = v.today;
   await settleOldFocus(v);

@@ -110,7 +110,7 @@ function GroupCard({ g, var_, src, slot, outcome }: { g: Group; var_?: ContentVa
 }
 
 export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string; gate?: string; variant?: string; status?: string; items?: string; startDate?: string; startTime?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const { blocked, drip, ...sp } = await searchParams;
   // The page's own sentences, chosen by a code: a block on the one-click send is never silent and never free text from the address bar.

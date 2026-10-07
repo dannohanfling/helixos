@@ -40,6 +40,9 @@ import { sendTemplateAction } from "@/lib/actions/body";
 import { KIND_LABEL, templateSummary, type TemplatePayload } from "@/lib/engine/body-templates";
 import { avatarData } from "@/lib/avatars";
 import { avatarTree, coachLine, offersOf } from "@/lib/engine/avatars";
+import { coachRemoveTeamMemberAction, setTeamCapAction } from "@/lib/actions/team";
+import { openInvites, teamOf } from "@/lib/team";
+import { TEAM_CAP_MAX, lastActiveWords, seatsLine } from "@/lib/engine/team";
 
 export const metadata = { title: "Client" };
 
@@ -47,7 +50,7 @@ export const metadata = { title: "Client" };
  * One client, before a call. The page answers "what do I say to this person today": where they are, what they wrote in
  * their own words, what's stuck, what they claimed, what they've built. Then the call's decisions go back in as tasks.
  */
-export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string; template?: string; error?: string }> }) {
+export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string; template?: string; error?: string; team?: string }> }) {
   const v = await requireCoach();
   const { clientId } = await params;
   const sp = await searchParams;
@@ -59,6 +62,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   // Emails from HelixOS (29 Sep): the coach's switch, and why nothing goes out even when it's on.
   const emailsBlocked = emailBlock({ emailsEnabled: m.emailsEnabled, removedAt: m.removedAt, firstSignedInAt: u?.firstSignedInAt ?? null });
   if (!u) notFound();
+  // The client's team (Danno, 6 Oct): who is on it, with "added by" and "last active", the open invites, and the seat cap.
+  const [team, teamInvites] = await Promise.all([teamOf(m.id), openInvites(m.id)]);
   const switches = await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, m.id), eq(schema.coachChanges.coachUserId, v.user.id), inArray(schema.coachChanges.kind, ["switch_in", "switch_out"])), orderBy: [desc(schema.coachChanges.createdAt)], limit: 20 });
   // The copy-link cookie the reset action leaves when there is no email: shown once, for this client only, then it expires on its own.
   let copyLink: string | null = null;
@@ -228,6 +233,45 @@ export default async function CoachClientPage({ params, searchParams }: { params
         </SubmitButton>
         {sp.emails ? <span className="text-xs text-good" role="status">Saved ✓</span> : null}
       </form>
+      <div id="team" className="mt-3 rounded-lg border border-line p-3 text-sm" data-testid="client-team" data-count={team.length}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            <strong>Their team:</strong> <span className="text-ink-3" data-testid="client-team-seats">{seatsLine({ cap: m.teamCap, members: team.length, invites: teamInvites.length })}</span>
+          </span>
+          <form action={setTeamCapAction} className="flex items-center gap-2" data-testid="team-cap-form">
+            <input type="hidden" name="membershipId" value={m.id} />
+            <label className="text-xs text-ink-3" htmlFor="team-cap">
+              Seats
+            </label>
+            <input id="team-cap" className="field w-20" name="cap" type="number" min={0} max={TEAM_CAP_MAX} defaultValue={m.teamCap} data-testid="team-cap" />
+            <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="team-cap-save">
+              Save
+            </SubmitButton>
+            {sp.team === "cap" ? <span className="text-xs text-good" role="status">Saved ✓</span> : null}
+            {sp.team === "removed" ? <span className="text-xs text-good" role="status">Removed. Their access ended.</span> : null}
+          </form>
+        </div>
+        {team.length ? (
+          <ul className="mt-2 divide-y divide-line" data-testid="client-team-members">
+            {team.map((t) => (
+              <li key={t.member.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5" data-testid="client-team-member">
+                <span>
+                  <span className="font-medium">{t.name}</span> <span className="text-ink-3">· {t.email}</span>
+                  <span className="block text-xs text-ink-3">
+                    added by {t.addedByName} on {formatDate(t.member.createdAt.slice(0, 10))} · last active {lastActiveWords(t.member.lastActiveAt)}
+                  </span>
+                </span>
+                <form action={coachRemoveTeamMemberAction}>
+                  <input type="hidden" name="teamMemberId" value={t.member.id} />
+                  <ConfirmDelete verb="Remove" what={`${t.name} from ${u.name.split(" ")[0]}'s team`} undo="Their access ends on their next request. What they made stays with your client." label="Remove" className="btn btn-ghost btn-xs" testId="client-team-remove" />
+                </form>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-xs text-ink-3">Nobody on their team. They invite from Settings → Team.</p>
+        )}
+      </div>
       {sp.reset === "emailed" ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="reset-emailed">A reset link is on its way to {u.email}.</p> : null}
       {sp.reset === "failed" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm" data-testid="reset-failed">The reset email could not be sent. Try again, or send the link with email off to copy it by hand.</p> : null}
       {sp.reset === "rate" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm">Too many reset links just now. Wait a few minutes and try again.</p> : null}

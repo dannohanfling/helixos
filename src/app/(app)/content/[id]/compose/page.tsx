@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/ui";
 export const metadata = { title: "Edit post" };
 
 export default async function EditComposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ pushed?: string; ghl?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const { pushed, ghl } = await searchParams;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });

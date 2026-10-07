@@ -9,7 +9,7 @@ import { eq, isNull, or } from "drizzle-orm";
 export const metadata = { title: "DM Playbook" };
 
 export default async function PlaybookPage() {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const lite = await templatesFor(v.workspace.id);
   const full = await db.query.dmTemplates.findMany({ where: or(isNull(schema.dmTemplates.workspaceId), eq(schema.dmTemplates.workspaceId, v.workspace.id)) });
   const byId = new Map(full.map((f) => [f.id, f]));

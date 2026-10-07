@@ -51,7 +51,7 @@ function parseInput(raw: unknown): RecordInput | null {
 export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckImageResult> {
   const input = parseInput(raw);
   if (!input) return { ok: false, error: "That upload couldn't be recorded. Choose the image again." };
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const owner = deckKeyOwner(input.key);
   if (!owner || owner.workspaceId !== workspaceId || owner.userId !== userId) return { ok: false, error: "That file is not under your own deck folder. Choose the image again." };
 
@@ -140,7 +140,7 @@ async function headOrNull(key: string): Promise<{ url: string } | null> {
 
 /** Updates a caption on the coach's own image. */
 export async function updateDeckImageCaptionAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId)) });
   if (!img) return;
@@ -154,7 +154,7 @@ export async function updateDeckImageCaptionAction(formData: FormData): Promise<
  * while its bytes are still live.
  */
 export async function deleteDeckImageAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId)) });
   if (!img) return;
@@ -181,7 +181,7 @@ async function ownWebinar(webinarId: string, userId: string) {
  * index on (webinar, slot) keeps one image per slot. A testimonial slot is not set here — it draws from its approved proof.
  */
 export async function setDeckSlotAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const webinarId = str(formData, "webinarId");
   const slotKey = str(formData, "slotKey");
   const imageId = str(formData, "imageId");
@@ -192,7 +192,7 @@ export async function setDeckSlotAction(formData: FormData): Promise<void> {
 
 /** "I don't have this" (§6.3): the slot is dropped, the slide exports as text with no placeholder, the shot list counts it out. */
 export async function dropDeckSlotAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const webinarId = str(formData, "webinarId");
   const slotKey = str(formData, "slotKey");
   if (!slotKey || !(await ownWebinar(webinarId, userId))) return;
@@ -204,7 +204,7 @@ export async function dropDeckSlotAction(formData: FormData): Promise<void> {
 
 /** Puts a dropped slot back: it asks for its picture again and the placeholder returns until one is attached. */
 export async function restoreDeckSlotAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const webinarId = str(formData, "webinarId");
   const slotKey = str(formData, "slotKey");
   if (!slotKey || !(await ownWebinar(webinarId, userId))) return;
@@ -214,7 +214,7 @@ export async function restoreDeckSlotAction(formData: FormData): Promise<void> {
 
 /** Empties a slot: the slide falls back to text, the image stays in the library. */
 export async function clearDeckSlotAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const webinarId = str(formData, "webinarId");
   const slotKey = str(formData, "slotKey");
   const w = await ownWebinar(webinarId, userId);

@@ -106,6 +106,10 @@ export const MEMBER_TABLES = {
   body_ingest_tokens: schema.bodyIngestTokens,
   // What a coach changed while working in this member's HelixOS, and their switches in and out (rev 216).
   coach_changes: schema.coachChanges,
+  // Team access (Danno, 6 Oct): who the member let into their HelixOS, the invites they made, and what the team did. Theirs.
+  team_members: schema.teamMembers,
+  team_invites: schema.teamInvites,
+  team_changes: schema.teamChanges,
   chat_links: schema.chatLinks,
   connected_apps: schema.connectedApps,
   oauth_codes: schema.oauthCodes,

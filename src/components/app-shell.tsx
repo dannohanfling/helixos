@@ -11,12 +11,17 @@ import { BottomNav, SideNav } from "./nav";
 import { SubmitButton } from "@/components/submit-button";
 import { APP_VERSION } from "@/lib/version";
 import { SwitchBanner } from "@/components/switch-banner";
+import { TeamBanner } from "@/components/team-banner";
 import { ChatWidget } from "@/components/chat-widget";
 import { ReportButton } from "@/components/report-button";
 import type { ChatWidgetProps } from "@/lib/chat";
 
-export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, coachFirst = null, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; coachFirst?: string | null; children: ReactNode }) {
+export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, coachFirst = null, choices = 1, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; children: ReactNode }) {
   const tier = tierProgress(points);
+  const team = Boolean(viewer.team);
+  // Whose name and emoji the account block shows: the HelixOS's own member (a switched coach sees the client's, as they see it),
+  // except a team member, who is shown as themself.
+  const who = team ? viewer.actor : viewer.user;
   return (
     <div className="min-h-screen md:flex" data-app-shell>
       {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold. */}
@@ -29,10 +34,23 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
           </div>
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} badges={badges} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} badges={badges} />
         </div>
         <div className="mt-3 space-y-3 border-t px-5 pt-3">
-          {coachFirst && !viewer.switchedInto ? <ReportButton coachFirst={coachFirst} /> : null}
+          {coachFirst && !viewer.switchedInto && !team ? <ReportButton coachFirst={coachFirst} /> : null}
+          {team ? (
+            // A team member's own block (Danno, 6 Oct): whose HelixOS this is, and the way to another when they have one. No tier
+            // or points: those are the owner's.
+            <div className="rounded-xl bg-surface-2 p-3 text-xs" data-testid="team-block">
+              <div className="font-semibold">On {viewer.team!.ownerName}&apos;s team</div>
+              <div className="mt-1 text-ink-3">Signed in as {viewer.actor.name}</div>
+              {choices > 1 ? (
+                <Link href="/choose" className="mt-2 inline-block font-medium text-ink-2 hover:text-ink" data-testid="team-switch-sidebar">
+                  Switch HelixOS →
+                </Link>
+              ) : null}
+            </div>
+          ) : (
           <div className="rounded-xl bg-surface-2 p-3 text-xs">
             <div className="flex items-center justify-between">
               <span className="font-semibold">
@@ -45,10 +63,16 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
             </div>
             {tier.next ? <div className="mt-1.5 text-ink-3">{tier.toNext.toLocaleString()} to {tier.next.name}</div> : <div className="mt-1.5 text-ink-3">Top of the mountain.</div>}
           </div>
+          )}
+          {!team && choices > 1 ? (
+            <Link href="/choose" className="block text-xs font-medium text-ink-2 hover:text-ink" data-testid="choose-link">
+              Switch HelixOS →
+            </Link>
+          ) : null}
           <div className="flex items-center justify-between">
             <Link href="/settings" className="flex items-center gap-2 text-sm text-ink-2 hover:text-ink">
-              <span className="text-lg">{viewer.user.avatarEmoji}</span>
-              <span className="max-w-[9rem] truncate">{viewer.user.name}</span>
+              <span className="text-lg">{who.avatarEmoji}</span>
+              <span className="max-w-[9rem] truncate">{who.name}</span>
             </Link>
             <form action={logoutAction}>
               <SubmitButton className="text-xs text-ink-3 hover:text-ink" data-testid="logout-sidebar" pendingText="Logging out…">
@@ -64,6 +88,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
       </aside>
       <div className="min-w-0 flex-1">
         {viewer.switchedInto ? <SwitchBanner sw={viewer.switchedInto} /> : null}
+        {viewer.team ? <TeamBanner team={viewer.team} choices={choices} /> : null}
         <PinToViewport edge="top">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b bg-bg/90 px-4 py-2.5 backdrop-blur md:hidden">
           <Link href="/today" className="flex items-center gap-2 text-sm font-bold">
@@ -71,10 +96,14 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
             HelixOS
           </Link>
           <div className="flex items-center gap-2 text-xs">
-            <span className="badge badge-accent">🔥 {streak}</span>
-            <span className="badge">{points.toLocaleString()} pts</span>
+            {team ? null : (
+              <>
+                <span className="badge badge-accent">🔥 {streak}</span>
+                <span className="badge">{points.toLocaleString()} pts</span>
+              </>
+            )}
             <Link href="/settings" className="text-lg" aria-label="Settings">
-              {viewer.user.avatarEmoji}
+              {who.avatarEmoji}
             </Link>
             <form action={logoutAction}>
               <SubmitButton className="text-ink-3 hover:text-ink" aria-label="Log out" data-testid="logout-header" pendingText="Logging out…">

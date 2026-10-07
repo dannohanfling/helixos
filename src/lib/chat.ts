@@ -35,7 +35,8 @@ export type ChatWidgetProps = { src: string; userId: string; name: string; email
  * client's HelixOS (the chat would sign the coach in as the client). The hash is computed here, on the server, every render.
  */
 export async function chatWidgetProps(v: Viewer): Promise<ChatWidgetProps | null> {
-  if (v.switchedInto) return null;
+  // Nor for a team member (Danno, 6 Oct): the widget would sign them in to the chat as the owner.
+  if (v.switchedInto || v.team) return null;
   const c = await chatConfig(v.workspace.id);
   if (!c.on || !c.widgetId || !c.secret) return null;
   return { src: widgetSrc(c.widgetId), userId: v.user.id, name: v.user.name, email: v.user.email.toLowerCase(), hash: identifierHash(v.user.id, c.secret), flowNs: c.flowNs };

@@ -68,7 +68,7 @@ describe("Community Loyalty chat: the secret stays on the server", () => {
 
   it("the widget never loads while a coach is switched into a client, and the hash is computed on the server per render", () => {
     const chat = read("lib/chat.ts");
-    expect(chat).toMatch(/if \(v\.switchedInto\) return null;/);
+    expect(chat).toMatch(/if \(v\.switchedInto \|\| v\.team\) return null;/);
     expect(chat).toMatch(/hash: identifierHash\(v\.user\.id, c\.secret\)/);
     expect(read("app/(app)/layout.tsx")).toMatch(/chatWidgetProps\(viewer\)/);
   });

@@ -102,13 +102,15 @@ async function wipeDemo(): Promise<void> {
   const ws = await db.query.workspaces.findFirst({ where: eq(schema.workspaces.slug, DEMO_SLUG) });
   if (!ws) return;
   const members = await db.query.memberships.findMany({ where: eq(schema.memberships.workspaceId, ws.id) });
+  // Team members' own accounts (Danno, 6 Oct) go with the demo workspace too, when the demo team is all they were in.
+  const teamUserIds = (await db.query.teamMembers.findMany({ where: eq(schema.teamMembers.workspaceId, ws.id) })).map((t) => t.teamUserId);
   const userIds = members.map((m) => m.userId);
   // Attachments' objects leave the private store before their rows go (the cascade below would otherwise strand them).
   if (process.env.PROOF_BLOB_READ_WRITE_TOKEN) {
     const { deleteAttachmentsForProof } = await import("@/lib/queries/proof-attachments");
     for (const p of await db.query.proofs.findMany({ where: eq(schema.proofs.workspaceId, ws.id), columns: { id: true } })) await deleteAttachmentsForProof(p.id, ws.id);
   }
-  const byWs = [schema.tasks, schema.contentItems, schema.contacts, schema.dailyLogs, schema.pointsLedger, schema.pathwayProgress, schema.curriculumProgress, schema.goals, schema.rewardClaims, schema.offers, schema.webinars, schema.clientRecords, schema.proofs, schema.groups, schema.targets, schema.lessonProgress, schema.certSubmissions, schema.integrations, schema.syncEvents, schema.socialConnections, schema.ladders, schema.leadMagnets, schema.files, schema.proofAttachments, schema.proofAttachmentReads, schema.ladderProfiles, schema.aiCredentials, schema.aiUsage, schema.coachNotes, schema.reviewConfirms, schema.formDrafts, schema.recordingViews, schema.memberships] as const;
+  const byWs = [schema.tasks, schema.contentItems, schema.contacts, schema.dailyLogs, schema.pointsLedger, schema.pathwayProgress, schema.curriculumProgress, schema.goals, schema.rewardClaims, schema.offers, schema.webinars, schema.clientRecords, schema.proofs, schema.groups, schema.targets, schema.lessonProgress, schema.certSubmissions, schema.integrations, schema.syncEvents, schema.socialConnections, schema.ladders, schema.leadMagnets, schema.files, schema.proofAttachments, schema.proofAttachmentReads, schema.ladderProfiles, schema.aiCredentials, schema.aiUsage, schema.coachNotes, schema.reviewConfirms, schema.formDrafts, schema.recordingViews, schema.teamChanges, schema.teamInvites, schema.teamMembers, schema.memberships] as const;
   if (userIds.length) await db.delete(schema.libraryAssets).where(inArray(schema.libraryAssets.userId, userIds));
   if (userIds.length) await db.delete(schema.libraryPosts).where(inArray(schema.libraryPosts.userId, userIds));
   await db.delete(schema.libraryPosts).where(eq(schema.libraryPosts.workspaceId, ws.id));
@@ -119,6 +121,10 @@ async function wipeDemo(): Promise<void> {
     await db.delete(schema.users).where(inArray(schema.users.id, userIds));
   }
   await db.delete(schema.workspaces).where(eq(schema.workspaces.id, ws.id));
+  for (const id of new Set(teamUserIds)) {
+    const [m, t] = await Promise.all([db.query.memberships.findFirst({ where: eq(schema.memberships.userId, id) }), db.query.teamMembers.findFirst({ where: eq(schema.teamMembers.teamUserId, id) })]);
+    if (!m && !t) await db.delete(schema.users).where(eq(schema.users.id, id));
+  }
 }
 
 /**

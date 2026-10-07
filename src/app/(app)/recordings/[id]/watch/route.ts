@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { markSeen, visibleRecording } from "@/lib/recordings";
 import { isFathomUrl } from "@/lib/engine/recording-members";
 
@@ -9,7 +9,7 @@ import { isFathomUrl } from "@/lib/engine/recording-members";
  * into the member marks nothing.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const v = await getViewer();
+  const v = await apiViewer();
   if (!v) return NextResponse.redirect(new URL("/login", request.url), 303);
   const { id } = await params;
   const r = await visibleRecording(v.workspace.id, id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role });

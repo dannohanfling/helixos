@@ -4,13 +4,14 @@ import { after } from "next/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { formatDateTime } from "@/lib/dates";
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { setCoachCanWorkAction } from "@/lib/actions/switch";
 import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
 import { kitFor, kitStatus } from "@/lib/queries/brand-kit";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { BrandKitEditor } from "@/components/brand-kit-editor";
 import { ConfirmButton } from "@/components/confirm-button";
+import { ConfirmDelete } from "@/components/confirm-delete";
 import { STARTER_KIT } from "@/lib/engine/deck";
 import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
@@ -32,19 +33,26 @@ import { CHANNEL_LABELS } from "@/lib/engine/chat";
 import { disconnectAppAction, setConnectedAppsOpenAction } from "@/lib/actions/mcp";
 import { SCOPE_WORDS, isScope } from "@/lib/engine/mcp";
 import { isNull } from "drizzle-orm";
+import { cookies } from "next/headers";
+import { TeamSettings } from "@/components/team-settings";
+import { createTeamInviteAction, removeTeamMemberAction, revokeTeamInviteAction } from "@/lib/actions/team";
+import { TEAM_INVITE_COOKIE, openInvites, seatsLeft, teamOf } from "@/lib/team";
+import { TEAM_INVITE_DAYS, lastActiveWords, seatsLine } from "@/lib/engine/team";
 
 export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string }> }) {
-  const v = await requireViewer();
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string }> }) {
+  const v = await requireViewer({ team: "allow" });
+  // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
+  if (v.team) return <TeamSettings v={v} />;
   // The storage figure counts rows; an object without a row (an upload that never finished recording) is reconciled away
   // here, the one place the workspace's holdings are looked at, so the figure and the store agree. After the response:
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -65,6 +73,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const [goal, conn, ghlIntegration, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel"), linkedChats(v.workspace.id, v.user.id)]);
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  // The owner's team (Danno, 6 Oct): who is on it, the open invites, the seats, and what the team changed. Not while switched.
+  const [team, invites, seats, teamChangeRows] = v.switchedInto
+    ? [[], [], null, []]
+    : await Promise.all([teamOf(v.membership.id), openInvites(v.membership.id), seatsLeft(v.membership), db.query.teamChanges.findMany({ where: and(eq(schema.teamChanges.ownerMembershipId, v.membership.id), eq(schema.teamChanges.kind, "change")), orderBy: [desc(schema.teamChanges.createdAt)], limit: 50 })]);
+  const teamNames = new Map((teamChangeRows.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(teamChangeRows.map((c) => c.teamUserId))]) }) : []).map((u) => [u.id, u.name]));
+  // The invite link just made, from the cookie the action left: shown this once, then the cookie is gone.
+  const inviteCode = teamParam === "invited" ? ((await cookies()).get(TEAM_INVITE_COOKIE)?.value ?? null) : null;
+  const teamNote = teamParam === "full" ? "No seat is free. Remove a team member or cancel an open invite first, or ask your coach for more seats." : teamParam === "removed" ? "Removed. Their access ended." : teamParam === "revoked" ? "Invite cancelled. That link no longer works." : null;
   const goalCard = (
     <Card id="goal" title="Your one goal">
       <form action={updateGoalAction} className="space-y-3">
@@ -379,6 +395,83 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {changesList}
           </Card>
         ) : null}
+        <Card id="team" title="Team" action={seats ? <span className="text-xs text-ink-3" data-testid="team-seats">{seatsLine(seats)}</span> : null}>
+          <p className="mb-3 text-sm text-ink-2">Invite a VA or a team member into your HelixOS with their own login. They can work in your content, DMs, tasks, webinars and contacts, and nothing else: not your day, your HumanOS, your connections, your billing or this team. Every change they make is shown here as theirs.</p>
+          {teamNote ? <p className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-sm" role="status" data-testid="team-note">{teamNote}</p> : null}
+          {inviteCode ? (
+            <div className="mb-3 rounded-xl border border-line bg-surface-2 p-3 text-sm" data-testid="team-invite-link">
+              <p className="mb-1">Send this link to them yourself. It works once, for {TEAM_INVITE_DAYS} days, and won&apos;t be shown again.</p>
+              <div className="flex items-center gap-2">
+                <code className="field truncate" data-testid="team-invite-url">{`${appUrl}/join/team/${inviteCode}`}</code>
+                <CopyButton text={`${appUrl}/join/team/${inviteCode}`} />
+              </div>
+            </div>
+          ) : null}
+          {seats && seats.left > 0 ? (
+            <form action={createTeamInviteAction} className="mb-3 flex flex-wrap items-end gap-2" data-testid="team-invite-form">
+              <Field label="Who is it for (optional)">
+                <input className="field" name="label" maxLength={80} placeholder="Sam, our VA" />
+              </Field>
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Making the link…" data-testid="team-invite">
+                Invite team member
+              </SubmitButton>
+            </form>
+          ) : seats ? (
+            <p className="mb-3 text-sm text-ink-3" data-testid="team-full">All {seats.cap} seats are taken or spoken for. Remove someone or cancel an invite to make room, or ask your coach for more seats.</p>
+          ) : null}
+          {team.length ? (
+            <ul className="divide-y divide-line text-sm" data-testid="team-members">
+              {team.map((t) => (
+                <li key={t.member.id} className="flex flex-wrap items-center justify-between gap-2 py-2" data-testid="team-member">
+                  <span>
+                    <span className="font-medium">{t.name}</span> <span className="text-ink-3">· {t.email}</span>
+                    <span className="block text-xs text-ink-3">
+                      added by {t.addedByName} on {formatDate(t.member.createdAt.slice(0, 10))} · last active {lastActiveWords(t.member.lastActiveAt)}
+                    </span>
+                  </span>
+                  <form action={removeTeamMemberAction}>
+                    <input type="hidden" name="teamMemberId" value={t.member.id} />
+                    <ConfirmDelete verb="Remove" what={`${t.name} from your team`} undo="Their access ends on their next request. What they made here stays yours." label="Remove" className="btn btn-ghost btn-xs" testId="team-remove" />
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-ink-3" data-testid="team-empty">Nobody on your team yet.</p>
+          )}
+          {invites.length ? (
+            <ul className="mt-3 space-y-1 text-sm" data-testid="team-invites">
+              {invites.map((i) => (
+                <li key={i.id} className="flex flex-wrap items-center justify-between gap-2" data-testid="team-invite-open">
+                  <span>
+                    Invite{i.label ? ` for ${i.label}` : ""} <span className="text-ink-3">· open until {formatDateTime(i.expiresAt, v.tz)}</span>
+                  </span>
+                  <form action={revokeTeamInviteAction}>
+                    <input type="hidden" name="inviteId" value={i.id} />
+                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Cancelling…" data-testid="team-revoke">
+                      Cancel invite
+                    </SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <details className="mt-3 text-sm">
+            <summary className="cursor-pointer text-ink-2">Changes by your team ({teamChangeRows.length})</summary>
+            {teamChangeRows.length ? (
+              <ul className="mt-2 space-y-1" data-testid="team-changes">
+                {teamChangeRows.map((c) => (
+                  <li key={c.id} data-testid="team-change">
+                    <span className="font-medium">{c.action}</span>
+                    {c.item ? <> · &ldquo;{c.item}&rdquo;</> : null} · on {c.page} · by {teamNames.get(c.teamUserId) ?? "a team member"} · <span className="text-ink-3">{formatDateTime(c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-ink-3">Nothing yet.</p>
+            )}
+          </details>
+        </Card>
         <Card title="Brand kit" action={savedKit ? <span className="text-xs text-ink-3">ink on ground {contrastRatio(savedKit.ground, savedKit.ink)}:1</span> : null}>
           <div id="brand-kit" data-testid="brand-card" data-status={kitStatus(savedKit)} />
           <p className="mb-3 text-sm text-ink-2">Your own colours, faces and logo: your decks render in these and in nobody else&apos;s. Six-digit hex, no #. A pair that cannot read on a slide is refused here, not discovered on screen.</p>

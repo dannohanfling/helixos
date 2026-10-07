@@ -1037,7 +1037,7 @@ async function main() {
     const coachUserM = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     const coachMemM = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUserM.id), eq(schema.memberships.workspaceId, mem.workspaceId)) }))!;
     const coachWsM = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }))!;
-    const asCoachM = { user: coachUserM, workspace: coachWsM, membership: coachMemM, role: "coach" as const, tz: coachWsM.timezone, today, hour: 12, actor: coachUserM, switchedInto: null };
+    const asCoachM = { user: coachUserM, workspace: coachWsM, membership: coachMemM, role: "coach" as const, tz: coachWsM.timezone, today, hour: 12, actor: coachUserM, switchedInto: null, team: null };
     if ((await coachMedsOf(asCoachM, maya.id, today)) !== null) throw new Error("the coach reads no meds while the member's switch is off");
     const { allTools: allToolsM } = await import("@/lib/mcp/registry");
     await import("@/lib/mcp/tools/index");
@@ -1399,7 +1399,7 @@ async function main() {
     const coachUser0 = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     const coachMem0 = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUser0.id), eq(schema.memberships.workspaceId, mem.workspaceId)) }))!;
     const coachWs = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }))!;
-    const asCoach = { user: coachUser0, workspace: coachWs, membership: coachMem0, role: "coach" as const, tz: coachMem0.timezone || coachWs.timezone, today, hour: 12, actor: coachUser0, switchedInto: null };
+    const asCoach = { user: coachUser0, workspace: coachWs, membership: coachMem0, role: "coach" as const, tz: coachMem0.timezone || coachWs.timezone, today, hour: 12, actor: coachUser0, switchedInto: null, team: null };
     const expectedCell = (await coachBodyColumn(asCoach, [{ userId: maya.id, today }])).get(maya.id);
     // On a Monday the week has no finished day to judge yet; any other day it has.
     const firstDayOfWeek = (await import("@/lib/dates")).startOfWeek(today) === today;
@@ -1452,7 +1452,7 @@ async function main() {
     const { bodyAiContext } = await import("@/lib/queries/body");
     const viewerFor = async () => {
       const [user, workspace, membership] = await Promise.all([db.query.users.findFirst({ where: eq(schema.users.id, maya.id) }), db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mem.workspaceId) }), db.query.memberships.findFirst({ where: eq(schema.memberships.id, mem.id) })]);
-      return { user: user!, workspace: workspace!, membership: membership!, role: "client" as const, tz: membership!.timezone || workspace!.timezone, today, hour: 12, actor: user!, switchedInto: null };
+      return { user: user!, workspace: workspace!, membership: membership!, role: "client" as const, tz: membership!.timezone || workspace!.timezone, today, hour: 12, actor: user!, switchedInto: null, team: null };
     };
     if ((await bodyAiContext(await viewerFor())) !== null) throw new Error("with the AI switch off (the default), AI gets no Body data");
     await client.goto(`${base}/body/settings`);

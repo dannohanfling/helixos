@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { nowIso } from "@/lib/dates";
 import { catalogue } from "@/lib/engine/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -13,7 +13,7 @@ import rewards from "@/data/seed/rewards.json";
  * signal), then sends them on. Only the claim's owner can use it.
  */
 export async function GET(request: Request, { params }: RouteContext<"/rewards/book/[claimId]">) {
-  const v = await getViewer();
+  const v = await apiViewer();
   if (!v) return NextResponse.redirect(new URL("/login", request.url), 303);
   const { claimId } = await params;
   const claim = await db.query.rewardClaims.findFirst({ where: and(eq(schema.rewardClaims.id, claimId), eq(schema.rewardClaims.workspaceId, v.workspace.id), eq(schema.rewardClaims.userId, v.user.id)) });

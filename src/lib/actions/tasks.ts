@@ -9,14 +9,14 @@ import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { addTask, ownTask, rescheduleTask, toggleTask } from "@/lib/tasks-core";
 
 export async function createTaskAction(formData: FormData): Promise<void> {
-  const { v } = await ctx();
+  const { v } = await ctx({ team: "allow" });
   // The rules (the double-tap guard, the dates, the star for a Top 3 due today) are in src/lib/tasks-core.ts.
   await addTask(v, { title: str(formData, "title"), details: opt(formData, "details"), urgency: str(formData, "urgency"), category: str(formData, "category"), dueDate: opt(formData, "dueDate"), repeatEveryDays: num(formData, "repeatEveryDays") || null });
   refresh();
 }
 
 export async function toggleTaskAction(formData: FormData): Promise<void> {
-  const { v } = await ctx();
+  const { v } = await ctx({ team: "allow" });
   const task = await ownTask(v, str(formData, "id"));
   if (!task) return;
   await toggleTask(v, task);
@@ -24,13 +24,13 @@ export async function toggleTaskAction(formData: FormData): Promise<void> {
 }
 
 export async function rescheduleTaskAction(formData: FormData): Promise<void> {
-  const { v } = await ctx();
+  const { v } = await ctx({ team: "allow" });
   await rescheduleTask(v, str(formData, "id"), opt(formData, "dueDate"));
   refresh();
 }
 
 export async function setFocusAction(formData: FormData): Promise<void> {
-  const { v, userId } = await ctx();
+  const { v, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const on = str(formData, "on") === "1";
   await db
@@ -41,7 +41,7 @@ export async function setFocusAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteTaskAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   await db.delete(schema.tasks).where(and(eq(schema.tasks.id, str(formData, "id")), eq(schema.tasks.userId, userId)));
   refresh();
   // A task is deleted from Today or Tasks; the person stays on whichever it was, with the line saying it went.
@@ -54,7 +54,7 @@ export async function deleteTaskAction(formData: FormData): Promise<void> {
  * it (never deleted; the Let go tab brings it back). Housekeeping, so Done here earns no points: the work was done before HelixOS.
  */
 export async function reviewImportedTaskAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const choice = str(formData, "choice");
   const set =
@@ -68,7 +68,7 @@ export async function reviewImportedTaskAction(formData: FormData): Promise<void
 
 /** One press keeps every imported task still waiting that is dated after today, as their own; the rest stay to review. */
 export async function keepFutureImportedTasksAction(): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   await db
     .update(schema.tasks)
     .set({ reviewState: null })

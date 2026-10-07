@@ -8,7 +8,7 @@ import { libraryPostFor } from "@/lib/queries/library-posts";
 export const metadata = { title: "New post" };
 
 export default async function ComposePage({ searchParams }: { searchParams: Promise<{ hook?: string; body?: string; title?: string; from?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const sp = await searchParams;
   const [c, from] = await Promise.all([composerContext(v), sp.from ? libraryPostFor(sp.from, v.workspace.id, v.user.id) : null]);
   // A library entry's CTA lands in the CTA field, never folded into the body: each channel version places it once at render.

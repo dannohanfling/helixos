@@ -63,7 +63,7 @@ function ContentCard({ item, today, outcomes = [] }: { item: ContentItem; today:
 }
 
 export default async function ContentPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { view = "board" } = await searchParams;
   const items = await db.query.contentItems.findMany({
     where: eq(schema.contentItems.userId, v.user.id),

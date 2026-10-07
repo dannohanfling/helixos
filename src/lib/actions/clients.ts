@@ -18,7 +18,7 @@ async function own(id: string, userId: string) {
 }
 
 export async function createClientRecordAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const name = str(formData, "name");
   if (!name) return;
   const id = newId();
@@ -49,7 +49,7 @@ export async function createClientRecordAction(formData: FormData): Promise<void
 }
 
 export async function updateClientRecordAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const c = await own(id, userId);
   await db
@@ -78,7 +78,7 @@ export async function updateClientRecordAction(formData: FormData): Promise<void
 }
 
 export async function logCheckinAction(formData: FormData): Promise<void> {
-  const { v, userId } = await ctx();
+  const { v, userId } = await ctx({ team: "allow" });
   const clientRecordId = str(formData, "clientRecordId");
   const c = await own(clientRecordId, userId);
   const kind = (["checkin", "call", "note"] as const).find((k) => k === str(formData, "kind")) ?? "checkin";
@@ -112,7 +112,7 @@ export async function logCheckinAction(formData: FormData): Promise<void> {
 }
 
 export async function deleteClientRecordAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   await own(id, userId);
   await db.delete(schema.clientRecords).where(eq(schema.clientRecords.id, id));
@@ -122,7 +122,7 @@ export async function deleteClientRecordAction(formData: FormData): Promise<void
 
 /** Awards points to one of the client's own members and pushes to their Community Loyalty webhook if configured. */
 export async function awardMemberPointsAction(formData: FormData): Promise<void> {
-  const { v, userId } = await ctx();
+  const { v, userId } = await ctx({ team: "allow" });
   const clientRecordId = str(formData, "clientRecordId");
   const c = await own(clientRecordId, userId);
   const points = Math.round(num(formData, "points"));

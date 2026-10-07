@@ -32,7 +32,7 @@ function fields(fd: FormData) {
 
 /** Coach or member creates an entry. Coaches can share it with the whole workspace at creation. */
 export async function createLibraryPostAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const f = fields(formData);
   if (!f.body && !f.hook) return;
   const shared = v.role === "coach" && formData.get("shared") === "on";
@@ -51,7 +51,7 @@ async function editable(id: string, userId: string, role: "coach" | "client", wo
 }
 
 export async function updateLibraryPostAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const row = await editable(id, userId, v.role, workspaceId);
   if (!row) return;
@@ -61,7 +61,7 @@ export async function updateLibraryPostAction(formData: FormData): Promise<void>
 }
 
 export async function deleteLibraryPostAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const row = await editable(str(formData, "id"), userId, v.role, workspaceId);
   if (!row) return;
   await db.delete(schema.libraryPosts).where(eq(schema.libraryPosts.id, row.id));
@@ -71,7 +71,7 @@ export async function deleteLibraryPostAction(formData: FormData): Promise<void>
 
 /** Coach shares one of their own entries with every member (or takes it back). */
 export async function shareLibraryPostAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   if (v.role !== "coach") return;
   const id = str(formData, "id");
   const row = await db.query.libraryPosts.findFirst({ where: and(eq(schema.libraryPosts.id, id), or(eq(schema.libraryPosts.userId, userId), and(isNull(schema.libraryPosts.userId), eq(schema.libraryPosts.workspaceId, workspaceId)))) });
@@ -83,7 +83,7 @@ export async function shareLibraryPostAction(formData: FormData): Promise<void> 
 
 /** A member keeps one of their own posts as a template, with the numbers it earned. */
 export async function saveContentToLibraryAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const itemId = str(formData, "contentItemId");
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) });
   if (!item) return;
@@ -101,7 +101,7 @@ export async function saveContentToLibraryAction(formData: FormData): Promise<vo
 
 /** Counts a use and opens the composer prefilled. */
 export async function useLibraryPostAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const row = await db.query.libraryPosts.findFirst({ where: eq(schema.libraryPosts.id, id) });
   if (!row) return;

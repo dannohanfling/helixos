@@ -3,15 +3,19 @@ import { redirect } from "next/navigation";
 import { readMoney } from "@/lib/engine/money";
 import { requireViewer } from "@/lib/auth";
 import { switchedWrite, type WhileSwitched } from "@/lib/switch";
+import { teamWrite, type TeamWrite } from "@/lib/team";
 
 /**
  * The viewer for a member's write. While a coach is switched into a client's HelixOS (rev 216) every write passes the gate in
  * src/lib/switch.ts first: refused while viewing, logged for the client while working, and refused in both modes when the
  * action says it is the client's own ("refuse", with a reason). "noop" is for a read-state side effect the caller then skips.
+ * A team member (Danno, 6 Oct) passes the gate in src/lib/team.ts: refused unless the action says `team: "allow"`, and then
+ * logged for the owner; "noop" again means the caller skips the side effect itself (it checks v.team).
  */
-export async function ctx(opts: { whileSwitched?: WhileSwitched; reason?: string } = {}) {
-  const v = await requireViewer();
+export async function ctx(opts: { whileSwitched?: WhileSwitched; reason?: string; team?: TeamWrite } = {}) {
+  const v = await requireViewer({ team: "allow" });
   if (v.switchedInto) await switchedWrite(v, opts.whileSwitched ?? "log", opts.reason);
+  if (v.team) await teamWrite(v, opts.team ?? "refuse");
   return { v, workspaceId: v.workspace.id, userId: v.user.id };
 }
 

@@ -61,7 +61,7 @@ function ContactRow({ c, today }: { c: Contact; today: string }) {
 }
 
 export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ filter?: string; new?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const sp = await searchParams;
   const filter = sp.filter ?? "due";
   const [contacts, templates] = await Promise.all([

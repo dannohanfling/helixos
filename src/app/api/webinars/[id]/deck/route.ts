@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
 import { boxAt, COVER_LOGO_BOX, COVER_LOGO_PLACEHOLDER, LOGO_BOX, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, logoBadgeFrame, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
 import { applyKitTheme } from "@/lib/deck-theme";
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
  * the webinar or gets a 404.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const v = await getViewer();
+  const v = await apiViewer({ team: "allow" });
   if (!v) return NextResponse.json({ error: "sign in first" }, { status: 401 });
   const { id } = await params;
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });

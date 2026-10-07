@@ -2,7 +2,7 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { UPLOAD_MAX_BYTES, UPLOAD_TYPES, UploadRefusal, publicFolderOf } from "@/lib/engine/storage-policy";
 import { STORAGE_UNCONFIGURED, storageConfigured } from "@/lib/storage";
 
@@ -13,7 +13,7 @@ import { STORAGE_UNCONFIGURED, storageConfigured } from "@/lib/storage";
  * browser afterwards through recordMagnetUploadAction, which reads the object back from the bucket before trusting it.
  */
 export async function POST(request: Request) {
-  const v = await getViewer();
+  const v = await apiViewer();
   if (!v) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   // A coach viewing a client's HelixOS (rev 216) writes nothing, files included.
   if (v.switchedInto?.mode === "view") return NextResponse.json({ error: `You're viewing ${v.switchedInto.clientName.split(" ")[0]}'s HelixOS. Switch to Work to add files.` }, { status: 403 });

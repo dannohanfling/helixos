@@ -63,7 +63,7 @@ async function pickedAttachment(id: string | null | undefined, workspaceId: stri
 
 /** Saves the post and one variant per target. Schedules or marks posted; pushes scheduled channel posts to the Social Planner. */
 export async function saveComposeAction(payload: ComposePayload): Promise<ComposeResult> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   // Block on truth, server-side as well: a fabricated statistic in any version saves nothing and says why.
   const everything = [payload.body, ...payload.targets.map((t) => t.body)].join("\n");
   const fabricated = findFabricated(everything);
@@ -167,7 +167,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
 
 /** Claude rewrites each target's draft in the coach's voice, respecting channel limits and group rules. Returns only the targets it improved. */
 export async function polishTargetsAction(input: { title: string; hook: string; body: string; cta?: string; hasCta: boolean; targets: { key: string; channel: string; groupId: string; body: string }[] }): Promise<{ drafts: Record<string, { body: string; subject?: string }>; removed: string | null }> {
-  const { v, userId } = await ctx();
+  const { v, userId } = await ctx({ team: "allow" });
   const groups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
   const lines = input.targets.map((t) => {
     const spec = CHANNEL_SPECS.find((c) => c.key === t.channel);
@@ -201,7 +201,7 @@ export async function polishTargetsAction(input: { title: string; hook: string; 
 
 /** One click from the Distribute page: every channel plus your group and top 3, scheduled 45 minutes apart from a start time. */
 export async function distributeAllAction(formData: FormData): Promise<void> {
-  const { v, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
+  const { v, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves.", team: "allow" });
   const itemId = String(formData.get("contentItemId") ?? "");
   // A cleared date or time input submits "", which ?? would keep: an empty start would schedule nothing.
   const startDate = String(formData.get("startDate") || v.today);

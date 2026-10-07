@@ -28,7 +28,7 @@ function nextSlot(today: string): string {
 }
 
 export default async function LaddersPage() {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const [list, profile, proofs, magnets] = await Promise.all([
     db.query.ladders.findMany({ where: eq(schema.ladders.userId, v.user.id), orderBy: desc(schema.ladders.createdAt) }),
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),

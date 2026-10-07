@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { readProofObject } from "@/lib/proof-storage";
 
 /**
@@ -10,7 +10,7 @@ import { readProofObject } from "@/lib/proof-storage";
  * reader's read the same — one sentence, one status — so an id cannot be probed.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const v = await getViewer();
+  const v = await apiViewer({ team: "allow" });
   if (!v) return new NextResponse("Sign in first.", { status: 401, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" } });
   const { id } = await params;
   const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)) });

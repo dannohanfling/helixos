@@ -9,7 +9,8 @@ import { outcomesForItem } from "@/lib/queries/outcomes";
 
 /** One post's per-channel outcomes, for the viewer's own post. The composer polls this after scheduling. */
 export async function channelOutcomesAction(contentId: string): Promise<ChannelOutcome[]> {
-  const v = await requireViewer();
+  // A team member (Danno, 6 Oct) reads it: scheduling the owner's posts is their work, and an outcome names no connection.
+  const v = await requireViewer({ team: "allow" });
   // It reads through the member's own GoHighLevel connection: never from a coach switched into their HelixOS (rev 216).
   if (v.switchedInto) return [];
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, contentId), eq(schema.contentItems.userId, v.user.id)) });

@@ -6,6 +6,7 @@ import type { DailyLog } from "@/db/schema";
 import { completeCurriculumDayAction } from "@/lib/actions/pathway";
 import { setContentStatusAction } from "@/lib/actions/content";
 import { todayData } from "@/lib/queries/today";
+import { TeamHome } from "@/components/team-home";
 import { NewTaskForm } from "@/components/new-task-form";
 import { SubmitButton } from "@/components/submit-button";
 import curriculumLinks from "@/data/curriculum-links.json";
@@ -58,7 +59,9 @@ function greeting(hour: number, name: string): string {
 const ENERGY = ["", ...ENERGY_WORDS];
 
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string; closeError?: string; field?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
+  // A team member (Danno, 6 Oct) sees the doors open to them, not the owner's day.
+  if (v.team) return <TeamHome v={v} />;
   const sp = await searchParams;
   const d = await todayData(v);
   // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.

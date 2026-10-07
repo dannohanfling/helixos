@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 107,
+    date: "2026-10-07",
+    title: "Team access: invite a VA or team member",
+    lines: [
+      "Settings now has a Team card. \"Invite team member\" makes a link that works once, for 7 days; whoever opens it creates their own login and lands in your HelixOS as a team member, up to 5 of them (your coach can change that).",
+      "A team member works in your content, DMs, tasks, webinars and contacts, and nothing else: not your day, your HumanOS, your connections, your billing or your team. Every change they make is listed under Team as theirs, with who added them and when they were last active. Remove someone and their access ends on their next request.",
+      "If you're part of more than one HelixOS (your own and a team you're on, or two workspaces), you pick which one after signing in and switch from the sidebar.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 106,
     date: "2026-10-06",
     title: "Your own Brand Kit",

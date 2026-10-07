@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { readProofObject } from "@/lib/proof-storage";
 import { NOT_YOURS, contentDisposition } from "@/lib/engine/proof-attachments";
@@ -15,7 +15,7 @@ import { NOT_YOURS, contentDisposition } from "@/lib/engine/proof-attachments";
  * ?display=1 serves a HEIC's JPEG rendition; ?download=1 asks the browser to save it under its original name.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const v = await getViewer();
+  const v = await apiViewer();
   if (!v) return new NextResponse("Sign in first.", { status: 401, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" } });
   const { id } = await params;
   const att = await db.query.proofAttachments.findFirst({ where: eq(schema.proofAttachments.id, id) });

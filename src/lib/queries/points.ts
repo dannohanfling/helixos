@@ -23,11 +23,12 @@ export async function pointsSince(workspaceId: string, userId: string, sinceIso:
   return Number(row?.total ?? 0);
 }
 
-/** Whether this request is a coach switched into a client's HelixOS. Outside a request (the hourly job) it never is. */
-async function switchedRequest(): Promise<boolean> {
+/** Whether this request is someone acting in a member's HelixOS: a coach switched in, or a team member. Outside a request (the hourly job) it never is. */
+async function actingForMember(): Promise<boolean> {
   try {
     const { getViewer } = await import("@/lib/auth");
-    return Boolean((await getViewer())?.switchedInto);
+    const v = await getViewer();
+    return Boolean(v?.switchedInto || v?.team);
   } catch {
     return false;
   }
@@ -42,8 +43,9 @@ export async function award(
   refId?: string,
 ): Promise<boolean> {
   if (!points) return false;
-  // Points are the member's own: nothing a coach does while switched into their HelixOS (rev 216) scores for them.
-  if (await switchedRequest()) return false;
+  // Points are the member's own: nothing a coach does while switched into their HelixOS (rev 216), and nothing a team member
+  // does (Danno, 6 Oct), scores for them.
+  if (await actingForMember()) return false;
   const res = await db
     .insert(schema.pointsLedger)
     .values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, type, points, reason, refId: refId ?? null })

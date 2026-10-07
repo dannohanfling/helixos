@@ -20,7 +20,7 @@ const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "good
 };
 
 export default async function WebinarsPage() {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const list = await db.query.webinars.findMany({ where: eq(schema.webinars.userId, v.user.id), orderBy: [asc(schema.webinars.isExample), desc(schema.webinars.createdAt)] });
   const ids = list.map((w) => w.id);
   const [sections, beliefs, reviews] = ids.length

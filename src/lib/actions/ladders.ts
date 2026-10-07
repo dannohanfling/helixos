@@ -75,7 +75,7 @@ function parseStats(text: string): LadderStat[] {
 }
 
 export async function saveLadderProfileAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const values = {
     productName: opt(formData, "productName"),
     productPitch: opt(formData, "productPitch"),
@@ -155,7 +155,7 @@ async function briefFrom(fd: FormData, userId: string): Promise<Brief & { leadMa
 }
 
 export async function createLadderAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const { leadMagnet, ...brief } = await briefFrom(formData, userId);
   if (!brief.topic) return;
   const { parsed, generatedBy } = await generate(workspaceId, userId, { ...brief, leadMagnet });
@@ -184,7 +184,7 @@ export async function createLadderAction(formData: FormData): Promise<void> {
 
 /** Runs the brief again (with any edits to it) and replaces every generated field. Live-posting progress is reset. */
 export async function regenerateLadderAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const l = await own(str(formData, "id"), userId);
   const magnet = await magnetFor(userId, l.leadMagnetId);
   const brief: Brief = { format: l.format, topic: str(formData, "topic") || l.topic, audience: l.audience, keyword: magnet?.keyword ?? l.keyword, sourceMaterial: opt(formData, "sourceMaterial") ?? l.sourceMaterial, realNumbers: opt(formData, "realNumbers") ?? l.realNumbers, leadMagnet: magnet ? { title: magnet.title, promise: magnet.promise } : null };
@@ -198,7 +198,7 @@ export async function regenerateLadderAction(formData: FormData): Promise<void> 
 
 /** Saves the client's edits. Rungs arrive as one block ("1. …" separated by ---) and are re-split; posted marks survive by rung number. */
 export async function updateLadderAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const l = await own(str(formData, "id"), userId);
   const posted = new Map(l.rungs.map((r) => [r.n, r.postedAt ?? null]));
   const rungs = parseRungs(str(formData, "rungs")).map((r) => ({ ...r, postedAt: posted.get(r.n) ?? null }));
@@ -231,7 +231,7 @@ export async function updateLadderAction(formData: FormData): Promise<void> {
 }
 
 export async function setLadderStatusAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const l = await own(str(formData, "id"), userId);
   const status = LADDER_STATUSES.find((s) => s === str(formData, "status"));
   if (!status) return;
@@ -242,7 +242,7 @@ export async function setLadderStatusAction(formData: FormData): Promise<void> {
 
 /** Live posting: marks one rung posted (starting the clock on the first), or clears them all. */
 export async function markRungAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const l = await own(str(formData, "id"), userId);
   const n = Number(str(formData, "n"));
   const reset = str(formData, "clearAll") === "1"; // never name a field "reset": it shadows form.reset(), which React calls after actions
@@ -266,7 +266,7 @@ export async function markRungAction(formData: FormData): Promise<void> {
  * still carries the older text, and only "Push the update to GoHighLevel" (the client's choice) replaces it.
  */
 export async function sendLadderToComposerAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const l = await own(str(formData, "id"), userId);
   await assertPublishable(l);
   let itemId = l.contentItemId;
@@ -296,7 +296,7 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
  * other outward step, and the schedule itself (dates, targets) is never altered.
  */
 export async function pushLadderUpdateAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves.", team: "allow" });
   const l = await own(str(formData, "id"), userId);
   const back = str(formData, "back").startsWith("/") ? str(formData, "back") : `/content/ladders/${l.id}`;
   await assertPublishable(l);
@@ -318,7 +318,7 @@ export async function pushLadderUpdateAction(formData: FormData): Promise<void> 
 }
 
 export async function deleteLadderAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const l = await own(str(formData, "id"), userId);
   await db.delete(schema.ladders).where(eq(schema.ladders.id, l.id));
   refresh();

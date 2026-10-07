@@ -13,7 +13,7 @@ export const metadata = { title: "What's new" };
  * coaches. The entries marked "New" are the ones added since this member last opened the page; opening it clears the dot.
  */
 export default async function WhatsNewPage() {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const seen = v.membership.whatsNewSeen ?? 0;
   const entries = visibleEntries(WHATS_NEW, v.role);
   const unseen = unseenCount(WHATS_NEW, v.role, v.membership.whatsNewSeen);

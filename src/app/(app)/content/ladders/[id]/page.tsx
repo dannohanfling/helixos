@@ -47,7 +47,7 @@ function HeadlinePreview({ headline, handle }: { headline: string; handle?: stri
 }
 
 export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string }> }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)) });
   const magnet = l?.leadMagnetId ? await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, l.leadMagnetId), eq(schema.leadMagnets.userId, v.user.id)) }) : null;

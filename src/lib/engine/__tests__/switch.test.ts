@@ -35,7 +35,7 @@ describe("switch to client: the words in the client's log (rev 216)", () => {
 
 describe("switch to client: no write escapes the gate", () => {
   // They establish, end or move the session itself, so they have no member to act as.
-  const SESSION = ["setupAction", "forgotAction", "resetAction", "loginAction", "joinAction", "logoutAction", "demoLoginAction", "switchToClientAction", "switchBackAction"];
+  const SESSION = ["setupAction", "forgotAction", "resetAction", "loginAction", "joinAction", "joinTeamAction", "chooseMembershipAction", "logoutAction", "demoLoginAction", "switchToClientAction", "switchBackAction"];
   it("every action goes through ctx() (the gate) or requireCoach() (a switched session is a client to it), or moves the session", () => {
     const loose = actions.filter((a) => !/await ctx\(|await requireCoach\(/.test(a.body) && !SESSION.includes(a.name));
     // The one read that doesn't: it returns nothing while switched (it would read the client's GoHighLevel connection).
@@ -57,16 +57,17 @@ describe("switch to client: no write escapes the gate", () => {
   ];
   it.each(REFUSED)("%s is refused while switched, with a reason, before anything else it awaits", (name) => {
     const b = byName(name).body;
-    expect(b).toMatch(/ctx\(\{ whileSwitched: "refuse", reason: "[^"]+" \}\)/);
+    // A few of these are a team member's work (Danno, 6 Oct: content, DMs) and say so after the reason; the switched refusal stands.
+    expect(b).toMatch(/ctx\(\{ whileSwitched: "refuse", reason: "[^"]+"(, team: "allow")? \}\)/);
     expect(b.indexOf("await ")).toBe(b.indexOf('await ctx({ whileSwitched: "refuse"'));
   });
 
   it("read-state side effects mark nothing for the client: What's new and the tier celebration", () => {
     for (const name of ["markWhatsNewSeenAction", "markTierCelebratedAction"]) {
       const b = byName(name).body;
-      expect(b).toMatch(/ctx\(\{ whileSwitched: "noop" \}\)/);
-      expect(b.indexOf("if (v.switchedInto) return;")).toBeGreaterThan(-1);
-      expect(b.indexOf("if (v.switchedInto) return;")).toBeLessThan(b.indexOf("db.update"));
+      expect(b).toMatch(/ctx\(\{ whileSwitched: "noop", team: "noop" \}\)/);
+      expect(b.indexOf("if (v.switchedInto || v.team) return;")).toBeGreaterThan(-1);
+      expect(b.indexOf("if (v.switchedInto || v.team) return;")).toBeLessThan(b.indexOf("db.update"));
     }
   });
 
@@ -78,7 +79,7 @@ describe("switch to client: no write escapes the gate", () => {
   });
 
   it("points, AI and Body: never the client's while switched", () => {
-    expect(read("lib/queries/points.ts")).toMatch(/if \(await switchedRequest\(\)\) return false;/);
+    expect(read("lib/queries/points.ts")).toMatch(/if \(await actingForMember\(\)\) return false;/);
     const ai = read("lib/ai.ts");
     expect(ai).toMatch(/credentialFor\(v\.workspace\.id, aiUserId\(v\)\)/);
     expect(ai).toMatch(/userId: aiUserId\(v\)/);

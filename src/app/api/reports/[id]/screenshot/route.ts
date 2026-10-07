@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { readProofObject } from "@/lib/proof-storage";
 
 /**
@@ -9,7 +9,7 @@ import { readProofObject } from "@/lib/proof-storage";
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const notFound = () => new Response("Not found", { status: 404, headers: { "cache-control": "no-store" } });
-  const v = await getViewer();
+  const v = await apiViewer();
   if (!v) return notFound();
   const { id } = await params;
   const r = await db.query.memberReports.findFirst({ where: and(eq(schema.memberReports.id, id), eq(schema.memberReports.workspaceId, v.workspace.id)) });

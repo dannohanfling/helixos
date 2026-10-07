@@ -14,7 +14,7 @@ import { carriesUnreviewed, originAfterAccept, originAfterSave } from "@/lib/eng
 import { recordConfirm } from "@/lib/provenance";
 
 export async function createContentAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const title = str(formData, "title");
   if (!title) return;
   const postDate = opt(formData, "postDate");
@@ -41,7 +41,7 @@ export async function createContentAction(formData: FormData): Promise<void> {
 }
 
 export async function updateContentAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const postDate = opt(formData, "postDate");
   const wanted = CONTENT_STATUSES.find((s) => s === str(formData, "status"));
@@ -81,7 +81,7 @@ export async function updateContentAction(formData: FormData): Promise<void> {
 
 /** Accept: the coach has read this post's AI draft and keeps it. One post per click; nothing accepts more than one. */
 export async function acceptContentAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, userId)) });
   if (!item) return;
@@ -90,7 +90,7 @@ export async function acceptContentAction(formData: FormData): Promise<void> {
 }
 
 export async function setContentStatusAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const status = CONTENT_STATUSES.find((s) => s === str(formData, "status"));
   if (!status) return;
@@ -114,7 +114,7 @@ export async function setContentStatusAction(formData: FormData): Promise<void> 
 }
 
 export async function deleteContentAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   await db.delete(schema.contentItems).where(and(eq(schema.contentItems.id, str(formData, "id")), eq(schema.contentItems.userId, userId)));
   refresh();
   // Back to the list, never left on the deleted post's own address (that was a 404, 22 Sep).

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { connectWhoop, syncWhoop } from "@/lib/body-whoop";
 import { exchangeCode, WhoopError, whoopProblem } from "@/lib/whoop";
 
@@ -13,7 +13,7 @@ import { exchangeCode, WhoopError, whoopProblem } from "@/lib/whoop";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
-  const v = await getViewer();
+  const v = await apiViewer();
   const back = (error?: string) => NextResponse.redirect(new URL(`/body/settings${error ? `?error=${encodeURIComponent(error)}` : "?whoop=connected"}#devices`, request.url));
   if (!v) return NextResponse.redirect(new URL("/login", request.url));
   if (!v.membership.bodyEnabled || v.switchedInto) return NextResponse.redirect(new URL("/today", request.url));

@@ -110,7 +110,7 @@ export default async function WebinarWizardPage({
     slides?: string;
   }>;
 }) {
-  const v = await requireViewer();
+  const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const sp = await searchParams;
   const ai = await hasAiKey();

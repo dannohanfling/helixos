@@ -178,6 +178,11 @@ export const memberships = sqliteTable(
     /** A coach's last look at Monthly feedback (rev 432 item 4): responses sent or changed after it count as new. */
     feedbackSeenAt: text("feedback_seen_at"),
     lastComebackAt: text("last_comeback_at"),
+    /**
+     * Team access (Danno, 6 Oct): how many team members this member may have at once (live rows in team_members). Five by
+     * default; the coach adjusts it on the client page. No invite goes out once live members plus open invites reach it.
+     */
+    teamCap: integer("team_cap").notNull().default(5),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("memberships_ws_user").on(t.workspaceId, t.userId)],
@@ -3387,6 +3392,92 @@ export const coachChanges = sqliteTable(
   (t) => [index("coach_changes_client").on(t.clientMembershipId, t.createdAt)],
 );
 export type CoachChange = typeof coachChanges.$inferSelect;
+
+/**
+ * Team access (Danno, 6 Oct): a person a member invited into their HelixOS, with their own login. A row here is not a
+ * membership: nothing that counts, reminds or ranks members ever sees a team member. `userId` is the owner (the member whose
+ * HelixOS it is), so the row is in the owner's export and erased with them; `teamUserId` is the person on the team. Removal is
+ * soft (`removedAt`): access ends on the next request, the row stays for "added by" and the log. One live row per person per
+ * owner (the partial unique index in migration 0122); a person removed and invited again gets a new row.
+ */
+export const teamMembers = sqliteTable(
+  "team_members",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    /** The owner's membership, in the same workspace. */
+    ownerMembershipId: text("owner_membership_id").notNull(),
+    /** The owner's user id: whose data the team member works in. */
+    userId: text("user_id").notNull(),
+    /** The team member's own account. */
+    teamUserId: text("team_user_id").notNull(),
+    /** Who created the invite this person joined through: the owner, or their coach from the client page. */
+    addedBy: text("added_by").notNull(),
+    /** The last request they made in this HelixOS, to the hour. */
+    lastActiveAt: text("last_active_at"),
+    removedAt: text("removed_at"),
+    removedBy: text("removed_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("team_members_owner").on(t.ownerMembershipId, t.removedAt),
+    index("team_members_user").on(t.teamUserId, t.removedAt),
+    uniqueIndex("team_members_live").on(t.ownerMembershipId, t.teamUserId).where(sql`removed_at IS NULL`),
+  ],
+);
+export type TeamMember = typeof teamMembers.$inferSelect;
+
+/**
+ * An invite link to a member's team: works once, for seven days, and only its sha256 hash is stored (the link itself is
+ * shown to the inviter once and never written anywhere). `userId` is the owner's, so it is theirs to export and erase.
+ */
+export const teamInvites = sqliteTable(
+  "team_invites",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    ownerMembershipId: text("owner_membership_id").notNull(),
+    userId: text("user_id").notNull(),
+    createdBy: text("created_by").notNull(),
+    codeHash: text("code_hash").notNull().unique(),
+    /** Who the inviter meant it for, in their own words ("Sam, our VA"). Optional; shown beside the pending invite. */
+    label: text("label"),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    usedByUserId: text("used_by_user_id"),
+    /** The inviter cancelled it before it was used. */
+    revokedAt: text("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("team_invites_owner").on(t.ownerMembershipId, t.createdAt)],
+);
+export type TeamInvite = typeof teamInvites.$inferSelect;
+
+/**
+ * What each team member did in the owner's HelixOS: one row per write request, in plain words, as coach_changes records a
+ * switched coach's; and their sign-ins, joins and removals. The owner's, in their export, erased with them.
+ */
+export const teamChanges = sqliteTable(
+  "team_changes",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    ownerMembershipId: text("owner_membership_id").notNull(),
+    /** The owner's user id. */
+    userId: text("user_id").notNull(),
+    teamMemberId: text("team_member_id").notNull(),
+    teamUserId: text("team_user_id").notNull(),
+    kind: text("kind", { enum: ["joined", "sign_in", "change", "removed"] }).notNull(),
+    /** What was done, in plain words ("Created task"). */
+    action: text("action"),
+    /** The page it was done on ("Tasks") and the item's name when there is one. */
+    page: text("page"),
+    item: text("item"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("team_changes_owner").on(t.ownerMembershipId, t.createdAt)],
+);
+export type TeamChange = typeof teamChanges.$inferSelect;
 export type ChatLink = typeof chatLinks.$inferSelect;
 export type OauthClient = typeof oauthClients.$inferSelect;
 export type ConnectedApp = typeof connectedApps.$inferSelect;

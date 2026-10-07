@@ -22,7 +22,7 @@ async function ownItem(id: string, userId: string) {
 }
 
 export async function generateVariantsAction(formData: FormData): Promise<void> {
-  const { v, userId } = await ctx();
+  const { v, userId } = await ctx({ team: "allow" });
   const itemId = str(formData, "contentItemId");
   const item = await ownItem(itemId, userId);
   const channels = formData.getAll("channels").map(String).filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
@@ -64,7 +64,7 @@ export async function generateVariantsAction(formData: FormData): Promise<void> 
 }
 
 export async function updateVariantAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const variant = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.id, id), eq(schema.contentVariants.userId, userId)) });
   if (!variant) return;
@@ -107,7 +107,7 @@ export async function updateVariantAction(formData: FormData): Promise<void> {
 
 /** Accept: the coach has read this one variant's AI draft and keeps it. One variant per click; nothing accepts more than one. */
 export async function acceptVariantAction(formData: FormData): Promise<void> {
-  const { userId } = await ctx();
+  const { userId } = await ctx({ team: "allow" });
   const id = str(formData, "id");
   const variant = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.id, id), eq(schema.contentVariants.userId, userId)) });
   if (!variant) return;

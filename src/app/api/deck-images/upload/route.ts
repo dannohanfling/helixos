@@ -1,6 +1,6 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { DECK_IMAGE_MAX_BYTES, DECK_IMAGE_MIME, deckKeyOwner } from "@/lib/engine/deck-image";
 import { UploadRefusal, redactUrls } from "@/lib/engine/storage-policy";
 import { PROOF_STORAGE_UNCONFIGURED, proofStorageConfigured, proofTokenOptions } from "@/lib/proof-storage";
@@ -13,7 +13,7 @@ import { PROOF_STORAGE_UNCONFIGURED, proofStorageConfigured, proofTokenOptions }
  * the cap. Consent, dimensions and the row come later, in recordDeckImageAction, after the bytes are read back and sniffed.
  */
 export async function POST(request: Request) {
-  const v = await getViewer();
+  const v = await apiViewer({ team: "allow" });
   if (!v) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   // A coach viewing a client's HelixOS (rev 216) writes nothing, files included.
   if (v.switchedInto?.mode === "view") return NextResponse.json({ error: `You're viewing ${v.switchedInto.clientName.split(" ")[0]}'s HelixOS. Switch to Work to add files.` }, { status: 403 });

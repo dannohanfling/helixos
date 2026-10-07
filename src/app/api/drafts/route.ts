@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { getViewer } from "@/lib/auth";
+import { apiViewer } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { DRAFT_MAX_BYTES, draftExpired, validDraftKey } from "@/lib/engine/drafts";
 
@@ -19,7 +19,7 @@ const sameOrigin = (request: Request): boolean => {
 };
 
 export async function GET(request: Request) {
-  const v = await getViewer();
+  const v = await apiViewer({ team: "allow" });
   if (!v) return json(null, 401);
   const key = new URL(request.url).searchParams.get("key") ?? "";
   if (v.switchedInto || !validDraftKey(key)) return json(null);
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   if (!sameOrigin(request)) return json(null, 403);
-  const v = await getViewer();
+  const v = await apiViewer({ team: "allow" });
   if (!v) return json(null, 401);
   const body = (await request.json().catch(() => null)) as { key?: unknown; data?: unknown; sent?: unknown } | null;
   const key = typeof body?.key === "string" ? body.key : "";
@@ -52,7 +52,7 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   if (!sameOrigin(request)) return json(null, 403);
-  const v = await getViewer();
+  const v = await apiViewer({ team: "allow" });
   if (!v) return json(null, 401);
   const body = (await request.json().catch(() => null)) as { keys?: unknown } | null;
   const keys = (Array.isArray(body?.keys) ? body.keys : []).filter((k): k is string => typeof k === "string" && validDraftKey(k)).slice(0, 4);
