@@ -7,32 +7,36 @@
  */
 import { useMemo, useState } from "react";
 import { SubmitButton } from "@/components/submit-button";
+import { FilePicker } from "@/components/file-picker";
 import { parseScaleCsv } from "@/lib/engine/body-scale";
 
 export function ScaleImport({ action }: { action: (fd: FormData) => Promise<void> }) {
   const [text, setText] = useState("");
   const [name, setName] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const parsed = useMemo(() => (text ? parseScaleCsv(text) : null), [text]);
   const days = parsed ? new Set(parsed.readings.map((r) => r.date)).size : 0;
   const first = parsed?.readings.reduce((a, r) => (r.date < a ? r.date : a), parsed.readings[0]?.date ?? "");
   const last = parsed?.readings.reduce((a, r) => (r.date > a ? r.date : a), parsed.readings[0]?.date ?? "");
   return (
     <form action={action} className="space-y-2" data-testid="scale-import">
-      <label className="block">
+      <div className="block">
         <span className="label">RENPHO export (.csv)</span>
-        <input
-          type="file"
+        <FilePicker
+          kind="file"
           accept=".csv,text/csv"
-          className="block w-full text-sm file:mr-3 file:rounded-lg file:border file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm"
-          data-testid="scale-file"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
+          files={files}
+          testId="scale-file"
+          labels={{ upload: "Upload the .csv" }}
+          onChange={(fs) => {
+            const f = fs[0];
+            setFiles(fs);
             setName(f?.name ?? "");
             if (f) f.text().then(setText, () => setText(""));
             else setText("");
           }}
         />
-      </label>
+      </div>
       <textarea hidden readOnly name="csv" value={text} />
       {parsed ? (
         parsed.readings.length ? (

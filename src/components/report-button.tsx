@@ -6,6 +6,7 @@ import { sendReportAction, type SendResult } from "@/lib/actions/reports";
 import { KIND_LABEL, SCREENSHOT_MAX_BYTES, SEVERITY_LABEL } from "@/lib/engine/reports";
 import { MEMBER_REPORT_KINDS, REPORT_SEVERITIES, type MemberReportKind } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
+import { FilePicker } from "@/components/file-picker";
 
 /** The refusal goes in the address the way every form's does, so the shared button puts the typing back and marks the field. */
 function setRefusal(error: string | null, field?: string) {
@@ -48,7 +49,7 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
   const form = useRef<HTMLFormElement>(null);
   const pathname = usePathname();
   const [kind, setKind] = useState<MemberReportKind>("issue");
-  const [shot, setShot] = useState<{ blob: Blob; url: string } | null>(null);
+  const [shot, setShot] = useState<{ blob: Blob; url: string; file: File } | null>(null);
   const [shotError, setShotError] = useState<string | null>(null);
   const [result, setResult] = useState<SendResult | null>(null);
   // Read after mounting: the server can't know the browser's features, and a button only the browser draws would make its HTML
@@ -70,7 +71,8 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
       const small = await shrink(blob);
       setShot((old) => {
         if (old) URL.revokeObjectURL(old.url);
-        return { blob: small, url: URL.createObjectURL(small) };
+        // The picker shows the shrunk picture as the one chosen, named for what it is.
+        return { blob: small, url: URL.createObjectURL(small), file: new File([small], "screenshot.jpg", { type: "image/jpeg" }) };
       });
       setShotError(null);
     } catch {
@@ -196,39 +198,27 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
               <div className="font-medium">
                 A screenshot <span className="font-normal text-ink-3">(optional)</span>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="btn btn-ghost btn-sm cursor-pointer">
-                  Upload a picture
-                  <input
-                    type="file"
-                    name="screenshotFile"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    className="sr-only"
-                    data-testid="report-screenshot"
-                    onChange={(e) => {
-                      const f = e.currentTarget.files?.[0];
-                      if (f) void take(f);
-                    }}
-                  />
-                </label>
-                {canCapture ? (
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => void capture()} data-testid="report-capture">
-                    Capture this screen
-                  </button>
-                ) : null}
-                {shot ? (
-                  <button
-                    type="button"
-                    className="text-xs underline"
-                    onClick={() => {
-                      URL.revokeObjectURL(shot.url);
-                      setShot(null);
-                    }}
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </div>
+              <FilePicker
+                kind="image"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                files={shot ? [shot.file] : []}
+                testId="report-screenshot"
+                labels={{ take: "Take photo", upload: "Upload picture" }}
+                hint={
+                  canCapture ? (
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void capture()} data-testid="report-capture">
+                      Capture this screen
+                    </button>
+                  ) : null
+                }
+                onChange={(fs) => {
+                  if (fs[0]) void take(fs[0]);
+                  else if (shot) {
+                    URL.revokeObjectURL(shot.url);
+                    setShot(null);
+                  }
+                }}
+              />
               {/* eslint-disable-next-line @next/next/no-img-element -- a local preview of the member's own picture, never a remote one */}
               {shot ? <img src={shot.url} alt="The screenshot that will be sent" className="max-h-40 rounded-lg border" data-testid="report-preview" /> : null}
               {shotError ? <p className="text-xs text-danger">{shotError}</p> : null}

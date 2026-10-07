@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
 import { recordMagnetUploadAction } from "@/lib/actions/magnets";
 import { capLabel, publicMagnetKey, redactUrls, uploadRefusal } from "@/lib/engine/storage-policy";
+import { FilePicker } from "@/components/file-picker";
 
 /**
  * A file made elsewhere (Canva, a designer) goes from the browser straight to the bucket on a token this app issues, under
@@ -43,9 +44,9 @@ export function MagnetUpload({ magnetId, slug, enabled, why }: { magnetId: strin
     <div className="mt-2 space-y-2" data-testid="magnet-upload-form">
       <p className="text-xs text-ink-2">Made in Canva or by a designer. Goes straight to storage and is served at its own public address. Up to {capLabel()}.</p>
       {enabled ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <input className="text-sm" type="file" data-testid="magnet-file" disabled={pending} onChange={(e) => setFile(e.currentTarget.files?.[0] ?? null)} />
-          <button className="btn btn-soft btn-sm" type="button" disabled={pending || !file} aria-busy={pending} onClick={send} data-testid="magnet-upload">
+        <div className="space-y-2">
+          <FilePicker kind="file" files={file ? [file] : []} onChange={(fs) => setFile(fs[0] ?? null)} disabled={pending} testId="magnet-file" />
+          <button className="btn btn-primary btn-sm w-full sm:w-auto" type="button" disabled={pending || !file} aria-busy={pending} onClick={send} data-testid="magnet-upload">
             {pending ? (progress !== null ? `Uploading ${Math.round(progress)}%` : "Uploading…") : "Upload"}
           </button>
         </div>

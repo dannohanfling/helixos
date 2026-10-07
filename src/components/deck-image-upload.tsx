@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
 import { recordDeckImageAction } from "@/lib/actions/deck-images";
 import { DECK_IMAGE_MIME, consentRequired, consentSatisfied, deckImageKey, deckImageSniff } from "@/lib/engine/deck-image";
 import { DECK_IMAGE_KINDS, type DeckImageKind } from "@/db/schema";
 import { redactUrls } from "@/lib/engine/storage-policy";
+import { FilePicker } from "@/components/file-picker";
 
 const KIND_LABEL: Record<DeckImageKind, string> = {
   photo: "Photo",
@@ -16,6 +17,13 @@ const KIND_LABEL: Record<DeckImageKind, string> = {
   graphic: "Graphic / social post (a designed image, shown whole)",
   diagram: "Diagram (your own framework or mechanism, shown whole)",
 };
+/** A small preview of one chosen image, its object URL let go when it leaves. */
+function Thumb({ file }: { file: File }) {
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  // eslint-disable-next-line @next/next/no-img-element -- a local preview of the coach's own file, never a remote one
+  return <img src={url} alt="" className="h-10 w-10 shrink-0 rounded-lg border object-cover" data-testid="deck-image-thumb" />;
+}
 const extFromMime: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" };
 
 /** One chosen file and what the coach says about it, before it is sent. */
@@ -59,7 +67,7 @@ export function DeckImageUpload({
   const router = useRouter();
   const startKind = fixedKind ?? defaultKind ?? "photo";
 
-  const pick = (list: FileList | null) => {
+  const pick = (list: FileList | File[] | null) => {
     const files = Array.from(list ?? []);
     setError(null);
     setDrafts(files.map((file, i) => ({ id: Date.now() + i, file, kind: startKind, caption: "", consentTick: false, consentName: "", noPeople: false, error: null })));
@@ -123,29 +131,21 @@ export function DeckImageUpload({
 
   return (
     <div className={compact ? "space-y-2" : "space-y-3 rounded-lg border border-line p-3"} data-testid="deck-image-upload">
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="btn btn-soft btn-sm cursor-pointer">
-          {fixedKind ? `Choose a ${fixedKind}` : drafts.length ? "Choose other images" : "Choose images"}
-          <input type="file" multiple className="sr-only" accept={DECK_IMAGE_MIME.join(",")} disabled={pending} data-testid="deck-image-file" onChange={(e) => {
-              pick(e.currentTarget.files);
-              // Cleared, so choosing the same file again still counts as a choice (the browser fires no change for an unchanged value).
-              e.currentTarget.value = "";
-            }} />
-        </label>
-        {drafts.length === 1 ? <span className="text-xs text-ink-2" data-testid="deck-image-name">{drafts[0].file.name}</span> : drafts.length > 1 ? <span className="text-xs text-ink-2" data-testid="deck-image-name">{drafts.length} files, each with its own kind</span> : null}
-      </div>
+      <FilePicker kind="image" multiple accept={DECK_IMAGE_MIME.join(",")} files={[]} onChange={(fs) => pick(fs)} disabled={pending} testId="deck-image-file" hideChosen labels={{ upload: fixedKind ? `Upload a ${fixedKind}` : drafts.length ? "Upload other images" : "Upload images" }} />
+      {drafts.length === 1 ? <span className="block text-xs text-ink-2" data-testid="deck-image-name">{drafts[0].file.name}</span> : drafts.length > 1 ? <span className="block text-xs text-ink-2" data-testid="deck-image-name">{drafts.length} files, each with its own kind</span> : null}
       {drafts.map((d, i) => {
         const needsConsent = consentRequired(d.kind);
         return (
           <div key={d.id} className={drafts.length > 1 ? "space-y-2 rounded-lg border border-line p-2" : "space-y-2"} data-testid="deck-image-row" data-row={i}>
-            {drafts.length > 1 ? (
-              <div className="flex items-center justify-between text-xs text-ink-2">
-                <span>{d.file.name}</span>
-                <button type="button" className="btn btn-ghost btn-xs" disabled={pending} onClick={() => setDrafts((ds) => ds.filter((x) => x.id !== d.id))}>
-                  Remove
-                </button>
-              </div>
-            ) : null}
+            <div className="flex items-center justify-between gap-2 text-xs text-ink-2">
+              <span className="flex min-w-0 items-center gap-2">
+                <Thumb file={d.file} />
+                <span className="truncate">{d.file.name}</span>
+              </span>
+              <button type="button" className="btn btn-ghost btn-xs" aria-label={`Clear ${d.file.name}`} title="Clear" disabled={pending} onClick={() => setDrafts((ds) => ds.filter((x) => x.id !== d.id))} data-testid="deck-image-clear">
+                ✕
+              </button>
+            </div>
             {fixedKind ? null : (
               <label className="block text-sm">
                 <span className="label">What is it?</span>

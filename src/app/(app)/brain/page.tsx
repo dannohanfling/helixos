@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FilePicker } from "@/components/file-picker";
 import { and, desc, eq, like, sql } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
@@ -96,10 +97,10 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
         <div className="space-y-4">
           <Card title="Bring your knowledge in">
             <form action={importFaqAction} className="space-y-2" encType="multipart/form-data" data-testid="faq-import">
-              <label className="block text-sm">
+              <div className="block text-sm">
                 <span className="label">A file (.md, .txt or .docx)</span>
-                <input className="field" type="file" name="file" accept=".md,.txt,.markdown,.docx,.pdf" data-testid="faq-file" />
-              </label>
+                <FilePicker kind="file" name="file" accept=".md,.txt,.markdown,.docx,.pdf" testId="faq-file" />
+              </div>
               <label className="block text-sm">
                 <span className="label">Or paste the Knowledge Base Builder output</span>
                 <textarea className="field min-h-32" name="text" placeholder={"### Q: How much does it cost?\n**Also asked:** …\n**Keywords:** …\n**Answer:** …\n**Category:** Pricing"} data-testid="faq-text" />

@@ -7,6 +7,7 @@ import { checkProofUploadAction, recordProofAttachmentAction } from "@/lib/actio
 import { ACCEPTED, ACCEPT_ATTRIBUTE, KIND_MAX, OWN_SCREEN_TICK, PERSON_QUESTION, RESULT_QUESTION, VIDEO_MAX_BYTES, likenessSentence, mb, proofKey, refusal, type Sniffed } from "@/lib/engine/proof-attachments";
 import type { ProofAttachmentKind } from "@/db/schema";
 import { redactUrls } from "@/lib/engine/storage-policy";
+import { FilePicker } from "@/components/file-picker";
 
 type Meta = { width: number | null; height: number | null; durationSeconds: number | null };
 
@@ -142,17 +143,7 @@ export function ProofUpload({ proofId, workspaceId, enabled, why, full, quotaLin
       {full ? (
         <p className="text-sm text-danger" data-testid="proof-upload-full">{full}</p>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="btn btn-soft btn-sm cursor-pointer">
-            Choose a file
-            <input type="file" className="sr-only" accept={ACCEPT_ATTRIBUTE} disabled={pending} data-testid="proof-file" onChange={(e) => void pick(e.currentTarget.files?.[0] ?? null)} />
-          </label>
-          <label className="btn btn-soft btn-sm cursor-pointer">
-            Take a photo or video
-            <input type="file" className="sr-only" accept="image/*,video/*" capture="environment" disabled={pending} data-testid="proof-capture" onChange={(e) => void pick(e.currentTarget.files?.[0] ?? null)} />
-          </label>
-          {file ? <span className="text-xs text-ink-2" data-testid="proof-file-name">{file.name} · {mb(file.size)}</span> : null}
-        </div>
+        <FilePicker kind="image" accept={ACCEPT_ATTRIBUTE} captureAccept="image/*,video/*" files={file ? [file] : []} onChange={(fs) => void pick(fs[0] ?? null)} disabled={pending} testId="proof-file" labels={{ take: "Take photo or video", upload: "Upload a file" }} />
       )}
       {file && sniffed ? (
         <div className="space-y-3 rounded-lg border border-line p-3" data-testid="proof-questions">
