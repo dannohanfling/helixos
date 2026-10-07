@@ -1208,38 +1208,60 @@ export const readinessReviews = sqliteTable("readiness_reviews", {
 });
 
 /**
- * The workspace's brand, as a renderer reads it: six colours as bare six-digit hex, three faces and the fallback the file
- * names when a face is missing, colours the brand bans outright. One per workspace; read only through the subject.
+ * A member's brand, as a renderer reads it: six colours as bare six-digit hex, three faces and the fallback the file
+ * names when a face is missing, colours the brand bans outright. One per member (rev 568); read only through the subject.
  */
-export const brandKits = sqliteTable("brand_kits", {
-  id: id(),
-  workspaceId: text("workspace_id").notNull().unique(),
-  name: text("name").notNull(),
-  ground: text("ground").notNull(),
-  ink: text("ink").notNull(),
-  accent: text("accent").notNull(),
-  muted: text("muted").notNull(),
-  surface: text("surface").notNull(),
-  inverseGround: text("inverse_ground"),
-  inverseInk: text("inverse_ink"),
-  displayFont: text("display_font").notNull(),
-  bodyFont: text("body_font").notNull(),
-  quoteFont: text("quote_font"),
-  fontFallback: text("font_fallback").notNull().default("Arial"),
-  /** The brand's logo (deck visuals §4): a deck_images row of kind logo, shown on the cover and in the footer bar. None means the kit's name set as type. */
-  logoImageId: text("logo_image_id"),
-  /** A second logo for dark grounds (first-deck brief §3): the cover sits on the inverse ground, where a dark wordmark vanishes. */
-  logoDarkImageId: text("logo_dark_image_id"),
-  bannedColors: text("banned_colors", { mode: "json" }).$type<string[]>().notNull().default([]),
-  /** Reserved for an unfilled slot on a slide, and nothing else: unmissable when flipping through. */
-  placeholder: text("placeholder"),
-  /** Names allowed to open a script without a warning ("Turas here"): permitted names, never a second presenter. */
-  aliases: text("aliases", { mode: "json" }).$type<string[]>().notNull().default([]),
-  /** The slide that puts the price next to the total value of the stack. Off, the price stands on its own. A house policy, set once. */
-  showPriceAnchor: integer("show_price_anchor", { mode: "boolean" }).notNull().default(true),
-  notes: text("notes"),
-  createdAt: createdAt(),
-});
+export const brandKits = sqliteTable(
+  "brand_kits",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    /**
+     * Whose kit it is (rev 568, 6 Oct): one per member, never per workspace. A client's decks render in their own kit; a member
+     * with no row renders in the house starter kit. Migration 0121 gave the one row a workspace had to the owner of its logo
+     * (it was saved while switched into that client), else to the coach, and gave a coach left without one a copy, no logo.
+     */
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    ground: text("ground").notNull(),
+    ink: text("ink").notNull(),
+    accent: text("accent").notNull(),
+    muted: text("muted").notNull(),
+    surface: text("surface").notNull(),
+    inverseGround: text("inverse_ground"),
+    inverseInk: text("inverse_ink"),
+    displayFont: text("display_font").notNull(),
+    bodyFont: text("body_font").notNull(),
+    quoteFont: text("quote_font"),
+    fontFallback: text("font_fallback").notNull().default("Arial"),
+    /** The brand's logo (deck visuals §4): a deck_images row of kind logo, the member's own, shown on the cover and in the footer bar. None means the kit's name set as type. */
+    logoImageId: text("logo_image_id"),
+    /** A second logo for dark grounds (first-deck brief §3): the cover sits on the inverse ground, where a dark wordmark vanishes. */
+    logoDarkImageId: text("logo_dark_image_id"),
+    bannedColors: text("banned_colors", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Reserved for an unfilled slot on a slide, and nothing else: unmissable when flipping through. */
+    placeholder: text("placeholder"),
+    /** Names allowed to open a script without a warning ("Turas here"): permitted names, never a second presenter. */
+    aliases: text("aliases", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The slide that puts the price next to the total value of the stack. Off, the price stands on its own. A house policy, set once. */
+    showPriceAnchor: integer("show_price_anchor", { mode: "boolean" }).notNull().default(true),
+    notes: text("notes"),
+    /**
+     * Make the graphic (rev 513, reserved by rev 568 so a member has one Brand section): the graphic's display name, @handle,
+     * verified mark, avatar (a deck_images row of the member's own), the gold gradient's two hexes and its face. Nothing reads
+     * them until Make the graphic is built; the card shows them then.
+     */
+    graphicDisplayName: text("graphic_display_name"),
+    graphicHandle: text("graphic_handle"),
+    graphicVerified: integer("graphic_verified", { mode: "boolean" }).notNull().default(false),
+    graphicAvatarImageId: text("graphic_avatar_image_id"),
+    graphicGoldFrom: text("graphic_gold_from"),
+    graphicGoldTo: text("graphic_gold_to"),
+    graphicFont: text("graphic_font"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("brand_kits_member").on(t.workspaceId, t.userId)],
+);
 export type BrandKit = typeof brandKits.$inferSelect;
 
 /** Story / analogy / objection / belief bank. workspaceId null = ships with the template. */

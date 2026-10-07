@@ -41,11 +41,12 @@ async function main() {
   page.on("response", (r) => {
     if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
   });
-  // The brand kit the deck renders in, saved by the coach first: the Turas kit with its placeholder colour and one permitted name
-  const coach = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
-  await coach.goto(`${base}/login`);
-  await coach.click('button:has-text("As the coach")');
-  await coach.waitForURL(/\/today/);
+  // The brand kit the deck renders in is the member's own (rev 568): the client saves the Turas kit on their own Settings first,
+  // with its placeholder colour and one permitted name. The coach's kit is theirs alone and never reaches a client's deck.
+  await page.goto(`${base}/login`);
+  await page.click('button:has-text("As a client")');
+  await page.waitForURL(/\/today/);
+  const coach = page;
   await coach.goto(`${base}/settings`);
   await coach.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
   const kit: Record<string, string> = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: "000000", placeholder: "FFF3A3", aliases: "Turas" };
@@ -65,12 +66,7 @@ async function main() {
   await submit(coach, '[data-testid="brand-form"] button[type="submit"]');
   await coach.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
   if ((await coach.locator('[data-testid="brand-aliases"]').inputValue()) !== "Turas") throw new Error("the permitted name is read back");
-  await coach.context().close();
-  console.log("✓ the coach saved the Turas kit with its placeholder colour and one permitted name");
-
-  await page.goto(`${base}/login`);
-  await page.click('button:has-text("As a client")');
-  await page.waitForURL(/\/today/);
+  console.log("✓ the client saved the Turas kit, their own, with its placeholder colour and one permitted name");
 
   // Webinars
   await page.goto(`${base}/webinars`);
@@ -286,10 +282,8 @@ async function main() {
   await page.locator('[data-testid="deck-thumb"]').first().waitFor({ timeout: 20000 });
   if ((await page.locator('[data-testid="deck-thumb"][data-layout="stack"]').count()) !== 2 || (await page.locator('[data-testid="deck-thumb"][data-layout="guarantee"] [data-testid="deck-thumb-seal"]').count()) !== 2) throw new Error("the thumbnails draw the build, the summary and the seal");
   console.log("✓ layouts 5: the core item builds the table, the summary strikes USD $4,994 through to USD $1,500, the guarantee has its seal, in the file and the thumbnails");
-  const coach2 = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
-  await coach2.goto(`${base}/login`);
-  await coach2.click('button:has-text("As the coach")');
-  await coach2.waitForURL(/\/today/);
+  // The anchor is the member's own kit's (rev 568): the client turns it off on their own Settings.
+  const coach2 = page;
   await coach2.goto(`${base}/settings`);
   await coach2.locator('[data-testid="brand-form"]').waitFor({ timeout: 15000 });
   if (!(await coach2.locator('[data-testid="brand-price-anchor"]').isChecked())) throw new Error("the price anchor is on by default");
@@ -297,7 +291,6 @@ async function main() {
   await submit(coach2, '[data-testid="brand-form"] button[type="submit"]');
   await coach2.locator('[data-testid="brand-saved"]').waitFor({ timeout: 10000 });
   if (await coach2.locator('[data-testid="brand-price-anchor"]').isChecked()) throw new Error("the kit reads the anchor back as off");
-  await coach2.context().close();
   const offRes = await page.request.get(`${base}${deckHref}`);
   if (!offRes.ok()) throw new Error(`export with the anchor off failed: ${offRes.status()}`);
   const zipOff = await JSZip.loadAsync(await offRes.body());
@@ -307,7 +300,8 @@ async function main() {
   if (!/USD \$1,500/.test(facesOff) || !/Total value so far/.test(facesOff) || !/I coach you free until you do/.test(facesOff) || !/Payment plan: 3 x \$550/.test(facesOff)) throw new Error("the price, the running totals, the payment plan and the guarantee still render with the anchor off");
   console.log("✓ price anchor: on by default with the total and the saving; off on the kit, the next export draws the price on its own");
   await shot(page, "w04-webinar-deck");
-  await page.goto(page.url().split("?")[0] + "?step=review");
+  // Back to the webinar: the anchor was turned off on this page's own Settings, so its address is not the wizard's any more.
+  await page.goto(`${wizardUrl0}?step=review`);
   // The header is the build check, itemised, and no rating moves it: eleven fives leave an unscripted webinar "building"
   const summary = await page.locator('[data-testid="build-summary"]').innerText();
   if (!/\d+\/\d+ scripted · ~\d+ min · \d+ of \d+ checks/.test(summary)) throw new Error(`the header reads the build check, got "${summary}"`);

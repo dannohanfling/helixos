@@ -48,6 +48,8 @@ export const MEMBER_TABLES = {
   ai_credentials: schema.aiCredentials,
   ai_usage: schema.aiUsage,
   deck_images: schema.deckImages,
+  // The brand kit is the member's (rev 568): in their export, erased with them.
+  brand_kits: schema.brandKits,
   drip_handoffs: schema.dripHandoffs,
   essences: schema.essences,
   evidence: schema.evidence,
@@ -151,7 +153,6 @@ export const USER_TABLES = {
 
 /** Keyed by the workspace alone: they go only with the workspace, when its last member is deleted. */
 export const WORKSPACE_TABLES = {
-  brand_kits: schema.brandKits,
   integrations: schema.integrations,
   dm_templates: schema.dmTemplates,
   courses: schema.courses,

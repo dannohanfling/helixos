@@ -319,10 +319,12 @@ async function main() {
     for (const p of ["/body/training", "/body/training/routines"]) await page.goto(`${base}${p}`);
     const actionMap = buildActionMap();
     const byName = Object.fromEntries(Object.entries(actionMap).map(([id, n]) => [n, id]));
-    const post = async (name: string, fields: Record<string, string>) => {
+    // An action is posted to a page whose tree imports it (the dev server registers actions per page): Today for most, Settings
+    // for the Settings card's own.
+    const post = async (name: string, fields: Record<string, string>, at = "/today") => {
       const id = byName[name];
       if (!id) throw new Error(`no action id for ${name}: the dev build did not register it`);
-      const r = await page.request.post(`${base}/today`, { multipart: { ...fields, [`$ACTION_ID_${id}`]: "" }, maxRedirects: 0 });
+      const r = await page.request.post(`${base}${at}`, { multipart: { ...fields, [`$ACTION_ID_${id}`]: "" }, maxRedirects: 0 });
       return { status: r.status(), body: (await r.text()).slice(0, 120) };
     };
     // action :: the field the id rides in :: a table+column to read back and a mutating field to attempt
@@ -409,6 +411,32 @@ async function main() {
     const objectionsHtml = await page.content();
     if (objectionsHtml.includes(bObjection) || objectionsHtml.includes(bStory)) failures.push("LIBRARY: B's private objection is on A's Socrates objections page");
     if (!failures.some((f) => f.startsWith("LIBRARY"))) console.log(`✓ the library bank: A reads the shared and workspace banks and A's own (${aLibrary.length} entries), none of B's, in the library, the deck and drafts, and Socrates`);
+
+    // Rev 568 (6 Oct): the brand kit is each member's own. A's kit can never carry B's logo, and A's save and reset touch only A's row.
+    const bLogo = (await db.insert(schema.deckImages).values({ id: newId(), workspaceId: ws, userId: B.id, kind: "logo", blobKey: `deck/${ws}/${B.id}/b-logo.png`, blobUrl: "http://localhost:4050/b-logo.png", mime: "image/png", width: 300, height: 100, caption: "B's logo" }).returning())[0];
+    const { STARTER_KIT } = await import("@/lib/engine/deck");
+    await db.delete(schema.brandKits).where(and(eq(schema.brandKits.workspaceId, ws), eq(schema.brandKits.userId, B.id)));
+    const bKit = (await db.insert(schema.brandKits).values({ id: newId(), workspaceId: ws, userId: B.id, name: "B's kit", ground: STARTER_KIT.ground, ink: STARTER_KIT.ink, accent: STARTER_KIT.accent, muted: STARTER_KIT.muted, surface: STARTER_KIT.surface, displayFont: STARTER_KIT.displayFont, bodyFont: STARTER_KIT.bodyFont, logoImageId: bLogo.id }).returning())[0];
+    const bKitBefore = JSON.stringify(await db.query.brandKits.findFirst({ where: eq(schema.brandKits.id, bKit.id) }));
+    const kitFields = { name: "A's kit", ground: STARTER_KIT.ground, ink: STARTER_KIT.ink, accent: STARTER_KIT.accent, muted: STARTER_KIT.muted, surface: STARTER_KIT.surface, inverseGround: "", inverseInk: "", displayFont: STARTER_KIT.displayFont, bodyFont: STARTER_KIT.bodyFont, quoteFont: "", fontFallback: "Arial", bannedColors: "", placeholder: "", aliases: "", showPriceAnchor: "1", notes: "" };
+    await page.goto(`${base}/settings`);
+    const saved = await post("saveBrandKitAction", { ...kitFields, logoImageId: bLogo.id, logoDarkImageId: bLogo.id }, "/settings");
+    if (saved.status >= 500) failures.push(`BRAND KIT: A's save answered ${saved.status}`);
+    const aKit = await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, ws), eq(schema.brandKits.userId, A.id)) });
+    if (!aKit) failures.push("BRAND KIT: A's own save did not make A a kit");
+    else if (aKit.logoImageId || aKit.logoDarkImageId) failures.push("BRAND KIT: A's kit carries B's logo");
+    await post("resetBrandKitAction", {}, "/settings");
+    if (await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, ws), eq(schema.brandKits.userId, A.id)) })) failures.push("BRAND KIT: A's reset left A's kit");
+    if (JSON.stringify(await db.query.brandKits.findFirst({ where: eq(schema.brandKits.id, bKit.id) })) !== bKitBefore) failures.push("BRAND KIT: A's save or reset changed B's kit");
+    // A's Settings lists only A's logos, and the deck's logo lookup refuses B's image for A's kit.
+    await page.goto(`${base}/settings`);
+    if ((await page.locator('[data-testid="brand-logo"] option').allInnerTexts()).some((t) => t.includes("B's logo"))) failures.push("BRAND KIT: A's logo picker lists B's logo");
+    const { deckLogos } = await import("@/lib/deck-logo");
+    const forA = await deckLogos({ workspaceId: ws, userId: A.id }, { logoImageId: bLogo.id, logoDarkImageId: bLogo.id }, { background: STARTER_KIT.ground, ground: STARTER_KIT.ground }, async () => null);
+    if (forA.logo?.id === bLogo.id || forA.dark?.id === bLogo.id || forA.cover?.id === bLogo.id) failures.push("BRAND KIT: the deck's logo lookup gave A's deck B's logo");
+    await db.delete(schema.brandKits).where(eq(schema.brandKits.id, bKit.id));
+    await db.delete(schema.deckImages).where(eq(schema.deckImages.id, bLogo.id));
+    if (!failures.some((f) => f.startsWith("BRAND KIT"))) console.log("✓ the brand kit: A's save with B's logo stores no logo, A's reset leaves B's kit, A's picker lists only A's logos, and the deck never shows A another member's logo");
 
     if (failures.length) throw new Error("TENANCY LEAK:\n" + failures.join("\n"));
     console.log("Tenancy walk passed.");

@@ -583,6 +583,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               ) : null}
             </div>
           ) : null}
+          {d.brandKitStarter ? (
+            <Card title="Your brand" action={<Link href="/settings#brand-kit" className="text-xs text-ink-2 hover:underline">Settings →</Link>}>
+              <Link href="/settings#brand-kit" className="font-semibold hover:underline" data-testid="brand-kit-nudge">
+                Set your brand kit (5 min)
+              </Link>
+              <div className="mt-1 text-xs text-ink-3">Your colours, fonts and logo. Until then your decks use the house starter kit.</div>
+            </Card>
+          ) : null}
           {d.pathwayNext ? (
             <Card title="Next on your pathway" action={<Link href="/pathway" className="text-xs text-ink-2 hover:underline">Pathway →</Link>}>
               <Link href={FIELD_TASKS[d.pathwayNext.key]?.href ?? `/pathway?task=${d.pathwayNext.key}`} className="font-semibold hover:underline" data-testid="pathway-next">

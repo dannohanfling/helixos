@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KIT_STATUS_WORDS, kitFor, kitStatus } from "@/lib/queries/brand-kit";
 import { notFound } from "next/navigation";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -99,6 +100,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const noteTasks = await tasksFromNotes(ws, notes.map((n) => n.id));
   // Their buyer avatars and which offers each is for, read-only (rev 501 §7).
   const avatars = await avatarData({ workspaceId: ws, userId: m.userId });
+  // Their own brand kit (rev 568), read-only here; it is set on their Settings, or by the coach switched in with Work on.
+  const clientKit = await kitFor(ws, m.userId);
   const avatarTop = avatarTree(avatars.rows);
   const adjustments = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, ws), eq(schema.pointsLedger.userId, m.userId), isNotNull(schema.pointsLedger.adjustedBy)), orderBy: desc(schema.pointsLedger.createdAt), limit: 10 });
   const tier = tierProgress(points);
@@ -241,7 +244,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
       {sp.reinstated ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="reinstated-banner">Reinstated. Their access and reminders are back.</p> : null}
 
       {/* Where they are, in one strip */}
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5" data-testid="client-strip">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6" data-testid="client-strip">
+        <Stat label="Brand kit" value={KIT_STATUS_WORDS[kitStatus(clientKit)]} sub={clientKit ? clientKit.name : "set it with them from Switch to client"} />
         <Stat label="Tier" value={`${TIER_ICONS[tier.current.name]} ${tier.current.name}`} sub={`${points.toLocaleString()} pts${tier.next ? ` · ${tier.toNext.toLocaleString()} to ${tier.next.name}` : ""}`} />
         <Stat label="Streak" value={`🔥 ${streak}`} sub={streak ? "weekday streak alive" : "no streak right now"} />
         <Stat label="Today" value={`${todayLog?.morningDoneAt ? "☀️" : "○"} ${todayLog?.eveningDoneAt ? "🌙" : "○"}`} sub={todayLog?.morningDoneAt ? (todayLog.eveningDoneAt ? "locked in and closed" : "locked in, not closed") : "not locked in yet"} />

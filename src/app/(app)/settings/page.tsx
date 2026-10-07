@@ -7,6 +7,7 @@ import { requireViewer } from "@/lib/auth";
 import { formatDateTime } from "@/lib/dates";
 import { setCoachCanWorkAction } from "@/lib/actions/switch";
 import { resetBrandKitAction, rotateInviteAction, saveBrandKitAction, updateBotFactsAction, updateGoalAction, updateProfileAction, updateWorkspaceAction } from "@/lib/actions/settings";
+import { kitFor, kitStatus } from "@/lib/queries/brand-kit";
 import { brandKitWarnings, contrastRatio } from "@/lib/engine/subject";
 import { BrandKitEditor } from "@/components/brand-kit-editor";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -46,9 +47,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
-  const savedKit = v.role === "coach" ? await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) }) : null;
-  // The coach's logos in their Images library, for the kit's logo pick (deck visuals §4).
-  const logos = v.role === "coach" ? await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id), eq(schema.deckImages.kind, "logo")) }) : [];
+  // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
+  const savedKit = await kitFor(v.workspace.id, v.user.id);
+  // The member's own logos in their Images library, for the kit's logo pick (deck visuals §4); never another member's.
+  const logos = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id), eq(schema.deckImages.kind, "logo")) });
   // A refused kit comes back as typed, so the person fixes the one pair named rather than typing thirteen fields again.
   const parseDraft = (raw: string | undefined): Partial<schema.BrandKit> | undefined => {
     if (!raw) return undefined;
@@ -377,6 +379,75 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {changesList}
           </Card>
         ) : null}
+        <Card title="Brand kit" action={savedKit ? <span className="text-xs text-ink-3">ink on ground {contrastRatio(savedKit.ground, savedKit.ink)}:1</span> : null}>
+          <div id="brand-kit" data-testid="brand-card" data-status={kitStatus(savedKit)} />
+          <p className="mb-3 text-sm text-ink-2">Your own colours, faces and logo: your decks render in these and in nobody else&apos;s. Six-digit hex, no #. A pair that cannot read on a slide is refused here, not discovered on screen.</p>
+          {savedKit && brandKitWarnings(savedKit).length ? (
+            <ul className="mb-3 list-disc rounded-lg bg-warn-soft p-2 pl-6 text-sm" data-testid="brand-warnings">
+              {brandKitWarnings(savedKit).map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          ) : null}
+          {!savedKit ? (
+            <p className="mb-3 rounded-lg border border-accent bg-accent-soft p-2 text-sm" data-testid="brand-starter">
+              <strong>House starter kit — replace with your own.</strong> Your decks use these colours and faces until you save your own. Change any of them, give the kit your business name, pick your logo, and save.
+            </p>
+          ) : null}
+          {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice === "reset" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-reset" role="status">Back to the house starter kit.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
+          <form action={saveBrandKitAction} className="grid gap-3 sm:grid-cols-2" data-testid="brand-form">
+            <BrandKitEditor
+              kit={{
+                name: brandKit?.name ?? "",
+                ground: brandKit ? (brandKit.ground ?? "") : (STARTER_KIT.ground ?? ""),
+                ink: brandKit ? (brandKit.ink ?? "") : (STARTER_KIT.ink ?? ""),
+                accent: brandKit ? (brandKit.accent ?? "") : (STARTER_KIT.accent ?? ""),
+                muted: brandKit ? (brandKit.muted ?? "") : (STARTER_KIT.muted ?? ""),
+                surface: brandKit ? (brandKit.surface ?? "") : (STARTER_KIT.surface ?? ""),
+                inverseGround: brandKit ? (brandKit.inverseGround ?? "") : (STARTER_KIT.inverseGround ?? ""),
+                inverseInk: brandKit ? (brandKit.inverseInk ?? "") : (STARTER_KIT.inverseInk ?? ""),
+                displayFont: brandKit ? (brandKit.displayFont ?? "") : (STARTER_KIT.displayFont ?? ""),
+                bodyFont: brandKit ? (brandKit.bodyFont ?? "") : (STARTER_KIT.bodyFont ?? ""),
+                quoteFont: brandKit ? (brandKit.quoteFont ?? "") : (STARTER_KIT.quoteFont ?? ""),
+                fontFallback: brandKit?.fontFallback ?? STARTER_KIT.fontFallback,
+                logoImageId: brandKit?.logoImageId ?? "",
+                logoDarkImageId: brandKit?.logoDarkImageId ?? "",
+              }}
+              logos={logos.map((l) => ({ id: l.id, caption: l.caption, width: l.width, height: l.height }))}
+              workspaceId={v.workspace.id}
+              userId={v.user.id}
+            />
+            <Field label="Banned colours" hint="hex, comma-separated: a kit using one is refused">
+              <input className="field font-mono" name="bannedColors" defaultValue={brandKit?.bannedColors?.join(", ") ?? ""} />
+            </Field>
+            <Field label="Placeholder colour" hint="the fill an unfilled [placeholder] is drawn in on a slide, so it cannot be missed; empty means FFF3A3. Ink must read on it.">
+              <input className="field font-mono" name="placeholder" defaultValue={brandKit?.placeholder ?? ""} maxLength={7} />
+            </Field>
+            <Field label="Permitted names" hint="names a script may introduce without a warning, comma-separated: a permitted name, never a second presenter">
+              <input className="field" name="aliases" defaultValue={brandKit?.aliases?.join(", ") ?? ""} data-testid="brand-aliases" />
+            </Field>
+            <label className="flex items-start gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" name="showPriceAnchor" value="1" defaultChecked={brandKit?.showPriceAnchor ?? true} className="mt-1" data-testid="brand-price-anchor" />
+              <span>
+                Price against total
+                <span className="block text-xs text-ink-3">The slide that puts your price next to the total value of the stack. Turn it off and the price stands on its own. Some brands do not allow the comparison.</span>
+              </span>
+            </label>
+            <Field label="Notes" hint="shown to you, never rendered">
+              <input className="field" name="notes" defaultValue={brandKit?.notes ?? ""} />
+            </Field>
+            <div className="sm:col-span-2">
+              <SubmitButton className="btn btn-primary" pendingText="Saving…">Save brand kit</SubmitButton>
+            </div>
+          </form>
+          {savedKit ? (
+            <form action={resetBrandKitAction} className="mt-3 border-t pt-3">
+              <ConfirmButton message="Go back to the house starter kit? Your saved colours, faces and logo choice are cleared from the kit; your logo stays in Images." className="btn btn-ghost btn-sm" pendingText="Resetting…">
+                Reset to the starter kit
+              </ConfirmButton>
+            </form>
+          ) : null}
+        </Card>
         {v.role === "coach" ? (
           <>
             <Card title="Workspace">
@@ -398,75 +469,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   Save workspace
                 </SubmitButton>
               </form>
-            </Card>
-            <Card title="Brand kit" action={savedKit ? <span className="text-xs text-ink-3">ink on ground {contrastRatio(savedKit.ground, savedKit.ink)}:1</span> : null}>
-              <div id="brand-kit" />
-              <p className="mb-3 text-sm text-ink-2">The colours and faces a client-facing file is rendered in: the deck reads these. Six-digit hex, no #. A pair that cannot read on a slide is refused here, not discovered on screen.</p>
-              {savedKit && brandKitWarnings(savedKit).length ? (
-                <ul className="mb-3 list-disc rounded-lg bg-warn-soft p-2 pl-6 text-sm" data-testid="brand-warnings">
-                  {brandKitWarnings(savedKit).map((x) => (
-                    <li key={x}>{x}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {!savedKit ? (
-                <p className="mb-3 rounded-lg border border-accent bg-accent-soft p-2 text-sm" data-testid="brand-starter">
-                  <strong>House starter kit: replace with your own.</strong> Your decks use these colours and faces until you save your own. Change any of them, give the kit your business name, and save.
-                </p>
-              ) : null}
-              {brandNotice === "saved" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-saved" role="status">Brand kit saved.</p> : brandNotice === "reset" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" data-testid="brand-reset" role="status">Back to the house starter kit.</p> : brandNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" data-testid="brand-refused" role="alert">{brandNotice}</p> : null}
-              <form action={saveBrandKitAction} className="grid gap-3 sm:grid-cols-2" data-testid="brand-form">
-                <BrandKitEditor
-                  kit={{
-                    name: brandKit?.name ?? "",
-                    ground: brandKit ? (brandKit.ground ?? "") : (STARTER_KIT.ground ?? ""),
-                    ink: brandKit ? (brandKit.ink ?? "") : (STARTER_KIT.ink ?? ""),
-                    accent: brandKit ? (brandKit.accent ?? "") : (STARTER_KIT.accent ?? ""),
-                    muted: brandKit ? (brandKit.muted ?? "") : (STARTER_KIT.muted ?? ""),
-                    surface: brandKit ? (brandKit.surface ?? "") : (STARTER_KIT.surface ?? ""),
-                    inverseGround: brandKit ? (brandKit.inverseGround ?? "") : (STARTER_KIT.inverseGround ?? ""),
-                    inverseInk: brandKit ? (brandKit.inverseInk ?? "") : (STARTER_KIT.inverseInk ?? ""),
-                    displayFont: brandKit ? (brandKit.displayFont ?? "") : (STARTER_KIT.displayFont ?? ""),
-                    bodyFont: brandKit ? (brandKit.bodyFont ?? "") : (STARTER_KIT.bodyFont ?? ""),
-                    quoteFont: brandKit ? (brandKit.quoteFont ?? "") : (STARTER_KIT.quoteFont ?? ""),
-                    fontFallback: brandKit?.fontFallback ?? STARTER_KIT.fontFallback,
-                    logoImageId: brandKit?.logoImageId ?? "",
-                    logoDarkImageId: brandKit?.logoDarkImageId ?? "",
-                  }}
-                  logos={logos.map((l) => ({ id: l.id, caption: l.caption, width: l.width, height: l.height }))}
-                  workspaceId={v.workspace.id}
-                  userId={v.user.id}
-                />
-                <Field label="Banned colours" hint="hex, comma-separated: a kit using one is refused">
-                  <input className="field font-mono" name="bannedColors" defaultValue={brandKit?.bannedColors?.join(", ") ?? ""} />
-                </Field>
-                <Field label="Placeholder colour" hint="the fill an unfilled [placeholder] is drawn in on a slide, so it cannot be missed; empty means FFF3A3. Ink must read on it.">
-                  <input className="field font-mono" name="placeholder" defaultValue={brandKit?.placeholder ?? ""} maxLength={7} />
-                </Field>
-                <Field label="Permitted names" hint="names a script may introduce without a warning, comma-separated: a permitted name, never a second presenter">
-                  <input className="field" name="aliases" defaultValue={brandKit?.aliases?.join(", ") ?? ""} data-testid="brand-aliases" />
-                </Field>
-                <label className="flex items-start gap-2 text-sm sm:col-span-2">
-                  <input type="checkbox" name="showPriceAnchor" value="1" defaultChecked={brandKit?.showPriceAnchor ?? true} className="mt-1" data-testid="brand-price-anchor" />
-                  <span>
-                    Price against total
-                    <span className="block text-xs text-ink-3">The slide that puts your price next to the total value of the stack. Turn it off and the price stands on its own. Some brands do not allow the comparison.</span>
-                  </span>
-                </label>
-                <Field label="Notes" hint="shown to you, never rendered">
-                  <input className="field" name="notes" defaultValue={brandKit?.notes ?? ""} />
-                </Field>
-                <div className="sm:col-span-2">
-                  <SubmitButton className="btn btn-primary" pendingText="Saving…">Save brand kit</SubmitButton>
-                </div>
-              </form>
-              {savedKit ? (
-                <form action={resetBrandKitAction} className="mt-3 border-t pt-3">
-                  <ConfirmButton message="Go back to the house starter kit? Your saved colours, faces and logo choice are cleared from the kit; your logo stays in Images." className="btn btn-ghost btn-sm" pendingText="Resetting…">
-                    Reset to the starter kit
-                  </ConfirmButton>
-                </form>
-              ) : null}
             </Card>
             <Card title="Invite links">
               <div className="space-y-3 text-sm">

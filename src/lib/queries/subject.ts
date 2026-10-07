@@ -35,7 +35,7 @@ export async function subjectFor(who: { userId: string; workspaceId: string; nam
     assetsFor(workspaceId, userId),
     citableEvidence(userId),
     db.query.offers.findMany({ where: eq(schema.offers.userId, userId) }),
-    db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, workspaceId) }),
+    db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) }),
   ]);
   const essenceStories = ((essence.representative_stories?.stories as EssenceStory[] | undefined) ?? []).filter((st) => st.name || st.summary);
   return {

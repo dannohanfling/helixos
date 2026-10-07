@@ -458,7 +458,7 @@ async function main() {
     //    on a content slide is a scheme colour; the theme fonts are the kit's faces and the runs name them as theme faces. Then the
     //    acceptance: change the theme's accent in the file, re-render, and the rule on a content slide takes the new colour with no
     //    per-slide edit. ──
-    const kitRow = await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, wsId) });
+    const kitRow = await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, wsId), eq(schema.brandKits.userId, user.id)) });
     // No kit of the workspace's own renders in the house starter kit (first-deck §1).
     const { STARTER_KIT } = await import("@/lib/engine/deck");
     const kitAccent = (kitRow?.accent ?? STARTER_KIT.accent).replace(/^#/, "").toUpperCase();

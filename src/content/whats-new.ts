@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 106,
+    date: "2026-10-06",
+    title: "Your own Brand Kit",
+    lines: [
+      "Settings now has a Brand Kit card for you: your colours, fonts and logo. Your decks render in your own kit, never anyone else's, and until you save one they use the house starter kit.",
+      "Today nudges you to set it (about 5 minutes), and your coach can set it up with you when \"Let my coach work\" is on.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 105,
     date: "2026-10-06",
     title: "Your deck: speaker notes you can talk from",

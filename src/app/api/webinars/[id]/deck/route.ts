@@ -30,7 +30,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const [context, kit] = await Promise.all([contextFor(w), db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, w.workspaceId) })]);
+  const [context, kit] = await Promise.all([contextFor(w), db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, w.workspaceId), eq(schema.brandKits.userId, w.userId)) })]);
   const deck = deckSlides(context, kit ?? null);
   if (deck.refused.length) return NextResponse.json({ error: "not exported", refused: deck.refused }, { status: 409 });
   // The provenance gate, on the export: a webinar carrying AI-drafted sections nobody reviewed leaves only under a confirm the

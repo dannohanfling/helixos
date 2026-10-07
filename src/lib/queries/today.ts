@@ -142,7 +142,7 @@ export async function todayData(v: Viewer) {
     const step = nextStep(p.steps);
     webinarInProgress = { id: building.id, title: building.title, step, stepLabel: STEPS.find((s) => s.key === step)?.label ?? step };
     // "Pictures to gather" (§6.3), the same list Foundation shows, as a Today action until it is complete.
-    const [context, kit] = await Promise.all([contextFor(building), db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, workspaceId) })]);
+    const [context, kit] = await Promise.all([contextFor(building), db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, building.workspaceId), eq(schema.brandKits.userId, building.userId)) })]);
     const resolved = await resolveDeckSlots(building.id, deckSlides(context, kit ?? null), { workspaceId: building.workspaceId, userId: building.userId });
     const hasLogo = Boolean(kit?.logoImageId) || Boolean(await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, building.workspaceId), eq(schema.deckImages.userId, building.userId), eq(schema.deckImages.kind, "logo")) }));
     const list = shotList(resolved, hasLogo);
@@ -185,6 +185,8 @@ export async function todayData(v: Viewer) {
     webinarBroken,
   };
   const actions: Action[] = nextBestActions(snapshot);
+  // Set your brand kit (rev 568): a member with no kit of their own sees the nudge on Today until they save one.
+  const brandKitStarter = !(await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) }));
 
   const upcomingTasks = await db.query.tasks.findMany({
     where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done"), sql`${schema.tasks.dueDate} between ${tomorrow} and ${addDays(today, 7)}`),
@@ -198,6 +200,7 @@ export async function todayData(v: Viewer) {
   });
 
   return {
+    brandKitStarter,
     log: log ?? null,
     streak: streak.running,
     points,

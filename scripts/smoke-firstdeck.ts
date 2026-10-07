@@ -138,18 +138,14 @@ async function main() {
     // ── §1, the house starter kit: a workspace with no kit of its own renders in the starter, named as such; Settings shows it
     //    pre-filled to edit; a saved kit takes over; Reset to the starter kit brings it back. ──
     // A run that failed partway may have left its kit or its footer bar: §1 starts from no kit of the workspace's own.
-    await db.delete(schema.brandKits).where(eq(schema.brandKits.workspaceId, (await w()).workspaceId));
+    await db.delete(schema.brandKits).where(and(eq(schema.brandKits.workspaceId, (await w()).workspaceId), eq(schema.brandKits.userId, user.id)));
     await db.update(schema.webinars).set({ footerBar: false }).where(eq(schema.webinars.id, webinarId));
     must(deck.kit.name === "House starter kit" && !deck.kitApplied && deck.kit.displayFont === "Montserrat" && deck.refused.length === 0, "with no kit of its own, the deck renders in the house starter kit");
     await page.goto(`${base}/webinars/${webinarId}?step=deck`);
     must((await page.locator('[data-testid="deck-kit-name"]').innerText()).includes("house starter kit"), "the Deck step says it is the house starter kit");
     const { ownerBrandName } = await import("@/lib/queries/webinar");
     must((await ownerBrandName(await w(), "the workspace")) !== "House starter kit", "the footer names the member's business, never the starter kit");
-    await page.goto(`${base}/settings`);
-    await page.click('button:has-text("Log out")');
-    await page.waitForURL(/\/login/);
-    await page.click('button:has-text("As the coach")');
-    await page.waitForURL(/\/today/);
+    // The kit is the member's own (rev 568): the client's Settings has the card, pre-filled with the starter.
     await page.goto(`${base}/settings#brand-kit`);
     await page.locator('[data-testid="brand-starter"]').waitFor({ timeout: 20000 });
     must((await page.locator('[data-testid="brand-hex-ground"]').inputValue()) === "F7F5F0" && (await page.locator('[data-testid="brand-form"] input[name="displayFont"]').inputValue()) === "Montserrat", "Settings shows the starter kit pre-filled, to edit rather than start blank");
@@ -157,12 +153,12 @@ async function main() {
     await submit(page, '[data-testid="brand-form"] button[type="submit"]');
     await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 20000 });
     const ws = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, user.id) }))!.workspaceId;
-    must((await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, ws) }))?.name === "Rooted Rest", "a saved kit takes over");
+    must((await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, ws), eq(schema.brandKits.userId, user.id)) }))?.name === "Rooted Rest", "a saved kit takes over");
     must(!(await page.locator('[data-testid="brand-starter"]').count()), "with a kit of its own, the starter line goes");
     page.once("dialog", (d) => d.accept());
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button:has-text("Reset to the starter kit")').click()]);
     await page.locator('[data-testid="brand-reset"]').waitFor({ timeout: 20000 });
-    must(!(await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, ws) })) && (await page.locator('[data-testid="brand-starter"]').count()) === 1, "Reset to the starter kit clears the saved kit, with a confirm, and the starter is back");
+    must(!(await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, ws), eq(schema.brandKits.userId, user.id)) })) && (await page.locator('[data-testid="brand-starter"]').count()) === 1, "Reset to the starter kit clears the saved kit, with a confirm, and the starter is back");
     console.log("✓ §1: no kit of its own renders in the house starter kit, named on the Deck step, the footer the member's business; Settings shows it pre-filled; a saved kit takes over; Reset brings the starter back");
 
     // ── §3, the logo. A logo uploaded in the kit editor lists at its real size, never 0×0. ──
@@ -186,11 +182,6 @@ async function main() {
 
     // The client's own deck: no logo anywhere, then a dark wordmark, then the kit's dark-background logo. The drafts are marked
     // reviewed so the export goes (the provenance gate has its own walk).
-    await page.goto(`${base}/settings`);
-    await page.click('button:has-text("Log out")');
-    await page.waitForURL(/\/login/);
-    await page.click('button:has-text("As a client")');
-    await page.waitForURL(/\/today/);
     const wsId = (await w()).workspaceId;
     await db.update(schema.webinarSections).set({ origin: "ai_accepted" }).where(eq(schema.webinarSections.webinarId, webinarId));
     await db.delete(schema.deckImages).where(and(eq(schema.deckImages.userId, user.id), eq(schema.deckImages.kind, "logo")));
@@ -235,7 +226,7 @@ async function main() {
     const light = await putLogo("Cream wordmark", await wordmark(CREAM));
     const { STARTER_KIT } = await import("@/lib/engine/deck");
     const k = STARTER_KIT;
-    await db.insert(schema.brandKits).values({ id: newId(), workspaceId: wsId, name: "Walk kit", ground: k.ground, ink: k.ink, accent: k.accent, muted: k.muted, surface: k.surface, inverseGround: k.inverseGround, inverseInk: k.inverseInk, displayFont: k.displayFont, bodyFont: k.bodyFont, quoteFont: k.quoteFont, fontFallback: k.fontFallback, logoImageId: dark.id, logoDarkImageId: light.id });
+    await db.insert(schema.brandKits).values({ id: newId(), workspaceId: wsId, userId: user.id, name: "Walk kit", ground: k.ground, ink: k.ink, accent: k.accent, muted: k.muted, surface: k.surface, inverseGround: k.inverseGround, inverseInk: k.inverseInk, displayFont: k.displayFont, bodyFont: k.bodyFont, quoteFont: k.quoteFont, fontFallback: k.fontFallback, logoImageId: dark.id, logoDarkImageId: light.id });
     await db.update(schema.webinars).set({ footerBar: true }).where(eq(schema.webinars.id, webinarId));
     x = await exportCover();
     // With a logo in the footer bar, the brand line beside it goes: the footer said the brand twice.
@@ -243,7 +234,7 @@ async function main() {
     must(x.badge === 0 && x.pics.length === 1 && [0, 2, 4].every((i) => Math.abs(parseInt(x.pics[0]?.slice(i, i + 2) ?? "0", 16) - parseInt("F7F5F0".slice(i, i + 2), 16)) <= 8), `the cover carries the kit's dark-background logo, bare: ${JSON.stringify(x.pics)}`);
     t = await thumbCover();
     must(t.badge === 0 && t.src === `/api/deck-images/${light.id}`, "the cover thumbnail shows the dark-background logo");
-    await db.delete(schema.brandKits).where(eq(schema.brandKits.workspaceId, wsId));
+    await db.delete(schema.brandKits).where(and(eq(schema.brandKits.workspaceId, wsId), eq(schema.brandKits.userId, user.id)));
     await db.update(schema.webinars).set({ footerBar: false }).where(eq(schema.webinars.id, webinarId));
     console.log("✓ §3: no logo, a red \"Your logo here\" on the cover only; a dark wordmark on the dark cover sits on a ground badge; the kit's dark-background logo takes the cover bare; the footer bar's logo stands without the brand line; the thumbnails agree");
 

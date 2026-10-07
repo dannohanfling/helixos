@@ -19,6 +19,7 @@ import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { runningStreak } from "@/lib/engine/streak";
 import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
+import { KIT_STATUS_WORDS, kitStatus, kitsByMember } from "@/lib/queries/brand-kit";
 import { setClientHumanosAction } from "@/lib/actions/body";
 import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
@@ -56,6 +57,8 @@ export default async function CoachPage() {
     db.query.libraryTasks.findMany(),
   ]);
   const monthStart = `${v.today.slice(0, 7)}-01`;
+  // Each client's own brand kit (rev 568): starter, in progress, or set, read once for the roster.
+  const kitOf = await kitsByMember(wsId);
   // Claims are instant unlocks; this is a window onto what's coming, not a queue to work.
   const claimRows = await db.query.rewardClaims.findMany({ where: eq(schema.rewardClaims.workspaceId, wsId), orderBy: desc(schema.rewardClaims.createdAt), limit: 50 });
   const linkOf = new Map(catalogue(rewards, prizes, loadRewardsConfig()).map((i) => [i.name, i.bookingUrl]));
@@ -166,6 +169,7 @@ export default async function CoachPage() {
                     <th className="py-2 pr-3">Streak</th>
                     <th className="py-2 pr-3" title="Days in band this week · last weigh-in · sessions this week, for clients sharing HumanOS with you">HumanOS</th>
                     <th className="py-2 pr-3" title="The points level they have earned">Level</th>
+                    <th className="py-2 pr-3" title="Their own brand kit: the house starter kit, their own without a logo yet, or set">Kit</th>
                     <th className="py-2 pr-3 text-right">Pathway</th>
                     <th className="py-2 pr-3 text-right">Last active</th>
                     <th className="py-2 text-right">Tier</th>
@@ -213,6 +217,9 @@ export default async function CoachPage() {
                       </td>
                       <td className="py-2 pr-3">
                         {TIER_ICONS[r.tier.name]} {r.tier.name} <span className="text-xs text-ink-3 tabular">{r.pts.toLocaleString()}</span>
+                      </td>
+                      <td className="py-2 pr-3 text-xs" data-testid="coach-kit-cell" data-member={r.m.id} data-status={kitStatus(kitOf.get(r.m.userId))}>
+                        <span className={kitStatus(kitOf.get(r.m.userId)) === "set" ? "text-ink-2" : "text-warn"}>{KIT_STATUS_WORDS[kitStatus(kitOf.get(r.m.userId))]}</span>
                       </td>
                       <td className="py-2 pr-3 text-right tabular">
                         {r.verified}/{pathTotal}

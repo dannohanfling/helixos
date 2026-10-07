@@ -12,6 +12,14 @@ import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { brandKitProblems, normaliseHex } from "@/lib/engine/subject";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 
+/** A picked logo's id when it is one of this member's own images of kind logo; otherwise null, so the kit keeps no logo. */
+async function ownLogo(workspaceId: string, userId: string, picked: string): Promise<string | null> {
+  const id = picked.trim();
+  if (!id) return null;
+  const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId), eq(schema.deckImages.kind, "logo")) });
+  return img ? img.id : null;
+}
+
 /** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
 function validTimezone(tz: string): string | null {
   if (!tz) return null;
@@ -114,17 +122,22 @@ export async function rotateInviteAction(formData: FormData): Promise<void> {
   refresh();
 }
 
-/** Back to the house starter kit (first-deck brief §1): the saved kit goes; decks use the starter until a new one is saved. */
+/** Back to the house starter kit (first-deck brief §1): the member's own kit goes; their decks use the starter until a new one is saved. */
 export async function resetBrandKitAction(): Promise<void> {
-  const coach = await requireCoach();
-  await db.delete(schema.brandKits).where(eq(schema.brandKits.workspaceId, coach.workspace.id));
+  // The member's own kit (rev 568); a coach switched in with Work on resets it for them, and that is logged like any other change.
+  const { workspaceId, userId } = await ctx();
+  await db.delete(schema.brandKits).where(and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)));
   refresh();
   redirect("/settings?brand=reset#brand-kit");
 }
 
-/** The workspace's brand kit: refused with each problem named when a pair cannot read on a slide or a colour is one the brand bans. */
+/**
+ * The member's own brand kit (rev 568: one per member, every member sees the card): refused with each problem named when a
+ * pair cannot read on a slide or a colour is one the brand bans. A coach switched in with Work on saves it for the client,
+ * logged; in View it is refused like every write.
+ */
 export async function saveBrandKitAction(formData: FormData): Promise<void> {
-  const coach = await requireCoach();
+  const { workspaceId, userId } = await ctx();
   const kit = {
     name: str(formData, "name"),
     ground: normaliseHex(str(formData, "ground")),
@@ -138,20 +151,11 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
     bodyFont: str(formData, "bodyFont"),
     quoteFont: opt(formData, "quoteFont"),
     fontFallback: str(formData, "fontFallback") || "Arial",
-    // The logo (deck visuals §4): one of the coach's own library images of kind logo, or none.
-    logoImageId: await (async () => {
-      const id = str(formData, "logoImageId").trim();
-      if (!id) return null;
-      const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, coach.workspace.id), eq(schema.deckImages.kind, "logo")) });
-      return img ? img.id : null;
-    })(),
-    // The dark-ground logo (first-deck brief §3): the same rule, one of the coach's own logos or none.
-    logoDarkImageId: await (async () => {
-      const id = str(formData, "logoDarkImageId").trim();
-      if (!id) return null;
-      const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, coach.workspace.id), eq(schema.deckImages.kind, "logo")) });
-      return img ? img.id : null;
-    })(),
+    // The logo (deck visuals §4): one of the member's own library images of kind logo, or none. Another member's image, even
+    // in the same workspace, is never accepted (rev 568, the rule of 6cbb890).
+    logoImageId: await ownLogo(workspaceId, userId, str(formData, "logoImageId")),
+    // The dark-ground logo (first-deck brief §3): the same rule.
+    logoDarkImageId: await ownLogo(workspaceId, userId, str(formData, "logoDarkImageId")),
     bannedColors: str(formData, "bannedColors").split(/[,\s]+/).map(normaliseHex).filter(Boolean),
     placeholder: normaliseHex(str(formData, "placeholder")) || null,
     // Permitted names: a script may introduce one with no warning; none is ever reported as the presenter.
@@ -162,9 +166,9 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
   const problems = brandKitProblems(kit);
   // Refused with the problems named, and what was typed comes back with it: a refusal never empties the form.
   if (problems.length) redirect(`/settings?brand=${encodeURIComponent(problems.join(" "))}&draft=${encodeURIComponent(JSON.stringify(kit))}#brand-kit`);
-  const existing = await db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, coach.workspace.id) });
+  const existing = await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) });
   if (existing) await db.update(schema.brandKits).set(kit).where(eq(schema.brandKits.id, existing.id));
-  else await db.insert(schema.brandKits).values({ id: newId(), workspaceId: coach.workspace.id, ...kit });
+  else await db.insert(schema.brandKits).values({ id: newId(), workspaceId, userId, ...kit });
   refresh();
   redirect("/settings?brand=saved#brand-kit");
 }

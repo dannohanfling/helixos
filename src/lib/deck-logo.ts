@@ -31,7 +31,8 @@ export async function deckLogos(
   cover: { background: string; ground: string },
   read: (url: string) => Promise<Buffer | null> = readDeckBytes,
 ): Promise<DeckLogos> {
-  const inWorkspace = (id: string) => db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, owner.workspaceId)) });
+  // The kit's pick counts only when it is the owner's own logo (rev 568): a kit can never show another member's image.
+  const inWorkspace = (id: string) => db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, owner.workspaceId), eq(schema.deckImages.userId, owner.userId), eq(schema.deckImages.kind, "logo")) });
   const logo =
     (kit?.logoImageId ? await inWorkspace(kit.logoImageId) : null) ??
     (await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, owner.workspaceId), eq(schema.deckImages.userId, owner.userId), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] })) ??

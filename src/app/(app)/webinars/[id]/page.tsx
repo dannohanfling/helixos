@@ -153,7 +153,7 @@ export default async function WebinarWizardPage({
     }),
     citableEvidence(v.user.id),
     essenceFor(v.workspace.id, v.user.id),
-    db.query.brandKits.findFirst({ where: eq(schema.brandKits.workspaceId, v.workspace.id) }),
+    db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, w.workspaceId), eq(schema.brandKits.userId, w.userId)) }),
   ]);
   // A permitted name (the kit's aliases) opens a script with no warning and is never reported as the presenter.
   const presenterAliases = brandKit?.aliases ?? [];
@@ -1823,7 +1823,7 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
         </div>
       ) : null}
       <p className="mb-3 text-sm text-ink-2" data-testid="deck-honesty">
-        A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in <span data-testid="deck-kit-name">{deck.kitApplied ? deck.kit.name : "the house starter kit, until a kit of your own is saved on Settings"}</span>.
+        A structured text deck, styled in your own template: one idea per slide, every slide built from what this record holds and nothing it does not. The proof, study, story and offer wired to each act are on their slides as the bank stores them; the art direction and your delivery notes are in the speaker notes, never on a face. Rendered in <span data-testid="deck-kit-name">{deck.kitApplied ? deck.kit.name : <>the house starter kit, until a kit of your own is saved: <Link href="/settings#brand-kit" className="underline" data-testid="deck-kit-link">Set your brand kit (5 min)</Link></>}</span>.
       </p>
       {deck.openingOmitted.length ? (
         <p className="mb-2 text-sm text-ink-2" data-testid="deck-opening-omitted">
