@@ -1,7 +1,7 @@
 /**
  * One file control everywhere (Danno, 7 Oct): a bare browser file input reads as plain text and, on a phone, looks like
- * take-a-photo only. Every file input in the app is the shared FilePicker's, read off the source; the one exception is
- * Body's photo form, which Body is replacing with the same component on the Log page.
+ * take-a-photo only. Every file input in the app is the shared FilePicker's, read off the source; Body's photo form on the
+ * Log page switched to it too.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -19,9 +19,10 @@ function walk(dir: string, out: string[] = []): string[] {
 const rel = (f: string) => path.relative(root, f).replaceAll("\\", "/");
 
 describe("the shared file control", () => {
-  it("is the only file input in the app, bar Body's photo form (theirs to switch)", () => {
+  it("is the only file input in the app, Body's photo form included", () => {
     const withInput = walk(path.join(root, "src")).filter((f) => /type="file"/.test(readFileSync(f, "utf8"))).map(rel).sort();
-    expect(withInput).toEqual(["src/components/body/photo-form.tsx", "src/components/file-picker.tsx"]);
+    expect(withInput).toEqual(["src/components/file-picker.tsx"]);
+    expect(readFileSync(path.join(root, "src/components/body/photo-form.tsx"), "utf8")).toMatch(/<FilePicker kind="image" files=\{files\} onChange=\{pick\} testId="body-photo-file" \/>/);
   });
   it("offers the camera and the library apart for an image, one upload button for a file, full width on a phone, and a clear", () => {
     const src = readFileSync(path.join(root, "src/components/file-picker.tsx"), "utf8");

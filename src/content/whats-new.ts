@@ -16,7 +16,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: "2026-10-07",
     title: "Choosing a file: real buttons, and the camera apart from the library",
     lines: [
-      "Wherever you add a file (a lead magnet, a RENPHO export, a proof, deck images, a screenshot on an issue report, an FAQ import) the plain browser box is gone. For a picture you get \"📷 Take photo\" and \"🖼️ Upload photo\" as two buttons, full width on a phone; for anything else, one \"Upload file\" button.",
+      "Wherever you add a file (a lead magnet, a RENPHO export, a proof, deck images, a screenshot on an issue report, an FAQ import, a meal photo in HumanOS) the plain browser box is gone. For a picture you get \"📷 Take photo\" and \"🖼️ Upload photo\" as two buttons, full width on a phone; for anything else, one \"Upload file\" button.",
       "What you chose shows beneath as a thumbnail or its name, with a ✕ to clear it before you send.",
     ],
     audience: "everyone",

@@ -1489,11 +1489,21 @@ async function main() {
         const photoFold = client.locator('details:has([data-testid="body-photo"]) > summary');
         await photoFold.waitFor({ timeout: 30000 });
         if (!(await photoFold.evaluate((el) => (el.parentElement as HTMLDetailsElement).open))) await photoFold.click();
-        await client.locator('[data-testid="body-photo-file"]').waitFor({ timeout: 30000 });
+        // Two button-shaped ways in, the native inputs hidden behind them; the camera one asks for the camera, the upload one doesn't.
+        await client.locator('[data-testid="body-photo-file-picker"]').waitFor({ timeout: 30000 });
+        if (!(await client.locator('[data-testid="body-photo-file-picker"] label', { hasText: "Take photo" }).isVisible()) || ((await client.locator('[data-testid="body-photo-file"]').boundingBox())?.width ?? 0) > 1) throw new Error("the photo is picked by two buttons, the file inputs hidden");
+        if ((await client.locator('[data-testid="body-photo-file-capture"]').getAttribute("capture")) !== "environment" || (await client.locator('[data-testid="body-photo-file"]').getAttribute("capture")) !== null) throw new Error("Take photo opens the camera; Upload photo opens the library");
+        if (!(await client.locator('[data-testid="body-photo-read"]').isDisabled())) throw new Error("Read the plate waits for a photo");
         // A 2 × 2 PNG: enough for the phone-side shrink to produce a JPEG to send.
         const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVQImWP4z8DAwMDAwPD//38GBgYAHiQEAhMtBaUAAAAASUVORK5CYII=", "base64");
         await client.locator('[data-testid="body-photo-file"]').setInputFiles({ name: "plate.png", mimeType: "image/png", buffer: png });
-        await client.locator('[data-testid="body-photo-preview"]').waitFor({ timeout: 30000 });
+        await client.locator('[data-testid="body-photo-file-thumb"]').waitFor({ timeout: 30000 });
+        if (!(await client.locator('[data-testid="body-photo-file-name"]').innerText()).trim().startsWith("plate.png")) throw new Error("the picked photo shows its name beside the thumbnail");
+        // ✕ clears it, and Read the plate waits again; then the same photo again.
+        await client.locator('[data-testid="body-photo-file-clear"]').click();
+        if ((await client.locator('[data-testid="body-photo-file-thumb"]').count()) || !(await client.locator('[data-testid="body-photo-read"]').isDisabled())) throw new Error("✕ clears the photo");
+        await client.locator('[data-testid="body-photo-file"]').setInputFiles({ name: "plate.png", mimeType: "image/png", buffer: png });
+        await client.locator('[data-testid="body-photo-file-thumb"]').waitFor({ timeout: 30000 });
         await press(client, '[data-testid="body-photo-read"]', async () => (await client.locator('[data-testid="body-photo-line"]').count()) === 3, "the plate read");
         const lastAi = (await (await fetch("http://localhost:4020/__last")).json()) as { system: { text: string; cached: boolean }[]; images: number; imageBytes: number };
         if (lastAi.images !== 1 || !(lastAi.imageBytes > 100)) throw new Error(`the photo went to the model once: ${JSON.stringify({ images: lastAi.images, bytes: lastAi.imageBytes })}`);

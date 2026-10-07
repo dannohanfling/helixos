@@ -1,7 +1,8 @@
 "use client";
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import type { PhotoState } from "@/lib/actions/body";
 import { SubmitButton } from "@/components/submit-button";
+import { FilePicker } from "@/components/file-picker";
 
 /**
  * A meal from a photo (rev 237 phase 14): the member picks or takes a photo, it is shrunk on the phone (longest side 1024 px,
@@ -10,13 +11,17 @@ import { SubmitButton } from "@/components/submit-button";
  */
 export function PhotoForm({ action, logAction, date, slots, defaultSlot }: { action: (prev: PhotoState, f: FormData) => Promise<PhotoState>; logAction: (f: FormData) => Promise<void>; date: string; slots: string[]; defaultSlot: string }) {
   const [state, read] = useActionState<PhotoState, FormData>(action, undefined);
-  const [image, setImage] = useState<{ data: string; mediaType: string; preview: string } | null>(null);
+  const [image, setImage] = useState<{ data: string; mediaType: string } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const file = useRef<HTMLInputElement>(null);
+  // The app's one file control (main's FilePicker, 7 Oct): 📷 Take photo and 🖼️ Upload photo as buttons, the chosen photo with
+  // its thumbnail, name and a ✕. Danno found only a bare "Choose File" here that read as camera-only on his phone.
+  const [files, setFiles] = useState<File[]>([]);
 
-  async function pick(f: File | undefined) {
+  async function pick(next: File[]) {
+    setFiles(next);
     setProblem(null);
     setImage(null);
+    const f = next[0];
     if (!f) return;
     try {
       const url = URL.createObjectURL(f);
@@ -33,7 +38,7 @@ export function PhotoForm({ action, logAction, date, slots, defaultSlot }: { act
       canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-      setImage({ data: dataUrl.replace(/^data:[^,]*,/, ""), mediaType: "image/jpeg", preview: dataUrl });
+      setImage({ data: dataUrl.replace(/^data:[^,]*,/, ""), mediaType: "image/jpeg" });
     } catch {
       setProblem("That file couldn't be read as a photo. Try a JPEG or PNG.");
     }
@@ -42,15 +47,11 @@ export function PhotoForm({ action, logAction, date, slots, defaultSlot }: { act
   return (
     <div className="space-y-3" data-testid="body-photo">
       <form action={read} className="space-y-2">
-        <input ref={file} type="file" accept="image/*" capture="environment" className="block text-sm" onChange={(e) => pick(e.target.files?.[0])} data-testid="body-photo-file" aria-label="A photo of the meal" />
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image.preview} alt="The meal, shrunk for AI" className="max-h-40 rounded-lg border" data-testid="body-photo-preview" />
-        ) : null}
+        <FilePicker kind="image" files={files} onChange={pick} testId="body-photo-file" />
         <input type="hidden" name="image" value={image?.data ?? ""} />
         <input type="hidden" name="mediaType" value={image?.mediaType ?? ""} />
         <div className="flex flex-wrap items-center gap-2">
-          <SubmitButton className="btn btn-humanos btn-sm" pendingText="Reading the plate…" disabled={!image} data-testid="body-photo-read">
+          <SubmitButton className={`btn btn-humanos btn-sm ${image ? "" : "cursor-not-allowed opacity-50"}`} pendingText="Reading the plate…" disabled={!image} title={image ? undefined : "Take or upload a photo first"} data-testid="body-photo-read">
             ✨ Read the plate
           </SubmitButton>
           <span className="text-xs text-ink-3">Your own AI names the foods and guesses the portions. Nothing is logged until you check the lines.</span>
