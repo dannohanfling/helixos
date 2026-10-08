@@ -197,9 +197,9 @@ async function main() {
     await page.goto(`${base}/content`);
     await page.locator('[data-testid="failed-banner"]').first().waitFor({ timeout: 15000 });
     await page.goto(`${base}/today`);
-    const todayBanner = page.locator('[data-testid="failed-banner"]').first();
-    await todayBanner.waitFor({ timeout: 15000 });
-    if (!(await todayBanner.innerText()).includes("GHL with a refused user id")) throw new Error("Today's banner names the post");
+    // Today lists every post with a failed channel from the last two weeks, so find this post's banner by its title.
+    const todayBanner = page.locator('[data-testid="failed-banner"]', { hasText: "GHL with a refused user id" }).first();
+    await todayBanner.waitFor({ timeout: 15000 }).catch(() => { throw new Error("Today's banner names the post"); });
     console.log("✓ a failed channel shows as a plain banner with Fix it on the post, the board and Today");
     await page.goto(`${base}/settings`);
     if (await page.locator('[data-testid="ghl-error"]').count()) throw new Error("a post's failure does not paint the connection red");

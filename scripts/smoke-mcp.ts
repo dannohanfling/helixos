@@ -253,6 +253,10 @@ async function main() {
     await logout(page);
     await login(page, "As the coach");
     await page.goto(`${base}/settings?at=${Date.now()}#connected-apps`);
+    // The page streams and then lands its hash: let it settle before the click, or the click lands on a moving box.
+    await page.locator('[data-testid="apps-open-toggle"]').waitFor({ timeout: 20000 });
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(400);
     await page.locator('[data-testid="apps-open-toggle"]').uncheck();
     await submit(page, '[data-testid="apps-open-save"]');
     await page.waitForURL(/apps=closed/);

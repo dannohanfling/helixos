@@ -5,8 +5,10 @@ import { PROOF_TYPES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import {
   createProofAction,
+  importProofsFromAirtableAction,
   proofFromCheckinAction,
 } from "@/lib/actions/proofs";
+import { PROOF_IMPORT, importSummary, tagRank } from "@/lib/engine/proof-import";
 import {
   Badge,
   Card,
@@ -31,9 +33,10 @@ const TYPE_LABEL: Record<string, string> = {
   story: "Story",
 };
 
-export default async function ProofPage() {
+export default async function ProofPage({ searchParams }: { searchParams: Promise<{ tag?: string; imported?: string; skipped?: string; dropped?: string; importError?: string }> }) {
   const v = await requireViewer();
-  const [rows, checkins, clients] = await Promise.all([
+  const sp = await searchParams;
+  const [allRows, checkins, clients] = await Promise.all([
     db.query.proofs.findMany({
       where: eq(schema.proofs.userId, v.user.id),
       orderBy: desc(schema.proofs.createdAt),
@@ -48,6 +51,13 @@ export default async function ProofPage() {
     }),
   ]);
   const fathom = await fathomKeyFor(v.workspace.id, v.user.id);
+  // Tags (Danno's Proof Bank from Airtable, 8 Oct): Results & Revenue, Sales Wins and Transformation first, then the rest by
+  // date; one tag filters the list. A bank with no tags reads as before.
+  const tagCounts = new Map<string, number>();
+  for (const r of allRows) for (const t of r.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  const tag = sp.tag && tagCounts.has(sp.tag) ? sp.tag : "";
+  const rows = allRows.filter((r) => !tag || r.tags.includes(tag)).sort((a, b) => tagRank(a.tags) - tagRank(b.tags));
+  const importNote = sp.imported !== undefined ? importSummary(Number(sp.imported) || 0, Number(sp.skipped) || 0, Number(sp.dropped) || 0) : null;
   const thumb = new Map<
     string,
     { id: string; displayKey: string | null; altText: string | null }
@@ -59,8 +69,8 @@ export default async function ProofPage() {
   const wins = checkins
     .filter((k) => k.wins && !captured.has(k.wins))
     .slice(0, 6);
-  const approved = rows.filter((r) => r.status === "approved").length;
-  const grandfathered = rows.filter(
+  const approved = allRows.filter((r) => r.status === "approved").length;
+  const grandfathered = allRows.filter(
     (r) => r.status === "approved" && !r.permissionAt,
   ).length;
   return (
@@ -69,7 +79,7 @@ export default async function ProofPage() {
         title="Proof Bank"
         subtitle={
           <span>
-            Your clients&apos; results. {rows.length} proofs · {approved}{" "}
+            Your clients&apos; results. {allRows.length} proofs · {approved}{" "}
             approved to use
             {grandfathered ? (
               <span data-testid="grandfathered-count">
@@ -83,6 +93,39 @@ export default async function ProofPage() {
           </span>
         }
       />
+      {v.role === "coach" ? (
+        <Card id="import" className="mb-4" title="Import from Airtable">
+          {importNote ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="proof-import-note">{importNote}</p> : null}
+          {sp.importError ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="proof-import-error">{sp.importError}</p> : null}
+          <Disclosure summary={<span className="btn btn-soft btn-sm" data-testid="proof-import-open">Import from Airtable</span>}>
+            <form action={importProofsFromAirtableAction} className="mt-2 grid gap-3 sm:grid-cols-3" data-testid="proof-import-form">
+              <Field label="Base">
+                <input className="field" name="baseId" defaultValue={PROOF_IMPORT.baseId} data-testid="proof-import-base" />
+              </Field>
+              <Field label="Table">
+                <input className="field" name="tableId" defaultValue={PROOF_IMPORT.tableId} data-testid="proof-import-table" />
+              </Field>
+              <Field label="Read-only token" hint="Used for this run only. Never stored, never shown back.">
+                <input className="field" name="token" type="password" autoComplete="off" required data-testid="proof-import-token" />
+              </Field>
+              <p className="text-xs text-ink-3 sm:col-span-3">Every clip comes in approved (you hold permission for all of them), off your bot until you put it there, as first name and last initial, with its categories as tags. A row already here is skipped, so run it again when the backfill lands.</p>
+              <div className="sm:col-span-3">
+                <SubmitButton className="btn btn-primary btn-sm" pendingText="Reading the table…" data-testid="proof-import-run">
+                  Import
+                </SubmitButton>
+              </div>
+            </form>
+          </Disclosure>
+        </Card>
+      ) : null}
+      {tagCounts.size ? (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5 text-xs" data-testid="proof-tag-filter">
+          <Link href="/proof" className={`badge ${tag ? "" : "badge-accent"}`}>All · {allRows.length}</Link>
+          {[...tagCounts.entries()].sort((a, b) => tagRank([a[0]]) - tagRank([b[0]]) || b[1] - a[1]).map(([t, n]) => (
+            <Link key={t} href={`/proof?tag=${encodeURIComponent(t)}`} className={`badge ${tag === t ? "badge-accent" : ""}`}>{t} · {n}</Link>
+          ))}
+        </div>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-4">
           {rows.length ? (
@@ -91,7 +134,7 @@ export default async function ProofPage() {
                 {rows.map((r) => {
                   const t = thumb.get(r.id);
                   return (
-                    <li key={r.id} className="py-2.5">
+                    <li key={r.id} className="py-2.5" data-testid="proof-row">
                       <Link
                         href={`/proof/${r.id}`}
                         className="flex items-start gap-3 hover:underline"
@@ -126,6 +169,13 @@ export default async function ProofPage() {
                           <span className="block truncate text-sm text-ink-2">
                             {r.shortVersion ?? r.resultAfter ?? ""}
                           </span>
+                          {r.tags.length ? (
+                            <span className="mt-0.5 flex flex-wrap gap-1" data-testid="proof-tags">
+                              {r.tags.map((t) => (
+                                <span key={t} className="badge text-[10px]">{t}</span>
+                              ))}
+                            </span>
+                          ) : null}
                         </span>
                         <span className="flex max-w-[45%] shrink-0 flex-col items-end gap-1 text-right">
                           <Badge

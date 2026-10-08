@@ -4,7 +4,8 @@
  * material never seeds an example anywhere else. The unit tests map it; scripts/mock-airtable.ts serves it to the import walk.
  */
 export type FixtureRecord = { id: string; createdTime: string; fields: Record<string, unknown> };
-export type FixtureTable = { id: string; name: string; records: FixtureRecord[] };
+export type FixtureField = { id: string; name: string; type?: string; options?: { linkedTableId?: string } };
+export type FixtureTable = { id: string; name: string; records: FixtureRecord[]; /** Listed by the metadata route when given; the primary field first. */ fields?: FixtureField[] };
 
 const NEW = "2026-06-10T20:32:22.000Z";
 const TEMPLATE = "2026-04-14T09:00:00.000Z";

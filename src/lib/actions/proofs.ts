@@ -1,7 +1,7 @@
 "use server";
 
 import { deletedTo } from "@/lib/deleted";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { PROOF_TYPES } from "@/db/schema";
@@ -12,6 +12,11 @@ import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { attachmentsBlockApproval } from "@/lib/engine/proof-attachments";
 import { attachmentsFor, deleteAttachmentsForProof } from "@/lib/queries/proof-attachments";
 import { redactUrls } from "@/lib/engine/storage-policy";
+import { requireCoach } from "@/lib/auth";
+import { allow } from "@/lib/rate-limit";
+import { AirtableError, airtableProblem, readFields, readOneField, readTableFields, type BaseAccess } from "@/lib/airtable";
+import type { AirtableRecord } from "@/lib/engine/airtable-import";
+import { PROOF_IMPORT, mapTestimonial } from "@/lib/engine/proof-import";
 
 const BELIEFS = ["vehicle", "internal", "external", "none"] as const;
 
@@ -173,4 +178,46 @@ export async function proofToContentAction(formData: FormData): Promise<void> {
     .trim();
   await db.insert(schema.contentItems).values({ id, workspaceId, userId, title: `Win: ${p.name}`, status: "creating", contentType: "Client Win", platform: "FB Group", hasCta: true, hook: p.hook ?? p.shortVersion ?? p.name, body, origin: "rule", notes: `From proof ${p.id}` });
   redirect(`/content/${id}`);
+}
+
+/**
+ * Danno's Proof Bank from Airtable (8 Oct): the coach's own Testimonials table, read with the token pasted for this run only
+ * (never stored, never logged), each clip a proof in the coach's member scope: approved (Danno holds permission for every
+ * one), never on the bot until he puts it there, tagged with its categories. Re-runnable: the Airtable record id is kept on
+ * the proof, and a row already in is skipped, so the backfill's later rows come in on the next run.
+ */
+export async function importProofsFromAirtableAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const back = (q: string) => redirect(`/proof?${q}#import`);
+  if (!(await allow(`proof-import:${v.user.id}`, 10, 15 * 60000))) back(`importError=${encodeURIComponent("That's a lot of runs in a row. Wait 15 minutes and try again.")}`);
+  const access: BaseAccess = { baseId: str(formData, "baseId").trim() || PROOF_IMPORT.baseId, token: str(formData, "token") };
+  const tableId = str(formData, "tableId").trim() || PROOF_IMPORT.tableId;
+  let rows: AirtableRecord[];
+  const clientNames = new Map<string, string>();
+  try {
+    const f = PROOF_IMPORT.fields;
+    rows = await readFields(access, tableId, Object.values(f));
+    // The client link names a record in another table: that table's primary field is the name.
+    const linkedTableId = (await readTableFields(access, tableId)).find((x) => x.id === f.client)?.options?.linkedTableId;
+    if (linkedTableId) {
+      const primary = (await readTableFields(access, linkedTableId))[0];
+      if (primary) for (const [id, name] of await readOneField(access, linkedTableId, primary.id)) clientNames.set(id, name);
+    }
+  } catch (e) {
+    if (e instanceof AirtableError) back(`importError=${encodeURIComponent(airtableProblem(e))}`);
+    throw e;
+  }
+  const have = new Set((await db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, v.user.id), isNotNull(schema.proofs.airtableId)), columns: { airtableId: true } })).map((p) => p.airtableId!));
+  let added = 0, skipped = 0, dropped = 0;
+  const at = nowIso();
+  for (const row of rows) {
+    if (have.has(row.id)) { skipped++; continue; }
+    const p = mapTestimonial(row, clientNames);
+    if (!p) { dropped++; continue; }
+    await db.insert(schema.proofs).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, name: p.name, type: "testimonial", who: p.who, quote: p.quote, shortVersion: p.shortVersion, sourceTitle: p.sourceTitle, sourceRecordedAt: p.sourceRecordedAt, sourceTimestamp: p.sourceTimestamp, sourceUrl: p.sourceUrl, link: p.sourceUrl, tags: p.tags, airtableId: p.airtableId, status: "approved", permissionAt: at, permissionBy: v.user.id, onBot: false });
+    have.add(row.id);
+    added++;
+  }
+  refresh();
+  back(`imported=${added}&skipped=${skipped}&dropped=${dropped}`);
 }

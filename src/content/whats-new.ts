@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 115,
+    date: "2026-10-08",
+    title: "Your Proof Bank from Airtable",
+    lines: [
+      "Coaches: Import from Airtable on the Proof Bank brings your Testimonials table in, each clip as an approved proof with who said it (first name and last initial), the call, the time and the Fathom link, and its categories as tags. Nothing goes on your bot until you put it there.",
+      "Filter the bank by tag; Results & Revenue, Sales Wins and Transformation come first. Run it again any time: what is already here is skipped.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 114,
     date: "2026-10-08",
     title: "Platforms, renamed",

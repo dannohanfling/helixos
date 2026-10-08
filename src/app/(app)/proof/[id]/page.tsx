@@ -95,6 +95,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
               <blockquote className="text-lg leading-relaxed" data-testid="verbatim-quote">“{p.quote}”</blockquote>
               <p className="mt-2 text-sm text-ink-2" data-testid="quote-speaker">
                 <span className="font-medium">{p.who}</span>
+                {p.sourceTitle ? <span data-testid="source-title"> · {p.sourceTitle}</span> : null}
                 {p.sourceTimestamp ? ` · at ${p.sourceTimestamp}` : ""}
                 {p.sourceRecordedAt ? ` · ${formatDateTime(p.sourceRecordedAt, v.tz)}` : ""}
                 {p.sourceUrl ? (

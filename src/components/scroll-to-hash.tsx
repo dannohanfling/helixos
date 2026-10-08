@@ -12,7 +12,11 @@ export function ScrollToHash() {
     const id = decodeURIComponent(window.location.hash.slice(1));
     if (!id) return;
     const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ block: "start" });
+    if (!el) return;
+    // Already in view (the browser landed it, or the page is short): leave the page where it is, so nothing jumps under a tap.
+    const r = el.getBoundingClientRect();
+    if (r.top >= 0 && r.top < window.innerHeight * 0.6) return;
+    el.scrollIntoView({ block: "start" });
   }, []);
   return null;
 }

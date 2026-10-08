@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { chromium, type Page } from "@playwright/test";
 import { V1_BASE, V1_TABLES, V2_BASE, V2_TABLES } from "./fixtures/airtable-client";
+import { TESTIMONIALS_TOKEN } from "./fixtures/airtable-testimonials";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const mockPort = 4070;
@@ -25,7 +26,7 @@ const SINCE = "2026-06-10";
 
 async function main() {
   const { db, schema } = await import("@/db");
-  const { and, eq, inArray } = await import("drizzle-orm");
+  const { and, eq, inArray, isNotNull } = await import("drizzle-orm");
   const { buildPlan, planSummary, tableKey } = await import("@/lib/engine/airtable-import");
 
   const mock = spawn("npx", ["tsx", "scripts/mock-airtable.ts", String(mockPort)], { stdio: "ignore", detached: true });
@@ -281,6 +282,42 @@ async function main() {
     } finally {
       await db.delete(schema.tasks).where(inArray(schema.tasks.id, Object.values(reviewIds)));
     }
+
+    // ── Danno's Proof Bank from Airtable (8 Oct): the coach's own clips, approved, off the bot, tagged; a second run adds nothing. ──
+    await signIn("coach");
+    await page.goto(`${base}/proof`);
+    await page.locator('[data-testid="proof-import-open"]').click();
+    await page.fill('[data-testid="proof-import-token"]', TESTIMONIALS_TOKEN);
+    await page.locator('[data-testid="proof-import-run"]').click();
+    await page.waitForURL(/imported=/, { timeout: 60000 });
+    const note = await page.locator('[data-testid="proof-import-note"]').innerText();
+    if (!note.includes("Added 3, skipped 0 already in, left out 1 with no quote")) throw new Error(`the first run says what it did: ${note}`);
+    const clips = await db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, coach.id), isNotNull(schema.proofs.airtableId)) });
+    if (clips.length !== 3 || clips.some((p) => p.status !== "approved" || p.onBot || !p.permissionAt)) throw new Error("every clip is approved and off the bot");
+    const marisol = clips.find((p) => p.airtableId === "recTESTI000000002")!;
+    if (marisol.who !== "Marisol Q." || /example\.com|0123/.test(marisol.quote ?? "") || marisol.sourceTitle !== "Office Hours" || marisol.sourceTimestamp !== "12:34") throw new Error(`first name and last initial, no email or number, the call and the stamp: ${JSON.stringify(marisol)}`);
+    const tomas = clips.find((p) => p.airtableId === "recTESTI000000003")!;
+    if (tomas.who !== "Tomas F." || !tomas.tags.includes("Results & Revenue")) throw new Error("a client named by email becomes a first name and initial, with the row's tags");
+    // The bank: the three priority categories first, a tag filter, the tags on the rows.
+    const titles = await page.locator('[data-testid="proof-row"]').allInnerTexts();
+    if (!titles[0].includes("Tomas F.") || !titles[1].includes("Marisol Q.: I closed")) throw new Error(`Results & Revenue then Sales Wins come first: ${titles.slice(0, 3).join(" | ")}`);
+    await page.locator('[data-testid="proof-tag-filter"] a', { hasText: "Transformation" }).click();
+    await page.waitForURL(/tag=Transformation/);
+    if ((await page.locator('[data-testid="proof-row"]').count()) !== 1) throw new Error("the tag filter narrows to that category");
+    await page.goto(`${base}/proof`);
+    await page.locator('[data-testid="proof-import-open"]').click();
+    await page.fill('[data-testid="proof-import-token"]', TESTIMONIALS_TOKEN);
+    await page.locator('[data-testid="proof-import-run"]').click();
+    await page.waitForURL(/imported=0/, { timeout: 60000 });
+    if ((await db.query.proofs.findMany({ where: and(eq(schema.proofs.userId, coach.id), isNotNull(schema.proofs.airtableId)) })).length !== 3) throw new Error("a second run skips what is in");
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await signIn("client");
+    await page.goto(`${base}/proof`);
+    if ((await page.locator("main").innerText()).includes("Marisol Q.") || (await page.locator('[data-testid="proof-import-open"]').count())) throw new Error("a client sees none of the coach's clips and no import button");
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    console.log("✓ Proof Bank from Airtable: 3 added, 1 left out, approved and off the bot, names shortened, contacts blanked, tags first and filterable, a second run adds nothing, nothing reaches a client");
 
     // ── Read only, and the tokens went nowhere. ──
     const { methods, paths } = (await (await fetch(`http://localhost:${mockPort}/__methods`)).json()) as { methods: string[]; paths: string[] };

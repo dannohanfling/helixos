@@ -127,3 +127,20 @@ export async function readOneField(access: BaseAccess, tableId: string, fieldId:
   const all = await rows(access.token.trim(), "source", access.baseId.trim(), tableId, [fieldId]);
   return new Map(all.flatMap((r) => (typeof r.fields[fieldId] === "string" ? [[r.id, r.fields[fieldId] as string] as const] : [])));
 }
+
+/** A table's fields as the metadata API lists them: the primary field first; a link field names the table it links to. */
+export type AirtableField = { id: string; name: string; type?: string; options?: { linkedTableId?: string } };
+export async function readTableFields(access: BaseAccess, tableId: string): Promise<AirtableField[]> {
+  if (!BASE_ID.test(access.baseId.trim())) throw new AirtableError("base_id", "source");
+  if (!access.token.trim()) throw new AirtableError("no_token", "source");
+  const body = (await get(access.token.trim(), "source", `/v0/meta/bases/${encodeURIComponent(access.baseId.trim())}/tables`)) as { tables?: { id: string; fields?: AirtableField[] }[] };
+  const t = (body.tables ?? []).find((x) => x.id === tableId);
+  if (!t) throw new AirtableError("missing", "source");
+  return t.fields ?? [];
+}
+/** The rows of one table, the named fields only, keyed by field id. */
+export async function readFields(access: BaseAccess, tableId: string, fieldIds: string[]): Promise<AirtableRecord[]> {
+  if (!BASE_ID.test(access.baseId.trim())) throw new AirtableError("base_id", "source");
+  if (!access.token.trim()) throw new AirtableError("no_token", "source");
+  return rows(access.token.trim(), "source", access.baseId.trim(), tableId, fieldIds);
+}

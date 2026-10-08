@@ -1555,9 +1555,13 @@ export const proofs = sqliteTable(
     onBot: integer("on_bot", { mode: "boolean" }).notNull().default(false),
     /** When the bot tells it, in the coach's words ("Too saturated, small audience"). Not the belief enum: that has four values. */
     botFits: text("bot_fits"),
+    /** Danno's Proof Bank from Airtable (8 Oct): the call the clip came from, its categories as tags, and the Airtable record id so a re-run skips it. */
+    sourceTitle: text("source_title"),
+    tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default([]),
+    airtableId: text("airtable_id"),
     createdAt: createdAt(),
   },
-  (t) => [index("proofs_user").on(t.userId, t.status)],
+  (t) => [index("proofs_user").on(t.userId, t.status), uniqueIndex("proofs_airtable").on(t.userId, t.airtableId)],
 );
 
 export const GROUP_KINDS = ["own", "member", "prospect"] as const;
