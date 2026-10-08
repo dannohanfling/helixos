@@ -12,6 +12,7 @@ import { isWeekday } from "@/lib/dates";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { redirect } from "next/navigation";
 import { readMoney } from "@/lib/engine/money";
+import { closeKpisOf, ownKpi, putKpiValue } from "@/lib/queries/kpi";
 
 export async function morningCheckinAction(formData: FormData): Promise<void> {
   const { v } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
@@ -37,6 +38,17 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
   }
   for (const k of CLOSE_TEXT) input[k] = opt(formData, k);
   await closeDay(v, input);
+  // The KPIs the close asks for (BG2): each box is the day's value for one of the member's own close-asked KPIs.
+  const m = { workspaceId: v.workspace.id, userId: v.user.id };
+  const asked = await closeKpisOf(m, v.today);
+  for (const k of asked) {
+    const raw = str(formData, `kpi_${k.id}`).trim();
+    if (!raw) continue;
+    const read = readMoney(raw);
+    if ("error" in read) redirect(`/today?closeError=${encodeURIComponent(`${k.name}: ${read.error}`)}&field=kpi_${k.id}#close`);
+    const kpi = await ownKpi(m, k.id);
+    if (kpi && kpi.source === "close") await putKpiValue(m, kpi, v.today, read.value ?? 0);
+  }
   refresh();
 }
 

@@ -4,6 +4,7 @@
  * here is Body's Health goals; the two never share a table, a name or a page.
  */
 import type { PlanKind, PlanStatus } from "@/db/schema";
+import type { Pace } from "@/lib/engine/kpi";
 
 export type PlanRow = { id: string; kind: PlanKind; title: string; status: PlanStatus; owner: string | null; dueDate: string | null; notes: string | null; pathwayStage: string | null; order: number; budget: number | null; hireTrigger: string | null; primary: boolean; archivedAt: string | null; createdAt: string };
 export type LinkRow = { fromId: string; toKind: "record" | "task"; toId: string };
@@ -24,23 +25,29 @@ export function linksOf(id: string, links: readonly LinkRow[]): { down: LinkRow[
 }
 
 export type InitiativeNode = { record: PlanRow; tasks: TaskRef[]; done: number };
-export type KeyResultNode = { record: PlanRow; initiatives: InitiativeNode[] };
-export type GoalNode = { record: PlanRow; keyResults: KeyResultNode[]; /** Of its key results, how many read on track or done (BG2 reads pace). */ onPace: number };
+export type KeyResultNode = { record: PlanRow; initiatives: InitiativeNode[]; /** From its KPIs (BG2): on pace when every one is; "none" without KPIs, when the status alone speaks. */ pace: Pace };
+export type GoalNode = { record: PlanRow; keyResults: KeyResultNode[]; /** Of its key results, how many are on track: by their KPIs' pace when they have KPIs, else by status. */ onPace: number; /** The goal's own KPIs' pace. */ pace: Pace };
 export type PlanTree = { goals: GoalNode[]; /** Key results and initiatives linked to no goal or key result: shown under "Not yet linked". */ loose: PlanRow[] };
 
 const byOrder = (a: PlanRow, b: PlanRow) => a.order - b.order || a.createdAt.localeCompare(b.createdAt);
 const live = (r: PlanRow) => !r.archivedAt;
 
-/** The tree: each goal, its key results, their initiatives with task counts; the primary goal first. */
-export function planTree(records: readonly PlanRow[], links: readonly LinkRow[], tasks: readonly TaskRef[]): PlanTree {
+/** A key result reads on track when its KPIs are on pace (ahead, on or done); without KPIs, when its status says so. */
+export function onTrack(status: PlanStatus, pace: Pace): boolean {
+  return pace === "none" ? status === "on_track" || status === "done" : pace !== "behind";
+}
+
+/** The tree: each goal, its key results, their initiatives with task counts; the primary goal first. `paces` is each record's pace from its KPIs (BG2). */
+export function planTree(records: readonly PlanRow[], links: readonly LinkRow[], tasks: readonly TaskRef[], paces: Readonly<Record<string, Pace>> = {}): PlanTree {
   const rows = records.filter(live);
   const byId = new Map(rows.map((r) => [r.id, r]));
   const taskById = new Map(tasks.map((t) => [t.id, t]));
   const childrenOf = (id: string, kind: PlanKind): PlanRow[] => links.filter((l) => l.fromId === id && l.toKind === "record").map((l) => byId.get(l.toId)).filter((r): r is PlanRow => Boolean(r) && r!.kind === kind).sort(byOrder);
   const tasksOf = (id: string): TaskRef[] => links.filter((l) => l.fromId === id && l.toKind === "task").map((l) => taskById.get(l.toId)).filter((t): t is TaskRef => Boolean(t));
   const initiative = (r: PlanRow): InitiativeNode => { const t = tasksOf(r.id); return { record: r, tasks: t, done: t.filter((x) => x.status === "done").length }; };
-  const keyResult = (r: PlanRow): KeyResultNode => ({ record: r, initiatives: childrenOf(r.id, "initiative").map(initiative) });
-  const goals = rows.filter((r) => r.kind === "goal").sort((a, b) => Number(b.primary) - Number(a.primary) || byOrder(a, b)).map((g) => { const krs = childrenOf(g.id, "key_result").map(keyResult); return { record: g, keyResults: krs, onPace: krs.filter((k) => k.record.status === "on_track" || k.record.status === "done").length }; });
+  const paceOf = (id: string): Pace => paces[id] ?? "none";
+  const keyResult = (r: PlanRow): KeyResultNode => ({ record: r, initiatives: childrenOf(r.id, "initiative").map(initiative), pace: paceOf(r.id) });
+  const goals = rows.filter((r) => r.kind === "goal").sort((a, b) => Number(b.primary) - Number(a.primary) || byOrder(a, b)).map((g) => { const krs = childrenOf(g.id, "key_result").map(keyResult); return { record: g, keyResults: krs, onPace: krs.filter((k) => onTrack(k.record.status, k.pace)).length, pace: paceOf(g.id) }; });
   const placed = new Set<string>();
   for (const g of goals) for (const k of g.keyResults) { placed.add(k.record.id); for (const i of k.initiatives) placed.add(i.record.id); }
   const loose = rows.filter((r) => r.kind !== "goal" && !placed.has(r.id)).sort(byOrder);

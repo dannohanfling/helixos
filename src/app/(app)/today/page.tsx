@@ -36,6 +36,7 @@ import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 import { goalsNow } from "@/lib/body-goals";
+import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
 
 export const metadata = { title: "Today" };
@@ -285,8 +286,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           </ul>
           {d.goal && d.goal.target > 0 ? (
             <div className="mt-4 border-t pt-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-ink-2">{d.goal.title}</span>
+              <div className="flex items-center justify-between gap-2 text-xs" data-testid="today-goal-bar" data-pace={d.goal.pace}>
+                <span className="font-semibold text-ink-2">
+                  {d.goal.recordId ? <Link href={`/goals/${d.goal.recordId}`} className="hover:underline" data-testid="today-goal-link">{d.goal.title}</Link> : d.goal.title}
+                  {d.goal.name && d.goal.name !== d.goal.title ? <span className="ml-1 font-normal text-ink-3">· {d.goal.name}</span> : null}
+                  {d.goal.pace !== "none" ? <span className="ml-1 font-normal text-ink-3">· {PACE_LABEL[d.goal.pace].toLowerCase()}</span> : null}
+                </span>
                 <span className="tabular text-ink-2">
                   {d.goal.unit === "$" ? "$" : ""}
                   {d.goal.actual.toLocaleString()} / {d.goal.unit === "$" ? "$" : ""}
@@ -473,7 +478,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                 ) : null}
                 <details open={Boolean(sp.closeError)}>
                   <summary className="text-xs text-ink-3 underline">Edit today&apos;s numbers</summary>
-                  <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} />
+                  <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} closeKpis={d.closeKpis} />
                 </details>
               </div>
             ) : v.hour < EVENING_HOUR ? (
@@ -481,10 +486,10 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                 <summary className="cursor-pointer text-sm text-ink-2">
                   It&apos;s not evening yet. Come back after {EVENING_HOUR - 12}pm to log your numbers, or <span className="underline">close the day early</span>.
                 </summary>
-                <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} />
+                <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} closeKpis={d.closeKpis} />
               </details>
             ) : (
-              <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} />
+              <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} closeKpis={d.closeKpis} />
             )}
             {bodyDayRead ? (
               <div className="mt-4 rounded-lg bg-humanos-soft p-3 text-sm" data-testid="today-day-read">
@@ -682,7 +687,7 @@ function LockInForm({ openTasks, stillOpen, today, defaultIntention }: { openTas
   );
 }
 
-function CloseForm({ log, activity, owner, today, error }: { log: DailyLog | null; activity: TodayActivity; owner: string | null; today: string; error?: string }) {
+function CloseForm({ log, activity, owner, today, error, closeKpis }: { log: DailyLog | null; activity: TodayActivity; owner: string | null; today: string; error?: string; closeKpis: { id: string; name: string; unit: string; value: number | null }[] }) {
   // First close: start from what the app already saw today. Editing a close shows what was saved.
   const prefill: Partial<Record<keyof DailyLog, number>> = log?.eveningDoneAt ? {} : { dmsStarted: activity.dmsStarted, conversations: activity.conversations, posts: activity.posts, newLeads: activity.newLeads };
   const n = (key: keyof DailyLog, label: string, hint: string) => {
@@ -721,6 +726,17 @@ function CloseForm({ log, activity, owner, today, error }: { log: DailyLog | nul
         {n("newLeads", "New leads", "Opt-ins, hand-raises")}
         {n("cashCollected", "Cash collected ($)", "Adds to your goal")}
       </div>
+      {closeKpis.length ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="close-kpis">
+          {closeKpis.map((k) => (
+            <label key={k.id} className="block">
+              <span className="label">{k.name}{k.unit && k.unit !== "count" ? ` (${k.unit})` : ""}</span>
+              <input className="field tabular" name={`kpi_${k.id}`} inputMode="decimal" defaultValue={k.value ?? ""} placeholder="0" data-testid={`close-kpi-${k.id}`} />
+              <span className="mt-0.5 block text-[11px] text-ink-3">Your KPI, today&apos;s number</span>
+            </label>
+          ))}
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Start">
           <input className="field" name="start" defaultValue={log?.start ?? ""} placeholder="Tomorrow I'll start…" />

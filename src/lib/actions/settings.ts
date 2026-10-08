@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { brandKitProblems, normaliseHex } from "@/lib/engine/subject";
 import { syncFieldTasks } from "@/lib/queries/pathway";
+import { syncPrimaryKpi } from "@/lib/queries/kpi";
 
 /** A picked logo's id when it is one of this member's own images of kind logo; otherwise null, so the kit keeps no logo. */
 async function ownLogo(workspaceId: string, userId: string, picked: string): Promise<string | null> {
@@ -82,7 +83,7 @@ export async function updateBotFactsAction(formData: FormData): Promise<void> {
 }
 
 export async function updateGoalAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx();
   const title = str(formData, "title") || "Cash collected this month";
   // Amounts the way people write them (rev 444): "5k" is 5000, never 5; one that can't be read is refused beside its box.
   const t = readMoney(str(formData, "target"));
@@ -92,11 +93,16 @@ export async function updateGoalAction(formData: FormData): Promise<void> {
   const target = t.value || 5000;
   const actual = a.value ?? 0;
   const existing = await db.query.goals.findFirst({ where: and(eq(schema.goals.userId, userId), eq(schema.goals.primary, true)) });
+  const unit = str(formData, "unit") || "$";
+  const period = str(formData, "period") || "This month";
+  const id = existing?.id ?? newId();
   if (existing) {
-    await db.update(schema.goals).set({ title, target, actual, unit: str(formData, "unit") || "$", period: str(formData, "period") || "This month" }).where(eq(schema.goals.id, existing.id));
+    await db.update(schema.goals).set({ title, target, actual, unit, period }).where(eq(schema.goals.id, existing.id));
   } else {
-    await db.insert(schema.goals).values({ id: newId(), workspaceId, userId, title, target, actual, unit: str(formData, "unit") || "$", period: str(formData, "period") || "This month", primary: true });
+    await db.insert(schema.goals).values({ id, workspaceId, userId, title, target, actual, unit, period, primary: true });
   }
+  // The Primary business goal and its KPI follow (BG2): the title, the target, the unit and the period; "So far" for a typed KPI.
+  await syncPrimaryKpi({ workspaceId, userId }, { id, title, target, actual, unit, period }, v.today);
   await syncFieldTasks(workspaceId, userId);
   queueProgress(workspaceId, userId, "goal_changed");
   refresh();

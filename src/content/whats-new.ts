@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 118,
+    date: "2026-10-08",
+    title: "KPIs on your Business goals",
+    lines: [
+      "Any goal or key result can carry KPIs: a name, a target and a period (this week, month, quarter, year, or your own dates). Each one shows its actual against the target, a pace word (ahead, on pace, behind, done) worked out from how much of the period has gone, and a weekly chart against the straight line to the target.",
+      "Three places a KPI's number can come from: read from your Numbers (calls booked, cash collected, posts and the rest, summed from your evening closes, nothing typed twice), typed in by you, or asked for in the evening close as its own box.",
+      "A key result with KPIs reads on track by their pace in the tree and on your coach's line. Your Primary business goal has its first KPI already (Cash collected for a $ goal), and Today's progress bar reads it; Settings → Your one goal still sets its target.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 117,
     date: "2026-10-08",
     title: "Business goals: one linked plan",

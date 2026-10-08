@@ -7,7 +7,9 @@ import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
 import { tierProgress } from "@/lib/engine/tiers";
 import { roadLine, simplePath } from "@/lib/engine/pathway";
-import { closedDates, logFor, logsBetween, repairsUsed, streakFor, todayActivity } from "./daily";
+import { closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
+import { ensurePrimaryGoal } from "./plan";
+import { closeKpisOf, primaryGoalBar } from "./kpi";
 import { nowFor, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
 import { brokenStreak } from "@/lib/engine/streak";
 import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
@@ -63,6 +65,8 @@ export async function todayData(v: Viewer) {
   const tomorrow = addDays(today, 1);
   // Yesterday's unfinished Top 3 loses the star before anything is read, so the new morning starts clean.
   await settleOldFocus(v);
+  // The one goal is the Primary business goal with its KPI (BG1, BG2): made on first read, never while a coach is switched in.
+  if (!v.switchedInto) await ensurePrimaryGoal({ workspaceId, userId }, today);
 
   const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal, everLockedIn] =
     await Promise.all([
@@ -222,7 +226,10 @@ export async function todayData(v: Viewer) {
     inbound,
     pathwayNext,
     curriculumDay,
-    goal: goal ? { ...goal, actual: goal.unit === "$" && goal.period === "This month" ? await monthCash(workspaceId, userId, today) : goal.actual } : null,
+    /** The Primary business goal and its first KPI (BG2): the bar reads the plan; before the mirror exists, the goals row itself. */
+    goal: await goalBar(workspaceId, userId, today, goal),
+    /** The KPIs the close asks for (BG2), with today's value if one was typed. */
+    closeKpis: v.switchedInto ? [] : await closeKpisOf({ workspaceId, userId }, today),
     /** Never locked in: Today shows the welcome card instead of the next-action block. */
     firstSession: !everLockedIn,
     /** When the running streak is 0 and something was lost: what, when, and whether one grace day mends it. */
@@ -236,13 +243,13 @@ export async function todayData(v: Viewer) {
 }
 
 /**
- * This month's cash collected, summed from the evening closes (friction walk N1, 7 Oct: Today's goal bar read a running total
- * that Settings or an older month could carry, while Numbers summed the month's logs; both now read the same sum).
+ * Today's goal bar (BG2): the Primary business goal's first KPI, read for the day (a "$" goal sums this month's closes, as
+ * the friction walk's N1 had it; a goal in another unit reads the values typed for it). Without the mirror yet, the goals row.
  */
-async function monthCash(workspaceId: string, userId: string, today: string): Promise<number> {
-  const month = today.slice(0, 7);
-  const logs = await logsBetween(workspaceId, userId, `${month}-01`, `${month}-31`);
-  return logs.reduce((a, l) => a + (l.cashCollected ?? 0), 0);
+async function goalBar(workspaceId: string, userId: string, today: string, legacy: { title: string; actual: number; target: number; unit: string } | null | undefined) {
+  const bar = await primaryGoalBar({ workspaceId, userId }, today);
+  if (bar) return bar;
+  return legacy ? { recordId: null, title: legacy.title, name: "", actual: legacy.actual, target: legacy.target, unit: legacy.unit, pace: "none" as const } : null;
 }
 
 /** The posts of the last fourteen days with a channel that did not send, newest first: the content and its outcomes. */

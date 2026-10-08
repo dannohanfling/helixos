@@ -834,6 +834,13 @@
       "when": 1791481924225,
       "tag": "0126_business_goals",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "6",
+      "when": 1791487031877,
+      "tag": "0127_kpis",
+      "breakpoints": true
     }
   ]
 }

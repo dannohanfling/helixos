@@ -1,7 +1,9 @@
 /**
  * Business goals (BG1): the client's plan under Grow. The one goal from Today is there as the Primary business goal; a key
  * result goes under it and an initiative under that, with a task added and ticked; the tree and the table read them; the
- * coach sees the read-only line. Nothing here touches Body's Health goals.
+ * coach sees the read-only line. BG2: a KPI read from the Numbers on the key result, with its pace in the tree; the Primary
+ * goal's Cash collected KPI on Today's bar; a close-asked KPI logged through the evening close. Nothing here touches Body's
+ * Health goals.
  *
  *   npx tsx scripts/smoke-goals.ts http://localhost:3000
  */
@@ -88,6 +90,74 @@ async function main() {
     if ((await page.locator('[data-testid="goal-plan-link"]').getAttribute("href")) !== "/goals") throw new Error("Your one goal links to Business goals");
     console.log("✓ the tree counts, the table filters, a status edit moves the roll-up, the primary goal has no Archive, Settings links across");
 
+    // ── BG2: a KPI read from the Numbers on the key result; its actual is this month's calls booked, its pace in the tree. ──
+    const { todayInTz } = await import("@/lib/dates");
+    const { readKpi, PACE_LABEL } = await import("@/lib/engine/kpi");
+    const ws = (await db.query.workspaces.findFirst())!;
+    const mayaM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+    const today = todayInTz(mayaM.timezone || ws.timezone);
+    await page.goto(`${base}/goals/${krId}`);
+    await page.locator('[data-testid="kpi-new"]').click();
+    await page.fill('[data-testid="kpi-form-name"]', "Calls booked");
+    await page.fill('[data-testid="kpi-form-target"]', "12");
+    await page.selectOption('[data-testid="kpi-form-source"]', "numbers");
+    await page.selectOption('[data-testid="kpi-form-metric"]', "callsBooked");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="kpi-form-save"]').click()]);
+    await page.locator('[data-testid="kpi-row"]', { hasText: "Calls booked" }).waitFor({ timeout: 20000 });
+    const kpi = (await db.query.kpis.findFirst({ where: and(eq(schema.kpis.userId, maya.id), eq(schema.kpis.name, "Calls booked")) }))!;
+    if (kpi.source !== "numbers" || kpi.metric !== "callsBooked" || kpi.unit !== "count" || kpi.target !== 12 || kpi.recordId !== krId) throw new Error(`the KPI reads the Numbers counter: ${JSON.stringify(kpi)}`);
+    const logs = await db.query.dailyLogs.findMany({ where: eq(schema.dailyLogs.userId, maya.id) });
+    const expected = readKpi(kpi, today, logs, []);
+    const row = page.locator('[data-testid="kpi-row"]', { hasText: "Calls booked" });
+    if ((await row.getAttribute("data-pace")) !== expected.pace || !(await row.locator('[data-testid="kpi-actual"]').innerText()).startsWith(`${expected.actual} / 12`)) throw new Error(`the KPI reads ${expected.actual} of 12 and ${expected.pace}: ${await row.innerText()}`);
+    if (!(await row.locator('[data-testid="kpi-chart"]').count())) throw new Error("the KPI has its weekly chart");
+    await page.goto(`${base}/goals`);
+    const kpiLine = page.locator('[data-testid="plan-kpi"]', { hasText: "Calls booked" });
+    await kpiLine.waitFor({ timeout: 20000 });
+    if ((await kpiLine.getAttribute("data-pace")) !== expected.pace || !(await kpiLine.innerText()).includes(`${expected.actual} / 12`)) throw new Error(`the tree carries the KPI line: ${await kpiLine.innerText()}`);
+    const onTrack = expected.pace === "behind" ? 0 : 1;
+    await page.locator('[data-testid="plan-goal-pace"]', { hasText: `${onTrack} of 1 key results on track` }).waitFor({ timeout: 20000 });
+    console.log(`✓ a Numbers KPI on the key result reads ${expected.actual} of 12 calls booked this month, ${PACE_LABEL[expected.pace]}; the tree shows it and the key result reads by its pace`);
+
+    // ── The Primary goal's Cash collected KPI is on Today's bar; a close-asked KPI goes through the evening close. ──
+    const cash = (await db.query.kpis.findFirst({ where: and(eq(schema.kpis.userId, maya.id), eq(schema.kpis.recordId, primary.id), eq(schema.kpis.metric, "cashCollected")) }))!;
+    if (!cash || cash.source !== "numbers" || cash.unit !== "$" || cash.target !== legacy.target) throw new Error(`the Primary goal carries Cash collected as its KPI from the goals row: ${JSON.stringify(cash)}`);
+    const cashRead = readKpi(cash, today, logs, []);
+    await page.goto(`${base}/today`);
+    await page.locator('[data-testid="today-goal-bar"]').waitFor({ timeout: 30000 });
+    const bar = await page.locator('[data-testid="today-goal-bar"]').innerText();
+    if ((await page.locator('[data-testid="today-goal-link"]').getAttribute("href")) !== `/goals/${primary.id}` || !bar.includes(`$${cashRead.actual.toLocaleString()} / $${legacy.target.toLocaleString()}`)) throw new Error(`Today's bar reads the Cash collected KPI and links to the goal: ${bar}`);
+    await page.goto(`${base}/goals/${primary.id}`);
+    await page.locator('[data-testid="kpi-new"]').click();
+    await page.fill('[data-testid="kpi-form-name"]', "Discovery calls");
+    await page.fill('[data-testid="kpi-form-target"]', "10");
+    await page.selectOption('[data-testid="kpi-form-source"]', "close");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="kpi-form-save"]').click()]);
+    await page.locator('[data-testid="kpi-row"]', { hasText: "Discovery calls" }).waitFor({ timeout: 20000 });
+    const asked = (await db.query.kpis.findFirst({ where: and(eq(schema.kpis.userId, maya.id), eq(schema.kpis.name, "Discovery calls")) }))!;
+    await page.goto(`${base}/today`);
+    await page.locator('[data-testid="close-form"]').waitFor({ state: "attached", timeout: 30000 });
+    const editClose = page.locator('summary:has-text("Edit today")');
+    if (await editClose.isVisible()) await editClose.click();
+    const early = page.locator('[data-testid="close-early"] > summary');
+    if (await early.isVisible()) await early.click();
+    await page.fill(`[data-testid="close-kpi-${asked.id}"]`, "2");
+    await page.fill('input[name="win"]', "Two discovery calls held.");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button:has-text("Close the day")').first().click()]);
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(600);
+    const value = await db.query.kpiValues.findFirst({ where: and(eq(schema.kpiValues.kpiId, asked.id), eq(schema.kpiValues.date, today)) });
+    if (value?.value !== 2) throw new Error(`the close writes the KPI's value for the day: ${JSON.stringify(value)}`);
+    await page.goto(`${base}/goals/${primary.id}`);
+    const askedRow = page.locator('[data-testid="kpi-row"]', { hasText: "Discovery calls" });
+    await askedRow.waitFor({ timeout: 20000 });
+    if (!(await askedRow.locator('[data-testid="kpi-actual"]').innerText()).startsWith("2 / 10")) throw new Error(`the close-asked KPI reads the day's value: ${await askedRow.innerText()}`);
+    // A value by hand replaces the day's: 3, never 2 + 3.
+    await askedRow.locator('[data-testid="kpi-value"]').fill("3");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), askedRow.locator('[data-testid="kpi-log-save"]').click()]);
+    await page.locator('[data-testid="kpi-row"]', { hasText: "Discovery calls" }).locator('[data-testid="kpi-actual"]', { hasText: "3 / 10" }).waitFor({ timeout: 20000 });
+    console.log(`✓ Today's bar reads the Primary goal's Cash collected KPI ($${cashRead.actual.toLocaleString()} of $${legacy.target.toLocaleString()}) and links to it; a close-asked KPI has its box in the close, 2 lands on the goal, a value by hand replaces the day's`);
+
     // ── The coach reads a line, read-only. ──
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
@@ -96,7 +166,8 @@ async function main() {
     await page.goto(`${base}/coach/${m.id}`);
     await page.locator('[data-testid="coach-plan-line"]').waitFor({ timeout: 30000 });
     const line = await page.locator('[data-testid="coach-plan-line"]').innerText();
-    if (!line.includes("1 goal · 1 of 1 key results on track · 1 of 1 initiatives not started")) throw new Error(`the coach's line counts the plan: ${line}`);
+    // The key result's KPI decides (BG2): on track only while its pace is not behind, whatever its status says.
+    if (!line.includes(`1 goal · ${onTrack} of 1 key results on track · 1 of 1 initiatives not started`)) throw new Error(`the coach's line counts the plan by the KPIs' pace: ${line}`);
     if (await page.locator('[data-testid="coach-plan"] a').count()) throw new Error("the coach's card is read-only");
     console.log(`✓ the coach reads "${line}" on the client page, nothing to click`);
     console.log("Goals walk passed.");

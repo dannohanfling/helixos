@@ -244,6 +244,53 @@ export const planLinks = sqliteTable(
 );
 export type PlanLink = typeof planLinks.$inferSelect;
 
+/** Business goals BG2: a KPI measures a key result or a goal. Its source says where the actual comes from. */
+export const KPI_PERIODS = ["week", "month", "quarter", "year", "range"] as const;
+export type KpiPeriod = (typeof KPI_PERIODS)[number];
+export const KPI_SOURCES = ["numbers", "manual", "close"] as const;
+export type KpiSource = (typeof KPI_SOURCES)[number];
+/**
+ * One KPI: a name, a unit, a target over a period, and how the actual is found: a daily-log counter summed over the period
+ * (Numbers, never typed twice), typed by hand (manual), or asked for in the evening close (close). Linked to one plan record.
+ */
+export const kpis = sqliteTable(
+  "kpis",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    recordId: text("record_id").notNull(),
+    name: text("name").notNull(),
+    unit: text("unit").notNull().default("count"),
+    target: real("target").notNull().default(0),
+    period: text("period", { enum: KPI_PERIODS }).notNull().default("month"),
+    periodStart: text("period_start"),
+    periodEnd: text("period_end"),
+    source: text("source", { enum: KPI_SOURCES }).notNull().default("manual"),
+    /** The daily-log counter a Numbers KPI sums (a TARGET_METRICS key). */
+    metric: text("metric"),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("kpis_record").on(t.workspaceId, t.userId, t.recordId)],
+);
+export type Kpi = typeof kpis.$inferSelect;
+/** One value per KPI per day, for the manual and close sources; a Numbers KPI never writes here. */
+export const kpiValues = sqliteTable(
+  "kpi_values",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    kpiId: text("kpi_id").notNull(),
+    date: text("date").notNull(),
+    value: real("value").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("kpi_values_day").on(t.kpiId, t.date), index("kpi_values_user").on(t.workspaceId, t.userId)],
+);
+export type KpiValue = typeof kpiValues.$inferSelect;
+
 export const goals = sqliteTable("goals", {
   id: id(),
   workspaceId: text("workspace_id").notNull(),

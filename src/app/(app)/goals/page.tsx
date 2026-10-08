@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PLAN_KINDS, PLAN_STATUSES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { KIND_LABEL, KIND_PLURAL, STATUS_LABEL, STATUS_TONE, tableRows, type GoalNode, type PlanRow } from "@/lib/engine/plan";
+import { PACE_LABEL, PACE_TONE, formatKpi, type KpiRead } from "@/lib/engine/kpi";
 import { ensurePrimaryGoal, planData } from "@/lib/queries/plan";
 import { formatDate } from "@/lib/dates";
 import { Badge, Card, Disclosure, Empty, PageHeader, Tabs } from "@/components/ui";
@@ -19,8 +20,8 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
   const v = await requireViewer({ team: "allow" });
   const sp = await searchParams;
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
-  if (!v.switchedInto) await ensurePrimaryGoal(m);
-  const { records, tree } = await planData(m);
+  if (!v.switchedInto) await ensurePrimaryGoal(m, v.today);
+  const { records, tree, reads } = await planData(m, v.today);
   const view = sp.view === "table" ? "table" : "tree";
   const kind = PLAN_KINDS.find((k) => k === sp.kind) ?? "";
   const status = PLAN_STATUSES.find((k) => k === sp.status) ?? "";
@@ -43,7 +44,7 @@ export default async function GoalsPage({ searchParams }: { searchParams: Promis
         tree.goals.length || tree.loose.length ? (
           <div className="space-y-3" data-testid="plan-tree">
             {tree.goals.map((g) => (
-              <GoalCard key={g.record.id} node={g} />
+              <GoalCard key={g.record.id} node={g} reads={reads} />
             ))}
             {tree.loose.length ? (
               <Card title="Not yet linked" action={<span className="text-xs text-ink-3">open one to link it under a goal or key result</span>}>
@@ -133,7 +134,24 @@ function RecordLine({ r, extra }: { r: PlanRow; extra?: string }) {
   );
 }
 
-function GoalCard({ node }: { node: GoalNode }) {
+/** A record's KPIs in the tree (BG2): each one's actual against its target, with its pace. */
+function KpiLines({ recordId, reads }: { recordId: string; reads: KpiRead[] }) {
+  const own = reads.filter((r) => r.kpi.recordId === recordId);
+  if (!own.length) return null;
+  return (
+    <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs" data-testid="plan-kpis">
+      {own.map((r) => (
+        <li key={r.kpi.id} className="flex items-center gap-1.5" data-testid="plan-kpi" data-pace={r.pace}>
+          <span className="text-ink-2">{r.kpi.name}</span>
+          <span className="tabular">{formatKpi(r.actual, r.kpi.unit)} / {formatKpi(r.kpi.target, r.kpi.unit)}</span>
+          <Badge tone={PACE_TONE[r.pace]}>{PACE_LABEL[r.pace]}</Badge>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function GoalCard({ node, reads }: { node: GoalNode; reads: KpiRead[] }) {
   const g = node.record;
   return (
     <Card title={<span>{g.primary ? "★ " : ""}{g.title}</span>} action={<span className="text-xs text-ink-3" data-testid="plan-goal-pace">{node.keyResults.length ? `${node.onPace} of ${node.keyResults.length} key results on track` : "no key results yet"}</span>} id={`g-${g.id}`}>
@@ -143,11 +161,13 @@ function GoalCard({ node }: { node: GoalNode }) {
         {g.dueDate ? <span>due {formatDate(g.dueDate)}</span> : null}
         <Link href={`/goals/${g.id}`} className="underline">Open</Link>
       </div>
+      <KpiLines recordId={g.id} reads={reads} />
       {node.keyResults.length ? (
-        <ul className="space-y-2" data-testid="plan-goal-krs">
+        <ul className="mt-2 space-y-2" data-testid="plan-goal-krs">
           {node.keyResults.map((k) => (
             <li key={k.record.id} className="rounded-lg bg-surface-2 p-2">
-              <RecordLine r={k.record} />
+              <RecordLine r={k.record} extra={k.pace !== "none" ? `KPIs: ${PACE_LABEL[k.pace].toLowerCase()}` : undefined} />
+              <KpiLines recordId={k.record.id} reads={reads} />
               {k.initiatives.length ? (
                 <ul className="mt-1 space-y-1 pl-4">
                   {k.initiatives.map((i) => (

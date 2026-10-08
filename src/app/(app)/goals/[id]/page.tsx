@@ -10,6 +10,7 @@ import { ownRecord, planData } from "@/lib/queries/plan";
 import { formatDate } from "@/lib/dates";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
 import { NewRecordForm } from "@/components/plan-forms";
+import { KpiCard } from "@/components/kpi-card";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { TaskRow } from "@/components/task-row";
 import { SubmitButton } from "@/components/submit-button";
@@ -25,13 +26,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
  * One record of the plan (BG1): its fields, its links both ways (clickable), and for an initiative its tasks with add and
  * tick. The member's own, or not found. Nothing here is Body's.
  */
-export default async function PlanRecordPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PlanRecordPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ kpiError?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
+  const sp = await searchParams;
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
   const r = await ownRecord(m, id);
   if (!r || r.archivedAt) notFound();
-  const { records, links, tasks } = await planData(m);
+  const { records, links, tasks, reads, logs, values } = await planData(m, v.today);
   const byId = new Map(records.map((x) => [x.id, x]));
   const { down, up } = linksOf(r.id, links);
   const parents = up.map((l) => byId.get(l.fromId)).filter((x): x is NonNullable<typeof x> => Boolean(x) && !x!.archivedAt);
@@ -105,7 +107,7 @@ export default async function PlanRecordPage({ params }: { params: Promise<{ id:
               </div>
               <div className="flex items-center gap-2 sm:col-span-2">
                 <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…" data-testid="plan-edit-save">Save</SubmitButton>
-                {r.primary ? <span className="text-xs text-ink-3">Your Primary business goal: Today&apos;s progress bar reads it. Its target and period are on Settings → Your one goal until the KPIs land.</span> : null}
+                {r.primary ? <span className="text-xs text-ink-3">Your Primary business goal: Today&apos;s progress bar reads its first KPI. Settings → Your one goal sets that KPI&apos;s target and period too.</span> : null}
               </div>
             </form>
             {r.primary ? null : (
@@ -236,7 +238,8 @@ export default async function PlanRecordPage({ params }: { params: Promise<{ id:
               ) : null}
             </Card>
           ) : null}
-          {r.kind === "goal" && tasks.length ? null : null}
+          {r.kind === "initiative" ? null : <KpiCard recordId={r.id} reads={reads} logs={logs} values={values} today={v.today} error={sp.kpiError} />}
+          {tasks.length ? null : null}
         </div>
       </div>
     </>

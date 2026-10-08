@@ -198,6 +198,15 @@ async function main() {
     }
     return r;
   };
+  const ensureKpi = async () => {
+    let k = await db.query.kpis.findFirst({ where: eq(schema.kpis.userId, B.id) });
+    if (!k) {
+      const id = newId();
+      await db.insert(schema.kpis).values({ id, workspaceId: ws, userId: B.id, recordId: (await ensurePlanRecord()).id, name: "B's Private KPI", target: 10 });
+      k = (await db.query.kpis.findFirst({ where: eq(schema.kpis.id, id) }))!;
+    }
+    return k;
+  };
   const ensureHealth = async () => {
     let h = await db.query.bodyHealth.findFirst({ where: eq(schema.bodyHealth.userId, B.id) });
     if (!h) {
@@ -262,6 +271,7 @@ async function main() {
     recordings: (await ensureRecording()).id,
     memberReports: (await ensureReport()).id,
     planRecords: (await ensurePlanRecord()).id,
+    kpis: (await ensureKpi()).id,
   };
   // B's private words, per table, that must never appear in a response to A.
   const bWord: Record<string, string> = {
@@ -272,6 +282,7 @@ async function main() {
     bodyHealth: (await ensureHealth()).title,
     recordings: (await ensureRecording()).title,
     planRecords: (await ensurePlanRecord()).title,
+    kpis: (await ensureKpi()).name,
   };
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
@@ -349,6 +360,10 @@ async function main() {
       { action: "updatePlanRecordAction", idField: "id", table: "planRecords", extra: { title: "HACKED", status: "done" } },
       { action: "archivePlanRecordAction", idField: "id", table: "planRecords" },
       { action: "linkPlanRecordsAction", idField: "fromId", table: "planRecords", extra: { toId: "nope" } },
+      { action: "updateKpiAction", idField: "id", table: "kpis", extra: { name: "HACKED", target: "1" } },
+      { action: "archiveKpiAction", idField: "id", table: "kpis" },
+      { action: "logKpiValueAction", idField: "kpiId", table: "kpis", extra: { value: "99" } },
+      { action: "createKpiAction", idField: "recordId", table: "planRecords", extra: { name: "HACKED", target: "1", source: "manual" } },
       { action: "deleteOfferAction", idField: "id", table: "offers" },
       { action: "updateGroupAction", idField: "id", table: "groups", extra: { name: "HACKED" } },
       { action: "deleteGroupAction", idField: "id", table: "groups" },
@@ -389,7 +404,8 @@ async function main() {
       bodySets: async () => JSON.stringify(await db.query.bodySets.findFirst({ where: eq(schema.bodySets.id, bId.bodySets) })),
       bodyHabits: async () => JSON.stringify([await db.query.bodyHabits.findFirst({ where: eq(schema.bodyHabits.id, bId.bodyHabits) }), await db.query.bodyHabitLogs.findMany({ where: eq(schema.bodyHabitLogs.habitId, bId.bodyHabits) })]),
       bodyHealth: async () => JSON.stringify(await db.query.bodyHealth.findFirst({ where: eq(schema.bodyHealth.id, bId.bodyHealth) })),
-      planRecords: async () => JSON.stringify([await db.query.planRecords.findFirst({ where: eq(schema.planRecords.id, bId.planRecords) }), await db.query.planLinks.findMany({ where: eq(schema.planLinks.fromId, bId.planRecords) })]),
+      planRecords: async () => JSON.stringify([await db.query.planRecords.findFirst({ where: eq(schema.planRecords.id, bId.planRecords) }), await db.query.planLinks.findMany({ where: eq(schema.planLinks.fromId, bId.planRecords) }), await db.query.kpis.findMany({ where: eq(schema.kpis.recordId, bId.planRecords) })]),
+      kpis: async () => JSON.stringify([await db.query.kpis.findFirst({ where: eq(schema.kpis.id, bId.kpis) }), await db.query.kpiValues.findMany({ where: eq(schema.kpiValues.kpiId, bId.kpis) })]),
     };
     let actionProbed = 0;
     for (const p of probes) {

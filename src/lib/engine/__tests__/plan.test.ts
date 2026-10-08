@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHILD_OF, PARENT_OF, coachSummary, linkAllowed, linksOf, planTree, tableRows, type LinkRow, type PlanRow, type TaskRef } from "../plan";
+import { CHILD_OF, PARENT_OF, coachSummary, linkAllowed, linksOf, onTrack, planTree, tableRows, type LinkRow, type PlanRow, type TaskRef } from "../plan";
 
 /** Business goals (BG1): the tree from records and links, the roll-ups, the table's filters, and which links are allowed. */
 const row = (over: Partial<PlanRow> & Pick<PlanRow, "id" | "kind" | "title">): PlanRow => ({ status: "not_started", owner: null, dueDate: null, notes: null, pathwayStage: null, order: 0, budget: null, hireTrigger: null, primary: false, archivedAt: null, createdAt: "2026-10-01T00:00:00.000Z", ...over });
@@ -52,5 +52,25 @@ describe("Business goals: the tree", () => {
     expect(linkAllowed({ kind: "goal" }, { kind: "initiative" })).toBe(false);
     expect(linkAllowed({ kind: "initiative" }, "task")).toBe(true);
     expect(linkAllowed({ kind: "key_result" }, "task")).toBe(false);
+  });
+});
+
+describe("Business goals: pace from KPIs (BG2)", () => {
+  it("a key result with KPIs is on track by their pace, not its status; without KPIs the status speaks; the goal's line and the coach's count follow", () => {
+    expect(onTrack("not_started", "none")).toBe(false);
+    expect(onTrack("on_track", "none")).toBe(true);
+    expect(onTrack("not_started", "on")).toBe(true);
+    expect(onTrack("on_track", "behind")).toBe(false);
+    expect(onTrack("behind", "done")).toBe(true);
+    // k1 is on_track by status but behind by its KPIs; k2 is behind by status but ahead by its KPIs.
+    const t = planTree(records, links, tasks, { k1: "behind", k2: "ahead", g1: "on" });
+    const g1 = t.goals[0];
+    expect(g1.pace).toBe("on");
+    expect(g1.keyResults.map((k) => [k.record.id, k.pace])).toEqual([["k1", "behind"], ["k2", "ahead"]]);
+    expect(g1.onPace).toBe(1);
+    expect(coachSummary(t).onPace).toBe(1);
+    // Without paces, the status alone: k1 on track, k2 behind.
+    expect(planTree(records, links, tasks).goals[0].onPace).toBe(1);
+    expect(planTree(records, links, tasks).goals[0].keyResults.map((k) => k.pace)).toEqual(["none", "none"]);
   });
 });

@@ -108,7 +108,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
   // Their buyer avatars and which offers each is for, read-only (rev 501 §7).
   const avatars = await avatarData({ workspaceId: ws, userId: m.userId });
   // Business goals (BG1), read-only: the plan as the client sees it, counted.
-  const plan = await planData({ workspaceId: ws, userId: m.userId });
+  const plan = await planData({ workspaceId: ws, userId: m.userId }, v.today);
   const planSum = coachSummary(plan.tree);
   const planLine = `${planSum.goals} goal${planSum.goals === 1 ? "" : "s"} · ${planSum.onPace} of ${planSum.keyResults} key results on track · ${planSum.notStarted} of ${planSum.initiatives} initiatives not started`;
   // Their own brand kit (rev 568), read-only here; it is set on their Settings, or by the coach switched in with Work on.
