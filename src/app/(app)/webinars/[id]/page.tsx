@@ -59,9 +59,11 @@ import {
 import { needsSlides } from "@/lib/engine/section-draft";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, ownerBrandName, presenterOf } from "@/lib/queries/webinar";
-import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry, figureLines, overlaps } from "@/lib/engine/deck";
+import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry, figureLines, overlaps, layoutsFor, type SlideChoice, type SlideLayout } from "@/lib/engine/deck";
 import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
 import { droppedSlides, filledSlides, resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
+import { slideChoicesFor } from "@/lib/queries/deck-choices";
+import { SlideChoices } from "@/components/slide-choices";
 import { DeckCheck, type ThumbChrome, type ThumbSlide } from "@/components/deck-thumbs";
 import { deckLogos } from "@/lib/deck-logo";
 import { isListedFont } from "@/lib/engine/fonts";
@@ -209,15 +211,18 @@ export default async function WebinarWizardPage({
   const pace: DeckPace = deckPace(context, deck);
   // The suggested picture slots, each resolved to the coach's own image or to why it is empty, and the coach's whole library to
   // fill them from. Read once here, so the Deck step and the export agree on which slots carry a picture.
-  const [deckSlotsResolved, deckLibrary] = await Promise.all([
+  const [deckSlotsResolved, slideChoices, deckLibrary] = await Promise.all([
     resolveDeckSlots(w.id, deck, { workspaceId: w.workspaceId, userId: w.userId }),
+    slideChoicesFor(w.id),
     db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, w.workspaceId), eq(schema.deckImages.userId, w.userId)), orderBy: (t, { desc }) => [desc(t.createdAt)] }),
   ]);
 
   // The slides as the export lays them out (§6.4): the same plan and geometry the route draws, drawn by the browser.
   const imageBySlide = new Map(deckSlotsResolved.filter((r) => r.image).map((r) => [r.slide, r.image!]));
   const labelBySlide = new Map(deck.slides.map((sl) => [sl.n, sl.section || "Cover"]));
-  const thumbs: ThumbSlide[] = renderPlan(deck, filledSlides(deckSlotsResolved), droppedSlides(deckSlotsResolved)).map((plan) => {
+  // The engine's own layout per slide, for the Layout menu's "Auto" (deck layouts 10); then the plan with the coach's choices.
+  const autoLayouts = new Map(renderPlan(deck, filledSlides(deckSlotsResolved), droppedSlides(deckSlotsResolved)).filter((p) => !p.pictureOnly).map((p) => [p.n, p.layout]));
+  const thumbs: ThumbSlide[] = renderPlan(deck, filledSlides(deckSlotsResolved), droppedSlides(deckSlotsResolved), slideChoices).map((plan) => {
     const img = imageBySlide.get(plan.n);
     return {
       plan,
@@ -1433,7 +1438,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep madeAll={sp.made !== undefined ? { made: Number(sp.made) || 0, failed: Number(sp.failed) || 0, left: Number(sp.left) || 0 } : null} scriptOnly={sections.filter((x) => needsSlides(x)).map((x) => ({ key: x.sectionKey, name: x.name }))} presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} thumbs={thumbs} thumbChrome={thumbChrome} hasLogo={hasLogo} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
+        <DeckStep choices={slideChoices} autoLayouts={autoLayouts} madeAll={sp.made !== undefined ? { made: Number(sp.made) || 0, failed: Number(sp.failed) || 0, left: Number(sp.left) || 0 } : null} scriptOnly={sections.filter((x) => needsSlides(x)).map((x) => ({ key: x.sectionKey, name: x.name }))} presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} thumbs={thumbs} thumbChrome={thumbChrome} hasLogo={hasLogo} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
       ) : null}
 
       {step === "review" ? (
@@ -1775,7 +1780,7 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter, scriptOnly, madeAll }: { /** What the last "Make slides for every section" did (deck re-test §5). */ madeAll?: { made: number; failed: number; left: number } | null; scriptOnly: { key: string; name: string }[]; webinarId: string; owner: { workspaceId: string; userId: string }; thumbs: ThumbSlide[]; thumbChrome: ThumbChrome; hasLogo: boolean; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
+function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter, scriptOnly, madeAll, choices, autoLayouts }: { /** The coach's choices per slide key (deck layouts 10). */ choices: ReadonlyMap<string, SlideChoice>; /** The engine's own layout per slide number. */ autoLayouts: ReadonlyMap<number, SlideLayout>; /** What the last "Make slides for every section" did (deck re-test §5). */ madeAll?: { made: number; failed: number; left: number } | null; scriptOnly: { key: string; name: string }[]; webinarId: string; owner: { workspaceId: string; userId: string }; thumbs: ThumbSlide[]; thumbChrome: ThumbChrome; hasLogo: boolean; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
   const madeNote = madeAll ? `Made slides for ${madeAll.made} section${madeAll.made === 1 ? "" : "s"}${madeAll.failed ? `; ${madeAll.failed} came back with nothing usable (press again, or type their key points)` : ""}${madeAll.left ? `; ${madeAll.left} left for the next press` : madeAll.made ? "; every section with a script has slides now" : ""}.` : null;
   const fallbacks = slotFallbacks(resolvedSlots);
@@ -1991,6 +1996,9 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
               </details>
             ) : null}
             {bySlide.get(s.n) ? <SlotControl webinarId={webinarId} owner={owner} resolved={bySlide.get(s.n)!} library={library} /> : null}
+            {s.key && s.kind !== "cover" ? (
+              <SlideChoices webinarId={webinarId} slideKey={s.key} headline={s.headline} auto={autoLayouts.get(s.n) ?? "content"} options={layoutsFor(s)} layout={choices.get(s.key)?.layout ?? null} phrase={thumbs.find((t) => t.plan.n === s.n && !t.plan.pictureOnly)?.plan.boxes.find((b) => b.role === "headline")?.phrase?.text ?? null} cleared={Boolean(choices.get(s.key)?.accentOff)} />
+            ) : null}
             <div className="mt-2 flex items-center justify-end gap-2">
               <CopyButton text={`${s.headline}\n${s.body.join("\n")}`} label="Copy" className="btn btn-ghost btn-xs" />
             </div>

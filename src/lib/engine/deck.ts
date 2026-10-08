@@ -8,7 +8,7 @@ import { formatPrice } from "./offer-score";
 import { FACE_CLASS_LABEL, cleanFace, currenciesIn, currencyConflicts, type FaceClass, type KeptOff } from "./deck-face";
 import { brandKitProblems, contrastRatio, normaliseHex } from "./subject";
 import { QA_SECTION_KEY, placeholdersIn, type ResolvedOffer, type ResolvedProof, type SectionContext, type WebinarContext } from "./webinar-context";
-import { COVER_WHAT, STORY_WHAT, originWhat, slotForLine, spreadSlots } from "./deck-slot-rules";
+import { COVER_WHAT, FIGURE, STORY_WHAT, originWhat, slotForLine, spreadSlots } from "./deck-slot-rules";
 import { fitSize } from "./deck-fit-text";
 import { bigNumbers, isCardList, shiftFrom } from "./deck-layouts";
 import { figureClashes, talkLines, talkTrack, type FigureClash, type Talk } from "./deck-notes";
@@ -131,6 +131,8 @@ export type Slide = {
   talk?: Talk | null;
   /** The picture slot this slide suggests, or null. Filled by the coach from the image library; empty here, listed on the Deck step. */
   slot: Slot | null;
+  /** A stable key for the coach's choices (deck layouts 10): the section (or the kind off a section) and the slide's place in it. */
+  key?: string;
   /** What the record's text carried that no face may (deck-face.ts): kept off this slide, in its notes and on the Deck step. */
   keptOff: KeptOff[];
   /** On a Proof Block slide: the proof it shows (the bank id, or the typed words), so the deck shows each proof once. */
@@ -578,8 +580,14 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     if (prev) prev.notes.push(...sl.keptOff.map(notOnFace));
     for (const k of sl.keptOff) keptOff.push({ slide: null, section: sl.section || sl.eyebrow, cls: k.cls, text: k.text });
   }
+  const ordinal = new Map<string, number>();
   kept.forEach((sl, i) => {
     sl.n = i + 1;
+    // The stable key (deck layouts 10): the section (or the kind, off a section) and the slide's place in it.
+    const group = sl.sectionKey ?? sl.kind;
+    const at = (ordinal.get(group) ?? 0) + 1;
+    ordinal.set(group, at);
+    sl.key = `${group}:${at}`;
     for (const k of sl.keptOff) keptOff.push({ slide: sl.n, section: sl.section || sl.eyebrow || "cover", cls: k.cls, text: k.text });
   });
   slides.splice(0, slides.length, ...kept);
@@ -674,7 +682,9 @@ export function suggestedSlots(d: DeckResult): { slide: number; section: string;
 
 /* ───────────── The render plan ───────────── */
 
-export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter" | "cover-date" | "figure" | "struck" | "small" | "source" | "card-num" | "card" | "row-check" | "row-name" | "row-value"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean; /** Struck through: the total the price is set against (first-deck §5). */ strike?: boolean; /** Which column of a row (big numbers, cards) the box sits in. */ col?: number };
+/** One contiguous phrase of a headline set apart (deck layouts 10): in the accent where it reads, else bold ink (color null). */
+export type AccentPhrase = { text: string; color: string | null };
+export type TextBox = { slide: number; role: "eyebrow" | "headline" | "body" | "attribution" | "footer" | "cover-title" | "cover-presenter" | "cover-date" | "figure" | "struck" | "small" | "source" | "card-num" | "card" | "row-check" | "row-name" | "row-value"; text: string; size: number; color: string; fill: string | null; face: string; bold: boolean; italic: boolean; bullet: boolean; placeholder: boolean; /** Struck through: the total the price is set against (first-deck §5). */ strike?: boolean; /** Which column of a row (big numbers, cards) the box sits in. */ col?: number ; /** The accent phrase (deck layouts 10), on a headline only. */ phrase?: AccentPhrase | null };
 /** A rule drawn in the accent: the one thing the accent draws besides a fill. Never under text. */
 export type Rule = { slide: number; color: string; y: number };
 /** A picture's frame in inches on the 10×5.625 slide. A photo fills it, cropped (cover); evidence sits whole inside it (contain); nothing is ever stretched (src/lib/engine/deck-fit.ts). */
@@ -702,9 +712,15 @@ export function slotFrame(kind: SlideKind): Frame {
 export const TEXT_LEFT_ZONE = { x: 0.5, w: 4.5 };
 
 /** The footer bar's logo box and the cover's (§4), inches: the route and the thumbnail both place the logo here. */
-export const LOGO_BOX: Frame = { x: 9.0, y: 5.35, w: 0.9, h: 0.24 };
+export const LOGO_BOX: Frame = { x: 9.0, y: 5.29, w: 0.9, h: 0.3 };
+/** The footer bar's band (Claude, rev 592: at 0.24 in a round emblem read as a dot; the band grew to hold a 0.3 in logo). */
+export const FOOTER_BAND: Frame = { x: 0, y: 5.26, w: 10, h: 0.36 };
 /** At least 2.5 in wide (first-deck brief §3, 5 Oct: at 1.8 by 0.55 a wordmark read as a smudge); still clear of the title. */
-export const COVER_LOGO_BOX: Frame = { x: 0.5, y: 0.3, w: 2.6, h: 0.9 };
+export const COVER_LOGO_BOX: Frame = { x: 0.5, y: 0.25, w: 2.6, h: 1.0 };
+/** The cover logo sits left-aligned with the title (Claude, rev 592: a square one sat small and off to the side, centred in the slot). */
+export function coverLogoFrame(placed: Frame): Frame {
+  return { ...placed, x: COVER_LOGO_BOX.x };
+}
 /** No logo anywhere (§3, Danno's decision): the cover says what to add, in the picture placeholders' style. Never the footer. */
 export const COVER_LOGO_PLACEHOLDER = "Your logo here";
 /** The contrast a logo needs against the cover before it stands on it bare; under it, it sits on a small badge of the kit's ground. */
@@ -912,7 +928,41 @@ export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageF
  * Accent draws rules and fills, never letters: every text box is ink or muted (both refused under 4.5:1 by the kit rules), and
  * the accent's one appearance is the rule under the eyebrow, so text in or on the accent cannot arrive without this changing.
  */
-export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dropped: Set<number> = new Set()): SlidePlan[] {
+/** The coach's choices on a slide (deck layouts 10): a layout over the engine's, the accent phrase, or the phrase cleared. */
+export type SlideChoice = { layout?: SlideLayout | null; accentPhrase?: string | null; accentOff?: boolean };
+/** The accent sets a headline's phrase only where it reads at this ratio on the slide's ground; under it, the phrase is bold ink. */
+export const PHRASE_MIN_CONTRAST = 4.5;
+export const LAYOUT_LABEL: Record<SlideLayout, string> = { cover: "Cover", content: "Headline and body", statement: "One line, centred", figure: "Figure", bignum: "Big number", cards: "Cards", stack: "Table", guarantee: "Guarantee", shift: "From → To" };
+/** The layouts a slide may be set to by hand: the engine's rules, loosened only where the drawing still holds. Empty: no menu. */
+export function layoutsFor(s: Pick<Slide, "kind" | "headline" | "body" | "figure" | "stack" | "seal" | "overflow">): SlideLayout[] {
+  const marked = (t: string) => placeholdersIn(t).length > 0;
+  if (s.kind === "cover" || s.figure || s.stack || s.seal || marked(s.headline) || s.body.some(marked)) return [];
+  const out: SlideLayout[] = ["content"];
+  if (!s.body.length) out.push("statement");
+  if ((s.kind === "section" || s.kind === "evidence") && !s.overflow && (s.body.length === 0 || (s.kind === "evidence" && s.body.length === 1)) && bigNumbers(s.headline)) out.push("bignum");
+  if ((s.kind === "opening" || s.kind === "section") && isCardList(s.body)) out.push("cards");
+  if (s.kind === "divider" && shiftFrom(s.body)) out.push("shift");
+  return out;
+}
+/** The draft's suggestion for the accent phrase: the figure in the line, else a short tail after a colon or dash; a quote keeps its own voice. */
+export function suggestAccentPhrase(headline: string): string | null {
+  const t = headline.trim();
+  if (!t || t.startsWith("“") || placeholdersIn(t).length > 0) return null;
+  const fig = t.match(FIGURE);
+  if (fig) return fig[0].trim();
+  const tail = t.split(/[:—–]\s+/)[1];
+  if (tail && tail.trim().split(/\s+/).length <= 5) return tail.trim().replace(/[.!?]+$/, "");
+  return null;
+}
+/** The phrase a slide's headline carries after the coach's choice: theirs, the suggestion, or none when cleared. */
+export function phraseFor(headline: string, choice: SlideChoice | undefined): string | null {
+  if (choice?.accentOff) return null;
+  const own = choice?.accentPhrase?.trim();
+  if (own) return headline.includes(own) ? own : null;
+  return suggestAccentPhrase(headline);
+}
+
+export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dropped: Set<number> = new Set(), choices: ReadonlyMap<string, SlideChoice> = new Map()): SlidePlan[] {
   const k = d.kit;
   const hex = (v: string) => normaliseHex(v);
   const placeholderColor = hex(k.placeholder ?? "") || PLACEHOLDER_FALLBACK;
@@ -934,7 +984,10 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     const ink = dark ? hex(k.inverseInk!) : hex(k.ink);
     const muted = dark ? hex(k.inverseInk!) : hex(k.muted);
     // The layouts beyond headline and body (deck layouts 1, 3 and 11), each picked by a rule from the slide's own words.
-    const special: "bignum" | "shift" | "cards" | "stack" | "guarantee" | null = s.stack
+    // The coach's choice over the engine's (deck layouts 10): only a layout the slide may take; "content" also turns a statement into a headline at the top.
+    const choice = choices.get(s.key ?? "");
+    const forced = choice?.layout && layoutsFor(s).includes(choice.layout) ? choice.layout : null;
+    const auto: "bignum" | "shift" | "cards" | "stack" | "guarantee" | null = s.stack
       ? "stack"
       : s.seal && !imageFrame && !placeholderSlot && !mark(s.headline)
         ? "guarantee"
@@ -945,6 +998,7 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
           : !s.sectionKey && (s.kind === "opening" || s.kind === "section") && isCardList(s.body) && !s.body.some(mark) && !imageFrame && !placeholderSlot
             ? "cards"
             : null;
+    const special = forced ? (forced === "bignum" || forced === "cards" || forced === "shift" ? forced : null) : auto;
     if (s.kind === "cover") {
       boxes.push({ slide: s.n, role: "cover-title", text: s.headline, size: s.headlineSize, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
       boxes.push({ slide: s.n, role: "cover-presenter", text: s.body[0] ?? "", size: COVER_LINE_SIZE, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
@@ -1044,6 +1098,12 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     const rules = s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: ruleY }];
     const headlineBox = boxes.find((b) => b.role === "headline");
     const bodyBoxes = boxes.filter((b) => b.role === "body" || b.role === "attribution");
+    // One phrase in the accent (deck layouts 10): the coach's or the draft's, in the accent where it reads on this ground,
+    // bold ink where it does not. The one place the accent sets letters; the kit check says when it cannot.
+    if (headlineBox && s.kind !== "cover" && !headlineBox.placeholder) {
+      const phrase = phraseFor(headlineBox.text, choice);
+      if (phrase) headlineBox.phrase = { text: phrase, color: contrastRatio(background, k.accent) >= PHRASE_MIN_CONTRAST ? hex(k.accent) : null };
+    }
     let layout: SlideLayout = s.kind === "cover" ? "cover" : s.figure ? "figure" : (special ?? "content");
     // The close and the reflection moment (deck re-test §3): one line, centred on the dark ground.
     const centred = s.kind === "close" || s.kind === "reflection";
@@ -1052,7 +1112,7 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     if (s.kind !== "cover" && !s.figure && !special) {
       const narrow = Boolean(imageFrame || placeholderSlot);
       const zoneW = narrow ? TEXT_LEFT_ZONE.w : 9;
-      if (headlineBox && !bodyBoxes.length) {
+      if (headlineBox && !bodyBoxes.length && forced !== "content") {
         layout = "statement";
         const sizes = [...STATEMENT_SIZES.filter((t) => headlineBox.text.trim().length <= t.maxChars).map((t) => t.size), ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z <= headlineBox.size), HEADLINE_FLOOR];
         headlineBox.size = fitSize(headlineBox.text, { w: zoneW, h: 3.4 }, [...new Set(sizes)].sort((a, b) => b - a), headlineBox.face) ?? HEADLINE_FLOOR;

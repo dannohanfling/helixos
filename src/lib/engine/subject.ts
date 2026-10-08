@@ -106,7 +106,7 @@ export function brandKitProblems(kit: BrandKitInput): string[] {
 export function brandKitWarnings(kit: Pick<BrandKitInput, "ground" | "accent" | "inverseGround">): string[] {
   const out: string[] = [];
   const onGround = contrastRatio(kit.ground, kit.accent);
-  if (onGround < MIN_CONTRAST) out.push(`accent on ground is ${onGround}:1: too light for small text, so the deck uses it for rules and buttons only, never for words.`);
+  if (onGround < MIN_CONTRAST) out.push(`accent on ground is ${onGround}:1: too light for small text, so the deck uses it for rules and buttons only, never for words; a headline's accent phrase is set in bold ink instead.`);
   if (normaliseHex(kit.inverseGround)) {
     const onInverse = contrastRatio(kit.inverseGround!, kit.accent);
     if (onInverse < MIN_CONTRAST) out.push(`accent on inverseGround is ${onInverse}:1: not for text on a full-bleed slide.`);

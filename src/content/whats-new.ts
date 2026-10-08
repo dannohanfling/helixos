@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 116,
+    date: "2026-10-08",
+    title: "One phrase in your accent, and a layout menu per slide",
+    lines: [
+      "Each headline can carry one phrase in your kit's accent: the deck suggests it (a figure, or the words after a colon) and on the Deck step you tap words to change it or clear it. Where the accent would not read on that slide's ground, the phrase is bold ink instead, and the kit check says so.",
+      "Every slide on the Deck step has a Layout menu: Auto names the deck's own pick, and you can set the layouts that slide can take (headline and body, one line centred, big number, cards, From → To). Your choices stay with the slide while you edit elsewhere.",
+      "Logos: the cover logo sits left with the title in a taller box; the footer logo is a third of an inch. The check before download measures the text once your faces have loaded. The kit card says when you have a logo in Images that is not picked yet.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 115,
     date: "2026-10-08",
     title: "Your Proof Bank from Airtable",

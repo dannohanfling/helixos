@@ -25,8 +25,9 @@ const LOGO_PX = { width: 300, height: 100 };
 const PHOTO_RGB = { r: 46, g: 134, b: 222 };
 /** A picture frame on the slide, inches (the engine's slotFrame for the cover; read back here, never retyped elsewhere). */
 const COVER_FRAME = { x: 5.2, y: 0.9, w: 4.3, h: 3.85 };
-const LOGO_BOX = { w: 0.9, h: 0.24 };
-const COVER_LOGO_BOX = { w: 2.6, h: 0.9 };
+// The engine's boxes (deck.ts), as the walk reads them: the footer logo 0.3 in tall and the cover's an inch (Claude, rev 592).
+const LOGO_BOX = { w: 0.9, h: 0.3 };
+const COVER_LOGO_BOX = { w: 2.6, h: 1.0 };
 const within = (a: number, b: number, tol = 0.01) => Math.abs(a - b) / b <= tol;
 // Construction language that must never reach a speaker note: how the deck is built in code, not what the presenter says.
 const CONSTRUCTION = ["renderPlan", "deckSlides", "SlidePlan", "TextBox", "slotFrame", "imageFrame", "data-testid", "placeholder colour", "the slot", "SLOT_WHAT", "pptxgenjs", "EMU"];
@@ -407,7 +408,7 @@ async function main() {
     // The bytes: a photo goes in as a JPEG, downscaled to cover twice the frame's 96 dpi size (826 by 739 px), never enlarged.
     const coverPlan = { w: Math.round(COVER_FRAME.w * 96 * 2), h: Math.round(COVER_FRAME.h * 96 * 2) };
     if (coverNative.format !== "jpeg" || coverNative.height !== coverPlan.h || coverNative.width !== Math.round((coverPlan.h * PHOTO_PX.width) / PHOTO_PX.height)) throw new Error(`the photo is embedded as a JPEG downscaled to cover ${coverPlan.w}×${coverPlan.h}: ${JSON.stringify(coverNative)}`);
-    // The logo (3:1) sits whole inside its 0.9 by 0.24 in box, never stretched, as a PNG; on every content slide, and one media file for all of them.
+    // The logo (3:1) sits whole inside its 0.9 by 0.3 in box, never stretched, as a PNG; on every content slide, and one media file for all of them.
     const logoPics = pics1.filter((p) => p.slide !== "ppt/slides/slide1.xml");
     const contentSlideCount = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).length - 1;
     if (logoPics.length !== contentSlideCount || logoPics.length < 2) throw new Error(`the logo is on every one of the ${contentSlideCount} content slides: ${logoPics.length}`);

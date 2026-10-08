@@ -190,6 +190,25 @@ export async function setDeckSlotAction(formData: FormData): Promise<void> {
   refresh();
 }
 
+/**
+ * The coach's choices on a slide (deck layouts 10): the layout sent sets the layout (empty for Auto); a phrase sent sets the
+ * phrase and turns the accent back on (empty asks for the draft's suggestion again); accentOff clears it. Their own webinar only.
+ */
+export async function setSlideChoiceAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx({ team: "allow" });
+  const webinarId = str(formData, "webinarId");
+  const slideKey = str(formData, "slideKey");
+  if (!slideKey || !(await ownWebinar(webinarId, userId))) return;
+  const patch: { layout?: string | null; accentPhrase?: string | null; accentOff?: boolean } = {};
+  if (formData.has("layout")) patch.layout = str(formData, "layout").trim() || null;
+  if (formData.has("accentPhrase")) { patch.accentPhrase = str(formData, "accentPhrase").trim().slice(0, 200) || null; patch.accentOff = false; }
+  if (formData.has("accentOff")) { patch.accentOff = true; patch.accentPhrase = null; }
+  const existing = await db.query.deckSlideChoices.findFirst({ where: and(eq(schema.deckSlideChoices.webinarId, webinarId), eq(schema.deckSlideChoices.slideKey, slideKey)) });
+  if (existing) await db.update(schema.deckSlideChoices).set(patch).where(eq(schema.deckSlideChoices.id, existing.id));
+  else await db.insert(schema.deckSlideChoices).values({ id: newId(), webinarId, slideKey, layout: patch.layout ?? null, accentPhrase: patch.accentPhrase ?? null, accentOff: patch.accentOff ?? false });
+  refresh();
+}
+
 /** "I don't have this" (§6.3): the slot is dropped, the slide exports as text with no placeholder, the shot list counts it out. */
 export async function dropDeckSlotAction(formData: FormData): Promise<void> {
   const { userId } = await ctx({ team: "allow" });

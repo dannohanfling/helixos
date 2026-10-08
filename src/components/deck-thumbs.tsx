@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { googleFontHref } from "@/lib/engine/fonts";
-import { boxAt, COVER_LOGO_PLACEHOLDER, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, type BoxGeometry, type SlideGeometry, type SlidePlan, type TextBox } from "@/lib/engine/deck";
+import { boxAt, COVER_LOGO_PLACEHOLDER, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, type BoxGeometry, type SlideGeometry, type SlidePlan, type TextBox, FOOTER_BAND } from "@/lib/engine/deck";
 
 /** What one thumbnail needs, computed on the server from the same plan the export draws. */
 export type ThumbSlide = {
@@ -55,7 +55,12 @@ export function DeckThumbs({ slides, chrome, hasLogo, onMeasured }: { slides: Th
   // fallback. Added to the head after render, never in it: a stylesheet React waits on would hold the whole step back when the
   // font host is slow or blocked, and the fallback is the right drawing until the face arrives (the measure runs again then).
   const fontKey = [chrome.faces.display, chrome.faces.body, chrome.faces.quote ?? ""].join("|");
+  // The faces arrive after first paint (Claude, rev 592: the overflow count read 6, then 2 once the Google faces loaded): the
+  // count is reported to the check panel only once every face link has loaded and the fonts are ready; until then it measures.
+  const facesReady = useRef(false);
   useEffect(() => {
+    let alive = true;
+    const waits: Promise<unknown>[] = [];
     for (const href of new Set(fontKey.split("|").map(googleFontHref).filter((h): h is string => Boolean(h)))) {
       if (document.head.querySelector(`link[data-deck-font="${href}"]`)) continue;
       const link = document.createElement("link");
@@ -63,28 +68,34 @@ export function DeckThumbs({ slides, chrome, hasLogo, onMeasured }: { slides: Th
       link.href = href;
       link.dataset.deckFont = href;
       link.dataset.testid = "deck-thumb-font";
+      waits.push(new Promise<void>((done) => { link.onload = () => done(); link.onerror = () => done(); }));
       document.head.appendChild(link);
     }
-  }, [fontKey]);
-  useEffect(() => {
     const measure = () => {
       const out = new Set<number>();
       root.current?.querySelectorAll<HTMLElement>("[data-measure]").forEach((el) => {
         if (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1) out.add(Number(el.dataset.measure));
       });
       setOverflow((prev) => (prev.size === out.size && [...prev].every((n) => out.has(n)) ? prev : out));
-      onMeasured?.(out.size);
+      // The panel's count waits for the faces: a number read off the fallback face is not the file's.
+      if (facesReady.current) onMeasured?.(out.size);
     };
     measure();
-    const t = setTimeout(measure, 600); // a web face arriving after first paint can change the measure
     const ro = typeof ResizeObserver !== "undefined" && root.current ? new ResizeObserver(measure) : null;
     if (ro && root.current) ro.observe(root.current);
-    document.fonts?.ready.then(measure).catch(() => undefined);
+    Promise.all(waits)
+      .then(() => document.fonts?.ready ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => {
+        if (!alive) return;
+        facesReady.current = true;
+        measure();
+      });
     return () => {
-      clearTimeout(t);
+      alive = false;
       ro?.disconnect();
     };
-  }, [slides, onMeasured]);
+  }, [fontKey, slides, onMeasured]);
 
   const empty = slides.filter((s) => s.plan.placeholderSlot).map((s) => s.plan.n);
   const summary = [
@@ -129,13 +140,22 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
         className="absolute flex overflow-hidden leading-[1.2]"
         style={{ ...place(at), alignItems: at.valign === "middle" ? "center" : "flex-start", justifyContent: at.align === "center" ? "center" : at.align === "right" ? "flex-end" : "flex-start", textAlign: at.align, color: `#${b.color}`, fontFamily: faceFor(b), fontSize: `${b.size * PT}cqw`, fontWeight: b.bold ? 700 : 400, fontStyle: b.italic ? "italic" : "normal", textDecoration: b.strike ? "line-through" : undefined, whiteSpace: "pre-line", backgroundColor: b.fill ? `#${b.fill}` : undefined }}
       >
-        <span>{b.text}</span>
+        {b.phrase && b.text.includes(b.phrase.text) ? (
+          <span>
+            {b.text.slice(0, b.text.indexOf(b.phrase.text))}
+            <span style={{ color: b.phrase.color ? `#${b.phrase.color}` : undefined, fontWeight: 700 }} data-testid="thumb-accent" data-accent={b.phrase.color ? 1 : 0}>{b.phrase.text}</span>
+            {b.text.slice(b.text.indexOf(b.phrase.text) + b.phrase.text.length)}
+          </span>
+        ) : (
+          <span>{b.text}</span>
+        )}
       </div>
     );
   };
   const lines = plan.boxes.filter((b) => b.role === "body" || b.role === "attribution");
   const frame = plan.imageFrame ?? plan.placeholderSlot?.frame ?? null;
-  const bandY = 5.32;
+  const bandY = FOOTER_BAND.y;
+  const bandH = FOOTER_BAND.h;
   return (
     <figure className="m-0" data-testid="deck-thumb" data-n={plan.n} data-overflow={overflow ? 1 : 0} data-empty={plan.placeholderSlot ? 1 : 0} data-nologo={missingLogo ? 1 : 0} data-layout={plan.layout}>
       <div className={`relative w-full overflow-hidden rounded border ${problems.length ? "border-warn ring-1 ring-warn" : "border-line"}`} style={{ aspectRatio: "16 / 9", backgroundColor: `#${plan.background}`, containerType: "inline-size" }}>
@@ -183,16 +203,16 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
           </div>
         ) : null}
         {!cover && chrome.footerBar ? (
-          <div className="absolute" style={{ left: 0, top: pct(bandY, SLIDE_H), width: "100%", height: pct(0.3, SLIDE_H), backgroundColor: `#${chrome.surface}` }}>
+          <div className="absolute" style={{ left: 0, top: pct(bandY, SLIDE_H), width: "100%", height: pct(bandH, SLIDE_H), backgroundColor: `#${chrome.surface}` }}>
             {chrome.logoUrl ? null : <div className="absolute flex items-center" style={{ left: pct(0.4, SLIDE_W), width: pct(3.5, SLIDE_W), height: "100%", color: `#${chrome.muted}`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), fontSize: `${9 * PT}cqw` }} data-testid="deck-thumb-footer-brand">{chrome.company}</div>}
             {chrome.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={chrome.logoUrl} alt="" className="absolute object-contain object-right" style={{ left: pct(chrome.logoBox.x, SLIDE_W), top: pct(chrome.logoBox.y - bandY, 0.3), width: pct(chrome.logoBox.w, SLIDE_W), height: pct(chrome.logoBox.h, 0.3) }} />
+              <img src={chrome.logoUrl} alt="" className="absolute object-contain object-right" style={{ left: pct(chrome.logoBox.x, SLIDE_W), top: pct(chrome.logoBox.y - bandY, bandH), width: pct(chrome.logoBox.w, SLIDE_W), height: pct(chrome.logoBox.h, 0.3) }} />
             ) : null}
           </div>
         ) : null}
         {!cover && plan.ctaBar ? (
-          <div className="absolute flex items-center justify-center font-bold" style={{ left: pct(4.0, SLIDE_W), top: pct(bandY, SLIDE_H), width: pct(4.8, SLIDE_W), height: pct(0.3, SLIDE_H), color: `#${chrome.muted}`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), fontSize: `${10 * PT}cqw` }} data-testid="deck-thumb-cta">{plan.ctaBar}</div>
+          <div className="absolute flex items-center justify-center font-bold" style={{ left: pct(4.0, SLIDE_W), top: pct(bandY, SLIDE_H), width: pct(4.8, SLIDE_W), height: pct(bandH, SLIDE_H), color: `#${chrome.muted}`, fontFamily: face(chrome.faces.body, chrome.faces.fallback), fontSize: `${10 * PT}cqw` }} data-testid="deck-thumb-cta">{plan.ctaBar}</div>
         ) : null}
       </div>
       <figcaption className="mt-1 flex items-center justify-between text-[11px] text-ink-3">

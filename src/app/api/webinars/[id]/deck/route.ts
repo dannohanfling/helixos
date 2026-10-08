@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/db";
 import { apiViewer } from "@/lib/auth";
 import type PptxGenJS from "pptxgenjs";
-import { boxAt, COVER_LOGO_BOX, COVER_LOGO_PLACEHOLDER, LOGO_BOX, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, logoBadgeFrame, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan } from "@/lib/engine/deck";
+import { boxAt, COVER_LOGO_BOX, COVER_LOGO_PLACEHOLDER, FOOTER_BAND, LOGO_BOX, PLACEHOLDER_RED, PLACEHOLDER_TEXT_SIZE, coverLogoFrame, logoBadgeFrame, SLIDE_MASTERS, deckSlides, masterFor, masterGeometry, outlineText, renderPlan, slideGeometry, slotFrame, type BoxGeometry, type Frame, type PlaceholderSlot, type SlidePlan, type TextBox } from "@/lib/engine/deck";
+import { slideChoicesFor } from "@/lib/queries/deck-choices";
 import { applyKitTheme } from "@/lib/deck-theme";
 import { dedupeDeckMedia, prepareDeckImage, type PreparedImage } from "@/lib/deck-media";
 import { pictureAltText } from "@/lib/engine/deck-slot";
@@ -62,7 +63,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (prepared) bySlide.set(r.slide, { ...prepared, alt: pictureAltText(r.image!.caption, r.slot.what) });
     else filled.delete(r.slide); // The bytes wouldn't read back or decode: the slide shows the slot's placeholder, never a broken picture.
   }));
-  const plans = renderPlan(deck, filled, droppedSlides(resolved));
+  const plans = renderPlan(deck, filled, droppedSlides(resolved), await slideChoicesFor(w.id));
   // The logos (§4, first-deck §3): the kit's pick, else the newest logo in the owner's own library. On the cover, contained whole
   // in its box: the kit's dark logo on a dark cover, or the one logo on a ground badge when it would not read there; in the footer
   // bar, when the bar is on, the one logo. No logo at all: a red "Your logo here" on the cover, and the brand line as type.
@@ -139,11 +140,11 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     // The logo on the cover (§4, first-deck §3), top left, contained whole in its box: on its ground badge when it needs one,
     // and with none at all, the red dashed "Your logo here" in the same box.
     if (chrome.coverLogo && chrome.coverBadge) {
-      const b = logoBadgeFrame(chrome.coverLogo.placement.box);
+      const b = logoBadgeFrame(coverLogoFrame(chrome.coverLogo.placement.box));
       slide.addShape(pptx.ShapeType.roundRect, { x: b.x, y: b.y, w: b.w, h: b.h, rectRadius: 0.08, fill: { color: chrome.coverBadge }, line: { color: chrome.coverBadge, width: 0 } });
     }
     if (!chrome.coverLogo && chrome.noLogo) drawPlaceholder(pptx, slide, { frame: COVER_LOGO_BOX, text: COVER_LOGO_PLACEHOLDER, color: PLACEHOLDER_RED }, chrome.body);
-    if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: chrome.coverLogo.placement.box.x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h, altText: `${chrome.company} logo` });
+    if (chrome.coverLogo) slide.addImage({ data: chrome.coverLogo.data, x: coverLogoFrame(chrome.coverLogo.placement.box).x, y: chrome.coverLogo.placement.box.y, w: chrome.coverLogo.placement.box.w, h: chrome.coverLogo.placement.box.h, altText: `${chrome.company} logo` });
     const title = plan.boxes.find((b) => b.role === "cover-title");
     const presenter = plan.boxes.find((b) => b.role === "cover-presenter");
     if (title && g.boxes["cover-title"]) slide.addText(title.text, { placeholder: "title", ...at(g.boxes["cover-title"]), fontSize: title.size, bold: title.bold, color: title.color, fontFace: title.face });
@@ -163,7 +164,7 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     for (const b of plan.boxes) {
       const at_ = boxAt(g, b);
       if (!at_) continue;
-      slide.addText(b.text, { ...at(at_), fontSize: b.size, bold: b.bold, italic: b.italic, color: b.color, fontFace: b.face, ...(b.fill ? { fill: { color: b.fill } } : {}), ...(b.strike ? { strike: "sngStrike" as const } : {}) });
+      slide.addText(runsOf(b), { ...at(at_), fontSize: b.size, bold: b.bold, italic: b.italic, color: b.color, fontFace: b.face, ...(b.fill ? { fill: { color: b.fill } } : {}), ...(b.strike ? { strike: "sngStrike" as const } : {}) });
     }
   } else {
     const eyebrow = plan.boxes.find((b) => b.role === "eyebrow");
@@ -174,7 +175,7 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
     // A statement (§4: one line, no body) sits vertically centred and large; a content headline sits at the top of its box.
     // The layout's title placeholder carries the family's own geometry and alignment, which pptxgenjs copies over the slide's
     // (deck re-test §1): a centred statement (the close, the reflection moment) is a plain box, or it would be set left.
-    if (headline && g.boxes.headline) slide.addText(headline.text, { ...(plan.centred ? {} : { placeholder: "title" }), ...at(g.boxes.headline), fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
+    if (headline && g.boxes.headline) slide.addText(runsOf(headline), { ...(plan.centred ? {} : { placeholder: "title" }), ...at(g.boxes.headline), fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
     if (lines.length && g.body) {
       slide.addText(
         lines.map((b) => ({ text: b.text, options: { bullet: b.bullet, breakLine: true, fontSize: b.size, color: b.color, fontFace: b.face, ...(b.fill ? { highlight: b.fill } : {}) } })),
@@ -225,20 +226,31 @@ function drawImage(pptx: PptxGenJS, slide: PptxGenJS.Slide, image: PreparedImage
  * The optional bottom chrome, both off by default: a footer bar (a thin surface band with the workspace name and, if the coach
  * has one, their logo) and a CTA bar (the offer's one line). They live in the bottom strip only, so they never cross the body.
  */
+/** A box's text as runs: the accent phrase (deck layouts 10) as its own run in its colour, bold; everything else as the box. */
+function runsOf(b: TextBox): string | { text: string; options?: { color?: string; bold?: boolean } }[] {
+  const p = b.phrase;
+  const i = p ? b.text.indexOf(p.text) : -1;
+  if (!p || i < 0) return b.text;
+  const before = b.text.slice(0, i);
+  const after = b.text.slice(i + p.text.length);
+  return [...(before ? [{ text: before }] : []), { text: p.text, options: { color: p.color ?? b.color, bold: true } }, ...(after ? [{ text: after }] : [])];
+}
+
 function drawBars(pptx: PptxGenJS, slide: PptxGenJS.Slide, chrome: Chrome, cover: boolean, cta: string | null) {
   if (cover) return; // The cover carries neither bar: it is the title moment.
-  const bandY = 5.32;
+  const bandY = FOOTER_BAND.y;
+  const bandH = FOOTER_BAND.h;
   if (chrome.footerBar) {
-    slide.addShape(pptx.ShapeType.rect, { x: 0, y: bandY, w: 10, h: 0.3, fill: { color: chrome.surface } });
+    slide.addShape(pptx.ShapeType.rect, { x: FOOTER_BAND.x, y: bandY, w: FOOTER_BAND.w, h: bandH, fill: { color: chrome.surface } });
     // The boxes never collide (§4): the brand line to 3.9 in, the CTA from 4.0 to 8.8, the logo from 9.0. With a logo the brand
     // line goes (first-deck §3): the footer said the brand twice.
-    if (!chrome.logo) slide.addText(chrome.company, { x: 0.4, y: bandY, w: 3.5, h: 0.3, fontSize: 9, color: chrome.muted, fontFace: chrome.body, valign: "middle" });
+    if (!chrome.logo) slide.addText(chrome.company, { x: 0.4, y: bandY, w: 3.5, h: bandH, fontSize: 9, color: chrome.muted, fontFace: chrome.body, valign: "middle" });
     // The logo whole at its own ratio inside its box, never stretched; a small one at its own size.
     if (chrome.logo) slide.addImage({ data: chrome.logo.data, x: chrome.logo.placement.box.x, y: chrome.logo.placement.box.y, w: chrome.logo.placement.box.w, h: chrome.logo.placement.box.h, altText: `${chrome.company} logo` });
   }
   if (cta) {
     // Only on the offer and Q&A slides and the close (first-deck §5), where it replaces the footer's CTA line. Footer text is
     // muted (§4: the accent at 10pt failed contrast on the surface); the accent stays on the rule.
-    slide.addText(cta, { x: 4.0, y: bandY, w: 4.8, h: 0.3, fontSize: 10, bold: true, color: chrome.muted, fontFace: chrome.body, align: "center", valign: "middle" });
+    slide.addText(cta, { x: 4.0, y: bandY, w: 4.8, h: bandH, fontSize: 10, bold: true, color: chrome.muted, fontFace: chrome.body, align: "center", valign: "middle" });
   }
 }

@@ -1200,6 +1200,26 @@ export const deckSlots = sqliteTable(
 );
 export type DeckSlot = typeof deckSlots.$inferSelect;
 
+/**
+ * The coach's choices on one slide (deck layouts 10, rev 533): a layout picked over the engine's, among the layouts that apply,
+ * and the one phrase set in the accent (or cleared). Keyed by the slide's stable key (its section and its place in it), so a
+ * choice survives edits elsewhere in the deck.
+ */
+export const deckSlideChoices = sqliteTable(
+  "deck_slide_choices",
+  {
+    id: id(),
+    webinarId: text("webinar_id").notNull().references(() => webinars.id, { onDelete: "cascade" }),
+    slideKey: text("slide_key").notNull(),
+    layout: text("layout"),
+    accentPhrase: text("accent_phrase"),
+    accentOff: integer("accent_off", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("deck_slide_choices_key").on(t.webinarId, t.slideKey)],
+);
+export type DeckSlideChoice = typeof deckSlideChoices.$inferSelect;
+
 export const readinessReviews = sqliteTable("readiness_reviews", {
   id: id(),
   webinarId: text("webinar_id")

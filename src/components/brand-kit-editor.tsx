@@ -96,6 +96,11 @@ export function BrandKitEditor({ kit, logos, workspaceId, userId }: { kit: KitDr
             ))}
           </select>
           <span className="mt-1 block text-xs text-ink-3">From your Images library (kind Logo): on the cover and in the footer bar. None means the kit&apos;s name set as type.</span>
+          {!draft.logoImageId && library.length ? (
+            <span className="mt-1 block text-xs font-medium text-accent-ink" data-testid="brand-logo-hint">
+              You have {library.length === 1 ? "a logo" : `${library.length} logos`} in Images. Pick one here and save.
+            </span>
+          ) : null}
         </label>
         <details className="mt-2" data-testid="brand-logo-upload">
           <summary className="inline-flex cursor-pointer"><span className="btn btn-soft btn-xs">Upload a logo</span></summary>

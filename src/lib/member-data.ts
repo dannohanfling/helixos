@@ -137,6 +137,7 @@ export const CHILD_TABLES = [
   { label: "webinar_beliefs", table: schema.webinarBeliefs, fk: "webinarId", parent: "webinars" },
   { label: "webinar_sections", table: schema.webinarSections, fk: "webinarId", parent: "webinars" },
   { label: "deck_slots", table: schema.deckSlots, fk: "webinarId", parent: "webinars" },
+  { label: "deck_slide_choices", table: schema.deckSlideChoices, fk: "webinarId", parent: "webinars" },
   { label: "readiness_reviews", table: schema.readinessReviews, fk: "webinarId", parent: "webinars" },
   { label: "client_checkins", table: schema.clientCheckins, fk: "clientRecordId", parent: "client_records" },
   { label: "community_pass_points", table: schema.memberPoints, fk: "clientRecordId", parent: "client_records" },

@@ -121,6 +121,22 @@ async function main() {
     console.log(`✓ §3: "${FIGURE_LINE}" asks for a screenshot with the figure circled; ${slotRuns.filter(Boolean).length} of ${slotRuns.length} slides ask for a picture, never three in a row`);
     console.log(`✓ the Deck step keeps ${expectedKept.length} lines off the slides, one per example in deck-face.ts, each named`);
 
+    // ── Deck layouts 10: tap two words for the accent phrase; set a layout the slide may take. Both show on the thumbnail at once. ──
+    const lineCard = page.locator('[data-testid="deck-slide"]', { has: page.locator('[data-testid="deck-headline"]:text-is("Line 1 the presenter says")') }).first();
+    // The words: "Line", "1", "the", "presenter", "says". Tap "the", then "presenter": one contiguous phrase.
+    await lineCard.locator('[data-testid="accent-word"]').nth(2).click();
+    await lineCard.locator('[data-testid="accent-picker"][data-phrase="the"]').waitFor({ timeout: 20000 });
+    await lineCard.locator('[data-testid="accent-word"]').nth(3).click();
+    await lineCard.locator('[data-testid="accent-picker"][data-phrase="the presenter"]').waitFor({ timeout: 20000 });
+    await page.locator('[data-testid="thumb-accent"]', { hasText: "the presenter" }).first().waitFor({ timeout: 20000 });
+    const accentOn = await page.locator('[data-testid="thumb-accent"]', { hasText: "the presenter" }).first().getAttribute("data-accent");
+    const layoutMenu = figureCard.locator('[data-testid="slide-layout"]');
+    if (!(await layoutMenu.locator("option").allInnerTexts()).some((o) => o.startsWith("Auto · Big number"))) throw new Error("the figure's menu names the engine's own layout as Auto");
+    await layoutMenu.selectOption("statement");
+    await page.locator('[data-testid="deck-thumb"][data-layout="statement"]', { hasText: FIGURE_LINE }).waitFor({ timeout: 20000 });
+    if ((await db.query.deckSlideChoices.findMany({ where: eq(schema.deckSlideChoices.webinarId, webinarId) })).length !== 2) throw new Error("one choice row per slide key");
+    console.log(`✓ deck layouts 10: "the presenter" is the accent phrase (${accentOn === "1" ? "in the accent" : "bold ink, the accent does not read on this ground"}); the figure slide set to one line, centred, both on the thumbnails`);
+
     // The offer: the demo client's own, linked, and a line in the offer stack typed in a currency that is not the offer's.
     const user = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
     const offer = (await db.query.offers.findFirst({ where: and(eq(schema.offers.userId, user.id), eq(schema.offers.status, "live")) }))!;
@@ -152,6 +168,14 @@ async function main() {
       }
     }
     if (slideFiles.length < 10 || faceLines.length < slideFiles.length) throw new Error(`the file has slides with text to read: ${slideFiles.length} slides, ${faceLines.length} lines`);
+    // The accent phrase is its own bold run in the file (deck layouts 10), and the figure slide exports as one line, no big number.
+    let phraseRun = false;
+    for (const f of slideFiles) {
+      const xml = await zip.file(f)!.async("string");
+      if (/<a:rPr[^>]*\bb="1"[^>]*>(?:(?!<\/a:r>)[\s\S])*?<a:t>the presenter<\/a:t>/.test(xml)) phraseRun = true;
+    }
+    if (!phraseRun) throw new Error("the accent phrase is a bold run of its own in the file");
+    if (!faceLines.includes(FIGURE_LINE) || faceLines.includes("602 comments")) throw new Error("the figure slide set to one line exports whole, not as a big number");
     const dirty = faceLines.filter((l) => faceHits(l).length);
     if (dirty.length) throw new Error(`a face in the exported file carries construction language: ${dirty.map((l) => `"${l}" (${faceHits(l).join(", ")})`).join("; ")}`);
     for (let i = 1; i <= examples.length; i++) if (!faceLines.includes(`Line ${i} the presenter says`)) throw new Error(`the ordinary line beside example ${i} is still on a face`);

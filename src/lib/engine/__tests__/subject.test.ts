@@ -51,7 +51,7 @@ describe("the subject: what still resolves, who presents, what the brand allows"
     expect(brandKitProblems({ ...turas, inverseGround: "000000" })).toEqual(["inverseGround is 000000, which this brand bans."]);
     // Heartfire Red reads on Clarity White; on Grounded Taupe it is the 1.24:1 eyebrow a human once caught on a render
     expect(brandKitWarnings(turas)).toEqual(["accent on inverseGround is 1.24:1: not for text on a full-bleed slide."]);
-    expect(brandKitWarnings({ ground: "FAF8F5", accent: "F2A4A4", inverseGround: null })).toEqual(["accent on ground is 1.87:1: too light for small text, so the deck uses it for rules and buttons only, never for words."]);
+    expect(brandKitWarnings({ ground: "FAF8F5", accent: "F2A4A4", inverseGround: null })).toEqual(["accent on ground is 1.87:1: too light for small text, so the deck uses it for rules and buttons only, never for words; a headline's accent phrase is set in bold ink instead."]);
     expect(brandKitWarnings({ ground: "FFFFFF", accent: "000000", inverseGround: null })).toEqual([]);
   });
 });
