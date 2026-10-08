@@ -21,7 +21,9 @@ describe("the draft writes the slides too (first-deck brief §2)", () => {
   it("keeps only lines the deck can export: no placeholder on a proof or price slide, none inside a number", () => {
     expect(deckSafe(["What changed for them", "[PROOF PLACEHOLDER]"], "Proof Block (Internal)")).toEqual(["What changed for them"]);
     expect(deckSafe(["Yours today for $297", "[OFFER PLACEHOLDER]"], "Offer Stack + CTA")).toEqual(["Yours today for $297"]);
-    expect(deckSafe(["[STORY PLACEHOLDER]", "Clients gained [X]% in a week"], "Hook")).toEqual(["[STORY PLACEHOLDER]"]);
+    // A line that is only a placeholder is no slide line either (deck re-test §2): the deck draws the gap, the panel names it.
+    expect(deckSafe(["[STORY PLACEHOLDER]", "Clients gained [X]% in a week"], "Hook")).toEqual([]);
+    expect(deckSafe(["Her story: [STORY PLACEHOLDER]"], "Hook")).toEqual(["Her story: [STORY PLACEHOLDER]"]);
   });
   it("asks for about one slide per two minutes, two to six", () => {
     expect([1, 4, 5, 8, 30].map(slideCountFor)).toEqual([2, 2, 3, 4, 6]);

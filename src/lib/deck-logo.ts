@@ -1,10 +1,11 @@
 /**
  * The deck's logos, server side (first-deck brief §3): the one the export and the Deck step's thumbnails both use, so the two
- * cannot disagree. The logo is the kit's pick, else the newest logo in the owner's own library (a client's deck, their logo);
- * the dark one is the kit's "Logo for dark backgrounds" alone. Which goes on the cover, and on a badge or bare, is the engine's
+ * cannot disagree. The logo is the kit's pick and nothing else (deck re-test §4, 7 Oct: after "Reset to the starter kit" the
+ * deck still carried a library logo the kit no longer named; Danno's decision is that no logo on the kit means the red "Your
+ * logo here" on the cover); the dark one is the kit's "Logo for dark backgrounds" alone. Which goes on the cover, and on a badge or bare, is the engine's
  * call (coverLogoPlan); this reads the rows and, only when the engine needs it, the one logo's bytes to measure its colour.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { DeckImage } from "@/db/schema";
 import { coverLogoPlan } from "@/lib/engine/deck";
@@ -33,10 +34,7 @@ export async function deckLogos(
 ): Promise<DeckLogos> {
   // The kit's pick counts only when it is the owner's own logo (rev 568): a kit can never show another member's image.
   const inWorkspace = (id: string) => db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, owner.workspaceId), eq(schema.deckImages.userId, owner.userId), eq(schema.deckImages.kind, "logo")) });
-  const logo =
-    (kit?.logoImageId ? await inWorkspace(kit.logoImageId) : null) ??
-    (await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.workspaceId, owner.workspaceId), eq(schema.deckImages.userId, owner.userId), eq(schema.deckImages.kind, "logo")), orderBy: [desc(schema.deckImages.createdAt)] })) ??
-    null;
+  const logo = (kit?.logoImageId ? await inWorkspace(kit.logoImageId) : null) ?? null;
   const dark = (kit?.logoDarkImageId ? await inWorkspace(kit.logoDarkImageId) : null) ?? null;
   // The one logo is measured only when it would stand on a dark cover with no dark logo to take its place.
   const needsMeasure = Boolean(logo && !dark && normaliseHex(cover.background) !== normaliseHex(cover.ground));

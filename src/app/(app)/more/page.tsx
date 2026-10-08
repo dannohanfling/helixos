@@ -32,14 +32,23 @@ export default async function MorePage() {
           .map((g) => (
           <div key={g.label} className="card p-2">
             <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">{g.label}</div>
-            {g.items
-              .map((n) => (
+            {g.items.map((n) =>
+              n.external ? (
+                <a key={n.href} href={n.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2" data-testid="more-platform">
+                  <span className="w-6 text-center text-lg">{n.icon}</span>
+                  <span className="font-medium">{n.label}</span>
+                  <span className="ml-auto text-xs text-ink-3">
+                    {n.line} <span aria-label="opens in a new tab">↗</span>
+                  </span>
+                </a>
+              ) : (
                 <Link key={n.href} href={n.href} className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2">
                   <span className="w-6 text-center text-lg">{n.icon}</span>
                   <span className="font-medium">{n.label}</span>
                   {n.href === "/intentions" && due ? <DueBadge count={due} /> : n.href === "/whats-new" && unseen ? <NewDot /> : n.line ?? n.hint ? <span className="ml-auto text-xs text-ink-3">{n.line ?? n.hint}</span> : null}
                 </Link>
-              ))}
+              ),
+            )}
           </div>
         ))}
         <div className="card p-2">

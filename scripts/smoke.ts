@@ -72,6 +72,22 @@ async function main() {
   await page.waitForURL(/\/today/);
   await expectText(page, "Next best action", "today");
   await shot(page, "01-today-before-lockin");
+  // Platforms (Danno, 7 Oct): three outbound links at the foot of the menu, each in a new tab with the ↗ mark, and the same on Everything.
+  const platforms = page.locator('aside [data-testid="nav-platform"]');
+  if ((await platforms.count()) !== 3) throw new Error(`the sidebar's Platforms section lists 3 links, saw ${await platforms.count()}`);
+  for (const [href, label] of [["https://communityloyalty.io", "Community Loyalty"], ["https://academy.evolveomega.com", "Academy"], ["https://app.evolveomega.com", "Evolve Omega App"]]) {
+    const a = platforms.filter({ hasText: label }).first();
+    if ((await a.getAttribute("href")) !== href || (await a.getAttribute("target")) !== "_blank" || !((await a.getAttribute("rel")) ?? "").includes("noopener") || !(await a.innerText()).includes("↗")) throw new Error(`${label} opens ${href} in a new tab with ↗`);
+  }
+  // The section labels render in capitals: read them as the DOM has them.
+  const navText = (await page.locator("aside nav").innerText()).toUpperCase();
+  if (!navText.includes("PLATFORMS") || navText.indexOf("PLATFORMS") < navText.indexOf("GROW")) throw new Error("Platforms is the last section of the menu");
+  await page.goto(`${base}/more`);
+  if ((await page.locator('[data-testid="more-platform"]').count()) !== 3) throw new Error("Everything lists the three platforms too");
+  await page.goto(`${base}/today`);
+  // Today streams: wait for its content before reading the lock-in's state, or "Edit lock-in" is read as absent while it loads.
+  await expectText(page, "Next best action", "today-again");
+  console.log("✓ Platforms: three outbound links, new tab and ↗, last in the menu and on Everything");
 
   // Morning lock-in (expand the form if today is already locked in)
   const redo = page.locator('summary:has-text("Edit lock-in")');

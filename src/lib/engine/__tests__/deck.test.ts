@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SECTION_TEMPLATES } from "../webinar";
 import { resolveSections, type SectionRow } from "../webinar-context";
-import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame, eventLine, BODY_FIT_SIZES, PLACEHOLDER_TEXT_SIZE, echoes, quoteWithSubject, boxAt } from "../deck";
+import { BODY_SIZE, EYEBROW_SIZE, HEADLINE_FLOOR, HEADLINE_MAX_CHARS, HEADLINE_TIERS, NEUTRAL_KIT, STARTER_KIT, PACE_BAND, PLACEHOLDER_FALLBACK, TEXT_LEFT_ZONE, deckPace, deckSlides, headlineTier, offSlidePlaceholders, offerBuild, outlineText, paceLine, placeholderHits, renderPlan, slotFrame, suggestedSlots, SLOT_WHAT, type DeckKit, PLACEHOLDER_RED, placeholderLine, PICTURE_ONLY_FRAME, slideGeometry, COVER_LOGO_BOX, coverLogoPlan, logoBadgeFrame, eventLine, BODY_FIT_SIZES, PLACEHOLDER_TEXT_SIZE, echoes, quoteWithSubject, boxAt, PROOF_GAP_WHAT } from "../deck";
 
 const kit: DeckKit = { name: "Turas — True North", ground: "FAF8F5", ink: "6E6256", accent: "DD2727", muted: "4B5563", surface: "ECE9E5", inverseGround: "6E6256", inverseInk: "FAF8F5", displayFont: "Red Hat Display", bodyFont: "Helvetica Now Display", quoteFont: "Libre Baskerville", fontFallback: "Arial", bannedColors: ["000000"], placeholder: "FFF3A3" };
 const base = (over: Partial<Record<string, Partial<SectionRow>>> = {}): SectionRow[] =>
@@ -61,9 +61,12 @@ describe("what a slide holds is what the record holds, or there is no slide", ()
     const withStudy = deckSlides(ctx(base(), [{ type: "vehicle", fromBelief: "a", toBelief: "b", evidenceId: "e1" }]), kit);
     expect(bySection(withStudy, "proof_block")).toHaveLength(1);
     expect(bySection(withStudy, "proof_block")[0]).toMatchObject({ kind: "evidence", headline: "Impostor phenomenon is common among high achievers.", body: ["Bravata et al. (2019). Prevalence of Impostor Syndrome. https://doi.org/10.1/x"] });
+    // With neither (deck re-test §2, 7 Oct): one red slot saying what to add, not a sentence about the absence on a face.
     const nothing = deckSlides(ctx(base()), kit);
-    expect(bySection(nothing, "proof_block")).toEqual([]);
-    expect(nothing.slides.map((s) => s.headline).join(" ")).not.toMatch(/no proof|missing|not yet/i);
+    const gap = bySection(nothing, "proof_block");
+    expect(gap).toHaveLength(1);
+    expect(gap[0]).toMatchObject({ kind: "proof", proofGap: true, headline: PROOF_GAP_WHAT, body: [] });
+    expect(nothing.slides.filter((s) => !s.proofGap).map((s) => s.headline).join(" ")).not.toMatch(/no proof|missing|not yet/i);
   });
   it("the Case Study renders the story wired to its act, or its key points, or nothing", () => {
     const story = deckSlides(ctx(base(), [{ type: "vehicle", fromBelief: "a", toBelief: "b", storyAssetId: "s1" }]), kit);
@@ -194,13 +197,18 @@ describe("placeholders: refused in a claim or on a proof or price slide, warned 
   it("the deck refuses with the slide named, from the same function the route runs, and a warning carries the count", () => {
     const d = deckSlides(ctx(base({ hook: { keyPoints: "Promise [X]% fewer no-shows" }, problem_frame: { keyPoints: "Send them to [SALES PAGE URL]" }, proof_block: { keyPoints: "[CLIENT NAME] doubled her list" } })), kit);
     // 1 cover · 2 Hook · 3 Problem Frame · 4 Proof Block · 5 Act 1 recap · 6 item · 7 price (no belief rows here, so no dividers, §9)
-    expect(d.refused).toEqual(["Slide 2 (Hook): [X]% sits in a sentence that carries a number: a claim with a hole in it.", "Slide 4 (Proof Block): [CLIENT NAME] sits on a proof slide, which is a claim by its nature."]);
+    expect(d.refused).toEqual(["Slide 2 (Hook): [X]% sits in a sentence that carries a number: a claim with a hole in it.", "Slide 5 (Proof Block): [CLIENT NAME] sits on a proof slide, which is a claim by its nature."]);
     // The recap repeats the act's lines, so the slot is on two slides and counted twice, but named once, at its source
-    expect(d.warnings).toEqual(["Slide 3 (Problem Frame): [SALES PAGE URL] is a gap to fill."]);
-    expect(d.slides[4].kind).toBe("recap");
-    expect(d.slides[4].placeholders.map((p) => p.text)).toEqual(["[SALES PAGE URL]", "[CLIENT NAME]"]);
-    expect(d.placeholderCount).toBe(5);
-    expect(outlineText("t", d)).toContain("Deck outline · 7 slides · 5 unfilled on slides");
+    // The gap to fill, then one red-slot note per Proof Block with no proof wired (deck re-test §2): the Deck step names where.
+    expect(d.warnings[0]).toBe("Slide 3 (Problem Frame): [SALES PAGE URL] is a gap to fill.");
+    expect(d.warnings.slice(1)).toHaveLength(d.slides.filter((s) => s.proofGap).length);
+    for (const w of d.warnings.slice(1)) expect(w).toMatch(/^Slide \d+ \(Proof Block.*?\): no proof is wired to .+ yet: the slide is a red slot saying what to add\./);
+    const recap = d.slides.find((s) => s.kind === "recap")!;
+    expect(recap.placeholders.map((p) => p.text)).toEqual(["[SALES PAGE URL]", "[CLIENT NAME]"]);
+    // Five in the text, and one on each red slot.
+    const gaps = d.slides.filter((s) => s.proofGap).length;
+    expect(d.placeholderCount).toBe(5 + gaps);
+    expect(outlineText("t", d)).toContain(`Deck outline · ${d.slides.length} slides · ${5 + gaps} unfilled on slides`);
   });
   it("the deck refuses only on what it renders; the run sheet names the rest as off-slide", () => {
     // Every key point is on a slide now, so the only slot the deck does not show is one in a script
@@ -270,8 +278,8 @@ describe("the deck against the clock", () => {
     expect(p.sectionsWithPoints).toBe(2);
     expect(p.sections).toBe(20);
     const vehicle = p.acts.find((a) => a.key === "vehicle")!;
-    // Problem Frame and the recap: two slides over the act's minutes (no belief row here, so no divider, §9)
-    expect(vehicle.slides).toBe(2);
+    // Problem Frame, the Proof Block's red slot (no proof wired, deck re-test §2) and the recap: three slides over the act's minutes (no belief row here, so no divider, §9)
+    expect(vehicle.slides).toBe(3);
     expect(vehicle.thin).toBe(vehicle.rate !== null && vehicle.rate < PACE_BAND[0]);
     const closing = p.acts.find((a) => a.key === "closing")!;
     expect(closing.minutes).toBe(c.acts.find((a) => a.key === "closing")!.durationMin - qa);
@@ -297,7 +305,9 @@ describe("the opening the record can fill, and a section that builds", () => {
     expect(d.slides[2].body).toEqual(["You run a practice.", "You have tried a plan before."]);
     // Nothing on the record, nothing on the deck; an omitted origin section takes its beats with it
     const bare = deckSlides(ctx(base({ hook: { keyPoints: "Open the loop" } })), kit);
-    expect(bare.slides.slice(1, 3).map((s) => s.kind)).toEqual(["section", "offer"]);
+    // The hook, then the first Proof Block's red slot (no proof wired): the origin section with nothing on the record has no slide.
+    expect(bare.slides.slice(1, 3).map((s) => s.kind)).toEqual(["section", "proof"]);
+    expect(bare.slides[2].proofGap).toBe(true);
     const omitted = deckSlides(resolveSections({ webinar: { title: "t", originStory: { wall: "x" } }, presenter: "L", sections: base({ credibility_origin: { status: "omitted" } }), beliefs: [], proofs, assets, essenceStories: [], citable, offer: null }), kit);
     expect(omitted.slides.some((s) => s.headline === "x")).toBe(false);
   });
@@ -387,7 +397,7 @@ describe("deck v2: the opening contract, the reflection beat, the moment family,
     expect(d.slides.find((s) => s.kind === "cover")!.slot).toEqual({ key: "cover:photo", kind: "photo", what: "A photo of you: on stage, or on a call." });
     expect(d.slides.filter((s) => s.kind === "offer").every((s) => s.slot === null)).toBe(true);
     // Every instruction names its subject, from a fixed lead and the slide's own words, never generated.
-    for (const x of slots) expect(x.slot.what).toMatch(/^(A photo of|A screenshot with|Your own diagram of|Two photos side by side|A wall of your real|The client's photo)/);
+    for (const x of slots) expect(x.slot.what).toMatch(/^(A photo of|A screenshot with|Your own diagram of|Two photos side by side|A wall of your real|The client's photo|Add a client result here)/);
     // Never three picture slots in a row.
     let run = 0;
     for (const s of d.slides) {
@@ -552,7 +562,9 @@ describe("first-deck §4 and §5: readable sizes, the CTA once, the price and th
   it("the deck ends on the call to action and a Q&A slide that keeps it on screen, from the record", () => {
     const d = deckSlides(closeCtx(), kit);
     const [cta, qa] = d.slides.slice(-2);
-    expect(cta).toMatchObject({ kind: "close", headline: "Book a call", body: ["DM me the word PLAN"], inverse: true, footer: null });
+    // A centred statement (deck re-test §3): the call to action alone on the face, the offer's line in the notes.
+    expect(cta).toMatchObject({ kind: "close", headline: "Book a call", body: [], inverse: true, footer: null });
+    expect(cta.notes.some((n) => n.includes("DM me the word PLAN"))).toBe(true);
     expect(qa).toMatchObject({ kind: "close", headline: "Your questions", footer: "DM me the word PLAN" });
     // With no CTA line on the offer, the Q&A slide keeps the Foundation's call to action on screen instead.
     const bare = deckSlides(resolveSections({ webinar: { title: "t", ctaType: "Apply" }, presenter: "L", sections: base(), beliefs: [], proofs, assets, essenceStories: [], citable, offer }), kit);

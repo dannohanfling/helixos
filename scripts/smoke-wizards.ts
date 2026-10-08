@@ -218,7 +218,9 @@ async function main() {
   await expectText(page, "A structured text deck, styled in your own template", "the deck step says what the file is");
   if (await page.locator('[data-testid="deck-refused"]').count()) throw new Error(`the filled deck is no longer refused, got "${await page.locator('[data-testid="deck-refused"]').innerText()}"`);
   if (!/\[SALES PAGE URL\] is a gap to fill/.test(await page.locator('[data-testid="deck-warnings"]').innerText())) throw new Error("a placeholder outside a claim warns rather than refuses");
-  if (!/^1 unfilled \[placeholder\]/.test(await page.locator('[data-testid="deck-placeholders"]').innerText())) throw new Error("the count of unfilled slots is shown");
+  // The gap in the text plus one red slot per Proof Block with no proof wired (deck re-test §2): the count says so.
+  if (!/^\d+ unfilled \[placeholder\]/.test(await page.locator('[data-testid="deck-placeholders"]').innerText())) throw new Error("the count of unfilled slots is shown");
+  if (!/red slot/.test(await page.locator('[data-testid="deck-warnings"]').innerText())) throw new Error("a Proof Block with no proof is named as a red slot");
   if (await page.locator('[data-testid="deck-slide"][data-section="credibility_origin"]').count()) throw new Error("a section left out on purpose has no slide");
   if (!(await page.locator('[data-testid="deck-slide"][data-kind="proof"]').count())) throw new Error("the Proof Block renders the typed proof as a slide");
   // The count against a rate: slides a minute over the minutes without Q&A, the arithmetic checked rather than the number assumed
@@ -235,7 +237,8 @@ async function main() {
   if (!pptx.ok() || !(pptx.headers()["content-type"] ?? "").includes("presentationml") || pptxBody.subarray(0, 2).toString() !== "PK" || pptxBody.length < 5000) throw new Error(`pptx export failed: ${pptx.status()} ${pptxBody.length} bytes`);
   const txt = await page.request.get(`${base}${deckHref.replace("pptx", "txt")}`);
   const txtText = await txt.text();
-  if (!txt.ok() || !/Deck outline · \d+ slides · 1 unfilled on slides/.test(txtText)) throw new Error("txt export failed");
+  // The gap in the text, plus one red slot per Proof Block with no proof wired (deck re-test §2).
+  if (!txt.ok() || !/Deck outline · \d+ slides · \d+ unfilled on slides/.test(txtText)) throw new Error(`txt export failed: ${txt.status()} ${txtText.slice(0, 120)}`);
   if (/Credibility/.test(txtText) || /Visual/.test(txtText) || !/discovery calls/.test(txtText)) throw new Error("the outline carries the proof, not the omitted section, and no art direction");
   // The file says whose it is: the presenter as author, the workspace as company, the webinar as subject, never the generator
   const { default: JSZip } = await import("jszip");
@@ -399,7 +402,9 @@ async function main() {
   const xml = await Promise.all(slideFiles.map((f) => zip2.file(f)!.async("string")));
   const withFooter = xml.map((x, i) => (x.includes("DM me the word PLAN") ? i + 1 : 0)).filter(Boolean);
   if (!withFooter.length || withFooter[0] < 3 || withFooter[withFooter.length - 1] !== xml.length) throw new Error(`the footer sits on the offer, the Q&A and the close, the last slide included, got slides ${withFooter.join(",")} of ${xml.length}`);
-  if (!xml[xml.length - 1].includes("Your questions") || !xml[xml.length - 2].includes("DM me the word PLAN")) throw new Error("the deck ends on the call to action, then a Q&A slide that keeps it on screen");
+  // The close is a centred statement with no bullet (deck re-test §3): the call to action alone on the face, the offer's line on the Q&A slide after it.
+  const close = xml[xml.length - 2];
+  if (!xml[xml.length - 1].includes("Your questions") || close.includes("DM me the word PLAN") || close.includes("<a:buChar") || !close.includes('algn="ctr"')) throw new Error("the deck ends on the call to action, centred and without a bullet, then a Q&A slide that keeps the offer's line on screen");
   if (xml[1].includes("DM me the word PLAN")) throw new Error("no footer before the offer");
   console.log(`✓ deck footer on the offer, Q&A and closing slides (${withFooter.join(", ")} of ${xml.length}) after a re-export; the deck ends on the call to action and Q&A`);
   await expectText(page, "Optimizer", "offer wizard");

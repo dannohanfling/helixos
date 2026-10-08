@@ -181,6 +181,13 @@ async function main() {
     await page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/images"), { timeout: 20000 }).catch(() => {});
     await settle(page);
     if ((await imagesOf("logo")).length !== 1) throw new Error("a logo joins the library");
+    // The deck uses the kit's logo and nothing else (deck re-test §4): the walk's kit names the wordmark it just added.
+    {
+      const { STARTER_KIT: sk } = await import("@/lib/engine/deck");
+      const { newId: kitId } = await import("@/lib/ids");
+      const wordmarkRow = (await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.userId, user.id), eq(schema.deckImages.kind, "logo")) }))!;
+      await db.insert(schema.brandKits).values({ id: kitId(), workspaceId: wsId, userId: user.id, name: "Walk kit", ground: sk.ground, ink: sk.ink, accent: sk.accent, muted: sk.muted, surface: sk.surface, inverseGround: sk.inverseGround, inverseInk: sk.inverseInk, displayFont: sk.displayFont, bodyFont: sk.bodyFont, quoteFont: sk.quoteFont, fontFallback: sk.fontFallback, logoImageId: wordmarkRow.id });
+    }
 
     // ── A picture on a slot, on a clean webinar. The seeded examples carry demo placeholders on purpose (the gate refuses
     // those, tested in the wizards walk); this test wants a deck that exports, so it builds one from the coach's own opening
@@ -466,7 +473,12 @@ async function main() {
     if (!themeXml.includes(`<a:accent1><a:srgbClr val="${kitAccent}"/></a:accent1>`)) throw new Error(`the theme's accent1 is the kit's accent (${kitAccent}): ${themeXml.match(/<a:accent1>.*?<\/a:accent1>/)?.[0]}`);
     const slide2 = await zip.file("ppt/slides/slide2.xml")!.async("string");
     if (!slide2.includes('<a:schemeClr val="accent1"/>') || slide2.includes(`<a:srgbClr val="${kitAccent}"/>`)) throw new Error("a content slide's rule is drawn in the theme's accent, not a literal");
-    if (!/<p:ph[^>]*type="title"/.test(slide2) || !/<p:ph[^>]*type="body"/.test(slide2)) throw new Error("a content slide's headline and body are real placeholders");
+    // A content slide with a body keeps real title and body placeholders; a statement (one line) has the title alone, and no slide
+    // carries a placeholder it does not fill (deck re-test §5).
+    const slideXmls = await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f)).map((f) => zip.file(f)!.async("string")));
+    if (!slideXmls.some((x) => /<p:ph[^>]*type="title"/.test(x) && /<p:ph[^>]*type="body"/.test(x))) throw new Error("a content slide's headline and body are real placeholders");
+    const emptyPh = slideXmls.flatMap((x) => [...x.matchAll(/<p:sp>([\s\S]*?)<\/p:sp>/g)].map((m) => m[1])).filter((sp) => /<p:ph\b/.test(sp) && ![...sp.matchAll(/<a:t>([^<]*)<\/a:t>/g)].some((t) => t[1].trim()));
+    if (emptyPh.length) throw new Error(`no slide carries an empty placeholder (${emptyPh.length} found)`);
     const layoutNames = Object.keys(zip.files).filter((f) => /^ppt\/slideLayouts\/slideLayout\d+\.xml$/.test(f));
     if (layoutNames.length < 7) throw new Error(`a layout per slide family (${layoutNames.length} found)`);
     if (!/typeface="\+mj-lt"/.test(slide2) && !/typeface="\+mn-lt"/.test(slide2)) throw new Error("the runs name the theme faces, so a theme font change follows");

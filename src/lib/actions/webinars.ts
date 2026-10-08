@@ -2,7 +2,7 @@
 
 import { readMoney } from "@/lib/engine/money";
 import { deletedTo } from "@/lib/deleted";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { WEBINAR_STATUSES } from "@/db/schema";
@@ -18,7 +18,7 @@ import { ctx, num, opt, optNum, refresh, str } from "@/lib/action-helpers";
 import { originAfterAccept, originAfterSave, sectionGate } from "@/lib/engine/provenance";
 import { recordConfirm } from "@/lib/provenance";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
-import { checkSlides, deckSafe, keyPointsText, offerBlock, parseSectionDraft, SLIDES_MARK, slideLines, slidesInstruction, slidesOnlyTask } from "@/lib/engine/section-draft";
+import { SLIDES_MARK, checkSlides, deckSafe, keyPointsText, needsSlides, offerBlock, parseSectionDraft, slideLines, slidesInstruction, slidesOnlyTask } from "@/lib/engine/section-draft";
 import { evidenceLines, insertText } from "@/lib/engine/evidence";
 import { essenceFor } from "@/lib/queries/essence";
 import { citableEvidence } from "@/lib/queries/evidence";
@@ -284,6 +284,44 @@ export async function makeSlidesAction(formData: FormData): Promise<void> {
   refresh();
   redirect(`${back}&slides=${lines.length}`);
 }
+
+/**
+ * "Make slides for every section" (deck re-test §5, 7 Oct): every section with a script and no key points, in order, the same
+ * way one press does one section, skipping any that already has points. The request has a time budget; what is not reached
+ * before it runs out is left for the next press, and the Deck step says how many are left.
+ */
+export async function makeAllSlidesAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx({ team: "allow" });
+  const id = str(formData, "id");
+  const w = await own(id, userId);
+  const sections = (await db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, w.id), orderBy: [asc(schema.webinarSections.order)] })).filter((x) => needsSlides(x));
+  const started = Date.now();
+  let made = 0;
+  let failed = 0;
+  for (const section of sections) {
+    if (Date.now() - started > MAKE_ALL_BUDGET_MS) break;
+    const out = await draftCompletely(slidesOnlyTask(section.durationMin), `Webinar: ${w.title}\n\nSection: ${section.name}\n\nScript:\n${section.script}`, "webinar_section", 1500);
+    if (out === "cut" || !out) {
+      failed++;
+      continue;
+    }
+    const at = out.indexOf(SLIDES_MARK);
+    const lines = deckSafe(checkSlides(slideLines(at >= 0 ? out.slice(at + SLIDES_MARK.length) : out).filter((l) => !stripFabricated(l).removed.length), section.script!).kept, section.name);
+    if (!lines.length) {
+      failed++;
+      continue;
+    }
+    await db.update(schema.webinarSections).set({ keyPoints: keyPointsText(lines) }).where(eq(schema.webinarSections.id, section.id));
+    made++;
+  }
+  if (made) await db.update(schema.webinars).set({ updatedAt: nowIso() }).where(eq(schema.webinars.id, w.id));
+  const left = sections.length - made - failed;
+  refresh();
+  redirect(`/webinars/${w.id}?step=deck&made=${made}&failed=${failed}&left=${left}`);
+}
+
+/** How long one "Make slides for every section" request works before handing the rest to the next press: under the route's minute. */
+const MAKE_ALL_BUDGET_MS = 40_000;
 
 /** Accept: the coach has read this one AI-drafted script and keeps it as it is. One section per click; nothing accepts more than one. */
 export async function acceptSectionAction(formData: FormData): Promise<void> {

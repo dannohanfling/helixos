@@ -206,7 +206,7 @@ function Thumb({ slide, chrome, overflow, missingLogo }: { slide: ThumbSlide; ch
 }
 
 /** What the server already knows before download (§6.5); the overflow count comes from the thumbnails' measure in the browser. */
-export type DeckCheckCounts = { emptySlots: number; placeholders: number; missingLogo: boolean; licensedNoFallback: number; dropped: number };
+export type DeckCheckCounts = { emptySlots: number; placeholders: number; missingLogo: boolean; licensedNoFallback: number; dropped: number; /** Slides whose boxes sit on top of each other, from the plan's own geometry (deck re-test §1). */ overlaps: number };
 
 /**
  * The check before download (deck visuals brief §6.5): one panel above "Download .pptx" that counts what a client should look
@@ -219,6 +219,7 @@ export function DeckCheck({ counts, slides, chrome, hasLogo, downloads }: { coun
   const items: { key: string; n: number; text: string }[] = [
     { key: "empty", n: counts.emptySlots, text: counts.emptySlots === 1 ? "1 empty picture slot: that slide exports with a red placeholder" : `${counts.emptySlots} empty picture slots: those slides export with red placeholders` },
     { key: "overflow", n: overflow ?? 0, text: overflow === null ? "measuring the text against its boxes…" : overflow === 1 ? "1 slide with text past its box" : `${overflow} slides with text past their box` },
+    { key: "overlaps", n: counts.overlaps, text: counts.overlaps === 1 ? "1 slide with boxes on top of each other" : `${counts.overlaps} slides with boxes on top of each other` },
     { key: "logo", n: counts.missingLogo ? 1 : 0, text: "no logo: the cover shows a red “Your logo here” box, and the footer bar sets the brand line as type" },
     { key: "face", n: counts.licensedNoFallback, text: "a licensed face with no fallback: readers without it will see their app's own substitute" },
     { key: "placeholders", n: counts.placeholders, text: counts.placeholders === 1 ? "1 unfilled [placeholder] in the text" : `${counts.placeholders} unfilled [placeholders] in the text` },

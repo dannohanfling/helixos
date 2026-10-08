@@ -96,7 +96,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     pptx.defineSlideMaster({
       title: name,
       background: { color: normalise(deck.kit.ground) },
-      objects: [...ph("title", "title", g.boxes["cover-title"] ?? g.boxes.headline), ...ph("presenter", "body", g.boxes["cover-presenter"]), ...ph("eyebrow", "body", g.boxes.eyebrow), ...ph("body", "body", g.body ?? undefined), ...ph("footer", "body", g.boxes.footer)],
+      // Only what every slide of the family fills (deck re-test §5): a placeholder no slide fills reads "Click to add text" in the editor.
+      objects: [...ph("title", "title", g.boxes["cover-title"] ?? g.boxes.headline), ...ph("presenter", "body", g.boxes["cover-presenter"]), ...ph("body", "body", g.body ?? undefined)],
     });
   }
   const chrome = { footerBar: deck.footerBar, ctaBar: deck.ctaBar, ctaFooter: deck.ctaFooter, company: brand, muted: normalise(deck.kit.muted), surface: normalise(deck.kit.surface), accent: normalise(deck.kit.accent), body: deck.kit.bodyFont, logo, coverLogo, coverBadge: logos.badge, noLogo: !logos.logo && !logos.dark };
@@ -157,27 +158,30 @@ function draw(pptx: PptxGenJS, plan: SlidePlan, image: PreparedImage | null, chr
       if (p.ring) slide.addShape(pptx.ShapeType.ellipse, { x: p.frame.x, y: p.frame.y, w: p.frame.w, h: p.frame.h, line: { color: p.color, width: p.ring } });
       else slide.addShape(pptx.ShapeType.roundRect, { x: p.frame.x, y: p.frame.y, w: p.frame.w, h: p.frame.h, rectRadius: 0.08, fill: { color: p.color }, line: { color: p.color, width: 0 } });
     }
+    // Plain boxes, never placeholders (deck re-test §1): pptxgenjs puts a placeholder's text at the layout's spot, whatever the
+    // slide says, and that is how the From → To, the stack's headline and the guarantee printed over their neighbours.
     for (const b of plan.boxes) {
       const at_ = boxAt(g, b);
       if (!at_) continue;
-      const ph = b.role === "headline" ? { placeholder: "title" } : b.role === "footer" ? { placeholder: "footer" } : {};
-      slide.addText(b.text, { ...ph, ...at(at_), fontSize: b.size, bold: b.bold, italic: b.italic, color: b.color, fontFace: b.face, ...(b.fill ? { fill: { color: b.fill } } : {}), ...(b.strike ? { strike: "sngStrike" as const } : {}) });
+      slide.addText(b.text, { ...at(at_), fontSize: b.size, bold: b.bold, italic: b.italic, color: b.color, fontFace: b.face, ...(b.fill ? { fill: { color: b.fill } } : {}), ...(b.strike ? { strike: "sngStrike" as const } : {}) });
     }
   } else {
     const eyebrow = plan.boxes.find((b) => b.role === "eyebrow");
     const headline = plan.boxes.find((b) => b.role === "headline");
     const lines = plan.boxes.filter((b) => b.role === "body" || b.role === "attribution");
     const footer = plan.boxes.find((b) => b.role === "footer");
-    if (eyebrow && g.boxes.eyebrow) slide.addText(eyebrow.text, { placeholder: "eyebrow", ...at(g.boxes.eyebrow), fontSize: eyebrow.size, color: eyebrow.color, fontFace: eyebrow.face });
+    if (eyebrow && g.boxes.eyebrow) slide.addText(eyebrow.text, { ...at(g.boxes.eyebrow), fontSize: eyebrow.size, color: eyebrow.color, fontFace: eyebrow.face });
     // A statement (§4: one line, no body) sits vertically centred and large; a content headline sits at the top of its box.
-    if (headline && g.boxes.headline) slide.addText(headline.text, { placeholder: "title", ...at(g.boxes.headline), fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
+    // The layout's title placeholder carries the family's own geometry and alignment, which pptxgenjs copies over the slide's
+    // (deck re-test §1): a centred statement (the close, the reflection moment) is a plain box, or it would be set left.
+    if (headline && g.boxes.headline) slide.addText(headline.text, { ...(plan.centred ? {} : { placeholder: "title" }), ...at(g.boxes.headline), fontSize: headline.size, bold: headline.bold, italic: headline.italic, color: headline.color, fontFace: headline.face, ...(headline.fill ? { fill: { color: headline.fill } } : {}) });
     if (lines.length && g.body) {
       slide.addText(
         lines.map((b) => ({ text: b.text, options: { bullet: b.bullet, breakLine: true, fontSize: b.size, color: b.color, fontFace: b.face, ...(b.fill ? { highlight: b.fill } : {}) } })),
         { placeholder: "body", ...at(g.body) },
       );
     }
-    if (footer && g.boxes.footer) slide.addText(footer.text, { placeholder: "footer", ...at(g.boxes.footer), fontSize: footer.size, color: footer.color, fontFace: footer.face, ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
+    if (footer && g.boxes.footer) slide.addText(footer.text, { ...at(g.boxes.footer), fontSize: footer.size, color: footer.color, fontFace: footer.face, ...(footer.fill ? { fill: { color: footer.fill } } : {}) });
   }
   // The picture in its frame: a photo cropped to fill it, evidence kept whole inside it; never stretched out of shape.
   if (image && plan.imageFrame) drawImage(pptx, slide, image, plan.imageFrame, plan.background);

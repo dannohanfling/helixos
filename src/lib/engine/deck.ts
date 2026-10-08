@@ -33,6 +33,8 @@ export const PLACEHOLDER_FALLBACK = "FFF3A3";
 export const PLACEHOLDER_RED = "D92D20";
 /** Readable on a projector (first-deck §4, 5 Oct: at 14pt in a 4 by 3.5 in frame it was hard to read), centred in its frame. */
 export const PLACEHOLDER_TEXT_SIZE = 20;
+/** The red slot a Proof Block with no proof draws (deck re-test §2, 7 Oct): one per such section, at the placeholder size, never the words [PROOF PLACEHOLDER] on a face. */
+export const PROOF_GAP_WHAT = "Add a client result here: a screenshot, a quote or a number (Proof Bank)";
 
 /**
  * A headline steps down a tier as it lengthens and is never cut. Characters → points. Past the floor the sentence moves to
@@ -133,6 +135,8 @@ export type Slide = {
   keptOff: KeptOff[];
   /** On a Proof Block slide: the proof it shows (the bank id, or the typed words), so the deck shows each proof once. */
   proofKey?: string;
+  /** A Proof Block with no proof yet (deck re-test §2): the slide is one red slot saying what to add, and nothing else. */
+  proofGap?: boolean;
 };
 export type DeckResult = {
   slides: Slide[];
@@ -173,6 +177,7 @@ const BELIEF_ACTS = new Set(["vehicle", "internal", "external"]);
 const isProofBlock = (s: SectionContext) => /proof block/i.test(s.name);
 const isCaseStudy = (s: SectionContext) => /case study/i.test(s.name);
 const isOfferStack = (s: SectionContext) => /offer stack/i.test(s.name);
+const isOfferTransition = (s: SectionContext) => /offer transition|transition to (the )?offer/i.test(s.name);
 /** The kind of slide a section's key points become (proof, price or plain): what decides whether a placeholder may sit on one. */
 export const pointKindFor = (sectionName: string): SlideKind => (/proof block/i.test(sectionName) ? "proof" : /offer stack/i.test(sectionName) ? "offer" : "section");
 const isOrigin = (s: SectionContext) => /credibility|origin/i.test(s.name);
@@ -197,6 +202,15 @@ const CLAIM_SENTENCE = /\d|%|[$£€]|\b(USD|NZD|AUD|CAD|GBP|EUR|SGD)\b/;
 const NUMBER_SLOT = /^\[\$?[A-Z]\]%?$/;
 const isClaim = (sentence: string, token: string) => NUMBER_SLOT.test(token) || CLAIM_SENTENCE.test(sentence.replace(/\[|\]/g, ""));
 const sentencesOf = (text: string): string[] => text.split(/(?<=[.!?])\s+|\n/).map((s) => s.trim()).filter(Boolean);
+
+/** A line that is nothing but placeholder tokens ("[PROOF PLACEHOLDER]"): no words of its own for a face. */
+export function placeholderOnly(line: string): boolean {
+  const tokens = placeholdersIn(line);
+  if (!tokens.length) return false;
+  let rest = line;
+  for (const t of tokens) rest = rest.split(t).join(" ");
+  return !/[\p{L}\p{N}]/u.test(rest);
+}
 
 /** Every placeholder on a slide, and whether it refuses the export: clause (a) the sentence is a claim, clause (b) the slide is proof or offer. */
 export function placeholderHits(kind: SlideKind, texts: string[]): PlaceholderHit[] {
@@ -420,7 +434,8 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     for (const s of act.sections) {
       if (s.status === "omitted") continue;
       // A key point the opening or the origin story already put on a slide comes off here, named on the Deck step (layouts 16).
-      const points = s.keyPoints.filter((p) => {
+      // A key point that is nothing but a placeholder (deck re-test §2) is no slide: the proof gap below is the one red slot.
+      let points = s.keyPoints.filter((p) => !placeholderOnly(p)).filter((p) => {
         const hit = alreadySaid.find((l) => echoes(p, l.text));
         if (hit) echoed.push({ section: s.name, text: p, sameAs: hit.label });
         return !hit;
@@ -443,9 +458,16 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
       // The origin story's beats are the Credibility / Origin section's own slides, one each, before its key points.
       if (isOrigin(s)) for (const b of c.originStory) slides.push(slideOf({ n: n++, kind: "section", s, headline: b.text, eyebrow: `${s.name} · ${b.label}`, footer, slot: { key: `${s.sectionKey}:${b.key}:photo`, kind: "photo", what: originWhat(b.label) } }));
       if (isProofBlock(s)) {
-        // From the bank or the shelf, as they store it; failing both, no slide. Never a sentence about the slide's own absence.
+        // From the bank or the shelf, as they store it. With neither (deck re-test §2): one red slot saying what to add, the
+        // same way an empty picture slot is drawn, counted as the one unfilled placeholder of the section and named on the Deck step.
         if (s.proof) slides.push({ ...slideOf({ n: n++, kind: "proof", s, headline: `“${quoteWithSubject(s.proof.quote, s.proof.who)}”`, body: s.proof.who ? [`— ${s.proof.who}`] : [], footer, slot: { key: `${s.sectionKey}:testimonial`, kind: "testimonial", what: SLOT_WHAT.testimonial, proofId: s.proof.source === "bank" ? s.proof.id : undefined } }), proofKey: proofKeyOf(s.proof) });
         else if (s.evidence) slides.push(slideOf({ n: n++, kind: "evidence", s, headline: s.evidence.claim, body: [s.evidence.citation], footer, slot: { key: `${s.sectionKey}:screenshot_callout`, kind: "screenshot_callout", what: SLOT_WHAT.screenshot_callout } }));
+        else {
+          const gap = slideOf({ n: n++, kind: "proof", s, headline: PROOF_GAP_WHAT, body: [], footer, slot: { key: `${s.sectionKey}:proof_gap`, kind: "testimonial", what: PROOF_GAP_WHAT }, extraNotes: ["No proof is wired to this section yet: the slide is a red slot until one is."] });
+          gap.proofGap = true;
+          gap.placeholders = [{ text: "[PROOF PLACEHOLDER]", refuse: false, why: `no proof is wired to ${s.name} yet: the slide is a red slot saying what to add. Pick one from the Proof Bank on the Proof step.` }];
+          slides.push(gap);
+        }
         pointSlides("proof");
         continue;
       }
@@ -465,10 +487,18 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
         continue;
       }
       if (isOfferStack(s)) {
+        // The section's own key points come first (deck re-test §3: they landed after the price and "Enrollment closes"), less
+        // any that say again what the Offer Transition's slides already said (each thing once, layouts 16).
+        const transition = c.sections.find((x) => x.status !== "omitted" && isOfferTransition(x));
+        points = points.filter((p) => {
+          const twin = transition?.keyPoints.find((t) => echoes(p, t));
+          if (twin) echoed.push({ section: s.name, text: p, sameAs: `the ${transition!.name} slides` });
+          return !twin;
+        });
+        pointSlides("offer");
         // The reflection beat before the offer: the coach's own private question on a moment slide. Its words, or no beat.
         if (s.offer && c.opening.reflectionPrompt) slides.push(slideOf({ n: n++, kind: "reflection", s: null, act: s.act, eyebrow: "A moment before we go on", headline: c.opening.reflectionPrompt, inverse: true }));
         if (s.offer) for (const b of offerBuild(s.offer, kit.showPriceAnchor !== false)) slides.push(slideOf({ n: n++, kind: "offer", s, headline: b.headline, body: b.body, footer, inverse: Boolean(b.price), figure: b.figure ?? null, stack: b.stack ?? null, seal: b.seal, ...(b.eyebrow ? { eyebrow: b.eyebrow } : {}) }));
-        pointSlides("offer");
         continue;
       }
       pointSlides("section", s.sectionKey === QA_SECTION_KEY && s.objections.length ? [`Objections to hand: ${s.objections.map((o) => o.name).join("; ")}`] : []);
@@ -482,7 +512,7 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
     }
     // A recap closes each belief act: the first line of every section that has one. Nothing new on it. "Has one" means a line that
     // can stand on a face: a section whose first key point is kept off (deck-face.ts) is quoted by its next, or not at all.
-    const lines = act.sections.filter((s) => s.status !== "omitted").map((s) => s.keyPoints.map((p) => cleanFace(p).face).find(Boolean)).filter((l): l is string => Boolean(l));
+    const lines = act.sections.filter((s) => s.status !== "omitted").map((s) => s.keyPoints.filter((p) => !placeholderOnly(p)).map((p) => cleanFace(p).face).find(Boolean)).filter((l): l is string => Boolean(l));
     // Its headline is the act's own line (the belief's "To:", else the first line), never "Act 1 · Vehicle · recap" (§9).
     const recapHead = belief?.to?.trim() || lines[0];
     if (BELIEF_ACTS.has(act.key) && lines.length) slides.push(slideOf({ n: n++, kind: "recap", s: null, headline: recapHead, body: lines.filter((l) => l !== recapHead).slice(0, 6), eyebrow: act.label, act: act.key }));
@@ -490,7 +520,9 @@ export function deckSlides(c: WebinarContext, kitIn: DeckKit | null): DeckResult
   // The close (first-deck §5: the deck ended on "Enrollment closes when the group starts."): always a call-to-action slide from
   // the Foundation's call to action, then a Q&A slide that keeps it on screen, both from the record whatever the Q&A section holds.
   if (c.close.cta) {
-    slides.push(slideOf({ n: n++, kind: "close", s: null, act: "closing", eyebrow: "The next step", headline: c.close.cta, body: offer?.ctaFooter ? [offer.ctaFooter] : [], inverse: true }));
+    // A statement on the moment ground (deck re-test §3): the call to action large and centred, no bullet; the offer's line is
+    // in the notes and in the footer bar when that is on.
+    slides.push(slideOf({ n: n++, kind: "close", s: null, act: "closing", eyebrow: "The next step", headline: c.close.cta, body: [], inverse: true, extraNotes: offer?.ctaFooter ? [`The offer's line: ${offer.ctaFooter}`] : [] }));
     slides.push(slideOf({ n: n++, kind: "close", s: null, act: "closing", eyebrow: "Q&A", headline: "Your questions", footer: offer?.ctaFooter ?? c.close.cta }));
   }
   // Each proof once (22 Sep: Kate A. on slides 20 and 22, Rachael C. on 21 and 36). A proof's home is its Proof Block slide, the
@@ -655,7 +687,7 @@ export const FACE_LABELS_NEVER = [...Object.values(ACT_LABEL), "Act 1", "Act 2",
 export type SlideLayout = "cover" | "content" | "statement" | "figure" | "bignum" | "shift" | "cards" | "stack" | "guarantee";
 /** A shape behind or beside the text: a card's surface, or the guarantee's seal (a ring in the accent, its line this many points). */
 export type Panel = { frame: Frame; color: string; ring?: number };
-export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; layout: SlideLayout; /** Filled panels behind the text: the cards' surface (layouts 3); the guarantee's seal (layouts 5). */ panels?: Panel[]; /** The CTA bar's line on this slide (first-deck §5): the offer and Q&A slides and the close, with the bar on; it then replaces the footer's CTA. */ ctaBar?: string | null; /** A slide that carries only the picture of the slide before it (§4: its text would not fit beside the picture even at the floor). */ pictureOnly: boolean; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
+export type SlidePlan = { n: number; background: string; boxes: TextBox[]; rules: Rule[]; notes: string; layout: SlideLayout; /** A statement set centred (the close, the reflection moment: deck re-test §3), not at the left. */ centred?: boolean; /** Filled panels behind the text: the cards' surface (layouts 3); the guarantee's seal (layouts 5). */ panels?: Panel[]; /** The CTA bar's line on this slide (first-deck §5): the offer and Q&A slides and the close, with the bar on; it then replaces the footer's CTA. */ ctaBar?: string | null; /** A slide that carries only the picture of the slide before it (§4: its text would not fit beside the picture even at the floor). */ pictureOnly: boolean; /** Where a filled picture sits, or null when the slide carries none. */ imageFrame: Frame | null; /** The red placeholder where a suggested picture is missing, or null when the slot is filled or the slide has none. The text keeps the picture-slide layout either way, so filling the slot later changes nothing else. */ placeholderSlot: PlaceholderSlot | null };
 
 /**
  * The frame a filled picture occupies, by the slide's kind. The cover's picture fills the right half; every content slide's
@@ -701,13 +733,20 @@ export function logoBadgeFrame(placed: Frame, pad = 0.1): Frame {
 }
 
 /** The file's layouts (§6.6): one master, a layout per slide family, each with real placeholders where slideGeometry puts them. */
-export const SLIDE_MASTERS = ["COVER", "COVER_PICTURE", "CONTENT", "CONTENT_PICTURE", "STATEMENT", "STATEMENT_PICTURE", "PICTURE_ONLY"] as const;
+export const SLIDE_MASTERS = ["COVER", "COVER_PICTURE", "CONTENT", "CONTENT_PICTURE", "STATEMENT", "STATEMENT_PICTURE", "PICTURE_ONLY", "LAID_OUT"] as const;
 export type SlideMaster = (typeof SLIDE_MASTERS)[number];
 /** Which layout a planned slide sits on: its family, and whether a picture (or an empty slot's frame) narrows the text. */
-export function masterFor(plan: Pick<SlidePlan, "boxes" | "layout" | "imageFrame" | "placeholderSlot" | "pictureOnly">): SlideMaster {
+export function masterFor(plan: Pick<SlidePlan, "boxes" | "layout" | "imageFrame" | "placeholderSlot" | "pictureOnly" | "centred">): SlideMaster {
   if (plan.pictureOnly) return "PICTURE_ONLY";
+  const cover = plan.boxes.some((b) => b.role === "cover-title");
+  // A laid-out slide (the shift, the stack, the guarantee, cards, a figure, a big number) draws every box at its own place: a
+  // placeholder would pull the box to the layout's spot (deck re-test §1, 7 Oct: pptxgenjs inherits a placeholder's position
+  // over the slide's own), so these sit on a bare layout with no placeholder at all. A centred statement (the close, the
+  // reflection moment: §3) is drawn as a plain box for the same reason, so it takes the bare layout too, or the statement
+  // layout's title would sit on the slide empty (§5).
+  if (!cover && plan.layout !== "content" && (plan.layout !== "statement" || plan.centred)) return "LAID_OUT";
   const picture = Boolean(plan.imageFrame ?? plan.placeholderSlot);
-  const family = plan.boxes.some((b) => b.role === "cover-title") ? "COVER" : plan.layout === "statement" ? "STATEMENT" : "CONTENT";
+  const family = cover ? "COVER" : plan.layout === "statement" ? "STATEMENT" : "CONTENT";
   return (picture ? `${family}_PICTURE` : family) as SlideMaster;
 }
 /** The geometry a layout's placeholders take: the same slideGeometry, over a plan of that family. */
@@ -716,8 +755,13 @@ export function masterGeometry(master: SlideMaster): SlideGeometry {
   const family = master.replace("_PICTURE", "");
   const box = (role: TextBox["role"]): TextBox => ({ slide: 0, role, text: "", size: 0, color: "", fill: null, face: "", bold: false, italic: false, bullet: false, placeholder: false });
   if (master === "PICTURE_ONLY") return slideGeometry({ boxes: [], layout: "content", imageFrame: PICTURE_ONLY_FRAME, placeholderSlot: null, pictureOnly: true });
-  const boxes = family === "COVER" ? [box("cover-title"), box("cover-presenter")] : family === "STATEMENT" ? [box("eyebrow"), box("headline"), box("footer")] : [box("eyebrow"), box("headline"), box("body"), box("footer")];
-  return slideGeometry({ boxes, layout: family === "COVER" ? "cover" : family === "STATEMENT" ? "statement" : "content", imageFrame: picture ? slotFrame(family === "COVER" ? "cover" : "section") : null, placeholderSlot: null, pictureOnly: false });
+  if (master === "LAID_OUT") return { boxes: {}, body: null, rules: { x: 0.5, w: 9 } };
+  // Only the boxes every slide of the family fills are placeholders (deck re-test §5: 168 empty "Click to add text" boxes came
+  // from eyebrow, body and footer placeholders no slide filled): the title, the cover's presenter, a content slide's body.
+  const boxes = family === "COVER" ? [box("cover-title"), box("cover-presenter")] : family === "STATEMENT" ? [box("headline")] : [box("headline"), box("body")];
+  const g = slideGeometry({ boxes, layout: family === "COVER" ? "cover" : family === "STATEMENT" ? "statement" : "content", imageFrame: picture ? slotFrame(family === "COVER" ? "cover" : "section") : null, placeholderSlot: null, pictureOnly: false });
+  const roles = new Set(boxes.map((b) => b.role));
+  return { ...g, boxes: Object.fromEntries(Object.entries(g.boxes).filter(([role]) => roles.has(role as TextBox["role"]))) as SlideGeometry["boxes"], body: roles.has("body") ? g.body : null };
 }
 
 /** Where a text box sits on the 10 by 5.625 in slide, and how its text is set inside it. */
@@ -737,8 +781,21 @@ export function boxAt(g: SlideGeometry, b: Pick<TextBox, "role" | "col">): BoxGe
   return g.boxes[b.role] ?? null;
 }
 /** The stack's rows (layouts 5): where the table starts and ends on a build slide and on the summary, and a row's most height. */
-export const STACK_ROWS = { build: [0.45, 3.85], summary: [1.25, 3.95] } as const;
+export const STACK_ROWS = { build: [1.25, 3.85], summary: [1.25, 3.95] } as const;
 export const STACK_ROW_MAX = 0.55;
+/** A one-row table's row (deck re-test §3): tall, the item large in it, where a figure slide puts its value. */
+export const STACK_ONE_ROW_H = 1.0;
+export const STACK_ONE_ROW_SIZES = [48, 44, 40, 36, 32, 28];
+/**
+ * A build slide's table (deck re-test §3: one row at 18pt sat above the headline band with nothing in the middle): it starts in
+ * the body band and the rows share the height they have; one row is tall and large. The item's line and the running total
+ * follow the table, so the whole reads as one block.
+ */
+export function stackBuildRows(n: number): { top: number; h: number; bottom: number } {
+  const [top, bottom] = STACK_ROWS.build;
+  const h = n <= 1 ? STACK_ONE_ROW_H : Math.min(STACK_ROW_MAX, (bottom - top) / Math.max(n, 1));
+  return { top, h, bottom: top + Math.max(n, 1) * h };
+}
 /** The guarantee's seal and its text (layouts 5). */
 export const SEAL: Frame = { x: 0.7, y: 1.7, w: 1.6, h: 1.6 };
 const GUARANTEE_TEXT: Frame = { x: 2.85, y: 0.95, w: 6.65, h: 3.3 };
@@ -758,7 +815,7 @@ const columns = (zone: { x: number; w: number }, n: number, gap: number) => {
  * the boxes keep the full width. The cover sets its title and presenter centred on a bare cover and left beside a picture; a
  * statement (§4) sits vertically centred and large; a content headline sits at the top of its box over the body's box.
  */
-export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageFrame" | "placeholderSlot" | "pictureOnly">): SlideGeometry {
+export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageFrame" | "placeholderSlot" | "pictureOnly" | "centred">): SlideGeometry {
   const frame = plan.imageFrame ?? plan.placeholderSlot?.frame ?? null;
   const zone = frame ? TEXT_LEFT_ZONE : { x: 0.5, w: 9 };
   const bodyZone = frame ? { x: TEXT_LEFT_ZONE.x + 0.2, w: TEXT_LEFT_ZONE.w - 0.2 } : { x: 0.7, w: 8.6 };
@@ -818,8 +875,9 @@ export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageF
     // arrow to the price, at the foot. Rows share the height they have, up to half an inch each.
     const n = new Set(plan.boxes.filter((b) => b.col !== undefined).map((b) => b.col)).size;
     const summary = plan.boxes.some((b) => b.role === "headline");
-    const [top, bottom] = summary ? STACK_ROWS.summary : STACK_ROWS.build;
-    const h = Math.min(STACK_ROW_MAX, (bottom - top) / Math.max(n, 1));
+    const build = stackBuildRows(n);
+    const [top, bottom] = summary ? STACK_ROWS.summary : [build.top, build.bottom];
+    const h = summary ? Math.min(STACK_ROW_MAX, (bottom - top) / Math.max(n, 1)) : build.h;
     const cols = Array.from({ length: n }, (_, i) => {
       const y = top + i * h;
       return { check: { x: 0.5, y, w: 0.45, h, align: "center" as const, valign: "middle" as const }, name: { x: 1.0, y, w: 6.3, h, align: "left" as const, valign: "middle" as const }, value: { x: 7.3, y, w: 2.2, h, align: "right" as const, valign: "middle" as const } };
@@ -829,8 +887,9 @@ export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageF
       boxes.struck = { x: 0.5, y: 4.05, w: 5.2, h: 0.8, align: "right", valign: "middle" };
       boxes.figure = { x: 5.85, y: 4.0, w: 3.65, h: 0.9, align: "left", valign: "middle" };
     } else {
-      body = { x: 0.5, y: 3.95, w: 9, h: 0.5, align: "left", valign: "top" };
-      boxes.source = { x: 0.5, y: 4.45, w: 9, h: 0.45, align: "right", valign: "top" };
+      // The item's line and the running total follow the table (deck re-test §3), never a fixed foot with air between.
+      body = { x: 0.5, y: build.bottom + 0.15, w: 9, h: 0.6, align: "left", valign: "top" };
+      boxes.source = { x: 0.5, y: Math.min(build.bottom + 0.8, 4.45), w: 9, h: 0.45, align: "right", valign: "top" };
     }
     boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
     return { boxes, body, rules: { x: 0.5, w: 9 }, cols };
@@ -841,7 +900,7 @@ export function slideGeometry(plan: Pick<SlidePlan, "boxes" | "layout" | "imageF
     return { boxes, body, rules: { x: 0.5, w: 9 }, seal: [SEAL, { x: SEAL.x + 0.15, y: SEAL.y + 0.15, w: SEAL.w - 0.3, h: SEAL.h - 0.3 }] };
   } else {
     boxes.eyebrow = { x: zone.x, y: 0.25, w: zone.w, h: 0.4, align: "left", valign: "top" };
-    boxes.headline = plan.layout === "statement" ? { x: zone.x, y: 1.0, w: zone.w, h: 3.4, align: "left", valign: "middle" } : { x: zone.x, y: 0.8, w: zone.w, h: 1.5, align: "left", valign: "top" };
+    boxes.headline = plan.layout === "statement" ? { x: zone.x, y: 1.0, w: zone.w, h: 3.4, align: plan.centred && !frame ? "center" : "left", valign: "middle" } : { x: zone.x, y: 0.8, w: zone.w, h: 1.5, align: "left", valign: "top" };
     if (plan.boxes.some((b) => b.role === "body" || b.role === "attribution")) body = { x: bodyZone.x, y: 2.4, w: bodyZone.w, h: 2.4, align: "left", valign: "top" };
     boxes.footer = { x: 0.5, y: 5.0, w: 9, h: 0.3, align: "center", valign: "top" };
   }
@@ -860,6 +919,11 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
   const hasInverse = Boolean(hex(k.inverseGround ?? "") && hex(k.inverseInk ?? ""));
   const plans: SlidePlan[] = [];
   for (const s of d.slides) {
+    if (s.proofGap) {
+      // One red slot and nothing else (deck re-test §2): the words [PROOF PLACEHOLDER] never reach a face.
+      plans.push({ n: s.n, background: hex(k.ground), boxes: [], rules: [], notes: s.notes.join("\n"), layout: "content", ctaBar: null, pictureOnly: true, imageFrame: null, placeholderSlot: { frame: PICTURE_ONLY_FRAME, text: PROOF_GAP_WHAT, color: PLACEHOLDER_RED } });
+      continue;
+    }
     let imageFrame = withImage.has(s.n) ? slotFrame(s.kind) : null;
     // A slot the coach said they don't have (§6.3) is no slot: no placeholder, and the text keeps the full width.
     let placeholderSlot = !imageFrame && s.slot && !dropped.has(s.n) ? { frame: slotFrame(s.kind), text: placeholderLine(s.slot), color: PLACEHOLDER_RED } : null;
@@ -891,12 +955,15 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
       // an arrow to the price. The check is a letter, so it is ink or muted like every letter; the accent stays on the rule.
       const t = s.stack!;
       const summary = t.newest === null;
-      const [top, bottom] = summary ? STACK_ROWS.summary : STACK_ROWS.build;
-      const rowH = Math.min(STACK_ROW_MAX, (bottom - top) / Math.max(t.rows.length, 1));
-      const fits = (sizes: number[]) => Math.min(...t.rows.map((r) => fitSize(r.name, { w: 6.3, h: rowH }, sizes) ?? sizes.at(-1)!));
-      const newSize = summary ? 0 : (fitSize(t.rows[t.newest!].name, { w: 6.3, h: rowH }, STACK_NEW_SIZES) ?? STACK_NEW_SIZES.at(-1)!);
+      const build = stackBuildRows(t.rows.length);
+      const [top, bottom] = summary ? STACK_ROWS.summary : [build.top, build.bottom];
+      const rowH = summary ? Math.min(STACK_ROW_MAX, (bottom - top) / Math.max(t.rows.length, 1)) : build.h;
+      const fits = (sizes: number[]) => Math.min(...t.rows.map((r) => fitSize(r.name, { w: 6.3, h: rowH }, sizes, k.bodyFont) ?? sizes.at(-1)!));
+      // One row (deck re-test §3): the item large, at the sizes a bonus's value takes.
+      const newSizes = t.rows.length <= 1 ? STACK_ONE_ROW_SIZES : STACK_NEW_SIZES;
+      const newSize = summary ? 0 : (fitSize(t.rows[t.newest!].name, { w: 6.3, h: rowH }, newSizes, k.displayFont) ?? newSizes.at(-1)!);
       const restSize = summary ? fits(STACK_SUMMARY_SIZES) : Math.min(newSize, fits(STACK_EARLIER_SIZES));
-      if (summary) boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, { w: 9, h: 0.75 }, [40, 36, 32, 28, HEADLINE_FLOOR]) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+      if (summary) boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, { w: 9, h: 0.75 }, [40, 36, 32, 28, HEADLINE_FLOOR], k.displayFont) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
       t.rows.forEach((r, col) => {
         const isNew = col === t.newest;
         const size = isNew ? newSize : restSize;
@@ -909,12 +976,12 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
         if (t.total) boxes.push({ slide: s.n, role: "struck", text: `Total value ${t.total}`, size: fitSize(`Total value ${t.total}`, { w: 5.2, h: 0.8 }, [STRUCK_SIZE, 24, 20]) ?? 20, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false, strike: true });
         if (t.total && t.price) boxes.push({ slide: s.n, role: "figure", text: `→ ${t.price}`, size: fitSize(`→ ${t.price}`, { w: 3.65, h: 0.9 }, [44, 40, 36, 32, 28]) ?? 28, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
       } else {
-        if (s.body[0]) boxes.push({ slide: s.n, role: "body", text: s.body[0], size: fitSize(s.body[0], { w: 9, h: 0.5 }, [20, 18, 16, 14]) ?? 14, color: ink, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+        if (s.body[0]) boxes.push({ slide: s.n, role: "body", text: s.body[0], size: fitSize(s.body[0], { w: 9, h: 0.6 }, [24, 22, 20, 18, 16, 14], k.bodyFont) ?? 14, color: ink, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
         if (t.runningTotal) boxes.push({ slide: s.n, role: "source", text: `Total value so far: ${t.runningTotal}`, size: 16, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
       }
     } else if (special === "guarantee") {
       // The guarantee (layouts 5): its words large beside a seal drawn in the accent.
-      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, GUARANTEE_TEXT, [...GUARANTEE_SIZES, HEADLINE_FLOOR]) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, GUARANTEE_TEXT, [...GUARANTEE_SIZES, HEADLINE_FLOOR], k.displayFont) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
     } else if (s.figure) {
       // The price or an item's value as a figure (first-deck §5). Ink and muted only, as everywhere: the accent never sets letters.
       const f = s.figure;
@@ -926,8 +993,8 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     } else if (special === "shift") {
       // From → To (layouts 11): the old belief small and muted over a short accent rule, the new belief large under it.
       const from = shiftFrom(s.body)!;
-      boxes.push({ slide: s.n, role: "small", text: from, size: fitSize(from, { w: 9, h: 0.9 }, [24, 22, 20, 18]) ?? 18, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
-      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, { w: 9, h: 2.5 }, [60, 52, 44, 40, 32, 26, HEADLINE_FLOOR]) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "small", text: from, size: fitSize(from, { w: 9, h: 0.9 }, [24, 22, 20, 18], k.bodyFont) ?? 18, color: muted, fill: null, face: k.bodyFont, bold: false, italic: false, bullet: false, placeholder: false });
+      boxes.push({ slide: s.n, role: "headline", text: s.headline, size: fitSize(s.headline, { w: 9, h: 2.5 }, [60, 52, 44, 40, 32, 26, HEADLINE_FLOOR], k.displayFont) ?? HEADLINE_FLOOR, color: ink, fill: null, face: k.displayFont, bold: true, italic: false, bullet: false, placeholder: false });
     } else if (special === "bignum") {
       // The big number (layouts 1): the figure huge in the display face, its label small under it; two or three side by side at
       // one size. An evidence slide's citation is the source line. Ink and muted only.
@@ -973,11 +1040,13 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
     // and this one keeps the full width. A one-line slide with no body is a statement: centred, large by its length.
     const background = dark ? hex(k.inverseGround!) : hex(k.ground);
     const notes = s.notes.join("\n");
-    const ruleY = special === "shift" ? 1.95 : special === "stack" ? (s.stack!.newest === null ? 1.15 : 3.9) : 0.68;
+    const ruleY = special === "shift" ? 1.95 : special === "stack" ? (s.stack!.newest === null ? 1.15 : stackBuildRows(s.stack!.rows.length).bottom + 0.05) : 0.68;
     const rules = s.kind === "cover" ? [] : [{ slide: s.n, color: hex(k.accent), y: ruleY }];
     const headlineBox = boxes.find((b) => b.role === "headline");
     const bodyBoxes = boxes.filter((b) => b.role === "body" || b.role === "attribution");
     let layout: SlideLayout = s.kind === "cover" ? "cover" : s.figure ? "figure" : (special ?? "content");
+    // The close and the reflection moment (deck re-test §3): one line, centred on the dark ground.
+    const centred = s.kind === "close" || s.kind === "reflection";
     let pictureOnly = false;
     const ctaBar = ctaAsBar ? s.footer : null;
     if (s.kind !== "cover" && !s.figure && !special) {
@@ -986,19 +1055,19 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
       if (headlineBox && !bodyBoxes.length) {
         layout = "statement";
         const sizes = [...STATEMENT_SIZES.filter((t) => headlineBox.text.trim().length <= t.maxChars).map((t) => t.size), ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z <= headlineBox.size), HEADLINE_FLOOR];
-        headlineBox.size = fitSize(headlineBox.text, { w: zoneW, h: 3.4 }, [...new Set(sizes)].sort((a, b) => b - a)) ?? HEADLINE_FLOOR;
+        headlineBox.size = fitSize(headlineBox.text, { w: zoneW, h: 3.4 }, [...new Set(sizes)].sort((a, b) => b - a), headlineBox.face) ?? HEADLINE_FLOOR;
       } else if (headlineBox) {
         const tiers = [...new Set([headlineBox.size, ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z < headlineBox.size), HEADLINE_FLOOR])].sort((a, b) => b - a);
-        headlineBox.size = fitSize(headlineBox.text, { w: zoneW, h: 1.5 }, tiers) ?? HEADLINE_FLOOR;
+        headlineBox.size = fitSize(headlineBox.text, { w: zoneW, h: 1.5 }, tiers, headlineBox.face) ?? HEADLINE_FLOOR;
       }
       if (bodyBoxes.length) {
         const text = bodyBoxes.map((b) => b.text).join("\n");
-        let size = fitSize(text, { w: narrow ? TEXT_LEFT_ZONE.w - 0.2 : 8.6, h: 2.4 }, BODY_FIT_SIZES);
+        let size = fitSize(text, { w: narrow ? TEXT_LEFT_ZONE.w - 0.2 : 8.6, h: 2.4 }, BODY_FIT_SIZES, k.bodyFont);
         if (size === null && narrow) {
           // The picture to its own slide; this one keeps the full width and fits again.
           pictureOnly = true;
-          size = fitSize(text, { w: 8.6, h: 2.4 }, BODY_FIT_SIZES) ?? BODY_FIT_SIZES[BODY_FIT_SIZES.length - 1];
-          if (headlineBox) headlineBox.size = fitSize(headlineBox.text, { w: 9, h: 1.5 }, [...new Set([s.headlineSize, ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z < s.headlineSize), HEADLINE_FLOOR])].sort((a, b) => b - a)) ?? HEADLINE_FLOOR;
+          size = fitSize(text, { w: 8.6, h: 2.4 }, BODY_FIT_SIZES, k.bodyFont) ?? BODY_FIT_SIZES[BODY_FIT_SIZES.length - 1];
+          if (headlineBox) headlineBox.size = fitSize(headlineBox.text, { w: 9, h: 1.5 }, [...new Set([s.headlineSize, ...HEADLINE_TIERS.map((t) => t.size).filter((z) => z < s.headlineSize), HEADLINE_FLOOR])].sort((a, b) => b - a), headlineBox.face) ?? HEADLINE_FLOOR;
         }
         for (const b of bodyBoxes) if (b.role === "body") b.size = size ?? BODY_FIT_SIZES[BODY_FIT_SIZES.length - 1];
       }
@@ -1007,16 +1076,63 @@ export function renderPlan(d: DeckResult, withImage: Set<number> = new Set(), dr
       const picture = { imageFrame: imageFrame ? PICTURE_ONLY_FRAME : null, placeholderSlot: placeholderSlot ? { ...placeholderSlot, frame: PICTURE_ONLY_FRAME } : null };
       imageFrame = null;
       placeholderSlot = null;
-      plans.push({ n: s.n, background, boxes, rules, notes, layout, ctaBar, pictureOnly: false, imageFrame, placeholderSlot });
+      plans.push({ n: s.n, background, boxes, rules, notes, layout, centred, ctaBar, pictureOnly: false, imageFrame, placeholderSlot });
       plans.push({ n: s.n, background, boxes: [], rules: [], notes: "The picture for the slide before: its text would not fit beside it.", layout: "content", ctaBar: null, pictureOnly: true, ...picture });
       continue;
     }
     const g = special === "cards" || special === "guarantee" ? slideGeometry({ boxes, layout, imageFrame, placeholderSlot, pictureOnly }) : null;
     // The cards sit on the surface; the seal is two rings in the accent, the outer one heavier.
     const panels: Panel[] = special === "cards" ? s.body.map((_, col) => ({ frame: g!.cols![col].panel!, color: hex(k.surface) })) : special === "guarantee" ? g!.seal!.map((frame, i) => ({ frame, color: hex(k.accent), ring: i === 0 ? 6 : 1.5 })) : [];
-    plans.push({ n: s.n, background, boxes, rules, notes, layout, ctaBar, pictureOnly, imageFrame, placeholderSlot, ...(panels.length ? { panels } : {}) });
+    plans.push({ n: s.n, background, boxes, rules, notes, layout, centred, ctaBar, pictureOnly, imageFrame, placeholderSlot, ...(panels.length ? { panels } : {}) });
   }
   return plans;
+}
+
+export type Overlap = { slide: number; a: string; b: string };
+/** Whether two frames share area: touching edges do not count, and a sliver under this many inches is a rounding, not a collision. */
+const OVERLAP_MIN = 0.05;
+export function framesOverlap(a: Frame, b: Frame): boolean {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return w > OVERLAP_MIN && h > OVERLAP_MIN;
+}
+/**
+ * Boxes on one slide that sit on top of each other (deck re-test §1, 7 Oct: the fit check saw text past its box and missed
+ * three layouts whose boxes printed over one another). Every filled text box, the seal's rings and the picture's frame are
+ * read at the place the plan's geometry gives them; any two that share area are named. A card's surface panel is read with its
+ * own boxes on it by design, so panels that are not rings are left out.
+ */
+export function overlaps(plans: SlidePlan[]): Overlap[] {
+  const out: Overlap[] = [];
+  for (const plan of plans) {
+    if (plan.pictureOnly) continue;
+    const g = slideGeometry(plan);
+    const frames: { name: string; frame: Frame }[] = [];
+    for (const b of plan.boxes) {
+      if (!b.text.trim()) continue;
+      const at = boxAt(g, b);
+      if (at) frames.push({ name: b.col !== undefined ? `${b.role} ${b.col + 1}` : b.role, frame: at });
+    }
+    // The body lines share one box: count it once.
+    const seen = new Set<string>();
+    const unique = frames.filter((f) => {
+      const key = `${f.name}:${f.frame.x}:${f.frame.y}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    for (const p of plan.panels ?? []) if (p.ring) unique.push({ name: "seal", frame: p.frame });
+    if (plan.imageFrame) unique.push({ name: "picture", frame: plan.imageFrame });
+    else if (plan.placeholderSlot) unique.push({ name: "picture slot", frame: plan.placeholderSlot.frame });
+    for (let i = 0; i < unique.length; i++) {
+      for (let j = i + 1; j < unique.length; j++) {
+        // The seal is two rings in one place: not a collision with each other.
+        if (unique[i].name === "seal" && unique[j].name === "seal") continue;
+        if (framesOverlap(unique[i].frame, unique[j].frame)) out.push({ slide: plan.n, a: unique[i].name, b: unique[j].name });
+      }
+    }
+  }
+  return out;
 }
 
 /** A figure slide's words in reading order, for the outline and the Deck step: the struck total, the figure, the small lines. */

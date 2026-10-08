@@ -100,7 +100,8 @@ describe("team access: what is open is named, and everything else is closed by d
   });
   it("the menu shows a team member only the open sections", () => {
     const m = { role: "client" as const, passEnabled: true, bodyEnabled: true, recordingsEnabled: true, team: true };
-    expect(NAV.filter((n) => navVisible(n, m)).map((n) => n.href).sort()).toEqual(["/clients", "/content", "/conversations", "/images", "/library", "/tasks", "/today", "/webinars", "/whats-new"]);
+    // The Platforms links (Danno, 7 Oct) are outbound and open no HelixOS data: a team member sees them too.
+    expect(NAV.filter((n) => navVisible(n, m)).map((n) => n.href).sort()).toEqual(["/clients", "/content", "/conversations", "/images", "/library", "/tasks", "/today", "/webinars", "/whats-new", "https://academy.evolveomega.com", "https://app.evolveomega.com", "https://communityloyalty.io"]);
     // Without the team flag the same member sees Body, Rewards and the rest.
     expect(NAV.filter((n) => navVisible(n, { ...m, team: false })).some((n) => n.href === "/body")).toBe(true);
   });

@@ -54,7 +54,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
   const toggle = (label: string) => writeCollapsed({ ...collapsed, [label]: !collapsed[label] });
   // The most specific item wins: on /body/foods that's Nutrition, not Log (/body) as well (a prefix match alone lit both).
   const activeHref = NAV_GROUPS.flatMap((g) => g.items)
-    .filter((n) => navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team }) && isActive(pathname, n.href))
+    .filter((n) => !n.external && navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team }) && isActive(pathname, n.href))
     .reduce<string | null>((best, n) => (!best || n.href.length > best.length ? n.href : best), null);
   return (
     <nav className="space-y-2">
@@ -82,7 +82,18 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
             </button>
             {open ? (
               <div className="flex flex-col gap-0.5">
-                {items.map((n) => (
+                {items.map((n) =>
+                  n.external ? (
+                    // An outbound platform (Danno, 7 Oct): a new tab, the ↗ mark, never the active page.
+                    <a key={n.href} href={n.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium text-ink-2 transition hover:bg-surface-2 hover:text-ink" data-testid="nav-platform">
+                      <span className="w-5 text-center text-base">{n.icon}</span>
+                      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                        {n.label}
+                        {n.line ? <span className="text-[11px] font-normal text-ink-3">{n.line}</span> : null}
+                      </span>
+                      <span aria-label="opens in a new tab" className="text-xs text-ink-3">↗</span>
+                    </a>
+                  ) : (
                   <Link
                     key={n.href}
                     href={n.href}
@@ -95,7 +106,8 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
                     </span>
                     {badges[n.href] ? n.href === "/whats-new" ? <NewDot /> : <DueBadge count={badges[n.href]} /> : null}
                   </Link>
-                ))}
+                  ),
+                )}
               </div>
             ) : null}
           </div>

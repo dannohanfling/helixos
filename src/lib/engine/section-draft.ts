@@ -5,7 +5,7 @@
  * placeholder ("[PROOF PLACEHOLDER]") stays, so the deck shows the red box rather than a result nobody had.
  */
 import type { ResolvedOffer } from "./webinar-context";
-import { placeholderHits, pointKindFor } from "./deck";
+import { placeholderHits, pointKindFor, placeholderOnly } from "./deck";
 
 export const SLIDES_MARK = "---SLIDES---";
 /** The longest deck line kept: a slide holds one idea, and the deck's longest headline tier is about this long. */
@@ -23,7 +23,7 @@ export function slidesInstruction(minutes: number): string {
 /** The task for "Make slides from my script": deck lines only, from a script the client already has. */
 export function slidesOnlyTask(minutes: number): string {
   const n = slideCountFor(minutes);
-  return `You turn one section of a spoken webinar script into deck lines. Output exactly ${n} lines, each starting with "- ", one per slide: a short phrase the audience reads while the presenter speaks (under 15 words), in the order the script says them. Use only what the script says. Quote a number only if it appears in the script. Keep any bracketed placeholder, such as [PROOF PLACEHOLDER], as a line of its own, word for word. Output nothing else.`;
+  return `You turn one section of a spoken webinar script into deck lines. Output exactly ${n} lines, each starting with "- ", one per slide: a short phrase the audience reads while the presenter speaks (under 15 words), in the order the script says them. Use only what the script says. Quote a number only if it appears in the script. Leave out any bracketed placeholder such as [PROOF PLACEHOLDER]: never make it a line, and never write it inside one. Output nothing else.`;
 }
 
 const bullet = /^\s*(?:[-•*]|\d+[.)])\s+/;
@@ -70,7 +70,9 @@ export function checkSlides(lines: string[], known: string): { kept: string[]; d
  */
 export function deckSafe(lines: string[], sectionName: string): string[] {
   const kind = pointKindFor(sectionName);
-  return lines.filter((l) => !placeholderHits(kind, [l]).some((h) => h.refuse));
+  // A line that is nothing but a placeholder (deck re-test §2, 7 Oct: "[PROOF PLACEHOLDER]" filled eleven slides) is no slide
+  // line at all; the deck draws one red slot per proof section instead, and the check panel still names the gap.
+  return lines.filter((l) => !placeholderOnly(l) && !placeholderHits(kind, [l]).some((h) => h.refuse));
 }
 
 /** As the Key points box stores them: one bullet per line. */

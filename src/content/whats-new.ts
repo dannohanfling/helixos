@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 112,
+    date: "2026-10-07",
+    title: "Platforms in the menu, and a deck that lays out cleanly",
+    lines: [
+      "A Platforms section at the bottom of the menu (and on Everything on your phone) opens Community Loyalty, the Academy and the Evolve Omega App in a new tab.",
+      "Your deck: the From → To dividers, the offer table and the guarantee no longer print on top of each other, no slide carries an empty \"Click to add text\" box, and the Deck step checks for boxes that overlap as well as text past its box. A Proof Block with no proof yet is one red slide saying what to add, and [PROOF PLACEHOLDER] never lands on a slide or a recap.",
+      "A one-item offer table sits in the body with the item large; the offer section's own points come before the table; the close stands large and centred; the deck uses only the logo your Brand Kit names; wide faces such as Montserrat step down sooner; and \"Make slides for every section\" on the Deck step does every section with a script but no slides in one go.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 111,
     date: "2026-10-07",
     title: "Choosing a file: real buttons, and the camera apart from the library",

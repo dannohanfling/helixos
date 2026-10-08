@@ -13,6 +13,7 @@ import {
   confirmDeckExportAction,
   deleteWebinarAction,
   draftSectionAction,
+  makeAllSlidesAction,
   makeSlidesAction,
   linkOfferAction,
   saveReadinessAction,
@@ -56,7 +57,7 @@ import {
 import { needsSlides } from "@/lib/engine/section-draft";
 import { fillRuntime, knownReferences, nameMismatch } from "@/lib/engine/subject";
 import { contextFor, ownerBrandName, presenterOf } from "@/lib/queries/webinar";
-import {HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry, figureLines } from "@/lib/engine/deck";
+import { HEADLINE_MAX_CHARS, deckPace, deckSlides, paceLine, type DeckPace, type DeckResult, COVER_LOGO_BOX, LOGO_BOX, renderPlan, slideGeometry, figureLines, overlaps } from "@/lib/engine/deck";
 import { FACE_CLASS_LABEL } from "@/lib/engine/deck-face";
 import { droppedSlides, filledSlides, resolveDeckSlots, slotFallbacks, type ResolvedSlot } from "@/lib/queries/deck-slots";
 import { DeckCheck, type ThumbChrome, type ThumbSlide } from "@/components/deck-thumbs";
@@ -107,8 +108,7 @@ export default async function WebinarWizardPage({
     field?: string;
     savedSection?: string;
     draftError?: string;
-    slides?: string;
-  }>;
+    slides?: string; made?: string; failed?: string; left?: string }>;
 }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
@@ -1409,7 +1409,7 @@ export default async function WebinarWizardPage({
       ) : null}
 
       {step === "deck" ? (
-        <DeckStep scriptOnly={sections.filter((x) => needsSlides(x)).map((x) => ({ key: x.sectionKey, name: x.name }))} presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} thumbs={thumbs} thumbChrome={thumbChrome} hasLogo={hasLogo} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
+        <DeckStep madeAll={sp.made !== undefined ? { made: Number(sp.made) || 0, failed: Number(sp.failed) || 0, left: Number(sp.left) || 0 } : null} scriptOnly={sections.filter((x) => needsSlides(x)).map((x) => ({ key: x.sectionKey, name: x.name }))} presenter={{ name: context.presenter, defaulted: !w.presenter?.trim() }} webinarId={w.id} owner={{ workspaceId: v.workspace.id, userId: v.user.id }} thumbs={thumbs} thumbChrome={thumbChrome} hasLogo={hasLogo} deck={deck} pace={pace} resolvedSlots={deckSlotsResolved} library={deckLibrary} gate={exportGate} confirmed={exportConfirmed ? { id: exportConfirmed.id, who: exportConfirmed.userName, when: formatDateTime(exportConfirmed.createdAt, v.tz) } : null} reviewHref={`/webinars/${w.id}?step=script&section=${sections.find((x) => isUnreviewed(x.origin) && x.status !== "omitted")?.sectionKey ?? ""}`} />
       ) : null}
 
       {step === "review" ? (
@@ -1751,8 +1751,9 @@ export default async function WebinarWizardPage({
   );
 }
 
-function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter, scriptOnly }: { scriptOnly: { key: string; name: string }[]; webinarId: string; owner: { workspaceId: string; userId: string }; thumbs: ThumbSlide[]; thumbChrome: ThumbChrome; hasLogo: boolean; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
+function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, resolvedSlots, library, gate, confirmed, reviewHref, presenter, scriptOnly, madeAll }: { /** What the last "Make slides for every section" did (deck re-test §5). */ madeAll?: { made: number; failed: number; left: number } | null; scriptOnly: { key: string; name: string }[]; webinarId: string; owner: { workspaceId: string; userId: string }; thumbs: ThumbSlide[]; thumbChrome: ThumbChrome; hasLogo: boolean; deck: DeckResult; pace: DeckPace; resolvedSlots: ResolvedSlot[]; library: DeckImage[]; gate: Gate | null; confirmed: { id: string; who: string; when: string } | null; reviewHref: string; presenter: { name: string; defaulted: boolean } }) {
   const md = deck.slides.map((s) => `## ${s.n}. ${s.headline}\n_${s.eyebrow}_\n${s.body.join("\n")}`).join("\n\n");
+  const madeNote = madeAll ? `Made slides for ${madeAll.made} section${madeAll.made === 1 ? "" : "s"}${madeAll.failed ? `; ${madeAll.failed} came back with nothing usable (press again, or type their key points)` : ""}${madeAll.left ? `; ${madeAll.left} left for the next press` : madeAll.made ? "; every section with a script has slides now" : ""}.` : null;
   const fallbacks = slotFallbacks(resolvedSlots);
   const bySlide = new Map(resolvedSlots.map((r) => [r.slide, r]));
   const refused = deck.refused.length > 0;
@@ -1766,6 +1767,7 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
       <DeckCheck
         counts={{
           emptySlots: fallbacks.emptyCount,
+          overlaps: new Set(overlaps(thumbs.map((t) => t.plan)).map((o) => o.slide)).size,
           placeholders: deck.placeholderCount,
           missingLogo: !hasLogo,
           licensedNoFallback: [deck.kit.displayFont, deck.kit.bodyFont, deck.kit.quoteFont ?? ""].some((f) => f.trim() && !isListedFont(f)) && !deck.kit.fontFallback.trim() ? 1 : 0,
@@ -1806,11 +1808,22 @@ function DeckStep({ webinarId, owner, thumbs, thumbChrome, hasLogo, deck, pace, 
           {pace.sectionsWithPoints} of {pace.sections} sections have key points; the deck reads only those.
         </p>
       ) : null}
+      {madeNote ? (
+        <p className="mb-3 rounded-lg bg-good-soft p-3 text-sm" role="status" data-testid="deck-made-all">
+          {madeNote}
+        </p>
+      ) : null}
       {scriptOnly.length ? (
         <div className="mb-3 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="deck-script-only">
           <p>
-            {scriptOnly.length === 1 ? "This section has" : `These ${scriptOnly.length} sections have`} a script but no slides yet. Open each and press Make slides from my script, or type one idea per line in Key points:
+            {scriptOnly.length === 1 ? "This section has" : `These ${scriptOnly.length} sections have`} a script but no slides yet. Press once for all of them (a section that already has key points is left as it is), or open each and press Make slides from my script, or type one idea per line in Key points:
           </p>
+          <form action={makeAllSlidesAction} className="mt-2">
+            <input type="hidden" name="id" value={webinarId} />
+            <SubmitButton className="btn btn-primary btn-sm" pendingText="Making slides…" data-testid="deck-make-all">
+              {madeAll?.left ? `Continue: make slides for the ${scriptOnly.length} left` : `Make slides for every section (${scriptOnly.length})`}
+            </SubmitButton>
+          </form>
           <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
             {scriptOnly.map((x) => (
               <li key={x.key}>

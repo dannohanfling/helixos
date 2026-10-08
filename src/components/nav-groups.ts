@@ -1,9 +1,11 @@
 /** The navigation model, in a plain module so both client components and server pages can read it. */
+import { PLATFORMS } from "@/lib/platforms";
 /** `line`: a one-line description shown under the label everywhere, for the two sections a client would otherwise confuse. `hint` shows on the More page only. */
 /** `bodyOnly`: shown only to a member whose HumanOS is switched on (rev 195, per member); `bodyOffOnly`: the one entry shown while it's off (rev 320), leading to the switch. */
 /** `recordingsOnly`: shown to a client only once a recording is published for them (Recordings R1). */
 /** `team`: shown to a team member working in the owner's HelixOS (Danno, 6 Oct); everything without it is hidden from them, and closed on the server. */
-export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; hint?: string; line?: string };
+/** `external`: an outbound link (the Platforms section, Danno 7 Oct): opens in a new tab with the ↗ mark, and is never the active page. */
+export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -82,6 +84,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/whats-new", label: "What's new", icon: "✨", team: true, hint: "latest changes" },
       { href: "/connect", label: "Connect to Claude", icon: "🔌", hint: "HelixOS from a chat" },
     ],
+  },
+  {
+    // Platforms (Danno, 7 Oct): the tools a member works in beside HelixOS, outbound links only, for every role and a team member
+    // too. The list is src/lib/platforms.ts; this section is drawn from it.
+    label: "Platforms",
+    items: PLATFORMS.map((p) => ({ href: p.href, label: p.label, icon: p.icon, line: p.line, external: true, team: true })),
   },
 ];
 

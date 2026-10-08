@@ -218,15 +218,17 @@ async function main() {
     must((await page.locator('[data-testid="deck-check"]').innerText()).includes("Your logo here"), "the check before download says the cover shows the placeholder");
     // A dark wordmark: on the dark starter cover it would read at about 1.2:1, so it sits on a ground badge.
     const dark = await putLogo("Aubergine wordmark", await wordmark(AUBERGINE));
+    // The deck uses the kit's logo and nothing else (deck re-test §4): the walk's kit names the wordmark.
+    const { STARTER_KIT } = await import("@/lib/engine/deck");
+    const k = STARTER_KIT;
+    await db.insert(schema.brandKits).values({ id: newId(), workspaceId: wsId, userId: user.id, name: "Walk kit", ground: k.ground, ink: k.ink, accent: k.accent, muted: k.muted, surface: k.surface, inverseGround: k.inverseGround, inverseInk: k.inverseInk, displayFont: k.displayFont, bodyFont: k.bodyFont, quoteFont: k.quoteFont, fontFallback: k.fontFallback, logoImageId: dark.id });
     x = await exportCover();
     must(!x.placeholder && x.badge === 1 && x.pics.length === 1, `a dark logo on the dark cover sits on one badge, the placeholder gone: ${JSON.stringify({ badge: x.badge, pics: x.pics })}`);
     t = await thumbCover();
     must(t.badge === 1 && t.placeholder === 0 && t.src === `/api/deck-images/${dark.id}`, "the cover thumbnail shows the logo on its badge");
     // The kit's "Logo for dark backgrounds": the cream one takes the cover, bare; the footer bar keeps the dark one.
     const light = await putLogo("Cream wordmark", await wordmark(CREAM));
-    const { STARTER_KIT } = await import("@/lib/engine/deck");
-    const k = STARTER_KIT;
-    await db.insert(schema.brandKits).values({ id: newId(), workspaceId: wsId, userId: user.id, name: "Walk kit", ground: k.ground, ink: k.ink, accent: k.accent, muted: k.muted, surface: k.surface, inverseGround: k.inverseGround, inverseInk: k.inverseInk, displayFont: k.displayFont, bodyFont: k.bodyFont, quoteFont: k.quoteFont, fontFallback: k.fontFallback, logoImageId: dark.id, logoDarkImageId: light.id });
+    await db.update(schema.brandKits).set({ logoDarkImageId: light.id }).where(and(eq(schema.brandKits.workspaceId, wsId), eq(schema.brandKits.userId, user.id)));
     await db.update(schema.webinars).set({ footerBar: true }).where(eq(schema.webinars.id, webinarId));
     x = await exportCover();
     // With a logo in the footer bar, the brand line beside it goes: the footer said the brand twice.
@@ -251,6 +253,38 @@ async function main() {
       return Promise.all(files.map((f) => zip.file(f)!.async("string")));
     };
     let xml = await slidesOf();
+    // Deck re-test §1 and §5 (7 Oct): read every slide's shapes at the positions the file holds. No two text boxes (nor a text box
+    // and a seal ring) share area, and no placeholder is left empty for the editor to read "Click to add text". Bars, rules,
+    // card surfaces and the dashed picture frames hold text on them by design and are left out.
+    const EMU_TOL = Math.round(0.05 * 914400);
+    const overlapsInFile: string[] = [];
+    let emptyPlaceholders = 0;
+    xml.forEach((slide, i) => {
+      const shapes = [...slide.matchAll(/<p:sp>([\s\S]*?)<\/p:sp>/g)].map((m) => m[1]);
+      const boxes: { name: string; x: number; y: number; w: number; h: number }[] = [];
+      for (const sp of shapes) {
+        const off = sp.match(/<a:off x="(-?\d+)" y="(-?\d+)"\/>/);
+        const ext = sp.match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
+        const text = [...sp.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((t) => t[1]).join(" ").trim();
+        const isPh = /<p:ph\b/.test(sp);
+        if (isPh && !text) emptyPlaceholders++;
+        if (!off || !ext) continue;
+        const ring = /prst="ellipse"/.test(sp);
+        if (!text && !ring) continue;
+        if (/prstDash/.test(sp) || /prst="roundRect"/.test(sp)) continue;
+        boxes.push({ name: ring ? "seal" : text.slice(0, 40), x: Number(off[1]), y: Number(off[2]), w: Number(ext[1]), h: Number(ext[2]) });
+      }
+      for (let a = 0; a < boxes.length; a++)
+        for (let b = a + 1; b < boxes.length; b++) {
+          if (boxes[a].name === "seal" && boxes[b].name === "seal") continue;
+          const w = Math.min(boxes[a].x + boxes[a].w, boxes[b].x + boxes[b].w) - Math.max(boxes[a].x, boxes[b].x);
+          const h = Math.min(boxes[a].y + boxes[a].h, boxes[b].y + boxes[b].h) - Math.max(boxes[a].y, boxes[b].y);
+          if (w > EMU_TOL && h > EMU_TOL) overlapsInFile.push(`slide ${i + 1}: "${boxes[a].name}" over "${boxes[b].name}"`);
+        }
+    });
+    must(!overlapsInFile.length, `no two boxes print on top of each other in the file: ${overlapsInFile.slice(0, 6).join("; ")}`);
+    must(emptyPlaceholders === 0, `no placeholder is left empty in the file for the editor to read "Click to add text": ${emptyPlaceholders}`);
+    console.log(`✓ §1 and §5 of the deck re-test: ${xml.length} slides, no boxes on top of each other, no empty placeholder`);
     must(xml[0].includes("Monday 12 October 2026 · 6:00 PM"), "the cover carries the event's date and time under the presenter");
     const placeholderRuns = xml.join("").match(/<a:rPr[^>]*sz="(\d+)"[^>]*>(?:(?!<\/a:rPr>)[\s\S])*?<\/a:rPr>\s*<a:t>Add [^<]*<\/a:t>/g) ?? [];
     must(placeholderRuns.length > 0 && placeholderRuns.every((r) => /sz="2000"/.test(r)), `the red placeholder text is 20pt: ${placeholderRuns.slice(0, 2).join(" | ").slice(0, 300)}`);
