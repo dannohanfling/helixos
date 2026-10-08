@@ -83,7 +83,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const inviteCode = teamParam === "invited" ? ((await cookies()).get(TEAM_INVITE_COOKIE)?.value ?? null) : null;
   const teamNote = teamParam === "full" ? "No seat is free. Remove a team member or cancel an open invite first, or ask your coach for more seats." : teamParam === "removed" ? "Removed. Their access ended." : teamParam === "revoked" ? "Invite cancelled. That link no longer works." : null;
   const goalCard = (
-    <Card id="goal" title="Your one goal">
+    <Card id="goal" title="Your one goal" action={<Link href="/goals" className="text-xs text-ink-2 hover:underline" data-testid="goal-plan-link">Your Business goals →</Link>}>
       <form action={updateGoalAction} className="space-y-3">
         {goalError ? (
           <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="goal-error">

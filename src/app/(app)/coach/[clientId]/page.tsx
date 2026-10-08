@@ -39,6 +39,8 @@ import { coachCheckins, coachSendsTo, coachTemplateLibrary } from "@/lib/queries
 import { sendTemplateAction } from "@/lib/actions/body";
 import { KIND_LABEL, templateSummary, type TemplatePayload } from "@/lib/engine/body-templates";
 import { avatarData } from "@/lib/avatars";
+import { planData } from "@/lib/queries/plan";
+import { coachSummary } from "@/lib/engine/plan";
 import { avatarTree, coachLine, offersOf } from "@/lib/engine/avatars";
 import { coachRemoveTeamMemberAction, setTeamCapAction } from "@/lib/actions/team";
 import { openInvites, teamOf } from "@/lib/team";
@@ -105,6 +107,10 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const noteTasks = await tasksFromNotes(ws, notes.map((n) => n.id));
   // Their buyer avatars and which offers each is for, read-only (rev 501 §7).
   const avatars = await avatarData({ workspaceId: ws, userId: m.userId });
+  // Business goals (BG1), read-only: the plan as the client sees it, counted.
+  const plan = await planData({ workspaceId: ws, userId: m.userId });
+  const planSum = coachSummary(plan.tree);
+  const planLine = `${planSum.goals} goal${planSum.goals === 1 ? "" : "s"} · ${planSum.onPace} of ${planSum.keyResults} key results on track · ${planSum.notStarted} of ${planSum.initiatives} initiatives not started`;
   // Their own brand kit (rev 568), read-only here; it is set on their Settings, or by the coach switched in with Work on.
   const clientKit = await kitFor(ws, m.userId);
   const avatarTop = avatarTree(avatars.rows);
@@ -616,6 +622,21 @@ export default async function CoachClientPage({ params, searchParams }: { params
                 </li>
               ))}
             </ul>
+          </Card>
+
+          <Card title="Business goals" action={<span className="text-xs text-ink-3" data-testid="coach-plan-line">{planLine}</span>}>
+            {plan.tree.goals.length ? (
+              <ul className="space-y-1 text-sm" data-testid="coach-plan">
+                {plan.tree.goals.map((g) => (
+                  <li key={g.record.id}>
+                    {g.record.primary ? "★ " : ""}{g.record.title}
+                    <span className="text-xs text-ink-3"> · {g.keyResults.length ? `${g.onPace} of ${g.keyResults.length} key results on track` : "no key results yet"}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-2">No business goals yet.</p>
+            )}
           </Card>
 
           <Card title="Avatars" action={<span className="text-xs text-ink-3" data-testid="coach-avatars-line">{coachLine(avatars.rows, avatars.links)}</span>}>

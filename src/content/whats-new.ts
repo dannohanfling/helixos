@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 117,
+    date: "2026-10-08",
+    title: "Business goals: one linked plan",
+    lines: [
+      "Business goals, under Grow: your goals, the key results that prove them, the initiatives that move them, and the tasks that do the work, linked both ways. A tree view, and a table you can filter by kind, status, owner, due date and pathway stage.",
+      "Your one goal from Today is now your Primary business goal, marked ★; nothing you set is lost. Open any record to edit it, link it up or down, archive it, or add and tick its tasks.",
+      "Your coach sees a read-only line on your client page: goals, key results on track, initiatives not started. KPIs with pace and charts come next.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 116,
     date: "2026-10-08",
     title: "One phrase in your accent, and a layout menu per slide",

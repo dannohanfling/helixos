@@ -301,7 +301,8 @@ async function main() {
     const lateRow = (await rowFor(lateWeek))!;
     const linkedId = lateRow.link?.split("/posts/")[1];
     if (lateRow.status !== "posted" || !lateRow.platformPostId || lateRow.platformPostId === lateRow.ghlPostId || linkedId !== lateRow.platformPostId) throw new Error(`the link is built on the community's own id, the one shown on the row: ${JSON.stringify(lateRow)}`);
-    if (!(await page.locator(`[data-testid="community-log-row"][data-week="${lateWeek}"]`).innerText()).includes(`Community id ${lateRow.platformPostId}`)) throw new Error("the row shows the community id the link uses");
+    // The row re-renders after the check: wait for the id to show rather than read the row the instant the action returns.
+    await page.locator(`[data-testid="community-log-row"][data-week="${lateWeek}"]`, { hasText: `Community id ${lateRow.platformPostId}` }).waitFor({ timeout: 15000 }).catch(() => { throw new Error("the row shows the community id the link uses"); });
     console.log("✓ rev 499: a read that hands back the planner's id waits, with no link; the link is then built on the community's own id, the one the row shows");
 
     // 28 Sep, 11:40: a post HelixOS can't find is never Failed on that alone (it may be live: Post now would post it twice). It

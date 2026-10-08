@@ -191,6 +191,59 @@ export const memberships = sqliteTable(
   (t) => [uniqueIndex("memberships_ws_user").on(t.workspaceId, t.userId)],
 );
 
+/** Business goals (rev 530, BG1): the plan's three kinds of record and the five states one can be in. Never Body's Health goals. */
+export const PLAN_KINDS = ["goal", "key_result", "initiative"] as const;
+export type PlanKind = (typeof PLAN_KINDS)[number];
+export const PLAN_STATUSES = ["not_started", "on_track", "behind", "done", "dropped"] as const;
+export type PlanStatus = (typeof PLAN_STATUSES)[number];
+/**
+ * One record of a member's business plan: a goal, a key result or an initiative, each scoped to the workspace and member on
+ * every read and write. The owner is a name, free text (Danno, 6 Oct). An initiative carries Lindsey's budget and hire
+ * trigger. `goalId` names the legacy goals row a Primary business goal was moved in from, so Today's bar keeps reading it.
+ */
+export const planRecords = sqliteTable(
+  "plan_records",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    kind: text("kind", { enum: PLAN_KINDS }).notNull(),
+    title: text("title").notNull(),
+    status: text("status", { enum: PLAN_STATUSES }).notNull().default("not_started"),
+    owner: text("owner"),
+    dueDate: text("due_date"),
+    notes: text("notes"),
+    pathwayStage: text("pathway_stage"),
+    order: integer("order").notNull().default(0),
+    budget: real("budget"),
+    hireTrigger: text("hire_trigger"),
+    /** The member's Primary business goal: the one Today's bar reads (moved in from the goals table). */
+    primary: integer("primary", { mode: "boolean" }).notNull().default(false),
+    goalId: text("goal_id"),
+    /** The Airtable V1 record an imported record came from (BG5), so a re-run updates it. */
+    sourceRef: text("source_ref"),
+    archivedAt: text("archived_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("plan_records_user").on(t.workspaceId, t.userId, t.kind)],
+);
+export type PlanRecord = typeof planRecords.$inferSelect;
+/** A link in the plan: goal to key result, key result to initiative, initiative to task; many to many where the brief allows. */
+export const planLinks = sqliteTable(
+  "plan_links",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    fromId: text("from_id").notNull(),
+    toKind: text("to_kind", { enum: ["record", "task"] }).notNull().default("record"),
+    toId: text("to_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("plan_links_pair").on(t.fromId, t.toId), index("plan_links_user").on(t.workspaceId, t.userId)],
+);
+export type PlanLink = typeof planLinks.$inferSelect;
+
 export const goals = sqliteTable("goals", {
   id: id(),
   workspaceId: text("workspace_id").notNull(),

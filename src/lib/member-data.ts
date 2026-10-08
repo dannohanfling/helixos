@@ -22,6 +22,8 @@ export const MEMBER_TABLES = {
   library_entries: schema.libraryAssets,
   tasks: schema.tasks,
   goals: schema.goals,
+  plan_records: schema.planRecords,
+  plan_links: schema.planLinks,
   daily_logs: schema.dailyLogs,
   weekly_intentions: schema.weeklyIntentions,
   monthly_intentions: schema.monthlyIntentions,

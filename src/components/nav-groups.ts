@@ -71,6 +71,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/clients", label: "Clients", icon: "🤝", team: true, hint: "your clients" },
       { href: "/community", label: "Community Pass", icon: "🎟️", passOnly: true, hint: "Elite" },
       { href: "/numbers", label: "Numbers", icon: "📊" },
+      { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives" },
       { href: "/rewards", label: "Rewards", icon: "🏆" },
       { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
