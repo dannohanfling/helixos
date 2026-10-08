@@ -6,7 +6,7 @@
 export type Platform = { href: string; label: string; line: string; icon: string };
 
 export const PLATFORMS: Platform[] = [
-  { href: "https://communityloyalty.io", label: "Community Loyalty", line: "your chatbot and automations", icon: "💬" },
+  { href: "https://communityloyalty.io", label: "Community Loyalty", line: "your chatbot and automations", icon: "🤖" },
   { href: "https://academy.evolveomega.com", label: "Academy", line: "courses and community", icon: "🎓" },
-  { href: "https://app.evolveomega.com", label: "Evolve Omega App", line: "CRM, calendar, funnels", icon: "🧭" },
+  { href: "https://app.evolveomega.com", label: "Omnichannel Marketing System", line: "CRM, calendar, funnels", icon: "💸" },
 ];

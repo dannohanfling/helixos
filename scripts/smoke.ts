@@ -75,7 +75,7 @@ async function main() {
   // Platforms (Danno, 7 Oct): three outbound links at the foot of the menu, each in a new tab with the ↗ mark, and the same on Everything.
   const platforms = page.locator('aside [data-testid="nav-platform"]');
   if ((await platforms.count()) !== 3) throw new Error(`the sidebar's Platforms section lists 3 links, saw ${await platforms.count()}`);
-  for (const [href, label] of [["https://communityloyalty.io", "Community Loyalty"], ["https://academy.evolveomega.com", "Academy"], ["https://app.evolveomega.com", "Evolve Omega App"]]) {
+  for (const [href, label] of [["https://communityloyalty.io", "Community Loyalty"], ["https://academy.evolveomega.com", "Academy"], ["https://app.evolveomega.com", "Omnichannel Marketing System"]]) {
     const a = platforms.filter({ hasText: label }).first();
     if ((await a.getAttribute("href")) !== href || (await a.getAttribute("target")) !== "_blank" || !((await a.getAttribute("rel")) ?? "").includes("noopener") || !(await a.innerText()).includes("↗")) throw new Error(`${label} opens ${href} in a new tab with ↗`);
   }

@@ -12,6 +12,13 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 114,
+    date: "2026-10-08",
+    title: "Platforms, renamed",
+    lines: ["In the Platforms section of the menu, Community Loyalty now shows a 🤖 and the app is called the Omnichannel Marketing System, with a 💸."],
+    audience: "everyone",
+  },
+  {
     n: 113,
     date: "2026-10-08",
     title: "Thirty small frictions, gone",
