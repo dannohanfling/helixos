@@ -15,7 +15,7 @@ import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
 import { CopyButton } from "@/components/copy-button";
 import { LiveClock } from "@/components/rung-runner";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
-import { LIVE_POSTING_HOUR, checkScore, checklist, formatFor, headlineParts, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, threadsText } from "@/lib/engine/ladder";
+import { LIVE_POSTING_HOUR, checkScore, checklist, formatFor, headlineParts, keywordOf, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, targetWords, threadsText } from "@/lib/engine/ladder";
 import { AiFormStatus } from "@/components/ai-status";
 import { GraphicMaker } from "@/components/graphic-maker";
 import { graphicStep, ownImage } from "@/lib/graphic";
@@ -92,7 +92,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           <span className="flex flex-wrap items-center gap-2">
             <Link href="/content/ladders" className="hover:underline">← Ladders</Link>
             <Badge tone={l.status === "ready" ? "good" : l.status === "live" ? "accent" : "neutral"}>{l.status}</Badge>
-            <span>{fmt.name} · {l.audience} audience · keyword {l.keyword}{magnet ? <> · offers <Link href={`/magnets/${magnet.id}`} className="underline" data-testid="ladder-magnet-link">{magnet.title}</Link></> : null} · {l.generatedBy === "claude" ? "drafted by AI" : l.generatedBy === "scaffold" ? "skeleton, fill the blanks" : l.generatedBy}</span>
+            <span>{fmt.name} · {l.audience} audience · keyword {l.keyword}{l.keyword !== "NONE" ? <span data-testid="ladder-keyword-target"> (fetches {targetWords(keywordOf(profile ?? null, l.keyword) ?? (magnet ? { target: { kind: "magnet" } } : null), magnet?.title)})</span> : null}{magnet ? <> · offers <Link href={`/magnets/${magnet.id}`} className="underline" data-testid="ladder-magnet-link">{magnet.title}</Link></> : null} · {l.generatedBy === "claude" ? "drafted by AI" : l.generatedBy === "scaffold" ? "skeleton, fill the blanks" : l.generatedBy}</span>
           </span>
         }
         action={

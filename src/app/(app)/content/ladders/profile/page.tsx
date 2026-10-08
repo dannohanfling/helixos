@@ -3,20 +3,34 @@ import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { saveLadderProfileAction } from "@/lib/actions/ladders";
-import { Card, Field, PageHeader } from "@/components/ui";
-import { DEFAULT_BANNED } from "@/lib/engine/ladder";
+import { pushKeywordsAction, saveLadderProfileAction } from "@/lib/actions/ladders";
+import { Badge, Card, Field, PageHeader } from "@/components/ui";
+import { DEFAULT_BANNED, targetWords } from "@/lib/engine/ladder";
+import { KEYWORD_KINDS, type LadderKeyword } from "@/db/schema";
+import { KEYWORDS_FIELD, parseRouterKeywords } from "@/lib/engine/keyword-fields";
+import { keywordPreview } from "@/lib/community-loyalty";
+import { formatDateTime } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Ladder facts" };
 
-export default async function LadderProfilePage() {
+const KIND_LABEL: Record<(typeof KEYWORD_KINDS)[number], string> = { comment: "a comment", dm: "a DM", both: "a comment or a DM" };
+
+export default async function LadderProfilePage({ searchParams }: { searchParams: Promise<{ keywords?: string; note?: string }> }) {
   const v = await requireViewer({ team: "allow" });
-  const [profile, offer, proofs] = await Promise.all([
+  const sp = await searchParams;
+  const [profile, offer, proofs, magnets] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
     db.query.offers.findFirst({ where: eq(schema.offers.userId, v.user.id), orderBy: desc(schema.offers.createdAt) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
+    db.query.leadMagnets.findMany({ where: eq(schema.leadMagnets.userId, v.user.id), columns: { id: true, title: true } }),
   ]);
+  // The keyword rows: every keyword saved, then two blank rows to add to.
+  const rows: (LadderKeyword | null)[] = [...(profile?.keywords ?? []), null, null];
+  const targetValue = (k: LadderKeyword | null): string => (!k?.target ? "" : k.target.kind === "magnet" ? `magnet:${k.target.magnetId ?? ""}` : k.target.kind);
+  // The bot: what it holds for keywords against what HelixOS would send (read live, nothing sent); never while switched or for a team member.
+  const bot = v.switchedInto || v.team ? null : await keywordPreview(v.membership);
+  const held = bot?.held ?? parseRouterKeywords(v.membership.clKeywordsHeld[KEYWORDS_FIELD]);
   const p = profile ?? null;
   const priceGuess = offer?.price ? `${formatPrice(offer.price, offer.currency)}${offer.paymentPlan ? `, or ${offer.paymentPlan}` : ""}` : "";
   return (
@@ -37,9 +51,33 @@ export default async function LadderProfilePage() {
             <Field label="Trial or entry line" hint="Optional. Also verbatim.">
               <input className="field" name="trialLine" defaultValue={p?.trialLine ?? ""} placeholder="Free 30 days, no card" />
             </Field>
-            <Field label="Keywords" hint="One per line: KEYWORD — what it's for. The first is the default.">
-              <textarea className="field" name="keywords" rows={3} defaultValue={p?.keywords.map((k) => `${k.keyword} — ${k.use}`).join("\n") ?? ""} placeholder={"RESET — default, anything selling the Reset\nPLAN — the free starter plan"} />
-            </Field>
+            <div>
+              <span className="label">Keywords</span>
+              <p className="mb-2 text-xs text-ink-3">Each keyword fetches one thing: your product (price and entry terms in the final rung), one of your lead magnets (named once, no price), or a conversation with one line you write (no price, no product name). The first is the default. A keyword with no target cannot carry a ladder to ready.</p>
+              <div className="space-y-2" data-testid="keyword-rows">
+                {rows.map((k, i) => (
+                  <div key={i} className="grid gap-2 rounded-lg border p-2 sm:grid-cols-6" data-testid="keyword-row">
+                    <input className="field uppercase" name={`kw_${i}_keyword`} defaultValue={k?.keyword ?? ""} placeholder="RESET" aria-label="Keyword" data-testid={`kw-${i}-keyword`} />
+                    <input className="field sm:col-span-2" name={`kw_${i}_use`} defaultValue={k?.use ?? ""} placeholder="what it's for" aria-label="What it's for" />
+                    <select className="field" name={`kw_${i}_target`} defaultValue={targetValue(k)} aria-label="What it fetches" data-testid={`kw-${i}-target`}>
+                      <option value="">No target yet</option>
+                      <option value="product">The product</option>
+                      {magnets.map((m) => (
+                        <option key={m.id} value={`magnet:${m.id}`}>Magnet: {m.title}</option>
+                      ))}
+                      <option value="conversation">A conversation</option>
+                    </select>
+                    <select className="field" name={`kw_${i}_kind`} defaultValue={k?.kind ?? "both"} aria-label="Where the bot listens">
+                      {KEYWORD_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>{KIND_LABEL[kind]}</option>
+                      ))}
+                    </select>
+                    <input className="field" name={`kw_${i}_tag`} defaultValue={k?.tag ?? ""} placeholder={k?.keyword ? `helix:${k.keyword}` : "tag"} aria-label="Tag" />
+                    <input className="field sm:col-span-6" name={`kw_${i}_line`} defaultValue={k?.target?.kind === "conversation" ? (k.target.line ?? "") : ""} placeholder="For a conversation: the one line, in your words (ROOM: a conversation about the Academy and the community)" aria-label="The conversation's line" data-testid={`kw-${i}-line`} />
+                  </div>
+                ))}
+              </div>
+            </div>
             <Field label="Permitted scarcity line" hint="The ONLY scarcity a ladder may use, verbatim. Leave blank for none. Anything else is flagged as fake scarcity.">
               <input className="field" name="scarcityLine" defaultValue={p?.scarcityLine ?? ""} placeholder="Founding members lock $100 a month for life. That price is real. It won't stay this low forever." />
             </Field>
@@ -89,6 +127,34 @@ export default async function LadderProfilePage() {
           </SubmitButton>
         </Card>
       </form>
+      {bot ? (
+        <Card id="bot-keywords" className="mt-4" title="Keywords on your bot" action={<span className="text-xs text-ink-3">{v.membership.clKeywordsPushedAt ? `Last pushed ${formatDateTime(v.membership.clKeywordsPushedAt, v.tz)}.` : "Not pushed yet."}</span>}>
+          {sp.keywords === "sent" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="keywords-pushed">Pushed and read back: your bot holds these keywords.</p> : sp.keywords === "failed" ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="keywords-failed">{sp.note}</p> : sp.keywords === "note" ? <p className="mb-3 rounded-lg bg-surface-2 p-2 text-sm" role="status" data-testid="keywords-note">{sp.note}</p> : null}
+          <p className="text-xs text-ink-3">Your Community Loyalty bot listens for these in comments and DMs, tags the person and hands off to your agent. HelixOS writes two fields by name and reads them back; it never deletes a field and never posts or comments as you.</p>
+          {bot.blocked ? (
+            <p className="mt-2 rounded-lg bg-warn-soft p-2 text-sm" data-testid="keywords-blocked">{bot.blocked}</p>
+          ) : (
+            <ul className="mt-2 divide-y text-sm" data-testid="keyword-plan">
+              {bot.rows.map((r) => (
+                <li key={r.name} className="flex items-center justify-between gap-2 py-1.5" data-testid="keyword-plan-row" data-field={r.name} data-status={r.status}>
+                  <span className="font-mono text-xs">{r.name}</span>
+                  <Badge tone={r.status === "same" ? "good" : "accent"}>{r.status === "same" ? "the bot holds this" : "will change"}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+          {held.length ? (
+            <p className="mt-2 text-xs text-ink-2" data-testid="keywords-held">On the bot now: {held.map((k) => `${k.keyword} (${KIND_LABEL[k.kind] ?? k.kind}, ${k.fetch.kind})`).join(" · ")}</p>
+          ) : null}
+          <form action={pushKeywordsAction} className="mt-3">
+            <input type="hidden" name="reason" value="profile page" />
+            <SubmitButton className="btn btn-primary btn-sm" pendingText="Sending to your bot…" disabled={Boolean(bot.blocked) || bot.rows.every((r) => r.status === "same")} data-testid="push-keywords">
+              {bot.rows.every((r) => r.status === "same") && !bot.blocked ? "Your bot holds these already" : "Push keywords to your bot"}
+            </SubmitButton>
+          </form>
+          <p className="mt-2 text-xs text-ink-3">{(profile?.keywords ?? []).filter((k) => k.target).map((k) => `${k.keyword} fetches ${targetWords(k, magnets.find((m) => m.id === k.target?.magnetId)?.title)}`).join(" · ") || "No keyword has a target yet."}</p>
+        </Card>
+      ) : null}
     </>
   );
 }

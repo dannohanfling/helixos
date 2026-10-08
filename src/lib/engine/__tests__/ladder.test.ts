@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LadderProfile, Proof } from "@/db/schema";
-import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, masterBlock, outputContract, parseLadderOutput, parseRungs, readyToPost, rungGapMinutes, rungsForAirtable, scaffold } from "../ladder";
+import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, ctaRung, keywordOf, masterBlock, outputContract, parseLadderOutput, parseRungs, productPitchHits, readyToPost, rungGapMinutes, rungsForAirtable, scaffold, targetWords } from "../ladder";
 import { readFileSync } from "node:fs";
 import { CHANNEL_SPECS } from "../repurpose";
 
@@ -9,7 +9,7 @@ const profile = {
   productPitch: "Three template meals, one weekend rule, a daily check-in.",
   priceLine: "$497 for 90 days.",
   trialLine: "Free 7-day starter plan, no card.",
-  keywords: [{ keyword: "RESET", use: "default" }],
+  keywords: [{ keyword: "RESET", use: "default", target: { kind: "product" } }, { keyword: "ROOM", use: "the community", target: { kind: "conversation", line: "A conversation about the Academy and the community." }, kind: "dm" }, { keyword: "LOST", use: "no target yet" }],
   scarcityLine: null,
   bannedPhrases: ["cheat day"],
   verifiedStats: [{ stat: "47 moms, average 14 lbs at day 90", source: "program data" }],
@@ -218,5 +218,51 @@ describe("cadence", () => {
     expect(bad.filter((n) => !n.ok)).toHaveLength(3);
     expect(rungGapMinutes(11)).toBe(5);
     expect(rungGapMinutes(5)).toBe(6);
+  });
+});
+
+describe("keywords know what they fetch (L1, rev 562)", () => {
+  it("the final rung is built from the target: the product's price, the magnet named once, or the conversation's line, never a price under the other two", () => {
+    expect(ctaRung(profile, "RESET")).toContain("$497 for 90 days.");
+    expect(ctaRung(profile, "RESET")).toContain("Comment RESET and I'll send you the link.");
+    const room = ctaRung(profile, "ROOM");
+    expect(room).toContain("A conversation about the Academy and the community.");
+    expect(room).toContain("Comment ROOM and I'll message you.");
+    expect(room).not.toContain("$497");
+    expect(room).not.toContain("90-Day Reset");
+    const magnet = ctaRung(profile, "PLAN", { title: "The 7-day starter plan" });
+    expect(magnet).toContain("The 7-day starter plan is yours for the asking.");
+    expect(magnet).not.toContain("$497");
+    expect(ctaRung(profile, "LOST")).toContain("[GIVE LOST A TARGET ON YOUR LADDER FACTS]");
+    expect(ctaRung(profile, "NONE")).toContain("[CLOSING QUESTION]");
+    expect(keywordOf(profile, " room ")?.keyword).toBe("ROOM");
+    expect(targetWords(keywordOf(profile, "ROOM"))).toBe("a conversation: A conversation about the Academy and the community.");
+    expect(targetWords({ target: { kind: "magnet" } }, "The plan")).toBe('the lead magnet "The plan"');
+    expect(targetWords(null)).toBe("no target yet");
+    expect(productPitchHits("Join The 90-Day Reset today, founding members, $497 for 90 days.", profile)).toEqual(["The 90-Day Reset", "founding", "$497"]);
+    expect(productPitchHits("A conversation about the Academy.", profile)).toEqual([]);
+  });
+  it("the checklist: a keyword with no target fails; under a conversation the final rung may not pitch the product; the product keyword keeps its price", () => {
+    const base = good();
+    expect(checklist(base, profile, proofs).find((c) => c.key === "keyword-target")?.ok).toBe(true);
+    expect(checklist(base, profile, proofs).find((c) => c.key === "target-pitch")?.ok).toBe(true);
+    const lost = checklist(good({ keyword: "LOST", dmKeyword: "LOST", rungs: base.rungs.map((r) => (r.n === 10 ? { ...r, body: r.body.replace(/RESET/g, "LOST") } : r)) }), profile, proofs);
+    expect(lost.find((c) => c.key === "keyword-target")).toMatchObject({ ok: false, level: "fail" });
+    expect(lost.find((c) => c.key === "keyword-target")?.note).toContain("Give LOST a target");
+    // A magnet picked on the ladder is the target even when the profile has no such keyword.
+    expect(checklist(good({ keyword: "LOST", dmKeyword: "LOST", leadMagnetId: "m1", rungs: base.rungs.map((r) => (r.n === 10 ? { ...r, body: r.body.replace(/RESET/g, "LOST").replace("$497 for 90 days.", "The plan is yours.") } : r)) }), profile, proofs).find((c) => c.key === "keyword-target")?.ok).toBe(true);
+    const pitched = checklist(good({ keyword: "ROOM", dmKeyword: "ROOM", rungs: base.rungs.map((r) => (r.n === 10 ? { ...r, body: r.body.replace(/RESET/g, "ROOM") } : r)) }), profile, proofs);
+    const tp = pitched.find((c) => c.key === "target-pitch");
+    expect(tp).toMatchObject({ ok: false, level: "fail" });
+    expect(tp?.note).toContain('"$497"');
+    expect(readyToPost(pitched)).toBe(false);
+    const clean = checklist(good({ keyword: "ROOM", dmKeyword: "ROOM", rungs: base.rungs.map((r) => (r.n === 10 ? { ...r, body: `Here's the whole system.\n${"Plan on Tuesday and pick three meals you know. ".repeat(3)}\nA conversation about the Academy and the community.\nComment ROOM and I'll message you.\nIf nothing happens, message me ROOM.\nStart small. Stay long.` } : r)) }), profile, proofs);
+    expect(clean.find((c) => c.key === "target-pitch")?.ok).toBe(true);
+    expect(clean.find((c) => c.key === "cta")?.ok).toBe(true);
+    const block = masterBlock(profile, proofs, { name: "Maya Torres", businessName: null, bigPromise: null });
+    expect(block).toContain("- RESET — default — fetches the product");
+    expect(block).toContain("- ROOM — the community — fetches a conversation: A conversation about the Academy and the community.");
+    expect(block).toContain("- LOST — no target yet — fetches no target yet");
+    expect(block).toContain("BUILT FROM WHAT THE KEYWORD FETCHES");
   });
 });

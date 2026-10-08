@@ -238,9 +238,40 @@ async function main() {
     const brief = (await page.locator('[data-testid="brief-price"]').innerText()).trim();
     if (brief !== `How it handles price: asked early, it answers with no numbers, “${PRICE_LINE}”, then asks a question. Numbers come only once it knows enough to recommend something.`) throw new Error(`the page quotes the coach's early answer, got "${brief}"`);
     if (/1,500/.test(await page.locator('[data-testid="brief-offers"]').innerText())) throw new Error("the offer line carries no price");
+    // ── The keyword router's fields (Ship a ladder commit 2): read against the bot, refused without the router, pushed by name. ──
+    await page.goto(`${base}/content/ladders/profile`);
+    await page.locator('[data-testid="keywords-blocked"]').waitFor({ timeout: 20000 });
+    if (!(await page.locator('[data-testid="keywords-blocked"]').innerText()).includes("no keyword router yet")) throw new Error("without the router's fields on the bot, the page says the template lacks them");
+    if (!(await page.locator('[data-testid="push-keywords"]').isDisabled())) throw new Error("the push is shut without the router");
+    const keywordRequestsBefore = (await requests()).length;
+    await post("/__seed", { helix_keywords_cbf: "[]", helix_keyword_agent_cbf: "" });
+    await page.goto(`${base}/content/ladders/profile`);
+    await page.locator('[data-testid="keyword-plan"]').waitFor({ timeout: 20000 });
+    const planStatuses = await page.locator('[data-testid="keyword-plan-row"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-field")}:${e.getAttribute("data-status")}`));
+    if (planStatuses.join() !== "helix_keywords_cbf:change,helix_keyword_agent_cbf:change") throw new Error(`both fields would change: ${planStatuses.join()}`);
+    if ((await requests()).length !== keywordRequestsBefore) throw new Error("reading the plan sends nothing");
+    await submit(page, '[data-testid="push-keywords"]');
+    await page.waitForURL(/keywords=sent/, { timeout: 20000 });
+    await page.locator('[data-testid="keywords-pushed"]').waitFor();
+    const heldNow = await store();
+    const routed = JSON.parse(heldNow.helix_keywords_cbf) as { keyword: string; kind: string; tag: string; fetch: { kind: string; line?: string; title?: string }; reply: string }[];
+    if (routed.map((k) => `${k.keyword}:${k.kind}:${k.fetch.kind}:${k.tag}`).join() !== "RESET:both:product:helix:RESET,PLAN:both:conversation:helix:PLAN") throw new Error(`the bot holds the keywords with their kinds, targets and tags: ${heldNow.helix_keywords_cbf}`);
+    if (!routed[1].fetch.line?.includes("free 7-day starter plan") || routed[1].reply !== routed[1].fetch.line || !routed[0].reply.includes("$497")) throw new Error(`each keyword carries its reply: ${heldNow.helix_keywords_cbf}`);
+    if (heldNow.helix_keyword_agent_cbf !== faqAgent.ai_agent_ns) throw new Error("the agent field is the member's chosen agent");
+    for (const [k, v] of Object.entries(botWritten)) if (heldNow[k] !== v) throw new Error(`${k} was changed by the keyword push`);
+    const kwReq = (await requests()).slice(keywordRequestsBefore);
+    if (kwReq.length !== 1 || kwReq[0].fields.map((f) => f.name).sort().join() !== "helix_keyword_agent_cbf,helix_keywords_cbf" || kwReq[0].token !== TOKEN) throw new Error("one push, the two router fields only, with the member's own token");
+    const afterPush = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membership.id) }))!;
+    if (!afterPush.clKeywordsPushedAt || afterPush.clKeywordsHeld.helix_keywords_cbf !== heldNow.helix_keywords_cbf) throw new Error("the record holds what the bot holds");
+    if (JSON.stringify(afterPush.clKeywordsHeld).includes(TOKEN)) throw new Error("the record carries no token");
+    await page.goto(`${base}/content/ladders/profile`);
+    await page.locator('[data-testid="keyword-plan"]').waitFor({ timeout: 20000 });
+    if (!(await page.locator('[data-testid="push-keywords"]').isDisabled()) || !(await page.locator('[data-testid="keywords-held"]').innerText()).includes("RESET (a comment or a DM, product)")) throw new Error("pushed, the page says the bot holds them and the push is shut");
+    console.log("✓ the keyword router: refused without its fields, both fields pushed by name and read back (RESET the product, PLAN a conversation), the agent with them, the bot's own fields untouched");
     await page.goto(`${base}/settings`);
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
+
     await signIn("coach");
     // Nothing pushes on its own, so the Coach page says the record moved since the last push, from HelixOS's data alone.
     await page.goto(`${base}/coach`);

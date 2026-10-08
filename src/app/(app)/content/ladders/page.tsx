@@ -6,7 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { createLadderAction, deleteLadderAction } from "@/lib/actions/ladders";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
-import { LADDER_FORMATS, cadenceNotes, checkScore, checklist } from "@/lib/engine/ladder";
+import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, targetWords } from "@/lib/engine/ladder";
 import { addDays, formatDate, formatDateTime, weekday } from "@/lib/dates";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
@@ -86,7 +86,7 @@ export default async function LaddersPage() {
                 <select className="field" name="keyword" defaultValue={keywords[0]?.keyword ?? "NONE"}>
                   {keywords.map((k) => (
                     <option key={k.keyword} value={k.keyword}>
-                      {k.keyword} — {k.use}
+                      {k.keyword} — {k.use} — fetches {targetWords(k, magnets.find((m) => m.id === k.target?.magnetId)?.title)}
                     </option>
                   ))}
                   <option value="NONE">NONE — close with a question</option>

@@ -5,7 +5,8 @@ import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { dripSetup } from "@/lib/rung-drip";
-import { LADDER_AUDIENCES, LADDER_FORMAT_KEYS, LADDER_STATUSES, type LadderKeyword, type LadderStat } from "@/db/schema";
+import { KEYWORD_KINDS, LADDER_AUDIENCES, LADDER_FORMAT_KEYS, LADDER_STATUSES, type KeywordKind, type LadderKeyword, type LadderStat } from "@/db/schema";
+import { pushKeywordFields } from "@/lib/community-loyalty";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
@@ -52,17 +53,25 @@ function lines(fd: FormData, key: string): string[] {
     .filter(Boolean);
 }
 
-/** "KEYWORD — what it's for", one per line. */
-function parseKeywords(text: string): LadderKeyword[] {
-  return text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((l) => {
-      const [k, ...rest] = l.split(/\s+[—–-]+\s+|:\s+/);
-      return { keyword: k.trim().toUpperCase().replace(/[^A-Z0-9]/g, ""), use: rest.join(" ").trim() || "default" };
-    })
-    .filter((k) => k.keyword);
+/**
+ * The keyword rows (L1, rev 562): kw_<i>_keyword, _use, _target (product | magnet:<id> | conversation), _line, _kind, _tag.
+ * A magnet must be the member's own; a row with no keyword is dropped; a keyword repeated keeps its first row.
+ */
+async function parseKeywordRows(fd: FormData, userId: string): Promise<LadderKeyword[]> {
+  const magnets = await db.query.leadMagnets.findMany({ where: eq(schema.leadMagnets.userId, userId), columns: { id: true } });
+  const out: LadderKeyword[] = [];
+  for (let i = 0; i < 40; i++) {
+    const raw = fd.get(`kw_${i}_keyword`);
+    if (raw === null) continue;
+    const keyword = String(raw).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!keyword || out.some((k) => k.keyword === keyword)) continue;
+    const t = str(fd, `kw_${i}_target`);
+    const line = opt(fd, `kw_${i}_line`)?.trim().slice(0, 300) || null;
+    const target: LadderKeyword["target"] = t === "product" ? { kind: "product" } : t.startsWith("magnet:") && magnets.some((m) => m.id === t.slice(7)) ? { kind: "magnet", magnetId: t.slice(7) } : t === "conversation" ? { kind: "conversation", line } : null;
+    const kind = (KEYWORD_KINDS as readonly string[]).includes(str(fd, `kw_${i}_kind`)) ? (str(fd, `kw_${i}_kind`) as KeywordKind) : "both";
+    out.push({ keyword, use: opt(fd, `kw_${i}_use`)?.trim().slice(0, 200) || "default", target, kind, tag: opt(fd, `kw_${i}_tag`)?.trim().slice(0, 80) || null });
+  }
+  return out;
 }
 /** "the stat (source, year)", one per line. */
 function parseStats(text: string): LadderStat[] {
@@ -83,7 +92,7 @@ export async function saveLadderProfileAction(formData: FormData): Promise<void>
     productPitch: opt(formData, "productPitch"),
     priceLine: opt(formData, "priceLine"),
     trialLine: opt(formData, "trialLine"),
-    keywords: parseKeywords(str(formData, "keywords")),
+    keywords: await parseKeywordRows(formData, userId),
     scarcityLine: opt(formData, "scarcityLine"),
     bannedPhrases: lines(formData, "bannedPhrases"),
     verifiedStats: parseStats(str(formData, "verifiedStats")),
@@ -357,4 +366,17 @@ export async function generateBackgroundAction(formData: FormData): Promise<void
   const r = await generateBackground({ workspaceId, userId }, l);
   refresh();
   redirect(r.ok ? `${back}?graphic=background&photo=${r.imageId}#graphic` : `${back}?graphic=${encodeURIComponent(r.error)}#graphic`);
+}
+
+/**
+ * Push the keyword router's two fields to the member's own Community Loyalty bot (Ship a ladder commit 2): the keywords with
+ * their targets, kinds and tags, and the agent. The member's own bot only (a team member works on the owner's words but never
+ * pushes to the bot, as with the Stage 1 push); refused with the reason on the page when the bot has no router field.
+ */
+export async function pushKeywordsAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
+  const out = await pushKeywordFields(v.membership.id, { reason: str(formData, "reason") || "profile page", by: v.user.id });
+  refresh();
+  if (out.status === "sent") redirect(`/content/ladders/profile?keywords=sent#bot-keywords`);
+  redirect(`/content/ladders/profile?keywords=${out.status === "failed" ? "failed" : "note"}&note=${encodeURIComponent(out.note)}#bot-keywords`);
 }

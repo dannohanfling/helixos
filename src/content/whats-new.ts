@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 120,
+    date: "2026-10-08",
+    title: "Keywords that know what they fetch",
+    lines: [
+      "Each keyword on your ladder facts now has a target: the product (price and entry terms in the final rung, as before), one of your lead magnets (named once in the final rung, no price), or a conversation, with one line you write (no price, no product name). The final rung is written from that target, and the checklist refuses a final rung that pitches the product under a magnet or conversation keyword. A keyword with no target cannot carry a ladder to ready.",
+      "A keyword also says where your bot listens for it (a comment, a DM, or both) and what it tags the person with.",
+      "Your bot: the ladder facts page shows what your Community Loyalty bot holds for keywords against what HelixOS would send, and Push keywords to your bot writes the two router fields by name and reads them back. Nothing is deleted on the bot, and nothing posts or comments as you.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 119,
     date: "2026-10-08",
     title: "Make the graphic: your headline on your photo",

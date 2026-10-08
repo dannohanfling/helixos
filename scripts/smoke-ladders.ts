@@ -72,10 +72,21 @@ async function main() {
     await page.goto(`${base}/content/ladders/profile`);
     await expectText(page, "Your ladder facts", "profile page");
     if ((await page.inputValue('input[name="productName"]')) !== "The 90-Day Reset") throw new Error("seeded profile not loaded");
+    // Keywords know what they fetch (L1, rev 562): the seeded rows carry their targets; a third keyword is added with none.
+    if ((await page.locator('[data-testid="kw-0-target"]').inputValue()) !== "product" || (await page.locator('[data-testid="kw-1-target"]').inputValue()) !== "conversation" || !(await page.locator('[data-testid="kw-1-line"]').inputValue()).includes("free 7-day starter plan")) throw new Error("the seeded keywords show their targets: RESET the product, PLAN a conversation with its line");
+    await page.fill('[data-testid="kw-2-keyword"]', "lost");
     await page.fill('textarea[name="bannedPhrases"]', "cheat day\nguilt-free\nskinny\nmagic pill");
     await submit(page, 'button:has-text("Save facts")');
     await page.waitForURL(/\/content\/ladders$/);
-    console.log("✓ facts profile saved");
+    {
+      const { db: dbp, schema: sp } = await import("@/db");
+      const { eq: eqp } = await import("drizzle-orm");
+      const saved = (await dbp.query.ladderProfiles.findMany({ where: eqp(sp.ladderProfiles.productName, "The 90-Day Reset") }))[0];
+      if (saved.keywords.length !== 3 || saved.keywords[2].keyword !== "LOST" || saved.keywords[2].target || saved.keywords[0].target?.kind !== "product" || saved.keywords[1].target?.kind !== "conversation" || saved.keywords[1].kind !== "both") throw new Error(`the rows save their targets: ${JSON.stringify(saved.keywords)}`);
+      const option = await page.locator('select[name="keyword"] option[value="PLAN"]').innerText();
+      if (!option.includes("fetches a conversation")) throw new Error(`the keyword picker says what each fetches: ${option}`);
+    }
+    console.log("✓ facts profile saved, keywords with their targets (and LOST with none)");
 
     // New ladder without Claude → skeleton, checklist blocks it
     await expectText(page, "Build the skeleton", "no-AI button");
@@ -122,6 +133,44 @@ async function main() {
     if (c.bait !== false || c.question !== false) throw new Error("comment bait / missing question not caught");
     await page.screenshot({ path: "screenshots/ld01-skeleton-checklist.png", fullPage: true });
     console.log("✓ skeleton built; checklist blocks placeholders, comment bait and a missing question");
+
+    // ── Keywords know what they fetch (L1): a conversation keyword's final rung carries the line and no price; a keyword with no
+    // target cannot go ready; the product pitched under a conversation keyword fails the checklist. ──
+    const skeletonWith = async (keyword: string, topic: string) => {
+      await page.goto(`${base}/content/ladders`);
+      await page.selectOption('select[name="format"]', "method_resource");
+      await page.fill('input[name="topic"]', topic);
+      await page.selectOption('select[name="keyword"]', keyword);
+      await submit(page, 'button:has-text("Build the skeleton")');
+      await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+$/i);
+      return page.url().split("/").pop()!.split("?")[0];
+    };
+    const planId = await skeletonWith("PLAN", "The starter plan, in five moves");
+    const planRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, planId) }))!;
+    const planFinal = planRow.rungs[planRow.rungs.length - 1].body;
+    if (!planFinal.includes("free 7-day starter plan") || !planFinal.includes("Comment PLAN and I'll message you.") || planFinal.includes("$497") || planFinal.includes("90-Day Reset")) throw new Error(`a conversation keyword's final rung carries the line and no price: ${planFinal}`);
+    if (!(await page.locator('[data-testid="ladder-keyword-target"]').innerText()).includes("fetches a conversation")) throw new Error("the ladder page says what its keyword fetches");
+    c = await checks(page);
+    if (c["keyword-target"] !== true || c["target-pitch"] !== true) throw new Error(`PLAN has a target and pitches nothing: ${JSON.stringify(c)}`);
+    // The product written into the final rung under a conversation keyword: the checklist fails it by name.
+    const rungsText = await page.locator('textarea[name="rungs"]').inputValue();
+    await fillExact(page, 'textarea[name="rungs"]', rungsText.replace("Comment PLAN and I'll message you.", "Join The 90-Day Reset for $497 for 90 days.\nComment PLAN and I'll message you."));
+    await submit(page, 'button:has-text("Save and re-check")');
+    c = await checksWhen(page, "target-pitch", false);
+    if (c["target-pitch"] !== false) throw new Error("the product pitched under a conversation keyword fails the checklist");
+    const pitchNote = await page.locator('[data-testid="checklist"] li[data-check="target-pitch"]').innerText();
+    if (!pitchNote.includes("The 90-Day Reset") || !pitchNote.includes("$497")) throw new Error(`the fail names what was pitched: ${pitchNote}`);
+    await fillExact(page, 'textarea[name="rungs"]', rungsText);
+    await submit(page, 'button:has-text("Save and re-check")');
+    c = await checksWhen(page, "target-pitch", true);
+    const lostId = await skeletonWith("LOST", "A keyword with no target");
+    c = await checks(page);
+    if (c["keyword-target"] !== false) throw new Error("a keyword with no target fails the checklist");
+    if (!(await page.locator('[data-testid="checklist"] li[data-check="keyword-target"]').innerText()).includes("Give LOST a target")) throw new Error("the fail says where to give it one");
+    const lostRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, lostId) }))!;
+    if (!lostRow.rungs[lostRow.rungs.length - 1].body.includes("[GIVE LOST A TARGET ON YOUR LADDER FACTS]")) throw new Error("the skeleton's final rung asks for the target");
+    console.log("✓ keywords know what they fetch: PLAN's final rung carries its line and no price; the product pitched under it fails by name; LOST, with no target, cannot go ready");
+
 
     // The finished demo ladder clears the checklist
     await page.goto(`${base}/content/ladders`);

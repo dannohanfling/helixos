@@ -3,7 +3,7 @@
  * Pure and deterministic. Builds the generation prompt from a client's own facts, parses what comes back, scaffolds a skeleton
  * when Claude isn't configured, and runs the pre-publish checklist. Nothing here touches the database.
  */
-import type { Ladder, LadderProfile, LadderRung, Proof } from "@/db/schema";
+import type { Ladder, LadderKeyword, LadderProfile, LadderRung, Proof } from "@/db/schema";
 import { LADDER_FORMAT_KEYS } from "@/db/schema";
 import { CHANNEL_SPECS, type Channel, type ChannelSpec } from "./repurpose";
 import { explainFabricated, findFabricated } from "./blacklist";
@@ -57,6 +57,29 @@ const STAT = /(\d+(?:\.\d+)?\s?%)|\b(?:studies|research|data|surveys?)\s+(?:show
 
 /** `leadMagnet`: the magnet the keyword fetches. It is named in the final rung only, as fulfilment; the body never mentions it. */
 export type Brief = { format: LadderFormatKey; topic: string; audience: "warm" | "cold"; keyword: string; sourceMaterial?: string | null; realNumbers?: string | null; leadMagnet?: { title: string; promise: string } | null };
+
+/** The profile's keyword by name, however it was typed. */
+export function keywordOf(profile: Pick<LadderProfile, "keywords"> | null, keyword: string | null | undefined): LadderKeyword | null {
+  const k = (keyword ?? "").trim().toUpperCase();
+  if (!k || k === "NONE") return null;
+  return profile?.keywords.find((x) => x.keyword.trim().toUpperCase() === k) ?? null;
+}
+/** A keyword's target in words, for the routing block and the page: the product, the magnet by title, or the conversation's line. */
+export function targetWords(k: Pick<LadderKeyword, "target"> | null, magnetTitle?: string | null): string {
+  if (!k?.target) return "no target yet";
+  if (k.target.kind === "product") return "the product";
+  if (k.target.kind === "magnet") return magnetTitle ? `the lead magnet "${magnetTitle}"` : "a lead magnet";
+  return `a conversation: ${(k.target.line ?? "").trim() || "(no line written)"}`;
+}
+/** Words the final rung may not carry when the keyword's target is not the product: the product's name, "founding", and any $ figure from the price line. */
+export function productPitchHits(final: string, profile: Pick<LadderProfile, "productName" | "priceLine"> | null): string[] {
+  const hits: string[] = [];
+  const name = profile?.productName?.trim();
+  if (name && name.length > 2 && final.toLowerCase().includes(name.toLowerCase())) hits.push(name);
+  if (/\bfounding\b/i.test(final)) hits.push("founding");
+  for (const m of (profile?.priceLine ?? "").matchAll(/\$\s?\d[\d,]*/g)) if (final.includes(m[0])) hits.push(m[0]);
+  return Array.from(new Set(hits));
+}
 /** The voice itself is not here: it arrives ahead of this block, from the client's Essence, through draft(). */
 export type Member = { name: string; businessName?: string | null; bigPromise?: string | null };
 
@@ -136,10 +159,14 @@ Sell methodology and transformation, never program names.`,
     evidence.length
       ? `## VERIFIED EVIDENCE — USE ONLY THESE\nEach line is a claim and its citation. Use them together, never the claim alone.\n${evidence.join("\n")}\nAny other study is off limits. Write [EVIDENCE PLACEHOLDER] rather than inventing or half-remembering one.`
       : `## EVIDENCE\nNo verified research is on this client's shelf. Do not cite a study. Write [EVIDENCE PLACEHOLDER] where one would help.`,
-    `## KEYWORD ROUTING\n${keywords.length ? keywords.map((k) => `- ${k.keyword} — ${k.use}`).join("\n") : "- (no keywords set up)"}\n- NONE — pure trust/story posts close with a question instead. Pitching at the end of a personal story breaks it.`,
+    `## KEYWORD ROUTING\n${keywords.length ? keywords.map((k) => `- ${k.keyword} — ${k.use} — fetches ${targetWords(k)}`).join("\n") : "- (no keywords set up)"}\n- NONE — pure trust/story posts close with a question instead. Pitching at the end of a personal story breaks it.`,
     profile?.originStory?.trim() ? `## ORIGIN STORY (recurring source material)\n${profile.originStory.trim()}${profile.positioningLine ? `\nPositioning line: ${profile.positioningLine}` : ""}\nKeep the odd specific details. They're what make it feel lived rather than constructed.` : "",
-    `## CTA — FINAL RUNG ONLY
-Recap the system in short lines. Then the price and entry terms exactly as given above. ${profile?.scarcityLine?.trim() ? "Then the permitted scarcity line verbatim. " : ""}Then "Comment [KEYWORD] and I'll send you the link." Then "If nothing happens, message me [KEYWORD]." Then one closing quotable line. When the keyword is NONE, close with a question instead of a pitch.`,
+    `## CTA — FINAL RUNG ONLY, BUILT FROM WHAT THE KEYWORD FETCHES
+Recap the system in short lines. Then, by the keyword's target:
+- the product: the price and entry terms exactly as given above. ${profile?.scarcityLine?.trim() ? "Then the permitted scarcity line verbatim. " : ""}Then "Comment [KEYWORD] and I'll send you the link."
+- a lead magnet: name the magnet once, as fulfilment. Then "Comment [KEYWORD] and I'll send you the link." No price, no entry terms, no product name.
+- a conversation: the conversation's line, in the client's words. Then "Comment [KEYWORD] and I'll message you." No price, no entry terms, no product name, no "founding".
+Then "If nothing happens, message me [KEYWORD]." Then one closing quotable line. When the keyword is NONE, close with a question instead of a pitch.`,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -342,12 +369,19 @@ function rungLabels(format: LadderFormatKey): string[] {
   }
 }
 
-function ctaRung(profile: LadderProfile | null, keyword: string): string {
+/** The skeleton's final rung, from what the keyword fetches (L1): the product's price and trial, the magnet named once, or the conversation's line; never a price under the other two. */
+export function ctaRung(profile: LadderProfile | null, keyword: string, magnet?: { title: string } | null): string {
   if (!keyword || keyword.toUpperCase() === "NONE") return "Recap the system in three short lines.\nThen ask the reader one question about their own version of this.\n[CLOSING QUESTION]";
+  const recap = "Here's the whole system in short lines.\n[RECAP LINE 1]\n[RECAP LINE 2]\n[RECAP LINE 3]";
+  const k = keywordOf(profile, keyword);
+  const target = k?.target ?? (magnet ? { kind: "magnet" as const } : null);
+  if (target?.kind === "magnet") return `${recap}\n${magnet?.title ? `${magnet.title} is yours for the asking.` : "[NAME THE MAGNET ONCE]"}\nComment ${keyword} and I'll send you the link.\nIf nothing happens, message me ${keyword}.\n[CLOSING QUOTABLE LINE]`;
+  if (target?.kind === "conversation") return `${recap}\n${(target.line ?? "").trim() || "[THE CONVERSATION LINE]"}\nComment ${keyword} and I'll message you.\nIf nothing happens, message me ${keyword}.\n[CLOSING QUOTABLE LINE]`;
+  if (!target) return `${recap}\n[GIVE ${keyword} A TARGET ON YOUR LADDER FACTS]\nComment ${keyword} and I'll send you the link.\nIf nothing happens, message me ${keyword}.\n[CLOSING QUOTABLE LINE]`;
   const price = profile?.priceLine?.trim() || "[PRICE LINE]";
   const trial = profile?.trialLine?.trim() ? `\n${profile.trialLine.trim()}` : "";
   const scarcity = profile?.scarcityLine?.trim() ? `\n${profile.scarcityLine.trim()}` : "";
-  return `Here's the whole system in short lines.\n[RECAP LINE 1]\n[RECAP LINE 2]\n[RECAP LINE 3]\n${price}${trial}${scarcity}\nComment ${keyword} and I'll send you the link.\nIf nothing happens, message me ${keyword}.\n[CLOSING QUOTABLE LINE]`;
+  return `${recap}\n${price}${trial}${scarcity}\nComment ${keyword} and I'll send you the link.\nIf nothing happens, message me ${keyword}.\n[CLOSING QUOTABLE LINE]`;
 }
 
 /** A complete skeleton in the right shape, with every blank marked so the checklist keeps it from going live half-done. */
@@ -359,7 +393,7 @@ export function scaffold(brief: Brief, profile: LadderProfile | null, proofs: Pr
   const keyword = brief.keyword && brief.keyword.toUpperCase() !== "NONE" ? brief.keyword.toUpperCase() : "";
   const rungs: LadderRung[] = labels.map((label, i) => {
     const n = i + 1;
-    if (label === "the CTA") return { n, body: ctaRung(profile, keyword) };
+    if (label === "the CTA") return { n, body: ctaRung(profile, keyword, brief.leadMagnet) };
     if (label === "proof") return { n, body: `${proofLine}\n[ONE LINE ON WHAT THIS PROVES]\n[QUOTABLE LINE]` };
     return { n, body: `[RUNG ${n} · ${label.toUpperCase()}]\n[40–90 WORDS. ONE THOUGHT PER LINE.]\n[QUOTABLE LINE]` };
   });
@@ -385,7 +419,7 @@ export function scaffold(brief: Brief, profile: LadderProfile | null, proofs: Pr
 
 export type Check = { key: string; label: string; ok: boolean; level: "fail" | "warn"; note: string };
 
-type LadderLike = Pick<Ladder, "copy" | "headline" | "rungs" | "dmKeyword" | "igCaption" | "threadsChain" | "realNumbers" | "keyword" | "format"> & Partial<Pick<Ladder, "hook" | "carousel" | "altHeadlines">>;
+type LadderLike = Pick<Ladder, "copy" | "headline" | "rungs" | "dmKeyword" | "igCaption" | "threadsChain" | "realNumbers" | "keyword" | "format"> & Partial<Pick<Ladder, "hook" | "carousel" | "altHeadlines" | "leadMagnetId">>;
 
 export function headlineParts(h: string): { lines: string[]; gold: string[]; text: string } {
   const gold = Array.from(h.matchAll(/\(gold:\s*([^)]+)\)/gi)).map((m) => m[1].trim());
@@ -418,8 +452,15 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   add("quotable", "Each rung ends with one short quotable line", !noQuote.length, `Last line is too long to quote in rung ${noQuote.join(", ")}.`, "warn");
   const final = rungs[rungs.length - 1]?.body ?? "";
   if (keyword) {
-    add("cta", `Final rung has "${keyword}" and the fallback line`, new RegExp(`comment\\s+${keyword}`, "i").test(final) && new RegExp(`message me\\s+${keyword}`, "i").test(final), `Final rung needs "Comment ${keyword} and I'll send you the link." and "If nothing happens, message me ${keyword}."`);
+    add("cta", `Final rung has "${keyword}" and the fallback line`, new RegExp(`comment\\s+${keyword}`, "i").test(final) && new RegExp(`message me\\s+${keyword}`, "i").test(final), `Final rung needs "Comment ${keyword} and I'll ${keywordOf(profile, keyword)?.target?.kind === "conversation" ? "message you" : "send you the link"}." and "If nothing happens, message me ${keyword}."`);
     add("keyword-once", "Keyword appears only in the final rung", !rungs.slice(0, -1).some((r) => new RegExp(`comment\\s+${keyword}`, "i").test(r.body)), "Earlier rungs prompt the keyword. Keep it for the fulfilment rung.", "warn");
+    // L1 (rev 562): a keyword knows what it fetches; until it does, the ladder cannot go ready. A magnet picked on the ladder is its own target.
+    const k = keywordOf(profile, keyword);
+    const target = k?.target ?? (l.leadMagnetId ? { kind: "magnet" as const } : null);
+    add("keyword-target", `"${keyword}" has a target on your ladder facts`, Boolean(target), `Give ${keyword} a target on your ladder facts: the product, a lead magnet, or a conversation.`);
+    // Under a magnet or a conversation the final rung never pitches the product (ROOM pitched BOOKEM).
+    const pitched = target && target.kind !== "product" ? productPitchHits(final, profile) : [];
+    add("target-pitch", `Final rung pitches only what "${keyword}" fetches`, !pitched.length, `${keyword} fetches ${targetWords(k ?? { target }, undefined)}, but the final rung names ${pitched.map((h) => `"${h}"`).join(", ")}. Take the product out of it.`);
   } else {
     add("cta", "No keyword: final rung closes with a question", /\?\s*$/.test(lastLine(final)) || /\?/.test(final), "Trust and story posts close with a question, not a pitch.");
   }

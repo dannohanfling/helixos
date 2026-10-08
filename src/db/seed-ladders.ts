@@ -12,8 +12,8 @@ export async function seedDemoLadders(wsId: string, mayaId: string, today: strin
     priceLine: "$497 for 90 days, or 3 payments of $179.",
     trialLine: "Free 7-day starter plan, no card.",
     keywords: [
-      { keyword: "RESET", use: "default, anything selling the Reset" },
-      { keyword: "PLAN", use: "the free 7-day starter plan" },
+      { keyword: "RESET", use: "default, anything selling the Reset", target: { kind: "product" }, kind: "both", tag: "helix:RESET" },
+      { keyword: "PLAN", use: "the free 7-day starter plan", target: { kind: "conversation", line: "a chat about the free 7-day starter plan and whether the Reset fits" }, kind: "both", tag: "helix:PLAN" },
     ],
     scarcityLine: null,
     bannedPhrases: ["cheat day", "guilt-free", "skinny"],

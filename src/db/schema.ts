@@ -116,6 +116,9 @@ export const memberships = sqliteTable(
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
     /** A fingerprint of HelixOS's Stage 1 record at the last push, so the Coach page can say "changed since the last push" without reading the bot. */
     clBotSourceKey: text("cl_bot_source_key"),
+    /** The keyword router's two fields as last confirmed on the bot (Ship a ladder commit 2): helix_keywords_cbf and helix_keyword_agent_cbf, by name. */
+    clKeywordsHeld: text("cl_keywords_held", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
+    clKeywordsPushedAt: text("cl_keywords_pushed_at"),
     /** What the bot says when asked about price in price mode "never", for this coach, not per offer. Null means PRICE_ANSWER_DEFAULT. */
     priceAnswer: text("price_answer"),
     /* The bot sales rules (handoff rev 80): the coach-level lines the offers field is composed from. Each is the coach's own words. */
@@ -1825,7 +1828,16 @@ export const LADDER_FORMAT_KEYS = ["loss_rebuild", "method_resource", "milestone
 export const LADDER_STATUSES = ["draft", "ready", "live", "done"] as const;
 export const LADDER_AUDIENCES = ["warm", "cold"] as const;
 
-export type LadderKeyword = { keyword: string; use: string };
+/**
+ * What a keyword fetches (ladders L1, rev 562; Ship a ladder commit 2): the product (price and trial in the final rung), a lead
+ * magnet (named in the final rung only), or a conversation with one line the member writes (no price, no product name). A
+ * keyword with no target cannot carry a ladder to ready. `kind` is where the bot listens for it; `tag` is what it tags the
+ * person with in Community Loyalty.
+ */
+export type KeywordTarget = { kind: "product" | "magnet" | "conversation"; magnetId?: string | null; line?: string | null };
+export const KEYWORD_KINDS = ["comment", "dm", "both"] as const;
+export type KeywordKind = (typeof KEYWORD_KINDS)[number];
+export type LadderKeyword = { keyword: string; use: string; target?: KeywordTarget | null; kind?: KeywordKind | null; tag?: string | null };
 /** How a ladder's graphic was made: the photo (an Images id, or none for a plain ground), the headline used, the stronger fade, and whether an AI background was allowed for it. */
 export type GraphicOptions = { photoImageId: string | null; headline: string; strongFade: boolean; aiBackground: boolean };
 export type LadderStat = { stat: string; source: string };

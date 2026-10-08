@@ -23,6 +23,7 @@ import { BOT_WRITTEN_FIELDS, PRODUCT_FIELD, PRODUCT_FIELD_OLD, READ_BACK_LIMIT, 
 import { normalizeEssence } from "@/lib/engine/essence";
 import { redactSecrets } from "@/lib/engine/redact";
 import { logSync } from "@/lib/integrations";
+import { KEYWORD_FIELDS, KEYWORDS_FIELD, keywordFieldsPayload, keywordPlan, parseRouterKeywords, type KeywordPlanRow, type MagnetRef } from "@/lib/engine/keyword-fields";
 
 const DEFAULT_BASE = "https://www.uchat.com.au/api";
 export function uchatBase(): string {
@@ -613,4 +614,74 @@ async function faqPreflight(m: schema.Membership, token: string, opts: { fresh?:
     return { agent, blocked: null, warning: `${field} holds text HelixOS did not write; the override is on, so sending will replace it.`, fieldVarType: held.varType, lastSentValue, nsByName, heldValue };
   }
   return { agent, blocked: null, warning: null, fieldVarType: held.varType, lastSentValue, nsByName, heldValue };
+}
+
+/* ───────────── The keyword router's fields (Ship a ladder commit 2) ───────────── */
+
+/** HelixOS's record for the router: the profile's keywords with their targets, the product, the member's magnets and the agent. */
+export async function keywordPayloadFor(m: schema.Membership): Promise<Record<(typeof KEYWORD_FIELDS)[number], string>> {
+  const [profile, magnets] = await Promise.all([
+    db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, m.workspaceId), eq(schema.ladderProfiles.userId, m.userId)) }),
+    db.query.leadMagnets.findMany({ where: eq(schema.leadMagnets.userId, m.userId) }),
+  ]);
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const refs: MagnetRef[] = magnets.map((x) => ({ id: x.id, title: x.title, promise: x.promise, url: x.publishedAt || x.pdfKey || x.fileKey ? `${appUrl}/g/${x.slug}` : null }));
+  return keywordFieldsPayload(profile?.keywords ?? [], { name: profile?.productName ?? null, pitch: profile?.productPitch ?? null, priceLine: profile?.priceLine ?? null, trialLine: profile?.trialLine ?? null }, refs, m.clAgentNs);
+}
+
+export type KeywordPreview = { blocked: string | null; rows: KeywordPlanRow[]; held: ReturnType<typeof parseRouterKeywords>; token: boolean };
+/** What a keyword push would change, read live from the bot; blocked with the reason when the bot cannot be read or has no router. */
+export async function keywordPreview(m: schema.Membership): Promise<KeywordPreview> {
+  const payload = await keywordPayloadFor(m);
+  const token = open(m.clApiToken);
+  if (!token) return { blocked: "No Community Loyalty API token on this member yet: your coach adds it on the Coach page.", rows: keywordPlan(payload, []), held: [], token: false };
+  const back = await readBotFields(token);
+  if ("refused" in back) return { blocked: `Couldn't read the bot's fields from Community Loyalty. ${back.refused}`, rows: keywordPlan(payload, []), held: [], token: true };
+  const rows = keywordPlan(payload, back.rows);
+  const missing = rows.filter((r) => r.status === "missing").map((r) => r.name);
+  const held = parseRouterKeywords(back.rows.find((r) => r.name === KEYWORDS_FIELD)?.value);
+  return { blocked: missing.length ? `Your bot has no keyword router yet: Evolve Omega adds ${missing.join(" and ")} to the template.` : null, rows, held, token: true };
+}
+
+const pushingKeywords = new Set<string>();
+/**
+ * Push the two router fields to one member's bot, by name, and read them back; the record moves only on a match. Never a
+ * delete, never a field the template lacks (refused before anything leaves), one push per member at a time. Never throws.
+ */
+export async function pushKeywordFields(membershipId: string, opts: { reason: string; by: string }): Promise<PushOutcome> {
+  const m = await db.query.memberships.findFirst({ where: eq(schema.memberships.id, membershipId) });
+  if (!m) return { status: "skipped", note: "No such member.", fields: [] };
+  if (pushingKeywords.has(m.id)) return { status: "skipped", note: "A push to this bot is already on its way.", fields: [] };
+  pushingKeywords.add(m.id);
+  const names = [...KEYWORD_FIELDS];
+  const log = async (status: "sent" | "failed", note: string) => {
+    await logSync({ workspaceId: m.workspaceId, userId: m.userId, provider: "community_loyalty", direction: "out", event: "keywords.push", payload: { reason: opts.reason, fields: names, by: opts.by }, status, note: redactSecrets(note) });
+    return { status, note, fields: names };
+  };
+  try {
+    const token = open(m.clApiToken);
+    if (!token) return { status: "skipped", note: "No Community Loyalty API token on this member yet.", fields: [] };
+    const preview = await keywordPreview(m);
+    if (preview.blocked) return log("failed", preview.blocked);
+    const payload = Object.fromEntries(preview.rows.filter((r) => r.status === "change").map((r) => [r.name, r.next]));
+    if (!Object.keys(payload).length) return { status: "skipped", note: "Nothing to change: the bot already holds these keywords.", fields: [] };
+    const res = await withTimeout(`${uchatBase()}/flow/set-bot-fields-by-name`, { method: "PUT", headers: authed(token), body: JSON.stringify(botFieldsRequest(payload)) });
+    const body = await res.text();
+    if (!res.ok) {
+      logPlatformRefusal("PUT /flow/set-bot-fields-by-name (keywords)", res.status, body);
+      return log("failed", `Not sent: ${platformReason(res.status, body)}.`);
+    }
+    const back = await readBotFields(token);
+    if ("refused" in back) return log("failed", `Pushed, but the read-back failed: ${back.refused} Not recorded as synced.`);
+    const held: Record<string, string | undefined> = Object.fromEntries(back.rows.map((r) => [r.name, r.value]));
+    const mismatched = readBackMismatches(payload, held);
+    if (mismatched.length) return log("failed", `Pushed, but the read-back differs on ${mismatched.join(", ")}: not recorded as synced.`);
+    const all = Object.fromEntries(preview.rows.map((r) => [r.name, r.next]));
+    await db.update(schema.memberships).set({ clKeywordsHeld: all, clKeywordsPushedAt: nowIso() }).where(eq(schema.memberships.id, m.id));
+    return log("sent", `${Object.keys(payload).length} ${Object.keys(payload).length === 1 ? "field" : "fields"} changed on the bot and read back`);
+  } catch (e) {
+    return log("failed", e instanceof Error ? e.message : String(e));
+  } finally {
+    pushingKeywords.delete(m.id);
+  }
 }
