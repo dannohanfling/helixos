@@ -199,7 +199,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
                         Log
                       </SubmitButton>
                       <details className="w-full">
-                        <summary className="cursor-pointer text-xs text-ink-3 underline">Adjust quantities</summary>
+                        <summary className="btn btn-soft btn-xs w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden">Adjust quantities</summary>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {m.lines.map((l, n) => (
                             <label key={n} className="text-xs">
