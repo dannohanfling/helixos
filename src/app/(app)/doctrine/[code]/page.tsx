@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
@@ -26,6 +28,11 @@ function Block({ label, text }: { label: string; text: string | null }) {
       <p className="whitespace-pre-line text-sm leading-relaxed">{text}</p>
     </div>
   );
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
+  const { code } = await params;
+  return ownTitle(async () => (await db.query.principles.findFirst({ where: eq(schema.principles.code, decodeURIComponent(code)), columns: { name: true } }))?.name, "Doctrine");
 }
 
 export default async function PrinciplePage({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ tab?: string }> }) {

@@ -407,7 +407,7 @@ async function main() {
     await page.locator('[data-testid="week-share"]').waitFor({ timeout: 20000 });
     if (!(await page.locator('[data-testid="week-share"] [data-testid="share-unavailable"]').innerText()).includes("isn't up yet") || (await page.locator('[data-testid="share-to-thread"]').count())) throw new Error("before this week's post is out, the button says so and opens nothing");
     // The month's share (1 Oct) says the same until this month's post is out (step 8 brings it out).
-    if (!(await page.locator('[data-testid="month-share"] [data-testid="share-unavailable"]').innerText()).includes("Check back after the 1st") || (await page.locator('[data-testid="month-thread"]').count())) throw new Error("before this month's post is out, the month's button says so, and there is no month thread link");
+    if (!(await page.locator('[data-testid="month-share"] [data-testid="share-unavailable"]').innerText()).includes("Once your coach posts it") || (await page.locator('[data-testid="month-thread"]').count())) throw new Error("before this month's post is out, the month's button says so, and there is no month thread link");
     if (await page.locator('[data-testid="week-thread"]').count()) throw new Error("no thread link before this week's post is published");
     await settle(page);
     const LINK = "https://academy.example.com/post?id=cm_share";

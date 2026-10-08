@@ -99,7 +99,7 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
             </ul>
           </Card>
         ))}
-        <Card title="Your lists">
+        <Card title="Your lists and the call">
           <form action={setOohListsAction} className="grid gap-3 sm:grid-cols-2" id="lists" data-testid="ooh-lists">
             {sp.error ? <p className="rounded-lg bg-danger-soft p-2 text-sm sm:col-span-2" role="alert">{sp.error}</p> : null}
             {sp.lists ? <p className="rounded-lg bg-good-soft p-2 text-sm sm:col-span-2" role="status" data-testid="ooh-lists-saved">Saved.</p> : null}
@@ -110,6 +110,14 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
             <label className="block text-sm">
               Who can be responsible, one per line
               <textarea className="field mt-1" name="hosts" rows={6} defaultValue={v.workspace.oohHosts.join("\n")} data-testid="ooh-hosts" />
+            </label>
+            <label className="block text-sm">
+              When the call is, in {v.workspace.timezone}
+              <input className="field mt-1" name="time" defaultValue={v.workspace.oohTime ?? ""} placeholder="Fridays at 12:00 pm" data-testid="ooh-time" />
+            </label>
+            <label className="block text-sm">
+              The link to join
+              <input className="field mt-1" name="link" type="url" defaultValue={v.workspace.oohLink ?? ""} placeholder="https://…" data-testid="ooh-link" />
             </label>
             <SubmitButton className="btn btn-soft btn-sm sm:col-span-2 sm:w-fit" pendingText="Saving…" data-testid="ooh-lists-save">
               Save lists

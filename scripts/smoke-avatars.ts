@@ -30,7 +30,8 @@ async function fillExact(page: Page, selector: string, value: string) {
   throw new Error(`${selector} wouldn't hold "${value}"`);
 }
 async function expectText(page: Page, text: string, what: string) {
-  if (!(await page.getByText(text, { exact: false }).first().isVisible().catch(() => false))) throw new Error(`${what}: "${text}" not on ${page.url()}`);
+  // The page streams after its shell: wait for the words, do not read the shell (8 Oct: "Brought in 1 avatar" was read too early in the gate).
+  await page.getByText(text, { exact: false }).first().waitFor({ timeout: 20000 }).catch(() => { throw new Error(`${what}: "${text}" not on ${page.url()}`); });
 }
 
 async function main() {

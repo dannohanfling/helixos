@@ -193,6 +193,12 @@ async function main() {
   // Tasks
   await page.goto(`${base}/tasks`);
   await expectText(page, "Top 3 today", "tasks");
+  // The control words show on a desktop too (friction walk T2): never bare ★ ↷ ✕.
+  {
+    const words = page.locator('[data-testid="task-controls"]').first().locator(".task-control-label");
+    await words.first().waitFor({ timeout: 20000 });
+    if (!(await words.first().isVisible())) throw new Error("the task control words are visible on a desktop");
+  }
   await page.click('summary:has-text("+ New task")');
   await page.fill('input[name="title"]', "Smoke-test task");
   await submit(page, 'button:has-text("Add task")');
@@ -206,6 +212,17 @@ async function main() {
   await page.goto(`${base}/content?view=calendar`);
   await expectText(page, "This week", "content calendar");
   await shot(page, "06-content-calendar");
+  // The calendar pages (friction walk CL1): Later shows three weeks on, with a way back to this week.
+  await page.locator('[data-testid="calendar-later"]').click();
+  await page.waitForURL(/from=/);
+  await expectText(page, "Week of", "calendar three weeks on");
+  if ((await page.locator('[data-testid="calendar-today"]').count()) !== 1) throw new Error("three weeks on, the pager offers the way back to this week");
+  await page.locator('[data-testid="calendar-today"]').click();
+  await page.waitForURL(/view=calendar$/);
+  await expectText(page, "This week", "calendar back to this week");
+  // The desktop menu has its own Settings item (friction walk G1).
+  if (!(await page.locator('aside [data-testid="nav-settings"]').count())) throw new Error("the menu has a Settings item");
+  console.log("✓ the calendar pages three weeks at a time; Settings is in the menu");
   await page.goto(`${base}/content?view=posted`);
   await expectText(page, "Client win", "content posted");
 
@@ -213,6 +230,14 @@ async function main() {
   await page.goto(`${base}/conversations`);
   await expectText(page, "Priya Natarajan", "conversations");
   await shot(page, "07-conversations");
+  // The new-contact form opens under the header at full width (friction walk DM3), and the header's own row stays whole.
+  if (await page.locator('[data-testid="new-conversation-form"]').count()) throw new Error("the new-contact form is closed until asked");
+  await page.locator('[data-testid="new-conversation"]').click();
+  await page.locator('[data-testid="new-conversation-form"]').waitFor({ timeout: 20000 });
+  const formBox = (await page.locator('[data-testid="new-conversation-form"]').boundingBox())!;
+  const headerBox = (await page.locator('[data-testid="new-conversation"]').boundingBox())!;
+  if (formBox.y < headerBox.y + headerBox.height || formBox.width < 600) throw new Error(`the form sits under the header at full width: ${JSON.stringify({ formBox, headerBox })}`);
+  await page.goto(`${base}/conversations`);
   await page.click('a:has-text("Priya Natarajan")');
   await page.waitForURL(/\/conversations\//);
   await expectText(page, "Thread", "contact");

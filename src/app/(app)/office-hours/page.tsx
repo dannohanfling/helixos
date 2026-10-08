@@ -88,6 +88,22 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
   return (
     <>
       <PageHeader title="Office Hours" subtitle="Ask ahead of a Friday session, so we can come prepared." />
+      {/* When and where (friction walk OH1, 7 Oct): the time in the workspace's zone and the link, as the coach set them. */}
+      <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm" data-testid="ooh-when">
+        {v.workspace.oohTime || v.workspace.oohLink ? (
+          <>
+            {v.workspace.oohTime ? <span>🗓 {v.workspace.oohTime} ({v.workspace.timezone})</span> : <span>🗓 Fridays ({v.workspace.timezone})</span>}
+            {v.workspace.oohLink ? (
+              <>
+                {" · "}
+                <a href={v.workspace.oohLink} target="_blank" rel="noopener noreferrer" className="underline" data-testid="ooh-join">Join the call ↗</a>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <span>Your coach hasn&apos;t set the call&apos;s time and link here yet. Ask them, or check the Academy.</span>
+        )}
+      </p>
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
         <div id="request">
           <Card title="Ask for help on a Friday">

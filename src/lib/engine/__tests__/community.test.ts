@@ -55,8 +55,8 @@ describe("the first-of-the-month post (1 Oct)", () => {
     expect(monthShareRef("2026-11")).toBe("share:month:2026-11");
   });
   it("goes only to this month's post, once it's out with a link", () => {
-    expect(monthShareTarget(null, "2026-11")).toEqual({ reason: "This month's post isn't up yet. Check back after the 1st." });
-    expect(monthShareTarget({ monthOf: "2026-10", status: "posted", link: "https://x" }, "2026-11")).toEqual({ reason: "This month's post isn't up yet. Check back after the 1st." });
+    expect(monthShareTarget(null, "2026-11")).toEqual({ reason: "This month's post isn't up yet. Once your coach posts it, you can share from here." });
+    expect(monthShareTarget({ monthOf: "2026-10", status: "posted", link: "https://x" }, "2026-11")).toEqual({ reason: "This month's post isn't up yet. Once your coach posts it, you can share from here." });
     expect(monthShareTarget({ monthOf: "2026-11", status: "sent", link: null }, "2026-11")).toEqual({ reason: "This month's post isn't up yet. Check back later today." });
     expect(monthShareTarget({ monthOf: "2026-11", status: "posted", link: "https://x" }, "2026-11")).toEqual({ link: "https://x" });
   });

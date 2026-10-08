@@ -1,4 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import Link from "next/link";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
@@ -14,6 +16,11 @@ import { addDays, formatDateTime } from "@/lib/dates";
 import { templatesFor } from "@/lib/queries/templates";
 import { STAGE_META } from "@/lib/stage-meta";
 import { SubmitButton } from "@/components/submit-button";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await db.query.contacts.findFirst({ where: and(eq(schema.contacts.id, id), eq(schema.contacts.userId, v.user.id)), columns: { name: true } }))?.name, "DMs");
+}
 
 export default async function ContactPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ needsIdentity?: string }> }) {
   const { needsIdentity } = await searchParams;

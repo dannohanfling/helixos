@@ -9,6 +9,7 @@ import { todayData } from "@/lib/queries/today";
 import { TeamHome } from "@/components/team-home";
 import { NewTaskForm } from "@/components/new-task-form";
 import { SubmitButton } from "@/components/submit-button";
+import { FailedBanner } from "@/components/channel-outcome";
 import curriculumLinks from "@/data/curriculum-links.json";
 import { PendingLink } from "@/components/pending-link";
 import { FIELD_TASKS } from "@/lib/engine/pathway";
@@ -355,6 +356,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                     </PendingLink>
                   )
                 ) : null}
+                <form action={completeCurriculumDayAction}>
+                  <input type="hidden" name="day" value={d.curriculumDay.day} />
+                  <SubmitButton className="btn btn-accent btn-sm" pendingText="Logging…">
+                    Done, log it
+                  </SubmitButton>
+                </form>
+              </div>
+            </Card>
+          ) : null}
 
           {/* Today's board */}
           <Card title="Also on your plate" action={<NewTaskForm today={v.today} />}>
@@ -372,6 +382,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           {/* Content + conversations */}
           <div className="grid gap-4 sm:grid-cols-2">
             <Card title="Content to ship" action={<Link href="/content" className="text-xs text-ink-2 hover:underline">All content →</Link>}>
+              {d.failedPosts.map((p) => (
+                <FailedBanner key={p.id} outcomes={p.outcomes} contentId={p.id} title={p.title} className="mb-3 text-xs" />
+              ))}
               {d.contentDue.length ? (
                 <ul className="space-y-2">
                   {d.contentDue.map((c) => {
@@ -429,7 +442,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               )}
             </Card>
           </div>
+        </div>
 
+        {/* The right column: the close, HumanOS, your brand, the pathway, what's coming, the level (friction walk T4, 7 Oct:
+            since the 6 Oct layout the 30-day build card's tail sat here, so the board and the close rendered inside it). */}
+        <div className="space-y-4">
           {/* Evening close */}
           <Card id="close" title={eveningDone ? "Day closed" : "Close the day"} action={eveningDone ? <Badge tone="good">Done · streak day {d.log?.streakDay}</Badge> : <Badge tone="accent">+20 {bonusIfClosedNow ? `+${bonusIfClosedNow} streak` : ""}</Badge>}>
             {eveningDone && d.log ? (
@@ -483,18 +500,6 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               </div>
             ) : null}
           </Card>
-        </div>
-
-        <div className="space-y-4">
-                <form action={completeCurriculumDayAction}>
-                  <input type="hidden" name="day" value={d.curriculumDay.day} />
-                  <SubmitButton className="btn btn-accent btn-sm" pendingText="Logging…">
-                    Done, log it
-                  </SubmitButton>
-                </form>
-              </div>
-            </Card>
-          ) : null}
           {body ? (
             <div className="card flex flex-wrap items-center justify-between gap-3 p-4 text-sm" data-testid="today-humanos">
               {body.line ? (

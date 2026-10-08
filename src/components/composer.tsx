@@ -19,6 +19,7 @@ import { ChannelOutcomePanel } from "@/components/channel-outcome-panel";
 import { PUBLISHABLE, manualChannelsSentence, publishedChannelsSentence } from "@/lib/engine/ghl-map";
 import { THREADS_EXCLUSIVE } from "@/lib/engine/rung-drip";
 import { SubmitButton } from "@/components/submit-button";
+import { DeckImageUpload } from "@/components/deck-image-upload";
 
 type Initial = { id?: string; title?: string; hook?: string; body?: string; cta?: string; firstComment?: string; hasCta?: boolean; mediaUrl?: string; mediaAttachmentId?: string | null; contentType?: string; overrides?: Record<string, { body: string; subject?: string }>; selected?: string[] };
 /** Scheduled channel posts of the ladder this item came from that still carry older text than the ladder (the seam). */
@@ -31,7 +32,7 @@ const DEFAULT_SELECTED: TargetKey[] = ["ch:fb_personal", "ch:instagram", "ch:thr
 
 type Snippet = { id: string; title: string; text: string };
 
-export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale, copyOnly: copyOnlyGiven, dripOn = false, firstCommentLocked }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[]; media?: ComposerMedia[] }; stale?: StaleNotice; copyOnly?: CopyOnly; dripOn?: boolean; firstCommentLocked?: string }) {
+export function Composer({ groups, persona, hashtag, today, aiEnabled, socialConnected, initial, snippets, stale, copyOnly: copyOnlyGiven, dripOn = false, firstCommentLocked, uploader }: { groups: GroupTarget[]; persona: Persona; hashtag: string | null; today: string; aiEnabled: boolean; socialConnected: boolean; initial?: Initial; snippets?: { hooks: Snippet[]; ctas: Snippet[]; proofs?: Snippet[]; media?: ComposerMedia[] }; stale?: StaleNotice; copyOnly?: CopyOnly; dripOn?: boolean; firstCommentLocked?: string; /** The member the composer's own upload records images for (friction walk CP1); none, and the upload is not offered. */ uploader?: { workspaceId: string; userId: string } }) {
   const router = useRouter();
   const voice = useVoice();
   const targets = useMemo(() => [...groupTargets(groups), ...channelTargets()], [groups]);
@@ -46,6 +47,8 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const [mediaUrl, setMediaUrl] = useState(initial?.mediaUrl ?? "");
   // A proof's photo or video the client picked. Only what the item already carries is restored; nothing attaches on its own.
   const [mediaAttachment, setMediaAttachment] = useState<ComposerMedia | null>(() => (initial?.mediaAttachmentId ? (snippets?.media ?? []).find((m) => m.id === initial.mediaAttachmentId) ?? null : null));
+  // The files on offer: a proof's photos and videos and the Images library, plus whatever this composer uploads (CP1).
+  const [library, setLibrary] = useState<ComposerMedia[]>(snippets?.media ?? []);
   const [contentType, setContentType] = useState(initial?.contentType ?? "CTA Post");
   const [selected, setSelected] = useState<TargetKey[]>(() => {
     const init = (initial?.selected ?? []).filter((k) => byKey.has(k as TargetKey)) as TargetKey[];
@@ -343,22 +346,24 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
               <AiStatus feature="composer_polish" active={pending && polishing} />
               {aiEnabled ? <AiPromise enabled>Returns one version of this draft per target you ticked, inside each one&apos;s limit. You review each tab before you schedule.</AiPromise> : null}
               <div className="grid gap-3 sm:grid-cols-2">
-                <input className="field text-sm" value={mediaUrl} disabled={Boolean(mediaAttachment)} onChange={(e) => { setMediaUrl(e.target.value); if (e.target.value.trim()) setMediaAttachment(null); }} placeholder={mediaAttachment ? "A file from a proof is picked" : "Photo or video URL (optional)"} data-testid="media-url" />
+                <input className="field text-sm" value={mediaUrl} disabled={Boolean(mediaAttachment)} onChange={(e) => { setMediaUrl(e.target.value); if (e.target.value.trim()) setMediaAttachment(null); }} placeholder={mediaAttachment ? "A picture is picked" : "Public photo or video URL (optional): what Instagram and Stories post"} data-testid="media-url" />
                 <select className="field text-sm" value={contentType} onChange={(e) => setContentType(e.target.value)}>
                   {CONTENT_TYPES.map((t) => (
                     <option key={t}>{t}</option>
                   ))}
                 </select>
               </div>
-              {snippets?.media?.length ? (
+              {library.length || uploader ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <select className="field w-auto py-1 text-xs" value="" onChange={(e) => { const m = snippets.media?.find((x) => x.id === e.target.value); if (m) { setMediaAttachment(m); setMediaUrl(""); } }} aria-label="Pick a photo or video from a proof" data-testid="media-from-proof">
-                      <option value="">🖼 Photo or video from a proof</option>
-                      {snippets.media.map((m) => (
-                        <option key={m.id} value={m.id}>{m.label}</option>
-                      ))}
-                    </select>
+                    {library.length ? (
+                      <select className="field w-auto py-1 text-xs" value="" onChange={(e) => { const m = library.find((x) => x.id === e.target.value); if (m) { setMediaAttachment(m); setMediaUrl(""); } }} aria-label="Pick a photo or video from a proof or from Images" data-testid="media-from-proof">
+                        <option value="">🖼 Pick from Images or a proof</option>
+                        {library.map((m) => (
+                          <option key={m.id} value={m.id}>{m.label}</option>
+                        ))}
+                      </select>
+                    ) : null}
                     {mediaAttachment ? (
                       <span className="inline-flex items-center gap-2 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-xs" data-testid="media-chip">
                         <span>{mediaAttachment.kind === "video" ? "🎬" : "🖼"} {mediaAttachment.label}</span>
@@ -368,6 +373,13 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                       </span>
                     ) : null}
                   </div>
+                  {uploader ? (
+                    <div data-testid="composer-upload">
+                      {/* The same upload as Images (friction walk CP1): a photo, graphic or diagram joins the library and is picked at once. */}
+                      <DeckImageUpload workspaceId={uploader.workspaceId} userId={uploader.userId} defaultKind="photo" compact onRecorded={(img) => { const m: ComposerMedia = { id: `img:${img.id}`, proofId: "", proofTitle: "Images", kind: "image", label: `Images · ${img.caption || "photo"} · ${today}`, url: `/api/deck-images/${img.id}`, downloadUrl: `/api/deck-images/${img.id}`, hasAlt: Boolean(img.caption), showsAResult: false }; setLibrary((l) => [m, ...l]); setMediaAttachment(m); setMediaUrl(""); }} />
+                      <p className="mt-1 text-[11px] text-ink-3">A picture from here goes on the copy-and-paste versions and the preview. Instagram and Stories post only a public web address, typed above.</p>
+                    </div>
+                  ) : null}
                   {urlProblem ? (
                     <p className="rounded-lg border border-danger bg-danger-soft p-2 text-xs" data-testid="media-url-block" role="alert">
                       {urlProblem}

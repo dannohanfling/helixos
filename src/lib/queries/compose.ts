@@ -28,6 +28,10 @@ export async function composerContext(v: Viewer) {
   const media: ComposerMedia[] = attachments
     .filter((a): a is typeof a & { kind: "image" | "video" } => a.kind === "image" || a.kind === "video")
     .map((a) => ({ id: a.id, proofId: a.proofId, proofTitle: proofName.get(a.proofId) ?? "", kind: a.kind, label: `${proofName.get(a.proofId) ?? ""} · ${a.originalFilename}`, url: mediaUrlFor(a), downloadUrl: downloadUrlFor(a), hasAlt: Boolean(a.altText?.trim()), showsAResult: a.showsAResult }));
+  // The Images library too (friction walk CP1, 7 Oct: the composer had only a URL field): each image as a pick, the same
+  // private read route as a proof's file. A proof-kind image shows a result, so it carries the illustrative rule.
+  const library = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), orderBy: (t, { desc }) => [desc(t.createdAt)] });
+  media.push(...library.map((img) => libraryMedia(img)));
   const snippets = {
     hooks: lib.filter((p) => p.kind === "hook").map((p) => ({ id: p.id, title: p.title, text: p.hook ?? p.body })),
     ctas: lib.filter((p) => p.kind === "cta").map((p) => ({ id: p.id, title: p.title, text: p.cta ?? p.body })),
@@ -53,5 +57,10 @@ export async function composerContext(v: Viewer) {
     aiEnabled: await hasAiKey(),
     socialConnected: Boolean(conn && readiness(conn.mapping).mapped > 0),
     snippets,
+    /** Who the composer's own upload records images for: the member whose composer it is. */
+    uploader: { workspaceId: v.workspace.id, userId: v.user.id },
   };
 }
+
+/** An Images entry as the composer offers it. Its id is prefixed, so the saved post can tell it from a proof's file. */
+export const libraryMedia = (img: { id: string; kind: string; caption: string | null; createdAt: string }): ComposerMedia => ({ id: `img:${img.id}`, proofId: "", proofTitle: "Images", kind: "image", label: `Images · ${img.caption?.trim() || img.kind} · ${img.createdAt.slice(0, 10)}`, url: `/api/deck-images/${img.id}`, downloadUrl: `/api/deck-images/${img.id}`, hasAlt: Boolean(img.caption?.trim()), showsAResult: img.kind === "proof" });

@@ -54,12 +54,17 @@ export type ComposeResult = { id: string; scheduled: number; posted: number; pus
 const isChannel = (c: string): c is Channel => (CHANNELS as readonly string[]).includes(c);
 
 /** The picked attachment, when it is a photo or video on one of this client's own approved proofs in this workspace. Anything else is nothing. */
-async function pickedAttachment(id: string | null | undefined, workspaceId: string, userId: string) {
+async function pickedAttachment(id: string | null | undefined, workspaceId: string, userId: string): Promise<{ id: string; showsAResult: boolean } | null> {
   if (!id) return null;
+  // An Images entry (friction walk CP1): the member's own, kept under its prefixed id; a proof-kind image shows a result.
+  if (id.startsWith("img:")) {
+    const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id.slice(4)), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId)), columns: { id: true, kind: true } });
+    return img ? { id, showsAResult: img.kind === "proof" } : null;
+  }
   const att = await db.query.proofAttachments.findFirst({ where: and(eq(schema.proofAttachments.id, id), eq(schema.proofAttachments.workspaceId, workspaceId)) });
   if (!att || att.kind === "document") return null;
   const proof = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, att.proofId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) });
-  return proof ? att : null;
+  return proof ? { id: att.id, showsAResult: att.showsAResult } : null;
 }
 
 /** Saves the post and one variant per target. Schedules or marks posted; pushes scheduled channel posts to the Social Planner. */

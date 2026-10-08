@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import { and, asc, eq } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
@@ -17,7 +19,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { MoneyInput } from "@/components/money-input";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { OfferAvatars } from "@/components/offer-avatars";
-import { avatarData } from "@/lib/avatars";
+import { avatarData, importFromOffers } from "@/lib/avatars";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
   return (
@@ -29,12 +31,20 @@ function T({ name, label, value, hint, placeholder }: { name: string; label: str
 
 const BREAK_LABEL: Record<string, string> = { vehicle: "🎯 Vehicle: proves the method works", internal: "💪 Internal: carries the load for them", external: "🌍 External: wins the outside game", none: "Untagged" };
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, v.user.id)), columns: { name: true } }))?.name, "Offers");
+}
+
 export default async function OfferWizardPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const sp = await searchParams;
   const v = await requireViewer();
   const { id } = await params;
   const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, v.user.id)) });
   if (!offer) notFound();
+  // The first-visit import Avatars runs (friction walk O2, 7 Oct: an offer said no avatar was linked while Avatars, opened
+  // later, showed one linked by this import): run it here too, so the two pages agree whichever is opened first.
+  if (!v.switchedInto) await importFromOffers({ workspaceId: v.workspace.id, userId: v.user.id });
   const [components, objections, proofs, avatars] = await Promise.all([
     db.query.offerComponents.findMany({ where: eq(schema.offerComponents.offerId, id), orderBy: asc(schema.offerComponents.order) }),
     assetsFor(v.workspace.id, v.user.id, "objection"),
@@ -139,13 +149,13 @@ export default async function OfferWizardPage({ params, searchParams }: { params
             <Card id="price" title="4 · Price and risk">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Price" hint="With its currency: a bare $ to a mixed room is a different number to each half of it.">
-                    <div className="flex gap-2">
-                      <select className="field w-28" name="currency" defaultValue={offer.currency} data-testid="offer-currency">
+                    <div className="flex flex-wrap gap-2">
+                      <select className="field w-28 shrink-0" name="currency" defaultValue={offer.currency} data-testid="offer-currency">
                         {CURRENCIES.map((c) => (
                           <option key={c}>{c}</option>
                         ))}
                       </select>
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-[8rem] flex-1">
                         <MoneyInput name="price" plain defaultValue={offer.price} data-testid="offer-price" />
                       </div>
                     </div>

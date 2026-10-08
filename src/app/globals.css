@@ -169,9 +169,10 @@ textarea::placeholder {
 .btn-primary:hover {
   opacity: 0.92;
 }
+/* Dark ink on the gold (friction walk G6, 7 Oct: white on gold read at about 2.2:1); the same on both themes. */
 .btn-accent {
   background: var(--accent);
-  color: #fff;
+  color: #111318;
 }
 .btn-accent:hover {
   filter: brightness(0.95);
@@ -466,8 +467,9 @@ details > summary::-webkit-details-marker {
     width: 1.25rem;
     height: 1.25rem;
   }
+  /* The words stay on a desktop too (friction walk T2, 7 Oct: bare ★ ↷ ✕ with delete beside tomorrow read as a puzzle). */
   .task-control-label {
-    display: none;
+    font-size: 0.7rem;
   }
 }
 

@@ -34,8 +34,11 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const stageOf = new Map(stages.map((s) => [s.key, s]));
   const doneIds = new Set(done.map((d) => d.lessonId));
   const program = PROGRAMS.find((p) => p.key === sp.program)?.key ?? "Launch Pad";
-  const mine = courses.filter((c) => c.program === program);
-  const lessonsOf = (courseId: string) => lessons.filter((l) => l.courseId === courseId);
+  // A client sees only lessons with something behind them, and only courses with such a lesson (friction walk P1, 7 Oct: every
+  // lesson of a new client's first stop read "Your coach is adding this lesson"). The coach sees every lesson, with that note.
+  const filled = (l: (typeof lessons)[number]) => Boolean(l.objective || l.prompts || l.resources || lessonLink(l.name));
+  const lessonsOf = (courseId: string) => lessons.filter((l) => l.courseId === courseId && (v.role === "coach" || filled(l)));
+  const mine = courses.filter((c) => c.program === program && (v.role === "coach" || lessonsOf(c.id).length > 0));
   const selected = mine.find((c) => c.id === sp.course) ?? mine.find((c) => lessonsOf(c.id).some((l) => !doneIds.has(l.id))) ?? mine[0];
   const meta = PROGRAMS.find((p) => p.key === program)!;
   return (
@@ -114,7 +117,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
         </div>
       ) : (
         <Card>
-          <Empty icon="📚" title="No courses here yet" hint="Your coach hasn't published any courses yet. Check back after your next session." />
+          <Empty icon="📚" title="No courses here yet" hint="Your coach is still adding the lessons. Your Pathway has your next step in the meantime." action={<Link href="/pathway" className="btn btn-ghost btn-sm" data-testid="courses-pathway">Open your Pathway</Link>} />
         </Card>
       )}
     </>

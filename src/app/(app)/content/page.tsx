@@ -6,7 +6,7 @@ import { requireViewer } from "@/lib/auth";
 import { setContentStatusAction } from "@/lib/actions/content";
 import { ContentForm } from "@/components/content-form";
 import { Badge, Card, Disclosure, Empty, PageHeader, Tabs } from "@/components/ui";
-import { OutcomeHeadline, OutcomeRows } from "@/components/channel-outcome";
+import { FailedBanner, OutcomeHeadline, OutcomeRows } from "@/components/channel-outcome";
 import { nowFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
 import { refreshStale } from "@/lib/planner-status";
 import { outcomesForItem } from "@/lib/queries/outcomes";
@@ -39,9 +39,12 @@ function ContentCard({ item, today, outcomes = [] }: { item: ContentItem; today:
         {day ? <span className={late ? "font-semibold text-danger" : ""}>· {late ? "late · " : ""}{formatDate(day, { month: "short", day: "numeric" })}</span> : null}
       </div>
       {outcomes.length ? (
-        <Disclosure summary={<OutcomeHeadline outcomes={outcomes} className="mt-1 text-xs" />} className="mt-1">
-          <OutcomeRows outcomes={outcomes} compact />
-        </Disclosure>
+        <>
+          <FailedBanner outcomes={outcomes} contentId={item.id} className="mt-2 text-xs" />
+          <Disclosure summary={<OutcomeHeadline outcomes={outcomes} className="mt-1 text-xs" />} className="mt-1">
+            <OutcomeRows outcomes={outcomes} compact contentId={item.id} />
+          </Disclosure>
+        </>
       ) : null}
       {item.status === "posted" ? (
         <div className="mt-2 flex gap-3 text-xs text-ink-2 tabular">
@@ -62,9 +65,12 @@ function ContentCard({ item, today, outcomes = [] }: { item: ContentItem; today:
   );
 }
 
-export default async function ContentPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function ContentPage({ searchParams }: { searchParams: Promise<{ view?: string; from?: string }> }) {
   const v = await requireViewer({ team: "allow" });
-  const { view = "board" } = await searchParams;
+  const { view = "board", from } = await searchParams;
+  // The calendar's first Monday (friction walk CL1, 7 Oct: three fixed weeks with no way forward or back): the week asked for,
+  // else this week. Three weeks from there, with Earlier and Later.
+  const calendarFrom = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? startOfWeek(from) : startOfWeek(v.today);
   const items = await db.query.contentItems.findMany({
     where: eq(schema.contentItems.userId, v.user.id),
     orderBy: [asc(schema.contentItems.postAt), desc(schema.contentItems.createdAt)],
@@ -125,11 +131,17 @@ export default async function ContentPage({ searchParams }: { searchParams: Prom
 
       {view === "calendar" ? (
         <div className="space-y-3">
+          <div className="flex items-center justify-between text-sm" data-testid="calendar-nav">
+            <Link href={`/content?view=calendar&from=${addDays(calendarFrom, -21)}`} className="btn btn-ghost btn-sm" data-testid="calendar-earlier">← Earlier</Link>
+            {calendarFrom !== startOfWeek(v.today) ? <Link href="/content?view=calendar" className="underline" data-testid="calendar-today">This week</Link> : <span className="text-ink-3">Three weeks from this one</span>}
+            <Link href={`/content?view=calendar&from=${addDays(calendarFrom, 21)}`} className="btn btn-ghost btn-sm" data-testid="calendar-later">Later →</Link>
+          </div>
           {[0, 1, 2].map((w) => {
-            const monday = addDays(startOfWeek(v.today), w * 7);
+            const monday = addDays(calendarFrom, w * 7);
             const days = rangeDays(monday, addDays(monday, 6));
+            const thisWeek = startOfWeek(v.today);
             return (
-              <Card key={monday} title={w === 0 ? "This week" : w === 1 ? "Next week" : `Week of ${formatDate(monday)}`}>
+              <Card key={monday} title={monday === thisWeek ? "This week" : monday === addDays(thisWeek, 7) ? "Next week" : monday === addDays(thisWeek, -7) ? "Last week" : `Week of ${formatDate(monday)}`}>
                 <div className="grid gap-2 sm:grid-cols-7">
                   {days.map((day) => {
                     const dayItems = items.filter((i) => i.postAt?.slice(0, 10) === day);

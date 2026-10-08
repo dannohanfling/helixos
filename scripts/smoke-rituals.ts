@@ -391,6 +391,8 @@ async function main() {
     const coachRow = (await oohRows())[0];
     if (coachRow.responsible !== "Shonna Roadruck" || coachRow.outcome !== "covered" || coachRow.coachNotes !== NOTES) throw new Error(`the coach's side is saved, got ${JSON.stringify(coachRow)}`);
     await page.locator('[data-testid="ooh-categories"]').fill("Chatbot\nAirtable\nFunnels\nFB Group Management\nOffer Creation\nTaxes\nOther");
+    await page.locator('[data-testid="ooh-time"]').fill("Fridays at 12:00 pm");
+    await page.locator('[data-testid="ooh-link"]').fill("https://example.com/office-hours");
     await submit(page, '[data-testid="ooh-lists-save"]');
     await page.locator('[data-testid="ooh-lists-saved"]').waitFor({ timeout: 20000 });
     if (!(await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, ws.id) }))!.oohCategories.includes("Taxes")) throw new Error("the coach's category list is saved");
@@ -398,6 +400,10 @@ async function main() {
     await signIn("client");
     await page.goto(`${base}/office-hours`);
     await page.locator('[data-testid="ooh-mine"]').first().waitFor({ timeout: 20000 });
+    // The member reads when and where (friction walk OH1): the time in the workspace's zone and the join link, new tab.
+    const when = await page.locator('[data-testid="ooh-when"]').innerText();
+    if (!when.includes("Fridays at 12:00 pm") || !when.includes("America/Los_Angeles")) throw new Error(`the member sees the call's time and zone: ${when}`);
+    if ((await page.locator('[data-testid="ooh-join"]').getAttribute("href")) !== "https://example.com/office-hours" || (await page.locator('[data-testid="ooh-join"]').getAttribute("target")) !== "_blank") throw new Error("the join link opens the call in a new tab");
     const mineText = await page.locator('[data-testid="ooh-mine"]').first().innerText();
     if (!mineText.includes("With Shonna Roadruck") || !mineText.includes("Covered") || (await page.content()).includes(NOTES)) throw new Error("the member sees who takes it and how it went, never the coach's notes");
     if (!(await page.locator('#request [data-testid="ooh-category"] option').evaluateAll((els) => els.map((e) => e.textContent))).includes("Taxes")) throw new Error("the member picks from the coach's list");

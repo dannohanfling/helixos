@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import { and, asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
@@ -16,7 +18,7 @@ import { refreshStale } from "@/lib/planner-status";
 import { handoffRow } from "@/lib/queries/outcomes";
 import { handOffLadderAction } from "@/lib/actions/drip";
 import { THREADS_EXCLUSIVE } from "@/lib/engine/rung-drip";
-import { OutcomeHeadline, OutcomeRows } from "@/components/channel-outcome";
+import { FailedBanner, OutcomeHeadline, OutcomeRows } from "@/components/channel-outcome";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
@@ -28,6 +30,7 @@ import { LIVE_POSTING_HOUR } from "@/lib/engine/ladder";
 import { SubmitButton } from "@/components/submit-button";
 
 function VariantForm({ var_, maxChars, email = false, outcome }: { var_: ContentVariant; maxChars: number; email?: boolean; outcome?: ChannelOutcome }) {
+  const contentId = var_.contentItemId;
   return (
     <>
     {isUnreviewed(var_.origin) ? <UnreviewedMark action={acceptVariantAction} fields={{ id: var_.id }} className="mb-2" /> : null}
@@ -60,7 +63,7 @@ function VariantForm({ var_, maxChars, email = false, outcome }: { var_: Content
           Save
         </SubmitButton>
       </div>
-      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} repostAction={repostChannelAction} compact inForm /> : null}
+      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} repostAction={repostChannelAction} compact inForm contentId={contentId} /> : null}
       {var_.status === "posted" ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["reactions", "comments", "dms", "leads"] as const).map((k) => (
@@ -107,6 +110,11 @@ function GroupCard({ g, var_, src, slot, outcome }: { g: Group; var_?: ContentVa
       </ul>
     </Card>
   );
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)), columns: { title: true } }))?.title, "Distribute");
 }
 
 export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string; gate?: string; variant?: string; status?: string; items?: string; startDate?: string; startTime?: string; kept?: string; reposted?: string }> }) {
@@ -174,6 +182,7 @@ export default async function RepurposePage({ params, searchParams }: { params: 
           ) : undefined
         }
       />
+      <FailedBanner outcomes={outcomes} contentId={item.id} className="mb-4" />
 
       {drip ? (
         <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="drip-refused" role="alert">{drip}</p>

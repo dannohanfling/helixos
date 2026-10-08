@@ -110,10 +110,10 @@ export function mediaTypeFor(url: string): string {
 export function manualChannelsSentence(): string {
   const labels = (Object.keys(PUBLISHABLE) as Channel[]).filter((c) => !PUBLISHABLE[c].via).map((c) => CHANNEL_SPECS.find((s) => s.key === c)?.label ?? c);
   const list = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}` : (labels[0] ?? "");
-  return `${list} stay copy-and-paste. That's a platform limit, not ours.`;
+  return `${list} you post yourself, by copy and paste: those platforms do not let an app post for you.`;
 }
 /** The channels the Social Planner publishes, named from the map. */
 export function publishedChannelsSentence(): string {
   const labels = (Object.keys(PUBLISHABLE) as Channel[]).filter((c) => PUBLISHABLE[c].via).map((c) => CHANNEL_SPECS.find((s) => s.key === c)?.label ?? c);
-  return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)} publish through the Social Planner once GoHighLevel is connected on Settings → Publishing.`;
+  return `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)} are posted for you once GoHighLevel is connected on Settings → Publishing.`;
 }

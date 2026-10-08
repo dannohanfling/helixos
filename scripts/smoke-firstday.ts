@@ -127,12 +127,11 @@ async function main() {
     await page.goto(`${base}/courses`);
     const coursesText = await page.locator("main").innerText();
     if (/\d+ of \d+ lessons/.test(coursesText)) throw new Error("courses still show a lessons-done score");
-    const roadmap = page.locator("li", { hasText: "The Evolve Omega Roadmap" }).first();
-    if (await roadmap.count()) {
-      if (await roadmap.locator('button:has-text("Done")').count()) throw new Error("the Roadmap lesson is still a bare checkbox");
-      if (!(await roadmap.locator('[data-testid="lesson-pending"]').count())) throw new Error("an empty lesson should say the coach is adding it");
-    }
-    console.log("✓ courses: no score, empty lessons are not checkboxes");
+    // A client never sees an empty lesson (friction walk P1): no "Your coach is adding this lesson", and a program with nothing
+    // filled points to the Pathway instead.
+    if (await page.locator('[data-testid="lesson-pending"]').count()) throw new Error("a client sees no empty lesson");
+    if (!(await page.locator('[data-testid="courses-pathway"]').count()) && !(await page.locator('[data-testid="lesson-open"], button:has-text("Done")').count())) throw new Error("a client sees filled lessons, or the Pathway pointer");
+    console.log("✓ courses: no score, no empty lessons for a client, the Pathway pointer when nothing is filled");
 
     // The whole tier ladder, locks on, exact gap to the next rung
     await page.goto(`${base}/rewards`);

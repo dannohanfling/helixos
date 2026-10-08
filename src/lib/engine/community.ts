@@ -224,7 +224,7 @@ export function monthShareText(m: { word: string; personalSeason: string; fear: 
 }
 /** Where the month's share goes: this month's post, once it's out with its link. Never an older month's post. */
 export function monthShareTarget(post: { monthOf: string | null; status: string; link: string | null; ghlPostId?: string | null } | null | undefined, monthOf: string): { link: string } | { reason: string } {
-  if (!post || post.monthOf !== monthOf || post.status === "skipped") return { reason: "This month's post isn't up yet. Check back after the 1st." };
+  if (!post || post.monthOf !== monthOf || post.status === "skipped") return { reason: "This month's post isn't up yet. Once your coach posts it, you can share from here." };
   const link = communityLink(post.link, post.ghlPostId);
   if (!link || (post.status !== "posted" && post.status !== "sent")) return { reason: "This month's post isn't up yet. Check back later today." };
   return { link };
@@ -234,7 +234,7 @@ export function monthShareTarget(post: { monthOf: string | null; status: string;
  * Where "Share to the thread" goes: this week's Monday post, once it's out and HelixOS has its link. Never an older week's post.
  */
 export function shareTarget(post: { weekOf: string | null; status: string; link: string | null; ghlPostId?: string | null } | null | undefined, weekOf: string): { link: string } | { reason: string } {
-  if (!post || post.weekOf !== weekOf || post.status === "skipped") return { reason: "This week's post isn't up yet. Check back after Monday's post goes out." };
+  if (!post || post.weekOf !== weekOf || post.status === "skipped") return { reason: "This week's post isn't up yet. Once Monday's post goes out, you can share from here." };
   const link = communityLink(post.link, post.ghlPostId);
   if (!link || (post.status !== "posted" && post.status !== "sent")) return { reason: "This week's post isn't up yet. Check back later today." };
   return { link };

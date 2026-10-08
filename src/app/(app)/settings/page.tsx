@@ -17,6 +17,7 @@ import { CopyButton } from "@/components/copy-button";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { ScrollToHash } from "@/components/scroll-to-hash";
 import { AiKeyCard } from "@/components/ai-key-card";
 import { FathomKeyCard } from "@/components/fathom-key-card";
 import { connectionFor } from "@/lib/ghl";
@@ -170,8 +171,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   }
   return (
     <>
+      <ScrollToHash />
       <PageHeader title="Settings" />
-      <Card className="mb-4" title="🚀 Publishing (your GoHighLevel sub-account)">
+      <Card id="publishing" className="mb-4 scroll-mt-20" title="🚀 Publishing (your GoHighLevel sub-account)">
         <p className="mb-3 text-sm text-ink-2">Connect your own GoHighLevel sub-account once. Posts you schedule in the composer land in your Social Planner and go out on their own. Your token is encrypted and only ever used for your sub-account.</p>
         <GhlConnect conn={conn ?? null} tz={v.tz} role={v.role} open={onboardingOpen(ghlIntegration?.config)} />
       </Card>
@@ -181,11 +183,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <div className="mb-4">
         <FathomKeyCard v={v} notice={fathomNotice} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Password">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <Card className="min-w-0" title="Password">
           <ChangePasswordForm />
         </Card>
-        <Card id="you" title="You">
+        <Card id="you" className="min-w-0" title="You">
           <form action={updateProfileAction} className="space-y-3">
             <div className="grid grid-cols-[4rem_1fr] gap-3">
               <Field label="Emoji">
@@ -212,7 +214,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ))}
               </select>
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Morning reminder (hour)">
                 <input className="field" name="reminderHour" type="number" min={0} max={23} defaultValue={v.membership.reminderHour} />
               </Field>
@@ -472,8 +474,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             )}
           </details>
         </Card>
-        <Card title="Brand kit" action={savedKit ? <span className="text-xs text-ink-3">ink on ground {contrastRatio(savedKit.ground, savedKit.ink)}:1</span> : null}>
-          <div id="brand-kit" data-testid="brand-card" data-status={kitStatus(savedKit)} />
+        <Card id="brand-kit" className="scroll-mt-20" title="Brand kit" action={savedKit ? <span className="text-xs text-ink-3">ink on ground {contrastRatio(savedKit.ground, savedKit.ink)}:1</span> : null}>
+          <div data-testid="brand-card" data-status={kitStatus(savedKit)} />
           <p className="mb-3 text-sm text-ink-2">Your own colours, faces and logo: your decks render in these and in nobody else&apos;s. Six-digit hex, no #. A pair that cannot read on a slide is refused here, not discovered on screen.</p>
           {savedKit && brandKitWarnings(savedKit).length ? (
             <ul className="mb-3 list-disc rounded-lg bg-warn-soft p-2 pl-6 text-sm" data-testid="brand-warnings">
@@ -555,7 +557,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     ))}
                   </select>
                 </Field>
-                <Field label="HelixOS Airtable base ID" hint="Run `npm run import:airtable` to refresh pathway, curriculum, and DM templates from your base.">
+                <Field label="HelixOS Airtable base ID" hint="The base the Pathway, curriculum and DM templates are refreshed from.">
                   <input className="field" name="airtableBaseId" defaultValue={v.workspace.airtableBaseId ?? ""} placeholder="appXXXXXXXXXXXXXX" />
                 </Field>
                 <SubmitButton className="btn btn-primary" pendingText="Saving…">

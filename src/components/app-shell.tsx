@@ -69,6 +69,10 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
               Switch HelixOS →
             </Link>
           ) : null}
+          {/* Settings as its own item (friction walk G1, 7 Oct: the only way in was the name under it). */}
+          <Link href="/settings" className="flex items-center gap-2 text-sm text-ink-2 hover:text-ink" data-testid="nav-settings">
+            <span className="text-base">⚙️</span> Settings
+          </Link>
           <div className="flex items-center justify-between">
             <Link href="/settings" className="flex items-center gap-2 text-sm text-ink-2 hover:text-ink">
               <span className="text-lg">{who.avatarEmoji}</span>

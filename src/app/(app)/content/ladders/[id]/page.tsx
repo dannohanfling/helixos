@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
@@ -44,6 +46,11 @@ function HeadlinePreview({ headline, handle }: { headline: string; handle?: stri
       {handle ? <div className="mt-1 text-[10px] text-white/70">{handle}</div> : null}
     </div>
   );
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)), columns: { topic: true } }))?.topic, "Ladders");
 }
 
 export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string }> }) {
@@ -277,7 +284,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                           <input type="hidden" name="id" value={l.id} />
                           <input type="hidden" name="n" value={r.n} />
                           <SubmitButton className={`btn btn-xs ${r.postedAt ? "btn-ghost" : next?.n === r.n ? "btn-primary" : "btn-soft"}`} disabled={blocked && !r.postedAt} title={!r.postedAt ? hold : undefined} data-testid="mark-rung" pendingText="Undoing…">
-                            {r.postedAt ? "Undo" : "Posted ✓"}
+                            {r.postedAt ? "Undo" : "Mark posted"}
                           </SubmitButton>
                         </form>
                       </li>

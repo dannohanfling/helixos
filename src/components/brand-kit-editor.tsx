@@ -98,7 +98,7 @@ export function BrandKitEditor({ kit, logos, workspaceId, userId }: { kit: KitDr
           <span className="mt-1 block text-xs text-ink-3">From your Images library (kind Logo): on the cover and in the footer bar. None means the kit&apos;s name set as type.</span>
         </label>
         <details className="mt-2" data-testid="brand-logo-upload">
-          <summary className="cursor-pointer text-sm text-accent">Upload a logo</summary>
+          <summary className="inline-flex cursor-pointer"><span className="btn btn-soft btn-xs">Upload a logo</span></summary>
           <div className="mt-2">
             <DeckImageUpload
               workspaceId={workspaceId}

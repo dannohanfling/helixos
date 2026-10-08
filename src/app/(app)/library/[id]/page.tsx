@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import { notFound } from "next/navigation";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { CONTENT_TYPES, LIBRARY_KINDS } from "@/db/schema";
@@ -8,6 +10,11 @@ import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { libraryPostFor } from "@/lib/queries/library-posts";
 import { SubmitButton } from "@/components/submit-button";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await libraryPostFor(id, v.workspace.id, v.user.id))?.title, "Library");
+}
 
 export default async function LibraryEntryPage({ params }: { params: Promise<{ id: string }> }) {
   const v = await requireViewer({ team: "allow" });

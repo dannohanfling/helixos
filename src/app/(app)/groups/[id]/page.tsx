@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import { and, desc, eq } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
@@ -9,6 +11,11 @@ import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { alignPost, groupReadiness, readRules } from "@/lib/engine/groups";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await db.query.groups.findFirst({ where: and(eq(schema.groups.id, id), eq(schema.groups.userId, v.user.id)), columns: { name: true } }))?.name, "Groups");
+}
 
 export default async function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const v = await requireViewer();

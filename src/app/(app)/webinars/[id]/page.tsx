@@ -1,4 +1,6 @@
 import { DeckImageUpload } from "@/components/deck-image-upload";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import { slotDefaultKind } from "@/lib/engine/deck-slot";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/dates";
@@ -89,6 +91,24 @@ const ACT_ICON: Record<string, string> = {
   external: "🌍",
   closing: "🎭",
 };
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.userId, v.user.id)), columns: { title: true } }))?.title, "Webinars");
+}
+
+/** "1", "7", "3 to 6, 8": the stages a step covers, as a short range. */
+function stageRange(stages: readonly number[]): string {
+  const out: string[] = [];
+  let i = 0;
+  while (i < stages.length) {
+    let j = i;
+    while (j + 1 < stages.length && stages[j + 1] === stages[j] + 1) j++;
+    out.push(j > i + 1 ? `${stages[i]} to ${stages[j]}` : j === i + 1 ? `${stages[i]}, ${stages[j]}` : `${stages[i]}`);
+    i = j + 1;
+  }
+  return out.join(", ");
+}
 
 export default async function WebinarWizardPage({
   params,
@@ -338,7 +358,11 @@ export default async function WebinarWizardPage({
               href={`/webinars/${w.id}?step=${s.key}`}
               className={`rounded-xl border p-2.5 text-left transition hover:border-ink ${active ? "border-accent bg-accent-soft" : pct >= 100 ? "bg-good-soft" : "bg-surface"}`}
             >
-              <div className="text-base">{s.icon}</div>
+              <div className="flex items-center justify-between text-base">
+                <span>{s.icon}</span>
+                {/* The method's stage numbers (friction walk W3, 7 Oct: "9 · Deck" on the fifth tab read as a wrong number). */}
+                {s.stages.length ? <span className="text-[10px] font-semibold text-ink-3" data-testid="step-stages">{stageRange(s.stages)}</span> : null}
+              </div>
               <div className="text-xs font-semibold">{s.label}</div>
               <div className="mt-1.5">
                 <Progress
@@ -2046,7 +2070,7 @@ function SlotControl({ webinarId, owner, resolved, library }: { webinarId: strin
         // Upload straight into the slot (§6.2): the same path, kinds and consent as the Images page; the first picture fills
         // this slot as it is recorded and every one lands in the library.
         <details className="mt-1" data-testid="deck-slot-upload">
-          <summary className="cursor-pointer text-accent">Upload a picture for this slide</summary>
+          <summary className="inline-flex cursor-pointer"><span className="btn btn-soft btn-xs">Upload a picture for this slide</span></summary>
           <div className="mt-1">
             <DeckImageUpload workspaceId={owner.workspaceId} userId={owner.userId} compact defaultKind={slotDefaultKind(slot.kind)} attach={{ webinarId, slotKey: slot.key }} />
           </div>

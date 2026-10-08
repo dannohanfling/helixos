@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import { and, desc, eq } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
@@ -13,6 +15,11 @@ import { formatDate, formatDateTime } from "@/lib/dates";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { SubmitButton } from "@/components/submit-button";
 import { MoneyInput } from "@/components/money-input";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await db.query.clientRecords.findFirst({ where: and(eq(schema.clientRecords.id, id), eq(schema.clientRecords.userId, v.user.id)), columns: { name: true } }))?.name, "Clients");
+}
 
 export default async function ClientDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; field?: string }> }) {
   const v = await requireViewer({ team: "allow" });

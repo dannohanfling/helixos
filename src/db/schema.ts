@@ -28,6 +28,9 @@ export const workspaces = sqliteTable("workspaces", {
   /** Open Office Hours (rev 124): the categories a member picks from, and who can be responsible for a request. Coach-edited. */
   oohCategories: text("ooh_categories", { mode: "json" }).$type<string[]>().notNull().default(OOH_CATEGORIES_DEFAULT),
   oohHosts: text("ooh_hosts", { mode: "json" }).$type<string[]>().notNull().default(OOH_HOSTS_DEFAULT),
+  /** Office Hours as a member reads it (friction walk OH1, 7 Oct): when, in the workspace's zone, and the link to join. Coach-edited. */
+  oohTime: text("ooh_time"),
+  oohLink: text("ooh_link"),
   /** Recordings' publishing rules (rev 491): series names and time slots, coach-edited. Null keeps the defaults in recording-rules.ts. */
   recordingRules: text("recording_rules", { mode: "json" }).$type<unknown>(),
   /** When the rules took effect: a call recorded before it is never published by them on its own, only suggested. */

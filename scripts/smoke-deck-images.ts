@@ -146,6 +146,15 @@ async function main() {
     if (page.url() !== `${base}/images`) throw new Error(`no navigation happened on Add to library: ${page.url()}`);
     const diagrams = await imagesOf("diagram");
     if (diagrams.length !== 1 || diagrams[0].consentTick) throw new Error(`a diagram is stored with no consent: ${JSON.stringify(diagrams[0])}`);
+    // Search and the kind filter (friction walk IM1 step 2): a caption word finds the one card; a kind narrows to its cards; Clear shows all.
+    await page.goto(`${base}/images?q=three-step`);
+    if ((await page.locator('[data-testid="library-image"]').count()) !== 1 || !(await page.locator('[data-testid="images-count"]').innerText()).startsWith("1 of ")) throw new Error("a caption word finds its one card");
+    await page.goto(`${base}/images?kind=diagram`);
+    if ((await page.locator('[data-testid="library-image"]').count()) !== 1 || (await page.locator('[data-testid="library-image"]').first().getAttribute("data-kind")) !== "diagram") throw new Error("the kind filter narrows to that kind");
+    await page.locator('[data-testid="images-clear"]').click();
+    await page.waitForURL(/\/images$/);
+    if ((await page.locator('[data-testid="library-image"]').count()) !== cardsBefore + 1) throw new Error("Clear shows every card again");
+    console.log("✓ Images: search by caption, filter by kind, Clear");
     const thumbClass = async (kind: string) => (await page.locator(`[data-testid="library-image"][data-kind="${kind}"] [data-testid="library-image-thumb"]`).first().getAttribute("class")) ?? "";
     if (!/object-cover/.test(await thumbClass("photo")) || !/object-contain/.test(await thumbClass("diagram")) || !/object-contain/.test(await thumbClass("screenshot"))) throw new Error("a photo's thumbnail covers its card; a diagram's and a screenshot's are shown whole");
     console.log(`✓ §5: a diagram joins the library with no consent asked, its card appears with no reload (${cardsBefore}→${cardsBefore + 1}), shown whole; a photo's thumbnail covers`);

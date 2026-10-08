@@ -37,7 +37,7 @@ describe("ghl-map", () => {
     expect(readiness(autoMap([...accounts, threads]))).toEqual({ mapped: 5, total: 5 });
   });
   it("what stays copy-and-paste and what publishes are said from the map, once, and Threads is on the publishing side", () => {
-    expect(manualChannelsSentence()).toBe("Facebook personal, Your Facebook group, Other people's groups, Email and Skool community stay copy-and-paste. That's a platform limit, not ours.");
+    expect(manualChannelsSentence()).toBe("Facebook personal, Your Facebook group, Other people's groups, Email and Skool community you post yourself, by copy and paste: those platforms do not let an app post for you.");
     expect(PUBLISHABLE.fb_group.via).toBeNull();
     expect(publishedChannelsSentence()).toContain("Threads");
     expect(publishedChannelsSentence()).not.toContain("Facebook personal");

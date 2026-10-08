@@ -135,7 +135,7 @@ export function WeekCard({ week, today, taskDone, sp, back = "/intentions", shar
           </form>
         ) : null}
         <details className="mt-4">
-          <summary className="cursor-pointer text-xs text-ink-3" data-testid="week-edit">Edit this week</summary>
+          <summary className="inline-flex cursor-pointer" data-testid="week-edit"><span className="btn btn-soft btn-xs">Edit this week</span></summary>
           <div className="mt-3">
             <WeekForm week={week} back={back} owner={owner} today={today} />
           </div>

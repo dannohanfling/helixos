@@ -127,13 +127,13 @@ export default async function ProofPage() {
                             {r.shortVersion ?? r.resultAfter ?? ""}
                           </span>
                         </span>
-                        <span className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="flex max-w-[45%] shrink-0 flex-col items-end gap-1 text-right">
                           <Badge
                             tone={r.status === "approved" ? "good" : "neutral"}
                           >
                             {r.status}
                           </Badge>
-                          <span className="text-[11px] text-ink-3">
+                          <span className="break-words text-[11px] text-ink-3">
                             {TYPE_LABEL[r.type]}
                             {r.beliefBroken !== "none"
                               ? ` · breaks ${r.beliefBroken} belief`
@@ -233,7 +233,7 @@ export default async function ProofPage() {
                   placeholder="Sarah: 11 lbs by week 6"
                 />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Type">
                   <select className="field" name="type" defaultValue="result">
                     {PROOF_TYPES.map((t) => (

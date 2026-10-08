@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 113,
+    date: "2026-10-08",
+    title: "Thirty small frictions, gone",
+    lines: [
+      "Settings is in the menu; gold buttons have dark text; the price box on an offer is wide enough to read; Proof Bank rows and the Settings forms fit a phone; task buttons say Top 3, Tomorrow and Delete on a desktop too; Images loads thumbnails as you scroll and has search, a kind filter and pages.",
+      "A post that didn't send stands in a red banner on the post, on the board and on Today, with a Fix it button that goes where the fix is. The composer takes a photo (camera or upload) or a pick from Images. The content calendar pages back and forward. Office Hours shows the call's time and the link to join.",
+      "The webinar list and the webinar page count the same checks; the step strip shows the method's stage numbers; the close-the-day and 30-day build cards sit where they should on Today; empty lessons are hidden until your coach fills them; every detail page has its own tab title.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 112,
     date: "2026-10-07",
     title: "Platforms in the menu, and a deck that lays out cleanly",

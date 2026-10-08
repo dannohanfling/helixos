@@ -43,7 +43,22 @@ export type OutcomeRow = {
 export type Now = { wall: string; iso: string; today: string; tz: string };
 /** Now, in the shape the rule reads: the member's wall time, the instant, their day and zone. */
 export const nowFor = (v: { tz: string; today: string }, at: Date = new Date()): Now => ({ wall: nowWallInTz(v.tz, at), iso: at.toISOString(), today: v.today, tz: v.tz });
-export type ChannelOutcome = { id: string; channel: string; label: string; state: OutcomeState; word: string; when: string | null; reason: string | null; canCheck: boolean; /** A published channel the planner posts to: "Post again to this channel" is offered (rev 567). */ canRepost?: boolean };
+/** Where a failure is put right (friction walk C1, 7 Oct): the Publishing card on Settings, the post itself, or a second send. */
+export type OutcomeFix = { where: "publishing" | "post" | "again"; label: string };
+export type ChannelOutcome = { id: string; channel: string; label: string; state: OutcomeState; word: string; when: string | null; reason: string | null; canCheck: boolean; /** A published channel the planner posts to: "Post again to this channel" is offered (rev 567). */ canRepost?: boolean; /** On a failure: where the Fix it button goes. */ fix?: OutcomeFix | null };
+
+/**
+ * The fix a failure's sentence points at: the connection and its accounts live on Settings → Publishing; the text, the media
+ * and the time live on the post; a post the planner lost or dropped is sent again. Pure, so the three surfaces agree.
+ */
+export function fixFor(reason: string | null): OutcomeFix {
+  const r = reason ?? "";
+  if (/photo or video|media|shorten|character|too long|the text|schedule time|hashtag/i.test(r)) return { where: "post", label: "Fix the post" };
+  if (/deleted in the Social Planner|lost track|logged why/i.test(r)) return { where: "again", label: "Send it again" };
+  return { where: "publishing", label: "Fix it in Publishing" };
+}
+/** A stored sentence without the vendor's status code in it ("(422)"): the words stay, the number goes (friction walk C1). */
+export const plainReason = (reason: string): string => reason.replace(/\s*\((?:4|5)\d\d\)/g, "").replace(/\s{2,}/g, " ").trim();
 
 const wallMs = (wall: string) => {
   const p = wall.match(/\d+/g)?.map(Number) ?? [];
@@ -72,8 +87,14 @@ export function outcomeOf(row: OutcomeRow, now: Now, cutoffMinutes = SENDING_CUT
     return { ...base, state: "manual", word: OUTCOME_WORD.manual, when: null, reason: row.groupId ? "Groups are posted by hand." : (PUBLISHABLE[row.channel as Channel]?.note ?? "Not something we can publish for you.") };
   }
   if (ext === "published") return { ...base, canRepost: true, state: "published", word: OUTCOME_WORD.published, when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : row.externalSyncedAt ? formatDateTime(row.externalSyncedAt, now.tz) : null, reason: null };
-  if (ext === "deleted") return { ...base, state: "failed", word: "Deleted", when: null, reason: row.externalError?.trim() || DELETED_IN_PLANNER };
-  if (ext === "failed" || (ext === "manual" && fixableSkip(row.externalError))) return { ...base, state: "failed", word: OUTCOME_WORD.failed, when: null, reason: row.externalError?.trim() || UNMAPPED_FAILURE };
+  if (ext === "deleted") {
+    const reason = row.externalError?.trim() || DELETED_IN_PLANNER;
+    return { ...base, state: "failed", word: "Deleted", when: null, reason, fix: fixFor(reason) };
+  }
+  if (ext === "failed" || (ext === "manual" && fixableSkip(row.externalError))) {
+    const reason = plainReason(row.externalError?.trim() || UNMAPPED_FAILURE);
+    return { ...base, state: "failed", word: OUTCOME_WORD.failed, when: null, reason, fix: fixFor(reason) };
+  }
   // Accepted or still on its way: scheduled while its time is ahead; sending until the cutoff after it; then lost track.
   const accepted = ext === "scheduled" || ext === "in_progress" || ext === "pending" || ext === "in_review" || ext === "notification_sent" || ext === "accepted";
   if (row.postAt && ext === "scheduled" && wallMs(row.postAt) > wallMs(now.wall)) return { ...base, state: "scheduled", word: OUTCOME_WORD.scheduled, when: whenText(row.postAt, now.today), reason: null };

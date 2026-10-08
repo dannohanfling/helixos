@@ -5,7 +5,7 @@ import { CONTACT_PLATFORMS, type Contact } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { createContactAction, snoozeContactAction } from "@/lib/actions/contacts";
 import { TemplatePicker } from "@/components/template-picker";
-import { Badge, Card, Disclosure, Empty, Field, PageHeader, Tabs } from "@/components/ui";
+import { Badge, Card, Empty, Field, PageHeader, Tabs } from "@/components/ui";
 import { templatesFor } from "@/lib/queries/templates";
 import { addDays, relativeDay } from "@/lib/dates";
 import { STAGE_META } from "@/lib/stage-meta";
@@ -94,8 +94,16 @@ export default async function ConversationsPage({ searchParams }: { searchParams
             <Link href="/conversations/playbook" className="btn btn-ghost btn-sm">
               📖 DM playbook
             </Link>
-            <Disclosure open={sp.new === "1"} summary={<span className="btn btn-primary btn-sm">+ New conversation</span>}>
-              <form action={createContactAction} className="card grid gap-3 p-4 sm:grid-cols-2">
+            <Link href={sp.new === "1" ? "/conversations" : "/conversations?new=1"} className="btn btn-primary btn-sm" data-testid="new-conversation">
+              + New conversation
+            </Link>
+          </div>
+        }
+      />
+      {/* The form sits under the header at the content's full width (friction walk DM3, 7 Oct: opened inside the header it broke its row). */}
+      {sp.new === "1" ? (
+        <Card className="mb-4" title="New conversation" action={<Link href="/conversations" className="text-xs text-ink-2 hover:underline">Cancel</Link>}>
+              <form action={createContactAction} className="grid gap-3 sm:grid-cols-2" data-testid="new-conversation-form">
                 <Field label="Name">
                   <input className="field" name="name" required placeholder="Priya Natarajan" autoFocus />
                 </Field>
@@ -140,12 +148,10 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                   </SubmitButton>
                 </div>
               </form>
-            </Disclosure>
-          </div>
-        }
-      />
+        </Card>
+      ) : null}
       <p className="mb-4 text-sm text-ink-2" data-testid="clarity-link">
-        Conversations is CLARITY in short form. The DM scripts run Recognition → Light Question → Stuck on X → Door Open: C → L → A → Y, with R, I and T left out — those are beats you can only do live.{" "}
+        Conversations is CLARITY in short form. A DM script does four of its beats: recognise them, ask one light question, name where they are stuck, and open a door. The other three beats only work live, on a call.{" "}
         <Link href="/socrates/foundations" className="underline">Socrates Domain →</Link>
       </p>
       <Tabs items={tabs} current={filter === "inbound" ? "due" : filter} />

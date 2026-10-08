@@ -12,7 +12,7 @@ export function ChangePasswordForm() {
         <span className="label">Current password</span>
         <input className="field" name="current" type="password" required autoComplete="current-password" />
       </label>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="label">New password</span>
           <input className="field" name="password" type="password" required minLength={8} autoComplete="new-password" />

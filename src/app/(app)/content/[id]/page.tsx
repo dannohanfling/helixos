@@ -1,4 +1,6 @@
 import { and, eq } from "drizzle-orm";
+import type { Metadata } from "next";
+import { ownTitle } from "@/lib/page-title";
 import Link from "next/link";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { notFound } from "next/navigation";
@@ -12,6 +14,11 @@ import { ContentForm } from "@/components/content-form";
 import { CopyButton } from "@/components/copy-button";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return ownTitle(async (v) => (await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)), columns: { title: true } }))?.title, "Content");
+}
 
 export default async function ContentDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gate?: string; status?: string }> }) {
   const v = await requireViewer({ team: "allow" });

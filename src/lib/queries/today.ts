@@ -7,7 +7,8 @@ import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
 import { tierProgress } from "@/lib/engine/tiers";
 import { roadLine, simplePath } from "@/lib/engine/pathway";
-import { closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
+import { closedDates, logFor, logsBetween, repairsUsed, streakFor, todayActivity } from "./daily";
+import { nowFor, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
 import { brokenStreak } from "@/lib/engine/streak";
 import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
 import { contextFor, knownFor } from "@/lib/queries/webinar";
@@ -215,11 +216,13 @@ export async function todayData(v: Viewer) {
     /** The last lock-in day's unfinished Top 3, offered first and unticked in the picker. */
     stillOpen: await stillOpenFocus(v),
     contentDue: [...contentOverdue, ...contentDue],
+    /** Posts with a channel that did not send in the last two weeks (friction walk C1): the banner on Today, with its fix. */
+    failedPosts: await failedPostsFor(v, userId, today),
     followUps,
     inbound,
     pathwayNext,
     curriculumDay,
-    goal: goal ?? null,
+    goal: goal ? { ...goal, actual: goal.unit === "$" && goal.period === "This month" ? await monthCash(workspaceId, userId, today) : goal.actual } : null,
     /** Never locked in: Today shows the welcome card instead of the next-action block. */
     firstSession: !everLockedIn,
     /** When the running streak is 0 and something was lost: what, when, and whether one grace day mends it. */
@@ -230,4 +233,29 @@ export async function todayData(v: Viewer) {
     actions,
     snapshot,
   };
+}
+
+/**
+ * This month's cash collected, summed from the evening closes (friction walk N1, 7 Oct: Today's goal bar read a running total
+ * that Settings or an older month could carry, while Numbers summed the month's logs; both now read the same sum).
+ */
+async function monthCash(workspaceId: string, userId: string, today: string): Promise<number> {
+  const month = today.slice(0, 7);
+  const logs = await logsBetween(workspaceId, userId, `${month}-01`, `${month}-31`);
+  return logs.reduce((a, l) => a + (l.cashCollected ?? 0), 0);
+}
+
+/** The posts of the last fourteen days with a channel that did not send, newest first: the content and its outcomes. */
+async function failedPostsFor(v: Viewer, userId: string, today: string): Promise<{ id: string; title: string; outcomes: ChannelOutcome[] }[]> {
+  const since = addDays(today, -14);
+  const rows = await db.query.contentVariants.findMany({ where: and(eq(schema.contentVariants.userId, userId), inArray(schema.contentVariants.externalStatus, ["failed", "deleted", "manual"]), sql`substr(${schema.contentVariants.createdAt}, 1, 10) >= ${since}`), orderBy: desc(schema.contentVariants.createdAt) });
+  if (!rows.length) return [];
+  const items = await db.query.contentItems.findMany({ where: inArray(schema.contentItems.id, [...new Set(rows.map((r) => r.contentItemId))]) });
+  const now = nowFor(v);
+  const out: { id: string; title: string; outcomes: ChannelOutcome[] }[] = [];
+  for (const item of items) {
+    const outcomes = outcomesFor(rows.filter((r) => r.contentItemId === item.id), now).filter((o) => o.state === "failed");
+    if (outcomes.length) out.push({ id: item.id, title: item.title, outcomes });
+  }
+  return out;
 }

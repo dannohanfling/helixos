@@ -189,6 +189,18 @@ async function main() {
     await page.reload();
     await expectOutcome(page, "fb_page", "failed", "a 422 names the refused field", "doesn't accept the GHL user ID on Settings → Publishing");
     if (/location ID/i.test(await page.locator("main").innerText())) throw new Error("a 422 on a post is never the location");
+    // The failure stands in a plain banner with its Fix it (friction walk C1): here, on the board's card and on Today; no "(422)".
+    const failedBanner = page.locator('[data-testid="failed-banner"]').first();
+    await failedBanner.waitFor({ timeout: 15000 });
+    if (!(await failedBanner.innerText()).includes("didn't send") || /\(4\d\d\)/.test(await failedBanner.innerText())) throw new Error(`the banner says which channel didn't send, with no status code: ${await failedBanner.innerText()}`);
+    if ((await failedBanner.locator('[data-testid="failed-fix"]').getAttribute("href")) !== "/settings#publishing") throw new Error("Fix it goes to Publishing for a refused user id");
+    await page.goto(`${base}/content`);
+    await page.locator('[data-testid="failed-banner"]').first().waitFor({ timeout: 15000 });
+    await page.goto(`${base}/today`);
+    const todayBanner = page.locator('[data-testid="failed-banner"]').first();
+    await todayBanner.waitFor({ timeout: 15000 });
+    if (!(await todayBanner.innerText()).includes("GHL with a refused user id")) throw new Error("Today's banner names the post");
+    console.log("✓ a failed channel shows as a plain banner with Fix it on the post, the board and Today");
     await page.goto(`${base}/settings`);
     if (await page.locator('[data-testid="ghl-error"]').count()) throw new Error("a post's failure does not paint the connection red");
     await expectText(page, "6 connected pages and profiles", "still connected after a refused post");

@@ -4,8 +4,8 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { createWebinarAction, duplicateExampleAction } from "@/lib/actions/webinars";
 import { Badge, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
-import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
-import { knownFor } from "@/lib/queries/webinar";
+import { STEPS, nextStep, statusStale } from "@/lib/engine/webinar";
+import { buildFor } from "@/lib/queries/webinar";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -23,15 +23,10 @@ export default async function WebinarsPage() {
   const v = await requireViewer({ team: "allow" });
   const list = await db.query.webinars.findMany({ where: eq(schema.webinars.userId, v.user.id), orderBy: [asc(schema.webinars.isExample), desc(schema.webinars.createdAt)] });
   const ids = list.map((w) => w.id);
-  const [sections, beliefs, reviews] = ids.length
-    ? await Promise.all([
-        db.query.webinarSections.findMany({ where: inArray(schema.webinarSections.webinarId, ids) }),
-        db.query.webinarBeliefs.findMany({ where: inArray(schema.webinarBeliefs.webinarId, ids) }),
-        db.query.readinessReviews.findMany({ where: inArray(schema.readinessReviews.webinarId, ids), orderBy: desc(schema.readinessReviews.createdAt) }),
-      ])
-    : [[], [], []];
-  // What each webinar's beliefs still point at, read once: a withdrawn approval or a deleted study is seen here too, not only on the Readiness step.
-  const known = ids.length ? await knownFor(v.user.id, v.workspace.id) : { proofIds: [], storyIds: [], evidenceIds: [] };
+  const sections = ids.length ? await db.query.webinarSections.findMany({ where: inArray(schema.webinarSections.webinarId, ids) }) : [];
+  // The same checks the detail page builds, including the deck's and the presenter's (friction walk W2, 7 Oct: the list said
+  // "5 of 10 checks" from a shorter build while the page said "5 of 13"), so the two can never disagree.
+  const builds = new Map(await Promise.all(list.map(async (w) => [w.id, (await buildFor(w)).build] as const)));
   const delivered = list.filter((w) => w.status === "delivered");
   const totals = delivered.reduce((a, w) => ({ registered: a.registered + (w.registered ?? 0), showed: a.showed + (w.showed ?? 0), sales: a.sales + (w.sales ?? 0), revenue: a.revenue + (w.revenue ?? 0) }), { registered: 0, showed: 0, sales: 0, revenue: 0 });
 
@@ -94,9 +89,7 @@ export default async function WebinarsPage() {
         <div className="grid gap-3 md:grid-cols-2">
           {list.map((w) => {
             const secs = sections.filter((s) => s.webinarId === w.id);
-            const bel = beliefs.filter((b) => b.webinarId === w.id);
-            const rev = reviews.find((r) => r.webinarId === w.id) ?? null;
-            const p = buildChecks({ webinar: w, sections: secs, beliefs: bel, known, review: rev });
+            const p = builds.get(w.id)!;
             const stale = statusStale(w.status, p);
             const next = STEPS.find((s) => s.key === nextStep(p.steps))!;
             return (

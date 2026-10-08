@@ -68,7 +68,11 @@ export async function setOohListsAction(formData: FormData): Promise<void> {
   const categories = readList(str(formData, "categories"));
   const hosts = readList(str(formData, "hosts"));
   if (!categories.length) redirect(`/coach/office-hours?error=${encodeURIComponent("Keep at least one category.")}#lists`);
-  await db.update(schema.workspaces).set({ oohCategories: categories, oohHosts: hosts }).where(eq(schema.workspaces.id, coach.workspace.id));
+  // The call's time and link (friction walk OH1, 7 Oct): members read them on Office Hours. The link is a web address or nothing.
+  const oohTime = str(formData, "time").trim().slice(0, 120) || null;
+  const oohLink = str(formData, "link").trim() || null;
+  if (oohLink && !/^https:\/\/\S+$/.test(oohLink)) redirect(`/coach/office-hours?error=${encodeURIComponent("The join link starts with https://.")}#lists`);
+  await db.update(schema.workspaces).set({ oohCategories: categories, oohHosts: hosts, oohTime, oohLink }).where(eq(schema.workspaces.id, coach.workspace.id));
   refresh();
   redirect(`/coach/office-hours?lists=1#lists`);
 }
