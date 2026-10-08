@@ -35,6 +35,8 @@ export default async function LaddersPage() {
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),
     db.query.leadMagnets.findMany({ where: eq(schema.leadMagnets.userId, v.user.id), orderBy: desc(schema.leadMagnets.createdAt) }),
   ]);
+  // Ship a ladder step 1 (rev 583 #1): the member's own photos, for the graphic made in the same go.
+  const photos = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id), eq(schema.deckImages.kind, "photo")), orderBy: desc(schema.deckImages.createdAt), columns: { id: true, caption: true, width: true, height: true } });
   const ai = await hasAiKey();
   const keywords = profile?.keywords.filter((k) => k.keyword) ?? [];
   const lastLaunch = list.map((l) => l.launchedAt).filter(Boolean).sort().at(-1) ?? null;
@@ -114,6 +116,21 @@ export default async function LaddersPage() {
                   <textarea className="field" name="realNumbers" rows={2} placeholder="Last month: 100 leads, 12 calls, 4 clients at $497" />
                 </Field>
               </div>
+              <Field label="Photo for the graphic (optional)" hint="Blank: HelixOS suggests one from your Images by the headline's words.">
+                <select className="field" name="photoImageId" defaultValue="" data-testid="ladder-photo">
+                  <option value="">Suggest one from my Images</option>
+                  {photos.map((p) => (
+                    <option key={p.id} value={p.id}>{p.caption?.trim() || "photo"} · {p.width}×{p.height}</option>
+                  ))}
+                </select>
+              </Field>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="makeGraphic" value="1" defaultChecked className="mt-1" data-testid="ladder-make-graphic" />
+                <span>
+                  Make the graphic too
+                  <span className="block text-xs text-ink-3">The headline on the photo, in your template, ready for Ship. Any person in it is you, in your own photo.</span>
+                </span>
+              </label>
               <div className="flex items-center gap-3 sm:col-span-2">
                 <SubmitButton className="btn btn-primary" pendingText="Building…">
                   {ai ? "Write the ladder" : "Build the skeleton"}

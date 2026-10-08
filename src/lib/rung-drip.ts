@@ -10,6 +10,7 @@ import { formatDateTime, nowIso } from "@/lib/dates";
 import { outcomesFor, type Now } from "@/lib/engine/channel-outcome";
 import { redactSecrets } from "@/lib/engine/redact";
 import { dripLock, dripPayload, estimateDripEnd, handoffReasons, scheduleAtProblem, type HandoffGate } from "@/lib/engine/rung-drip";
+import type { DripExtras } from "@/lib/engine/rung-drip";
 import { logSync } from "@/lib/integrations";
 
 export type DripSetup = { on: boolean; userNs: string | null; url: string | null };
@@ -52,7 +53,7 @@ export async function handoffGate(v: { user: { id: string }; membership: schema.
 export type HandoffResult = { ok: true; handedAt: string } | { ok: false; reason: string };
 
 /** Sends the ladder. The caller has run the gate; this runs it again beside the write, then posts once. */
-export async function handOffLadder(v: { workspaceId: string; user: { id: string }; membership: schema.Membership; tz: string; today: string }, item: schema.ContentItem, variants: schema.ContentVariant[], ladder: schema.Ladder, blockers: number, now: Now, threadsAt: string | null): Promise<HandoffResult> {
+export async function handOffLadder(v: { workspaceId: string; user: { id: string }; membership: schema.Membership; tz: string; today: string }, item: schema.ContentItem, variants: schema.ContentVariant[], ladder: schema.Ladder, blockers: number, now: Now, threadsAt: string | null, extras: DripExtras = {}): Promise<HandoffResult> {
   const { reasons } = await handoffGate(v, item, variants, ladder, blockers, now);
   if (reasons.length) return { ok: false, reason: reasons.join(" ") };
   const timeProblem = scheduleAtProblem(threadsAt, now.iso);
@@ -61,7 +62,7 @@ export async function handOffLadder(v: { workspaceId: string; user: { id: string
   const url = open(setup.url);
   if (!url || !setup.userNs) return { ok: false, reason: "Community Loyalty isn't connected for comment ladders yet. Evolve Omega sets that up." };
   const rungs = ladder.rungs.map((r) => r.body);
-  const payload = dripPayload({ userNs: setup.userNs, post: [item.hook, item.body].filter(Boolean).join("\n\n"), rungs, fbIgPublisher: "helixos", scheduleAt: threadsAt });
+  const payload = dripPayload({ userNs: setup.userNs, post: [item.hook, item.body].filter(Boolean).join("\n\n"), rungs, fbIgPublisher: "helixos", scheduleAt: threadsAt, ...extras });
   let status = 0;
   let text = "";
   try {
@@ -79,7 +80,7 @@ export async function handOffLadder(v: { workspaceId: string; user: { id: string
     return { ok: false, reason: "Community Loyalty didn't accept the ladder. Nothing was handed off; the reason is in the sync log." };
   }
   const handedAt = nowIso();
-  await db.insert(schema.dripHandoffs).values({ id: crypto.randomUUID(), workspaceId: v.workspaceId, userId: v.user.id, contentItemId: item.id, ladderId: ladder.id, handedAt, rungCount: rungs.length, threadsAt: threadsAt || null, expiresAt: estimateDripEnd(handedAt, rungs.length), note });
+  await db.insert(schema.dripHandoffs).values({ id: crypto.randomUUID(), workspaceId: v.workspaceId, userId: v.user.id, contentItemId: item.id, ladderId: ladder.id, handedAt, rungCount: rungs.length, threadsAt: threadsAt || null, target: extras.target ?? "both", fbPostId: extras.fbPostId ?? null, igMediaId: extras.igMediaId ?? null, gapMinutes: extras.gapMinutes ?? null, pinLast: extras.pinLast ?? false, expiresAt: estimateDripEnd(handedAt, rungs.length), note });
   await logSync({ workspaceId: v.workspaceId, userId: v.user.id, provider: "community_loyalty", direction: "out", event: "drip.handoff", payload: { contentItemId: item.id, ladderId: ladder.id, rungs: rungs.length, threadsAt: threadsAt || undefined }, status: "sent", note });
   return { ok: true, handedAt };
 }

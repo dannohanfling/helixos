@@ -4,9 +4,17 @@ import { mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 // The private store is the mock blob (as the deck-images walk runs it): the walk writes Maya's photo there and reads the graphic back.
 const blobPort = 4050;
+// Ship (rev 583 #1): the mock Social Planner the app is pointed at through the workspace's integration, and the mock uChat
+// the dev server already reads at :4060; the drip webhook lands on the mock planner's inbound hook, as the ghl walk has it.
+const ghlPort = 4010;
+const uchatPort = 4060;
+const DRIP_HOOK = `http://localhost:${ghlPort}/api/iwh/abcdef0123456789abcdef0123456789`;
+const CL_TOKEN = "uchat-test-token-for-maya-ship-0123456789";
 process.env.PROOF_BLOB_READ_WRITE_TOKEN ||= "vercel_blob_rw_PROOFSTORE_testsecret";
 process.env.BLOB_READ_WRITE_TOKEN ||= "vercel_blob_rw_TESTSTORE_testsecret";
 process.env.VERCEL_BLOB_API_URL ||= `http://localhost:${blobPort}`;
+// The walk seals Maya's Planner token as the dev server does, so the server can open it (scripts/dev-server.sh's secret).
+process.env.SESSION_SECRET ||= "dev-secret-dev-secret-dev-secret-123";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 mkdirSync("screenshots", { recursive: true });
@@ -54,7 +62,11 @@ async function checksWhen(page: Page, key: string, expected: boolean): Promise<R
 
 async function main() {
   const blob = spawn("npx", ["tsx", "scripts/mock-blob.ts", String(blobPort)], { stdio: "ignore", detached: true });
-  await new Promise((r) => setTimeout(r, 2500));
+  const ghl = spawn("npx", ["tsx", "scripts/mock-ghl.ts", String(ghlPort)], { stdio: "ignore", detached: true });
+  const uchat = spawn("npx", ["tsx", "scripts/mock-uchat.ts", String(uchatPort)], { stdio: "ignore", detached: true });
+  await new Promise((r) => setTimeout(r, 3000));
+  await fetch(`http://localhost:${ghlPort}/__reset`, { method: "POST", headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } }).catch(() => null);
+  await fetch(`http://localhost:${uchatPort}/__reset`, { method: "POST" }).catch(() => null);
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
@@ -288,7 +300,9 @@ async function main() {
     const small = await page.request.get(`${base}/api/deck-images/${g1.id}?size=1080&download=1`);
     const smeta = await sharp(Buffer.from(await small.body())).metadata();
     if (small.status() !== 200 || smeta.width !== 1080 || smeta.height !== 1350 || smeta.format !== "png" || !(small.headers()["content-disposition"] ?? "").includes("1080x1350")) throw new Error(`the 1080×1350 copy comes on request, as a PNG download: ${small.status()} ${smeta.width}×${smeta.height} ${small.headers()["content-disposition"]}`);
-    if ((await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.userId, maya.id), eq(schema.deckImages.kind, "graphic")) })).length !== 1) throw new Error("one file is stored, never a second 1080 one");
+    const graphicsNow = async () => (await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.userId, maya.id), eq(schema.deckImages.kind, "graphic")) })).length;
+    const graphicsAfterFirst = await graphicsNow();
+    if (graphicsAfterFirst !== 1) throw new Error(`one file is stored, never a second 1080 one (and a skeleton's bracketed headline makes none): ${graphicsAfterFirst}`);
     // Remake with the alternate headline and the other photo: the ladder points at the new one, the old one stays in Images.
     await page.goto(`${base}/content/ladders/${demoId}`);
     await page.locator('[data-testid="graphic-current"]').waitFor({ timeout: 20000 });
@@ -298,7 +312,7 @@ async function main() {
     await Promise.all([page.waitForURL(/graphic=made/, { timeout: 60000 }), page.locator('[data-testid="graphic-make"]').click()]);
     demoRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
     if (demoRow.graphicImageId === g1.id || demoRow.graphicOptions?.headline !== demoRow.altHeadlines[0] || demoRow.graphicOptions.photoImageId !== otherId || !demoRow.graphicOptions.strongFade) throw new Error(`the remake replaces the ladder's graphic with the alternate headline: ${JSON.stringify(demoRow.graphicOptions)}`);
-    if ((await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.userId, maya.id), eq(schema.deckImages.kind, "graphic")) })).length !== 2) throw new Error("the previous graphic stays in Images");
+    if ((await graphicsNow()) !== graphicsAfterFirst + 1) throw new Error("the previous graphic stays in Images");
     await page.goto(`${base}/images?kind=graphic`);
     await page.locator('[data-testid="library-image-caption"]').first().waitFor({ timeout: 20000 });
     const captions = await page.locator('[data-testid="library-image-caption"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
@@ -375,9 +389,87 @@ async function main() {
     await expectText(page, "Next good slot", "cadence");
     await page.screenshot({ path: "screenshots/ld04-list.png", fullPage: true });
     console.log("✓ list and cadence");
+
+    // ── Ship (rev 583 #1, commit 3): one press posts to the Page and Instagram through GoHighLevel with the graphic at its
+    // public address, reads them back, hands the rungs to the drip naming the two posts, and writes the keyword to the bot. ──
+    const { newId: newIdShip } = await import("@/lib/ids");
+    const ghlRow = await db.query.integrations.findFirst({ where: and(eq(schema.integrations.workspaceId, ws), eq(schema.integrations.provider, "gohighlevel")) });
+    if (ghlRow) await db.update(schema.integrations).set({ enabled: true, config: { ...ghlRow.config, apiUrl: `http://localhost:${ghlPort}` }, lastError: null }).where(eq(schema.integrations.id, ghlRow.id));
+    else await db.insert(schema.integrations).values({ id: newIdShip(), workspaceId: ws, provider: "gohighlevel", enabled: true, config: { apiUrl: `http://localhost:${ghlPort}` } });
+    // The coach installs Maya's drip (the webhook and the contact) and her Community Loyalty token, sealed by the server.
+    await page.goto(`${base}/settings`);
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As the coach")');
+    await page.waitForURL(/\/today/);
+    await page.goto(`${base}/coach`);
+    const mayaForm = 'form:has(input[name="eoPassUrl"][value*="maya-torres"])';
+    await page.locator(mayaForm).first().waitFor({ timeout: 15000 });
+    await page.locator(`${mayaForm} input[name="clDripWebhookUrl"]`).fill(DRIP_HOOK);
+    await page.locator(`${mayaForm} input[name="clUserNs"]`).fill("f52594u50757435");
+    await page.locator(`${mayaForm} [data-testid="cl-api-token"]`).fill(CL_TOKEN);
+    await submit(page, `${mayaForm} button:has-text("Save")`);
+    await fetch(`http://localhost:${uchatPort}/__seed`, { method: "POST", body: JSON.stringify({ helix_keywords_cbf: "[]", helix_keyword_agent_cbf: "" }) });
+    // Maya connects her GoHighLevel sub-account with her user id, and the channel map auto-fills from the mock's accounts.
+    await page.click('button:has-text("Log out")');
+    await page.waitForURL(/\/login/);
+    await page.click('button:has-text("As a client")');
+    await page.waitForURL(/\/today/);
+    // The seeded connection has the location, the user and the channel map but no token: the token goes on as Settings → Publishing would put it.
+    const { upsertConnection } = await import("@/lib/ghl");
+    const up = await upsertConnection({ workspaceId: ws, userId: maya.id, locationId: "loc_maya", ghlUserId: "JD8kLxeYM3FqbWLQXC4p", manualToken: "pit-loc_maya" });
+    if (!up.ok) throw new Error(`the Planner token could not be set: ${up.error}`);
+    const conn = (await db.query.socialConnections.findFirst({ where: eq(schema.socialConnections.userId, maya.id) }))!;
+    if (!conn?.mapping.fb_page || !conn.mapping.instagram || !conn.ghlUserId) throw new Error(`the Page and Instagram are mapped with a user id: ${JSON.stringify({ map: conn?.mapping, user: conn?.ghlUserId })}`);
+    // The card: the graphic is done, the two posts run on Ship, the drip waits for them, the keyword runs.
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    await page.locator('[data-testid="ship-steps"]').waitFor({ timeout: 20000 });
+    const stepStates = async () => Object.fromEntries(await page.locator('[data-testid="ship-step"]').evaluateAll((els) => els.map((e) => [e.getAttribute("data-step"), e.getAttribute("data-state")])));
+    let states = await stepStates();
+    if (states.graphic !== "done" || states.page !== "ready" || states.instagram !== "ready" || states.drip !== "held" || states.keywords !== "ready") throw new Error(`before Ship: ${JSON.stringify(states)}`);
+    if (!(await page.locator('[data-testid="ship-line"]').innerText()).startsWith("Ship runs: facebook page post, instagram post, keyword on your bot")) throw new Error(`the line names what Ship runs: ${await page.locator('[data-testid="ship-line"]').innerText()}`);
+    if (await page.locator('[data-testid="ship-public-link"]').count()) throw new Error("no public address before Ship");
+    await Promise.all([page.waitForURL(/ship=ran/, { timeout: 90000 }), page.locator('[data-testid="ship-button"]').click()]);
+    await page.locator('[data-testid="ship-ran"]').waitFor({ timeout: 20000 });
+    const shipped = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
+    if (!shipped.graphicPublicToken || !/^[0-9a-f]{32}$/.test(shipped.graphicPublicToken) || !shipped.shippedAt) throw new Error("Ship mints the public token and marks the ladder shipped");
+    const publicUrl = `${base}/api/graphics/${shipped.graphicPublicToken}.png`;
+    // The two posts reached the Planner with the graphic at its public address; the address serves the master to anyone, no session.
+    const plannerPosts = ((await (await fetch(`http://localhost:${ghlPort}/__posts`, { headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } })).json()) as { posts: { _id: string; accountIds: string[]; media?: { url: string }[]; summary: string; followUpComment?: string }[] }).posts;
+    const shippedPosts = plannerPosts.filter((p) => p.media?.[0]?.url === publicUrl);
+    if (shippedPosts.length !== 2 || !shippedPosts.some((p) => p.accountIds.some((a) => a.includes("fbpage"))) || !shippedPosts.some((p) => p.accountIds.some((a) => a.includes("_ig_")))) throw new Error(`the Page and Instagram posts carry the graphic's public address: ${JSON.stringify(plannerPosts.map((p) => [p.accountIds, p.media?.[0]?.url]))}`);
+    if (shippedPosts.some((p) => p.followUpComment)) throw new Error("a shipped ladder post carries no first comment: rung 1 is the drip's");
+    const pub = await fetch(publicUrl);
+    const pubMeta = await sharp(Buffer.from(await pub.arrayBuffer())).metadata();
+    if (pub.status !== 200 || pubMeta.width !== 2160 || pubMeta.format !== "png" || !(pub.headers.get("cache-control") ?? "").includes("public")) throw new Error(`the public address serves the master with no session: ${pub.status} ${pubMeta.width} ${pub.headers.get("cache-control")}`);
+    // A token that is not live, and one that is not a token at all, read the same 404; a traversal never reaches a private route (the signed-in route answers for itself).
+    if ((await fetch(`${base}/api/graphics/${"0".repeat(32)}.png`)).status !== 404 || (await fetch(`${base}/api/graphics/not-a-token.png`)).status !== 404) throw new Error("a token that is not live reads 404");
+    if ((await fetch(`${base}/api/graphics/../deck-images/x`, { redirect: "manual" })).status === 200) throw new Error("a traversal never serves a private picture");
+    // Read back as published, the rungs went to the drip naming the two posts; the keyword reached the bot.
+    const drips = ((await (await fetch(`http://localhost:${ghlPort}/__drips`)).json()) as { drips: { path: string; body: Record<string, string> }[] }).drips;
+    if (drips.length !== 1 || !drips[0].path.endsWith("abcdef0123456789abcdef0123456789") || drips[0].body.user_ns !== "f52594u50757435") throw new Error(`one drip hand-off to the coach's hook: ${JSON.stringify(drips.map((d) => d.path))}`);
+    const sentDrip = drips[0].body;
+    const ids = shippedPosts.map((p) => p._id);
+    if (sentDrip.target !== "both" || !ids.includes(sentDrip.rung_fb_post_id) || !ids.includes(sentDrip.rung_ig_media_id) || sentDrip.gap_minutes !== "" || sentDrip.pin_last !== "") throw new Error(`the hand-off names where the rungs land and the two posts: ${JSON.stringify({ target: sentDrip.target, fb: sentDrip.rung_fb_post_id, ig: sentDrip.rung_ig_media_id, gap: sentDrip.gap_minutes, pin: sentDrip.pin_last })}`);
+    if (!sentDrip.rungs || !sentDrip.first_comment) throw new Error("the five keys the Dripper always read are still there");
+    const handoff = (await db.query.dripHandoffs.findFirst({ where: eq(schema.dripHandoffs.ladderId, demoId) }))!;
+    if (handoff?.target !== "both" || handoff.fbPostId !== sentDrip.rung_fb_post_id || handoff.igMediaId !== sentDrip.rung_ig_media_id || handoff.pinLast) throw new Error(`the hand-off row keeps the target and the ids: ${JSON.stringify(handoff)}`);
+    const botFields = (await (await fetch(`http://localhost:${uchatPort}/__fields`)).json()) as Record<string, string>;
+    const routed = JSON.parse(botFields.helix_keywords_cbf ?? "[]") as { keyword: string }[];
+    if (!routed.some((k) => k.keyword === "RESET")) throw new Error(`the keyword reached the bot: ${botFields.helix_keywords_cbf}`);
+    states = await stepStates();
+    if (Object.values(states).some((v) => v !== "done")) throw new Error(`after Ship every step is done: ${JSON.stringify(states)}`);
+    if ((await page.locator('[data-testid="ship-line"]').innerText()) !== "Shipped: every step is done.") throw new Error("the line says shipped");
+    if (!(await page.locator('[data-testid="ship-button"]').isDisabled())) throw new Error("nothing left to run, Ship is shut");
+    // Revoke: the address dies, the graphic stays.
+    await Promise.all([page.waitForURL(/ship=revoked/, { timeout: 20000 }), page.locator('[data-testid="ship-revoke"]').click()]);
+    if ((await fetch(publicUrl)).status !== 404) throw new Error("a revoked address reads 404");
+    const revoked = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
+    if (revoked.graphicPublicToken || !revoked.graphicImageId) throw new Error("Revoke clears the token and keeps the graphic");
+    console.log("✓ Ship: the Page and Instagram posts through GoHighLevel with the graphic at its public address (served with no session, 404 otherwise), read back, the rungs handed to the drip naming both posts, the keyword on the bot, every step done; Revoke kills the address");
   } finally {
     await browser.close();
-    if (blob.pid) try { process.kill(-blob.pid); } catch { /* already gone */ }
+    for (const m of [blob, ghl, uchat]) if (m.pid) try { process.kill(-m.pid, "SIGTERM"); } catch { /* already gone */ }
   }
   // Never vacuous: every walk asserts page content before this runs, so the responses this reads over are never an empty set.
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);

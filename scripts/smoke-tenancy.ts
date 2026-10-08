@@ -55,6 +55,7 @@ const ROUTES: Record<string, Route> = {
   "/content/ladders/[id]": { kind: "owned", table: "ladders" },
   "/conversations/[id]": { kind: "owned", table: "contacts" },
   "/doctrine/[code]": { kind: "public", why: "a principle code from the shared doctrine, the same for everyone" },
+  "/api/graphics/[token]": { kind: "public", why: "a shipped ladder graphic at its unguessable token (Ship, rev 583 #1): the Social Planner fetches it with no session; dead once revoked; nothing of the member in the address" },
   "/groups/[id]": { kind: "owned", table: "groups" },
   "/library/[id]": { kind: "owned", table: "libraryPosts" },
   "/magnets/[id]": { kind: "owned", table: "leadMagnets" },

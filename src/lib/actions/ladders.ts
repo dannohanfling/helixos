@@ -19,8 +19,15 @@ import { pushSocialPost } from "@/lib/integrations";
 import { staleScheduledFor } from "@/lib/queries/ladders";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { draftAvatarBrief } from "@/lib/avatars";
-import { generateBackground, makeGraphic, ownImage } from "@/lib/graphic";
+import { generateBackground, graphicStep, makeGraphic, ownImage } from "@/lib/graphic";
 import { headlineChoices } from "@/lib/engine/graphic";
+import { randomBytes } from "node:crypto";
+import { graphicPublicPath, shipRuns } from "@/lib/engine/ship";
+import { shipFacts } from "@/lib/queries/ship";
+import { handOffLadder } from "@/lib/rung-drip";
+import { nowFor } from "@/lib/engine/channel-outcome";
+import { connectionFor } from "@/lib/ghl";
+import { recordReadback } from "@/lib/planner-status";
 
 /**
  * The publish gate. Anything that pushes a ladder outward (to the composer, to ready/live/done, a rung marked posted)
@@ -189,6 +196,16 @@ export async function createLadderAction(formData: FormData): Promise<void> {
     notes: [parsed.screenshotText ? `SCREENSHOT TEXT:\n${parsed.screenshotText}` : "", parsed.notes].filter(Boolean).join("\n\n") || null,
     generatedBy,
   });
+  // Ship a ladder step 1 (rev 583 #1): the graphic in the same go, from the photo picked or the one the headline suggests.
+  // A skeleton's headline is still brackets: nothing to draw yet; the member makes it from the ladder page once written.
+  if (str(formData, "makeGraphic") === "1" && parsed.headline.trim() && !/\[/.test(parsed.headline)) {
+    const m = { workspaceId, userId };
+    const row = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, id) }))!;
+    const step = await graphicStep(m, parsed.headline);
+    const picked = str(formData, "photoImageId").trim();
+    const photoId = picked ? (step.choices.find((c) => c.id === picked)?.id ?? null) : step.suggestedId;
+    await makeGraphic(m, row, { photoImageId: photoId, headline: parsed.headline, strongFade: false, aiBackground: step.aiAllowed });
+  }
   refresh();
   redirect(`/content/ladders/${id}`);
 }
@@ -280,6 +297,13 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
   const { workspaceId, userId } = await ctx({ team: "allow" });
   const l = await own(str(formData, "id"), userId);
   await assertPublishable(l);
+  const itemId = await ensureLadderItem(l, workspaceId, userId);
+  refresh();
+  redirect(`/content/${itemId}/compose`);
+}
+
+/** The ladder's content item and one draft per channel, made or refreshed; a scheduled or posted channel draft is never touched. */
+async function ensureLadderItem(l: schema.Ladder, workspaceId: string, userId: string): Promise<string> {
   let itemId = l.contentItemId;
   const existing = itemId ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) }) : null;
   // The ladder composes the post and its channel bodies from what the coach built: rule, never gated.
@@ -297,8 +321,7 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
     if (v) await db.update(schema.contentVariants).set({ body: c.body, generatedBy: "ladder", origin: "rule" }).where(eq(schema.contentVariants.id, v.id));
     else await db.insert(schema.contentVariants).values({ id: newId(), contentItemId: itemId!, userId, channel: c.channel, groupId: "", body: c.body, generatedBy: "ladder", origin: "rule" });
   }
-  refresh();
-  redirect(`/content/${itemId}/compose`);
+  return itemId!;
 }
 
 /**
@@ -379,4 +402,76 @@ export async function pushKeywordsAction(formData: FormData): Promise<void> {
   refresh();
   if (out.status === "sent") redirect(`/content/ladders/profile?keywords=sent#bot-keywords`);
   redirect(`/content/ladders/profile?keywords=${out.status === "failed" ? "failed" : "note"}&note=${encodeURIComponent(out.note)}#bot-keywords`);
+}
+
+/**
+ * Ship (rev 583 #1, commit 3): one press runs every step that is ready, in order: the Facebook Page and Instagram posts
+ * through the member's GoHighLevel with the graphic attached at its public address (minted here), their read-back, the
+ * rungs to Community Loyalty's drip naming the two posts, and the keyword to the bot. Each step says what it did or why not
+ * on the card; a second press runs only what did not go. Gated like every outward step; never a profile or a group.
+ */
+export async function shipLadderAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves.", team: "allow" });
+  let l = await own(str(formData, "id"), userId);
+  const back = `/content/ladders/${l.id}`;
+  await assertPublishable(l);
+  const when = opt(formData, "when");
+  const postAt = when && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(when) ? `${when.slice(0, 16)}:00` : null;
+  const notes: string[] = [];
+  // The public address, once: the token carries nothing of the member and dies on Revoke.
+  if (l.graphicImageId && !l.graphicPublicToken) {
+    await db.update(schema.ladders).set({ graphicPublicToken: randomBytes(16).toString("hex") }).where(and(eq(schema.ladders.id, l.id), eq(schema.ladders.userId, userId)));
+    l = await own(l.id, userId);
+  }
+  const first = await shipFacts(v, l);
+  const runs = shipRuns(first.steps);
+  if (!runs.length) redirect(`${back}?ship=held#ship`);
+  const itemId = await ensureLadderItem(l, workspaceId, userId);
+  const item = (await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) }))!;
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const mediaUrl = l.graphicPublicToken ? `${appUrl}${graphicPublicPath(l.graphicPublicToken)}` : null;
+  const dripOn = dripSetup(v.membership).on;
+  const conn = await connectionFor(userId);
+  // The two posts: the channel draft is scheduled (or posted now) and pushed to the Social Planner with the graphic; then read back.
+  for (const key of ["page", "instagram"] as const) {
+    if (!runs.includes(key)) continue;
+    const channel = key === "page" ? "fb_page" : "instagram";
+    const variant = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, channel), eq(schema.contentVariants.groupId, "")) });
+    if (!variant) { notes.push(`${channel}: no draft`); continue; }
+    await db.update(schema.contentVariants).set({ status: postAt ? "scheduled" : "posted", postAt, ...(postAt ? {} : { postedAt: nowIso() }) }).where(eq(schema.contentVariants.id, variant.id));
+    const sent = await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: variant.id, channel, body: variant.subject ? `${variant.subject}\n\n${variant.body}` : variant.body, postAt, mediaUrl, title: item.title, followUpComment: dripOn ? null : item.firstComment });
+    notes.push(`${channel}: ${sent ? "sent" : "refused"}`);
+    if (sent && conn) {
+      const after = await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, variant.id) });
+      if (after?.externalId) await recordReadback(after, conn);
+    }
+  }
+  await db.update(schema.contentItems).set({ status: postAt ? "scheduled" : "posted" }).where(eq(schema.contentItems.id, itemId));
+  // The drip, once both posts read back as published: the hand-off names the two posts for the Dripper.
+  const second = await shipFacts(v, l);
+  if (shipRuns(second.steps).includes("drip")) {
+    const fb = second.variants.find((x) => x.channel === "fb_page" && x.groupId === "");
+    const ig = second.variants.find((x) => x.channel === "instagram" && x.groupId === "");
+    const r = await handOffLadder({ workspaceId, user: v.user, membership: v.membership, tz: v.tz, today: v.today }, second.item!, second.variants, l, 0, nowFor(v), null, { target: "both", fbPostId: fb?.externalId ?? null, igMediaId: ig?.externalId ?? null, pinLast: false });
+    notes.push(`drip: ${r.ok ? "handed" : `held (${r.reason})`}`);
+  }
+  // The keyword to the bot, through the same push the ladder facts page offers.
+  let keywordBlocked: string | null = null;
+  if (runs.includes("keywords")) {
+    const out = await pushKeywordFields(v.membership.id, { reason: `ship ${l.id}`, by: v.user.id });
+    if (out.status === "failed") keywordBlocked = out.note;
+    notes.push(`keywords: ${out.status}`);
+  }
+  await db.update(schema.ladders).set({ shippedAt: nowIso() }).where(and(eq(schema.ladders.id, l.id), eq(schema.ladders.userId, userId)));
+  refresh();
+  redirect(`${back}?ship=ran&ran=${encodeURIComponent(notes.join("; "))}${keywordBlocked ? `&keywordBlocked=${encodeURIComponent(keywordBlocked)}` : ""}#ship`);
+}
+
+/** The public address dies: the token is cleared, the route answers nothing, the graphic itself stays in Images. */
+export async function revokeGraphicLinkAction(formData: FormData): Promise<void> {
+  const { userId } = await ctx({ team: "allow" });
+  const l = await own(str(formData, "id"), userId);
+  await db.update(schema.ladders).set({ graphicPublicToken: null }).where(and(eq(schema.ladders.id, l.id), eq(schema.ladders.userId, userId)));
+  refresh();
+  redirect(`/content/ladders/${l.id}?ship=revoked#ship`);
 }

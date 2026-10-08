@@ -616,6 +616,9 @@ async function faqPreflight(m: schema.Membership, token: string, opts: { fresh?:
   return { agent, blocked: null, warning: null, fieldVarType: held.varType, lastSentValue, nsByName, heldValue };
 }
 
+/** Whether a member's Community Loyalty token is on the record: a yes or no for a page, never the value. */
+export const clTokenSet = (m: Pick<schema.Membership, "clApiToken">): boolean => Boolean(open(m.clApiToken));
+
 /* ───────────── The keyword router's fields (Ship a ladder commit 2) ───────────── */
 
 /** HelixOS's record for the router: the profile's keywords with their targets, the product, the member's magnets and the agent. */

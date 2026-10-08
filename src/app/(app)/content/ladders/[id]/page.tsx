@@ -6,7 +6,9 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
-import { markRungAction, pushLadderUpdateAction, regenerateLadderAction, sendLadderToComposerAction, setLadderStatusAction, updateLadderAction } from "@/lib/actions/ladders";
+import { markRungAction, pushLadderUpdateAction, regenerateLadderAction, revokeGraphicLinkAction, sendLadderToComposerAction, setLadderStatusAction, shipLadderAction, updateLadderAction } from "@/lib/actions/ladders";
+import { shipFacts } from "@/lib/queries/ship";
+import { graphicPublicPath, shipLine, shipRuns } from "@/lib/engine/ship";
 import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK } from "@/lib/engine/compose-media";
 import { staleScheduledFor } from "@/lib/queries/ladders";
 import { citableEvidence } from "@/lib/queries/evidence";
@@ -56,7 +58,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return ownTitle(async (v) => (await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)), columns: { topic: true } }))?.topic, "Ladders");
 }
 
-export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string; graphic?: string; photo?: string }> }) {
+export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string; graphic?: string; photo?: string; ship?: string; ran?: string; keywordBlocked?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)) });
@@ -74,7 +76,10 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
   const ready = readyToPost(checks);
   const blockers = publishBlockers(checks);
   const blocked = blockers.length > 0;
-  const { blocked: refused, pushed, ghl, graphic: graphicNotice, photo: photoParam } = await searchParams;
+  const { blocked: refused, pushed, ghl, graphic: graphicNotice, photo: photoParam, ship: shipNotice, ran, keywordBlocked } = await searchParams;
+  // Ship (rev 583 #1): what one press runs now, what is done, what is held and why.
+  const ship = await shipFacts(v, l, { keywordBlocked: keywordBlocked ?? null });
+  const shipReady = shipRuns(ship.steps);
   // Make the graphic (rev 513): the member's own photos to choose from, the kit's badge, and the graphic made so far.
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
   const [step, graphic] = await Promise.all([graphicStep(m, l.headline), ownImage(m, l.graphicImageId)]);
@@ -250,6 +255,37 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
           </Card>
         </div>
         <div className="space-y-4">
+          <Card id="ship" title="Ship" action={<span className="text-xs text-ink-3" data-testid="ship-line">{shipLine(ship.steps)}</span>}>
+            {shipNotice === "ran" ? <p className="mb-2 rounded-lg bg-good-soft p-2 text-xs" role="status" data-testid="ship-ran">Ship ran: {ran}. The steps below say where each stands.</p> : shipNotice === "held" ? <p className="mb-2 rounded-lg bg-warn-soft p-2 text-xs" role="status" data-testid="ship-held">Nothing was ready to run. The steps below say why.</p> : shipNotice === "revoked" ? <p className="mb-2 rounded-lg bg-surface-2 p-2 text-xs" role="status" data-testid="ship-revoked">The public address is dead. The graphic stays in Images.</p> : null}
+            <ul className="divide-y text-sm" data-testid="ship-steps">
+              {ship.steps.map((st) => (
+                <li key={st.key} className="flex items-start justify-between gap-2 py-1.5" data-testid="ship-step" data-step={st.key} data-state={st.state}>
+                  <span>
+                    <span className="font-medium">{st.label}</span>
+                    {st.why ? <span className="block text-xs text-ink-2">{st.why}</span> : null}
+                  </span>
+                  <Badge tone={st.state === "done" ? "good" : st.state === "ready" ? "accent" : "neutral"}>{st.state === "done" ? "done" : st.state === "ready" ? "runs on Ship" : "held"}</Badge>
+                </li>
+              ))}
+            </ul>
+            <form action={shipLadderAction} className="mt-3 flex flex-wrap items-end gap-2" data-testid="ship-form">
+              <input type="hidden" name="id" value={l.id} />
+              <Field label="Post at (optional; blank posts now)">
+                <input className="field" name="when" type="datetime-local" data-testid="ship-when" />
+              </Field>
+              <SubmitButton className="btn btn-accent btn-sm" disabled={blocked || !shipReady.length} title={blocked ? hold : !shipReady.length ? "Nothing is ready to run" : undefined} pendingText="Shipping…" data-testid="ship-button">Ship</SubmitButton>
+            </form>
+            <p className="mt-2 text-[11px] text-ink-3">The Facebook Page and Instagram through your GoHighLevel, the rungs to Community Loyalty, the keyword to your bot. Never your personal profile or a group: those stay copy-and-paste.</p>
+            {l.graphicPublicToken ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" data-testid="ship-public-link">
+                <span className="text-ink-2">Public address for the graphic (Instagram fetches it): <code>{graphicPublicPath(l.graphicPublicToken)}</code></span>
+                <form action={revokeGraphicLinkAction}>
+                  <input type="hidden" name="id" value={l.id} />
+                  <SubmitButton className="btn btn-ghost btn-xs text-danger" pendingText="…" data-testid="ship-revoke">Revoke</SubmitButton>
+                </form>
+              </div>
+            ) : null}
+          </Card>
           <Card title="Evidence" action={<Badge tone={evidence.length ? "good" : "neutral"}>{evidence.length} citable</Badge>}>
             <p className="mb-2 text-[11px] text-ink-3">Published research for a proof rung. Copy puts the claim and its citation together; they never travel apart. Unconfirmed studies are not here.</p>
             {evidence.length ? (

@@ -1896,6 +1896,9 @@ export const ladders = sqliteTable(
     /** Make the graphic (rev 513): the rendered graphic, a deck_images row of kind graphic, the member's own; and how it was made. */
     graphicImageId: text("graphic_image_id"),
     graphicOptions: text("graphic_options", { mode: "json" }).$type<GraphicOptions>(),
+    /** Ship (rev 583 #1): the public, unguessable address of the graphic lives only while this token is set; minted at Ship, revoked from the ladder page. */
+    graphicPublicToken: text("graphic_public_token"),
+    shippedAt: text("shipped_at"),
     notes: text("notes"),
     generatedBy: text("generated_by").notNull().default("scaffold"),
     status: text("status", { enum: LADDER_STATUSES }).notNull().default("draft"),
@@ -2176,6 +2179,8 @@ export type Essence = typeof essences.$inferSelect;
  * slot is taken (the state lives on one Community Loyalty contact, so two at once would tangle). HelixOS is never told when
  * a rung lands, so a row here means "handed", never "posted".
  */
+export const DRIP_TARGETS = ["page", "instagram", "both"] as const;
+export type DripTarget = (typeof DRIP_TARGETS)[number];
 export const dripHandoffs = sqliteTable(
   "drip_handoffs",
   {
@@ -2187,6 +2192,12 @@ export const dripHandoffs = sqliteTable(
     handedAt: text("handed_at").notNull(),
     rungCount: integer("rung_count").notNull(),
     threadsAt: text("threads_at"),
+    /** L2's Instagram-only drip (rev 567): where the rungs land, the Planner's ids when known, the gap and the pin (Ship, rev 583). */
+    target: text("target", { enum: DRIP_TARGETS }).notNull().default("both"),
+    fbPostId: text("fb_post_id"),
+    igMediaId: text("ig_media_id"),
+    gapMinutes: integer("gap_minutes"),
+    pinLast: integer("pin_last", { mode: "boolean" }).notNull().default(false),
     expiresAt: text("expires_at").notNull(),
     note: text("note"),
     createdAt: createdAt(),

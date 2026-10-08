@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 121,
+    date: "2026-10-08",
+    title: "Ship a ladder in one press",
+    lines: [
+      "On a comment ladder that clears its checklist and has its graphic, Ship does the rest: the post goes to your Facebook Page and Instagram through your GoHighLevel with the graphic attached (now, or at a time you set), the rungs go to Community Loyalty's drip naming the two posts, and the keyword goes to your bot. The card says what each step did, what is held and why, and Ship again runs only the parts that did not go.",
+      "The graphic gets a public, unguessable address the moment you ship, so Instagram can fetch it; it carries nothing about you, and Revoke on the ladder page kills it. Never your personal profile or a group: those stay copy-and-paste.",
+      "New ladder can make the graphic in the same go: pick the photo (or let HelixOS suggest one) and tick Make the graphic. The drip hand-off now names where the rungs land (the Page, Instagram or both), the Planner's post ids, the gap and whether the last rung is pinned.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 120,
     date: "2026-10-08",
     title: "Keywords that know what they fetch",

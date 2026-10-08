@@ -198,6 +198,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl"]);
+export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl", "graphicPublicToken"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);

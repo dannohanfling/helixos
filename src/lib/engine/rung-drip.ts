@@ -10,7 +10,13 @@
  */
 import { LIVE_POSTING_HOUR } from "./ladder";
 export type Publisher = "helixos" | "community_loyalty";
-export type DripPayload = { user_ns: string; post: string; first_comment: string; schedule_at: string; rungs: string };
+/**
+ * The payload the Rung Dripper reads. The five keys it has always read, then the keys Ship adds (L2's Instagram-only drip,
+ * rev 567; Ship, rev 583): where the rungs land (page, instagram or both), the Planner's ids when known, the gap between
+ * rungs in minutes and whether the last is pinned. A Dripper that does not know the new keys ignores them and runs as today.
+ */
+export type DripPayload = { user_ns: string; post: string; first_comment: string; schedule_at: string; rungs: string; target: string; rung_fb_post_id: string; rung_ig_media_id: string; gap_minutes: string; pin_last: string };
+export type DripExtras = { target?: "page" | "instagram" | "both"; fbPostId?: string | null; igMediaId?: string | null; gapMinutes?: number | null; pinLast?: boolean };
 
 /** A line holding only --- separates rungs; the flow splits on /\r?\n\s*-{3,}\s*\r?\n/ and strips a leading "1\." or "2.". */
 export const RUNG_SEPARATOR = "\n\n---\n\n";
@@ -22,11 +28,11 @@ export const splitRungs = (ladder: string): string[] =>
     .map((r) => r.replace(/^\s*\d+\s*\\?\.\s*/, "").trim())
     .filter(Boolean);
 
-export function dripPayload(input: { userNs: string; post: string; rungs: string[]; fbIgPublisher: Publisher; scheduleAt?: string | null }): DripPayload {
+export function dripPayload(input: { userNs: string; post: string; rungs: string[]; fbIgPublisher: Publisher; scheduleAt?: string | null } & DripExtras): DripPayload {
   const rungs = input.rungs.map((r) => r.trim()).filter(Boolean);
   const first = rungs[0] ?? "";
   const dripped = input.fbIgPublisher === "helixos" ? rungs : rungs.slice(1);
-  return { user_ns: input.userNs, post: input.post, first_comment: first, schedule_at: input.scheduleAt ?? "", rungs: joinRungs(dripped) };
+  return { user_ns: input.userNs, post: input.post, first_comment: first, schedule_at: input.scheduleAt ?? "", rungs: joinRungs(dripped), target: input.target ?? "both", rung_fb_post_id: input.fbPostId ?? "", rung_ig_media_id: input.igMediaId ?? "", gap_minutes: input.gapMinutes ? String(input.gapMinutes) : "", pin_last: input.pinLast ? "1" : "" };
 }
 
 /** GoHighLevel refuses a scheduled Threads post less than fifteen minutes out; the form says so before anything is sent. */
