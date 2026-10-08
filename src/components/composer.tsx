@@ -9,7 +9,7 @@ import { pushLadderUpdateAction } from "@/lib/actions/ladders";
 import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type Draft, type GroupTarget, type Target, type TargetKey, scheduleNotice } from "@/lib/engine/compose";
 import { hashtagsFor } from "@/lib/engine/repurpose";
 import { explainFabricated, findFabricated } from "@/lib/engine/blacklist";
-import { PRIVATE_MEDIA_NOTE, STORIES_MEDIA_NOTE, mediaBlock, mediaUrlProblem, mediaWarning, type ComposerMedia } from "@/lib/engine/compose-media";
+import { PRIVATE_MEDIA_NOTE, STORIES_MEDIA_NOTE, instagramImageProblem, mediaBlock, mediaUrlProblem, mediaWarning, type ComposerMedia } from "@/lib/engine/compose-media";
 import { ChannelPreview, type Persona } from "./channel-previews";
 import { AiStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
@@ -96,6 +96,8 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   // A picked file that shows a result is a typed dollar figure in another form: same rule, same gate, same wording as the ladder's checklist.
   const mediaProblem = mediaBlock(mediaAttachment, [body, ...schedulable.map((t) => draftOf(t).body)]);
   const urlProblem = mediaUrlProblem(mediaUrl);
+  // Instagram with no picture is refused here, before scheduling (rev 515), never at publish time.
+  const instagramProblem = instagramImageProblem(schedulable.map((t) => t.channel), { attachment: mediaAttachment, mediaUrl });
   const storiesPicked = mediaAttachment && selected.includes("ch:stories" as TargetKey);
   const mediaWarn = mediaWarning(mediaAttachment);
   // The preview shows the picked file through the signed-in read route; the typed URL is the fallback. Only the URL ever leaves here.
@@ -353,6 +355,12 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                   ))}
                 </select>
               </div>
+              {/* Instagram with no picture is said here, whatever else the composer offers (rev 515): never a held button with no reason. */}
+              {instagramProblem ? (
+                <p className="rounded-lg border border-danger bg-danger-soft p-2 text-xs" data-testid="instagram-image-block" role="alert">
+                  {instagramProblem}
+                </p>
+              ) : null}
               {library.length || uploader ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -367,6 +375,9 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                     {mediaAttachment ? (
                       <span className="inline-flex items-center gap-2 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-xs" data-testid="media-chip">
                         <span>{mediaAttachment.kind === "video" ? "🎬" : "🖼"} {mediaAttachment.label}</span>
+                        <a href={`${mediaAttachment.downloadUrl}${mediaAttachment.downloadUrl.includes("?") ? "&" : "?"}download=1`} className="underline" data-testid="media-download">
+                          Download image
+                        </a>
                         <button type="button" className="underline" onClick={() => setMediaAttachment(null)} data-testid="media-clear">
                           Clear
                         </button>
@@ -446,6 +457,11 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                 {problems.length} {problems.length === 1 ? "version needs" : "versions need"} a fix: {problems.map((p) => p.label.split(" ")[0]).join(", ")}
               </span>
             ) : null}
+            {instagramProblem ? (
+              <span className="rounded-full border border-danger px-2.5 py-1 text-xs text-danger" data-testid="instagram-image-pill">
+                {instagramProblem}
+              </span>
+            ) : null}
             {mediaProblem ? (
               <span className="rounded-full border border-danger px-2.5 py-1 text-xs text-danger" title={mediaProblem}>
                 The attached file needs a fix: {mediaProblem.split("\n")[0]}
@@ -455,10 +471,10 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
             <button type="button" className="btn btn-ghost" disabled={pending || !chosen.length} onClick={() => submit("draft")}>
               Save for later
             </button>
-            <button type="button" className="btn btn-soft" disabled={pending || !schedulable.length || problems.length > 0 || Boolean(mediaProblem) || Boolean(urlProblem)} onClick={() => submit("now")}>
+            <button type="button" className="btn btn-soft" disabled={pending || !schedulable.length || problems.length > 0 || Boolean(mediaProblem) || Boolean(urlProblem) || Boolean(instagramProblem)} onClick={() => submit("now")}>
               Post now
             </button>
-            <button type="button" className="btn btn-accent" disabled={pending || !schedulable.length || problems.length > 0 || Boolean(mediaProblem) || Boolean(urlProblem)} onClick={() => submit("schedule")}>
+            <button type="button" className="btn btn-accent" disabled={pending || !schedulable.length || problems.length > 0 || Boolean(mediaProblem) || Boolean(urlProblem) || Boolean(instagramProblem)} onClick={() => submit("schedule")}>
               {pending ? "Working…" : `Schedule ${chosen.length} ${chosen.length === 1 ? "post" : "posts"}`}
             </button>
           </div>

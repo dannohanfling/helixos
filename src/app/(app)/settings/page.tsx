@@ -60,6 +60,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const savedKit = await kitFor(v.workspace.id, v.user.id);
   // The member's own logos in their Images library, for the kit's logo pick (deck visuals §4); never another member's.
   const logos = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id), eq(schema.deckImages.kind, "logo")) });
+  // The graphic's avatar (rev 513): a photo or a logo of the member's own.
+  const avatars = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id), inArray(schema.deckImages.kind, ["photo", "logo"])), orderBy: [desc(schema.deckImages.createdAt)] });
   // A refused kit comes back as typed, so the person fixes the one pair named rather than typing thirteen fields again.
   const parseDraft = (raw: string | undefined): Partial<schema.BrandKit> | undefined => {
     if (!raw) return undefined;
@@ -531,6 +533,44 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Field label="Notes" hint="shown to you, never rendered">
               <input className="field" name="notes" defaultValue={brandKit?.notes ?? ""} />
             </Field>
+            <div className="sm:col-span-2 border-t pt-3">
+              <div className="text-sm font-semibold">The graphic&apos;s badge</div>
+              <p className="text-xs text-ink-3">On every graphic Make the graphic draws (Ladders): your avatar, name, verified tick and @handle under the headline, and the gold of the one phrase.</p>
+            </div>
+            <Field label="Display name">
+              <input className="field" name="graphicDisplayName" defaultValue={brandKit?.graphicDisplayName ?? ""} placeholder={v.user.name} data-testid="brand-graphic-name" />
+            </Field>
+            <Field label="@handle">
+              <input className="field" name="graphicHandle" defaultValue={brandKit?.graphicHandle ?? ""} placeholder="@yourhandle" data-testid="brand-graphic-handle" />
+            </Field>
+            <Field label="Avatar" hint="a photo or logo from your Images; a framed Business Page photo needs no extra ring">
+              <select className="field" name="graphicAvatarImageId" defaultValue={brandKit?.graphicAvatarImageId ?? ""} data-testid="brand-graphic-avatar">
+                <option value="">None</option>
+                {avatars.map((a) => (
+                  <option key={a.id} value={a.id}>{a.caption?.trim() || a.kind} · {a.width}×{a.height}</option>
+                ))}
+              </select>
+            </Field>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="graphicVerified" value="1" defaultChecked={brandKit?.graphicVerified ?? false} className="mt-1" data-testid="brand-graphic-verified" />
+              <span>
+                Verified
+                <span className="block text-xs text-ink-3">The blue tick beside your name, only if your page has one.</span>
+              </span>
+            </label>
+            <Field label="Gold, from" hint="hex; empty means Danno's Canva gold">
+              <input className="field font-mono" name="graphicGoldFrom" defaultValue={brandKit?.graphicGoldFrom ?? ""} maxLength={7} placeholder="DDA338" />
+            </Field>
+            <Field label="Gold, to">
+              <input className="field font-mono" name="graphicGoldTo" defaultValue={brandKit?.graphicGoldTo ?? ""} maxLength={7} placeholder="C5801F" />
+            </Field>
+            <label className="flex items-start gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" name="aiBackgrounds" value="1" defaultChecked={brandKit?.aiBackgrounds ?? true} className="mt-1" data-testid="brand-ai-backgrounds" />
+              <span>
+                Allow AI backgrounds
+                <span className="block text-xs text-ink-3">When no photo of yours fits a graphic, a background scene can be made with your own AI key. Backgrounds only: a person in a graphic is always your own real photo. Off, your photos or a plain ground.</span>
+              </span>
+            </label>
             <div className="sm:col-span-2">
               <SubmitButton className="btn btn-primary" pendingText="Saving…">Save brand kit</SubmitButton>
             </div>

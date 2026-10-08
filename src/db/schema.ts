@@ -1260,6 +1260,8 @@ export const webinarSections = sqliteTable(
  * webinars.
  */
 export const DECK_IMAGE_KINDS = ["photo", "screenshot", "proof", "logo", "graphic", "diagram"] as const;
+export const DECK_IMAGE_SOURCES = ["upload", "render", "ai"] as const;
+export type DeckImageSource = (typeof DECK_IMAGE_SOURCES)[number];
 export type DeckImageKind = (typeof DECK_IMAGE_KINDS)[number];
 export const deckImages = sqliteTable(
   "deck_images",
@@ -1278,6 +1280,8 @@ export const deckImages = sqliteTable(
     consentTick: integer("consent_tick", { mode: "boolean" }).notNull().default(false),
     consentName: text("consent_name"),
     consentAt: text("consent_at"),
+    /** Where the picture came from (Make the graphic): uploaded by the member, rendered by HelixOS, or an AI background (rev 524). */
+    source: text("source", { enum: DECK_IMAGE_SOURCES }).notNull().default("upload"),
     createdAt: createdAt(),
   },
   (t) => [index("deck_images_user").on(t.userId, t.createdAt)],
@@ -1386,6 +1390,8 @@ export const brandKits = sqliteTable(
     graphicGoldFrom: text("graphic_gold_from"),
     graphicGoldTo: text("graphic_gold_to"),
     graphicFont: text("graphic_font"),
+    /** Allow AI backgrounds (rev 524): on by default; off, a graphic uses only the member's own photos or a plain ground. Faces are never generated. */
+    aiBackgrounds: integer("ai_backgrounds", { mode: "boolean" }).notNull().default(true),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("brand_kits_member").on(t.workspaceId, t.userId)],
@@ -1820,6 +1826,8 @@ export const LADDER_STATUSES = ["draft", "ready", "live", "done"] as const;
 export const LADDER_AUDIENCES = ["warm", "cold"] as const;
 
 export type LadderKeyword = { keyword: string; use: string };
+/** How a ladder's graphic was made: the photo (an Images id, or none for a plain ground), the headline used, the stronger fade, and whether an AI background was allowed for it. */
+export type GraphicOptions = { photoImageId: string | null; headline: string; strongFade: boolean; aiBackground: boolean };
 export type LadderStat = { stat: string; source: string };
 export type LadderRung = { n: number; body: string; postedAt?: string | null };
 
@@ -1873,6 +1881,9 @@ export const ladders = sqliteTable(
     carousel: text("carousel", { mode: "json" }).$type<string[]>().notNull().default([]),
     igCaption: text("ig_caption").notNull().default(""),
     threadsChain: text("threads_chain", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Make the graphic (rev 513): the rendered graphic, a deck_images row of kind graphic, the member's own; and how it was made. */
+    graphicImageId: text("graphic_image_id"),
+    graphicOptions: text("graphic_options", { mode: "json" }).$type<GraphicOptions>(),
     notes: text("notes"),
     generatedBy: text("generated_by").notNull().default("scaffold"),
     status: text("status", { enum: LADDER_STATUSES }).notNull().default("draft"),

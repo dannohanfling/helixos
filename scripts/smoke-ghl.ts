@@ -161,6 +161,7 @@ async function main() {
     await page.fill('input[placeholder^="Working title"]', "GHL without a user id");
     await page.fill('input[placeholder^="Hook"]', "No user id yet.");
     await page.fill('textarea[placeholder^="Type content"]', "This must not reach the planner.");
+    await page.fill('[data-testid="media-url"]', "https://example.com/photo.jpg"); // Instagram takes no post without a picture (rev 515)
     await page.click('button[title="Facebook business page"]');
     await page.click('button:has-text("Schedule")');
     await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
@@ -180,6 +181,7 @@ async function main() {
     await page.fill('input[placeholder^="Working title"]', "GHL with a refused user id");
     await page.fill('input[placeholder^="Hook"]', "Refused id.");
     await page.fill('textarea[placeholder^="Type content"]', "This is refused by the planner.");
+    await page.fill('[data-testid="media-url"]', "https://example.com/photo.jpg"); // Instagram takes no post without a picture (rev 515)
     await page.click('button[title="Facebook business page"]');
     await page.click('button:has-text("Schedule")');
     await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
@@ -254,6 +256,7 @@ async function main() {
     await page.fill('input[placeholder^="Working title"]', "GHL end to end");
     await page.fill('input[placeholder^="Hook"]', "Twelve minutes on Tuesday.");
     await page.fill('textarea[placeholder^="Type content"]', "Beats three hours on Sunday.\nEvery single week.");
+    await page.fill('[data-testid="media-url"]', "https://example.com/photo.jpg"); // Instagram takes no post without a picture (rev 515)
     await page.fill('[data-testid="first-comment"]', "First comment test.");
     await page.click('button[title="Facebook business page"]');
     // A time still ahead in the member's own zone: a scheduled row whose time has passed with no readback is honestly "sending", then "lost track".
@@ -361,6 +364,7 @@ async function main() {
       await page.fill('input[placeholder^="Working title"]', title);
       await page.fill('input[placeholder^="Hook"]', "Instagram after a reconnect.");
       await page.fill('textarea[placeholder^="Type content"]', "The same account, a new id in GoHighLevel.");
+      await page.fill('[data-testid="media-url"]', "https://example.com/photo.jpg"); // Instagram takes no post without a picture (rev 515)
       // Instagram is on by default for a fresh post; the chip toggles, so it is pressed only when off.
       const igChip = page.locator('button[title="Instagram caption"]').first();
       if (!((await igChip.getAttribute("class")) ?? "").includes("border-accent")) await igChip.click();
@@ -442,6 +446,7 @@ async function main() {
       if (isOn !== on) await chip.click();
     };
     for (const [t, on] of [["Facebook business page", true], ["Instagram caption", true], ["Facebook personal", false], ["LinkedIn", false], ["Stories (FB / IG)", false], ["Email", false], ["Skool community", false]] as const) await setChip(t, on);
+    await page.fill('[data-testid="media-url"]', "https://example.com/photo.jpg"); // the demo ladder has no graphic here; Instagram takes no post without a picture (rev 515)
     await page.click('button:has-text("Post now")');
     await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
     const threadsRow = await dbl.query.contentVariants.findFirst({ where: eql(sl.contentVariants.contentItemId, ladderItemId) }).then(async () => (await dbl.query.contentVariants.findMany({ where: eql(sl.contentVariants.contentItemId, ladderItemId) })).find((x) => x.channel === "threads"));

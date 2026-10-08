@@ -17,6 +17,9 @@ import { LiveClock } from "@/components/rung-runner";
 import { Badge, Card, Disclosure, Field, PageHeader } from "@/components/ui";
 import { LIVE_POSTING_HOUR, checkScore, checklist, formatFor, headlineParts, publishBlockers, readyToPost, rungGapMinutes, rungsForAirtable, rungsPlain, threadsText } from "@/lib/engine/ladder";
 import { AiFormStatus } from "@/components/ai-status";
+import { GraphicMaker } from "@/components/graphic-maker";
+import { graphicStep, ownImage } from "@/lib/graphic";
+import { headlineChoices } from "@/lib/engine/graphic";
 import { AiPromise } from "@/components/ai-promise";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -53,7 +56,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return ownTitle(async (v) => (await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)), columns: { topic: true } }))?.topic, "Ladders");
 }
 
-export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string }> }) {
+export default async function LadderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; pushed?: string; ghl?: string; graphic?: string; photo?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)) });
@@ -71,7 +74,11 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
   const ready = readyToPost(checks);
   const blockers = publishBlockers(checks);
   const blocked = blockers.length > 0;
-  const { blocked: refused, pushed, ghl } = await searchParams;
+  const { blocked: refused, pushed, ghl, graphic: graphicNotice, photo: photoParam } = await searchParams;
+  // Make the graphic (rev 513): the member's own photos to choose from, the kit's badge, and the graphic made so far.
+  const m = { workspaceId: v.workspace.id, userId: v.user.id };
+  const [step, graphic] = await Promise.all([graphicStep(m, l.headline), ownImage(m, l.graphicImageId)]);
+  const badgeReady = Boolean(step.kit?.graphicDisplayName?.trim() && step.kit?.graphicHandle?.trim());
   const hold = blocked ? "Clear the checklist first" : undefined;
   const airtable = rungsForAirtable(l.rungs);
   // The seam with the live schedule: channel posts already scheduled keep their text until the client pushes the update.
@@ -186,8 +193,8 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
                   </Field>
                 </div>
                 <div>
-                  <HeadlinePreview headline={l.headline} handle={profile?.handle} />
-                  <p className="mt-2 text-[11px] text-ink-3">1080 × 1350. Photo top 60%, gradient to near-black. Anton, all caps, white, one gold phrase (#DDA338). The photo must argue the headline. Generate backgrounds only; you type the words.</p>
+                  <HeadlinePreview headline={l.headline} handle={step.kit?.graphicHandle || profile?.handle} />
+                  <p className="mt-2 text-[11px] text-ink-3">1080 × 1350. Photo top 60%, gradient to near-black. Anton, all caps, white, one gold phrase. The photo must argue the headline. <a href="#graphic" className="underline">Make the graphic</a> below draws it from your own photo.</p>
                 </div>
               </div>
             </Card>
@@ -225,6 +232,22 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
               </SubmitButton>
             </Card>
           </form>
+          <Card id="graphic" title="Make the graphic" action={graphic ? <span className="flex gap-2"><a href={`/api/deck-images/${graphic.id}?download=1`} className="btn btn-ghost btn-xs" data-testid="graphic-download-2x">Download 2×</a><a href={`/api/deck-images/${graphic.id}?size=1080&download=1`} className="btn btn-ghost btn-xs" data-testid="graphic-download-1080">Download 1080×1350</a></span> : null}>
+            {graphicNotice === "made" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="graphic-made">Graphic made. It is in your Images as a graphic, and Send to composer carries it.</p> : graphicNotice === "background" ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="graphic-background-made">Background made and picked. Make the graphic to draw the headline on it.</p> : graphicNotice ? <p className="mb-3 rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="graphic-error">{graphicNotice}</p> : null}
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
+              <GraphicMaker ladderId={l.id} choices={step.choices.map((c) => ({ id: c.id, caption: c.caption, kind: c.kind, source: c.source ?? "upload", width: c.width, height: c.height }))} suggestedId={step.suggestedId} preselectId={photoParam ?? null} headlines={headlineChoices(l.headline, l.altHeadlines)} options={l.graphicOptions ?? null} aiAllowed={step.aiAllowed} canGenerate={step.canGenerate} aiNote={step.aiNote} badgeReady={badgeReady} owner={m} />
+              <div>
+                {graphic ? (
+                  <a href={`/api/deck-images/${graphic.id}`} target="_blank" rel="noreferrer" data-testid="graphic-current">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={`/api/deck-images/${graphic.id}?size=1080`} alt={graphic.caption ?? "The graphic"} className="w-full rounded-lg border" />
+                  </a>
+                ) : (
+                  <div className="flex aspect-[4/5] items-center justify-center rounded-lg border border-dashed text-center text-xs text-ink-3" data-testid="graphic-none">No graphic yet</div>
+                )}
+              </div>
+            </div>
+          </Card>
         </div>
         <div className="space-y-4">
           <Card title="Evidence" action={<Badge tone={evidence.length ? "good" : "neutral"}>{evidence.length} citable</Badge>}>

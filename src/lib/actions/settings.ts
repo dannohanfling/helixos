@@ -20,6 +20,13 @@ async function ownLogo(workspaceId: string, userId: string, picked: string): Pro
   const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId), eq(schema.deckImages.kind, "logo")) });
   return img ? img.id : null;
 }
+/** The graphic's avatar (rev 513): one of the member's own photos or logos, never another member's. */
+async function ownAvatar(workspaceId: string, userId: string, picked: string): Promise<string | null> {
+  const id = picked.trim();
+  if (!id) return null;
+  const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId)) });
+  return img && (img.kind === "photo" || img.kind === "logo") ? img.id : null;
+}
 
 /** Any IANA zone the runtime knows; anything else is null, meaning "use the workspace's". */
 function validTimezone(tz: string): string | null {
@@ -168,6 +175,14 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
     aliases: str(formData, "aliases").split(/[,\n]+/).map((a) => a.trim()).filter(Boolean),
     showPriceAnchor: str(formData, "showPriceAnchor") === "1",
     notes: opt(formData, "notes"),
+    // Make the graphic's badge and gold (rev 513), and the AI backgrounds switch (rev 524), on the same kit: one Brand section.
+    graphicDisplayName: opt(formData, "graphicDisplayName")?.trim().slice(0, 80) || null,
+    graphicHandle: (opt(formData, "graphicHandle")?.trim() ? `@${opt(formData, "graphicHandle")!.trim().replace(/^@/, "")}`.slice(0, 60) : null),
+    graphicVerified: str(formData, "graphicVerified") === "1",
+    graphicAvatarImageId: await ownAvatar(workspaceId, userId, str(formData, "graphicAvatarImageId")),
+    graphicGoldFrom: normaliseHex(str(formData, "graphicGoldFrom")) || null,
+    graphicGoldTo: normaliseHex(str(formData, "graphicGoldTo")) || null,
+    aiBackgrounds: str(formData, "aiBackgrounds") === "1",
   };
   const problems = brandKitProblems(kit);
   // Refused with the problems named, and what was typed comes back with it: a refusal never empties the form.

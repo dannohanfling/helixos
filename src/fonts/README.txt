@@ -1,0 +1,1 @@
+Fonts bundled for Make the graphic (rev 513): Anton, Playfair Display and Inter, each under the SIL Open Font License 1.1 (the licence files beside them), as fontsource serves them (latin subset, woff). The pointing hand (twemoji-1f447.svg) is from Twemoji, copyright Twitter and contributors, CC-BY 4.0, https://github.com/jdecked/twemoji. No font is fetched at runtime.

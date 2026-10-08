@@ -16,6 +16,13 @@ export const PRIVATE_MEDIA_NOTE = "GoHighLevel needs a public address for media.
 export const STORIES_MEDIA_NOTE = "Stories need a photo or video the Social Planner can fetch. This private file does not count for Stories: paste a public address or take Stories off the list.";
 export const PRIVATE_URL_REFUSAL = "That address is a private file in HelixOS, which the Social Planner cannot fetch. Pick it from a proof instead, or paste a public address that starts with https://.";
 export const NOT_A_URL_REFUSAL = "The photo or video address must be a web address, starting with http:// or https://.";
+/** Instagram's feed takes no post without a picture (rev 515): said before scheduling, never at publish time. */
+export const INSTAGRAM_NEEDS_IMAGE = "Instagram needs an image: Make the graphic or pick one.";
+/** Null when Instagram is not going out, or it has a picture (a picked file or a typed address); the refusal otherwise. */
+export function instagramImageProblem(channels: readonly string[], media: { attachment: unknown | null; mediaUrl: string }): string | null {
+  if (!channels.includes("instagram")) return null;
+  return media.attachment || media.mediaUrl.trim() ? null : INSTAGRAM_NEEDS_IMAGE;
+}
 
 /**
  * A typed media address is handed to the Social Planner as-is. One of our private routes is refused whatever happens next;

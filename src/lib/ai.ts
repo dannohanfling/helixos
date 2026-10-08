@@ -146,6 +146,35 @@ export async function draftFull(task: string, user: string, maxTokens = 4000, op
   return r.text ? { text: r.text, cut: r.cut } : null;
 }
 
+/**
+ * One picture from the member's own OpenAI key (rev 524, AI backgrounds): a scene with no people and no text, as a PNG. Said
+ * plainly when it can't: no key, an Anthropic key (it makes no images), the cap, or a refusal. Logged as usage under its feature.
+ */
+export async function generateImage(prompt: string, size: "1024x1536" | "1536x1024" | "1024x1024" = "1024x1536"): Promise<{ bytes: Buffer } | { error: string }> {
+  const v = await getViewer();
+  if (!v) return { error: "Sign in first." };
+  const cred = await credentialFor(v.workspace.id, aiUserId(v));
+  if (!cred || cred.lastError) return { error: "Add an AI key in Settings → AI first." };
+  if (cred.provider !== "openai") return { error: "Your AI key is Anthropic's, which makes no images. Backgrounds come from your own photos, or add an OpenAI key in Settings → AI." };
+  if (!capExempt(v) && (await callsToday(v)) >= v.workspace.aiDailyCap) return { error: "Today's AI cap is reached. Pick one of your own photos, or try tomorrow." };
+  const key = open(cred.keyEncrypted);
+  if (!key) return { error: "Your AI key couldn't be read. Add it again in Settings → AI." };
+  const model = "gpt-image-1";
+  try {
+    const client = new OpenAI({ apiKey: key, baseURL: openaiBaseURL() });
+    const r = await client.images.generate({ model, prompt, size, quality: "medium", n: 1 });
+    const b64 = r.data?.[0]?.b64_json;
+    if (!b64) return { error: "The model sent no picture back. Try once more, or pick one of your own photos." };
+    await db.insert(schema.aiUsage).values({ id: newId(), workspaceId: v.workspace.id, userId: aiUserId(v), provider: cred.provider, model, feature: "graphic_background", inputTokens: r.usage?.input_tokens ?? 0, outputTokens: r.usage?.output_tokens ?? 0, cacheWriteTokens: 0, cacheReadTokens: 0, estimatedCostUsd: 0.04 });
+    return { bytes: Buffer.from(b64, "base64") };
+  } catch (e) {
+    const err = e as { status?: number; message?: string };
+    console.error("[ai] image failed", JSON.stringify({ status: err.status, message: (err.message ?? "").slice(0, 300) }));
+    if (err.status === 401 || err.status === 402 || err.status === 403) await db.update(schema.aiCredentials).set({ lastError: explainAiError(cred.provider, err.status, err.message ?? "", model) }).where(eq(schema.aiCredentials.id, cred.id));
+    return { error: err.status === 400 && /safety|policy|moderation/i.test(err.message ?? "") ? "The model refused that scene. Change the headline's words, or pick one of your own photos." : "The picture couldn't be made just now. Try again in a minute, or pick one of your own photos." };
+  }
+}
+
 /** A cheap real call that proves the key works and billing is on. Returns the reason in plain words when it doesn't. */
 export async function validateKey(provider: AiProvider, key: string): Promise<{ ok: true; inputTokens: number; outputTokens: number; model: string } | { ok: false; reason: string }> {
   const model = MODELS[provider].light;

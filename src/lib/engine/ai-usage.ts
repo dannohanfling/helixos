@@ -11,6 +11,7 @@ export type Tier = "strong" | "light";
 export const FEATURES: Record<string, { label: string; tier: Tier }> = {
   webinar_section: { label: "Webinar script sections", tier: "strong" },
   ladder: { label: "Comment ladders", tier: "strong" },
+  graphic_background: { label: "Make the graphic: AI backgrounds", tier: "light" },
   composer_polish: { label: "Composer: shape for every channel", tier: "light" },
   repurpose: { label: "Repurpose drafts", tier: "light" },
   group_variant: { label: "Group-aligned drafts", tier: "light" },

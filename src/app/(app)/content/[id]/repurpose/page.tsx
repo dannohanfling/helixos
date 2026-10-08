@@ -11,7 +11,7 @@ import { gateLine, isUnreviewed, variantName } from "@/lib/engine/provenance";
 import { GateBlock, UnreviewedMark } from "@/components/provenance";
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
 import { distributeAllAction, repostChannelAction } from "@/lib/actions/compose";
-import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, PRIVATE_URL_REFUSAL } from "@/lib/engine/compose-media";
+import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, INSTAGRAM_NEEDS_IMAGE, PRIVATE_URL_REFUSAL } from "@/lib/engine/compose-media";
 import { checkAllPostStatusAction, syncPostStatusAction } from "@/lib/actions/social";
 import { nowFor, outcomeOf, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
 import { refreshStale } from "@/lib/planner-status";
@@ -117,14 +117,16 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return ownTitle(async (v) => (await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)), columns: { title: true } }))?.title, "Distribute");
 }
 
-export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string; gate?: string; variant?: string; status?: string; items?: string; startDate?: string; startTime?: string; kept?: string; reposted?: string }> }) {
+export default async function RepurposePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ blocked?: string; drip?: string; gate?: string; variant?: string; status?: string; items?: string; startDate?: string; startTime?: string; kept?: string; reposted?: string; left?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
-  const { blocked, drip, kept, reposted, ...sp } = await searchParams;
+  const { blocked, drip, kept, reposted, left, ...sp } = await searchParams;
+  // One click everywhere left Instagram out (rev 515): it takes no post without a picture, so the send went on without it.
+  const leftLine = left === "instagram" ? `Instagram was left out: ${INSTAGRAM_NEEDS_IMAGE} Everything else went.` : null;
   // The one-click send scheduled nothing because every channel was already posted (rev 567): said by name, never a silent "Scheduled".
   const keptLine = kept ? `Nothing scheduled: ${kept.split("|").filter(Boolean).map((l) => `${l} already posted`).join("; ")}. A posted channel is never overwritten. To post one again on purpose, use "Post again to this channel" on its row.` : null;
   // The page's own sentences, chosen by a code: a block on the one-click send is never silent and never free text from the address bar.
-  const blockedLine = blocked === "threads" ? THREADS_EXCLUSIVE : blocked === "media" ? `${ILLUSTRATIVE_LABEL}\nAn attached file shows a result. Add ${ILLUSTRATIVE_MARK} to the post, in every version that goes out. Nothing was scheduled.` : blocked === "url" ? `${PRIVATE_URL_REFUSAL} Nothing was scheduled.` : blocked === "fabricated" ? "A statistic in this post is on the blacklist, so nothing was scheduled. Open it in the composer to see which one and what to say instead." : null;
+  const blockedLine = blocked === "threads" ? THREADS_EXCLUSIVE : blocked === "instagram" ? `${INSTAGRAM_NEEDS_IMAGE} Nothing was scheduled.` : blocked === "media" ? `${ILLUSTRATIVE_LABEL}\nAn attached file shows a result. Add ${ILLUSTRATIVE_MARK} to the post, in every version that goes out. Nothing was scheduled.` : blocked === "url" ? `${PRIVATE_URL_REFUSAL} Nothing was scheduled.` : blocked === "fabricated" ? "A statistic in this post is on the blacklist, so nothing was scheduled. Open it in the composer to see which one and what to say instead." : null;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
   if (!item) notFound();
   const [variants, groups] = await Promise.all([
@@ -208,6 +210,9 @@ export default async function RepurposePage({ params, searchParams }: { params: 
       ) : null}
       {keptLine ? (
         <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="distribute-kept" role="status">{keptLine}</p>
+      ) : null}
+      {leftLine ? (
+        <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="distribute-left" role="status">{leftLine}</p>
       ) : null}
       {reposted ? (
         <p className="mb-4 rounded-lg bg-good-soft p-3 text-sm" data-testid="reposted" role="status">Posting again now. The row below says what happened.</p>

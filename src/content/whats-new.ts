@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 119,
+    date: "2026-10-08",
+    title: "Make the graphic: your headline on your photo",
+    lines: [
+      "On a comment ladder, Make the graphic draws the headline on one of your own photos in the ladder template: the photo over the top, the fade, the two big lines with the one gold phrase, (READ COMMENTS) and your badge: avatar, name, verified tick and @handle from your Brand kit. HelixOS suggests the photo whose caption matches the headline; pick another, or upload one there.",
+      "One file is kept, the sharp 2× master (2160 by 2700, PNG), in your Images as a graphic. Download it at 2× or at 1080 by 1350; Remake with another photo or an alternate headline, or a stronger fade for a busy picture. Send to composer carries it, with Download image beside the copy-and-paste versions; Instagram with no picture is refused before scheduling, not at publish time.",
+      "Allow AI backgrounds, on in your Brand kit and switchable per graphic: when no photo of yours fits, a background scene can be made with your own OpenAI key. Backgrounds only; a person in a graphic is always your own real photo. Your Claude can ask for it too: ladder_make_graphic.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 118,
     date: "2026-10-08",
     title: "KPIs on your Business goals",

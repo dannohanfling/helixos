@@ -288,6 +288,9 @@ async function main() {
     // The composer: the same post, sent as stored, is named at the send; Review stays; Continue anyway saves the versions
     await page.goto(`${base}/content/${itemId}/compose`);
     await expectText(page, "Redistribute:", "composer");
+    // Instagram is on and takes no post without a picture (rev 515): a public address stands in, so the gate is what is tested.
+    const giveAPicture = async () => { const url = page.locator('[data-testid="media-url"]'); if ((await url.count()) && (await url.isEnabled()) && !(await url.inputValue()).trim()) await url.fill("https://example.com/photo.jpg"); };
+    await giveAPicture();
     await page.click('button:has-text("Schedule")');
     const g5 = await readGate(page, "composer gate");
     if (JSON.stringify(g5.items) !== JSON.stringify([i1.title]) || g5.line !== gateLine(1)) throw new Error(`the composer names the post: ${JSON.stringify(g5)}`);
@@ -295,6 +298,7 @@ async function main() {
     await page.click('[data-testid="review-gate-review"]');
     await page.waitForTimeout(300);
     await noGate(page, "composer review");
+    await giveAPicture();
     await page.click('button:has-text("Schedule")');
     await readGate(page, "composer gate again");
     await page.click('[data-testid="review-gate-continue"]');

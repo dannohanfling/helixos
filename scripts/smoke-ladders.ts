@@ -1,6 +1,12 @@
 /** Comment ladders: facts profile → new skeleton (no Claude) → checklist blocks it → the finished demo ladder clears → live hour → Airtable copy → composer → scheduled posts keep their text until the client pushes the update. */
 import { chromium, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { spawn } from "node:child_process";
+// The private store is the mock blob (as the deck-images walk runs it): the walk writes Maya's photo there and reads the graphic back.
+const blobPort = 4050;
+process.env.PROOF_BLOB_READ_WRITE_TOKEN ||= "vercel_blob_rw_PROOFSTORE_testsecret";
+process.env.BLOB_READ_WRITE_TOKEN ||= "vercel_blob_rw_TESTSTORE_testsecret";
+process.env.VERCEL_BLOB_API_URL ||= `http://localhost:${blobPort}`;
 
 const base = process.argv[2] ?? "http://localhost:3000";
 mkdirSync("screenshots", { recursive: true });
@@ -47,6 +53,8 @@ async function checksWhen(page: Page, key: string, expected: boolean): Promise<R
 }
 
 async function main() {
+  const blob = spawn("npx", ["tsx", "scripts/mock-blob.ts", String(blobPort)], { stdio: "ignore", detached: true });
+  await new Promise((r) => setTimeout(r, 2500));
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
@@ -176,7 +184,80 @@ async function main() {
     if (!clip.startsWith("1\\. Mistake one.") || !clip.includes("\n---\n2\\. ")) throw new Error(`Airtable copy not escaped: ${clip.slice(0, 40)}`);
     console.log("✓ Airtable copy escapes rung numbers");
 
+    // ── Make the graphic (rev 513, 514, 515, 524): Maya's own photo, the template, one 2× master, the 1080 copy on request, a remake. ──
+    const { putDeckObject, readProofObject } = await import("@/lib/proof-storage");
+    const { deckImageKey } = await import("@/lib/engine/deck-image");
+    const { newId } = await import("@/lib/ids");
+    const sharp = (await import("sharp")).default;
+    const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
+    const mayaM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+    const ws = mayaM.workspaceId;
+    const photoBytes = await sharp({ create: { width: 1200, height: 1500, channels: 3, background: { r: 46, g: 134, b: 222 } } }).jpeg().toBuffer();
+    const photoId = newId();
+    const obj = await putDeckObject(deckImageKey(ws, maya.id, photoId, "jpg"), photoBytes, "image/jpeg");
+    await db.insert(schema.deckImages).values({ id: photoId, workspaceId: ws, userId: maya.id, kind: "photo", blobKey: obj.key, blobUrl: obj.url, mime: "image/jpeg", width: 1200, height: 1500, caption: "Me, the week three diet photo" });
+    const otherId = newId();
+    const obj2 = await putDeckObject(deckImageKey(ws, maya.id, otherId, "jpg"), photoBytes, "image/jpeg");
+    await db.insert(schema.deckImages).values({ id: otherId, workspaceId: ws, userId: maya.id, kind: "photo", blobKey: obj2.key, blobUrl: obj2.url, mime: "image/jpeg", width: 1200, height: 1500, caption: "Desk at night" });
+    // The badge from the Brand kit (Settings), the avatar one of her own photos; AI backgrounds stay on by default.
+    await page.goto(`${base}/settings`);
+    // A member with no kit yet saves the starter kit under a name of their own, with the badge on it.
+    if (!(await page.locator('[data-testid="brand-form"] input[name="name"]').inputValue()).trim()) await page.fill('[data-testid="brand-form"] input[name="name"]', "Maya's kit");
+    await page.fill('[data-testid="brand-graphic-name"]', "Maya Torres");
+    await page.fill('[data-testid="brand-graphic-handle"]', "mayacoaches");
+    await page.check('[data-testid="brand-graphic-verified"]');
+    await page.selectOption('[data-testid="brand-graphic-avatar"]', photoId);
+    if (!(await page.locator('[data-testid="brand-ai-backgrounds"]').isChecked())) throw new Error("Allow AI backgrounds is on by default");
+    await submit(page, 'button:has-text("Save brand kit")');
+    if (await page.locator('[data-testid="brand-refused"]').count()) throw new Error(`the kit was refused: ${await page.locator('[data-testid="brand-refused"]').innerText()}`);
+    await page.locator('[data-testid="brand-saved"]').waitFor({ timeout: 15000 });
+    const kit = await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, ws), eq(schema.brandKits.userId, maya.id)) });
+    if (kit?.graphicDisplayName !== "Maya Torres" || kit.graphicHandle !== "@mayacoaches" || !kit.graphicVerified || kit.graphicAvatarImageId !== photoId || !kit.aiBackgrounds) throw new Error(`the kit carries the badge: ${JSON.stringify({ name: kit?.graphicDisplayName, handle: kit?.graphicHandle, v: kit?.graphicVerified, a: kit?.graphicAvatarImageId, ai: kit?.aiBackgrounds })}`);
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    await page.locator('[data-testid="graphic-maker"]').waitFor({ timeout: 20000 });
+    if ((await page.locator('[data-testid="graphic-photo"]').inputValue()) !== photoId) throw new Error("the photo whose caption shares the headline's words is suggested and picked");
+    if (!(await page.locator('[data-testid="graphic-photo"] option').first().innerText()).includes("No photo")) throw new Error("a plain ground is offered");
+    const headlines = await page.locator('[data-testid="graphic-headline"] option').allInnerTexts();
+    if (headlines.length !== 2 || !headlines[1].startsWith("Alternate")) throw new Error(`the headline and its alternate are offered: ${headlines.join(" | ")}`);
+    if (!(await page.locator('[data-testid="graphic-none"]').count())) throw new Error("no graphic yet");
+    await Promise.all([page.waitForURL(/graphic=made/, { timeout: 60000 }), page.locator('[data-testid="graphic-make"]').click()]);
+    await page.locator('[data-testid="graphic-made"]').waitFor({ timeout: 20000 });
+    let demoRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
+    const g1 = (await db.query.deckImages.findFirst({ where: eq(schema.deckImages.id, demoRow.graphicImageId ?? "") }))!;
+    if (!g1 || g1.kind !== "graphic" || g1.source !== "render" || g1.userId !== maya.id || g1.mime !== "image/png" || g1.width !== 2160 || g1.height !== 2700) throw new Error(`the master is one PNG of kind graphic at 2×: ${JSON.stringify({ kind: g1?.kind, source: g1?.source, mime: g1?.mime, w: g1?.width, h: g1?.height })}`);
+    if (g1.caption !== "I QUIT EVERY DIET BY WEEK THREE UNTIL I STOPPED PLANNING SUNDAYS") throw new Error(`the caption is the headline: ${g1.caption}`);
+    if (demoRow.graphicOptions?.photoImageId !== photoId || demoRow.graphicOptions.headline !== demoRow.headline) throw new Error(`the options are kept: ${JSON.stringify(demoRow.graphicOptions)}`);
+    const masterRes = await readProofObject(g1.blobUrl);
+    const master = Buffer.from(await masterRes.arrayBuffer());
+    const meta = await sharp(master).metadata();
+    if (meta.format !== "png" || meta.width !== 2160 || meta.height !== 2700) throw new Error(`the stored file is a 2160×2700 PNG: ${meta.format} ${meta.width}×${meta.height}`);
+    // The photo's blue is in the top; the band under the headline is black.
+    const { data: px } = await sharp(master).extract({ left: 1080, top: 300, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
+    if (px[2] < 150 || px[0] > 90) throw new Error(`the photo covers the top: ${[...px].join(",")}`);
+    const { data: lo } = await sharp(master).extract({ left: 40, top: 2650, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
+    if (lo[0] > 10 || lo[1] > 10 || lo[2] > 10) throw new Error(`the bottom band is black: ${[...lo].join(",")}`);
+    const small = await page.request.get(`${base}/api/deck-images/${g1.id}?size=1080&download=1`);
+    const smeta = await sharp(Buffer.from(await small.body())).metadata();
+    if (small.status() !== 200 || smeta.width !== 1080 || smeta.height !== 1350 || smeta.format !== "png" || !(small.headers()["content-disposition"] ?? "").includes("1080x1350")) throw new Error(`the 1080×1350 copy comes on request, as a PNG download: ${small.status()} ${smeta.width}×${smeta.height} ${small.headers()["content-disposition"]}`);
+    if ((await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.userId, maya.id), eq(schema.deckImages.kind, "graphic")) })).length !== 1) throw new Error("one file is stored, never a second 1080 one");
+    // Remake with the alternate headline and the other photo: the ladder points at the new one, the old one stays in Images.
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    await page.locator('[data-testid="graphic-current"]').waitFor({ timeout: 20000 });
+    await page.selectOption('[data-testid="graphic-headline"]', { index: 1 });
+    await page.selectOption('[data-testid="graphic-photo"]', otherId);
+    await page.check('[data-testid="graphic-strong-fade"]');
+    await Promise.all([page.waitForURL(/graphic=made/, { timeout: 60000 }), page.locator('[data-testid="graphic-make"]').click()]);
+    demoRow = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
+    if (demoRow.graphicImageId === g1.id || demoRow.graphicOptions?.headline !== demoRow.altHeadlines[0] || demoRow.graphicOptions.photoImageId !== otherId || !demoRow.graphicOptions.strongFade) throw new Error(`the remake replaces the ladder's graphic with the alternate headline: ${JSON.stringify(demoRow.graphicOptions)}`);
+    if ((await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.userId, maya.id), eq(schema.deckImages.kind, "graphic")) })).length !== 2) throw new Error("the previous graphic stays in Images");
+    await page.goto(`${base}/images?kind=graphic`);
+    await page.locator('[data-testid="library-image-caption"]').first().waitFor({ timeout: 20000 });
+    const captions = await page.locator('[data-testid="library-image-caption"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+    if (captions.length !== 2 || !captions.some((c) => c.startsWith("FIVE MISTAKES THAT ENDED EVERY DIET"))) throw new Error(`the graphics are in Images under their headlines: ${captions.join(" | ")}`);
+    console.log("✓ Make the graphic: the suggested photo, the badge from the kit, one 2× PNG master in Images, the 1080 copy on request, a remake with the alternate headline and a stronger fade");
+
     // Composer hand-off
+    await page.goto(`${base}/content/ladders/${demoId}`);
     const ladderUrl = page.url();
     await submit(page, 'button:has-text("Send to composer")');
     await page.waitForURL(/\/content\/[a-z0-9-]+\/compose/i);
@@ -187,8 +268,21 @@ async function main() {
     await expectText(page, "A Threads chain posts as separate posts. Copy them out, or schedule the other channels here.", "chain is copy-only, with the reason");
     if (!(await page.locator('[data-testid="copy-only"] button:has-text("Copy the chain")').count())) throw new Error("the chain must be copyable from the composer");
     if (await page.locator('[data-testid="over-limit"]').count()) throw new Error("a chain must not be shown as one over-long post");
+    // The graphic rides in as the post's picture (rev 515); Instagram with no picture is refused before scheduling.
+    const chip = page.locator('[data-testid="media-chip"]');
+    if (!(await chip.count()) || !(await chip.innerText()).includes("FIVE MISTAKES")) throw new Error(`the ladder's graphic is the post's picture in the composer: ${await chip.count() ? await chip.innerText() : "no chip"}`);
+    if (!(await page.locator('[data-testid="media-download"]').getAttribute("href"))?.includes("download=1")) throw new Error("Download image sits beside the picked picture");
+    if (await page.locator('[data-testid="instagram-image-block"]').count()) throw new Error("with the graphic picked, Instagram is not blocked");
+    await page.locator('[data-testid="media-clear"]').click();
+    await page.locator('[data-testid="instagram-image-block"]').waitFor({ timeout: 10000 });
+    if (!(await page.locator('[data-testid="instagram-image-block"]').innerText()).includes("Instagram needs an image: Make the graphic or pick one")) throw new Error("the Instagram refusal says what to do");
+    if (!(await page.locator('button:has-text("Schedule")').isDisabled())) throw new Error("Schedule is held while Instagram has no picture");
+    await page.selectOption('[data-testid="media-from-proof"]', `img:${demoRow.graphicImageId}`);
+    await page.locator('[data-testid="instagram-image-block"]').waitFor({ state: "detached", timeout: 10000 });
     await page.click('button:has-text("Schedule")');
     await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
+    const itemRow = await db.query.contentItems.findFirst({ where: eq(schema.contentItems.id, itemId) });
+    if (itemRow?.mediaAttachmentId !== `img:${demoRow.graphicImageId}`) throw new Error(`the scheduled post carries the graphic: ${itemRow?.mediaAttachmentId}`);
     const fbVariant = () => db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, "fb_personal"), eq(schema.contentVariants.groupId, "")) });
     const scheduled = await fbVariant();
     if (scheduled?.status !== "scheduled") throw new Error(`Facebook version should be scheduled, is ${scheduled?.status}`);
@@ -234,6 +328,7 @@ async function main() {
     console.log("✓ list and cadence");
   } finally {
     await browser.close();
+    if (blob.pid) try { process.kill(-blob.pid); } catch { /* already gone */ }
   }
   // Never vacuous: every walk asserts page content before this runs, so the responses this reads over are never an empty set.
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);

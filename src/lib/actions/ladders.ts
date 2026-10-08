@@ -18,6 +18,8 @@ import { pushSocialPost } from "@/lib/integrations";
 import { staleScheduledFor } from "@/lib/queries/ladders";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
 import { draftAvatarBrief } from "@/lib/avatars";
+import { generateBackground, makeGraphic, ownImage } from "@/lib/graphic";
+import { headlineChoices } from "@/lib/engine/graphic";
 
 /**
  * The publish gate. Anything that pushes a ladder outward (to the composer, to ready/live/done, a rung marked posted)
@@ -272,7 +274,8 @@ export async function sendLadderToComposerAction(formData: FormData): Promise<vo
   let itemId = l.contentItemId;
   const existing = itemId ? await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) }) : null;
   // The ladder composes the post and its channel bodies from what the coach built: rule, never gated.
-  const item = { title: l.postName || l.topic, hook: l.hook || null, body: l.copy || null, hasCta: l.keyword !== "NONE", contentType: "Comment Ladder", notes: l.notes, origin: "rule" as const };
+  // The ladder's graphic is the post's picture on every image channel (rev 515): picked here, no re-upload; a remake follows.
+  const item = { title: l.postName || l.topic, hook: l.hook || null, body: l.copy || null, hasCta: l.keyword !== "NONE", contentType: "Comment Ladder", notes: l.notes, origin: "rule" as const, ...(l.graphicImageId ? { mediaAttachmentId: `img:${l.graphicImageId}` } : {}) };
   if (existing) await db.update(schema.contentItems).set(item).where(eq(schema.contentItems.id, existing.id));
   else {
     itemId = newId();
@@ -323,4 +326,35 @@ export async function deleteLadderAction(formData: FormData): Promise<void> {
   await db.delete(schema.ladders).where(eq(schema.ladders.id, l.id));
   refresh();
   redirect("/content/ladders");
+}
+
+/**
+ * Make the graphic (rev 513): renders the ladder's headline on one of the member's own photos in the approved template and
+ * stores the master as an Images entry of kind graphic, pointed at from the ladder. The photo must be the member's own, the
+ * headline one of the ladder's (its own or an alternate). A remake replaces the ladder's graphic; the old one stays in Images.
+ */
+export async function makeGraphicAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx({ team: "allow" });
+  const l = await own(str(formData, "id"), userId);
+  const back = `/content/ladders/${l.id}`;
+  const m = { workspaceId, userId };
+  const photoId = str(formData, "photoImageId").trim();
+  const photo = photoId ? await ownImage(m, photoId) : null;
+  if (photoId && !photo) redirect(`${back}?graphic=${encodeURIComponent("That photo isn't in your Images. Pick another.")}#graphic`);
+  const choices = headlineChoices(l.headline, l.altHeadlines);
+  const headline = choices.find((h) => h === str(formData, "headline").trim()) ?? choices[0] ?? "";
+  if (!headline.trim()) redirect(`${back}?graphic=${encodeURIComponent("Write the headline first.")}#graphic`);
+  const r = await makeGraphic(m, l, { photoImageId: photo?.id ?? null, headline, strongFade: str(formData, "strongFade") === "1", aiBackground: str(formData, "aiBackground") === "1" });
+  refresh();
+  redirect(r.ok ? `${back}?graphic=made#graphic` : `${back}?graphic=${encodeURIComponent(r.error)}#graphic`);
+}
+
+/** An AI background for the graphic (rev 524): made with the member's own key when their kit allows it, kept as one of their photos and picked for the next make. */
+export async function generateBackgroundAction(formData: FormData): Promise<void> {
+  const { workspaceId, userId } = await ctx({ team: "allow" });
+  const l = await own(str(formData, "id"), userId);
+  const back = `/content/ladders/${l.id}`;
+  const r = await generateBackground({ workspaceId, userId }, l);
+  refresh();
+  redirect(r.ok ? `${back}?graphic=background&photo=${r.imageId}#graphic` : `${back}?graphic=${encodeURIComponent(r.error)}#graphic`);
 }

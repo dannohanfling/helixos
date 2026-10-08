@@ -15,7 +15,7 @@ import { readRules } from "@/lib/engine/groups";
 import { explainFabricated, findFabricated, stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { type ScheduleSkip, type Target, channelTargets, draftFor, groupTargets, normaliseTargets, staggerSchedule } from "@/lib/engine/compose";
 import { PUBLISHABLE } from "@/lib/engine/ghl-map";
-import { ILLUSTRATIVE_LABEL, mediaBlock, mediaUrlProblem } from "@/lib/engine/compose-media";
+import { ILLUSTRATIVE_LABEL, INSTAGRAM_NEEDS_IMAGE, instagramImageProblem, mediaBlock, mediaUrlProblem } from "@/lib/engine/compose-media";
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
 import { background, logSync, pushSocialPost } from "@/lib/integrations";
@@ -85,6 +85,9 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
   // A typed address goes to the Social Planner as-is: it must be a public web address, never one of our private routes.
   const urlProblem = mediaUrlProblem(payload.mediaUrl, payload.mode !== "draft");
   if (urlProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, skipped: [], blocked: urlProblem };
+  // Instagram with no picture (rev 515): refused by the server too, before anything is scheduled.
+  const instagramProblem = payload.mode !== "draft" ? instagramImageProblem(payload.targets.map((t) => t.channel), { attachment, mediaUrl: payload.mediaUrl }) : null;
+  if (instagramProblem) return { id: payload.id ?? "", scheduled: 0, posted: 0, pushed: 0, skipped: [], blocked: instagramProblem };
   // While the comment-ladder handoff is on, Threads is Community Loyalty's: the server refuses it as the chip does. The
   // refusal looks at the targets as they will be saved: a group id that is not the member's own is a plain channel post.
   const ownGroups = await db.query.groups.findMany({ where: eq(schema.groups.userId, userId) });
@@ -247,7 +250,11 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
   const picked = groups.filter((g) => g.kind === "own" || (g.kind === "prospect" && g.rank >= 1 && g.rank <= 3));
   // While the handoff is on, Threads is Community Loyalty's and is not part of "everywhere".
   const dripOn = dripSetup(v.membership).on;
-  const targets: Target[] = [...groupTargets(picked), ...channelTargets().filter((t) => !(dripOn && t.channel === "threads"))];
+  // Instagram takes no post without a picture (rev 515): with none on the item, one click everywhere leaves Instagram out and
+  // says so, rather than refusing the whole send or failing at publish time.
+  const hasPicture = Boolean(item.mediaAttachmentId || (item.mediaUrl ?? "").trim());
+  const targets: Target[] = [...groupTargets(picked), ...channelTargets().filter((t) => !(dripOn && t.channel === "threads") && !(!hasPicture && t.channel === "instagram"))];
+  const left = hasPicture ? "" : "&left=instagram";
   // A ladder post's first comment is the drip's rung 1: one click everywhere carries none, whatever the item held before the lock.
   const ladderPost = Boolean(await db.query.ladders.findFirst({ where: and(eq(schema.ladders.contentItemId, item.id), eq(schema.ladders.userId, userId)), columns: { id: true } }));
   const when = staggerSchedule(targets, `${startDate}T${startTime}:00`);
@@ -273,9 +280,9 @@ export async function distributeAllAction(formData: FormData): Promise<void> {
   // The gate is never silent either: the page that offered the button names the drafts and offers Review or Continue anyway.
   if (result.gate) redirect(`/content/${item.id}/repurpose?gate=distribute&items=${encodeURIComponent(result.gate.items.join("\n"))}&startDate=${encodeURIComponent(startDate)}&startTime=${encodeURIComponent(startTime)}`);
   // A block is never silent: the page that offered the button names it.
-  if (result.blocked) redirect(`/content/${item.id}/repurpose?blocked=${result.blocked.startsWith(ILLUSTRATIVE_LABEL) ? "media" : mediaUrlProblem(item.mediaUrl ?? "") ? "url" : result.blocked === THREADS_EXCLUSIVE ? "threads" : "fabricated"}`);
+  if (result.blocked) redirect(`/content/${item.id}/repurpose?blocked=${result.blocked.startsWith(ILLUSTRATIVE_LABEL) ? "media" : mediaUrlProblem(item.mediaUrl ?? "") ? "url" : result.blocked === THREADS_EXCLUSIVE ? "threads" : result.blocked === INSTAGRAM_NEEDS_IMAGE ? "instagram" : "fabricated"}`);
   // Nothing scheduled, because every channel was already posted: the page says so by name (rev 567), never a silent "Scheduled".
-  if (result.scheduled + result.posted === 0 && result.skipped.length) redirect(`/content/${item.id}/repurpose?kept=${encodeURIComponent(result.skipped.map((s) => s.label).join("|"))}`);
+  if (result.scheduled + result.posted === 0 && result.skipped.length) redirect(`/content/${item.id}/repurpose?kept=${encodeURIComponent(result.skipped.map((s) => s.label).join("|"))}${left}`);
   // Back to the page with a clean address: a gate or a block that was answered is not shown again on the next load.
-  redirect(`/content/${item.id}/repurpose`);
+  redirect(`/content/${item.id}/repurpose${left ? `?${left.slice(1)}` : ""}`);
 }

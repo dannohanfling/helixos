@@ -97,6 +97,15 @@ async function main() {
   await expectText(page, "customized", "override marked");
   await expectText(page, "Custom Instagram caption", "preview reflects override");
   await shot(page, "c02-composer-custom");
+  // Instagram is on and takes no post without a picture (rev 515): Schedule is held and says so until one is given.
+  {
+    const scheduleBtn = page.locator('button.btn-accent:has-text("Schedule")').first();
+    // On a channel tab the media row is out of view, so the reason also sits beside the held button.
+    if (!(await scheduleBtn.isDisabled()) || !(await page.locator('[data-testid="instagram-image-pill"]').count())) throw new Error(`Instagram with no picture holds Schedule and says why: button "${await scheduleBtn.innerText()}" disabled=${await scheduleBtn.isDisabled()}, blocks=${await page.locator('[data-testid="instagram-image-block"]').count()}, chips=${JSON.stringify(await page.locator("button[title]").evaluateAll((els) => els.filter((e) => /border-accent/.test(e.className)).map((e) => e.getAttribute("title"))))}`);
+  }
+  await page.locator('div.border-b button:has-text("Source")').click();
+  await page.fill('[data-testid="media-url"]', "https://example.com/photo.jpg");
+  await page.locator('[data-testid="instagram-image-pill"]').waitFor({ state: "detached", timeout: 10000 });
   await page.click('button:has-text("Schedule")');
   await page.getByText(/Saved \d+ versions/).waitFor({ timeout: 20000 });
   await page.click('a:has-text("See every version")');

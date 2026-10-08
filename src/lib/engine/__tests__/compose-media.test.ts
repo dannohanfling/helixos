@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ALT_WARNING, ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, NOT_A_URL_REFUSAL, PRIVATE_MEDIA_NOTE, PRIVATE_URL_REFUSAL, downloadUrlFor, mediaBlock, mediaUrlFor, mediaUrlProblem, mediaWarning, type ComposerMedia } from "../compose-media";
+import { INSTAGRAM_NEEDS_IMAGE, instagramImageProblem, ALT_WARNING, ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, NOT_A_URL_REFUSAL, PRIVATE_MEDIA_NOTE, PRIVATE_URL_REFUSAL, downloadUrlFor, mediaBlock, mediaUrlFor, mediaUrlProblem, mediaWarning, type ComposerMedia } from "../compose-media";
 
 const media = (patch: Partial<ComposerMedia> = {}): ComposerMedia => ({
   id: "att1",
@@ -83,5 +83,16 @@ describe("the read route is the only address a picked file has", () => {
     expect(mediaUrlFor({ id: "a1", displayKey: null })).toBe("/api/proofs/attachments/a1");
     expect(mediaUrlFor({ id: "a1", displayKey: "proofs/ws/p/a1-display.jpg" })).toBe("/api/proofs/attachments/a1?display=1");
     expect(downloadUrlFor({ id: "a1" })).toBe("/api/proofs/attachments/a1?download=1");
+  });
+});
+
+describe("Instagram needs an image (rev 515)", () => {
+  it("refuses Instagram with neither a picked file nor a typed address, before scheduling; anything else passes", () => {
+    expect(instagramImageProblem(["fb_page", "instagram"], { attachment: null, mediaUrl: "" })).toBe(INSTAGRAM_NEEDS_IMAGE);
+    expect(instagramImageProblem(["fb_page", "instagram"], { attachment: null, mediaUrl: "   " })).toBe(INSTAGRAM_NEEDS_IMAGE);
+    expect(instagramImageProblem(["instagram"], { attachment: { id: "img:1" }, mediaUrl: "" })).toBeNull();
+    expect(instagramImageProblem(["instagram"], { attachment: null, mediaUrl: "https://example.com/p.jpg" })).toBeNull();
+    expect(instagramImageProblem(["fb_page", "threads"], { attachment: null, mediaUrl: "" })).toBeNull();
+    expect(INSTAGRAM_NEEDS_IMAGE).toBe("Instagram needs an image: Make the graphic or pick one.");
   });
 });
