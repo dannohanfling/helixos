@@ -28,6 +28,18 @@ describe("Make the graphic", () => {
     expect(goldGradient("AABBCC", "#112233")).toBe("linear-gradient(90deg, #AABBCC, #112233)");
     expect(goldGradient("nope", "#112233")).toContain("#c5801f");
   });
+  it("keeps a gold phrase written in place of its words (9 Oct: Danno's headlines lost it), on its own line, and drops one that only names words already there", () => {
+    const a = layoutHeadline("HOW TO TURN A FULL ROOM / INTO (gold: BOOKED CALLS)");
+    expect(a.lines.map((segs) => segs.map((s) => s.text).join(""))).toEqual(["HOW TO TURN A FULL ROOM", "INTO BOOKED CALLS"]);
+    expect(a.lines[1]).toEqual([{ text: "INTO ", gold: false }, { text: "BOOKED CALLS", gold: true }]);
+    const b = layoutHeadline("THE ROOM IS NOT THE WIN. / THE (gold: HOUR AFTER) IS.");
+    expect(b.lines[1]).toEqual([{ text: "THE ", gold: false }, { text: "HOUR AFTER", gold: true }, { text: " IS.", gold: false }]);
+    expect(graphicCaption("THE ROOM IS NOT THE WIN. / THE (gold: HOUR AFTER) IS.")).toBe("THE ROOM IS NOT THE WIN. THE HOUR AFTER IS.");
+    // The trailing form, as the writer has always produced it, reads as before.
+    const c = layoutHeadline("I QUIT EVERY DIET BY WEEK THREE / UNTIL I STOPPED (gold: WEEK THREE)");
+    expect(c.lines.map((segs) => segs.map((s) => s.text).join(""))).toEqual(["I QUIT EVERY DIET BY WEEK THREE", "UNTIL I STOPPED"]);
+    expect(c.lines[0].find((s) => s.gold)?.text).toBe("WEEK THREE");
+  });
   it("picks the photo whose caption shares the headline's words, photos before other kinds, never a proof or a screenshot, AI backgrounds last among equals", () => {
     const images = [
       img({ id: "old", caption: "Me on stage at the summit", createdAt: "2026-09-01T00:00:00.000Z" }),

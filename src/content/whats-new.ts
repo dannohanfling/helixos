@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 123,
+    date: "2026-10-09",
+    title: "The gold phrase is back on your graphic",
+    lines: [
+      "A headline's gold phrase now shows on Make the graphic and in the ladder's headline preview, in the gold gradient, on the same line as the rest of its words. It works whether (gold: PHRASE) sits where the words go or after the line.",
+      "Gold words had been missing, or dull under the headline's shadow. A graphic made before today keeps how it looked: make it again to get the gold.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 122,
     date: "2026-10-08",
     title: "Your photo",

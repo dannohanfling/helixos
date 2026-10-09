@@ -297,6 +297,11 @@ async function main() {
     if (px[2] < 150 || px[0] > 90) throw new Error(`the photo covers the top: ${[...px].join(",")}`);
     const { data: lo } = await sharp(master).extract({ left: 40, top: 2650, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
     if (lo[0] > 10 || lo[1] > 10 || lo[2] > 10) throw new Error(`the bottom band is black: ${[...lo].join(",")}`);
+    // The gold phrase is drawn in gold, in the headline's own band above "(READ COMMENTS" (9 Oct: it came out missing, or dull).
+    const band = await sharp(master).extract({ left: 0, top: 1640, width: 2160, height: 480 }).raw().toBuffer({ resolveWithObject: true });
+    let goldPx = 0;
+    for (let i = 0; i < band.data.length; i += band.info.channels) { const [r, g, b] = [band.data[i], band.data[i + 1], band.data[i + 2]]; if (r > 190 && g > 130 && g < 200 && b < 110) goldPx++; }
+    if (goldPx < 5000) throw new Error(`the headline's gold phrase is drawn in gold: ${goldPx} gold pixels`);
     const small = await page.request.get(`${base}/api/deck-images/${g1.id}?size=1080&download=1`);
     const smeta = await sharp(Buffer.from(await small.body())).metadata();
     if (small.status() !== 200 || smeta.width !== 1080 || smeta.height !== 1350 || smeta.format !== "png" || !(small.headers()["content-disposition"] ?? "").includes("1080x1350")) throw new Error(`the 1080×1350 copy comes on request, as a PNG download: ${small.status()} ${smeta.width}×${smeta.height} ${small.headers()["content-disposition"]}`);
@@ -317,7 +322,14 @@ async function main() {
     await page.locator('[data-testid="library-image-caption"]').first().waitFor({ timeout: 20000 });
     const captions = await page.locator('[data-testid="library-image-caption"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
     if (captions.length !== 2 || !captions.some((c) => c.startsWith("FIVE MISTAKES THAT ENDED EVERY DIET"))) throw new Error(`the graphics are in Images under their headlines: ${captions.join(" | ")}`);
-    console.log("✓ Make the graphic: the suggested photo, the badge from the kit, one 2× PNG master in Images, the 1080 copy on request, a remake with the alternate headline and a stronger fade");
+    // A gold marker written in place of its words keeps them, in gold, in the page's preview (9 Oct).
+    const savedHeadline = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!.headline;
+    await db.update(schema.ladders).set({ headline: "HOW TO TURN A FULL ROOM / INTO (gold: BOOKED CALLS)" }).where(eq(schema.ladders.id, demoId));
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    const previewText = (await page.locator('[data-testid="headline-preview"]').innerText()).replace(/\s+/g, " ");
+    if (!previewText.includes("INTO BOOKED CALLS") || (await page.locator('[data-testid="headline-preview-gold"]').innerText()) !== "BOOKED CALLS") throw new Error(`the preview keeps the gold phrase in its line: ${previewText}`);
+    await db.update(schema.ladders).set({ headline: savedHeadline }).where(eq(schema.ladders.id, demoId));
+    console.log("✓ Make the graphic: the suggested photo, the badge from the kit, one 2× PNG master in Images, the 1080 copy on request, a remake with the alternate headline and a stronger fade; the gold phrase in gold on the master and in its line in the preview");
 
     // Composer hand-off
     await page.goto(`${base}/content/ladders/${demoId}`);

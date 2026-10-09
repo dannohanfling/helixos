@@ -421,9 +421,20 @@ export type Check = { key: string; label: string; ok: boolean; level: "fail" | "
 
 type LadderLike = Pick<Ladder, "copy" | "headline" | "rungs" | "dmKeyword" | "igCaption" | "threadsChain" | "realNumbers" | "keyword" | "format"> & Partial<Pick<Ladder, "hook" | "carousel" | "altHeadlines" | "leadMagnetId">>;
 
+/**
+ * A headline's lines, its gold phrases and its plain words. A gold marker is read two ways (9 Oct): written after the line,
+ * naming words already there ("… BY WEEK THREE (gold: WEEK THREE)"), it is dropped; written in place of the words ("INTO
+ * (gold: BOOKED CALLS)", "THE (gold: HOUR AFTER) IS."), its words stay where it stood. Either way the phrase is in the text.
+ */
 export function headlineParts(h: string): { lines: string[]; gold: string[]; text: string } {
-  const gold = Array.from(h.matchAll(/\(gold:\s*([^)]+)\)/gi)).map((m) => m[1].trim());
-  const text = h.replace(/\(gold:[^)]*\)/gi, "").trim();
+  const MARK = /\(gold:\s*([^)]*)\)/gi;
+  const gold = Array.from(h.matchAll(MARK)).map((m) => m[1].trim()).filter(Boolean);
+  const bare = h.replace(MARK, " ").toUpperCase();
+  const text = h
+    .replace(MARK, (_m, phrase: string) => (phrase.trim() && !bare.includes(phrase.trim().toUpperCase()) ? ` ${phrase.trim()} ` : " "))
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +([.,!?;:])/g, "$1")
+    .trim();
   const lines = text.split(/\s*\/\s*|\n/).map((l) => l.trim()).filter(Boolean);
   return { lines, gold, text };
 }

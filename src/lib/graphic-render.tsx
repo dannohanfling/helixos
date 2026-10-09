@@ -50,6 +50,9 @@ export async function renderGraphic(input: RenderInput): Promise<Buffer> {
   const { lines, px } = layoutHeadline(input.headline);
   const photo = input.photo ? await uri(input.photo, W, GRAPHIC.photoHeight * s) : null;
   const avatar = input.badge.avatar ? await uri(input.badge.avatar, GRAPHIC.avatarPx * s * 2, GRAPHIC.avatarPx * s * 2) : null;
+  // The gold fill is the gradient clipped to the letters; a shadow inherited from the line paints over it (9 Oct: the phrase
+  // came out dull, or black), so the shadow sits on the white words alone.
+  const shadow = `0 ${3 * s}px ${12 * s}px rgba(0,0,0,0.6)`;
   const goldText = { backgroundImage: gold, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent" } as const;
   const res = new ImageResponse(
     (
@@ -57,11 +60,11 @@ export async function renderGraphic(input: RenderInput): Promise<Buffer> {
         {photo ? <img src={photo} alt="" style={{ position: "absolute", top: 0, left: 0, width: W, height: GRAPHIC.photoHeight * s, objectFit: "cover", objectPosition: GRAPHIC.photoFocus }} /> : <div style={{ position: "absolute", top: 0, left: 0, width: W, height: GRAPHIC.photoHeight * s, background: "linear-gradient(180deg, #2a2a2a 0%, #0a0a0a 100%)" }} />}
         <div style={{ position: "absolute", top: GRAPHIC.fadeTop * s, left: 0, width: W, height: GRAPHIC.fadeHeight * s, background: input.strongFade ? FADE_STRONG : FADE }} />
         <div style={{ position: "absolute", top: (GRAPHIC.fadeTop + GRAPHIC.fadeHeight) * s, left: 0, width: W, height: H - (GRAPHIC.fadeTop + GRAPHIC.fadeHeight) * s, background: "#000" }} />
-        <div style={{ position: "absolute", left: 0, width: W, bottom: GRAPHIC.headlineBottom * s, display: "flex", flexDirection: "column", alignItems: "center", fontFamily: "Anton", fontSize: px * s, lineHeight: GRAPHIC.lineHeight, color: "#fff", textShadow: `0 ${3 * s}px ${12 * s}px rgba(0,0,0,0.6)` }}>
+        <div style={{ position: "absolute", left: 0, width: W, bottom: GRAPHIC.headlineBottom * s, display: "flex", flexDirection: "column", alignItems: "center", fontFamily: "Anton", fontSize: px * s, lineHeight: GRAPHIC.lineHeight, color: "#fff" }}>
           {lines.map((segs, i) => (
             <div key={i} style={{ display: "flex", whiteSpace: "nowrap" }}>
               {segs.map((seg, j) => (
-                <span key={j} style={seg.gold ? { ...goldText, whiteSpace: "pre" } : { whiteSpace: "pre" }}>{seg.text}</span>
+                <span key={j} style={seg.gold ? { ...goldText, whiteSpace: "pre" } : { whiteSpace: "pre", textShadow: shadow }}>{seg.text}</span>
               ))}
             </div>
           ))}

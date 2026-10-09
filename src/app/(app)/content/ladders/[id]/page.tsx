@@ -21,7 +21,7 @@ import { LIVE_POSTING_HOUR, checkScore, checklist, formatFor, headlineParts, key
 import { AiFormStatus } from "@/components/ai-status";
 import { GraphicMaker } from "@/components/graphic-maker";
 import { graphicStep, ownImage } from "@/lib/graphic";
-import { headlineChoices } from "@/lib/engine/graphic";
+import { goldGradient, headlineChoices } from "@/lib/engine/graphic";
 import { AiPromise } from "@/components/ai-promise";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -35,7 +35,7 @@ function HeadlinePreview({ headline, handle }: { headline: string; handle?: stri
     return (
       <>
         {up.slice(0, at)}
-        <span style={{ color: "#DDA338" }}>{up.slice(at, at + gold.length)}</span>
+        <span style={{ color: "#DDA338", backgroundImage: goldGradient(), WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }} data-testid="headline-preview-gold">{up.slice(at, at + gold.length)}</span>
         {up.slice(at + gold.length)}
       </>
     );
