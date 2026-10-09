@@ -12,6 +12,23 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 129,
+    date: "2026-10-09",
+    title: "Ladders tell your origin story once",
+    lines: ["The ladder writer gives your origin story one rung at most, unless the format is Origin Story. The checklist warns when two or more rungs retell it."],
+    audience: "everyone",
+  },
+  {
+    n: 128,
+    date: "2026-10-09",
+    title: "Your teaching library feeds your ladders",
+    lines: [
+      "Coach → Teaching library: upload the story bank and your Q&A files together. Uploading again updates what changed and never doubles. Set each story's status there; only Ready stories are used, and anything naming a price never is.",
+      "Your own ladders draw on the best-matching answers and stories, and a Material used panel on the ladder page shows each one with a link to the call at its moment. Clients' ladders never see the library.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 127,
     date: "2026-10-09",
     title: "Office Hours requests say when they were sent",

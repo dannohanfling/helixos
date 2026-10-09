@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-hours";
+import { MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
 
 const id = () => text("id").primaryKey();
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
@@ -2630,6 +2631,88 @@ export type Integration = typeof integrations.$inferSelect;
 export type SyncEvent = typeof syncEvents.$inferSelect;
 export type LadderProfile = typeof ladderProfiles.$inferSelect;
 export type Ladder = typeof ladders.$inferSelect;
+
+/**
+ * Danno's teaching library (rev 615 plan, rev 618 answers): one answer from his calls, uploaded by the coach from the library
+ * files. The coach's own: read by the ladder writer for the coach's own ladders only. A full-text index (teaching_fts, made in
+ * the migration by hand) sits beside it and is kept in step by src/lib/teaching.ts.
+ */
+export const teachingEntries = sqliteTable(
+  "teaching_entries",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** The entry's own key: the question and the day it was taught, so a re-upload updates and never doubles. */
+    key: text("key").notNull(),
+    file: text("file").notNull(),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    topic: text("topic"),
+    category: text("category"),
+    taughtOn: text("taught_on"),
+    callType: text("call_type"),
+    /** It names a price: never given to the writer (rev 618: no prices of any kind). */
+    hasPrice: integer("has_price", { mode: "boolean" }).notNull().default(false),
+    digest: text("digest").notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("teaching_entries_user_key").on(t.userId, t.key)],
+);
+export type TeachingEntryRow = typeof teachingEntries.$inferSelect;
+
+/** One item of Danno's story bank: what it is, its exact words and numbers, where it was said, and whether it may be used. */
+export const storyItems = sqliteTable(
+  "story_items",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    key: text("key").notNull(),
+    title: text("title").notNull(),
+    type: text("type", { enum: STORY_TYPES }).notNull(),
+    what: text("what").notNull(),
+    exactWords: text("exact_words"),
+    numbers: text("numbers"),
+    goodFor: text("good_for"),
+    /** Only "ready" ever reaches the writer; "check" and "needs permission" are held until Danno clears them. */
+    status: text("status", { enum: STORY_STATUSES }).notNull().default("check"),
+    /** Set when Danno changed the status in the app: it then stands over the file's on a re-upload. */
+    statusSetBy: text("status_set_by"),
+    rawStatus: text("raw_status"),
+    sourceCall: text("source_call"),
+    sourceDate: text("source_date"),
+    fathomUrl: text("fathom_url"),
+    hasPrice: integer("has_price", { mode: "boolean" }).notNull().default(false),
+    digest: text("digest").notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("story_items_user_key").on(t.userId, t.key), index("story_items_user_status").on(t.userId, t.status)],
+);
+export type StoryItemRow = typeof storyItems.$inferSelect;
+
+/** What a ladder was given from the library and story bank, and which the writer said it used: the Material used panel and the "not in the last 10 ladders" rule. */
+export const ladderMaterial = sqliteTable(
+  "ladder_material",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    ladderId: text("ladder_id")
+      .notNull()
+      .references(() => ladders.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: MATERIAL_KINDS }).notNull(),
+    itemId: text("item_id").notNull(),
+    /** The short id the writer saw: T1…T12, S1…S8. */
+    tag: text("tag").notNull(),
+    used: integer("used", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ladder_material_ladder").on(t.ladderId), index("ladder_material_user").on(t.userId, t.used)],
+);
+export type LadderMaterialRow = typeof ladderMaterial.$inferSelect;
 export type AiCredential = typeof aiCredentials.$inferSelect;
 export type AiUsage = typeof aiUsage.$inferSelect;
 

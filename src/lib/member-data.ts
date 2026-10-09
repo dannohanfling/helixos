@@ -62,6 +62,9 @@ export const MEMBER_TABLES = {
   fathom_connections: schema.fathomConnections,
   ladder_profiles: schema.ladderProfiles,
   ladders: schema.ladders,
+  // The teaching library and story bank (rev 618): the coach's own. What each ladder was given hangs off the ladder (below).
+  teaching_entries: schema.teachingEntries,
+  story_items: schema.storyItems,
   lead_magnets: schema.leadMagnets,
   review_confirms: schema.reviewConfirms,
   socrates_questions: schema.socratesQuestions,
@@ -148,6 +151,7 @@ export const CHILD_TABLES = [
   { label: "proof_attachments", table: schema.proofAttachments, fk: "proofId", parent: "proofs" },
   { label: "proof_attachment_reads", table: schema.proofAttachmentReads, fk: "attachmentId", parent: "proof_attachments" },
   { label: "lead_magnet_hits", table: schema.leadMagnetHits, fk: "magnetId", parent: "lead_magnets" },
+  { label: "ladder_material", table: schema.ladderMaterial, fk: "ladderId", parent: "ladders" },
   { label: "coach_notes", table: schema.coachNotes, fk: "membershipId", parent: "membership" },
   { label: "bot_approvals", table: schema.botApprovals, fk: "membershipId", parent: "membership" },
 ] as const;

@@ -7,6 +7,7 @@ import type { Ladder, LadderKeyword, LadderProfile, LadderRung, Proof } from "@/
 import { LADDER_FORMAT_KEYS } from "@/db/schema";
 import { CHANNEL_SPECS, type Channel, type ChannelSpec } from "./repurpose";
 import { explainFabricated, findFabricated } from "./blacklist";
+import { originRungs, usedIds } from "./teaching";
 
 export type LadderFormatKey = (typeof LADDER_FORMAT_KEYS)[number];
 
@@ -161,7 +162,7 @@ Sell methodology and transformation, never program names.`,
       ? `## VERIFIED EVIDENCE — USE ONLY THESE\nEach line is a claim and its citation. Use them together, never the claim alone.\n${evidence.join("\n")}\nAny other study is off limits. Write [EVIDENCE PLACEHOLDER] rather than inventing or half-remembering one.`
       : `## EVIDENCE\nNo verified research is on this client's shelf. Do not cite a study. Write [EVIDENCE PLACEHOLDER] where one would help.`,
     `## KEYWORD ROUTING\n${keywords.length ? keywords.map((k) => `- ${k.keyword} — ${k.use} — fetches ${targetWords(k)}`).join("\n") : "- (no keywords set up)"}\n- NONE — pure trust/story posts close with a question instead. Pitching at the end of a personal story breaks it.`,
-    profile?.originStory?.trim() ? `## ORIGIN STORY (recurring source material)\n${profile.originStory.trim()}${profile.positioningLine ? `\nPositioning line: ${profile.positioningLine}` : ""}\nKeep the odd specific details. They're what make it feel lived rather than constructed.` : "",
+    profile?.originStory?.trim() ? `## ORIGIN STORY (recurring source material)\n${profile.originStory.trim()}${profile.positioningLine ? `\nPositioning line: ${profile.positioningLine}` : ""}\nKeep the odd specific details. They're what make it feel lived rather than constructed. Give it one rung at most, unless the format is Origin Story: told again and again it stops being a story.` : "",
     `## CTA — FINAL RUNG ONLY, BUILT FROM WHAT THE KEYWORD FETCHES
 Recap the system in short lines. Then, by the keyword's target:
 - the product: the price and entry terms exactly as given above. ${profile?.scarcityLine?.trim() ? "Then the permitted scarcity line verbatim. " : ""}Then "Comment [KEYWORD] and I'll send you the link."
@@ -173,7 +174,7 @@ Then "If nothing happens, message me [KEYWORD]." Then one closing quotable line.
     .join("\n\n");
 }
 
-export const OUTPUT_FIELDS = ["POST_NAME", "HEADLINE", "ALT_HEADLINES", "HOOK", "COPY", "SUPPORTING_COMMENTS", "DM_KEYWORD", "IG_CAROUSEL", "IG_CAPTION", "THREADS_CHAIN", "SCREENSHOT_TEXT", "NOTES"] as const;
+export const OUTPUT_FIELDS = ["POST_NAME", "HEADLINE", "ALT_HEADLINES", "HOOK", "COPY", "SUPPORTING_COMMENTS", "DM_KEYWORD", "IG_CAROUSEL", "IG_CAPTION", "THREADS_CHAIN", "SCREENSHOT_TEXT", "NOTES", "MATERIAL_USED"] as const;
 
 /** The FORMAT line(s) for the channels an output field lands on; channels sharing one line are named together. Nothing when none has a line. */
 function sectionFormat(specs: ChannelSpec[], keys: Channel[]): string {
@@ -285,6 +286,8 @@ export type Parsed = {
   threadsChain: string[];
   screenshotText: string;
   notes: string;
+  /** The library and story ids the writer named (T2, S1), when it was given any: the coach's own ladders only. */
+  materialUsed: string[];
 };
 
 function sections(text: string): Record<string, string> {
@@ -330,6 +333,7 @@ export function parseLadderOutput(text: string): Parsed {
     threadsChain: listLines(s.THREADS_CHAIN ?? ""),
     screenshotText: s.SCREENSHOT_TEXT ?? "",
     notes: s.NOTES ?? "",
+    materialUsed: usedIds(s.MATERIAL_USED ?? ""),
   };
 }
 
@@ -412,6 +416,7 @@ export function scaffold(brief: Brief, profile: LadderProfile | null, proofs: Pr
     igCaption: `[HOOK]\n\n**[LEAD-IN 1]** [compressed rung]\n**[LEAD-IN 2]** [compressed rung]\n**[LEAD-IN 3]** [compressed rung]\n**[LEAD-IN 4]** [compressed rung]\n\n${keyword ? `Comment ${keyword} and I'll send you the link.` : "[CLOSING QUESTION]"}`,
     threadsChain: [1, 2, 3, 4, 5, 6].map((n) => `${n}/ [${n === 1 ? "HOOK" : n === 6 ? "CTA OR QUESTION" : `RUNG ${n} COMPRESSED`}, under ${limitOf(CHANNEL_SPECS, "threads")} characters]`),
     screenshotText: brief.format === "screenshot" ? "[80–150 WORDS OF STANDALONE TEXT THAT BECOMES THE IMAGE]" : "",
+    materialUsed: [],
     notes: `Scaffold only (Claude drafting isn't configured). Fill every [BRACKET]. ${f.structure}${f.stopRule ? ` ${f.stopRule}` : ""}`,
   };
 }
@@ -490,6 +495,9 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   // Truth rule, not craft: every number is true or it is marked illustrative. Blocks.
   const money = rungs.filter((r) => /\$\s?\d[\d,]*/.test(r.body) && !/illustrative/i.test(r.body) && !(l.realNumbers ?? "").match(/\$\s?\d/) && !(profile?.priceLine ?? "").match(/\$\s?\d/) ).map((r) => r.n);
   add("illustrative", "Dollar figures are real numbers or marked illustrative", !money.length, `Rung ${money.join(", ")} has a $ figure that is neither in Real numbers nor marked "(Illustrative. Your numbers will differ.)"`);
+  // The origin story once (rev 618): two or more rungs retelling it, outside the Origin Story format, is a warning.
+  const retold = l.format === "origin_story" ? [] : originRungs(profile?.originStory, rungs.map((r) => r.body)).map((i) => rungs[i].n);
+  add("origin-once", "The origin story gets one rung at most", retold.length < 2, `Rungs ${retold.join(", ")} each retell your origin story. Keep it to one and give the others a new point.`, "warn");
   const pun = all.match(NAME_PUN);
   add("namepun", "No Book 'Em Danno name puns", !pun, `"${pun?.[0]}" is the brand's pun, not this client's.`);
   const verified = (profile?.verifiedStats ?? []).map((s) => s.stat.toLowerCase());

@@ -24,6 +24,8 @@ import { graphicStep, ownImage } from "@/lib/graphic";
 import { goldGradient, headlineChoices } from "@/lib/engine/graphic";
 import { AiPromise } from "@/components/ai-promise";
 import { SubmitButton } from "@/components/submit-button";
+import { materialUsedFor } from "@/lib/teaching";
+import { STATUS_WORDS, momentOf, type StoryStatus } from "@/lib/engine/teaching";
 
 function HeadlinePreview({ headline, handle }: { headline: string; handle?: string | null }) {
   const h = headlineParts(headline);
@@ -70,6 +72,8 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
   ]);
   const ai = await hasAiKey();
   const evidence = await citableEvidence(v.user.id);
+  // Material used (rev 618): what the writer drew from the coach's teaching library and story bank. Never on a client's ladder.
+  const material = v.role === "coach" && !v.switchedInto ? await materialUsedFor(v.user.id, l.id) : [];
   const fmt = formatFor(l.format);
   const checks = checklist(l, profile ?? null, proofs);
   const score = checkScore(checks);
@@ -286,6 +290,28 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
               </div>
             ) : null}
           </Card>
+          {material.length ? (
+            <Card title="Material used" action={<Badge tone="neutral">{material.length} from your library</Badge>}>
+              <p className="mb-2 text-[11px] text-ink-3">What the writer drew on from your teaching library and story bank. Check a rung against the call it came from.</p>
+              <ul className="space-y-2 text-sm" data-testid="material-used">
+                {material.map((m) => (
+                  <li key={m.tag} data-testid="material-item" data-kind={m.kind}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="neutral">{m.kind === "teaching" ? "Answer" : m.type.replace("_", " ")}</Badge>
+                      <span className="font-medium">{m.title}</span>
+                      {m.status ? <span className="text-[11px] text-ink-3">{STATUS_WORDS[m.status as StoryStatus] ?? m.status}</span> : null}
+                    </div>
+                    {m.firstLine ? <p className="mt-0.5 line-clamp-2 text-xs text-ink-2">{m.firstLine}</p> : null}
+                    {m.fathomUrl ? (
+                      <a href={m.fathomUrl} target="_blank" rel="noreferrer" className="text-xs text-accent underline" data-testid="material-fathom">
+                        {m.source ?? "The call"}{momentOf(m.fathomUrl) ? ` at ${momentOf(m.fathomUrl)}` : ""} ↗
+                      </a>
+                    ) : m.source ? <p className="text-xs text-ink-3">{m.source}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
           <Card title="Evidence" action={<Badge tone={evidence.length ? "good" : "neutral"}>{evidence.length} citable</Badge>}>
             <p className="mb-2 text-[11px] text-ink-3">Published research for a proof rung. Copy puts the claim and its citation together; they never travel apart. Unconfirmed studies are not here.</p>
             {evidence.length ? (

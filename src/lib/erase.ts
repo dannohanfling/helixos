@@ -13,7 +13,7 @@
  *   4. one audit row: who ran it, the email, when, the counts. No content.
  * The tables come from src/lib/member-data.ts, the same list the export reads.
  */
-import { and, eq, inArray, like, ne } from "drizzle-orm";
+import { and, eq, inArray, like, ne, sql } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
@@ -184,6 +184,11 @@ export async function eraseMember(plan: ErasePlan, ranByUserId: string): Promise
     await db.transaction(async (tx) => {
       for (const c of subtree(label)) await drop(tx, c.table, plan.ids[c.label] ?? []);
       await drop(tx, table, plan.ids[label] ?? []);
+      // The teaching library's search index sits beside its two tables, outside the schema: its rows go with theirs.
+      const fts = label === "teaching_entries" ? sql`teaching_fts` : label === "story_items" ? sql`story_fts` : null;
+      const key = label === "teaching_entries" ? sql`entry_id` : sql`item_id`;
+      const gone = plan.ids[label] ?? [];
+      for (let i = 0; fts && i < gone.length; i += 200) await tx.run(sql`DELETE FROM ${fts} WHERE ${key} IN (${sql.join(gone.slice(i, i + 200).map((x) => sql`${x}`), sql`, `)})`);
     });
   }
 

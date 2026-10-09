@@ -10,7 +10,9 @@ import { pushKeywordFields } from "@/lib/community-loyalty";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { channelBodies, checklist, masterBlock, outputContract, parseLadderOutput, parseRungs, perPostInput, publishBlockers, scaffold, type Brief, type Parsed } from "@/lib/engine/ladder";
+import { channelBodies, checklist, formatFor, keywordOf, masterBlock, outputContract, parseLadderOutput, parseRungs, perPostInput, publishBlockers, scaffold, targetWords, type Brief, type Parsed } from "@/lib/engine/ladder";
+import { libraryBlock } from "@/lib/engine/teaching";
+import { materialFor, offeredOf, recordMaterial, type Offered } from "@/lib/teaching";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { mediaBlock } from "@/lib/engine/compose-media";
 import { evidenceLines } from "@/lib/engine/evidence";
@@ -128,7 +130,7 @@ function scrub(parsed: Parsed): Parsed {
   return note ? { ...out, notes: [out.notes, note].filter(Boolean).join("\n") } : out;
 }
 
-async function generate(workspaceId: string, userId: string, brief: Brief): Promise<{ parsed: Parsed; generatedBy: string }> {
+async function generate(workspaceId: string, userId: string, brief: Brief): Promise<{ parsed: Parsed; generatedBy: string; offered: Offered[] }> {
   const [profile, proofs, membership, user, evidence] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, workspaceId), eq(schema.ladderProfiles.userId, userId)) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId), eq(schema.proofs.status, "approved")) }),
@@ -140,15 +142,19 @@ async function generate(workspaceId: string, userId: string, brief: Brief): Prom
   const system = `${masterBlock(profile ?? null, proofs, member, evidenceLines(evidence))}\n\n${outputContract()}`;
   // Who the post is for: the member's Primary avatar in their own words, when they've written one (rev 501 §6).
   const avatar = await draftAvatarBrief({ workspaceId, userId }, null);
-  const text = await draft(system, [perPostInput(brief), avatar].filter(Boolean).join("\n\n"), 8000, { feature: "ladder" });
+  // The teaching library and story bank (rev 618): the coach's own ladders only. A client's ladder never reads any of it.
+  const material = membership?.role === "coach" ? await materialFor(userId, { topic: brief.topic, formatName: formatFor(brief.format).name, target: brief.keyword !== "NONE" ? targetWords(keywordOf(profile ?? null, brief.keyword), brief.leadMagnet?.title) : null, source: brief.sourceMaterial }).catch(() => null) : null;
+  const offered = material ? offeredOf(material) : [];
+  const library = material ? libraryBlock(material.teaching, material.stories) : "";
+  const text = await draft(system, [perPostInput(brief), avatar, library].filter(Boolean).join("\n\n"), 8000, { feature: "ladder" });
   if (text) {
     const parsed = scrub(parseLadderOutput(text));
-    if (parsed.rungs.length >= 3 && parsed.copy) return { parsed, generatedBy: "claude" };
+    if (parsed.rungs.length >= 3 && parsed.copy) return { parsed, generatedBy: "claude", offered };
     // The model refused (stop rule) or answered outside the contract: keep what it said as the notes on a skeleton.
     const sk = scaffold(brief, profile ?? null, proofs);
-    return { parsed: { ...sk, notes: `Claude did not return a full ladder. Its answer:\n${text.slice(0, 2000)}` }, generatedBy: "claude-partial" };
+    return { parsed: { ...sk, notes: `Claude did not return a full ladder. Its answer:\n${text.slice(0, 2000)}` }, generatedBy: "claude-partial", offered: [] };
   }
-  return { parsed: scaffold(brief, profile ?? null, proofs), generatedBy: "scaffold" };
+  return { parsed: scaffold(brief, profile ?? null, proofs), generatedBy: "scaffold", offered: [] };
 }
 
 /** The magnet a ladder offers, when it does: its keyword replaces whatever was picked, so a comment always routes to the magnet. */
@@ -176,7 +182,7 @@ export async function createLadderAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ team: "allow" });
   const { leadMagnet, ...brief } = await briefFrom(formData, userId);
   if (!brief.topic) return;
-  const { parsed, generatedBy } = await generate(workspaceId, userId, { ...brief, leadMagnet });
+  const { parsed, generatedBy, offered } = await generate(workspaceId, userId, { ...brief, leadMagnet });
   const id = newId();
   await db.insert(schema.ladders).values({
     id,
@@ -196,6 +202,7 @@ export async function createLadderAction(formData: FormData): Promise<void> {
     notes: [parsed.screenshotText ? `SCREENSHOT TEXT:\n${parsed.screenshotText}` : "", parsed.notes].filter(Boolean).join("\n\n") || null,
     generatedBy,
   });
+  await recordMaterial(workspaceId, userId, id, offered, parsed.materialUsed);
   // Ship a ladder step 1 (rev 583 #1): the graphic in the same go, from the photo picked or the one the headline suggests.
   // A skeleton's headline is still brackets: nothing to draw yet; the member makes it from the ladder page once written.
   if (str(formData, "makeGraphic") === "1" && parsed.headline.trim() && !/\[/.test(parsed.headline)) {
@@ -216,11 +223,12 @@ export async function regenerateLadderAction(formData: FormData): Promise<void> 
   const l = await own(str(formData, "id"), userId);
   const magnet = await magnetFor(userId, l.leadMagnetId);
   const brief: Brief = { format: l.format, topic: str(formData, "topic") || l.topic, audience: l.audience, keyword: magnet?.keyword ?? l.keyword, sourceMaterial: opt(formData, "sourceMaterial") ?? l.sourceMaterial, realNumbers: opt(formData, "realNumbers") ?? l.realNumbers, leadMagnet: magnet ? { title: magnet.title, promise: magnet.promise } : null };
-  const { parsed, generatedBy } = await generate(workspaceId, userId, brief);
+  const { parsed, generatedBy, offered } = await generate(workspaceId, userId, brief);
   await db
     .update(schema.ladders)
     .set({ topic: brief.topic, keyword: brief.keyword, sourceMaterial: brief.sourceMaterial ?? null, realNumbers: brief.realNumbers ?? null, postName: parsed.postName, headline: parsed.headline, altHeadlines: parsed.altHeadlines, hook: parsed.hook, copy: parsed.copy, rungs: parsed.rungs, dmKeyword: parsed.dmKeyword, carousel: parsed.carousel, igCaption: parsed.igCaption, threadsChain: parsed.threadsChain, notes: parsed.notes || null, generatedBy, status: "draft", launchedAt: null })
     .where(eq(schema.ladders.id, l.id));
+  await recordMaterial(workspaceId, userId, l.id, offered, parsed.materialUsed);
   refresh();
 }
 
