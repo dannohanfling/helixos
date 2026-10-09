@@ -54,31 +54,52 @@ export function summaryMoment(url: string): { href: string; label: string } | nu
   return { href: url, label: t ? `▶ ${timestampLabel(t)}` : "▶" };
 }
 
-export type ItemPerson = { name: string; email: string };
-export type ItemGroup = { key: string; label: string; own: boolean; items: { item: RecordingActionItem; index: number }[] };
+/** A person an action step can be for: a member, or a coach (whose steps are headed "<first name> (coach)"). */
+export type ItemPerson = { name: string; email: string; coach?: boolean };
+export type ItemGroup = { key: string; label: string; own: boolean; everyone: boolean; items: { item: RecordingActionItem; index: number }[] };
+export const YOUR_STEPS = "Your action steps";
+export const EVERYONE_STEPS = "Everyone / unassigned";
+
+/** A timestamp in seconds, for ordering steps in call order; null when there is none or it can't be read. */
+export function timestampSeconds(ts: string | null | undefined): number | null {
+  const t = (ts ?? "").trim();
+  if (!t) return null;
+  if (/^\d+(\.\d+)?$/.test(t)) return Math.floor(Number(t));
+  const parts = t.split(":").map(Number);
+  return parts.length && parts.every((p) => Number.isFinite(p)) ? parts.reduce((a, p) => a * 60 + p, 0) : null;
+}
+const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+const first = (name: string) => name.trim().split(/\s+/)[0] || name.trim();
 
 /**
- * The action items under the person each is for, in Fathom's order within a group (rev 496). A person is matched by email to a
- * member or a coach and shown by name; someone else by the name Fathom gives, never an email; no name and no email is
- * "Unassigned", last. The viewer's own group comes first, headed "Yours" for a member and with their name for the coach.
+ * The action steps under the person each is for (rev 496; Danno's rev 619 rules). A step is matched to a person by email, then
+ * by full name; a member is headed by their own name, a coach "<first name> (coach)". A step with no one, or no one we can match,
+ * goes under "Everyone / unassigned": never a guess from a first name, never an email shown. The viewer's own group comes first
+ * ("Your action steps" for a member), the rest alphabetically, Everyone last; inside a group, steps run in call order.
  */
 export function groupActionItems(items: RecordingActionItem[], people: ItemPerson[], viewer: { email: string; name: string; role: "coach" | "client" }): ItemGroup[] {
-  const byEmail = new Map(people.map((p) => [p.email.trim().toLowerCase(), p.name]));
-  const me = viewer.email.trim().toLowerCase();
+  const byEmail = new Map(people.filter((p) => p.email).map((p) => [norm(p.email), p]));
+  // A name matches only when exactly one person carries it.
+  const nameCount = new Map<string, number>();
+  for (const p of people) nameCount.set(norm(p.name), (nameCount.get(norm(p.name)) ?? 0) + 1);
+  const byName = new Map(people.filter((p) => nameCount.get(norm(p.name)) === 1).map((p) => [norm(p.name), p]));
+  const me = norm(viewer.email);
   const groups = new Map<string, ItemGroup>();
   items.forEach((item, index) => {
-    const email = (item.assigneeEmail ?? "").trim().toLowerCase();
-    const known = email ? byEmail.get(email) : undefined;
-    const name = item.assigneeName?.trim() && !item.assigneeName.includes("@") ? item.assigneeName.trim() : null;
-    const own = Boolean(email) && email === me;
-    const key = own ? "own" : email && known ? `email:${email}` : name ? `name:${name.toLowerCase()}` : "unassigned";
-    const label = own ? (viewer.role === "client" ? "Yours" : viewer.name) : (known ?? name ?? "Unassigned");
-    const g = groups.get(key) ?? { key, label, own, items: [] };
+    const email = norm(item.assigneeEmail ?? "");
+    const name = item.assigneeName && !item.assigneeName.includes("@") ? norm(item.assigneeName) : "";
+    const person = (email ? byEmail.get(email) : undefined) ?? (name ? byName.get(name) : undefined);
+    const own = Boolean(person && norm(person.email) === me) || (Boolean(email) && email === me);
+    const key = own ? "own" : person ? `email:${norm(person.email)}` : "everyone";
+    const label = own ? (viewer.role === "client" ? YOUR_STEPS : `${first(viewer.name)} (coach)`) : person ? (person.coach ? `${first(person.name)} (coach)` : person.name) : EVERYONE_STEPS;
+    const g = groups.get(key) ?? { key, label, own, everyone: key === "everyone", items: [] };
     g.items.push({ item, index });
     groups.set(key, g);
   });
   const all = [...groups.values()];
-  return [...all.filter((g) => g.own), ...all.filter((g) => !g.own && g.key !== "unassigned"), ...all.filter((g) => g.key === "unassigned")];
+  for (const g of all) g.items.sort((x, y) => (timestampSeconds(x.item.timestamp) ?? Number.MAX_SAFE_INTEGER) - (timestampSeconds(y.item.timestamp) ?? Number.MAX_SAFE_INTEGER) || x.index - y.index);
+  const rest = all.filter((g) => !g.own && !g.everyone).sort((x, y) => x.label.localeCompare(y.label));
+  return [...all.filter((g) => g.own), ...rest, ...all.filter((g) => g.everyone)];
 }
 
 /** The heading a recording sits under on the member's list: "This week", "Last week", then the week's Monday. */

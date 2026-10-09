@@ -62,6 +62,13 @@ export async function coachEmailsOf(workspaceId: string): Promise<string[]> {
   return (await db.query.users.findMany({ where: inArray(schema.users.id, ms.map((m) => m.userId)) })).map((u) => u.email);
 }
 
+/** The workspace's coaches as people an action step can be for: their own name and email, marked as the coach (rev 619). */
+export async function coachPeopleOf(workspaceId: string): Promise<{ name: string; email: string; coach: true }[]> {
+  const ms = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.role, "coach")) });
+  if (!ms.length) return [];
+  return (await db.query.users.findMany({ where: inArray(schema.users.id, ms.map((m) => m.userId)) })).map((u) => ({ name: u.name, email: u.email, coach: true as const }));
+}
+
 /** Who published a recording when no person did: the rules (rev 491), or the rev 261 title phrases before them. */
 export const BY_RULES = new Set(["rules", "title"]);
 

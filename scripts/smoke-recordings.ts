@@ -165,6 +165,10 @@ async function main() {
       action_items: [
         { description: "Record the offer in one sentence", completed: false, recording_timestamp: "00:09:12", recording_playback_url: "https://fathom.video/share/acc-9201?timestamp=552", assignee: { name: "Maya Torres", email: "client@demo.helixos.app" } },
         { description: "Book three calls this week", completed: false, recording_timestamp: "00:20:00", recording_playback_url: null, assignee: { name: "Jordan Lee", email: "client2@demo.helixos.app" } },
+        // Rev 619: the coach's own step, a name no member carries, and one with no one at all.
+        { description: "Send the offer template to the group", completed: false, recording_timestamp: "00:05:00", recording_playback_url: "https://fathom.video/share/acc-9201?timestamp=300", assignee: { name: "Danno Hanfling", email: "coach@demo.helixos.app" } },
+        { description: "Share the replay with a friend", completed: false, recording_timestamp: "00:30:00", recording_playback_url: "https://fathom.video/share/acc-9201?timestamp=1800", assignee: { name: "Pat Visitor", email: null } },
+        { description: "Everyone: post your one-sentence offer", completed: false, recording_timestamp: "00:15:00", recording_playback_url: "https://fathom.video/share/acc-9201?timestamp=900", assignee: null },
       ],
     };
     const hookUrl = registered[0].destination_url.replace(/^https?:\/\/[^/]+/, base);
@@ -297,12 +301,17 @@ async function main() {
     must(watched.status() === 303 && watched.headers().location === oneToOne.shareUrl, `the tap sends her on to the call's share link (${watched.status()} ${watched.headers().location})`);
     const seenRows = await db.query.recordingViews.findMany({ where: eq(schema.recordingViews.userId, maya.id) });
     must(seenRows.length === 2 && seenRows.some((r) => r.recordingId === week4.id) && seenRows.some((r) => r.recordingId === oneToOne.id), "opening one and pressing Watch on the other marks both seen");
-    // The action items under the person each is for (rev 496): hers first as "Yours", the others folded; each with its ▶ moment.
-    const groupHeads = await page.locator('[data-testid="recording-group-items"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-own")}:${(e.querySelector("span") as HTMLElement).textContent?.trim()}:${e.tagName === "DETAILS" ? ((e as HTMLDetailsElement).open ? "open" : "folded") : "shown"}`));
-    must(groupHeads[0] === "yes:Yours (1):shown" && groupHeads.slice(1).every((g) => g.startsWith("no:") && g.endsWith(":folded")) && groupHeads.some((g) => g.includes("Jordan Lee (1)")), `her items first as Yours, the others folded under their names: ${groupHeads.join(" | ")}`);
+    // Action steps under the person each is for (rev 496; rev 619): hers first as "Your action steps", the rest alphabetically and
+    // open, the coach as "Danno (coach)", the unmatched name and the step for no one under "Everyone / unassigned", last.
+    const groupHeads = await page.locator('[data-testid="recording-group-items"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-own")}:${(e.querySelector('[data-testid="recording-group-label"]') as HTMLElement).textContent?.replace(/\s+/g, " ").trim()}:${e.tagName}`));
+    must(JSON.stringify(groupHeads) === JSON.stringify(["yes:Your action steps (1):SECTION", "no:Danno (coach) (1):SECTION", "no:Jordan Lee (1):SECTION", "no:Everyone / unassigned (2):SECTION"]), `her steps first, the rest by name, Everyone last: ${groupHeads.join(" | ")}`);
+    must((await page.locator('[data-testid="recording-group-items"][data-everyone="yes"] [data-testid="recording-step-moment"]').allInnerTexts()).map((t) => t.replace(/\s+/g, " ").trim()).join(" | ") === "▶ 15:00 jump to this moment | ▶ 30:00 jump to this moment", "inside a group, steps run in call order");
+    must(!((await page.locator('[data-testid="recording-steps"]').innerText()).match(/\bFathom\b|\bassignee\b|\bwebhook\b/i)), "the column never says Fathom, assignee or webhook");
+    // Another person's steps are theirs: no Add on Jordan's or the coach's; Add on hers and on Everyone's.
+    must((await page.locator('[data-testid="recording-group-items"][data-own="no"][data-everyone="no"] [data-testid="recording-step-make-task"]').count()) === 0 && (await page.locator('[data-testid="recording-group-items"][data-everyone="yes"] [data-testid="recording-step-make-task"]').count()) === 2, "Add to my Tasks only on her own steps and Everyone's");
     must(!((await page.locator('[data-testid="recording-steps"]').textContent()) ?? "").includes("@"), "no email address among the action items");
     const moment = page.locator('[data-testid="recording-group-items"][data-own="yes"] [data-testid="recording-step-moment"]').first();
-    must((await moment.innerText()).trim() === "▶ 9:12" && (await moment.getAttribute("href")) === payload.action_items[0].recording_playback_url, "the item's timestamp is a ▶ link to that moment in Fathom");
+    must((await moment.innerText()).replace(/\s+/g, " ").trim() === "▶ 9:12 jump to this moment" && (await moment.getAttribute("href")) === payload.action_items[0].recording_playback_url && (await moment.getAttribute("target")) === "_blank", "the step's time is a link that opens the call at that moment");
     const steps = page.locator('[data-testid="recording-step"]');
     must((await steps.count()) === payload.action_items.length, "every action item shown");
     const mine = steps.filter({ hasText: "Record the offer in one sentence" });
@@ -315,6 +324,10 @@ async function main() {
     must(tasksAfter.length === tasksBefore + 1, "one task made");
     const made = tasksAfter.find((t) => t.title === "Record the offer in one sentence")!;
     must(made.source === "fathom" && made.sourceRef === week4.id && made.status === "today", "the task carries source fathom and points at the recording");
+    must((made.details ?? "").includes(`Jump to this moment: ${payload.action_items[0].recording_playback_url}`), `the task's note carries the moment's link: ${made.details}`);
+    must((await page.locator('[data-testid="recording-step"]').filter({ hasText: "Record the offer" }).locator('[data-testid="recording-step-done"]').innerText()).trim() === "Added ✓", "after Add, the step says Added");
+    // Never twice: pressing Add again is refused by the step already holding its task (the button is gone).
+    must((await page.locator('[data-testid="recording-step"]').filter({ hasText: "Record the offer" }).locator('[data-testid="recording-step-make-task"]').count()) === 0, "no second Add");
     must((await page.locator('[data-testid="recording-step"]').filter({ hasText: "Record the offer" }).locator('[data-testid="recording-step-done"]').count()) === 1, "the step now says it is in her tasks");
     await page.goto(`${base}/tasks`);
     await expectText(page, "Record the offer in one sentence", "task on Tasks");

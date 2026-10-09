@@ -13,6 +13,7 @@ import { allow } from "@/lib/rate-limit";
 import { createWebhook, deleteWebhook, validateFathomKey } from "@/lib/fathom";
 import { TRANSCRIPT_PRESSES_PER_HOUR, shownTitle } from "@/lib/engine/recordings";
 import { TASK_SOURCES } from "@/lib/engine/notes";
+import { itemMoment } from "@/lib/engine/recording-members";
 import { rulesFromForm, type RulesForm } from "@/lib/engine/recording-rules";
 import { taskPoints } from "@/lib/engine/points";
 import { fetchTranscript, markAllSeen, paceKeyFor, publishRecording, restoreRecording, reviewContext, reviewOf, skipRecording, syncRecordings, unpublishRecording, visibleRecording, workspaceFathom } from "@/lib/recordings";
@@ -267,7 +268,8 @@ export async function makeStepTaskAction(formData: FormData): Promise<void> {
     workspaceId,
     userId,
     title: item!.description,
-    details: `From the recording "${shownTitle(r!)}"`,
+    // The moment in the call goes with the task (rev 619), when it has one.
+    details: [`From the recording "${shownTitle(r!)}"`, (() => { const m = itemMoment(item!, r!.shareUrl || r!.url); return m ? `Jump to this moment: ${m.href}` : ""; })()].filter(Boolean).join("\n"),
     urgency: "medium",
     category: "system",
     dueDate: v.today,

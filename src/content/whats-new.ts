@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 126,
+    date: "2026-10-09",
+    title: "Action steps from your calls, by person",
+    lines: [
+      "On a recording, Action steps lists what each person on the call is taking on: your own first as Your action steps, then everyone else by name, then Everyone / unassigned.",
+      "Each step shows when it came up in the call. Tap the time to jump to that moment.",
+      "+ Add to my Tasks puts one of your steps on your list, with the link to that moment, and then it says Added.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 125,
     date: "2026-10-09",
     title: "Ship says more when GoHighLevel says no",
