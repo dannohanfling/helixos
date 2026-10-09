@@ -39,12 +39,16 @@ import { TeamSettings } from "@/components/team-settings";
 import { createTeamInviteAction, removeTeamMemberAction, revokeTeamInviteAction } from "@/lib/actions/team";
 import { TEAM_INVITE_COOKIE, openInvites, seatsLeft, teamOf } from "@/lib/team";
 import { TEAM_INVITE_DAYS, lastActiveWords, seatsLine } from "@/lib/engine/team";
+import { MemberAvatar } from "@/components/member-avatar";
+import { HeadshotUpload } from "@/components/headshot-upload";
+import { hasHeadshot } from "@/lib/headshots";
+import { removeMyHeadshotAction } from "@/lib/actions/headshots";
 
 export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
   if (v.team) return <TeamSettings v={v} />;
@@ -53,7 +57,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -189,6 +193,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Card className="min-w-0" title="Password">
           <ChangePasswordForm />
         </Card>
+        {v.team ? null : (
+          <Card id="photo" className="min-w-0" title="Your photo" action={<span className="text-xs text-ink-3" data-testid="photo-source">{v.membership.headshotSource === "upload" ? "your own" : v.membership.headshotSource === "import" ? "from your coach's records" : v.membership.headshotSource === "removed" ? "removed" : "none yet"}</span>}>
+            {photoNotice === "removed" ? <p className="mb-2 rounded-lg bg-surface-2 p-2 text-sm" role="status" data-testid="photo-removed">Removed. Your coach&apos;s import won&apos;t put it back.</p> : null}
+            <div className="flex items-start gap-4">
+              <MemberAvatar membershipId={v.membership.id} hasPhoto={hasHeadshot(v.membership)} emoji={v.user.avatarEmoji} size={72} version={v.membership.headshotUpdatedAt} name={v.user.name} />
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="text-xs text-ink-3">Shown to you and your coach inside HelixOS. A photo you add replaces the one from your coach&apos;s records, and their import never overwrites it. Using it on a published graphic is your choice, on your Brand kit.</p>
+                {v.switchedInto ? <p className="text-xs text-ink-3">The client adds their own photo.</p> : <HeadshotUpload />}
+                {hasHeadshot(v.membership) && !v.switchedInto ? (
+                  <form action={removeMyHeadshotAction}>
+                    <SubmitButton className="btn btn-ghost btn-xs text-danger" pendingText="Removing…" data-testid="photo-remove">Remove my photo</SubmitButton>
+                  </form>
+                ) : null}
+              </div>
+            </div>
+          </Card>
+        )}
         <Card id="you" className="min-w-0" title="You">
           <form action={updateProfileAction} className="space-y-3">
             <div className="grid grid-cols-[4rem_1fr] gap-3">
@@ -551,6 +572,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ))}
               </select>
             </Field>
+            {hasHeadshot(v.membership) ? (
+              <label className="flex items-start gap-2 text-sm sm:col-span-2">
+                <input type="checkbox" name="graphicUseHeadshot" value="1" defaultChecked={brandKit?.graphicUseHeadshot ?? false} disabled={Boolean(v.switchedInto)} className="mt-1" data-testid="brand-use-headshot" />
+                <span>
+                  Use my profile photo as the badge
+                  <span className="block text-xs text-ink-3">When no avatar is picked above, your graphics show your profile photo. Your yes, not your coach&apos;s: a photo from their records is never published without it.</span>
+                </span>
+              </label>
+            ) : null}
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" name="graphicVerified" value="1" defaultChecked={brandKit?.graphicVerified ?? false} className="mt-1" data-testid="brand-graphic-verified" />
               <span>

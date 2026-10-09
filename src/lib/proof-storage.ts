@@ -12,6 +12,7 @@
 import { del, head, list, put } from "@vercel/blob";
 import { proofKeyWorkspace } from "@/lib/engine/proof-attachments";
 import { deckKeyOwner } from "@/lib/engine/deck-image";
+import { headshotKeyOk } from "@/lib/engine/headshots";
 
 export const PROOF_STORAGE_UNCONFIGURED = "Attachments aren't set up yet. Ask your coach.";
 export const proofStorageConfigured = (): boolean => Boolean(process.env.PROOF_BLOB_READ_WRITE_TOKEN);
@@ -41,6 +42,13 @@ export async function putProofObject(key: string, bytes: Buffer, contentType: st
 /** A picture HelixOS draws itself (Make the graphic, rev 513) or makes with the member's key (rev 524): private, the proof store's token, a key under the member's own deck folder only. */
 export async function putDeckObject(key: string, bytes: Buffer, contentType: string): Promise<ProofObject> {
   if (!deckKeyOwner(key)) throw new Error("refusing to write a deck object outside a member's deck folder");
+  const blob = await put(key, bytes, { access: "private", token: proofToken(), contentType, addRandomSuffix: false });
+  return { key, url: blob.url, size: bytes.length, contentType };
+}
+
+/** A profile photo (client headshots, Danno 8 Oct): private, the proof store's token, a key under the headshots tree only. */
+export async function putHeadshotObject(key: string, bytes: Buffer, contentType: string): Promise<ProofObject> {
+  if (!headshotKeyOk(key)) throw new Error("refusing to write a headshot outside the headshots tree");
   const blob = await put(key, bytes, { access: "private", token: proofToken(), contentType, addRandomSuffix: false });
   return { key, url: blob.url, size: bytes.length, contentType };
 }

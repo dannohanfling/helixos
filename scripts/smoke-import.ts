@@ -23,6 +23,7 @@ const RUN = randomUUID().slice(0, 6);
 const SOURCE_TOKEN = "pat-source-good";
 const FALLBACK_TOKEN = "pat-fallback-good";
 const SINCE = "2026-06-10";
+const BLOB = "http://localhost:4050";
 
 async function main() {
   const { db, schema } = await import("@/db");
@@ -30,6 +31,10 @@ async function main() {
   const { buildPlan, planSummary, tableKey } = await import("@/lib/engine/airtable-import");
 
   const mock = spawn("npx", ["tsx", "scripts/mock-airtable.ts", String(mockPort)], { stdio: "ignore", detached: true });
+  // Client headshots keep their photos in the private store: the walk's stand-in, unless another walk left one running.
+  const blobUp = await fetch(`${BLOB}/__list`).then((r) => r.ok).catch(() => false);
+  const blobProc = blobUp ? null : spawn("npx", ["tsx", "scripts/mock-blob.ts", "4050"], { stdio: "ignore", detached: true });
+  for (let i = 0; i < 40 && !(await fetch(`${BLOB}/__list`).then((r) => r.ok).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
   await new Promise((r) => setTimeout(r, 2500));
   const coach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
   const ws = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, coach.id) }))!.workspaceId;
@@ -56,7 +61,7 @@ async function main() {
       if (r.status() >= 500) failures.push(`${r.status()} ${r.url()}`);
       if (r.request().method() !== "POST") return;
       const body = await r.text().catch(() => "");
-      for (const t of [SOURCE_TOKEN, FALLBACK_TOKEN]) if (body.includes(t)) echoed.push(`${t} in ${r.url()}`);
+      for (const t of [SOURCE_TOKEN, FALLBACK_TOKEN, TESTIMONIALS_TOKEN]) if (body.includes(t)) echoed.push(`${t} in ${r.url()}`);
     });
     const signIn = async (who: "coach" | "client") => {
       await page.goto(`${base}/login`);
@@ -319,6 +324,150 @@ async function main() {
     await page.waitForURL(/\/login/);
     console.log("✓ Proof Bank from Airtable: 3 added, 1 left out, approved and off the bot, names shortened, contacts blanked, tags first and filterable, a second run adds nothing, nothing reaches a client");
 
+    // ── Client headshots from Airtable (Danno, 8 Oct): dry run, apply, review, re-run, the member's own photo wins. ──
+    {
+      const sharp = (await import("sharp")).default;
+      const mem = async (email: string) => {
+        const u = (await db.query.users.findFirst({ where: eq(schema.users.email, email) }))!;
+        return (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, u.id), eq(schema.memberships.workspaceId, ws)) }))!;
+      };
+      const objects = async () => ((await (await fetch(`${BLOB}/__list`)).json()) as { objects: { pathname: string; access: string }[] }).objects.filter((o) => o.pathname.startsWith(`headshots/${ws}/`));
+      const run = async (mode: "dry" | "apply", wait: RegExp) => {
+        await page.goto(`${base}/coach/headshots`);
+        await page.fill('[data-testid="headshots-token"]', TESTIMONIALS_TOKEN);
+        await page.locator(`[data-testid="headshots-${mode === "dry" ? "dry-run" : "apply"}"]`).click();
+        await page.waitForURL(wait, { timeout: 90000 });
+        return page.locator(`[data-testid="headshots-${mode === "dry" ? "dry" : "applied"}"]`).innerText();
+      };
+      const maya0 = await mem("client@demo.helixos.app");
+      const jordan0 = await mem("client2@demo.helixos.app");
+      if (maya0.headshotUrl || jordan0.headshotUrl) throw new Error("the seed starts with no photos");
+
+      // A client cannot open it, nor the photo route for another member.
+      await signIn("client");
+      await page.goto(`${base}/coach/headshots`);
+      await page.waitForURL(/\/today/, { timeout: 15000 }).catch(() => undefined);
+      if (page.url().includes("/coach/headshots")) throw new Error("a client cannot open the import");
+      await page.click('button:has-text("Log out")');
+      await page.waitForURL(/\/login/);
+
+      await signIn("coach");
+      await page.goto(`${base}/coach/headshots`);
+      await page.fill('[data-testid="headshots-token"]', "pat-not-a-token");
+      await page.locator('[data-testid="headshots-dry-run"]').click();
+      await page.waitForURL(/error=/, { timeout: 60000 });
+      if (!(await page.locator('[data-testid="headshots-error"]').isVisible())) throw new Error("a bad token says so");
+
+      const dry = await run("dry", /dry=1/);
+      if (!dry.includes("2 matched, 4 need review, 1 no headshot. Of the matched: 2 to store.") || !dry.includes("4 of those to review are new")) throw new Error(`the dry run's counts: ${dry}`);
+      if ((await mem("client@demo.helixos.app")).headshotUrl || (await db.query.headshotReviews.findMany({ where: eq(schema.headshotReviews.workspaceId, ws) })).length || (await objects()).length) throw new Error("the dry run writes nothing");
+
+      const first = await run("apply", /applied=1/);
+      if (!first.includes("2 matched (2 stored, 0 unchanged, 0 kept the client's own), 4 new to review, 1 no headshot")) throw new Error(`the first apply: ${first}`);
+      const maya1 = await mem("client@demo.helixos.app");
+      const jordan1 = await mem("client2@demo.helixos.app");
+      if (maya1.headshotSource !== "import" || maya1.headshotAirtableId !== "attMAYA000000001" || jordan1.headshotAirtableId !== "attJORDAN0000001") throw new Error("matched by email, case and spaces aside, the first attachment of each");
+      const stored1 = await objects();
+      if (stored1.length !== 2 * 2 + 4 * 2 || stored1.some((o) => o.access !== "private")) throw new Error(`the original and the square of each, all private: ${JSON.stringify(stored1)}`);
+      if (!/^https?:/.test(maya1.headshotUrl!) || !maya1.headshotUrl!.includes("/private/")) throw new Error("kept in the private store");
+      const reviews = await db.query.headshotReviews.findMany({ where: eq(schema.headshotReviews.workspaceId, ws) });
+      if (reviews.map((r) => r.reason).sort().join() !== "no_email,no_match,shared_email,shared_email") throw new Error(`each one to review says why: ${reviews.map((r) => r.reason).join()}`);
+      // The square copy is 512 a side; the original keeps its shape and type.
+      const square = await page.request.get(`${base}/api/headshots/${jordan1.id}`);
+      const sqMeta = await sharp(Buffer.from(await square.body())).metadata();
+      if (square.status() !== 200 || sqMeta.width !== 512 || sqMeta.height !== 512 || square.headers()["cache-control"] !== "private, no-store") throw new Error(`the display copy is a 512 square, private: ${square.status()} ${sqMeta.width}x${sqMeta.height}`);
+      const original = await page.request.get(`${base}/api/headshots/${jordan1.id}?size=original`);
+      const orMeta = await sharp(Buffer.from(await original.body())).metadata();
+      if (orMeta.format !== "png" || orMeta.width !== 900 || orMeta.height !== 1200) throw new Error(`the original is kept as it came: ${orMeta.format} ${orMeta.width}x${orMeta.height}`);
+      await page.goto(`${base}/coach`);
+      if (!(await page.locator('[data-testid="member-avatar"][data-photo="1"]').count())) throw new Error("the coach's client list shows the photos");
+
+      // Review: the row with no email goes to the coach (picked), the one nobody matches is dismissed.
+      await page.goto(`${base}/coach/headshots`);
+      if ((await page.locator('[data-testid="headshots-review-row"]').count()) !== 4) throw new Error("the review list shows the four");
+      const coachMem = await mem("coach@demo.helixos.app");
+      const riley = page.locator('[data-testid="headshots-review-row"][data-reason="no_email"]');
+      await riley.locator('[data-testid="headshots-review-pick"]').selectOption(coachMem.id);
+      await riley.locator('[data-testid="headshots-review-set"]').click();
+      await page.waitForURL(/picked=1/);
+      const coachAfter = await mem("coach@demo.helixos.app");
+      const picked = await db.query.headshotReviews.findFirst({ where: and(eq(schema.headshotReviews.workspaceId, ws), eq(schema.headshotReviews.reason, "no_email")) });
+      if (coachAfter.headshotAirtableId !== "attRILEY00000001" || picked?.status !== "picked" || picked.photoUrl || picked.email || picked.name) throw new Error("picked: the photo is that member's, and the row keeps only that it was settled");
+      await page.locator('[data-testid="headshots-review-row"][data-reason="no_match"] [data-testid="headshots-review-dismiss"]').click();
+      await page.waitForURL(/dismissed=1/);
+      const dismissed = await db.query.headshotReviews.findFirst({ where: and(eq(schema.headshotReviews.workspaceId, ws), eq(schema.headshotReviews.reason, "no_match")) });
+      if (dismissed?.status !== "dismissed" || dismissed.photoUrl || (await objects()).length !== stored1.length - 2) throw new Error("dismissed: its photo leaves the store");
+      if ((await page.locator('[data-testid="headshots-review-row"]').count()) !== 2) throw new Error("two left to review");
+
+      // A re-run changes nothing and brings no settled row back.
+      const second = await run("apply", /applied=1/);
+      if (!second.includes("2 matched (0 stored, 2 unchanged, 0 kept the client's own), 0 new to review")) throw new Error(`the re-run: ${second}`);
+      if ((await objects()).length !== stored1.length - 2) throw new Error("a re-run stores nothing again");
+      await page.click('button:has-text("Log out")');
+      await page.waitForURL(/\/login/);
+
+      // Maya: her photo in the header; another member's photo and the review photos are not hers to see; her own upload wins.
+      await signIn("client");
+      if ((await page.locator('[data-testid="header-avatar"] [data-testid="member-avatar"]').getAttribute("data-photo")) !== "1") throw new Error("the client's header shows her photo");
+      if ((await page.request.get(`${base}/api/headshots/${jordan1.id}`)).status() !== 404) throw new Error("another member's photo is not hers to see");
+      if ((await page.request.get(`${base}/api/headshots/review/${reviews[0].id}`)).status() !== 404) throw new Error("the review photos are the coach's");
+      if ((await page.request.get(`${base}/api/headshots/${maya1.id}`)).status() !== 200) throw new Error("her own photo is hers to see");
+      await page.goto(`${base}/settings#photo`);
+      if ((await page.locator('[data-testid="photo-source"]').innerText()) !== "from your coach's records") throw new Error("Settings says where the photo came from");
+      if (!(await page.locator('[data-testid="headshot-save"]').isDisabled())) throw new Error("Save waits for a photo");
+      const own = await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 10, g: 120, b: 200 } } }).jpeg().toBuffer();
+      await page.waitForLoadState("networkidle");
+      await page.locator('[data-testid="headshot-file"]').setInputFiles({ name: "me.jpg", mimeType: "image/jpeg", buffer: own });
+      await page.locator('[data-testid="headshot-file-picker"][data-count="1"]').waitFor({ timeout: 10000 });
+      await Promise.all([page.waitForResponse((r) => r.url().includes("/api/headshots/upload")), page.locator('[data-testid="headshot-save"]').click()]);
+      await page.waitForFunction(() => document.querySelector('[data-testid="photo-source"]')?.textContent === "your own", null, { timeout: 15000 });
+      const maya2 = await mem("client@demo.helixos.app");
+      if (maya2.headshotSource !== "upload" || maya2.headshotAirtableId || maya2.headshotUrl === maya1.headshotUrl) throw new Error("her upload replaces the import");
+      // The badge on her ladder graphics uses the photo only when she says so (rule 6: a photo in HelixOS is not consent to publish).
+      await page.goto(`${base}/settings`);
+      await page.waitForLoadState("networkidle");
+      if (await page.locator('[data-testid="brand-use-headshot"]').isChecked()) throw new Error("the photo is not the badge until she ticks it");
+      await page.fill('[data-testid="brand-form"] input[name="name"]', "Maya's kit");
+      await page.check('[data-testid="brand-use-headshot"]');
+      await page.locator('button:has-text("Save brand kit")').click();
+      await page.locator('[data-testid="brand-saved"], [data-testid="brand-refused"]').first().waitFor({ timeout: 20000 }).catch(() => undefined);
+      if (!(await page.locator('[data-testid="brand-saved"]').count())) throw new Error(`the kit saves: ${page.url()} ${await page.locator('[data-testid="brand-refused"]').innerText().catch(() => "no notice")}`);
+      const mayaUser = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
+      if (!(await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, ws), eq(schema.brandKits.userId, mayaUser.id)) }))?.graphicUseHeadshot) throw new Error("ticked and saved, the badge uses her photo");
+      await page.click('button:has-text("Log out")');
+      await page.waitForURL(/\/login/);
+
+      // Jordan's photo changes in Airtable: a re-run updates his alone; Maya's own stands, and the replaced objects are gone.
+      await fetch(`http://localhost:${mockPort}/__headshot-change`, { method: "POST" });
+      await signIn("coach");
+      const third = await run("apply", /applied=1/);
+      if (!third.includes("2 matched (1 stored, 0 unchanged, 1 kept the client's own)")) throw new Error(`the run after a change: ${third}`);
+      const jordan3 = await mem("client2@demo.helixos.app");
+      if (jordan3.headshotAirtableId !== "attJORDAN0000002" || (await mem("client@demo.helixos.app")).headshotSource !== "upload") throw new Error("the changed photo updated, the member's own kept");
+      const paths3 = (await objects()).map((o) => o.pathname);
+      if (paths3.some((p) => jordan1.headshotUrl!.endsWith(p) || jordan1.headshotDisplayUrl!.endsWith(p))) throw new Error("the replaced photo leaves the store");
+      await page.click('button:has-text("Log out")');
+      await page.waitForURL(/\/login/);
+
+      // Maya removes hers: gone, and the import never puts it back.
+      await signIn("client");
+      await page.goto(`${base}/settings#photo`);
+      await page.waitForLoadState("networkidle");
+      await page.locator('[data-testid="photo-remove"]').click();
+      await page.waitForURL(/photo=removed/, { timeout: 60000 });
+      const maya4 = await mem("client@demo.helixos.app");
+      if (maya4.headshotSource !== "removed" || maya4.headshotUrl || (await page.request.get(`${base}/api/headshots/${maya4.id}`)).status() !== 404) throw new Error("removed: no photo, and the route says so");
+      if ((await page.locator('[data-testid="header-avatar"] [data-testid="member-avatar"]').getAttribute("data-photo")) !== "0") throw new Error("the header is back to her emoji");
+      await page.click('button:has-text("Log out")');
+      await page.waitForURL(/\/login/);
+      await signIn("coach");
+      const fourth = await run("apply", /applied=1/);
+      if (!fourth.includes("2 matched (0 stored, 1 unchanged, 1 kept the client's own)") || (await mem("client@demo.helixos.app")).headshotUrl) throw new Error(`a removed photo stays removed: ${fourth}`);
+      await page.click('button:has-text("Log out")');
+      await page.waitForURL(/\/login/);
+      console.log("✓ client headshots: a bad token said; dry run 2 matched, 4 to review, 1 no headshot, nothing written; apply stored the original and a 512 square of each, all private; the coach's list and the client's header show them; one picked, one dismissed (its photo gone); a re-run changed nothing; Maya's upload won and she ticked it as her badge, Jordan's changed photo alone updated, her removal stayed removed; another member's photo and the review photos 404 for a client");
+    }
+
     // ── Read only, and the tokens went nowhere. ──
     const { methods, paths } = (await (await fetch(`http://localhost:${mockPort}/__methods`)).json()) as { methods: string[]; paths: string[] };
     if (!methods.length || methods.some((x) => x !== "GET")) throw new Error(`the import only reads, got ${[...new Set(methods)].join(", ")}`);
@@ -328,9 +477,9 @@ async function main() {
     const dbFiles = readdirSync("data").filter((f) => /\.(db|sqlite)(-wal)?$/.test(f));
     const stored = dbFiles.some((f) => {
       const raw = readFileSync(`data/${f}`).toString("latin1");
-      return raw.includes(SOURCE_TOKEN) || raw.includes(FALLBACK_TOKEN);
+      return raw.includes(SOURCE_TOKEN) || raw.includes(FALLBACK_TOKEN) || raw.includes(TESTIMONIALS_TOKEN);
     });
-    if (log.includes(SOURCE_TOKEN) || log.includes(FALLBACK_TOKEN) || stored || !dbFiles.length) throw new Error("no token reaches the server log or the database");
+    if (log.includes(SOURCE_TOKEN) || log.includes(FALLBACK_TOKEN) || log.includes(TESTIMONIALS_TOKEN) || stored || !dbFiles.length) throw new Error("no token reaches the server log or the database");
     console.log(`✓ ${methods.length} requests to Airtable, all GET, none for the people tables' rows; no token came back from the server, reached the log or the database`);
   } finally {
     if (userId) {
@@ -348,6 +497,7 @@ async function main() {
     }
     await browser.close();
     if (mock.pid) process.kill(-mock.pid);
+    if (blobProc?.pid) process.kill(-blobProc.pid);
   }
   if (failures.length) throw new Error(`Server errors:\n${failures.join("\n")}`);
   console.log("Import smoke passed");

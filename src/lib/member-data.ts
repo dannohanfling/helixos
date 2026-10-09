@@ -171,6 +171,8 @@ export const WORKSPACE_TABLES = {
   // Recordings R1: the coach's calls, shown to an audience, and the workspace's Fathom connection (the coach's key).
   recordings: schema.recordings,
   fathom_workspace_connections: schema.fathomWorkspaceConnections,
+  // Client headshots: the coach's review list of imported photos no member was matched to; its photos go with it.
+  headshot_reviews: schema.headshotReviews,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */
@@ -198,6 +200,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl", "graphicPublicToken"]);
+export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl", "graphicPublicToken", "headshotUrl", "headshotDisplayUrl"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);

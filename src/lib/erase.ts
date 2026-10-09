@@ -88,6 +88,16 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
   // Deck images: every row's object, and anything else under the member's own prefix (an upload never recorded).
   const deckRows = ids.deck_images.length ? await db.query.deckImages.findMany({ where: inArray(schema.deckImages.id, ids.deck_images) }) : [];
   for (const d of deckRows) objects.push({ store: "proof", key: d.blobKey, url: d.blobUrl, label: "deck_images", rowId: d.id });
+  // The profile photo (client headshots): its original and display copy go with the member.
+  if (m.headshotUrl) objects.push({ store: "proof", key: "headshot", url: m.headshotUrl, label: "memberships", rowId: m.id });
+  if (m.headshotDisplayUrl) objects.push({ store: "proof", key: "headshot-512", url: m.headshotDisplayUrl, label: "memberships", rowId: m.id });
+  // The headshot review list's photos go with the workspace, each with its row.
+  if (ids.headshot_reviews?.length) {
+    for (const r of await db.query.headshotReviews.findMany({ where: inArray(schema.headshotReviews.id, ids.headshot_reviews) })) {
+      if (r.photoUrl) objects.push({ store: "proof", key: "headshot-review", url: r.photoUrl, label: "headshot_reviews", rowId: r.id });
+      if (r.displayUrl) objects.push({ store: "proof", key: "headshot-review-512", url: r.displayUrl, label: "headshot_reviews", rowId: r.id });
+    }
+  }
   if (proofStorageConfigured()) {
     const known = new Set(deckRows.map((d) => d.blobKey));
     for (const o of await listProofObjects(`deck/${workspaceId}/${m.userId}/`)) if (!known.has(o.key)) objects.push({ store: "proof", key: o.key, url: o.url, label: "deck_images", rowId: "" });

@@ -8,6 +8,7 @@ import { kitFor } from "@/lib/queries/brand-kit";
 import { putDeckObject, readProofObject } from "@/lib/proof-storage";
 import { renderGraphic } from "@/lib/graphic-render";
 import { credentialFor, generateImage } from "@/lib/ai";
+import { memberHeadshotBytes } from "@/lib/headshots";
 
 /**
  * Make the graphic, the stored side (rev 513, amended by 514 and 524): the member's own photos to choose from, the render
@@ -57,7 +58,8 @@ export async function makeGraphic(m: Member, ladder: Ladder, options: GraphicOpt
   const kit = await kitFor(m.workspaceId, m.userId);
   const photo = await imageBytes(m, options.photoImageId);
   if (options.photoImageId && !photo) return { ok: false, error: "That photo isn't in your Images any more. Pick another." };
-  const avatar = await imageBytes(m, kit?.graphicAvatarImageId);
+  // The badge: the avatar the member picked, else their profile photo when they said yes to it (client headshots, rule 6).
+  const avatar = (await imageBytes(m, kit?.graphicAvatarImageId)) ?? (kit?.graphicUseHeadshot ? await memberHeadshotBytes(m.workspaceId, m.userId) : null);
   let master: Buffer;
   try {
     master = await renderGraphic({ headline: options.headline, photo, strongFade: options.strongFade, badge: { avatar, name: kit?.graphicDisplayName?.trim() || "", handle: kit?.graphicHandle?.trim() || "", verified: kit?.graphicVerified ?? false }, gold: { from: kit?.graphicGoldFrom, to: kit?.graphicGoldTo } });

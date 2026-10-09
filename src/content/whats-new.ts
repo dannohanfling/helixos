@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 122,
+    date: "2026-10-08",
+    title: "Your photo",
+    lines: [
+      "Settings has Your photo: take or upload one, replace it, or remove it. It shows in your header and to your coach inside HelixOS, nowhere else. A photo you add always wins over the one from your coach's records, and a removed photo stays removed.",
+      "On your Brand kit, Use my profile photo as the badge puts it on your ladder graphics when no avatar is picked. That is your choice to make: a photo from your coach's records is never published without it.",
+      "Coaches: Coach → Client headshots brings each client's headshot in from Airtable, a dry run first, matched by email; anything that matches no client, or more than one, waits for you to pick, never guessed.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 121,
     date: "2026-10-08",
     title: "Ship a ladder in one press",

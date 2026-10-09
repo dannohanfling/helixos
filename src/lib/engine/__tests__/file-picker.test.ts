@@ -47,5 +47,7 @@ describe("the shared file control", () => {
     expect(scale).toMatch(/disabled=\{!parsed\?\.readings\.length\}/);
     const proof = readFileSync(path.join(root, "src/components/proof-upload.tsx"), "utf8");
     expect(proof).toMatch(/\{file && sniffed \? \(/);
+    const headshot = readFileSync(path.join(root, "src/components/headshot-upload.tsx"), "utf8");
+    expect(headshot).toMatch(/disabled=\{pending \|\| !files\.length\}/);
   });
 });

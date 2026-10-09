@@ -150,7 +150,7 @@ export async function resetBrandKitAction(): Promise<void> {
  * logged; in View it is refused like every write.
  */
 export async function saveBrandKitAction(formData: FormData): Promise<void> {
-  const { workspaceId, userId } = await ctx();
+  const { v, workspaceId, userId } = await ctx();
   const kit = {
     name: str(formData, "name"),
     ground: normaliseHex(str(formData, "ground")),
@@ -184,12 +184,15 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
     graphicGoldTo: normaliseHex(str(formData, "graphicGoldTo")) || null,
     aiBackgrounds: str(formData, "aiBackgrounds") === "1",
   };
+  // The badge's yes to the profile photo is the member's own (client headshots, rule 6): never set by a coach switched in.
+  const keepConsent = v.switchedInto ? (await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)), columns: { graphicUseHeadshot: true } }))?.graphicUseHeadshot ?? false : null;
+  const useHeadshot = keepConsent ?? str(formData, "graphicUseHeadshot") === "1";
   const problems = brandKitProblems(kit);
   // Refused with the problems named, and what was typed comes back with it: a refusal never empties the form.
   if (problems.length) redirect(`/settings?brand=${encodeURIComponent(problems.join(" "))}&draft=${encodeURIComponent(JSON.stringify(kit))}#brand-kit`);
   const existing = await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) });
-  if (existing) await db.update(schema.brandKits).set(kit).where(eq(schema.brandKits.id, existing.id));
-  else await db.insert(schema.brandKits).values({ id: newId(), workspaceId, userId, ...kit });
+  if (existing) await db.update(schema.brandKits).set({ ...kit, graphicUseHeadshot: useHeadshot }).where(eq(schema.brandKits.id, existing.id));
+  else await db.insert(schema.brandKits).values({ id: newId(), workspaceId, userId, ...kit, graphicUseHeadshot: useHeadshot });
   refresh();
   redirect("/settings?brand=saved#brand-kit");
 }

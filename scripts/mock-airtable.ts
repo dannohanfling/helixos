@@ -2,7 +2,7 @@
  * A stand-in for the Airtable REST API for the import walk. `npx tsx scripts/mock-airtable.ts 4070`, then run the app with
  * AIRTABLE_API_URL=http://localhost:4070. It serves the synthetic bases in scripts/fixtures/airtable-client.ts, one token per base
  * as Danno set them up (27 Sep): `pat-source-good` reads the source base, `pat-fallback-good` the fallback; any other token is 401,
- * a good token on the other base is 403; `pat-humanos-good` reads the synthetic HumanOS base of scripts/fixtures/airtable-humanos.ts, and `pat-omni-good` the Omnichannel base of scripts/fixtures/airtable-omni.ts (`fields[]` honoured). Only GET answers. `POST /__edit` renames the first task, so a walk can change the base
+ * a good token on the other base is 403; `pat-humanos-good` reads the synthetic HumanOS base of scripts/fixtures/airtable-humanos.ts, and `pat-omni-good` the Omnichannel base of scripts/fixtures/airtable-omni.ts (`fields[]` honoured), and `pat-testimonials-good` the Testimonials and Fulfillment tables (scripts/fixtures/airtable-testimonials.ts, airtable-headshots.ts), whose headshots it draws at `/__attachments/<id>`; `POST /__headshot-change` gives Jordan's row a new photo. Only GET answers. `POST /__edit` renames the first task, so a walk can change the base
  * between a dry run and Approve; `GET /__methods` lists every method and path it was sent, so a walk can prove the import only read,
  * and never asked for the people tables' rows.
  */
@@ -11,6 +11,8 @@ import { V1_BASE, V1_TABLES, V2_BASE, V2_TABLES, type FixtureTable } from "./fix
 import { HUMANOS_BASE, HUMANOS_TABLES, HUMANOS_TOKEN } from "./fixtures/airtable-humanos";
 import { OMNI_BASE, OMNI_TABLES, OMNI_TOKEN } from "./fixtures/airtable-omni";
 import { TESTIMONIALS_BASE, TESTIMONIALS_TABLES, TESTIMONIALS_TOKEN } from "./fixtures/airtable-testimonials";
+import { FULFILLMENT_TABLE, attachment, fulfillmentTable } from "./fixtures/airtable-headshots";
+import sharp from "sharp";
 
 const port = Number(process.argv[2] ?? 4070);
 const bases: Record<string, { token: string; tables: FixtureTable[] }> = {
@@ -20,7 +22,8 @@ const bases: Record<string, { token: string; tables: FixtureTable[] }> = {
   [HUMANOS_BASE]: { token: HUMANOS_TOKEN, tables: structuredClone(HUMANOS_TABLES) },
   // The coach's backfill (rev 441): the Omnichannel base, its own token.
   [OMNI_BASE]: { token: OMNI_TOKEN, tables: structuredClone(OMNI_TABLES) },
-  [TESTIMONIALS_BASE]: { token: TESTIMONIALS_TOKEN, tables: structuredClone(TESTIMONIALS_TABLES) },
+  // The same base's Fulfillment table, for client headshots (8 Oct).
+  [TESTIMONIALS_BASE]: { token: TESTIMONIALS_TOKEN, tables: [...structuredClone(TESTIMONIALS_TABLES), fulfillmentTable(port)] },
 };
 const methods: string[] = [];
 const paths: string[] = [];
@@ -35,6 +38,23 @@ createServer((req, res) => {
   if (url.pathname === "/__edit" && req.method === "POST") {
     const tasks = bases[V2_BASE].tables.find((t) => t.name.includes("TasksOS"))!;
     tasks.records[0].fields["📌 Tasks"] = `${tasks.records[0].fields["📌 Tasks"]} (edited)`;
+    return json(200, { ok: true });
+  }
+  // Client headshots: an attachment's bytes at its own address, no token (as Airtable's signed addresses), a flat colour per id.
+  const att = url.pathname.match(/^\/__attachments\/([A-Za-z0-9]+)\.(jpg|png)$/);
+  if (att && req.method === "GET") {
+    const n = [...att[1]].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
+    const img = sharp({ create: { width: 900, height: 1200, channels: 3, background: { r: (n * 3) % 256, g: (n * 7) % 256, b: (n * 11) % 256 } } });
+    void (att[2] === "png" ? img.png() : img.jpeg()).toBuffer().then((b) => {
+      res.writeHead(200, { "content-type": att[2] === "png" ? "image/png" : "image/jpeg" });
+      res.end(b);
+    });
+    return;
+  }
+  // A new photo on Jordan's row, as a coach replacing it in Airtable: a re-run updates that one only.
+  if (url.pathname === "/__headshot-change" && req.method === "POST") {
+    const t = bases[TESTIMONIALS_BASE].tables.find((x) => x.id === FULFILLMENT_TABLE)!;
+    t.records[1].fields.fldFwZgWGRUpvGy2t = [attachment(port, "attJORDAN0000002")];
     return json(200, { ok: true });
   }
   methods.push(req.method ?? "?");

@@ -75,6 +75,8 @@ const ROUTES: Record<string, Route> = {
   "/reset/[token]": { kind: "public", why: "a single-use password-reset token, its own secret" },
   "/link-chat/[token]": { kind: "public", why: "a single-use chat-link token, its own secret; the page itself refuses a token from another workspace" },
   "/api/deck-images/[id]": { kind: "owned", table: "deckImages" },
+  "/api/headshots/[membershipId]": { kind: "owned", table: "memberships" },
+  "/api/headshots/review/[id]": { kind: "coach" },
   "/body/training/[exerciseId]": { kind: "owned", table: "bodyExercises" },
   "/api/proofs/attachments/[id]": { kind: "owned", table: "proofAttachments" },
   "/api/reports/[id]/screenshot": { kind: "owned", table: "memberReports" },
@@ -273,6 +275,8 @@ async function main() {
     memberReports: (await ensureReport()).id,
     planRecords: (await ensurePlanRecord()).id,
     kpis: (await ensureKpi()).id,
+    // B's profile photo (client headshots): set on the record, so the route has something of B's to refuse.
+    memberships: await (async () => { await db.update(schema.memberships).set({ headshotUrl: "https://private.invalid/b-original.jpg", headshotDisplayUrl: "https://private.invalid/b-512.jpg", headshotMime: "image/jpeg", headshotSource: "import" }).where(eq(schema.memberships.id, bMem.id)); return bMem.id; })(),
   };
   // B's private words, per table, that must never appear in a response to A.
   const bWord: Record<string, string> = {

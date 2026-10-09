@@ -45,6 +45,8 @@ import { avatarTree, coachLine, offersOf } from "@/lib/engine/avatars";
 import { coachRemoveTeamMemberAction, setTeamCapAction } from "@/lib/actions/team";
 import { openInvites, teamOf } from "@/lib/team";
 import { TEAM_CAP_MAX, lastActiveWords, seatsLine } from "@/lib/engine/team";
+import { MemberAvatar } from "@/components/member-avatar";
+import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Client" };
 
@@ -144,7 +146,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
     <>
       <PageHeader
         title={`${u.avatarEmoji ?? ""} ${u.name}`.trim()}
-        subtitle={`${m.businessName ? `${m.businessName} · ` : ""}${m.programTier} · joined ${formatDate(m.createdAt.slice(0, 10))} · ${u.email}`}
+        subtitle={<span className="flex items-center gap-2">{hasHeadshot(m) ? <MemberAvatar membershipId={m.id} hasPhoto emoji={u.avatarEmoji} size={40} version={m.headshotUpdatedAt} name={u.name} /> : null}<span>{`${m.businessName ? `${m.businessName} · ` : ""}${m.programTier} · joined ${formatDate(m.createdAt.slice(0, 10))} · ${u.email}`}</span></span>}
         action={
           <span className="flex items-center gap-2">
             {emailsBlocked ? (

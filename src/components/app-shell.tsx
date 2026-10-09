@@ -15,6 +15,7 @@ import { TeamBanner } from "@/components/team-banner";
 import { ChatWidget } from "@/components/chat-widget";
 import { ReportButton } from "@/components/report-button";
 import type { ChatWidgetProps } from "@/lib/chat";
+import { MemberAvatar } from "@/components/member-avatar";
 
 export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, coachFirst = null, choices = 1, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; children: ReactNode }) {
   const tier = tierProgress(points);
@@ -75,7 +76,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
           </Link>
           <div className="flex items-center justify-between">
             <Link href="/settings" className="flex items-center gap-2 text-sm text-ink-2 hover:text-ink">
-              <span className="text-lg">{who.avatarEmoji}</span>
+              {team ? <span className="text-lg">{who.avatarEmoji}</span> : <MemberAvatar membershipId={viewer.membership.id} hasPhoto={Boolean(viewer.membership.headshotDisplayUrl)} emoji={who.avatarEmoji} size={28} version={viewer.membership.headshotUpdatedAt} name={who.name} />}
               <span className="max-w-[9rem] truncate">{who.name}</span>
             </Link>
             <form action={logoutAction}>
@@ -106,8 +107,8 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
                 <span className="badge">{points.toLocaleString()} pts</span>
               </>
             )}
-            <Link href="/settings" className="text-lg" aria-label="Settings">
-              {who.avatarEmoji}
+            <Link href="/settings" className="text-lg" aria-label="Settings" data-testid="header-avatar">
+              {team ? who.avatarEmoji : <MemberAvatar membershipId={viewer.membership.id} hasPhoto={Boolean(viewer.membership.headshotDisplayUrl)} emoji={who.avatarEmoji} size={28} version={viewer.membership.headshotUpdatedAt} name={who.name} />}
             </Link>
             <form action={logoutAction}>
               <SubmitButton className="text-ink-3 hover:text-ink" aria-label="Log out" data-testid="logout-header" pendingText="Logging out…">

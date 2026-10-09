@@ -51,6 +51,10 @@ export const users = sqliteTable("users", {
   createdAt: createdAt(),
 });
 
+/** Who set a member's profile photo: the coach's Airtable import, the member's own upload, or removed by the member. */
+export const HEADSHOT_SOURCES = ["import", "upload", "removed"] as const;
+export type HeadshotSource = (typeof HEADSHOT_SOURCES)[number];
+
 export const memberships = sqliteTable(
   "memberships",
   {
@@ -116,6 +120,19 @@ export const memberships = sqliteTable(
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),
     /** A fingerprint of HelixOS's Stage 1 record at the last push, so the Coach page can say "changed since the last push" without reading the bot. */
     clBotSourceKey: text("cl_bot_source_key"),
+    /**
+     * The member's profile photo (client headshots, Danno 8 Oct): the original and a 512 square display copy, both in the
+     * private proof store under headshots/, read only through /api/headshots/[membershipId]. `headshotSource` says who set it:
+     * the coach's Airtable import, the member's own upload (an import never overwrites it), or removed by the member (an
+     * import never puts it back). A profile photo is never consent to publish it: proof cards, ads and graphics keep their gate.
+     */
+    headshotUrl: text("headshot_url"),
+    headshotDisplayUrl: text("headshot_display_url"),
+    headshotMime: text("headshot_mime"),
+    headshotSource: text("headshot_source", { enum: HEADSHOT_SOURCES }),
+    /** The Airtable attachment id the import last stored: a re-run stores only a photo whose attachment changed. */
+    headshotAirtableId: text("headshot_airtable_id"),
+    headshotUpdatedAt: text("headshot_updated_at"),
     /** The keyword router's two fields as last confirmed on the bot (Ship a ladder commit 2): helix_keywords_cbf and helix_keyword_agent_cbf, by name. */
     clKeywordsHeld: text("cl_keywords_held", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     clKeywordsPushedAt: text("cl_keywords_pushed_at"),
@@ -1393,6 +1410,8 @@ export const brandKits = sqliteTable(
     graphicGoldFrom: text("graphic_gold_from"),
     graphicGoldTo: text("graphic_gold_to"),
     graphicFont: text("graphic_font"),
+    /** The member's own yes to their profile photo as the graphic's badge (client headshots, rule 6): an imported photo is never consent to publish it. */
+    graphicUseHeadshot: integer("graphic_use_headshot", { mode: "boolean" }).notNull().default(false),
     /** Allow AI backgrounds (rev 524): on by default; off, a graphic uses only the member's own photos or a plain ground. Faces are never generated. */
     aiBackgrounds: integer("ai_backgrounds", { mode: "boolean" }).notNull().default(true),
     createdAt: createdAt(),
@@ -3643,3 +3662,35 @@ export type ChatLink = typeof chatLinks.$inferSelect;
 export type OauthClient = typeof oauthClients.$inferSelect;
 export type ConnectedApp = typeof connectedApps.$inferSelect;
 export type OauthToken = typeof oauthTokens.$inferSelect;
+
+/**
+ * A headshot from the coach's Airtable import that matched no client, or more than one, or had no email (client headshots,
+ * Danno 8 Oct): the coach picks the client, or dismisses it. Never guessed. The photo was downloaded when the row was made
+ * (Airtable's addresses expire within hours) and lives in the private store under headshots/<workspace>/review/. One row per
+ * attachment: a re-run never adds the same photo twice, whatever became of it.
+ */
+export const HEADSHOT_REVIEW_REASONS = ["no_email", "no_match", "shared_email", "several_members"] as const;
+export const HEADSHOT_REVIEW_STATUSES = ["open", "picked", "dismissed"] as const;
+export const headshotReviews = sqliteTable(
+  "headshot_reviews",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    airtableRecordId: text("airtable_record_id").notNull(),
+    attachmentId: text("attachment_id").notNull(),
+    name: text("name").notNull().default(""),
+    email: text("email"),
+    reason: text("reason", { enum: HEADSHOT_REVIEW_REASONS }).notNull(),
+    /** The memberships it could be, when there were several. */
+    candidates: text("candidates", { mode: "json" }).$type<string[]>().notNull().default([]),
+    photoUrl: text("photo_url"),
+    displayUrl: text("photo_display_url"),
+    mime: text("mime"),
+    status: text("status", { enum: HEADSHOT_REVIEW_STATUSES }).notNull().default("open"),
+    pickedMembershipId: text("picked_membership_id"),
+    resolvedBy: text("resolved_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("headshot_reviews_attachment").on(t.workspaceId, t.attachmentId)],
+);
+export type HeadshotReview = typeof headshotReviews.$inferSelect;

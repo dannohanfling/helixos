@@ -33,6 +33,8 @@ import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
 import { TierSelect } from "@/components/tier-select";
 import { PROGRAM_ORDER } from "@/lib/engine/recordings";
+import { MemberAvatar } from "@/components/member-avatar";
+import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
@@ -143,7 +145,7 @@ export default async function CoachPage() {
 
   return (
     <>
-      <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
+      <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/headshots" className="btn btn-ghost btn-sm" data-testid="coach-headshots-link">Client headshots</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
       <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">Your bot →</Link>}>
         <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your bot page can send nothing until the token is here.</p>
         <form action={setMyBotAction} className="flex flex-wrap items-center gap-2" data-testid="my-bot">
@@ -180,7 +182,7 @@ export default async function CoachPage() {
                     <tr key={r.m.id} className={r.daysSilent >= 3 ? "bg-warn-soft/40" : ""}>
                       <td className="py-2 pr-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">{r.u?.avatarEmoji}</span>
+                          <MemberAvatar membershipId={r.m.id} hasPhoto={hasHeadshot(r.m)} emoji={r.u?.avatarEmoji} size={32} version={r.m.headshotUpdatedAt} name={r.u?.name} />
                           <div>
                             <Link href={`/coach/${r.m.id}`} className="font-medium underline-offset-2 hover:underline" data-testid="client-link">
                               {r.u?.name}
