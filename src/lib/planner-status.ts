@@ -18,8 +18,19 @@ import { redactSecrets } from "@/lib/engine/redact";
 import type { SocialConnection } from "@/db/schema";
 import { connectionFor, getPost, listPostsIn } from "@/lib/ghl";
 
-export async function recordReadback(variant: schema.ContentVariant, conn: SocialConnection): Promise<void> {
+export const POSTED_WITHOUT_PICTURE = "Posted without the picture. Add it to the post in GoHighLevel's Social Planner, or delete the post there and send it again.";
+/** The channels whose post carries the item's picture: a readback there that lists no picture says so on the post. */
+const PICTURE_CHANNELS = new Set(["fb_page", "instagram"]);
+/**
+ * `expectMedia`: the post was sent with a picture, so a readback that lists none says so on the post (9 Oct: a Page post went
+ * out bare). Left out, it is read from the post's own item: a picture attached or linked there went with the Page and Instagram.
+ */
+export async function recordReadback(variant: schema.ContentVariant, conn: SocialConnection, expectMedia?: boolean): Promise<void> {
   if (!variant.externalId) return;
+  if (expectMedia === undefined) {
+    const item = PICTURE_CHANNELS.has(variant.channel) ? await db.query.contentItems.findFirst({ where: eq(schema.contentItems.id, variant.contentItemId), columns: { mediaUrl: true, mediaAttachmentId: true } }) : null;
+    expectMedia = Boolean(item?.mediaUrl || item?.mediaAttachmentId);
+  }
   const r = await getPost(conn, variant.externalId);
   if (!r.ok) {
     // A 404 on the readback is the planner no longer holding the post: deleted there, said as such.
@@ -31,7 +42,9 @@ export async function recordReadback(variant: schema.ContentVariant, conn: Socia
   // The postId question (is it the platform's own id, e.g. Facebook's {pageId}_{postId}?) is settled by shape, never by value.
   if (published && variant.externalStatus !== "published") console.info("[ghl] readback shape", JSON.stringify({ channel: variant.channel, status: r.data.status, hasPostId: Boolean(r.data.postId), postIdLooksLikeFacebook: /^\d+_\d+$/.test(r.data.postId ?? ""), postIdSameAsPlannerId: r.data.postId === variant.externalId, hasPublishedAt: Boolean(r.data.publishedAt), keys: Object.keys(r.data).filter((k) => (r.data as Record<string, unknown>)[k] !== null && (r.data as Record<string, unknown>)[k] !== undefined) }));
   if (r.data.error) console.error("[ghl] readback error", JSON.stringify({ variantId: variant.id, postId: variant.externalId, status: r.data.status, error: redactSecrets(String(r.data.error)).slice(0, 300) }));
-  const error = r.data.status === "deleted" ? DELETED_IN_PLANNER : explainPlatformError(r.data.error, platformName(variant.channel));
+  const bare = expectMedia && PICTURE_CHANNELS.has(variant.channel) && r.data.mediaCount === 0;
+  if (bare) console.warn("[ghl] readback: sent with a picture, the planner lists none", JSON.stringify({ variantId: variant.id, channel: variant.channel, postId: variant.externalId, status: r.data.status }));
+  const error = r.data.status === "deleted" ? DELETED_IN_PLANNER : (explainPlatformError(r.data.error, platformName(variant.channel)) ?? (bare ? POSTED_WITHOUT_PICTURE : null));
   await db
     .update(schema.contentVariants)
     .set({ externalStatus: r.data.status, externalError: error, externalSyncedAt: nowIso(), ...(published ? { status: "posted", postedAt: variant.postedAt ?? r.data.publishedAt ?? nowIso() } : {}) })

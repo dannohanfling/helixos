@@ -86,7 +86,8 @@ export function outcomeOf(row: OutcomeRow, now: Now, cutoffMinutes = SENDING_CUT
     if (row.status === "posted") return { ...base, state: "published", word: "Posted by you", when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : null, reason: null };
     return { ...base, state: "manual", word: OUTCOME_WORD.manual, when: null, reason: row.groupId ? "Groups are posted by hand." : (PUBLISHABLE[row.channel as Channel]?.note ?? "Not something we can publish for you.") };
   }
-  if (ext === "published") return { ...base, canRepost: true, state: "published", word: OUTCOME_WORD.published, when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : row.externalSyncedAt ? formatDateTime(row.externalSyncedAt, now.tz) : null, reason: null };
+  // Published with a note the readback left (9 Oct: "Posted without the picture"): still published, and the note is said beside it.
+  if (ext === "published") return { ...base, canRepost: true, state: "published", word: OUTCOME_WORD.published, when: row.postedAt ? formatDateTime(row.postedAt, now.tz) : row.externalSyncedAt ? formatDateTime(row.externalSyncedAt, now.tz) : null, reason: row.externalError?.trim() || null };
   if (ext === "deleted") {
     const reason = row.externalError?.trim() || DELETED_IN_PLANNER;
     return { ...base, state: "failed", word: "Deleted", when: null, reason, fix: fixFor(reason) };

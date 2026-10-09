@@ -473,6 +473,19 @@ async function main() {
     if (Object.values(states).some((v) => v !== "done")) throw new Error(`after Ship every step is done: ${JSON.stringify(states)}`);
     if ((await page.locator('[data-testid="ship-line"]').innerText()) !== "Shipped: every step is done.") throw new Error("the line says shipped");
     if (!(await page.locator('[data-testid="ship-button"]').isDisabled())) throw new Error("nothing left to run, Ship is shut");
+    // Sent with the graphic, read back with it: no warning on the post. A post the platform let out bare says so on the post.
+    const pageVariant = (await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.channel, "fb_page"), eq(schema.contentVariants.groupId, ""), eq(schema.contentVariants.externalId, shippedPosts.find((p) => p.accountIds.some((a) => a.includes("fbpage")))!._id)) }))!;
+    if (pageVariant.externalError) throw new Error(`a post read back with its picture carries no warning: ${pageVariant.externalError}`);
+    const stripped = await fetch(`http://localhost:${ghlPort}/__strip-media?id=${pageVariant.externalId}`, { method: "POST", headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } });
+    if (!stripped.ok) throw new Error(`the mock planner drops the post's picture: ${stripped.status}`);
+    const { POSTED_WITHOUT_PICTURE } = await import("@/lib/planner-status");
+    await page.goto(`${base}/content/${pageVariant.contentItemId}/repurpose`);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button:has-text("Check every version with GoHighLevel")').click()]);
+    await page.waitForLoadState("networkidle");
+    if ((await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, pageVariant.id) }))?.externalError !== POSTED_WITHOUT_PICTURE) throw new Error("a post the planner holds without its picture says so on the post");
+    if (!(await page.locator("main").innerText()).includes("Posted without the picture")) throw new Error("the page says the post went out without its picture");
+    await page.goto(`${base}/content/ladders/${demoId}`);
+    console.log("✓ Ship: both posts sent with the graphic and read back with it; one the platform let out bare says \"Posted without the picture\" on the post");
     // Revoke: the address dies, the graphic stays.
     await Promise.all([page.waitForURL(/ship=revoked/, { timeout: 20000 }), page.locator('[data-testid="ship-revoke"]').click()]);
     if ((await fetch(publicUrl)).status !== 404) throw new Error("a revoked address reads 404");

@@ -18,9 +18,12 @@ const LOCATION = "That Location ID doesn't match this token. Copy the Location I
 export function refusedField(detail: string): "userId" | "accountIds" | "scheduleDate" | "content" | null {
   const d = detail.toLowerCase();
   if (/\buserid\b|\bcreatedby\b/.test(d)) return "userId";
-  if (/\baccountids?\b|\baccount\b/.test(d)) return "accountIds";
+  // A reply about the picture is about the picture, even when it also says "account" (9 Oct: an Instagram refusal that went
+  // through on a second Ship was read as a wrong channel). The account is named only by its id field or an invalid account.
+  if (/\bmedia\b|\bimage\b|\bphoto\b|\bvideo\b|\burl\b/.test(d)) return "content";
+  if (/\baccountids?\b|\baccount ?ids?\b|\binvalid account\b|\baccount (?:not found|does not exist|doesn't exist|is not)\b/.test(d)) return "accountIds";
   if (/\bscheduledate\b|\bschedule\b|\bdate\b/.test(d)) return "scheduleDate";
-  if (/\bsummary\b|\bmedia\b|\bcontent\b|\btype\b/.test(d)) return "content";
+  if (/\bsummary\b|\bcontent\b|\btype\b/.test(d)) return "content";
   return null;
 }
 
@@ -44,11 +47,11 @@ export function explainGhl(r: GhlFailure, call: GhlCall): string {
         case "userId":
           return "GoHighLevel refused the post (422): it doesn't accept the GHL user ID on Settings → Publishing. Use the ID of the user who owns the connected accounts (Settings → My Staff in GoHighLevel).";
         case "accountIds":
-          return "GoHighLevel refused the post (422): the account chosen for this channel isn't one the Social Planner will post to. On Settings → Publishing, press \"Check again\" and re-pick the channel.";
+          return "GoHighLevel refused the post (422) for this channel's account. This is often brief: Ship again (or send again) in a few minutes. If it refuses a second time, press \"Check again\" on Settings → Publishing and re-pick the channel.";
         case "scheduleDate":
           return "GoHighLevel refused the post (422): it didn't accept the schedule time. Pick a time in the future and schedule again.";
         case "content":
-          return "GoHighLevel refused the post (422): the text or media didn't pass its checks for this channel. Shorten the text or change the media and try again.";
+          return "GoHighLevel refused the post (422): the text or the picture didn't pass its checks for this channel. Try again in a few minutes; if it refuses again, shorten the text or change the picture.";
         default:
           return "GoHighLevel refused the post's details (422). Ask your coach; the reason is in the log.";
       }

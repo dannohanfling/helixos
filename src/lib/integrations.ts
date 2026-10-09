@@ -259,18 +259,18 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   let r = await send();
   if (!r.ok && r.status === 422 && refusedField(r.detail ?? "") === "accountIds") {
     const sent = accountId;
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId: sent, ghlPostId: held ?? undefined }, status: "failed", note: `${r.error} Account id sent: ${shortAccountId(sent)}. Reading the connected accounts again.` });
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: post.mediaUrl ? 1 : 0, accountId: sent, ghlPostId: held ?? undefined }, status: "failed", note: `${r.error} Account id sent: ${shortAccountId(sent)}. Reading the connected accounts again.` });
     if (await heal(true)) r = await send();
   }
   if (!r.ok) {
     // A refused account names the id that was sent, so the log and the card say which one GoHighLevel no longer knows.
     const error = r.status === 422 && refusedField(r.detail ?? "") === "accountIds" ? `${r.error} Account id sent: ${shortAccountId(accountId)}.` : r.error;
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: held ?? undefined }, status: "failed", note: error });
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: post.mediaUrl ? 1 : 0, accountId, ghlPostId: held ?? undefined }, status: "failed", note: error });
     // The post's failure is said on the post (Distribute page) and in the sync log; the connection itself is not marked broken by it.
     await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
     return false;
   }
-  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, accountId, ghlPostId: r.data.id ?? undefined }, status: "sent", note: r.data.id ? `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Accepted by"} Social Planner · ${r.data.id}` : "Accepted by the Social Planner without an id; found from its list on the next check" });
+  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: post.mediaUrl ? 1 : 0, accountId, ghlPostId: r.data.id ?? undefined }, status: "sent", note: r.data.id ? `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Accepted by"} Social Planner · ${r.data.id}` : "Accepted by the Social Planner without an id; found from its list on the next check" });
   // Accepted is not published: an immediate post is "in_progress" until the readback (Check status) says it went out; a
   // 2xx with no id is "accepted" until the planner's list gives the id back.
   await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: r.data.id ? (scheduleDate ? "scheduled" : "in_progress") : "accepted", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));

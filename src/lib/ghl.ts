@@ -52,7 +52,8 @@ async function call<T>(base: string, token: string, path: string, init: RequestI
       const raw = json && typeof json === "object" && "message" in json ? (json as { message: unknown }).message : text;
       // Nothing token-shaped survives into the log or the classifier's detail, whoever put it in the body.
       const msg = redactSecrets((Array.isArray(raw) ? raw.map(String).join("; ") : String(raw)).slice(0, 500));
-      logGhl(`upstream ${res.status}`, { status: res.status, path, body: msg });
+      // The whole reply too (9 Oct: a refusal read as the wrong cause), redacted and capped: the message field alone can hide it.
+      logGhl(`upstream ${res.status}`, { status: res.status, path, message: msg, body: redactSecrets(text.slice(0, 1500)) });
       return { ok: false, error: `GoHighLevel didn't accept the request (${res.status}).`, status: res.status, detail: msg };
     }
     return { ok: true, data: json as T };
@@ -190,12 +191,13 @@ export async function updatePost(conn: SocialConnection, id: string, post: NewPo
     userId: conn.ghlUserId ?? "",
   };
   const r = await call<unknown>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/${encodeURIComponent(id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status };
+  if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status, detail: r.detail };
   return { ok: true, data: { id } };
 }
 
-export type PostStatus = { status: string; error: string | null; postId: string | null; publishedAt: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[]; author: string | null };
-type RawPost = { _id?: string; id?: string; status?: string; error?: string; postId?: string; publishedAt?: string; createdAt?: string; summary?: string; scheduleDate?: string; accountIds?: unknown; user?: { name?: string; firstName?: string; lastName?: string } };
+/** `mediaCount`: how many pictures or videos the planner says the post carries; null when its reply has no media list at all. */
+export type PostStatus = { status: string; error: string | null; postId: string | null; publishedAt: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[]; author: string | null; mediaCount: number | null };
+type RawPost = { _id?: string; id?: string; status?: string; error?: string; postId?: string; publishedAt?: string; createdAt?: string; summary?: string; scheduleDate?: string; accountIds?: unknown; media?: unknown; user?: { name?: string; firstName?: string; lastName?: string } };
 
 /** Who the planner says a post is from, when it says: its `user` object's name. */
 const authorOf = (p: RawPost): string | null => p.user?.name?.trim() || [p.user?.firstName, p.user?.lastName].filter(Boolean).join(" ").trim() || null;
@@ -208,7 +210,7 @@ export async function getPost(conn: SocialConnection, id: string): Promise<GhlRe
   const r = await call<{ results?: { post?: RawPost } }>(cred.data.base, cred.data.token, `/social-media-posting/${conn.locationId}/posts/${encodeURIComponent(id)}`);
   if (!r.ok) return { ok: false, error: explain(r, "post"), status: r.status, detail: r.detail };
   const p = r.data.results?.post ?? {};
-  return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p), author: authorOf(p) } };
+  return { ok: true, data: { status: String(p.status ?? "unknown"), error: p.error ?? null, postId: p.postId ?? null, publishedAt: p.publishedAt ?? null, summary: p.summary ?? null, scheduleDate: p.scheduleDate ?? null, accountIds: accountIdsOf(p), author: authorOf(p), mediaCount: Array.isArray(p.media) ? p.media.length : null } };
 }
 
 export type PlannerPost = { id: string; status: string | null; summary: string | null; scheduleDate: string | null; accountIds: string[]; createdAt: string | null; publishedAt: string | null };

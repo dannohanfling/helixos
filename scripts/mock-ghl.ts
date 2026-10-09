@@ -37,6 +37,14 @@ createServer((req, res) => {
     if (!auth.startsWith("Bearer ") || version !== "2021-07-28") return json(401, { message: "Invalid JWT" });
     const token = auth.slice(7);
     if (url.startsWith("/__posts") && req.method === "GET") return json(200, { posts: [...posts.values()] }); // walk introspection, not a GHL route
+    // A post the platform published without its picture (9 Oct): the walk empties one post's media, the next read shows none.
+    if (url.startsWith("/__strip-media") && req.method === "POST") {
+      const id = new URL(url, "http://localhost").searchParams.get("id") ?? "";
+      const p = posts.get(id);
+      if (!p) return json(404, { message: "no such post" });
+      posts.set(id, { ...p, media: [] });
+      return json(200, { ok: true });
+    }
     if (url.startsWith("/__reset") && req.method === "POST") {
       posts.clear();
       drips.length = 0;

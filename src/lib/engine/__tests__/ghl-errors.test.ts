@@ -7,9 +7,12 @@ describe("what GoHighLevel's reply means, by the call that was made", () => {
     const userId = explainGhl({ error: "x", status: 422, detail: "userId must be a string; userId should not be empty" }, "post");
     expect(userId).toContain("GHL user ID on Settings → Publishing");
     expect(userId).not.toContain("location");
-    expect(explainGhl({ error: "x", status: 422, detail: "accountIds must contain at least 1 elements" }, "post")).toContain("account chosen for this channel");
+    // A refused account says "Ship again" first, then the re-pick (9 Oct: the refusal went through on a second Ship).
+    const account = explainGhl({ error: "x", status: 422, detail: "accountIds must contain at least 1 elements" }, "post");
+    expect(account).toContain("Ship again (or send again) in a few minutes");
+    expect(account.indexOf("Ship again")).toBeLessThan(account.indexOf("re-pick the channel"));
     expect(explainGhl({ error: "x", status: 422, detail: "scheduleDate must be a valid ISO 8601 date string" }, "post")).toContain("schedule time");
-    expect(explainGhl({ error: "x", status: 422, detail: "summary must be shorter than or equal to 2200 characters" }, "post")).toContain("text or media");
+    expect(explainGhl({ error: "x", status: 422, detail: "summary must be shorter than or equal to 2200 characters" }, "post")).toContain("text or the picture");
     expect(explainGhl({ error: "x", status: 422, detail: "something new" }, "post")).toContain("refused the post's details (422)");
     // A 404 on a post is the post or its account, not the location either.
     expect(explainGhl({ error: "x", status: 404, detail: "Post not found" }, "post")).not.toContain("location ID");
@@ -35,6 +38,10 @@ describe("what GoHighLevel's reply means, by the call that was made", () => {
     expect(refusedField("each value in accountIds must be a string")).toBe("accountIds");
     expect(refusedField("scheduleDate must be in the future")).toBe("scheduleDate");
     expect(refusedField("media.0.url must be an URL address")).toBe("content");
+    // About the picture, even when the reply also says "account": never sent to re-pick a channel.
+    expect(refusedField("The Instagram account could not fetch the media from the image url")).toBe("content");
+    expect(refusedField("Invalid account for this location")).toBe("accountIds");
+    expect(refusedField("Instagram account requires reconnecting")).toBeNull();
     expect(refusedField("")).toBeNull();
   });
 });

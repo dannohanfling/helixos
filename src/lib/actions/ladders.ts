@@ -440,10 +440,10 @@ export async function shipLadderAction(formData: FormData): Promise<void> {
     if (!variant) { notes.push(`${channel}: no draft`); continue; }
     await db.update(schema.contentVariants).set({ status: postAt ? "scheduled" : "posted", postAt, ...(postAt ? {} : { postedAt: nowIso() }) }).where(eq(schema.contentVariants.id, variant.id));
     const sent = await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: variant.id, channel, body: variant.subject ? `${variant.subject}\n\n${variant.body}` : variant.body, postAt, mediaUrl, title: item.title, followUpComment: dripOn ? null : item.firstComment });
-    notes.push(`${channel}: ${sent ? "sent" : "refused"}`);
+    notes.push(`${channel}: ${sent ? "sent" : "refused"}${mediaUrl ? " with the graphic" : ""}`);
     if (sent && conn) {
       const after = await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, variant.id) });
-      if (after?.externalId) await recordReadback(after, conn);
+      if (after?.externalId) await recordReadback(after, conn, Boolean(mediaUrl));
     }
   }
   await db.update(schema.contentItems).set({ status: postAt ? "scheduled" : "posted" }).where(eq(schema.contentItems.id, itemId));

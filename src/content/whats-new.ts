@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 125,
+    date: "2026-10-09",
+    title: "Ship says more when GoHighLevel says no",
+    lines: [
+      "When GoHighLevel refuses a post for its channel's account, it now says to Ship again in a few minutes first, since that kind of refusal is often brief. A refusal about the picture is no longer read as a problem with the channel.",
+      "If a post goes out without its picture, the post now says \"Posted without the picture\" when it is checked, with what to do about it.",
+      "Ladders written from now on use a made-up word or nickname in action and never stop to explain it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 124,
     date: "2026-10-09",
     title: "Monthly feedback, open all month",

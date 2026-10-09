@@ -136,6 +136,7 @@ RUNGS
 - ${profile?.scarcityLine?.trim() ? `The ONLY permitted scarcity, verbatim: "${profile.scarcityLine.trim()}"` : "No scarcity line of any kind. There is no permitted one for this client."}
 - BANNED: ${banned.map((b) => `"${b}"`).join(", ")}, any hypey close.
 - No contempt. Never mock any group. Polarize on readiness, never on intelligence.
+- A coined word or nickname is used, never explained. Not "I called my car The Beast", but "I fired up The Beast and hit the road." The reader gets it from the action.
 - Every number is true, or marked "(Illustrative. Your numbers will differ.)"
 - NEVER invent a testimonial.`,
     `## THE WORTH-IT TEST
