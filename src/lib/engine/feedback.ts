@@ -26,6 +26,20 @@ export function feedbackMonth(today: string): string | null {
   if (day <= 5) return prevMonth(month);
   return null;
 }
+/**
+ * The form on Intentions (Danno, 9 Oct): shown all month, not only in the window. Last month's comes first while it has no
+ * response and the 7th of the new month hasn't passed; otherwise it is this month's. The reminder dot keeps the window above.
+ */
+export const FEEDBACK_LATE_DAYS = 7;
+export function feedbackFormMonth(today: string, lastMonthGiven: boolean): string {
+  const month = today.slice(0, 7);
+  return !lastMonthGiven && Number(today.slice(8)) <= FEEDBACK_LATE_DAYS ? prevMonth(month) : month;
+}
+/** The months a response may be sent or changed for today: this month until it ends, and last month through the 7th. */
+export function feedbackMonthsOpen(today: string): string[] {
+  const month = today.slice(0, 7);
+  return Number(today.slice(8)) <= FEEDBACK_LATE_DAYS ? [prevMonth(month), month] : [month];
+}
 /** The first day the window opens for a month: three days before its end. */
 export const windowOpens = (month: string): string => `${month}-${String(lastDayOf(month) - 2).padStart(2, "0")}`;
 

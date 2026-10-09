@@ -5,7 +5,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card } from "@/components/ui";
 import { DraftKeeper } from "@/components/draft-keeper";
 
-type Sp = { feedbackError?: string; feedbackSaved?: string };
+type Sp = { feedbackError?: string; feedbackSaved?: string; feedbackMonth?: string };
 
 function FeedbackForm({ month, given, lookBack, owner }: { month: string; given: MonthlyFeedback | null; lookBack: string | null; owner?: string }) {
   const area = (name: string, label: string, value: string | null | undefined, rows = 2) => (
@@ -16,6 +16,7 @@ function FeedbackForm({ month, given, lookBack, owner }: { month: string; given:
   );
   return (
     <form action={saveFeedbackAction} className="space-y-3" data-testid="feedback-form">
+      <input type="hidden" name="month" value={month} />
       {owner ? <DraftKeeper id={`feedback.${owner}.${month}`} /> : null}
       <p className="text-xs text-ink-3" data-testid="feedback-who-reads">Your coach reads every answer here, in full. It goes to them and nowhere else.</p>
       {lookBack ? (
@@ -49,25 +50,32 @@ function FeedbackForm({ month, given, lookBack, owner }: { month: string; given:
 }
 
 /**
- * End-of-month feedback on Today (handoff rev 124), from the last 3 days of a month through the 5th of the next, about the month
- * ending. Once sent it folds to a thank-you that can be opened to change it while the window is open.
+ * End-of-month feedback on Intentions (handoff rev 124; all month since 9 Oct, Danno). One response per member per month, which
+ * can be changed until the month ends (last month's through the 7th). Once sent it folds to "Saved" with an Edit button, never a
+ * blank form. `closes` says until when, in plain words.
  */
-export function FeedbackCard({ month, given, lookBack = null, sp, owner }: { month: string; given: MonthlyFeedback | null; lookBack?: string | null; sp: Sp; owner?: string }) {
+export function FeedbackCard({ month, given, lookBack = null, sp, owner, closes, first = true }: { month: string; given: MonthlyFeedback | null; lookBack?: string | null; sp: Sp; owner?: string; closes: string; first?: boolean }) {
+  // A refusal names its month; one that names none (a closed month) shows on the first card.
+  const error = sp.feedbackError && (sp.feedbackMonth ? sp.feedbackMonth === month : first) ? sp.feedbackError : null;
   return (
-    <section id="feedback" className="mb-5" data-testid="feedback-card" data-state={given ? "given" : "ask"}>
-      <Card title={`Your feedback on ${monthLabel(month)}`} action={<Badge tone={given ? "good" : "accent"}>{given ? "Sent" : "5 to 10 minutes"}</Badge>}>
-        {sp.feedbackError ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="feedback-error">{sp.feedbackError}</p> : null}
-        {sp.feedbackSaved ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="feedback-saved">Thank you. It helps us make next month better.</p> : null}
+    <section id={`feedback-${month}`} className="mb-5 scroll-mt-4" data-testid="feedback-card" data-month={month} data-state={given ? "given" : "ask"}>
+      <Card title={`Your feedback on ${monthLabel(month)}`} action={<Badge tone={given ? "good" : "accent"}>{given ? "Saved" : "5 to 10 minutes"}</Badge>}>
+        {error ? <p className="mb-3 rounded-lg bg-danger-soft p-2 text-sm" role="alert" data-testid="feedback-error">{error}</p> : null}
+        {sp.feedbackSaved === month ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="feedback-saved">Thank you. It helps us make next month better.</p> : null}
         {given ? (
           <details>
-            <summary className="cursor-pointer text-sm text-ink-2" data-testid="feedback-edit">Thanks for your feedback. Change it until the 5th.</summary>
+            <summary data-testid="feedback-edit" className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-sm text-ink-2 [&::-webkit-details-marker]:hidden">
+              <span data-testid="feedback-saved-line">Saved · your coach reads every answer</span>
+              <span className="btn btn-soft btn-sm min-h-[44px]">Edit</span>
+            </summary>
             <div className="mt-3">
+              <p className="mb-2 text-xs text-ink-3">You can change it {closes}.</p>
               <FeedbackForm month={month} given={given} lookBack={lookBack} owner={owner} />
             </div>
           </details>
         ) : (
           <>
-            <p className="mb-3 text-sm text-ink-2">A few questions about the month. It takes 5 to 10 minutes, and it shapes what we do next.</p>
+            <p className="mb-3 text-sm text-ink-2">A few questions about the month. It takes 5 to 10 minutes, it shapes what we do next, and you can change it {closes}.</p>
             <FeedbackForm month={month} given={null} lookBack={lookBack} owner={owner} />
           </>
         )}

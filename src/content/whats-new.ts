@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 124,
+    date: "2026-10-09",
+    title: "Monthly feedback, open all month",
+    lines: [
+      "Intentions now shows your monthly feedback all month, under This month, with the same questions. You can change your answers until the month ends.",
+      "Once saved it says Saved, with an Edit button. If last month's is still blank, it comes first until you fill it or the 7th passes.",
+      "The reminder dot still comes at the end of the month, and your coach still reads every answer.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 123,
     date: "2026-10-09",
     title: "The gold phrase is back on your graphic",

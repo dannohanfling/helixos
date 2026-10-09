@@ -8,8 +8,8 @@
  * 2. The Open Office Hours request: the two gates (going back saves nothing, the promise must be ticked), this month's upcoming
  *    the next four Fridays across month ends, the member's own list with a change until the Friday; the coach sees requests by Friday, sets who takes it,
  *    covered or no-show and notes the member never sees (nor their export), and edits the category and host lists.
- * 3. End-of-month feedback: the card on Intentions (never Today) only from the last 3 days of a month through the 5th of the next, about the month
- *    ending; the score required; sent and changed; the coach sees each month's responses, the average referral score and its
+ * 3. End-of-month feedback: the card on Intentions (never Today) all month (9 Oct), last month's first while unanswered through the 7th;
+ *    saved, it folds to "Saved" with Edit; the score required; sent and changed; the coach sees each month's responses, the average referral score and its
  *    trend, and the proud-of answers together, with nothing that sends them anywhere.
  * 4. The monthly intention on the Intentions page (rev 129/130/157): asked for in the month's first week, optional after, one line
  *    on Today once set; a refused one keeps every answer (rev 160); the eleven questions (a revenue goal as a number); edits and
@@ -33,7 +33,7 @@ async function main() {
   const { todayInTz } = await import("@/lib/dates");
   const { MONTH_ASK_DAYS, NEEDS_NUMBER, intentionPrompt, intentionsDue, lateForWeek, tasksDueOn, weekOf } = await import("@/lib/engine/intentions");
   const { upcomingFridays } = await import("@/lib/engine/office-hours");
-  const { feedbackMonth, monthSummary, prevMonth, trendLine } = await import("@/lib/engine/feedback");
+  const { feedbackFormMonth, feedbackMonth, monthSummary, prevMonth, trendLine } = await import("@/lib/engine/feedback");
   const { lateForMonth, monthOf } = await import("@/lib/engine/month-intentions");
   const { newId } = await import("@/lib/ids");
 
@@ -411,52 +411,54 @@ async function main() {
     if (!exported.includes("office_hours_requests") || !exported.includes("My bot books the wrong calendar") || exported.includes(NOTES) || exported.includes("coachNotes")) throw new Error("the member's export has their request and not the coach's notes");
     console.log("✓ the coach: the request under its Friday, Shonna responsible, covered, notes kept the coach's (not on the member's page, not in their export); a category added to the list");
 
-    // ── 3. End-of-month feedback, on Intentions in its window only (rev 157: never on Today). ──
+    // ── 3. End-of-month feedback, on Intentions all month (9 Oct; never on Today): last month's first while it is unanswered
+    //    through the 7th, else this month's; saved, it folds to "Saved" with Edit. ──
     const PROUD = `Booked my first 3 calls ${Date.now()}`;
-    const fbMonth = feedbackMonth(mayaToday);
-    const month = fbMonth ?? mayaToday.slice(0, 7);
+    const lastGiven = Boolean(await db.query.monthlyFeedback.findFirst({ where: and(eq(schema.monthlyFeedback.userId, maya.id), eq(schema.monthlyFeedback.month, prevMonth(thisMonth))) }));
+    const month = feedbackFormMonth(mayaToday, lastGiven);
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="intentions-summary"]').waitFor({ timeout: 20000 });
     if (await page.locator('[data-testid="feedback-card"]').count()) throw new Error("feedback is never on Today");
     await page.goto(`${base}/intentions`);
     await page.locator('[data-testid="week-card"]').waitFor({ timeout: 20000 });
-    const fbCard = page.locator('[data-testid="feedback-card"]');
-    if (fbMonth) {
-      if ((await fbCard.getAttribute("data-state")) !== "ask") throw new Error(`in the window (${mayaToday}), Intentions asks for feedback on ${fbMonth}`);
-      // What Maya wrote for that month's question 11, shown back to compare.
-      const wrote = fbMonth === thisMonth ? "Showing up every single day." : PAST_PROUD;
-      if (!(await page.locator('[data-testid="feedback-lookback"]').innerText()).includes(wrote)) throw new Error(`the feedback card shows what Maya wrote for question 11 of ${fbMonth}`);
-      const fillFeedback = async () => {
-        for (const [k, t] of [["proud", PROUD], ["love", "The Friday calls."], ["less", "Long lessons."], ["more", "Templates."], ["wow", "A done-for-you funnel."], ["referral", "Sam, a fitness coach."], ["favorite", "The community."]]) await page.locator(`[data-testid="feedback-${k}"]`).last().fill(t);
-      };
-      await fillFeedback();
-      await submit(page, '[data-testid="feedback-save"]');
-      if ((await page.locator('[data-testid="feedback-error"]').innerText()).trim() !== "Pick a referral score from 1 to 10." || (await db.query.monthlyFeedback.findFirst({ where: eq(schema.monthlyFeedback.userId, maya.id) }))) throw new Error("without a score, nothing is sent");
-      // Favorite part is required (rev 129); Referral stays optional.
-      await fillFeedback();
-      await page.locator('[data-testid="feedback-favorite"]').last().fill("");
-      await page.locator('[data-testid="feedback-referral"]').last().fill("");
-      await page.locator('[data-testid="feedback-score-9"]').last().check();
-      await submit(page, '[data-testid="feedback-save"]');
-      if ((await page.locator('[data-testid="feedback-error"]').innerText()).trim() !== "Tell us your favorite part of the experience so far.") throw new Error("without a favorite part, nothing is sent");
-      await fillFeedback();
-      await page.locator('[data-testid="feedback-referral"]').last().fill("");
-      await page.locator('[data-testid="feedback-score-9"]').last().check();
-      await submit(page, '[data-testid="feedback-save"]');
-      await page.locator('[data-testid="feedback-saved"]').waitFor({ timeout: 20000 });
-      if ((await fbCard.getAttribute("data-state")) !== "given") throw new Error("once sent, the card thanks them");
-      await page.locator('[data-testid="feedback-edit"]').click();
-      await page.locator('[data-testid="feedback-score-10"]').last().check();
-      await submit(page, '[data-testid="feedback-save"]');
-      await page.locator('[data-testid="feedback-saved"]').waitFor({ timeout: 20000 });
-      const fb = await db.query.monthlyFeedback.findMany({ where: eq(schema.monthlyFeedback.userId, maya.id) });
-      if (fb.length !== 1 || fb[0].month !== fbMonth || fb[0].referralScore !== 10 || fb[0].proud !== PROUD) throw new Error(`one response for ${fbMonth}, changed in place, got ${JSON.stringify(fb.map((f) => [f.month, f.referralScore]))}`);
-      console.log(`✓ feedback on ${fbMonth}: the score and the favorite part required, sent with no referral, then changed in place (9 to 10)`);
-    } else {
-      if (await fbCard.count()) throw new Error(`outside the window (${mayaToday}) there is no feedback card`);
-      await db.insert(schema.monthlyFeedback).values({ id: newId(), workspaceId: ws.id, userId: maya.id, month, proud: PROUD, love: "The Friday calls.", less: "Long lessons.", more: "Templates.", wow: "A done-for-you funnel.", referralScore: 10 });
-      console.log(`✓ feedback: ${mayaToday} is outside the window, so Intentions asks nothing (the unit tests cover the window; a response is seeded for the coach's view)`);
+    const fbCard = page.locator(`[data-testid="feedback-card"][data-month="${month}"]`);
+    if ((await page.locator('[data-testid="feedback-card"]').count()) !== 1 || (await fbCard.getAttribute("data-state")) !== "ask") throw new Error(`on ${mayaToday}, whatever the window, Intentions asks for feedback on ${month}`);
+    if (!(await fbCard.locator('[data-testid="feedback-who-reads"]').isVisible())) throw new Error("the form says the coach reads every answer");
+    // What Maya wrote for that month's question 11, shown back to compare.
+    const wrote = month === thisMonth ? "Showing up every single day." : PAST_PROUD;
+    if (!(await fbCard.locator('[data-testid="feedback-lookback"]').innerText()).includes(wrote)) throw new Error(`the feedback card shows what Maya wrote for question 11 of ${month}`);
+    const fillFeedback = async () => {
+      for (const [k, t] of [["proud", PROUD], ["love", "The Friday calls."], ["less", "Long lessons."], ["more", "Templates."], ["wow", "A done-for-you funnel."], ["referral", "Sam, a fitness coach."], ["favorite", "The community."]]) await fbCard.locator(`[data-testid="feedback-${k}"]`).fill(t);
+    };
+    await fillFeedback();
+    await submit(page, `[data-testid="feedback-card"][data-month="${month}"] [data-testid="feedback-save"]`);
+    if ((await page.locator('[data-testid="feedback-error"]').innerText()).trim() !== "Pick a referral score from 1 to 10." || (await db.query.monthlyFeedback.findFirst({ where: eq(schema.monthlyFeedback.userId, maya.id) }))) throw new Error("without a score, nothing is sent");
+    // Favorite part is required (rev 129); Referral stays optional.
+    await fillFeedback();
+    await fbCard.locator('[data-testid="feedback-favorite"]').fill("");
+    await fbCard.locator('[data-testid="feedback-referral"]').fill("");
+    await fbCard.locator('[data-testid="feedback-score-9"]').check();
+    await submit(page, `[data-testid="feedback-card"][data-month="${month}"] [data-testid="feedback-save"]`);
+    if ((await page.locator('[data-testid="feedback-error"]').innerText()).trim() !== "Tell us your favorite part of the experience so far.") throw new Error("without a favorite part, nothing is sent");
+    await fillFeedback();
+    await fbCard.locator('[data-testid="feedback-referral"]').fill("");
+    await fbCard.locator('[data-testid="feedback-score-9"]').check();
+    await submit(page, `[data-testid="feedback-card"][data-month="${month}"] [data-testid="feedback-save"]`);
+    await fbCard.locator('[data-testid="feedback-saved"]').waitFor({ timeout: 20000 });
+    if ((await fbCard.getAttribute("data-state")) !== "given" || (await fbCard.locator('[data-testid="feedback-saved-line"]').innerText()).trim() !== "Saved · your coach reads every answer" || (await fbCard.locator('[data-testid="feedback-form"]').isVisible())) throw new Error("once saved, the card says Saved with an Edit button, not a blank form");
+    await fbCard.locator('[data-testid="feedback-edit"]').click();
+    if ((await fbCard.locator('[data-testid="feedback-proud"]').inputValue()) !== PROUD) throw new Error("Edit opens the saved answers");
+    await fbCard.locator('[data-testid="feedback-score-10"]').check();
+    await submit(page, `[data-testid="feedback-card"][data-month="${month}"] [data-testid="feedback-save"]`);
+    await fbCard.locator('[data-testid="feedback-saved"]').waitFor({ timeout: 20000 });
+    const fb = await db.query.monthlyFeedback.findMany({ where: eq(schema.monthlyFeedback.userId, maya.id) });
+    if (fb.length !== 1 || fb[0].month !== month || fb[0].referralScore !== 10 || fb[0].proud !== PROUD) throw new Error(`one response for ${month}, changed in place, got ${JSON.stringify(fb.map((f) => [f.month, f.referralScore]))}`);
+    // Last month's answered (or never asked): this month's form is open, with last month's kept above it through the 7th.
+    if (month !== thisMonth) {
+      const now = page.locator(`[data-testid="feedback-card"][data-month="${thisMonth}"]`);
+      if ((await now.getAttribute("data-state")) !== "ask" || (await page.locator('[data-testid="feedback-card"]').count()) !== 2) throw new Error("with last month's sent, this month's form is next, under it");
     }
+    console.log(`✓ feedback on ${month} (${mayaToday}), on Intentions outside the reminder window too: the score and the favorite part required, sent with no referral, folded to "Saved · your coach reads every answer" with Edit, then changed in place (9 to 10)`);
     const exportedFb = await (await page.request.get(`${base}/api/export?format=json`)).text();
     if (!exportedFb.includes("monthly_feedback") || !exportedFb.includes(PROUD)) throw new Error("the member's export has their feedback");
     await signOut();

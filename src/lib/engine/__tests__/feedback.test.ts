@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { feedbackMonth, lastDayOf, monthLabel, monthSummary, nextMonth, prevMonth, readFeedback, trendLine, windowOpens } from "../feedback";
+import { feedbackFormMonth, feedbackMonth, feedbackMonthsOpen, lastDayOf, monthLabel, monthSummary, nextMonth, prevMonth, readFeedback, trendLine, windowOpens } from "../feedback";
 
 const full = { proud: "Booked my first 3 calls.", love: "The Friday calls.", less: "Long lessons.", more: "Templates.", wow: "A done-for-you funnel.", referralScore: "9", referral: "Sam, a fitness coach.", favorite: "The community." };
 
@@ -16,6 +16,20 @@ describe("end-of-month feedback (handoff rev 124)", () => {
     expect([feedbackMonth("2026-02-26"), feedbackMonth("2027-01-03")]).toEqual(["2026-02", "2026-12"]);
     expect(feedbackMonth("2026-09-25")).toBeNull();
     expect(windowOpens("2026-09")).toBe("2026-09-28");
+  });
+  it("the form on Intentions is there all month: last month's first while it is unanswered through the 7th, then this month's (9 Oct)", () => {
+    expect(feedbackFormMonth("2026-10-09", false)).toBe("2026-10");
+    expect(feedbackFormMonth("2026-10-15", false)).toBe("2026-10");
+    expect(feedbackFormMonth("2026-10-03", false)).toBe("2026-09");
+    expect(feedbackFormMonth("2026-10-07", false)).toBe("2026-09");
+    expect(feedbackFormMonth("2026-10-08", false)).toBe("2026-10");
+    expect(feedbackFormMonth("2026-10-03", true)).toBe("2026-10");
+    expect(feedbackFormMonth("2027-01-02", false)).toBe("2026-12");
+    // Saved or changed: this month until it ends, last month through the 7th, never a month further back or ahead.
+    expect(feedbackMonthsOpen("2026-10-07")).toEqual(["2026-09", "2026-10"]);
+    expect(feedbackMonthsOpen("2026-10-08")).toEqual(["2026-10"]);
+    expect(feedbackMonthsOpen("2026-10-31")).toEqual(["2026-10"]);
+    expect(feedbackMonthsOpen("2026-10-31")).not.toContain("2026-11");
   });
   it("proud, Love, Less, More, Wow, a whole referral score from 1 to 10 and their favorite part are required; who they'd refer is not (rev 129)", () => {
     expect(readFeedback(full)).toEqual({ value: { ...full, referralScore: 9 } });

@@ -3,7 +3,7 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { keyResultTally, krProgress, weekOf } from "@/lib/engine/intentions";
 import { monthOf } from "@/lib/engine/month-intentions";
-import { feedbackMonth, monthLabel } from "@/lib/engine/feedback";
+import { FEEDBACK_LATE_DAYS, feedbackFormMonth, monthLabel, prevMonth } from "@/lib/engine/feedback";
 import { FeedbackCard } from "@/components/feedback-card";
 import { MONTH_ASK_DAYS } from "@/lib/engine/intentions";
 import { formatDate } from "@/lib/dates";
@@ -14,7 +14,7 @@ import { Card, PageHeader } from "@/components/ui";
 
 export const metadata = { title: "Intentions" };
 
-type Sp = { weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string };
+type Sp = { weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string; feedbackMonth?: string };
 
 /**
  * Intentions (handoff rev 130): the week and the month together. This week's 3-1-3 (the form, the set week with Edit, or the
@@ -37,15 +37,17 @@ export default async function IntentionsPage({ searchParams }: { searchParams: P
   const tasks = taskIds.length ? await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, v.user.id), inArray(schema.tasks.id, taskIds)) }) : [];
   const taskDone = Object.fromEntries(tasks.map((t) => [t.id, t.status === "done"]));
   const [share, thread, monthShare, monthThread] = await Promise.all([week ? shareFor(ws, v.user.id, week) : null, threadLinkFor(ws, thisWeek), month ? monthShareFor(ws, v.user.id, month) : null, monthThreadLinkFor(ws, thisMonth)]);
-  // End-of-month feedback (rev 157: here, not on Today): only in its window, about the month ending. What they wrote for that
-  // month's question 11 is shown back to them, and only them, to compare (rev 129).
-  const fbMonth = feedbackMonth(v.today);
-  const [fbGiven, fbLook] = fbMonth
-    ? await Promise.all([
-        db.query.monthlyFeedback.findFirst({ where: and(eq(schema.monthlyFeedback.workspaceId, ws), eq(schema.monthlyFeedback.userId, v.user.id), eq(schema.monthlyFeedback.month, fbMonth)) }),
-        db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, ws), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, fbMonth)) }),
-      ])
-    : [undefined, undefined];
+  // End-of-month feedback (rev 157: here, not on Today; all month since 9 Oct): this month's form, or last month's first while it
+  // has no response and the 7th hasn't passed. Last month's, once sent, stays above this month's through the 7th to change. What
+  // they wrote for that month's question 11 is shown back to them, and only them, to compare (rev 129).
+  const lastMonth = prevMonth(thisMonth);
+  const early = Number(v.today.slice(8, 10)) <= FEEDBACK_LATE_DAYS;
+  const fbRows = await db.query.monthlyFeedback.findMany({ where: and(eq(schema.monthlyFeedback.workspaceId, ws), eq(schema.monthlyFeedback.userId, v.user.id), inArray(schema.monthlyFeedback.month, [lastMonth, thisMonth])) });
+  const fbOf = (m: string) => fbRows.find((f) => f.month === m) ?? null;
+  const formMonth = feedbackFormMonth(v.today, Boolean(fbOf(lastMonth)));
+  const fbMonths = formMonth === thisMonth && early && fbOf(lastMonth) ? [lastMonth, thisMonth] : [formMonth];
+  const fbLooks = await db.query.monthlyIntentions.findMany({ where: and(eq(schema.monthlyIntentions.workspaceId, ws), eq(schema.monthlyIntentions.userId, v.user.id), inArray(schema.monthlyIntentions.month, fbMonths)) });
+  const closesOn = (m: string) => (m === thisMonth ? "until the month ends" : `until the ${FEEDBACK_LATE_DAYS}th`);
   const monthOptional = !month && Number(v.today.slice(8, 10)) > MONTH_ASK_DAYS;
 
   return (
@@ -71,12 +73,10 @@ export default async function IntentionsPage({ searchParams }: { searchParams: P
         ) : null}
       </div>
       <MonthCard m={month ?? null} month={thisMonth} sp={sp} back="/intentions" optional={monthOptional} owner={v.user.id} share={monthShare} />
-      {fbMonth ? (
-        <>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">End-of-month feedback</h2>
-          <FeedbackCard month={fbMonth} given={fbGiven ?? null} lookBack={fbLook?.proudEnd ?? null} sp={sp} owner={v.user.id} />
-        </>
-      ) : null}
+      <h2 id="feedback" className="mb-2 scroll-mt-4 text-xs font-semibold uppercase tracking-wide text-ink-3">End-of-month feedback</h2>
+      {fbMonths.map((m, i) => (
+        <FeedbackCard key={m} month={m} given={fbOf(m)} lookBack={fbLooks.find((x) => x.month === m)?.proudEnd ?? null} sp={sp} owner={v.user.id} closes={closesOn(m)} first={i === 0} />
+      ))}
       <Card title="History" action={<span className="text-xs text-ink-3">{pastWeeks.length} weeks · {pastMonths.length} months</span>}>
         {pastWeeks.length || pastMonths.length ? (
           <div className="grid gap-4 md:grid-cols-2" data-testid="intentions-history">
