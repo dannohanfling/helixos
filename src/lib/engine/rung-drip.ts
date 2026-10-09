@@ -35,6 +35,21 @@ export function dripPayload(input: { userNs: string; post: string; rungs: string
   return { user_ns: input.userNs, post: input.post, first_comment: first, schedule_at: input.scheduleAt ?? "", rungs: joinRungs(dripped), target: input.target ?? "both", rung_fb_post_id: input.fbPostId ?? "", rung_ig_media_id: input.igMediaId ?? "", gap_minutes: input.gapMinutes ? String(input.gapMinutes) : "", pin_last: input.pinLast ? "1" : "" };
 }
 
+/**
+ * Ship's rungs-only hand-off (rev 625, the contract Community Loyalty maps on its side): the rungs as finished text in order, each
+ * numbered on its first line, and the two posts' ids to pin them to. Never the post itself: HelixOS has published it already.
+ * The channel targeted is the one whose id is there ("" for a channel not shipped); a fixed gap only when one is set.
+ */
+export type RungsPayload = { user_ns: string; rungs: string[]; rung_fb_post_id: string; rung_ig_media_id: string; target: "both" | "facebook" | "instagram"; gap_minutes: string };
+export function rungsPayload(input: { userNs: string; rungs: string[]; fbPostId?: string | null; igMediaId?: string | null; gapMinutes?: number | null }): RungsPayload {
+  const rungs = input.rungs.map((r) => r.replace(/^\s*\d{1,2}\\?[.)]\s*/, "").trim()).filter(Boolean).map((r, i) => `${i + 1}. ${r}`);
+  const fb = (input.fbPostId ?? "").trim();
+  const ig = (input.igMediaId ?? "").trim();
+  return { user_ns: input.userNs, rungs, rung_fb_post_id: fb, rung_ig_media_id: ig, target: fb && ig ? "both" : fb ? "facebook" : "instagram", gap_minutes: input.gapMinutes ? String(input.gapMinutes) : "" };
+}
+/** What Ship says once Community Loyalty has the rungs (a 200 is "queued"): the first one goes up about five minutes later. */
+export const rungsQueuedLine = (n: number): string => `Rungs queued: ${n}, first one in about 5 minutes`;
+
 /** GoHighLevel refuses a scheduled Threads post less than fifteen minutes out; the form says so before anything is sent. */
 export const MIN_SCHEDULE_LEAD_MINUTES = 15;
 export function scheduleAtProblem(iso: string | null | undefined, nowIso: string): string | null {

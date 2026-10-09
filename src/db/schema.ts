@@ -111,6 +111,8 @@ export const memberships = sqliteTable(
     eoPassLastPushAt: text("eo_pass_last_push_at"),
     /** The coach's Community Loyalty inbound webhook for the Rung Dripper: the URL is the credential (no auth on it), sealed at rest, never rendered, never logged. */
     clDripWebhookUrl: text("cl_drip_webhook_url"),
+    /** Ship's rungs-only inbound webhook on Community Loyalty (rev 625): the rungs and the two posts' ids, never the post. Sealed. */
+    clRungsWebhookUrl: text("cl_rungs_webhook_url"),
     /** The Community Loyalty contact that holds the drip state for this coach (user_ns). */
     clUserNs: text("cl_user_ns"),
     /** The client's own Community Loyalty (uChat) API token: sealed at rest, never rendered, never logged. One per client workspace. */
@@ -551,6 +553,8 @@ export const officeHoursRequests = sqliteTable(
     /** The Airtable record a backfilled request came from (rev 441), so a second run adds nothing. Null for the app's own. */
     airtableId: text("airtable_id"),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    /** When the member last changed their own request (rev 625): "Edited …". The coach's own notes never set it. */
+    editedAt: text("edited_at"),
     createdAt: createdAt(),
   },
   (t) => [index("office_hours_requests_ws_friday").on(t.workspaceId, t.friday), uniqueIndex("office_hours_requests_airtable").on(t.workspaceId, t.airtableId)],

@@ -174,7 +174,8 @@ describe("client-facing errors: what happened and what to do next, never our int
  */
 describe("the drip webhook URL is a credential", () => {
   // Both Community Loyalty inbound webhook URLs: the coach's Rung Dripper one and the client's own community one.
-  const TOKEN = /\bclDripWebhookUrl\b|cl_drip_webhook_url|\bpassWebhookUrl\b|pass_webhook_url/;
+  // And Ship's rungs-only one (rev 625), the same kind of credential.
+  const TOKEN = /\bclDripWebhookUrl\b|cl_drip_webhook_url|\bclRungsWebhookUrl\b|cl_rungs_webhook_url|\bpassWebhookUrl\b|pass_webhook_url/;
   const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/rung-drip.ts", "src/app/(app)/coach/page.tsx", "src/lib/queries/compose.ts", "src/lib/actions/compose.ts", "src/lib/actions/clients.ts", "src/app/(app)/community/page.tsx", "src/lib/export.ts", "src/lib/member-data.ts"];
   const LEAK = /console\.|\bnote:|\bthrow\b|new Error\(|redirect\(|defaultValue=|\bvalue=\{|JSON\.stringify\(|logSync\(/;
   it("is named only where it is stored, sealed, opened or blanked, and never on a line that logs, notes, throws, redirects or renders a value", () => {
@@ -186,10 +187,10 @@ describe("the drip webhook URL is a credential", () => {
     }
   });
   it("is opened in one place each, the call that posts to it, and that call's notes go through the redactor", () => {
-    const OPENS: Record<string, string> = { clDripWebhookUrl: "src/lib/rung-drip.ts", url: "src/lib/rung-drip.ts", passWebhookUrl: "src/lib/actions/clients.ts" };
+    const OPENS: Record<string, string> = { clDripWebhookUrl: "src/lib/rung-drip.ts", clRungsWebhookUrl: "src/lib/rung-drip.ts", url: "src/lib/rung-drip.ts", passWebhookUrl: "src/lib/actions/clients.ts" };
     for (const f of walk(SRC)) {
       const text = readFileSync(f, "utf8");
-      for (const m of text.matchAll(/open\((?:setup|m|membership|v\.membership)\.(clDripWebhookUrl|url|passWebhookUrl)\)/g)) expect(rel(f), `${m[1]} opened in ${rel(f)}`).toBe(OPENS[m[1]]);
+      for (const m of text.matchAll(/open\((?:setup|m|membership|v\.membership)\.(clDripWebhookUrl|clRungsWebhookUrl|url|passWebhookUrl)\)/g)) expect(rel(f), `${m[1]} opened in ${rel(f)}`).toBe(OPENS[m[1]]);
     }
     const clients = readFileSync(join(SRC, "lib/actions/clients.ts"), "utf8");
     expect(clients).not.toMatch(/syncNote:[^\n]*(err|error)\.message/);

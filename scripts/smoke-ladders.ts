@@ -9,6 +9,8 @@ const blobPort = 4050;
 const ghlPort = 4010;
 const uchatPort = 4060;
 const DRIP_HOOK = `http://localhost:${ghlPort}/api/iwh/abcdef0123456789abcdef0123456789`;
+// Ship's rungs-only webhook (rev 625), separate from the old publisher one, which Ship never calls.
+const RUNGS_HOOK = `http://localhost:${ghlPort}/api/iwh/ru0123456789abcdef0123456789abcd`;
 const CL_TOKEN = "uchat-test-token-for-maya-ship-0123456789";
 process.env.PROOF_BLOB_READ_WRITE_TOKEN ||= "vercel_blob_rw_PROOFSTORE_testsecret";
 process.env.BLOB_READ_WRITE_TOKEN ||= "vercel_blob_rw_TESTSTORE_testsecret";
@@ -418,6 +420,7 @@ async function main() {
     const mayaForm = 'form:has(input[name="eoPassUrl"][value*="maya-torres"])';
     await page.locator(mayaForm).first().waitFor({ timeout: 15000 });
     await page.locator(`${mayaForm} input[name="clDripWebhookUrl"]`).fill(DRIP_HOOK);
+    await page.locator(`${mayaForm} [data-testid="cl-rungs-webhook"]`).fill(RUNGS_HOOK);
     await page.locator(`${mayaForm} input[name="clUserNs"]`).fill("f52594u50757435");
     await page.locator(`${mayaForm} [data-testid="cl-api-token"]`).fill(CL_TOKEN);
     await submit(page, `${mayaForm} button:has-text("Save")`);
@@ -459,11 +462,16 @@ async function main() {
     if ((await fetch(`${base}/api/graphics/../deck-images/x`, { redirect: "manual" })).status === 200) throw new Error("a traversal never serves a private picture");
     // Read back as published, the rungs went to the drip naming the two posts; the keyword reached the bot.
     const drips = ((await (await fetch(`http://localhost:${ghlPort}/__drips`)).json()) as { drips: { path: string; body: Record<string, string> }[] }).drips;
-    if (drips.length !== 1 || !drips[0].path.endsWith("abcdef0123456789abcdef0123456789") || drips[0].body.user_ns !== "f52594u50757435") throw new Error(`one drip hand-off to the coach's hook: ${JSON.stringify(drips.map((d) => d.path))}`);
+    // One hand-off, to the rungs-only webhook, never the old publisher one (it would post again).
+    if (drips.length !== 1 || !drips[0].path.endsWith("ru0123456789abcdef0123456789abcd") || drips[0].body.user_ns !== "f52594u50757435") throw new Error(`one hand-off, to the rungs webhook: ${JSON.stringify(drips.map((d) => d.path))}`);
     const sentDrip = drips[0].body;
     const ids = shippedPosts.map((p) => p._id);
-    if (sentDrip.target !== "both" || !ids.includes(sentDrip.rung_fb_post_id) || !ids.includes(sentDrip.rung_ig_media_id) || sentDrip.gap_minutes !== "" || sentDrip.pin_last !== "") throw new Error(`the hand-off names where the rungs land and the two posts: ${JSON.stringify({ target: sentDrip.target, fb: sentDrip.rung_fb_post_id, ig: sentDrip.rung_ig_media_id, gap: sentDrip.gap_minutes, pin: sentDrip.pin_last })}`);
-    if (!sentDrip.rungs || !sentDrip.first_comment) throw new Error("the five keys the Dripper always read are still there");
+    if (sentDrip.target !== "both" || !ids.includes(sentDrip.rung_fb_post_id) || !ids.includes(sentDrip.rung_ig_media_id) || sentDrip.gap_minutes !== "") throw new Error(`the hand-off names where the rungs land and the two posts: ${JSON.stringify({ target: sentDrip.target, fb: sentDrip.rung_fb_post_id, ig: sentDrip.rung_ig_media_id, gap: sentDrip.gap_minutes })}`);
+    // The contract (rev 625): the rungs as an array, each numbered on its first line; never the post or a first comment.
+    const sentRungs = sentDrip.rungs as unknown as string[];
+    const demoRungs = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!.rungs;
+    if (!Array.isArray(sentRungs) || sentRungs.length !== demoRungs.length || !sentRungs.every((r, i) => r.startsWith(`${i + 1}. `)) || "post" in sentDrip || "first_comment" in sentDrip) throw new Error(`the rungs go as numbered strings, and nothing else: ${JSON.stringify(Object.keys(sentDrip))}`);
+    if (!decodeURIComponent(page.url()).includes(`Rungs queued: ${demoRungs.length}, first one in about 5 minutes`)) throw new Error(`Ship says the rungs are queued: ${decodeURIComponent(page.url())}`);
     const handoff = (await db.query.dripHandoffs.findFirst({ where: eq(schema.dripHandoffs.ladderId, demoId) }))!;
     if (handoff?.target !== "both" || handoff.fbPostId !== sentDrip.rung_fb_post_id || handoff.igMediaId !== sentDrip.rung_ig_media_id || handoff.pinLast) throw new Error(`the hand-off row keeps the target and the ids: ${JSON.stringify(handoff)}`);
     const botFields = (await (await fetch(`http://localhost:${uchatPort}/__fields`)).json()) as Record<string, string>;

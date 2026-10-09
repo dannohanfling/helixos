@@ -17,7 +17,8 @@ async function sheetLoaded(page: Page) {
   const sheet = page.locator('[data-testid="call-sheet"]');
   if (await sheet.waitFor({ timeout: 30000 }).then(() => true, () => false)) return;
   const body = await page.locator("body").innerText().catch(() => "");
-  if (!/\b404\b|could not be found/i.test(body)) throw new Error(`the call sheet did not load: ${body.slice(0, 120)}`);
+  // The app's own not-found page reads "This page isn't here anymore." (the deletes walk's wording), a 404 by another name.
+  if (!/\b404\b|could not be found|isn't here anymore/i.test(body)) throw new Error(`the call sheet did not load: ${body.slice(0, 120)}`);
   const now = new Date();
   utimesSync(SHEET_PAGE, now, now);
   console.log("  (the dev server answered the call sheet 404; its page was touched and reloaded once)");

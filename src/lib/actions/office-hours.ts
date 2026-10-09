@@ -39,7 +39,7 @@ export async function saveOohRequestAction(formData: FormData): Promise<void> {
     if (!existing || !oohEditable(v.today, existing.friday)) redirect(`/office-hours?error=${encodeURIComponent("That request can't be changed after its Friday.")}#mine`);
     await db
       .update(schema.officeHoursRequests)
-      .set({ friday: value.friday, description: value.description, triedSelf: value.triedSelf, tools: value.tools || null, goal: value.goal, category: value.category, updatedAt: nowIso() })
+      .set({ friday: value.friday, description: value.description, triedSelf: value.triedSelf, tools: value.tools || null, goal: value.goal, category: value.category, updatedAt: nowIso(), editedAt: nowIso() })
       .where(and(eq(schema.officeHoursRequests.id, existing.id), eq(schema.officeHoursRequests.userId, userId), eq(schema.officeHoursRequests.workspaceId, workspaceId)));
   } else {
     await db.insert(schema.officeHoursRequests).values({ id: newId(), workspaceId, userId, friday: value.friday, description: value.description, triedSelf: value.triedSelf, tools: value.tools || null, goal: value.goal, category: value.category });

@@ -367,6 +367,9 @@ async function main() {
     let rows = await oohRows();
     if (rows.length !== 1 || rows[0].friday !== friday || rows[0].category !== "Chatbot" || rows[0].workspaceId !== ws.id) throw new Error(`the request is saved for ${friday}, from the login, got ${JSON.stringify(rows)}`);
     if ((await page.locator('[data-testid="ooh-mine"]').count()) !== 1) throw new Error("the member sees their request");
+    // When it was sent, in her zone with the zone said; nothing edited yet (rev 625).
+    const sentLine = (await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-submitted"]').innerText()).trim();
+    if (!/^Submitted today, \d{1,2}:\d{2} [AP]M \S+/.test(sentLine) || (await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-edited"]').count()) || !/:\d{2}:\d{2}/.test((await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-submitted"]').getAttribute("title")) ?? "")) throw new Error(`the request says when it was sent, seconds on hover: ${sentLine}`);
     // A change, until the Friday.
     await page.locator('[data-testid="ooh-edit"]').click();
     await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-description"]').fill("My bot books the wrong calendar, only on weekends.");
@@ -374,6 +377,7 @@ async function main() {
     await page.locator('[data-testid="ooh-saved"]').waitFor({ timeout: 20000 });
     rows = await oohRows();
     if (rows.length !== 1 || rows[0].description !== "My bot books the wrong calendar, only on weekends.") throw new Error("a change edits the same request");
+    if (!rows[0].editedAt || !/^Edited today, /.test((await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-edited"]').innerText()).trim()) || !(await page.locator('[data-testid="ooh-mine"] [data-testid="ooh-submitted"]').count())) throw new Error("her change keeps Submitted and adds Edited");
     console.log(`✓ Office Hours: going back sends nothing, the promise is required, the request for ${friday} is saved and changed; the next ${fridays.length} Fridays offered, across month ends`);
     await signOut();
 
@@ -383,6 +387,18 @@ async function main() {
     await Promise.all([page.waitForURL(/\/coach\/office-hours/), page.locator('[data-testid="coach-ooh-link"]').click()]);
     const req = page.locator('[data-testid="ooh-request"]', { hasText: maya.name });
     await req.waitFor({ timeout: 20000 });
+    // The coach sees when it was sent and changed, in his zone; newest first, or oldest first on request (rev 625).
+    if (!/^Submitted today, /.test((await req.locator('[data-testid="ooh-submitted"]').innerText()).trim()) || !/^Edited today, /.test((await req.locator('[data-testid="ooh-edited"]').innerText()).trim())) throw new Error("the coach's row says when it was sent and changed");
+    const earlier = newId();
+    await db.insert(schema.officeHoursRequests).values({ id: earlier, workspaceId: ws.id, userId: jordan.id, friday, description: "An earlier question.", triedSelf: "Tried.", goal: "Answer.", category: "Other", createdAt: "2026-01-01 09:00:00", updatedAt: "2026-01-01 09:00:00" });
+    await page.reload();
+    const order = async () => (await page.locator(`[data-testid="ooh-friday-group"][data-friday="${friday}"] [data-testid="ooh-request"]`).allInnerTexts()).map((t) => (t.includes("An earlier question.") ? "earlier" : "maya"));
+    if ((await order()).join() !== "maya,earlier") throw new Error(`newest first: ${(await order()).join()}`);
+    await Promise.all([page.waitForURL(/order=oldest/), page.locator('[data-testid="ooh-order-oldest"]').click()]);
+    if ((await order()).join() !== "earlier,maya") throw new Error(`oldest first on request: ${(await order()).join()}`);
+    await db.delete(schema.officeHoursRequests).where(eq(schema.officeHoursRequests.id, earlier));
+    await page.goto(`${base}/coach/office-hours`);
+    await req.waitFor({ timeout: 20000 });
     await req.locator('[data-testid="ooh-responsible"]').selectOption("Shonna Roadruck");
     await req.locator('[data-testid="ooh-outcome"]').selectOption("covered");
     await req.locator('[data-testid="ooh-notes"]').fill(NOTES);
@@ -390,6 +406,7 @@ async function main() {
     await page.locator('[data-testid="ooh-updated"]').waitFor({ timeout: 20000 });
     const coachRow = (await oohRows())[0];
     if (coachRow.responsible !== "Shonna Roadruck" || coachRow.outcome !== "covered" || coachRow.coachNotes !== NOTES) throw new Error(`the coach's side is saved, got ${JSON.stringify(coachRow)}`);
+    if (coachRow.editedAt !== rows[0].editedAt) throw new Error("the coach's notes never count as the member's edit");
     await page.locator('[data-testid="ooh-categories"]').fill("Chatbot\nAirtable\nFunnels\nFB Group Management\nOffer Creation\nTaxes\nOther");
     await page.locator('[data-testid="ooh-time"]').fill("Fridays at 12:00 pm");
     await page.locator('[data-testid="ooh-link"]').fill("https://example.com/office-hours");

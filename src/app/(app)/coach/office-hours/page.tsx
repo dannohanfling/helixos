@@ -3,7 +3,8 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { setOohListsAction, updateOohRequestAction } from "@/lib/actions/office-hours";
-import { OOH_OUTCOMES, OOH_OUTCOME_LABEL } from "@/lib/engine/office-hours";
+import { OOH_OUTCOMES, OOH_OUTCOME_LABEL, byStamp } from "@/lib/engine/office-hours";
+import { OohStamps as Stamps } from "@/components/ooh-stamps";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, PageHeader } from "@/components/ui";
@@ -14,7 +15,7 @@ export const metadata = { title: "Office Hours requests" };
  * The coach's Open Office Hours (handoff rev 124): every request grouped by its Friday, upcoming first, each with who takes it,
  * covered or no-show, and notes that stay the coach's. Below, the category list members pick from and who can be responsible.
  */
-export default async function CoachOfficeHoursPage({ searchParams }: { searchParams: Promise<{ updated?: string; lists?: string; error?: string }> }) {
+export default async function CoachOfficeHoursPage({ searchParams }: { searchParams: Promise<{ updated?: string; lists?: string; error?: string; order?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   const requests = await db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.workspaceId, v.workspace.id), orderBy: [desc(schema.officeHoursRequests.friday), schema.officeHoursRequests.createdAt] });
@@ -23,13 +24,22 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
   const fridays = [...new Set(requests.map((r) => r.friday))];
   const upcoming = fridays.filter((f) => f >= v.today).sort();
   const past = fridays.filter((f) => f < v.today).sort().reverse();
-  const group = (f: string) => requests.filter((r) => r.friday === f);
+  // Inside each Friday, newest first unless the coach asks for the order they came in (rev 625).
+  const order = sp.order === "oldest" ? "oldest" : "newest";
+  const group = (f: string) => requests.filter((r) => r.friday === f).sort(byStamp(order));
 
   return (
     <>
       <PageHeader title="Office Hours requests" subtitle={`${requests.filter((r) => r.friday >= v.today).length} upcoming · ${requests.length} in all`} action={<Link href="/coach" className="btn btn-ghost btn-sm">Back</Link>} />
       {sp.updated ? <p className="mb-3 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="ooh-updated">Saved.</p> : null}
-      {requests.length ? null : <p className="mb-4 text-sm text-ink-2">No requests yet. Members ask from Office Hours in their menu.</p>}
+      {requests.length ? (
+        <p className="mb-3 text-sm text-ink-2" data-testid="ooh-order">
+          In each Friday: {order === "newest" ? <b>newest first</b> : <Link href="/coach/office-hours" className="underline" data-testid="ooh-order-newest">newest first</Link>} ·{" "}
+          {order === "oldest" ? <b>oldest first</b> : <Link href="/coach/office-hours?order=oldest" className="underline" data-testid="ooh-order-oldest">oldest first</Link>}
+        </p>
+      ) : (
+        <p className="mb-4 text-sm text-ink-2">No requests yet. Members ask from Office Hours in their menu.</p>
+      )}
       <div className="space-y-4">
         {[...upcoming, ...past].map((f) => (
           <Card key={f} title={formatDate(f, { weekday: "long", month: "long", day: "numeric" })} action={<Badge tone={f >= v.today ? "accent" : "neutral"}>{group(f).length} {f >= v.today ? "upcoming" : "past"}</Badge>}>
@@ -41,6 +51,7 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
                       <span className="font-semibold">{nameOf.get(r.userId) ?? "A member"}</span>
                       <Badge tone="neutral">{r.category}</Badge>
                     </div>
+                    <Stamps createdAt={r.createdAt} editedAt={r.editedAt} tz={v.tz} today={v.today} />
                     <dl className="mt-1 space-y-1 text-ink-2">
                       <div>
                         <dt className="inline font-medium text-ink">The issue: </dt>

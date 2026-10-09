@@ -4,7 +4,7 @@ import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
-import { dripSetup } from "@/lib/rung-drip";
+import { dripSetup, queueRungs, rungsSetup } from "@/lib/rung-drip";
 import { KEYWORD_KINDS, LADDER_AUDIENCES, LADDER_FORMAT_KEYS, LADDER_STATUSES, type KeywordKind, type LadderKeyword, type LadderStat } from "@/db/schema";
 import { pushKeywordFields } from "@/lib/community-loyalty";
 import { newId } from "@/lib/ids";
@@ -23,8 +23,8 @@ import { generateBackground, graphicStep, makeGraphic, ownImage } from "@/lib/gr
 import { headlineChoices } from "@/lib/engine/graphic";
 import { randomBytes } from "node:crypto";
 import { graphicPublicPath, shipRuns } from "@/lib/engine/ship";
+import { rungsQueuedLine } from "@/lib/engine/rung-drip";
 import { shipFacts } from "@/lib/queries/ship";
-import { handOffLadder } from "@/lib/rung-drip";
 import { nowFor } from "@/lib/engine/channel-outcome";
 import { connectionFor } from "@/lib/ghl";
 import { recordReadback } from "@/lib/planner-status";
@@ -430,7 +430,8 @@ export async function shipLadderAction(formData: FormData): Promise<void> {
   const item = (await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) }))!;
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   const mediaUrl = l.graphicPublicToken ? `${appUrl}${graphicPublicPath(l.graphicPublicToken)}` : null;
-  const dripOn = dripSetup(v.membership).on;
+  // With the rungs webhook set, the drip posts rung 1, so a shipped post carries no first comment (rev 625).
+  const dripOn = rungsSetup(v.membership).on;
   const conn = await connectionFor(userId);
   // The two posts: the channel draft is scheduled (or posted now) and pushed to the Social Planner with the graphic; then read back.
   for (const key of ["page", "instagram"] as const) {
@@ -452,8 +453,9 @@ export async function shipLadderAction(formData: FormData): Promise<void> {
   if (shipRuns(second.steps).includes("drip")) {
     const fb = second.variants.find((x) => x.channel === "fb_page" && x.groupId === "");
     const ig = second.variants.find((x) => x.channel === "instagram" && x.groupId === "");
-    const r = await handOffLadder({ workspaceId, user: v.user, membership: v.membership, tz: v.tz, today: v.today }, second.item!, second.variants, l, 0, nowFor(v), null, { target: "both", fbPostId: fb?.externalId ?? null, igMediaId: ig?.externalId ?? null, pinLast: false });
-    notes.push(`drip: ${r.ok ? "handed" : `held (${r.reason})`}`);
+    // The rungs-only webhook (rev 625): the rungs and the two posts' ids; a 200 is queued.
+    const r = await queueRungs({ workspaceId, user: v.user, membership: v.membership }, second.item!, l, { fbPostId: fb?.externalId ?? null, igMediaId: ig?.externalId ?? null });
+    notes.push(r.ok ? rungsQueuedLine(r.count) : `rungs held (${r.reason})`);
   }
   // The keyword to the bot, through the same push the ladder facts page offers.
   let keywordBlocked: string | null = null;

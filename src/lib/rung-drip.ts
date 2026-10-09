@@ -9,7 +9,7 @@ import { open } from "@/lib/crypto";
 import { formatDateTime, nowIso } from "@/lib/dates";
 import { outcomesFor, type Now } from "@/lib/engine/channel-outcome";
 import { redactSecrets } from "@/lib/engine/redact";
-import { dripLock, dripPayload, estimateDripEnd, handoffReasons, scheduleAtProblem, type HandoffGate } from "@/lib/engine/rung-drip";
+import { dripLock, dripPayload, estimateDripEnd, handoffReasons, rungsPayload, scheduleAtProblem, type HandoffGate } from "@/lib/engine/rung-drip";
 import type { DripExtras } from "@/lib/engine/rung-drip";
 import { logSync } from "@/lib/integrations";
 
@@ -18,6 +18,45 @@ export type DripSetup = { on: boolean; userNs: string | null; url: string | null
 /** Whether the coach's Community Loyalty drip is set up: both values present. The URL is opened only when a call is made. */
 export function dripSetup(m: Pick<schema.Membership, "clDripWebhookUrl" | "clUserNs">): DripSetup {
   return { on: Boolean(m.clDripWebhookUrl && m.clUserNs), userNs: m.clUserNs ?? null, url: m.clDripWebhookUrl ?? null };
+}
+
+/** Ship's own rungs-only webhook (rev 625) and the contact that holds the drip state: both set, or Ship holds the rungs. */
+export function rungsSetup(m: Pick<schema.Membership, "clRungsWebhookUrl" | "clUserNs">): DripSetup {
+  return { on: Boolean(m.clRungsWebhookUrl && m.clUserNs), userNs: m.clUserNs ?? null, url: m.clRungsWebhookUrl ?? null };
+}
+
+export type RungsResult = { ok: true; count: number } | { ok: false; reason: string };
+/**
+ * Ship hands the rungs to Community Loyalty's rungs-only webhook (rev 625): the rungs in order and the two posts' ids, never the
+ * post. A 200 is "queued"; the Dripper posts every rung, rung 1 included, onto the pinned posts. The hand-off row is the lock, so
+ * a second ladder waits its turn, and the sync log keeps what happened with the address redacted.
+ */
+export async function queueRungs(v: { workspaceId: string; user: { id: string }; membership: schema.Membership }, item: schema.ContentItem, ladder: schema.Ladder, ids: { fbPostId: string | null; igMediaId: string | null }): Promise<RungsResult> {
+  const setup = rungsSetup(v.membership);
+  const url = open(setup.url);
+  if (!url || !setup.userNs) return { ok: false, reason: "Community Loyalty isn't connected for comment ladders yet. Evolve Omega sets that up." };
+  const payload = rungsPayload({ userNs: setup.userNs, rungs: ladder.rungs.map((r) => r.body), fbPostId: ids.fbPostId, igMediaId: ids.igMediaId });
+  const event = "drip.rungs";
+  const logged = { contentItemId: item.id, ladderId: ladder.id, rungs: payload.rungs.length, target: payload.target };
+  let status = 0;
+  let text = "";
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(10_000) });
+    status = res.status;
+    text = (await res.text()).slice(0, 300);
+  } catch (e) {
+    await logSync({ workspaceId: v.workspaceId, userId: v.user.id, provider: "community_loyalty", direction: "out", event, payload: logged, status: "failed", note: `Couldn't reach Community Loyalty: ${redactSecrets(e instanceof Error ? e.message : String(e))}` });
+    return { ok: false, reason: "Community Loyalty didn't answer. The rungs weren't queued; Ship again in a minute." };
+  }
+  const note = redactSecrets(`${status} ${text}`.trim());
+  if (status < 200 || status >= 300) {
+    await logSync({ workspaceId: v.workspaceId, userId: v.user.id, provider: "community_loyalty", direction: "out", event, payload: logged, status: "failed", note });
+    return { ok: false, reason: "Community Loyalty didn't accept the rungs. Nothing was queued; the reason is in the sync log." };
+  }
+  const handedAt = nowIso();
+  await db.insert(schema.dripHandoffs).values({ id: crypto.randomUUID(), workspaceId: v.workspaceId, userId: v.user.id, contentItemId: item.id, ladderId: ladder.id, handedAt, rungCount: payload.rungs.length, threadsAt: null, target: payload.target === "facebook" ? "page" : payload.target, fbPostId: ids.fbPostId, igMediaId: ids.igMediaId, gapMinutes: null, pinLast: false, expiresAt: estimateDripEnd(handedAt, payload.rungs.length), note });
+  await logSync({ workspaceId: v.workspaceId, userId: v.user.id, provider: "community_loyalty", direction: "out", event, payload: logged, status: "sent", note });
+  return { ok: true, count: payload.rungs.length };
 }
 
 export async function activeHandoff(userId: string, atIso = nowIso()) {

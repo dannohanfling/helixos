@@ -7,7 +7,7 @@ import { KEYWORDS_FIELD, parseRouterKeywords } from "@/lib/engine/keyword-fields
 import { clTokenSet } from "@/lib/community-loyalty";
 import { shipSteps, type PostFact, type ShipFacts, type ShipStep } from "@/lib/engine/ship";
 import { ladderBlockers } from "@/lib/queries/outcomes";
-import { activeHandoff, dripSetup, handoffRowFor } from "@/lib/rung-drip";
+import { activeHandoff, handoffRowFor, rungsSetup } from "@/lib/rung-drip";
 import { formatDateTime } from "@/lib/dates";
 
 /**
@@ -30,7 +30,8 @@ export async function shipFacts(v: Viewer, ladder: schema.Ladder, opts: { keywor
     if (o.state === "failed" || o.state === "unknown") return { state: "failed", reason: o.reason };
     return { state: "sent", reason: null };
   };
-  const setup = dripSetup(v.membership);
+  // Ship hands the rungs only to the rungs-only webhook (rev 625), never the old publisher one, which would post again.
+  const setup = rungsSetup(v.membership);
   const [handed, lock] = await Promise.all([item ? handoffRowFor(userId, item.id) : Promise.resolve(null), activeHandoff(userId)]);
   const keyword = ladder.keyword && ladder.keyword.toUpperCase() !== "NONE" ? ladder.keyword.toUpperCase() : "";
   const held = parseRouterKeywords(v.membership.clKeywordsHeld[KEYWORDS_FIELD]);

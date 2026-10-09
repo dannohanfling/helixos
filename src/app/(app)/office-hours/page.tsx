@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { Badge, Card, PageHeader } from "@/components/ui";
+import { OohStamps } from "@/components/ooh-stamps";
 
 export const metadata = { title: "Office Hours" };
 
@@ -130,6 +131,7 @@ export default async function OfficeHoursPage({ searchParams }: { searchParams: 
                         {r.outcome ? <Badge tone={r.outcome === "covered" ? "good" : "warn"}>{OOH_OUTCOME_LABEL[r.outcome]}</Badge> : null}
                       </span>
                     </div>
+                    <OohStamps createdAt={r.createdAt} editedAt={r.editedAt} tz={v.tz} today={v.today} />
                     <p className="mt-1 whitespace-pre-line text-ink-2">{r.description}</p>
                     {r.responsible ? <p className="mt-1 text-xs text-ink-3">With {r.responsible}</p> : null}
                     {oohEditable(v.today, r.friday) ? (

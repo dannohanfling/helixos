@@ -48,3 +48,32 @@ export function readOohRequest(
 
 /** A coach-edited list, one per line: trimmed, blank lines and repeats dropped. */
 export const readList = (text: string): string[] => [...new Set(text.split("\n").map((l) => l.trim()).filter(Boolean))];
+
+/** A stored instant read as UTC: SQLite's own "YYYY-MM-DD HH:MM:SS" carries no zone and is UTC; an ISO string is kept. */
+export function storedUtc(stored: string | null | undefined): Date | null {
+  const s = (stored ?? "").trim();
+  if (!s) return null;
+  const d = new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s) ? `${s.replace(" ", "T")}Z` : s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+const part = (d: Date, tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: tz, ...o }).format(d);
+const dayIn = (d: Date, tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+const zoneOf = (d: Date, tz: string) => new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "shortGeneric" }).formatToParts(d).find((p) => p.type === "timeZoneName")?.value ?? "";
+
+/**
+ * When a member sent (or last changed) an Office Hours request, in the viewer's own zone with the zone said (rev 625):
+ * "Submitted Fri, Oct 9 · 10:42 AM PT", "Submitted today, 10:42 AM PT", "Edited Oct 9 · 11:05 AM PT". The title is the
+ * full date and time with seconds, for a hover or a long press. A row with no time says so rather than guess.
+ */
+export function stampLine(word: "Submitted" | "Edited", stored: string | null | undefined, tz: string, today: string): { label: string; title: string } {
+  const d = storedUtc(stored);
+  if (!d) return { label: `${word}: date unknown`, title: "" };
+  const time = `${part(d, tz, { hour: "numeric", minute: "2-digit" })} ${zoneOf(d, tz)}`.trim();
+  const day = dayIn(d, tz);
+  const yesterday = dayIn(new Date(new Date(`${today}T12:00:00Z`).getTime() - 86400000), "UTC");
+  const when = day === today ? `today, ${time}` : day === yesterday ? `yesterday, ${time}` : `${part(d, tz, word === "Submitted" ? { weekday: "short", month: "short", day: "numeric" } : { month: "short", day: "numeric" })} · ${time}`;
+  const title = new Intl.DateTimeFormat("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "long" }).format(d);
+  return { label: `${word} ${when}`, title };
+}
+/** The coach's list order inside each Friday: newest first unless asked for oldest. */
+export const byStamp = (order: "newest" | "oldest") => (a: { createdAt: string }, b: { createdAt: string }) => ((storedUtc(a.createdAt)?.getTime() ?? 0) - (storedUtc(b.createdAt)?.getTime() ?? 0)) * (order === "oldest" ? 1 : -1);

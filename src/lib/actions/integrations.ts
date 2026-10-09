@@ -99,12 +99,15 @@ export async function setMemberPassAction(formData: FormData): Promise<void> {
   // The drip webhook URL is a credential: sealed at rest, kept when the field is left blank, cleared with "clear".
   const url = opt(formData, "clDripWebhookUrl");
   const drip = url === "clear" ? { clDripWebhookUrl: null } : url ? { clDripWebhookUrl: seal(url) } : {};
+  // Ship's rungs-only webhook (rev 625): the same kind of credential, the same three states.
+  const rungsUrl = opt(formData, "clRungsWebhookUrl");
+  const rungs = rungsUrl === "clear" ? { clRungsWebhookUrl: null } : rungsUrl ? { clRungsWebhookUrl: seal(rungsUrl) } : {};
   // The client's own uChat API token is a credential too: the same three states.
   const tok = opt(formData, "clApiToken");
   const token = tok === "clear" ? { clApiToken: null } : tok ? { clApiToken: seal(tok) } : {};
   await db
     .update(schema.memberships)
-    .set({ eoPassUrl: opt(formData, "eoPassUrl"), eoPassSerial: opt(formData, "eoPassSerial"), clUserNs: opt(formData, "clUserNs"), clAgentNs: opt(formData, "clAgentNs"), faqBotField: opt(formData, "faqBotField"), faqOverwriteOk: formData.get("faqOverwriteOk") === "on", ...drip, ...token })
+    .set({ eoPassUrl: opt(formData, "eoPassUrl"), eoPassSerial: opt(formData, "eoPassSerial"), clUserNs: opt(formData, "clUserNs"), clAgentNs: opt(formData, "clAgentNs"), faqBotField: opt(formData, "faqBotField"), faqOverwriteOk: formData.get("faqOverwriteOk") === "on", ...drip, ...rungs, ...token })
     .where(and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, coach.workspace.id)));
   refresh();
 }
@@ -112,16 +115,19 @@ export async function setMemberPassAction(formData: FormData): Promise<void> {
 /**
  * The coach's own bot, saved from the My bot block at the top of the Coach page. A coach is a member too — their Bot Brief reads
  * their own membership row — but every integration field lived on a client's row only, so a coach could not set their own token.
- * The same four fields, and only those: the pass and the drip webhook beside them on a client row are not in this form and are
- * left as they are.
+ * The same fields, plus Ship's rungs webhook and drip contact for the coach's own ladders (rev 625); the pass and the old drip
+ * webhook beside them on a client row are not in this form and are left as they are.
  */
 export async function setMyBotAction(formData: FormData): Promise<void> {
   const coach = await requireCoach();
   const tok = opt(formData, "clApiToken");
   const token = tok === "clear" ? { clApiToken: null } : tok ? { clApiToken: seal(tok) } : {};
+  // The coach's own ladders ship too (rev 625): the rungs-only webhook and the contact that holds the drip state, on this row.
+  const rungsUrl = opt(formData, "clRungsWebhookUrl");
+  const rungs = rungsUrl === "clear" ? { clRungsWebhookUrl: null } : rungsUrl ? { clRungsWebhookUrl: seal(rungsUrl) } : {};
   await db
     .update(schema.memberships)
-    .set({ clAgentNs: opt(formData, "clAgentNs"), faqBotField: opt(formData, "faqBotField"), faqOverwriteOk: formData.get("faqOverwriteOk") === "on", ...token })
+    .set({ clAgentNs: opt(formData, "clAgentNs"), faqBotField: opt(formData, "faqBotField"), faqOverwriteOk: formData.get("faqOverwriteOk") === "on", clUserNs: opt(formData, "clUserNs"), ...rungs, ...token })
     .where(eq(schema.memberships.id, coach.membership.id));
   refresh();
 }

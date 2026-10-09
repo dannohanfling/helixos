@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIRST_COMMENT_LOCKED, HANDED_NOTE, HANDOFF_FALLBACK, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, firstCommentRefusal, handoffReasons, joinRungs, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
+import { FIRST_COMMENT_LOCKED, HANDED_NOTE, HANDOFF_FALLBACK, HANDOFF_WORDS, PUBLISH_WORDS, THREADS_EXCLUSIVE, dripLock, dripPayload, estimateDripEnd, rungsPayload, rungsQueuedLine, firstCommentRefusal, handoffReasons, joinRungs, scheduleAtProblem, splitRungs, threadsRefusal } from "../rung-drip";
 import { handoffOutcome, outcomesFor, summarize, OUTCOME_WORD } from "../channel-outcome";
 import { matchPlannerPost, needsCheck, orderForCheck, reconcileWindow } from "../planner-match";
 import { normaliseTargets } from "../compose";
@@ -142,5 +142,19 @@ describe("a 2xx with no id: accepted, then reconciled from the planner's own lis
     expect(o.state).toBe("failed");
     expect(o.word).toBe("Deleted");
     expect(o.reason).toBe("This post was deleted in the Social Planner.");
+  });
+});
+
+describe("Ship's rungs-only hand-off (rev 625, the contract Community Loyalty maps)", () => {
+  it("sends the rungs numbered on their first line, the two posts' ids and the channel targeted; never the post", () => {
+    const p = rungsPayload({ userNs: "f52594u1", rungs: ["The first move.\nIts second line.", "2. Already numbered.", "  ", "Third."], fbPostId: "fb1", igMediaId: "ig1" });
+    expect(p.rungs).toEqual(["1. The first move.\nIts second line.", "2. Already numbered.", "3. Third."]);
+    expect([p.user_ns, p.rung_fb_post_id, p.rung_ig_media_id, p.target, p.gap_minutes]).toEqual(["f52594u1", "fb1", "ig1", "both", ""]);
+    expect(Object.keys(p).sort()).toEqual(["gap_minutes", "rung_fb_post_id", "rung_ig_media_id", "rungs", "target", "user_ns"]);
+    expect(JSON.stringify(p)).not.toMatch(/"post"|first_comment/);
+    expect(rungsPayload({ userNs: "u", rungs: ["a"], fbPostId: "fb1", igMediaId: null }).target).toBe("facebook");
+    expect(rungsPayload({ userNs: "u", rungs: ["a"], fbPostId: "", igMediaId: "ig1" })).toMatchObject({ target: "instagram", rung_fb_post_id: "" });
+    expect(rungsPayload({ userNs: "u", rungs: ["a"], gapMinutes: 5 }).gap_minutes).toBe("5");
+    expect(rungsQueuedLine(11)).toBe("Rungs queued: 11, first one in about 5 minutes");
   });
 });

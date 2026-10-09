@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 127,
+    date: "2026-10-09",
+    title: "Office Hours requests say when they were sent",
+    lines: [
+      "Each Office Hours request now shows when it was submitted, in your own time zone, and when it was edited if you changed it. Hover or long-press for the exact time.",
+      "Coaches: Office Hours requests list newest first in each Friday, with oldest first one tap away. Ship hands a ladder's rungs to its own Community Loyalty webhook, set on the client's row or under My bot.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 126,
     date: "2026-10-09",
     title: "Action steps from your calls, by person",
