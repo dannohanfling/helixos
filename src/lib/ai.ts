@@ -99,7 +99,8 @@ async function callOpenAI(key: string, model: string, system: SystemBlock[], use
  * `images` (rev 201): sent to the model with the user text, never stored or logged, never in ai_usage or an error. `essence: false`
  * keeps the client's Essence out of the system message (a HumanOS call needs no business voice, and the prompt stays small).
  */
-export type DraftOptions = { feature?: keyof typeof FEATURES | string; images?: DraftImage[]; essence?: boolean };
+/** `viewer`: the member to draft for when the caller isn't a browser session (the HelixOS connector, rev 638); a page leaves it out. */
+export type DraftOptions = { feature?: keyof typeof FEATURES | string; images?: DraftImage[]; essence?: boolean; viewer?: Viewer };
 
 /** Thrown only by a call that carried images, when the member's model can't read them: a plain sentence for the page, never a silent null. */
 export class AiImageError extends Error {}
@@ -116,7 +117,7 @@ export async function draft(task: string, user: string, maxTokens = 4000, opts: 
 
 /** As draft(), saying also whether the answer was cut off at the output budget, for a caller that must never keep half a sentence. */
 export async function draftFull(task: string, user: string, maxTokens = 4000, opts: DraftOptions = {}): Promise<{ text: string; cut: boolean } | null> {
-  const v = await getViewer();
+  const v = opts.viewer ?? (await getViewer());
   if (!v) return null;
   const cred = await credentialFor(v.workspace.id, aiUserId(v));
   if (!cred || cred.lastError) return null;

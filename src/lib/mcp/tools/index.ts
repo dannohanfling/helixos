@@ -5,3 +5,4 @@ import "./tasks";
 import "./today";
 import "./avatars";
 import "./ladders";
+import "./ship";

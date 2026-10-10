@@ -43,7 +43,7 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
       error = "gate";
       text = def.scope === "body" ? "HumanOS's AI switch is off for this member, so HumanOS tools do nothing. They can turn it on in HumanOS settings." : "This tool isn't available for this member right now.";
     } else {
-      const r = await def.handler(grant.viewer, args);
+      const r = await def.handler(grant.viewer, args, { scopes: grant.scopes });
       text = r.data === undefined ? r.text : `${r.text}\n\n${JSON.stringify(r.data, null, 2)}`;
     }
   } catch (e) {

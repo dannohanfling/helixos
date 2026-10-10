@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { approveConnectionAction, denyConnectionAction } from "@/lib/actions/mcp";
-import { SCOPE_WORDS, backToApp, hostOf, isChallenge, parseScopes, redirectMatches, type Scope } from "@/lib/engine/mcp";
+import { OPT_IN_SCOPES, SCOPE_WORDS, backToApp, hostOf, isChallenge, parseScopes, redirectMatches, type Scope } from "@/lib/engine/mcp";
 import { clientById, consentSignature, issuerFor, resourceFor } from "@/lib/mcp/oauth";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -60,7 +60,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
               if (isBody && !v.membership.bodyEnabled) return null;
               return (
                 <label key={s} className="flex items-start gap-2 text-sm" data-testid={`consent-scope-${s}`}>
-                  <input type="checkbox" name="scopes" value={s} defaultChecked={!isBody} className="mt-1" />
+                  <input type="checkbox" name="scopes" value={s} defaultChecked={!OPT_IN_SCOPES.includes(s)} className="mt-1" />
                   <span>
                     <span className="font-medium">{SCOPE_WORDS[s].label}</span>
                     <span className="block text-xs text-ink-3">{SCOPE_WORDS[s].line}</span>
@@ -69,7 +69,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
               );
             })}
           </fieldset>
-          <p className="text-xs text-ink-3">It never sends, publishes or deletes anything, and never reaches another member. Every change it makes is marked as made by this app. You can disconnect it any time in Settings.</p>
+          <p className="text-xs text-ink-3">{asked.includes("content:publish") ? "It never sends or deletes anything, and publishes only with Content: publish ticked, after reading back what will post and hearing your yes. It never reaches another member." : "It never sends, publishes or deletes anything, and never reaches another member."} Every change it makes is marked as made by this app. You can disconnect it any time in Settings.</p>
           <div className="flex flex-wrap items-center gap-3">
             <SubmitButton formAction={approveConnectionAction} className="btn btn-primary btn-sm" pendingText="Connecting…" data-testid="consent-approve">
               Connect

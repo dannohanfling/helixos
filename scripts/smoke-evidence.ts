@@ -253,6 +253,8 @@ async function main() {
     // The ladder: the shelf feeds the prompt (verified only, claim and citation together) and sits beside the rungs
     await page.goto(`${base}/content/ladders`);
     await fillExact(page, 'input[name="topic"]', "Why the hand raise comes before the offer");
+    // The graphic is the ladders walk's; a full mock ladder would make one here (Voice to Ship's mock, rev 638).
+    if (await page.locator('[data-testid="ladder-make-graphic"]').isChecked().catch(() => false)) await page.locator('[data-testid="ladder-make-graphic"]').uncheck();
     await submit(page, 'button:has-text("Write the ladder")');
     await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+/i);
     const sys = await lastSystem();

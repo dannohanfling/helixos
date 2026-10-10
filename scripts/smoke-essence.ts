@@ -67,6 +67,8 @@ async function main() {
 
     // A ✨ call with no Essence: the system message is the task alone, no voice invented
     await fillExact(page, 'input[name="topic"]', "Why my clients stop chasing leads");
+    // The graphic is the ladders walk's; a full mock ladder would make one here (Voice to Ship's mock, rev 638).
+    if (await page.locator('[data-testid="ladder-make-graphic"]').isChecked().catch(() => false)) await page.locator('[data-testid="ladder-make-graphic"]').uncheck();
     await submit(page, 'button:has-text("Write the ladder")');
     await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+/i);
     let sys = (await last()).system;
@@ -139,6 +141,8 @@ async function main() {
     await page.goto(`${base}/content/ladders`);
     if ((await page.locator('[data-testid="ai-promise"]').first().getAttribute("data-voice")) !== "1") throw new Error("with an Essence the promise line must not warn");
     await fillExact(page, 'input[name="topic"]', "Why my clients stop chasing leads, again");
+    // The graphic is the ladders walk's; a full mock ladder would make one here (Voice to Ship's mock, rev 638).
+    if (await page.locator('[data-testid="ladder-make-graphic"]').isChecked().catch(() => false)) await page.locator('[data-testid="ladder-make-graphic"]').uncheck();
     await submit(page, 'button:has-text("Write the ladder")');
     await page.waitForURL(/\/content\/ladders\/[a-z0-9-]+/i);
     sys = (await last()).system;

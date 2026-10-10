@@ -14,7 +14,7 @@ import { headlineChoices } from "@/lib/engine/graphic";
 const member = (v: Viewer) => ({ workspaceId: v.workspace.id, userId: v.user.id });
 
 /** One of the member's ladders, by id or by words of its topic; one match or the choices named. */
-async function ladderFor(v: Viewer, words: string) {
+export async function ladderFor(v: Viewer, words: string) {
   const w = words.trim().toLowerCase();
   const rows = await db.query.ladders.findMany({ where: and(eq(schema.ladders.workspaceId, v.workspace.id), eq(schema.ladders.userId, v.user.id)) });
   const byId = rows.find((l) => l.id === w);
@@ -27,7 +27,7 @@ async function ladderFor(v: Viewer, words: string) {
 
 export const ladderMakeGraphic = defineTool({
   name: "ladder_make_graphic",
-  scope: "content",
+  scope: "content:write",
   kind: "write",
   description: "Makes (or remakes) the headline graphic for one of the member's comment ladders in their approved template: their own photo (the suggested one unless a photo from their Images is named), the ladder's headline or one of its alternates, the badge from their Brand kit. Stored in their Images as a graphic and on the ladder. A face is never generated; a background may be, only from a photo already in their Images.",
   input: {

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 134,
+    date: "2026-10-10",
+    title: "Voice to Ship: make and ship a ladder by talking to Claude",
+    lines: [
+      "With HelixOS connected to Claude, say \"make a ladder on X, use my gym photo, ship it\". Claude writes it with your Ladders writer, changes any part you ask, finds the photo and makes the graphic.",
+      "Before anything posts, Claude reads back the accounts, the headline and the first lines, and ships only after your yes. Reconnect HelixOS in Claude and tick Content: write and Content: publish to use it. A new ladder's rungs now go out with its first Ship from the app too.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 131,
     date: "2026-10-10",
     title: "Bot Features: new skills for your bot",

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { MCP_SCOPES } from "@/db/schema";
-import { ACCESS_TTL_MS, CODE_TTL_MS, REFRESH_TTL_MS, SCOPE_WORDS, backToApp, hostOf, isChallenge, isToolName, parseScopes, pkceOk, redirectMatches, redirectUriOk } from "../mcp";
+import { ACCESS_TTL_MS, CODE_TTL_MS, OPT_IN_SCOPES, REFRESH_TTL_MS, SCOPE_WORDS, backToApp, hostOf, isChallenge, isToolName, parseScopes, pkceOk, redirectMatches, redirectUriOk } from "../mcp";
 import { defineTool, toolsFor } from "@/lib/mcp/registry";
 
 const SRC = join(__dirname, "..", "..", "..");
@@ -35,12 +35,17 @@ describe("MCP server (rev 224): the pure parts", () => {
   });
 
   it("scopes: one per area, Body among them, unknown ones named, and words for each", () => {
-    expect([...MCP_SCOPES]).toEqual(["today", "tasks", "goals", "offers", "content", "library", "webinars", "essence", "body"]);
+    expect([...MCP_SCOPES]).toEqual(["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "library", "webinars", "essence", "body"]);
+    expect(parseScopes("content content:write content:publish")).toEqual({ scopes: ["content", "content:write", "content:publish"], unknown: [] });
     expect(parseScopes("today tasks body")).toEqual({ scopes: ["today", "tasks", "body"], unknown: [] });
     expect(parseScopes("today admin")).toEqual({ scopes: ["today"], unknown: ["admin"] });
     expect(parseScopes(null)).toEqual({ scopes: [], unknown: [] });
     for (const s of MCP_SCOPES) expect(SCOPE_WORDS[s].line.length).toBeGreaterThan(10);
-    expect(SCOPE_WORDS.body.line).toMatch(/never pre-ticked/);
+    expect(SCOPE_WORDS.body.line).toMatch(/never pre-ticked/i);
+    // Voice to Ship (rev 638): publishing is its own tick, never pre-ticked, and says it reads back first.
+    expect(SCOPE_WORDS["content:publish"].line).toMatch(/never pre-ticked/i);
+    expect(SCOPE_WORDS["content:publish"].line).toMatch(/reading back exactly what will post/);
+    expect([...OPT_IN_SCOPES].sort()).toEqual(["body", "content:publish"]);
   });
 
   it("the lifetimes: a code ten minutes, access an hour, refresh thirty days", () => {
@@ -107,7 +112,7 @@ describe("MCP server: the auth holds where it must", () => {
 
   it("the consent form is signed for this member and this request, and Body is never pre-ticked", () => {
     const page = read("app/(app)/oauth/authorize/page.tsx");
-    expect(page).toMatch(/defaultChecked=\{!isBody\}/);
+    expect(page).toMatch(/defaultChecked=\{!OPT_IN_SCOPES\.includes\(s\)\}/);
     expect(page).toMatch(/if \(isBody && !v\.membership\.bodyEnabled\) return null;/);
     expect(page).toMatch(/data-testid="consent-host"/);
     const actions = read("lib/actions/mcp.ts");

@@ -25,13 +25,14 @@ function reply(system: string, user: string): string {
     if (!/---SLIDES---/.test(system)) return script;
     return `${script}\n\n---SLIDES---\n- ${section}: the one idea\n- The ceiling at 2 a.m. is a signal\n- Clients sleep 47% better in a week${noProof ? "\n- [PROOF PLACEHOLDER]" : ""}${price ? `\n- Yours today for ${price}` : ""}`;
   }
-  // A ladder written with the coach's teaching library (rev 618): a full ladder that names the first answer and story it was given,
-  // so a walk sees the Material used panel. A ladder without the library still gets the short draft below.
-  if (/SUPPORTING_COMMENTS/.test(system) && /FROM YOUR TEACHING LIBRARY/.test(user)) {
+  // A ladder (Voice to Ship, rev 638; the teaching library, rev 618): a full ladder in the contract's shape that passes the
+  // checks with no keyword, so a walk can ship it. Given the coach's library, it names the first answer and story it used.
+  if (/SUPPORTING_COMMENTS/.test(system)) {
     const ids = Array.from(user.matchAll(/^\[([TS]\d+)\]/gm)).map((m) => m[1]);
     const used = [ids.find((i) => i.startsWith("T")), ids.find((i) => i.startsWith("S"))].filter(Boolean).join(", ") || "NONE";
-    const rung = (n: number) => `${n}. Mock rung ${n}, drawn from the library.\nOne thought per line.\nSay it plainly.`;
-    return ["POST_NAME", "SKIN — Mock — library", "HEADLINE", "THE FIRST CLIENT / CAME FROM ONE (gold: CONVERSATION)", "HOOK", "Mock hook from the library.", "COPY", "Mock hook from the library.\n\nThe whole plan is in the comments. Read them in order. 👇\n\nWhat would you try first?", "SUPPORTING_COMMENTS", [1, 2, 3, 4, 5].map(rung).join("\n---\n"), "DM_KEYWORD", "NONE", "NOTES", "Mock notes.", "MATERIAL_USED", used].join("\n");
+    const topic = user.match(/^TOPIC: (.+)$/m)?.[1]?.trim() ?? "the topic";
+    const rung = (n: number) => `${n}. Mock rung ${n} about ${topic}.\nOne thought per line.\n${n === 5 ? "What would you try first?" : "Say it plainly."}`;
+    return ["POST_NAME", `SKIN — Mock — ${topic}`, "HEADLINE", "THE FIRST CLIENT / CAME FROM ONE (gold: CONVERSATION)", "ALT_HEADLINES", "THREE CALLS BOOKED / FROM ONE (gold: SIMPLE POST)\nONE POST BOOKED / THREE (gold: CALLS) THIS WEEK", "HOOK", `Mock hook about ${topic}.`, "COPY", `Mock hook about ${topic}.\n\nThe whole plan is in the comments. Read them in order. 👇\n\nWhat would you try first?`, "SUPPORTING_COMMENTS", [1, 2, 3, 4, 5].map(rung).join("\n---\n"), "DM_KEYWORD", "NONE", "IG_CAPTION", `Mock caption about ${topic}.\n\nWhat would you try first?`, "NOTES", "Mock notes.", "MATERIAL_USED", used].join("\n");
   }
   // "Make slides from my script": lines from the script, one with a figure the script never had.
   if (/turn one section of a spoken webinar script into deck lines/i.test(system)) return "- Your first line from the script\n- A second idea, said plainly\n- 99% of people get this wrong";

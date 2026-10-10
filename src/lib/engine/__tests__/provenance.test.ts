@@ -105,7 +105,8 @@ describe("where the mark is set and where the gate stands (read off the source)"
       ["src/lib/actions/variants.ts", /p \? \("ai_unreviewed" as const\) : \("rule" as const\)/],
       ["src/lib/actions/magnets.ts", /generatedBy: "scaffold", origin: "rule"/],
       ["src/lib/actions/magnets.ts", /generatedBy: text \? "claude-partial" : "scaffold", origin: "rule"/],
-      ["src/lib/actions/ladders.ts", /contentType: "Comment Ladder", notes: l\.notes, origin: "rule" as const/],
+      // The ladder's post moved into the shared Ship module with Voice to Ship (rev 638).
+      ["src/lib/ladder-core.ts", /contentType: "Comment Ladder", notes: l\.notes, origin: "rule" as const/],
       ["src/lib/actions/ladders.ts", /generatedBy: "ladder", origin: "rule"/],
       ["src/lib/actions/proofs.ts", /body, origin: "rule", notes/],
       ["src/lib/actions/content.ts", /origin: "coach",\n  \}\);/],

@@ -13,7 +13,10 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   tasks: { label: "Tasks", line: "List your tasks, add one, tick one off or back, move one to another day." },
   goals: { label: "Goals", line: "Read your goal and key results, update the numbers." },
   offers: { label: "Offers", line: "Read your offers; create and edit drafts. Never publish." },
-  content: { label: "Content", line: "Read your content; draft new pieces for you to review." },
+  content: { label: "Content", line: "Read your content and ladders, and find your images." },
+  // Voice to Ship (rev 638): writing a ladder is its own tick, and publishing another, never pre-ticked.
+  "content:write": { label: "Content: write", line: "Write a comment ladder, change a part of one, and make its graphic. Nothing is posted." },
+  "content:publish": { label: "Content: publish", line: "Ship a ladder to your Facebook Page and Instagram, only after reading back exactly what will post and hearing your yes. Never pre-ticked." },
   library: { label: "Library", line: "Search your library and assets." },
   webinars: { label: "Webinars", line: "Read your webinars and proofs." },
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },
@@ -21,6 +24,8 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
 };
 
 export const SCOPE_NAMES: readonly Scope[] = MCP_SCOPES;
+/** Never pre-ticked on the consent screen: HumanOS (rev 247, B3) and publishing (rev 638). */
+export const OPT_IN_SCOPES: readonly Scope[] = ["body", "content:publish"];
 export const isScope = (s: string): s is Scope => (MCP_SCOPES as readonly string[]).includes(s);
 
 /** A space-separated scope string, as OAuth sends it, into known scopes and the rest. */
