@@ -14,6 +14,7 @@ import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { ladderFor } from "@/lib/mcp/tools/ladders";
+import { ideaFor } from "@/lib/mcp/tools/voice2";
 import { checksFor, createLadder, pickFormat, shipLadder, updateLadderPart, LADDER_PARTS, type LadderPart } from "@/lib/ladder-core";
 import { LADDER_FORMATS, headlineParts, type LadderFormatKey } from "@/lib/engine/ladder";
 import { checksLine, channelSet, findImages, fingerprint, firstLines, numbered, type ShipTarget } from "@/lib/engine/voice-ship";
@@ -86,15 +87,18 @@ defineTool({
   name: "ladder_create",
   scope: "content:write",
   kind: "write",
-  description: "Writes a new comment ladder for the member with the same writer as their Ladders page (their voice, Essence, avatar; for a coach's own ladders their teaching library), and the same checks. Saves it as a draft; nothing is posted. Give the topic; the format (one of the 13) and notes (an angle, story, offer or avatar to lean on) are optional. Read back the one-line summary, then the numbered headlines.",
+  description: "Writes a new comment ladder for the member with the same writer as their Ladders page (their voice, Essence, avatar; for a coach's own ladders their teaching library), and the same checks. Saves it as a draft; nothing is posted. Give the topic, or an idea from their Content board (its words; its title and notes become the topic and notes, and the idea moves to Creating); the format (one of the 13) and notes (an angle, story, offer or avatar to lean on) are optional. Read back the one-line summary, then the numbered headlines.",
   input: {
-    topic: z.string().min(3).max(300).describe("What the ladder is about"),
+    topic: z.string().min(3).max(300).optional().describe("What the ladder is about (or give idea instead)"),
+    idea: z.string().min(2).max(300).optional().describe("Optional: an idea on their Content board, by words from its title (ideas_list)"),
     format: z.string().max(60).optional().describe(`Optional. One of: ${LADDER_FORMATS.map((f) => f.name).join(", ")}. Left out, the best fit is picked.`),
     notes: z.string().max(4000).optional().describe("Optional: an angle, a story, an offer or an avatar to lean on"),
   },
   handler: async (v, input): Promise<ToolResult> => {
-    const topic = String(input.topic ?? "").trim();
-    const notes = input.notes ? String(input.notes).trim() : null;
+    const idea = input.idea ? await ideaFor(v, String(input.idea)) : null;
+    const topic = String(input.topic ?? "").trim() || idea?.title.trim() || "";
+    if (topic.length < 3) throw new Error("Say what the ladder is about, or which idea to make it from.");
+    const notes = [input.notes ? String(input.notes).trim() : "", idea?.notes?.trim() ?? "", idea?.hook?.trim() ?? ""].filter(Boolean).join("\n\n") || null;
     const asked = String(input.format ?? "").trim().toLowerCase();
     const named = asked ? LADDER_FORMATS.find((f) => f.key === asked || f.name.toLowerCase() === asked) : undefined;
     if (asked && !named) throw new Error(`"${input.format}" isn't one of the formats: ${LADDER_FORMATS.map((f) => f.name).join(", ")}.`);
@@ -103,12 +107,14 @@ defineTool({
     const keyword = profile?.keywords?.[0]?.keyword ?? "NONE";
     const { id, generatedBy } = await createLadder({ workspaceId: v.workspace.id, userId: v.user.id }, { format, topic, audience: "warm", keyword, sourceMaterial: notes, realNumbers: null, leadMagnet: null, leadMagnetId: null }, v);
     const l = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, id) }))!;
+    // The idea it came from moves to Creating on the board (rev 642).
+    if (idea && idea.status === "idea") await db.update(schema.contentItems).set({ status: "creating" }).where(and(eq(schema.contentItems.id, idea.id), eq(schema.contentItems.userId, v.user.id)));
     const checks = await checksFor(l);
     const alts = headlineChoices(l.headline, l.altHeadlines).map(headlineText);
     const fmt = LADDER_FORMATS.find((f) => f.key === format)!.name;
     const lead = generatedBy === "claude" ? `Ladder ready: "${alts[0] ?? topic}", ${l.rungs.length} rungs, ${checksLine(checks)}.` : generatedBy === "claude-partial" ? `The writer didn't return a full ladder, so a skeleton was saved to fill in; its answer is in the notes.` : `No AI key is set up in HelixOS, so a skeleton was saved to fill in.`;
     const text = [lead, `Format: ${fmt}.`, alts.length ? `Headline and alternates:\n${numbered(alts)}` : "", `Body starts: ${firstLines(l.copy)}`, `Open it: ${linkTo(id)}`].filter(Boolean).join("\n\n");
-    return { text, data: { id, format, generatedBy, headlines: alts, rungs: l.rungs.length, checks: checks.filter((c) => !c.ok).map((c) => ({ key: c.key, label: c.label, level: c.level })), link: linkTo(id) } };
+    return { text, data: { id, format, generatedBy, idea: idea ? { id: idea.id, title: idea.title } : null, headlines: alts, rungs: l.rungs.length, checks: checks.filter((c) => !c.ok).map((c) => ({ key: c.key, label: c.label, level: c.level })), link: linkTo(id) } };
   },
 });
 

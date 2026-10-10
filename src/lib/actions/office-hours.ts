@@ -4,10 +4,10 @@ import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { OOH_OUTCOMES, oohEditable, readList, readOohRequest } from "@/lib/engine/office-hours";
+import { OOH_OUTCOMES, readList } from "@/lib/engine/office-hours";
+import { saveOohRequest } from "@/lib/office-hours-core";
 
 /**
  * A member's Open Office Hours request, new or edited (handoff rev 124). The two gates come first, as on the old form. The
@@ -16,7 +16,8 @@ import { OOH_OUTCOMES, oohEditable, readList, readOohRequest } from "@/lib/engin
  */
 export async function saveOohRequestAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
-  const read = readOohRequest(
+  const saved = await saveOohRequest(
+    { workspaceId, userId, today: v.today, categories: v.workspace.oohCategories },
     {
       friday: str(formData, "friday"),
       description: str(formData, "description"),
@@ -27,23 +28,11 @@ export async function saveOohRequestAction(formData: FormData): Promise<void> {
       triedGate: str(formData, "triedGate"),
       promise: formData.get("promise") === "yes",
     },
-    v.today,
-    v.workspace.oohCategories,
+    str(formData, "requestId") || null,
   );
-  if ("goBack" in read) redirect(`/office-hours?back=1#request`);
-  if ("error" in read) redirect(`/office-hours?error=${encodeURIComponent(read.error)}${read.field ? `&field=${read.field}` : ""}#request`);
-  const { value } = read;
-  const requestId = str(formData, "requestId");
-  if (requestId) {
-    const existing = await db.query.officeHoursRequests.findFirst({ where: and(eq(schema.officeHoursRequests.id, requestId), eq(schema.officeHoursRequests.userId, userId), eq(schema.officeHoursRequests.workspaceId, workspaceId)) });
-    if (!existing || !oohEditable(v.today, existing.friday)) redirect(`/office-hours?error=${encodeURIComponent("That request can't be changed after its Friday.")}#mine`);
-    await db
-      .update(schema.officeHoursRequests)
-      .set({ friday: value.friday, description: value.description, triedSelf: value.triedSelf, tools: value.tools || null, goal: value.goal, category: value.category, updatedAt: nowIso(), editedAt: nowIso() })
-      .where(and(eq(schema.officeHoursRequests.id, existing.id), eq(schema.officeHoursRequests.userId, userId), eq(schema.officeHoursRequests.workspaceId, workspaceId)));
-  } else {
-    await db.insert(schema.officeHoursRequests).values({ id: newId(), workspaceId, userId, friday: value.friday, description: value.description, triedSelf: value.triedSelf, tools: value.tools || null, goal: value.goal, category: value.category });
-  }
+  if (!saved.ok && "goBack" in saved) redirect(`/office-hours?back=1#request`);
+  if (!saved.ok && saved.field === "edit") redirect(`/office-hours?error=${encodeURIComponent(saved.error)}#mine`);
+  if (!saved.ok) redirect(`/office-hours?error=${encodeURIComponent(saved.error)}${saved.field ? `&field=${saved.field}` : ""}#request`);
   refresh();
   redirect(`/office-hours?saved=1#mine`);
 }

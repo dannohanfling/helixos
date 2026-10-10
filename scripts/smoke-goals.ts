@@ -137,16 +137,16 @@ async function main() {
     const asked = (await db.query.kpis.findFirst({ where: and(eq(schema.kpis.userId, maya.id), eq(schema.kpis.name, "Discovery calls")) }))!;
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="close-form"]').waitFor({ state: "attached", timeout: 30000 });
-    const editClose = page.locator('summary:has-text("Edit today")');
-    if (await editClose.isVisible()) await editClose.click();
-    const early = page.locator('[data-testid="close-early"] > summary');
-    if (await early.isVisible()) {
-      // Opened only once the page has settled: a click before Today finishes loading is undone when it does.
-      await page.waitForLoadState("networkidle");
-      for (let i = 0; i < 5 && !(await page.locator('[data-testid="close-early"]').evaluate((d) => (d as HTMLDetailsElement).open)); i++) {
-        await early.click();
-        await page.waitForTimeout(300);
-      }
+    // Opened only once the page has settled: a click before Today finishes loading is undone when it does. Until the field
+    // shows, open whichever fold holds it (Edit today, or Close early) and look again.
+    await page.waitForLoadState("networkidle");
+    const field = page.locator(`[data-testid="close-kpi-${asked.id}"]`);
+    for (let i = 0; i < 20 && !(await field.isVisible()); i++) {
+      const editClose = page.locator('summary:has-text("Edit today")');
+      const early = page.locator('[data-testid="close-early"]');
+      if (await editClose.isVisible()) await editClose.click();
+      else if ((await early.count()) && !(await early.evaluate((d) => (d as HTMLDetailsElement).open))) await early.locator("> summary").click();
+      await page.waitForTimeout(500);
     }
     await page.fill(`[data-testid="close-kpi-${asked.id}"]`, "2");
     await page.fill('input[name="win"]', "Two discovery calls held.");

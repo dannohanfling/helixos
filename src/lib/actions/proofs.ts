@@ -9,6 +9,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { isTrim } from "@/lib/engine/fathom";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
+import { autoShort, createProof } from "@/lib/proofs-core";
 import { attachmentsBlockApproval } from "@/lib/engine/proof-attachments";
 import { attachmentsFor, deleteAttachmentsForProof } from "@/lib/queries/proof-attachments";
 import { redactUrls } from "@/lib/engine/storage-policy";
@@ -40,23 +41,15 @@ function fields(fd: FormData) {
   };
 }
 
-/** One-line proof, built from the parts when no short version was written. */
-function autoShort(f: ReturnType<typeof fields>): string | null {
-  if (f.shortVersion) return f.shortVersion;
-  const who = f.who ?? "A client";
-  if (f.resultAfter && f.problemBefore) return `${who} went from "${f.problemBefore.replace(/[.]$/, "")}" to ${f.resultAfter.replace(/[.]$/, "")}.`;
-  if (f.resultAfter) return `${who}: ${f.resultAfter}`;
-  return null;
-}
-
 export async function createProofAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
   const f = fields(formData);
   if (!f.name) return;
-  const id = newId();
-  // Every proof starts as a draft; the same permission tick as the Beliefs door is recorded here when given, and approval still happens on the proof's page.
-  const ticked = formData.get("permission") === "on" && Boolean(f.who);
-  await db.insert(schema.proofs).values({ id, workspaceId, userId, ...f, status: "draft", shortVersion: autoShort(f), clientRecordId: opt(formData, "clientRecordId"), ...(ticked ? { permissionAt: nowIso(), permissionBy: userId } : {}) });
+  // Every proof starts as a draft; the same permission tick as the Beliefs door is recorded here when given, and approval still
+  // happens on the proof's page (src/lib/proofs-core.ts, the same the connector's proof_add uses).
+  const { status: _status, ...rest } = f;
+  void _status;
+  const id = await createProof({ workspaceId, userId }, { ...rest, clientRecordId: opt(formData, "clientRecordId") }, { permission: formData.get("permission") === "on" });
   refresh();
   const back = str(formData, "back");
   redirect(back.startsWith("/") ? back : `/proof/${id}`);

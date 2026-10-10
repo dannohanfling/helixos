@@ -11,9 +11,12 @@ import { nowIso } from "@/lib/dates";
 import { open } from "@/lib/crypto";
 import { logSync } from "@/lib/integrations";
 import { listMeetingsFull, readTranscript, type FathomResult } from "@/lib/fathom";
-import { assignSteps, canSee, intake, inviteeMembers, meetingFields, type Member, type RawMeeting } from "@/lib/engine/recordings";
+import { assignSteps, canSee, intake, inviteeMembers, meetingFields, shownTitle, type Member, type RawMeeting } from "@/lib/engine/recordings";
 import { JUST_YOU, attendeeSummary, groupKey, groupOf, minutesOf, suggestAudience, type PublishedBefore, type Suggestion } from "@/lib/engine/recording-review";
 import { readRules, ruleMatch, type RecordingRules } from "@/lib/engine/recording-rules";
+import { groupActionItems, itemMoment } from "@/lib/engine/recording-members";
+import { TASK_SOURCES } from "@/lib/engine/notes";
+import { taskPoints } from "@/lib/engine/points";
 
 export const FATHOM_PROVIDER = "fathom";
 /** The first Sync now reaches back this far before switch-on, so the coach has recent calls to publish by hand on day one. */
@@ -365,4 +368,49 @@ export async function coachItems(workspaceId: string, sinceIso: string): Promise
   const handled = await db.query.recordingSteps.findMany({ where: and(inArray(schema.recordingSteps.recordingId, rows.map((r) => r.id)), inArray(schema.recordingSteps.state, ["accepted", "dismissed"])) });
   const done = new Set(handled.map((s) => `${s.recordingId}:${s.itemIndex}`));
   return rows.map((r) => ({ recording: r, open: r.actionItems.map((_, i) => i).filter((i) => !done.has(`${r.id}:${i}`)) }));
+}
+
+/* ───────── A member's action steps, shared by the recording page and the connector (Voice pack 2, rev 642) ───────── */
+
+type StepViewer = { workspace: { id: string }; user: { id: string; email: string; name: string }; membership: { programTier: schema.Membership["programTier"] }; role: "coach" | "client"; today: string };
+
+/** Who each step is for, the way the recording page shows it: the member's own first, others by name, Everyone last. */
+export async function stepGroupsFor(v: StepViewer, r: schema.Recording) {
+  const [members, coaches] = await Promise.all([clientMembers(v.workspace.id), coachPeopleOf(v.workspace.id)]);
+  return groupActionItems(r.actionItems, [...members.map((m) => ({ name: m.name, email: m.email })), ...coaches], { email: v.user.email, name: v.user.name, role: "client" });
+}
+
+export type StepTaskResult = { ok: true; taskId: string; already: boolean } | { ok: false; error: string };
+/**
+ * One action step into the member's own tasks (source fathom), with its moment in the call. Only a recording they can open,
+ * only their own steps or Everyone's (another person's are theirs), and never twice: a step already added returns its task.
+ */
+export async function addStepTask(v: StepViewer, recordingId: string, itemIndex: number): Promise<StepTaskResult> {
+  const r = await visibleRecording(v.workspace.id, recordingId, { userId: v.user.id, programTier: v.membership.programTier, role: v.role });
+  const item = r?.actionItems[itemIndex];
+  if (!r || !item || !Number.isInteger(itemIndex)) return { ok: false, error: "That step isn't on a recording you can open." };
+  const group = (await stepGroupsFor(v, r)).find((g) => g.items.some((x) => x.index === itemIndex));
+  if (!group || !(group.own || group.everyone)) return { ok: false, error: "That step is someone else's, so it can't go on your tasks." };
+  const existing = await db.query.recordingSteps.findFirst({ where: and(eq(schema.recordingSteps.recordingId, r.id), eq(schema.recordingSteps.userId, v.user.id), eq(schema.recordingSteps.itemIndex, itemIndex)) });
+  if (existing?.taskId) return { ok: true, taskId: existing.taskId, already: true };
+  const taskId = newId();
+  const moment = itemMoment(item, r.shareUrl || r.url);
+  await db.insert(schema.tasks).values({
+    id: taskId,
+    workspaceId: v.workspace.id,
+    userId: v.user.id,
+    title: item.description,
+    // The moment in the call goes with the task (rev 619), when it has one.
+    details: [`From the recording "${shownTitle(r)}"`, moment ? `Jump to this moment: ${moment.href}` : ""].filter(Boolean).join("\n"),
+    urgency: "medium",
+    category: "system",
+    dueDate: v.today,
+    status: "today",
+    points: taskPoints("medium"),
+    source: TASK_SOURCES.fathom,
+    sourceRef: r.id,
+  });
+  if (existing) await db.update(schema.recordingSteps).set({ state: "accepted", taskId }).where(eq(schema.recordingSteps.id, existing.id));
+  else await db.insert(schema.recordingSteps).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, recordingId: r.id, itemIndex, text: item.description, assigneeEmail: item.assigneeEmail, state: "accepted", taskId });
+  return { ok: true, taskId, already: false };
 }

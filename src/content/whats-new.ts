@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 136,
+    date: "2026-10-10",
+    title: "More of your day by voice in Claude",
+    lines: [
+      "With HelixOS connected to Claude you can now log a DM (the stage, a note, a follow-up), save a client win to your Proof Bank as a private draft, add a content idea and make a ladder from it, hear your call sheet before a call, and add a call's action steps to your tasks.",
+      "Ask for Office Hours too: Claude reads your request back and sends it only after your yes. Reconnect HelixOS in Claude and tick DMs, Proof Bank, Sales calls, Recordings and Office Hours to use them.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 135,
     date: "2026-10-10",
     title: "Your loyalty pass leaderboard, as a live feed",

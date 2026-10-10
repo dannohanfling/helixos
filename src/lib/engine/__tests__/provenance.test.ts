@@ -109,13 +109,14 @@ describe("where the mark is set and where the gate stands (read off the source)"
       ["src/lib/ladder-core.ts", /contentType: "Comment Ladder", notes: l\.notes, origin: "rule" as const/],
       ["src/lib/actions/ladders.ts", /generatedBy: "ladder", origin: "rule"/],
       ["src/lib/actions/proofs.ts", /body, origin: "rule", notes/],
-      ["src/lib/actions/content.ts", /origin: "coach",\n  \}\);/],
+      ["src/lib/content-core.ts", /origin: "coach",\n  \}\);/],
       ["src/lib/actions/compose.ts", /\.\.\.row, origin: "coach" \}\)/],
     ] as const;
     expect(sites.length).toBe(10);
     for (const [file, re] of sites) expect(read(file), `${file} ${re}`).toMatch(re);
     // No write site on the four tables sets origin to null on purpose.
     for (const file of ["doctrine", "groups", "variants", "magnets", "ladders", "proofs", "content", "compose", "webinars"]) expect(read(`src/lib/actions/${file}.ts`), file).not.toMatch(/origin: null/);
+    for (const file of ["src/lib/content-core.ts", "src/lib/ladder-core.ts"]) expect(read(file), file).not.toMatch(/origin: null/);
   });
 
   it("every action that sends content out checks the gate and logs Continue anyway with who and when", () => {

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
-import { clientMembers, coachPeopleOf, markSeen, stepsFor, visibleRecording } from "@/lib/recordings";
-import { groupActionItems, itemMoment, timestampLabel, type ItemGroup } from "@/lib/engine/recording-members";
+import { markSeen, stepGroupsFor, stepsFor, visibleRecording } from "@/lib/recordings";
+import { itemMoment, timestampLabel, type ItemGroup } from "@/lib/engine/recording-members";
 import { programLine, shownTitle } from "@/lib/engine/recordings";
 import { deepLink } from "@/lib/engine/fathom";
 import { dismissStepAction, makeStepTaskAction, viewTranscriptAction } from "@/lib/actions/recordings";
@@ -25,14 +25,13 @@ export default async function RecordingPage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const r = await visibleRecording(v.workspace.id, id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role });
   if (!r) notFound();
-  const [steps, members, coaches] = await Promise.all([stepsFor(v.user.id, [r.id]), clientMembers(v.workspace.id), coachPeopleOf(v.workspace.id)]);
+  const [steps, groups] = await Promise.all([stepsFor(v.user.id, [r.id]), stepGroupsFor(v, r)]);
   // Opening it here is seeing it (rev 498); a coach switched in marks nothing for the member.
   if (!v.switchedInto) await markSeen(v.workspace.id, v.user.id, r.id);
   const watch = r.shareUrl || r.url;
   const watchHref = `/recordings/${r.id}/watch`;
   // Who each step is for (rev 496; Danno's rev 619 rules): by email, then by full name; the coach as "<name> (coach)"; anything
   // unmatched under "Everyone / unassigned". The member's own first, the rest alphabetically.
-  const groups = groupActionItems(r.actionItems, [...members.map((m) => ({ name: m.name, email: m.email })), ...coaches], { email: v.user.email, name: v.user.name, role: "client" });
   const showTranscript = Boolean(r.transcript) && sp.transcript === "1";
   const switched = Boolean(v.switchedInto);
   return (

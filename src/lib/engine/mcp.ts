@@ -17,6 +17,12 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   // Voice to Ship (rev 638): writing a ladder is its own tick, and publishing another, never pre-ticked.
   "content:write": { label: "Content: write", line: "Write a comment ladder, change a part of one, and make its graphic. Nothing is posted." },
   "content:publish": { label: "Content: publish", line: "Ship a ladder to your Facebook Page and Instagram, only after reading back exactly what will post and hearing your yes. Never pre-ticked." },
+  // Voice pack 2 (rev 642): each its own tick, with its own line.
+  dms: { label: "DMs", line: "Log a DM conversation (the person, the stage, a note, a follow-up) and read who's waiting on you." },
+  proofs: { label: "Proof Bank", line: "Save a client win as a private draft and list your wins. Never approves one." },
+  sales: { label: "Sales calls", line: "Read your call sheet before a call. Read-only." },
+  recordings: { label: "Recordings", line: "Read a recorded call's action steps and add yours to your tasks." },
+  office_hours: { label: "Office Hours", line: "Ask for help at a Friday Office Hours call, only after reading it back and hearing your yes; list your requests." },
   library: { label: "Library", line: "Search your library and assets." },
   webinars: { label: "Webinars", line: "Read your webinars and proofs." },
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },

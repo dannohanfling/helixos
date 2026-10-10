@@ -4,7 +4,6 @@ import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { CONTENT_STATUSES } from "@/db/schema";
-import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { contentPoints } from "@/lib/engine/points";
 import { award } from "@/lib/queries/points";
@@ -12,31 +11,14 @@ import { redirect } from "next/navigation";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { carriesUnreviewed, originAfterAccept, originAfterSave } from "@/lib/engine/provenance";
 import { recordConfirm } from "@/lib/provenance";
+import { createContentItem } from "@/lib/content-core";
 
 export async function createContentAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ team: "allow" });
+  const { workspaceId, userId } = await ctx({ team: "allow" });
   const title = str(formData, "title");
   if (!title) return;
-  const postDate = opt(formData, "postDate");
-  const status = CONTENT_STATUSES.find((s) => s === str(formData, "status")) ?? (postDate ? "scheduled" : "idea");
-  await db.insert(schema.contentItems).values({
-    id: newId(),
-    workspaceId,
-    userId,
-    title,
-    status,
-    contentType: str(formData, "contentType") || "CTA Post",
-    platform: str(formData, "platform") || "FB Group",
-    hasCta: formData.get("hasCta") === "on",
-    hook: opt(formData, "hook"),
-    body: opt(formData, "body"),
-    cta: opt(formData, "cta"),
-    postAt: postDate ? `${postDate}T${str(formData, "postTime") || "09:00"}:00` : null,
-    notes: opt(formData, "notes"),
-    postedAt: status === "posted" ? nowIso() : null,
-    origin: "coach",
-  });
-  void v;
+  // The one add (src/lib/content-core.ts), the same the connector's idea_add uses.
+  await createContentItem({ workspaceId, userId }, { title, status: str(formData, "status"), contentType: str(formData, "contentType"), platform: str(formData, "platform"), hasCta: formData.get("hasCta") === "on", hook: opt(formData, "hook"), body: opt(formData, "body"), cta: opt(formData, "cta"), postDate: opt(formData, "postDate"), postTime: str(formData, "postTime"), notes: opt(formData, "notes") });
   refresh();
 }
 

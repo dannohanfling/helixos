@@ -11,13 +11,11 @@ import { open, seal } from "@/lib/crypto";
 import { appUrl } from "@/lib/branded-email";
 import { allow } from "@/lib/rate-limit";
 import { createWebhook, deleteWebhook, validateFathomKey } from "@/lib/fathom";
-import { TRANSCRIPT_PRESSES_PER_HOUR, shownTitle } from "@/lib/engine/recordings";
-import { TASK_SOURCES } from "@/lib/engine/notes";
-import { itemMoment } from "@/lib/engine/recording-members";
+import { TRANSCRIPT_PRESSES_PER_HOUR } from "@/lib/engine/recordings";
 import { rulesFromForm, type RulesForm } from "@/lib/engine/recording-rules";
-import { taskPoints } from "@/lib/engine/points";
 import { fetchTranscript, markAllSeen, paceKeyFor, publishRecording, restoreRecording, reviewContext, reviewOf, skipRecording, syncRecordings, unpublishRecording, visibleRecording, workspaceFathom } from "@/lib/recordings";
 import { ctx, refresh, str } from "@/lib/action-helpers";
+import { addStepTask } from "@/lib/recordings";
 
 const INTEGRATIONS = "/integrations#fathom-recordings";
 const back = (q: string): never => redirect(`/integrations?fathom=${encodeURIComponent(q)}#fathom-recordings`);
@@ -254,32 +252,12 @@ export async function markAllSeenAction(): Promise<void> {
 
 /** One tap turns an action item into the member's own task (source fathom). Nothing is created without the tap. */
 export async function makeStepTaskAction(formData: FormData): Promise<void> {
-  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: OWN });
+  const { v } = await ctx({ whileSwitched: "refuse", reason: OWN });
   const id = str(formData, "recordingId");
-  const itemIndex = Number(str(formData, "itemIndex"));
-  const r = await visibleRecording(workspaceId, id, { userId, programTier: v.membership.programTier, role: v.role });
-  const item = r?.actionItems[itemIndex];
-  if (!r || !item || !Number.isInteger(itemIndex)) redirect("/recordings");
-  const existing = await db.query.recordingSteps.findFirst({ where: and(eq(schema.recordingSteps.recordingId, r!.id), eq(schema.recordingSteps.userId, userId), eq(schema.recordingSteps.itemIndex, itemIndex)) });
-  if (existing?.taskId) redirect(`/recordings/${id}#steps`);
-  const taskId = newId();
-  await db.insert(schema.tasks).values({
-    id: taskId,
-    workspaceId,
-    userId,
-    title: item!.description,
-    // The moment in the call goes with the task (rev 619), when it has one.
-    details: [`From the recording "${shownTitle(r!)}"`, (() => { const m = itemMoment(item!, r!.shareUrl || r!.url); return m ? `Jump to this moment: ${m.href}` : ""; })()].filter(Boolean).join("\n"),
-    urgency: "medium",
-    category: "system",
-    dueDate: v.today,
-    status: "today",
-    points: taskPoints("medium"),
-    source: TASK_SOURCES.fathom,
-    sourceRef: r!.id,
-  });
-  if (existing) await db.update(schema.recordingSteps).set({ state: "accepted", taskId }).where(eq(schema.recordingSteps.id, existing.id));
-  else await db.insert(schema.recordingSteps).values({ id: newId(), workspaceId, userId, recordingId: r!.id, itemIndex, text: item!.description, assigneeEmail: item!.assigneeEmail, state: "accepted", taskId });
+  // The one way a step becomes a task (src/lib/recordings.ts), the same the connector's action_step_to_task uses.
+  const out = await addStepTask(v, id, Number(str(formData, "itemIndex")));
+  if (!out.ok) redirect("/recordings");
+  if (out.already) redirect(`/recordings/${id}#steps`);
   refresh();
   redirect(`/recordings/${id}?task=1#steps`);
 }

@@ -6,3 +6,4 @@ import "./today";
 import "./avatars";
 import "./ladders";
 import "./ship";
+import "./voice2";
