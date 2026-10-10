@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { totalPoints } from "@/lib/queries/points";
 import { ctx, refresh, str } from "@/lib/action-helpers";
+import { requireCoach } from "@/lib/auth";
 import { catalogue, claimability } from "@/lib/engine/rewards";
 import { tierFor } from "@/lib/engine/tiers";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -38,4 +39,16 @@ export async function claimRewardAction(_prev: ClaimState, formData: FormData): 
   }
   refresh();
   return { ok: item.cost ? `Claimed. ${item.cost.toLocaleString()} points spent. Your booking link is ready.` : "Claimed. Your booking link is ready." };
+}
+
+/**
+ * The coach closes a claim once the call or the prize is delivered (Mark done), or opens it again. The client's Rewards page says
+ * Done; the open count on the Coach menu and Today drops. The coach's own workspace only, never while switched into a client.
+ */
+export async function setClaimDoneAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  if (v.switchedInto) return;
+  const status = str(formData, "done") === "1" ? "fulfilled" : "requested";
+  await db.update(schema.rewardClaims).set({ status }).where(and(eq(schema.rewardClaims.id, str(formData, "id")), eq(schema.rewardClaims.workspaceId, v.workspace.id)));
+  refresh();
 }

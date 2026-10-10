@@ -172,7 +172,7 @@ export default async function RewardsPage() {
  * One reward or prize: what it is, what it asks for, and exactly one of: a Claim button, the reason it can't be claimed
  * yet, or (once claimed) that reward's own booking link. A claim is an instant unlock; the next step is the client's.
  */
-function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdict: Claimability; claim?: { id: string; createdAt: string; bookingOpenedAt: string | null }; tz: string }) {
+function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdict: Claimability; claim?: { id: string; createdAt: string; bookingOpenedAt: string | null; status: string }; tz: string }) {
   const locked = !claim && !verdict.ok;
   const soon = !verdict.ok && (verdict.reason === "opening-soon" || verdict.reason === "not-earnable" || verdict.reason === "earned-soon");
   return (
@@ -189,7 +189,9 @@ function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdi
           {claim ? (
             <>
               <span className="text-good">Claimed {formatDateTime(claim.createdAt.includes("T") ? claim.createdAt : claim.createdAt.replace(" ", "T") + "Z", tz)}</span>
-              {item.bookingUrl ? (
+              {claim.status === "fulfilled" ? (
+                <span className="badge badge-good" data-testid="claim-done-badge">Done ✓</span>
+              ) : item.bookingUrl ? (
                 <a href={`/rewards/book/${claim.id}`} target="_blank" rel="noreferrer" className="btn btn-accent btn-xs" data-testid="book-link">
                   {claim.bookingOpenedAt ? "Booking link ↗" : "Book your slot ↗"}
                 </a>
@@ -206,7 +208,7 @@ function CatalogueRow({ item, verdict, claim, tz }: { item: CatalogueItem; verdi
           )}
         </span>
       </div>
-      {claim && item.bookingUrl && !claim.bookingOpenedAt ? <p className="mt-2 text-xs text-ink-2">Your points are spent and the slot is yours to book. Nobody books it for you.</p> : null}
+      {claim && claim.status !== "fulfilled" && item.bookingUrl && !claim.bookingOpenedAt ? <p className="mt-2 text-xs text-ink-2">Your points are spent and the slot is yours to book. Nobody books it for you.</p> : null}
     </li>
   );
 }

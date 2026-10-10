@@ -13,6 +13,7 @@ import { unseenCount } from "@/lib/engine/whats-new";
 import { chatWidgetProps } from "@/lib/chat";
 import { hasVisibleRecordings, newRecordings } from "@/lib/recordings";
 import { coachFirstName, newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
+import { openClaims } from "@/lib/queries/rewards";
 import { choicesFor } from "@/lib/team";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
@@ -37,16 +38,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // The coach's counts (rev 432): issues and ideas not yet opened, and monthly feedback new since they last looked. A client
   // gets the coach's first name for "Tell Danno" instead.
   const coachView = viewer.role === "coach" && !viewer.switchedInto;
-  const [reportsNew, feedbackNew, coachFirst, recordingsNew] = await Promise.all([
+  const [reportsNew, feedbackNew, coachFirst, recordingsNew, claimsOpen] = await Promise.all([
     coachView ? unseenReports(viewer.workspace.id) : Promise.resolve(0),
     coachView ? newMonthlyFeedback(viewer.workspace.id, viewer.membership.feedbackSeenAt) : Promise.resolve(0),
     viewer.role === "client" ? coachFirstName(viewer.workspace.id) : Promise.resolve(null),
     // Rev 498: the calls this member hasn't opened yet, as a count on the Recordings item.
     recordingsEnabled ? newRecordings(viewer.workspace.id, { userId: viewer.user.id, programTier: viewer.membership.programTier, role: viewer.role }).then((r) => r.length) : Promise.resolve(0),
+    // Reward claims the coach hasn't marked done, on the Coach item.
+    coachView ? openClaims(viewer.workspace.id) : Promise.resolve(0),
   ]);
   const tier = tierFor(points);
   return (
-    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} coachFirst={coachFirst} choices={choices.length} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew }}>
+    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} coachFirst={coachFirst} choices={choices.length} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>

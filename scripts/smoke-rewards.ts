@@ -119,7 +119,7 @@ async function main() {
     if ((await totalPoints(ws, maya.id)) !== afterClaim) throw new Error("a prize claim deducted points");
     console.log("✓ prize: claimed at the threshold, link revealed, no points spent");
 
-    // Coach sees claims read-only, with the only booking signal we have
+    // Coach sees every open claim with its booking signal, and closes one once it's delivered
     await login(page, "coach");
     await page.goto(`${base}/coach`);
     const claims = page.locator('[data-testid="claims-list"]');
@@ -127,10 +127,44 @@ async function main() {
     const text = await claims.innerText();
     if (!/Maya[\s\S]*Offer \+ Messaging Alignment Session[\s\S]*opened the booking link/.test(text)) throw new Error(`coach view missing the booked claim:\n${text}`);
     if (!/Onboarding Champion[\s\S]*hasn't opened the booking link yet/.test(text)) throw new Error(`coach view missing the unbooked prize claim:\n${text}`);
-    if ((await page.locator('[data-testid="claim-row"]').count()) < 7) throw new Error("coach view should list every claim in the workspace");
-    if (await claims.locator("button, form").count()) throw new Error("the claims view must be read-only");
+    const openRows = await db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, ws), eq(schema.rewardClaims.status, "requested")) });
+    if (openRows.length < 7 || (await page.locator('[data-testid="claim-row"]').count()) !== openRows.length) throw new Error(`coach view should list every open claim in the workspace (${openRows.length})`);
     await page.screenshot({ path: "screenshots/rw03-coach-claims.png", fullPage: true });
-    console.log("✓ coach: claims listed read-only with booking status");
+    console.log("✓ coach: every open claim listed with its booking status");
+
+    // Mark done: off the Open list, onto Done with Reopen; the counts on the card, the Coach menu item and Today drop by one
+    const before = openRows.length;
+    const counted = async () => {
+      await page.goto(`${base}/today`);
+      const notice = (await page.locator('[data-testid="coach-new-claims"]').innerText().catch(() => "")).trim();
+      return { notice, nav: (await page.locator('nav a[href="/coach"]').first().innerText()).replace(/\D+/g, " ").trim() };
+    };
+    let shown = await counted();
+    if (!shown.notice.startsWith(`${before} reward claims to deliver`) || !shown.nav.split(" ").includes(String(before))) throw new Error(`Today and the Coach item should count ${before} open claims: ${JSON.stringify(shown)}`);
+    await page.goto(`${base}/coach?claims=open#claims`);
+    const offer = page.locator('[data-testid="claim-row"]').filter({ hasText: "Offer + Messaging Alignment Session" }).filter({ hasText: "Maya" });
+    if ((await offer.count()) !== 1) throw new Error("Maya's session claim should be one open row");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), offer.locator('[data-testid="claim-done"]').click()]);
+    await page.waitForLoadState("networkidle");
+    await page.locator('[data-testid="claim-row"]').nth(before - 2).waitFor();
+    if ((await page.locator('[data-testid="claim-row"]').count()) !== before - 1) throw new Error("a claim marked done should leave the Open list");
+    if (!(await page.getByText(`Claimed rewards · ${before - 1} open`).count())) throw new Error("the card's open count should drop by one");
+    const done = await db.query.rewardClaims.findFirst({ where: eq(schema.rewardClaims.id, claimRow.id) });
+    if (done?.status !== "fulfilled") throw new Error("Mark done should set the claim fulfilled");
+    await page.click('[data-testid="claims-done"]');
+    await page.waitForURL(/claims=done/);
+    const doneRows = page.locator('[data-testid="claim-row"]');
+    if ((await doneRows.count()) !== 1 || !(await doneRows.first().locator('[data-testid="claim-reopen"]').count())) throw new Error("the Done list should hold the one claim, with Reopen");
+    shown = await counted();
+    if (!shown.notice.startsWith(`${before - 1} reward claim`) || !shown.nav.split(" ").includes(String(before - 1))) throw new Error(`Today and the Coach item should now count ${before - 1}: ${JSON.stringify(shown)}`);
+    console.log(`✓ coach: Mark done moves a claim to Done (Reopen there); the card, the Coach item and Today count ${before - 1} open`);
+
+    // The client sees Done on Rewards, with the booking link and its nudge gone
+    await login(page, "client");
+    await page.goto(`${base}/rewards`);
+    const mine = row(page, "Offer + Messaging Alignment Session");
+    if (!(await mine.locator('[data-testid="claim-done-badge"]').count()) || (await mine.locator('[data-testid="book-link"]').count())) throw new Error("a claim marked done should say Done on Rewards, with no booking link");
+    console.log("✓ client: the delivered claim says Done on Rewards");
   } finally {
     await browser.close();
     rmSync(overridePath, { force: true });

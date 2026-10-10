@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 130,
+    date: "2026-10-09",
+    title: "Reward claims close when they're delivered",
+    lines: [
+      "Once your coach has delivered a reward you claimed, it says Done on your Rewards page.",
+      "Coaches: each claim on the Coach view has Mark done (and Reopen), with Open and Done lists. Open claims are counted on the Coach menu item and on your Today.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 129,
     date: "2026-10-09",
     title: "Ladders tell your origin story once",

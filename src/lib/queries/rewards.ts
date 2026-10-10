@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { todayInTz } from "@/lib/dates";
 
@@ -14,4 +14,10 @@ export async function claimDatesByName(workspaceId: string, tz: string): Promise
     out.set(r.name, [...(out.get(r.name) ?? []), todayInTz(tz, new Date(iso))]);
   }
   return out;
+}
+
+/** Claims the coach hasn't marked done yet: the count on the Coach menu item and on the coach's Today. */
+export async function openClaims(workspaceId: string): Promise<number> {
+  const rows = await db.select({ id: schema.rewardClaims.id }).from(schema.rewardClaims).where(and(eq(schema.rewardClaims.workspaceId, workspaceId), eq(schema.rewardClaims.status, "requested")));
+  return rows.length;
 }

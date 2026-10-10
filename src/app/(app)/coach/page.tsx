@@ -27,6 +27,8 @@ import { lateForMonth, monthOf } from "@/lib/engine/month-intentions";
 import { MonthAnswers } from "@/components/month-card";
 import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
+import { openClaims } from "@/lib/queries/rewards";
+import { setClaimDoneAction } from "@/lib/actions/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
@@ -38,8 +40,9 @@ import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
-export default async function CoachPage() {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string }> }) {
   const v = await requireCoach();
+  const claimsShown = (await searchParams).claims === "done" ? "done" : "open";
   const [reportsNew, feedbackNew] = await Promise.all([unseenReports(v.workspace.id), newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt)]);
   const now = new Date();
   const wsId = v.workspace.id;
@@ -61,8 +64,9 @@ export default async function CoachPage() {
   const monthStart = `${v.today.slice(0, 7)}-01`;
   // Each client's own brand kit (rev 568): starter, in progress, or set, read once for the roster.
   const kitOf = await kitsByMember(wsId);
-  // Claims are instant unlocks; this is a window onto what's coming, not a queue to work.
-  const claimRows = await db.query.rewardClaims.findMany({ where: eq(schema.rewardClaims.workspaceId, wsId), orderBy: desc(schema.rewardClaims.createdAt), limit: 50 });
+  // A claim is an instant unlock the client books themselves; the coach marks it done once it's delivered (open by default).
+  const claimRows = await db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, wsId), eq(schema.rewardClaims.status, claimsShown === "done" ? "fulfilled" : "requested")), orderBy: desc(schema.rewardClaims.createdAt), limit: 50 });
+  const claimsOpen = await openClaims(wsId);
   const linkOf = new Map(catalogue(rewards, prizes, loadRewardsConfig()).map((i) => [i.name, i.bookingUrl]));
   const [aiCreds, aiRows] = await Promise.all([
     db.query.aiCredentials.findMany({ where: eq(schema.aiCredentials.workspaceId, wsId) }),
@@ -425,7 +429,16 @@ export default async function CoachPage() {
               ))}
             </div>
           </Card>
-          <Card title="Claimed rewards" action={<span className="text-xs text-ink-3">read-only · the client books it</span>}>
+          <Card
+            id="claims"
+            title={`Claimed rewards · ${claimsOpen} open`}
+            action={
+              <span className="flex gap-1 text-xs" data-testid="claims-filter">
+                <Link href="/coach?claims=open#claims" className={`btn btn-xs ${claimsShown === "open" ? "btn-soft" : "btn-ghost"}`} aria-current={claimsShown === "open" ? "page" : undefined} data-testid="claims-open">Open</Link>
+                <Link href="/coach?claims=done#claims" className={`btn btn-xs ${claimsShown === "done" ? "btn-soft" : "btn-ghost"}`} aria-current={claimsShown === "done" ? "page" : undefined} data-testid="claims-done">Done</Link>
+              </span>
+            }
+          >
             {claimRows.length ? (
               <ul className="divide-y text-sm" data-testid="claims-list">
                 {claimRows.map((c) => {
@@ -440,13 +453,18 @@ export default async function CoachPage() {
                       <span className="min-w-0 flex-1">{c.rewardName}</span>
                       <span className="text-xs text-ink-3">{formatDateTime(c.createdAt.includes("T") ? c.createdAt : c.createdAt.replace(" ", "T") + "Z", v.tz)}</span>
                       <span className="tabular text-xs text-ink-2">{c.pointsSpent ? `−${c.pointsSpent.toLocaleString()} pts` : "milestone"}</span>
+                      <form action={setClaimDoneAction}>
+                        <input type="hidden" name="id" value={c.id} />
+                        <input type="hidden" name="done" value={c.status === "fulfilled" ? "0" : "1"} />
+                        <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…" data-testid={c.status === "fulfilled" ? "claim-reopen" : "claim-done"}>{c.status === "fulfilled" ? "Reopen" : "Mark done"}</SubmitButton>
+                      </form>
                       <span className={`basis-full text-xs ${c.bookedAt ? "text-good" : link && !c.bookingOpenedAt ? "text-warn" : "text-ink-3"}`}>{booking}</span>
                     </li>
                   );
                 })}
               </ul>
             ) : (
-              <p className="text-sm text-ink-2">Nothing claimed yet. When a client spends points, it shows here with whether they&apos;ve followed the booking link.</p>
+              <p className="text-sm text-ink-2" data-testid="claims-empty">{claimsShown === "done" ? "Nothing marked done yet." : "Nothing open. When a client claims a reward, it shows here with whether they've followed the booking link; mark it done once it's delivered."}</p>
             )}
           </Card>
           <Card title="This week's 3-1-3" action={<span className="text-xs text-ink-3">{weekSet.length} of {rows.length} set</span>}>
