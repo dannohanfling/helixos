@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 131,
+    date: "2026-10-10",
+    title: "Bot Features: new skills for your bot",
+    lines: [
+      "Build → Bot Features shows eight skills your bot can learn. Each unlocks when you hit a milestone; then Set it up, fill in a few details and tap Turn it on for me.",
+      "We switch it on in your bot and let you know by email and on your Today. Coaches: requests wait on the Coach view with the setup, tick milestones on a client's page, and change how each unlocks under Unlock rules.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 130,
     date: "2026-10-09",
     title: "Reward claims close when they're delivered",

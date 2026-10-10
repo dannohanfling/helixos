@@ -44,6 +44,7 @@ type Owned = { kind: "owned"; table: string };
 type Route = Owned | { kind: "public"; why: string } | { kind: "coach" };
 const ROUTES: Record<string, Route> = {
   "/clients/[id]": { kind: "owned", table: "clientRecords" },
+  "/bot-features/[key]": { kind: "public", why: "a Bot Features catalogue key (one of eight, in code); the page shows only the signed-in member's own state and setup" },
   "/coach/[clientId]": { kind: "coach" },
   "/coach/[clientId]/body": { kind: "coach" },
   "/coach/[clientId]/bot": { kind: "coach" },

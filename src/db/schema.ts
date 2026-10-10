@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-hours";
 import { MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
+import { BOT_FEATURE_KEYS, REQUEST_STATES, UNLOCK_TYPES, type Behavior } from "@/lib/engine/bot-features";
 
 const id = () => text("id").primaryKey();
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
@@ -114,6 +115,8 @@ export const memberships = sqliteTable(
     clDripWebhookUrl: text("cl_drip_webhook_url"),
     /** Ship's rungs-only inbound webhook on Community Loyalty (rev 625): the rungs and the two posts' ids, never the post. Sealed. */
     clRungsWebhookUrl: text("cl_rungs_webhook_url"),
+    /** Bot Features (rev 618): the milestones the coach says this client has reached where HelixOS can't see them (or overrides). */
+    botUnlocks: text("bot_unlocks", { mode: "json" }).$type<Behavior[]>().notNull().default([]),
     /** The Community Loyalty contact that holds the drip state for this coach (user_ns). */
     clUserNs: text("cl_user_ns"),
     /** The client's own Community Loyalty (uChat) API token: sealed at rest, never rendered, never logged. One per client workspace. */
@@ -888,6 +891,40 @@ export const curriculumProgress = sqliteTable(
   },
   (t) => [uniqueIndex("curriculum_user_day").on(t.userId, t.day)],
 );
+
+/** Bot Features (rev 618): how each feature unlocks in this workspace, one rule per feature, changed by the coach without code. */
+export const botFeatureRules = sqliteTable(
+  "bot_feature_rules",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    featureKey: text("feature_key", { enum: BOT_FEATURE_KEYS }).notNull(),
+    type: text("type", { enum: UNLOCK_TYPES }).notNull(),
+    value: text("value").notNull().default(""),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [uniqueIndex("bot_feature_rules_ws_key").on(t.workspaceId, t.featureKey)],
+);
+export type BotFeatureRule = typeof botFeatureRules.$inferSelect;
+
+/** A client's "Turn it on for me": the setup they entered, then On once the coach has switched it on in their bot. Never points. */
+export const botFeatureRequests = sqliteTable(
+  "bot_feature_requests",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    featureKey: text("feature_key", { enum: BOT_FEATURE_KEYS }).notNull(),
+    state: text("state", { enum: REQUEST_STATES }).notNull().default("requested"),
+    setup: text("setup", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
+    requestedAt: text("requested_at").notNull().default(sql`(datetime('now'))`),
+    onAt: text("on_at"),
+    onBy: text("on_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("bot_feature_requests_member_key").on(t.workspaceId, t.userId, t.featureKey), index("bot_feature_requests_ws_state").on(t.workspaceId, t.state)],
+);
+export type BotFeatureRequest = typeof botFeatureRequests.$inferSelect;
 
 export const rewardClaims = sqliteTable("reward_claims", {
   id: id(),

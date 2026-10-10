@@ -14,6 +14,7 @@ import { chatWidgetProps } from "@/lib/chat";
 import { hasVisibleRecordings, newRecordings } from "@/lib/recordings";
 import { coachFirstName, newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 import { openClaims } from "@/lib/queries/rewards";
+import { waitingFeatures } from "@/lib/bot-features";
 import { choicesFor } from "@/lib/team";
 
 // Every page here is per-user and reads the session cookie. Never prerender it, and never let the build touch the database.
@@ -44,8 +45,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     viewer.role === "client" ? coachFirstName(viewer.workspace.id) : Promise.resolve(null),
     // Rev 498: the calls this member hasn't opened yet, as a count on the Recordings item.
     recordingsEnabled ? newRecordings(viewer.workspace.id, { userId: viewer.user.id, programTier: viewer.membership.programTier, role: viewer.role }).then((r) => r.length) : Promise.resolve(0),
-    // Reward claims the coach hasn't marked done, on the Coach item.
-    coachView ? openClaims(viewer.workspace.id) : Promise.resolve(0),
+    // Reward claims the coach hasn't marked done and Bot Features waiting to be switched on, on the Coach item.
+    coachView ? Promise.all([openClaims(viewer.workspace.id), waitingFeatures(viewer.workspace.id)]).then(([a, b]) => a + b) : Promise.resolve(0),
   ]);
   const tier = tierFor(points);
   return (

@@ -36,6 +36,7 @@ import { logHabitAction, takeMedAction } from "@/lib/actions/body";
 import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 import { openClaims } from "@/lib/queries/rewards";
+import { recentlyOn, waitingFeatures } from "@/lib/bot-features";
 import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
@@ -112,10 +113,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   }
 
   // The coach's notice (rev 432 item 4): new monthly feedback and issues not yet opened, so neither can be missed.
-  const coachNew = v.role === "coach" && !v.switchedInto ? await Promise.all([newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt), unseenReports(v.workspace.id), openClaims(v.workspace.id)]) : null;
+  // Bot Features switched on for this member in the last seven days (rev 618): one line each, to the feature.
+  const featuresOn = await recentlyOn(v.workspace.id, v.user.id);
+  const coachNew = v.role === "coach" && !v.switchedInto ? await Promise.all([newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt), unseenReports(v.workspace.id), openClaims(v.workspace.id), waitingFeatures(v.workspace.id)]) : null;
   return (
     <>
-      {coachNew && (coachNew[0] || coachNew[1] || coachNew[2]) ? (
+      {coachNew && (coachNew[0] || coachNew[1] || coachNew[2] || coachNew[3]) ? (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="coach-new">
           {coachNew[0] ? (
             <Link href="/coach/feedback" className="rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="coach-new-feedback">
@@ -132,6 +135,20 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               {coachNew[2]} reward claim{coachNew[2] === 1 ? "" : "s"} to deliver →
             </Link>
           ) : null}
+          {coachNew[3] ? (
+            <Link href="/coach#bot-features" className="rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="coach-new-features">
+              {coachNew[3]} bot feature{coachNew[3] === 1 ? "" : "s"} to switch on →
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+      {featuresOn.length ? (
+        <div className="mb-4 flex flex-wrap gap-2" data-testid="features-on">
+          {featuresOn.map((f) => (
+            <Link key={f.key} href={`/bot-features/${f.key}`} className="rounded-lg bg-good-soft px-3 py-2 text-sm font-medium hover:underline" data-testid="feature-on-line">
+              {f.name} is on · running in your bot →
+            </Link>
+          ))}
         </div>
       ) : null}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">

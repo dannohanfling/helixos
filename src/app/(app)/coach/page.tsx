@@ -28,6 +28,8 @@ import { MonthAnswers } from "@/components/month-card";
 import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
 import { openClaims } from "@/lib/queries/rewards";
+import { setFeatureOnAction } from "@/lib/actions/bot-features";
+import { featureOf } from "@/lib/engine/bot-features";
 import { setClaimDoneAction } from "@/lib/actions/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
 import prizes from "@/data/seed/prizes.json";
@@ -67,6 +69,10 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   // A claim is an instant unlock the client books themselves; the coach marks it done once it's delivered (open by default).
   const claimRows = await db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, wsId), eq(schema.rewardClaims.status, claimsShown === "done" ? "fulfilled" : "requested")), orderBy: desc(schema.rewardClaims.createdAt), limit: 50 });
   const claimsOpen = await openClaims(wsId);
+  // Bot Features (rev 618): what clients asked to have switched on, waiting first, then the last few switched on.
+  const featureRows = await db.query.botFeatureRequests.findMany({ where: eq(schema.botFeatureRequests.workspaceId, wsId), orderBy: desc(schema.botFeatureRequests.requestedAt), limit: 60 });
+  const featuresWaiting = featureRows.filter((r) => r.state === "requested");
+  const featuresOn = featureRows.filter((r) => r.state === "on").slice(0, 8);
   const linkOf = new Map(catalogue(rewards, prizes, loadRewardsConfig()).map((i) => [i.name, i.bookingUrl]));
   const [aiCreds, aiRows] = await Promise.all([
     db.query.aiCredentials.findMany({ where: eq(schema.aiCredentials.workspaceId, wsId) }),
@@ -428,6 +434,43 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                 </div>
               ))}
             </div>
+          </Card>
+          <Card id="bot-features" title={`Bot Features requests · ${featuresWaiting.length} to switch on`} action={<Link href="/coach/bot-features" className="btn btn-ghost btn-xs" data-testid="bot-rules-link">Unlock rules</Link>}>
+            {featuresWaiting.length || featuresOn.length ? (
+              <ul className="divide-y text-sm" data-testid="feature-requests">
+                {[...featuresWaiting, ...featuresOn].map((r) => {
+                  const u = userById.get(r.userId);
+                  const f = featureOf(r.featureKey);
+                  const filled = (f?.setup ?? []).filter((x) => r.setup[x.key]);
+                  return (
+                    <li key={r.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-2" data-testid="feature-request" data-state={r.state} data-key={r.featureKey}>
+                      <Link href={`/coach/${members.find((mm) => mm.userId === r.userId)?.id ?? ""}#bot-unlocks`} className="font-medium hover:underline">
+                        {u?.avatarEmoji} {u?.name ?? "Member"}
+                      </Link>
+                      <span className="min-w-0 flex-1 font-medium">{f?.name ?? r.featureKey}</span>
+                      <span className="text-xs text-ink-3">{r.state === "on" && r.onAt ? `on since ${formatDateTime(r.onAt, v.tz)}` : `asked ${formatDateTime(r.requestedAt.includes("T") ? r.requestedAt : r.requestedAt.replace(" ", "T") + "Z", v.tz)}`}</span>
+                      <form action={setFeatureOnAction}>
+                        <input type="hidden" name="id" value={r.id} />
+                        <input type="hidden" name="on" value={r.state === "on" ? "0" : "1"} />
+                        <SubmitButton className={`btn btn-xs ${r.state === "on" ? "btn-ghost" : "btn-primary"}`} pendingText="Saving…" data-testid={r.state === "on" ? "feature-not-on" : "feature-switch-on"}>{r.state === "on" ? "Not on yet" : "Switched on"}</SubmitButton>
+                      </form>
+                      {filled.length ? (
+                        <dl className="basis-full space-y-0.5 text-xs text-ink-2" data-testid="feature-setup">
+                          {filled.map((x) => (
+                            <div key={x.key} className="flex gap-2">
+                              <dt className="text-ink-3">{x.label}:</dt>
+                              <dd className="min-w-0 whitespace-pre-line break-words">{r.setup[x.key]}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-2" data-testid="feature-requests-empty">No requests yet. When a client taps Turn it on for me, it shows here with the setup they entered. Switch it on in their bot, then mark it here: they get an email and their card turns On.</p>
+            )}
           </Card>
           <Card
             id="claims"

@@ -64,6 +64,8 @@ export const MEMBER_TABLES = {
   ladders: schema.ladders,
   // The teaching library and story bank (rev 618): the coach's own. What each ladder was given hangs off the ladder (below).
   teaching_entries: schema.teachingEntries,
+  // Bot Features (rev 618): what the client asked to have switched on, with the setup they entered.
+  bot_feature_requests: schema.botFeatureRequests,
   story_items: schema.storyItems,
   lead_magnets: schema.leadMagnets,
   review_confirms: schema.reviewConfirms,
@@ -166,6 +168,8 @@ export const USER_TABLES = {
 
 /** Keyed by the workspace alone: they go only with the workspace, when its last member is deleted. */
 export const WORKSPACE_TABLES = {
+  // How each Bot Feature unlocks here (rev 618): the coach's rules, not any one member's.
+  bot_feature_rules: schema.botFeatureRules,
   integrations: schema.integrations,
   dm_templates: schema.dmTemplates,
   courses: schema.courses,

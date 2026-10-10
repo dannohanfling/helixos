@@ -263,6 +263,14 @@ async function main() {
     must((await sam.request.get(`${base}/api/webinars/${mayaWebinar.id}/deck`, { maxRedirects: 0 })).status() !== 401, "the deck export is open to a team member");
     console.log("✓ open to a team member: a task lands as Maya's, with no points for Maya and one plain-words row on her team log");
 
+    // Bot Features (rev 618): a team member sees Maya's cards but can't ask for one to be switched on.
+    await sam.goto(`${base}/bot-features`);
+    must((await sam.locator('[data-testid="bf-card"]').count()) === 8, "a team member sees Maya's eight Bot Features");
+    must(!(await sam.locator('[data-testid="bf-setup"]').count()), "no Set it up for a team member");
+    await sam.goto(`${base}/bot-features/no_show_rescue`);
+    must((await sam.locator('[data-testid="bf-view-only"]').count()) === 1 && !(await sam.locator('[data-testid="bf-turn-on"]').count()), "a feature's page is view-only for a team member");
+    console.log("✓ Bot Features: a team member sees the cards, view-only, with no way to ask");
+
     // ── 5. Isolation: Jordan's records read as missing. ──
     const rnd = randomUUID();
     for (const [pattern, bId] of [

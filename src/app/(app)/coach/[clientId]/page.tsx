@@ -47,6 +47,9 @@ import { openInvites, teamOf } from "@/lib/team";
 import { TEAM_CAP_MAX, lastActiveWords, seatsLine } from "@/lib/engine/team";
 import { MemberAvatar } from "@/components/member-avatar";
 import { hasHeadshot } from "@/lib/headshots";
+import { behaviorsOf, featuresFor, unlockedCount } from "@/lib/bot-features";
+import { BEHAVIORS, BEHAVIOR_SOURCE, BEHAVIOR_WORDS } from "@/lib/engine/bot-features";
+import { setBotUnlocksAction } from "@/lib/actions/bot-features";
 
 export const metadata = { title: "Client" };
 
@@ -61,6 +64,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, clientId), eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client")) });
   if (!m) notFound();
   const u = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
+  // Bot Features (rev 618): where the client stands, and the milestones HelixOS sees for itself beside the coach's ticks.
+  const [featureViews, seenBehaviors] = await Promise.all([featuresFor(m), behaviorsOf(m.workspaceId, m.userId, [])]);
   // An Essence over the cap (an import brings it in whole) is flagged here with its trim-to-fit, read-only.
   const essence = await essenceFor(v.workspace.id, m.userId);
   // Emails from HelixOS (29 Sep): the coach's switch, and why nothing goes out even when it's on.
@@ -600,7 +605,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
                   return (
                     <li key={c.id} className="py-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span>{c.rewardName}</span>
+                        <span>{c.rewardName}{c.status === "fulfilled" ? <span className="ml-1 text-xs text-good">· done</span> : null}</span>
                         <span className="text-xs text-ink-3">{when(c.createdAt)} · {c.pointsSpent ? `−${c.pointsSpent.toLocaleString()} pts` : "milestone"}</span>
                       </div>
                       <div className={`text-xs ${c.bookedAt ? "text-good" : link && !c.bookingOpenedAt ? "text-warn" : "text-ink-3"}`}>{booking}</div>
@@ -611,6 +616,36 @@ export default async function CoachClientPage({ params, searchParams }: { params
             ) : (
               <p className="text-sm text-ink-2">Nothing claimed yet.</p>
             )}
+          </Card>
+
+          <Card title="Bot Features" id="bot-unlocks" action={<span className="text-xs text-ink-3" data-testid="client-features-line">{unlockedCount(featureViews)} of {featureViews.length} unlocked</span>}>
+            <ul className="mb-3 flex flex-wrap gap-1.5 text-xs" data-testid="client-features">
+              {featureViews.map((x) => (
+                <li key={x.feature.key} className={`rounded-full border px-2 py-0.5 ${x.state === "on" ? "border-good text-good" : x.state === "locked" || x.state === "coming_soon" ? "text-ink-3" : "border-accent text-accent"}`} data-key={x.feature.key} data-state={x.state}>
+                  {x.feature.name} · {x.state === "coming_soon" ? "coming soon" : x.state}
+                </li>
+              ))}
+            </ul>
+            <form action={setBotUnlocksAction} data-testid="bot-unlocks-form">
+              <input type="hidden" name="membershipId" value={m.id} />
+              <p className="mb-2 text-xs text-ink-3">Milestones you can confirm for them. HelixOS sees some on its own (marked); tick the ones it can&apos;t, or to unlock early. A tick always counts.</p>
+              <ul className="space-y-1.5 text-sm">
+                {BEHAVIORS.map((b) => (
+                  <li key={b}>
+                    <label className="flex min-h-11 items-center gap-2">
+                      <input type="checkbox" name="behavior" value={b} defaultChecked={(m.botUnlocks ?? []).includes(b)} data-testid={`bot-unlock-${b}`} />
+                      <span>
+                        {BEHAVIOR_WORDS[b].replace(/^./, (c) => c.toUpperCase())}
+                        <span className="ml-1 text-xs text-ink-3">
+                          ({BEHAVIOR_SOURCE[b]}){seenBehaviors.has(b) ? " · HelixOS sees it" : ""}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <SubmitButton className="btn btn-soft btn-sm mt-2" pendingText="Saving…" data-testid="bot-unlocks-save">Save milestones</SubmitButton>
+            </form>
           </Card>
 
           <Card title="What they've built">
