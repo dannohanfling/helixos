@@ -29,6 +29,7 @@ import { daysSinceNudge } from "@/lib/nudge";
 import { catalogue } from "@/lib/engine/rewards";
 import { openClaims } from "@/lib/queries/rewards";
 import { setFeatureOnAction } from "@/lib/actions/bot-features";
+import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardAction } from "@/lib/actions/leaderboard";
 import { featureOf } from "@/lib/engine/bot-features";
 import { setClaimDoneAction } from "@/lib/actions/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -69,6 +70,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   // A claim is an instant unlock the client books themselves; the coach marks it done once it's delivered (open by default).
   const claimRows = await db.query.rewardClaims.findMany({ where: and(eq(schema.rewardClaims.workspaceId, wsId), eq(schema.rewardClaims.status, claimsShown === "done" ? "fulfilled" : "requested")), orderBy: desc(schema.rewardClaims.createdAt), limit: 50 });
   const claimsOpen = await openClaims(wsId);
+  // Each client's loyalty leaderboard (rev 639): the key's last four and the last check, never the key.
+  const feedOf = new Map((await db.query.leaderboardFeeds.findMany({ where: eq(schema.leaderboardFeeds.workspaceId, wsId) })).map((f) => [f.membershipId, f]));
   // Bot Features (rev 618): what clients asked to have switched on, waiting first, then the last few switched on.
   const featureRows = await db.query.botFeatureRequests.findMany({ where: eq(schema.botFeatureRequests.workspaceId, wsId), orderBy: desc(schema.botFeatureRequests.requestedAt), limit: 60 });
   const featuresWaiting = featureRows.filter((r) => r.state === "requested");
@@ -316,6 +319,28 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                     <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
                     <span className="text-[11px] text-ink-3">{r.m.eoPassInstalledAt ? "installed" : r.m.eoPassSerial ? "not installed" : ""}</span>
                   </form>
+                  <details className="basis-full text-xs" data-testid="leaderboard-row" open={Boolean(feedOf.get(r.m.id))}>
+                    <summary className="cursor-pointer text-ink-3">Loyalty leaderboard{feedOf.get(r.m.id)?.keyEncrypted ? ` · key …${feedOf.get(r.m.id)!.keyLast4}` : ""}</summary>
+                    <form action={saveLeaderboardAction} className="mt-1 flex flex-wrap items-center gap-1">
+                      <input type="hidden" name="membershipId" value={r.m.id} />
+                      <input className="field min-w-40 flex-1 py-1 text-xs" name="key" type="password" autoComplete="off" data-testid="leaderboard-key" placeholder={feedOf.get(r.m.id)?.keyEncrypted ? `eLoyalty key: saved, ending ${feedOf.get(r.m.id)!.keyLast4} (blank keeps it)` : "eLoyalty key"} aria-label="eLoyalty key" />
+                      <input className="field w-52 py-1 text-xs" name="host" defaultValue={feedOf.get(r.m.id)?.host ?? "https://www.eloyalty.ai"} aria-label="eLoyalty web address" data-testid="leaderboard-host" />
+                      <input className="field w-40 py-1 text-xs" name="templateId" defaultValue={feedOf.get(r.m.id)?.templateId ?? ""} placeholder="template id (optional)" aria-label="Template id" data-testid="leaderboard-template" />
+                      <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…" data-testid="leaderboard-connect">Connect and check</SubmitButton>
+                    </form>
+                    {feedOf.get(r.m.id) ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        <span className={`min-w-0 flex-1 ${feedOf.get(r.m.id)!.lastCheckOk ? "text-good" : "text-ink-3"}`} data-testid="leaderboard-check">{feedOf.get(r.m.id)!.lastCheckNote ?? "Not checked yet."}</span>
+                        {feedOf.get(r.m.id)!.keyEncrypted ? (
+                          <>
+                            <form action={checkLeaderboardAction}><input type="hidden" name="id" value={feedOf.get(r.m.id)!.id} /><SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…" data-testid="leaderboard-check-again">Check again</SubmitButton></form>
+                            <form action={removeLeaderboardKeyAction}><input type="hidden" name="id" value={feedOf.get(r.m.id)!.id} /><SubmitButton className="btn btn-ghost btn-xs" pendingText="Removing…" data-testid="leaderboard-remove">Remove key</SubmitButton></form>
+                          </>
+                        ) : null}
+                        <code className="basis-full break-all text-[11px] text-ink-3" data-testid="leaderboard-feed">/api/public/leaderboard/{feedOf.get(r.m.id)!.slug}</code>
+                      </div>
+                    ) : null}
+                  </details>
                   {r.m.clApiToken ? <BotPushLine m={r.m} clientName={r.u?.name ?? null} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
                 </li>
               ))}

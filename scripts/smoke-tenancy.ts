@@ -43,6 +43,7 @@ function dynamicRoutes(): { pattern: string; file: string }[] {
 type Owned = { kind: "owned"; table: string };
 type Route = Owned | { kind: "public"; why: string } | { kind: "coach" };
 const ROUTES: Record<string, Route> = {
+  "/api/public/leaderboard/[slug]": { kind: "public", why: "a client's loyalty leaderboard feed, public by design (rev 639): first names, initials, points and tiers only, read by their own landing page with no session" },
   "/clients/[id]": { kind: "owned", table: "clientRecords" },
   "/bot-features/[key]": { kind: "public", why: "a Bot Features catalogue key (one of eight, in code); the page shows only the signed-in member's own state and setup" },
   "/coach/[clientId]": { kind: "coach" },

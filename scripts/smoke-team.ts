@@ -270,6 +270,9 @@ async function main() {
     await sam.goto(`${base}/bot-features/no_show_rescue`);
     must((await sam.locator('[data-testid="bf-view-only"]').count()) === 1 && !(await sam.locator('[data-testid="bf-turn-on"]').count()), "a feature's page is view-only for a team member");
     console.log("✓ Bot Features: a team member sees the cards, view-only, with no way to ask");
+    // The loyalty leaderboard (rev 639): its card and hide list are the owner's, never on a team member's Settings.
+    await sam.goto(`${base}/settings`);
+    must(!(await sam.locator('[data-testid="leaderboard-state"], [data-testid="leaderboard-hidden"]').count()), "a team member's Settings has no leaderboard card or hide list");
 
     // ── 5. Isolation: Jordan's records read as missing. ──
     const rnd = randomUUID();

@@ -140,7 +140,14 @@ async function main() {
     const editClose = page.locator('summary:has-text("Edit today")');
     if (await editClose.isVisible()) await editClose.click();
     const early = page.locator('[data-testid="close-early"] > summary');
-    if (await early.isVisible()) await early.click();
+    if (await early.isVisible()) {
+      // Opened only once the page has settled: a click before Today finishes loading is undone when it does.
+      await page.waitForLoadState("networkidle");
+      for (let i = 0; i < 5 && !(await page.locator('[data-testid="close-early"]').evaluate((d) => (d as HTMLDetailsElement).open)); i++) {
+        await early.click();
+        await page.waitForTimeout(300);
+      }
+    }
     await page.fill(`[data-testid="close-kpi-${asked.id}"]`, "2");
     await page.fill('input[name="win"]', "Two discovery calls held.");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button:has-text("Close the day")').first().click()]);

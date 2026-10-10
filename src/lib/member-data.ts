@@ -66,6 +66,8 @@ export const MEMBER_TABLES = {
   teaching_entries: schema.teachingEntries,
   // Bot Features (rev 618): what the client asked to have switched on, with the setup they entered.
   bot_feature_requests: schema.botFeatureRequests,
+  // The loyalty-pass leaderboard (rev 639): the feed's address, hide list and held board. The key never leaves (STRIP_COLUMNS).
+  leaderboard_feeds: schema.leaderboardFeeds,
   story_items: schema.storyItems,
   lead_magnets: schema.leadMagnets,
   review_confirms: schema.reviewConfirms,
