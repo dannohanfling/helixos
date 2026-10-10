@@ -107,7 +107,14 @@ async function main() {
   await page.goto(`${base}/today`);
   await page.locator('summary:has-text("Edit today")').click().catch(() => null);
   const early = page.locator('[data-testid="close-early"] > summary');
-  if (await early.isVisible()) await early.click();
+  if (await early.isVisible()) {
+    // Opened only once the page has settled: a click before Today finishes loading is undone when it does.
+    await page.waitForLoadState("networkidle");
+    for (let i = 0; i < 5 && !(await page.locator('[data-testid="close-early"]').evaluate((d) => (d as HTMLDetailsElement).open)); i++) {
+      await early.click();
+      await page.waitForTimeout(300);
+    }
+  }
   const funnel = page.locator('details:has(> summary:has-text("Webinar funnel"))').first();
   if (!(await funnel.evaluate((el) => (el as HTMLDetailsElement).open))) await funnel.locator(":scope > summary").click();
   await page.fill('input[name="webinarRegs"]', "7");

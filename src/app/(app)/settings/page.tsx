@@ -25,6 +25,8 @@ import { getIntegration, onboardingOpen } from "@/lib/integrations";
 import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 import { SubmitButton } from "@/components/submit-button";
+import { saveLeaderboardHiddenAction } from "@/lib/actions/leaderboard";
+import { appUrl as appBase } from "@/lib/branded-email";
 import { MoneyInput } from "@/components/money-input";
 import { QUALIFYING_DEFAULTS } from "@/lib/engine/bot-fields";
 import { setHumanosAction } from "@/lib/actions/body";
@@ -52,6 +54,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const v = await requireViewer({ team: "allow" });
   // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
   if (v.team) return <TeamSettings v={v} />;
+  // A client's loyalty leaderboard (rev 639), once the coach has set one up: whether it's connected, the feed link and the
+  // hide list, which is the owner's own (a switched-in coach sees it but can't change it). The key is never on this page.
+  const leaderboard = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, v.membership.id), columns: { slug: true, hidden: true, keyEncrypted: true } });
+  const canHide = !v.switchedInto;
   // The storage figure counts rows; an object without a row (an upload that never finished recording) is reconciled away
   // here, the one place the workspace's holdings are looked at, so the figure and the store agree. After the response:
   // the page never waits on the store, and a store that is down costs the reader nothing.
@@ -338,6 +344,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <p className="mt-2 text-xs text-ink-3">Attachments on your proofs, in private storage.</p>
         </Card>
         {goalCard}
+        {leaderboard ? (
+          <Card id="leaderboard" title="Loyalty leaderboard">
+            <p className="text-sm" data-testid="leaderboard-state">
+              Leaderboard: <strong>{leaderboard.keyEncrypted ? "connected" : "not connected"}</strong>
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <code className="min-w-0 break-all rounded bg-surface-2 px-2 py-1" data-testid="leaderboard-feed-link">{`${appBase()}/api/public/leaderboard/${leaderboard.slug}`}</code>
+              <CopyButton text={`${appBase()}/api/public/leaderboard/${leaderboard.slug}`} label="Copy" className="btn btn-ghost btn-xs" />
+            </div>
+            <p className="mt-2 text-xs text-ink-3">Paste the link into your leaderboard page. It shows first names and initials, points and tiers, nothing else. Your coach sets up the connection.</p>
+            <form action={saveLeaderboardHiddenAction} className="mt-3 space-y-2" data-testid="leaderboard-hide-form">
+              <label className="label" htmlFor="leaderboard-hidden">Hide from the board (one eLoyalty customer id per line)</label>
+              <textarea id="leaderboard-hidden" name="hidden" className="field min-h-20 font-mono text-xs" defaultValue={leaderboard.hidden.join("\n")} disabled={!canHide} data-testid="leaderboard-hidden" />
+              {canHide ? <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="leaderboard-hide-save">Save hide list</SubmitButton> : <p className="text-xs text-ink-3">Only the account owner can change this.</p>}
+            </form>
+          </Card>
+        ) : null}
         <Card id="connected-apps" title="Connected apps">
           {/* The MCP server (rev 224): the apps this member let act as them, and the way to cut each one. */}
           {appsNote ? <p className="mb-2 text-sm text-good" data-testid="apps-note">{appsNote}</p> : null}

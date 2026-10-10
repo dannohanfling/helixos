@@ -892,6 +892,41 @@ export const curriculumProgress = sqliteTable(
   (t) => [uniqueIndex("curriculum_user_day").on(t.userId, t.day)],
 );
 
+/**
+ * A client's loyalty-pass leaderboard (rev 639): their eLoyalty (WalletPush) key, set by the coach on their /coach row and
+ * sealed (it is a full admin key: never shown, logged or returned, only its last four), and the public feed it serves at
+ * /api/public/leaderboard/<slug> with first names, initials, points and tiers only. Read-only on eLoyalty, always.
+ */
+export const leaderboardFeeds = sqliteTable(
+  "leaderboard_feeds",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    /** The feed's public address: the client's name and a random tail, so it can't be guessed from the name alone. */
+    slug: text("slug").notNull(),
+    keyEncrypted: text("key_encrypted"),
+    keyLast4: text("key_last4"),
+    /** The host the coach gave (default www.eloyalty.ai); the one that answered 2xx is kept once a check passes. */
+    host: text("host").notNull().default("https://www.eloyalty.ai"),
+    templateId: text("template_id"),
+    /** eLoyalty customer ids the client leaves off the board, one per line on their Settings. */
+    hidden: text("hidden", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The last check, in words: the host, the member count and the field names seen (names only, never a value). */
+    lastCheckAt: text("last_check_at"),
+    lastCheckOk: integer("last_check_ok", { mode: "boolean" }),
+    lastCheckNote: text("last_check_note"),
+    /** The last good feed, served when eLoyalty is busy or down; already stripped to what the page shows. */
+    cacheJson: text("cache_json"),
+    cachedAt: text("cached_at"),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("leaderboard_feeds_slug").on(t.slug), uniqueIndex("leaderboard_feeds_membership").on(t.membershipId)],
+);
+export type LeaderboardFeed = typeof leaderboardFeeds.$inferSelect;
+
 /** Bot Features (rev 618): how each feature unlocks in this workspace, one rule per feature, changed by the coach without code. */
 export const botFeatureRules = sqliteTable(
   "bot_feature_rules",

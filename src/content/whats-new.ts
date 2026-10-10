@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 135,
+    date: "2026-10-10",
+    title: "Your loyalty pass leaderboard, as a live feed",
+    lines: [
+      "If your coach has connected your loyalty pass, Settings shows your leaderboard feed link to paste into your page. It shares first names and initials, points and tiers only, and you can hide anyone from it.",
+      "Coaches: paste a client's eLoyalty key on their row in the Coach view and press Connect and check. The key is sealed and shows only its last four; HelixOS only ever reads.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 134,
     date: "2026-10-10",
     title: "Voice to Ship: make and ship a ladder by talking to Claude",

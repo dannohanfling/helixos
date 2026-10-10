@@ -121,7 +121,14 @@ async function main() {
     await page.locator("#close").waitFor({ timeout: 15000 });
     const early = page.locator('[data-testid="close-early"] > summary');
     const earlyVisible = await early.isVisible();
-    if (earlyVisible) await early.click();
+    if (earlyVisible) {
+      // Opened only once the page has settled: a click before Today finishes loading is undone when it does.
+      await page.waitForLoadState("networkidle");
+      for (let i = 0; i < 5 && !(await page.locator('[data-testid="close-early"]').evaluate((d) => (d as HTMLDetailsElement).open)); i++) {
+        await early.click();
+        await page.waitForTimeout(300);
+      }
+    }
     prefillTimes.summaryClicked = new Date().toISOString();
     // This step has failed intermittently with nothing to go on. On failure, everything that could explain it is written to a
     // file under screenshots/logs (which the gate keeps) and printed, so the next occurrence is diagnosable rather than re-run.
