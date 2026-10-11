@@ -142,10 +142,12 @@ describe("Community Loyalty chat: progress pushes (rev 247, addition 2)", () => 
   });
 
   it("every event the brief names queues a push, and the first sign-in only once", () => {
-    expect(read("lib/actions/intentions.ts")).toMatch(/queueProgress\(workspaceId, userId, "intention_set"\)/);
+    // The 3-1-3 and a new offer are saved by their shared writers (the form and the Board's set-up both call them).
+    expect(read("lib/intentions-core.ts")).toMatch(/queueProgress\(workspaceId, userId, "intention_set"\)/);
     expect(read("lib/actions/pathway.ts")).toMatch(/queueProgress\(row\.workspaceId, row\.userId, "pathway_verified"\)/);
     expect(read("lib/actions/settings.ts")).toMatch(/queueProgress\(workspaceId, userId, "goal_changed"\)/);
-    expect((read("lib/actions/offers.ts").match(/queueProgress\(workspaceId, userId, "offer_changed"\)/g) ?? []).length).toBe(2);
+    expect((read("lib/actions/offers.ts").match(/queueProgress\(workspaceId, userId, "offer_changed"\)/g) ?? []).length).toBe(1);
+    expect(read("lib/offers-core.ts")).toMatch(/queueProgress\(m\.workspaceId, m\.userId, "offer_changed"\)/);
     const gate = read("lib/email-gate.ts");
     expect(gate).toMatch(/returning\(\{ id: schema\.users\.id \}\)/);
     expect(gate).toMatch(/if \(!first\.length\) return;/);

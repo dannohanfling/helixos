@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { decisionsFor, ownDecision } from "@/lib/board";
-import { askBoardAction } from "@/lib/actions/board";
+import { applySetupAction, askBoardAction } from "@/lib/actions/board";
+import { BoardSetup } from "@/components/board-setup";
 import { seatsFor, type Mode } from "@/lib/engine/board";
 import { Boardroom } from "@/components/boardroom";
 import { SubmitButton } from "@/components/submit-button";
@@ -15,7 +16,7 @@ export const metadata = { title: "A Board decision" };
  * One decision in the Boardroom: its latest answer played back (on arrival from an ask, or with "Run the discussion"), the
  * earlier answers on it below, and the box to ask more. An answer that didn't pass the checks shows why, with Ask again.
  */
-export default async function DecisionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; play?: string }> }) {
+export default async function DecisionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; play?: string; setUp?: string; setupError?: string; skipped?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
@@ -39,6 +40,13 @@ export default async function DecisionPage({ params, searchParams }: { params: P
         <p className="br-wrap" role="alert" data-testid="board-error" style={{ color: "#f5b0a0", marginBottom: 24 }}>
           {sp.error}
         </p>
+      ) : null}
+      {sp.setUp || sp.setupError || sp.skipped ? (
+        <div className="br-wrap" role="status" style={{ marginBottom: 24, fontSize: 14 }} data-testid="board-setup-result">
+          {sp.setUp ? <p className="br-goldtext" style={{ margin: 0 }}>{`Set up ${sp.setUp} ${sp.setUp === "1" ? "change" : "changes"}. Each links back to this decision.`}</p> : null}
+          {sp.skipped ? <p className="br-muted" style={{ margin: "4px 0 0" }}>{`Not set up: ${sp.skipped.split(" | ").join("; ")}.`}</p> : null}
+          {sp.setupError ? <p style={{ margin: 0, color: "#f5b0a0" }}>{sp.setupError}</p> : null}
+        </div>
       ) : null}
       {failed ? (
         <div className="br-wrap" style={{ marginBottom: 32 }} data-testid="board-problem">
@@ -77,6 +85,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             canAsk={canAsk}
             decisionView
             initialMode={(latest.mode as Mode) ?? "board"}
+            setup={latest.proposals.length ? <BoardSetup key={`${latest.id}-${latest.applied.length}`} decisionId={latest.id} back={d.id} proposals={latest.proposals} applied={latest.applied} canApprove={canAsk} action={applySetupAction} /> : null}
           />
         </>
       ) : null}

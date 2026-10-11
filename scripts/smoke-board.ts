@@ -54,6 +54,18 @@ async function main() {
       await db.insert(schema.aiCredentials).values({ id: newId(), workspaceId: ws, userId: u, provider: "anthropic", keyEncrypted: seal("sk-ant-good")!, last4: "good" });
     }
     await db.update(schema.memberships).set({ boardHours: null }).where(eq(schema.memberships.id, m.id));
+    // Set it up for me (rev 660): Odette is in her DMs with the longest-overdue follow-up, and this week's 3-1-3 is already set.
+    const { viewerFor } = await import("@/lib/auth");
+    const today = (await viewerFor(maya.id, ws))!.today;
+    const { weekOf } = await import("@/lib/engine/intentions");
+    const { addDays } = await import("@/lib/dates");
+    const overdue = addDays(today, -30);
+    await db.insert(schema.contacts).values({ id: newId(), workspaceId: ws, userId: maya.id, name: "Odette Lane", stage: "conversation", nextFollowUpAt: overdue });
+    await db.delete(schema.weeklyIntentions).where(and(eq(schema.weeklyIntentions.userId, maya.id), eq(schema.weeklyIntentions.weekOf, weekOf(today))));
+    await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId: ws, userId: maya.id, weekOf: weekOf(today), word: "Calm", keyResults: [{ text: "Sleep by 10", done: null }, { text: "Two walks", done: null }, { text: "One rest day", done: null }], initiative: "Evenings off", tasks: [] });
+    const offersBefore = (await db.query.offers.findMany({ where: eq(schema.offers.userId, maya.id) })).length;
+    const proofsBefore = (await db.query.proofs.findMany({ where: eq(schema.proofs.userId, maya.id) })).length;
+    const oohBefore = (await db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.userId, maya.id) })).length;
     // A webinar of her own (the seeded two are worked examples, which the Board never reads as hers).
     await db.insert(schema.webinars).values({ id: newId(), workspaceId: ws, userId: maya.id, title: "Spring Reset Workshop", status: "building" });
     const page = await (await browser.newContext({ viewport: { width: 1280, height: 950 } })).newPage();
@@ -75,15 +87,19 @@ async function main() {
     await page.locator('[data-testid="board-submit"]').click();
     await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
     const decisionId = page.url().split("/my-board/")[1].split(/[?#]/)[0];
+    // Timed from the second speaker: the server's HTML already shows the first one speaking before the page is live in the
+    // browser, so the first turn also holds however long a cold page takes to load.
     const t0 = Date.now();
     const heard: string[] = [];
+    const at: number[] = [];
     const rowsWhile: number[] = [];
-    while (Date.now() - t0 < 30000) {
+    while (Date.now() - t0 < 90000) {
       if (await page.locator('[data-testid="board-table-recommends"]').count()) break;
       const label = await page.locator('[data-testid="board-speaking"] .br-says-label').innerText().catch(() => "");
       const who = SEATS.find((x) => label === `${x.short.toUpperCase()} SAYS`)?.key;
       if (who && heard.at(-1) !== who) {
         heard.push(who);
+        at.push(Date.now());
         rowsWhile.push(await page.locator('[data-testid^="board-minute-"]').count());
         must(await page.locator(`[data-testid="board-seat-${who}"].br-speaking`).count(), `${who}'s seat is the one speaking`);
         must((await page.locator(".br-seat.br-dim").count()) === 4, "the other four seats dim");
@@ -91,12 +107,12 @@ async function main() {
       }
       await page.waitForTimeout(250);
     }
-    const took = Date.now() - t0;
+    const took = Date.now() - (at[1] ?? t0);
     must(heard.join() === "danno,alex,jordan,morgan,riley", `the seats speak in order: ${heard.join()}`);
     must(rowsWhile.join() === "1,2,3,4,5", `each row appears as its advisor speaks, earlier rows staying: ${rowsWhile.join()}`);
-    must(took > 4 * SPEAK_MS - 1500 && took < 5 * SPEAK_MS + 6000, `about ${SPEAK_MS} ms a speaker: ${took} ms for five`);
+    must(took > 4 * SPEAK_MS - 1000 && took < 4 * SPEAK_MS + 3000, `about ${SPEAK_MS} ms a speaker: ${took} ms from the second speaker to the recommendation`);
     must((await page.locator('[data-testid="board-table-recommends"]').innerText()).startsWith("THE BOARD RECOMMENDS"), "the table ends on the recommendation");
-    console.log(`✓ the Boardroom plays it back: ${heard.join(" → ")}, ${took} ms, rows appearing as each speaks, the recommendation last`);
+    console.log(`✓ the Boardroom plays it back: ${heard.join(" → ")}, ${took} ms for the last four turns, rows appearing as each speaks, the recommendation last`);
     for (const x of SEATS) must(await page.locator(`[data-testid="board-minute-${x.key}"]`).count(), `the ${x.name} row in the minutes`);
     const danno = await page.locator('[data-testid="board-minute-danno"]').innerText();
     must(!/As Danno/i.test(danno) && danno.includes("Be painfully specific"), `the Danno Seat never claims to be Danno: ${danno}`);
@@ -115,6 +131,48 @@ async function main() {
     must((await page.locator('[data-testid="board-you-decide"]').innerText()).startsWith("You decide"), "You decide");
     must((await page.locator('[data-testid="board-decision"]').innerText()).length > 0, "the decision line");
     console.log("✓ the minutes: five rows, Danno never claimed, a made-up figure left out, a weekend step moved, a step dropped for her hours, what it used named");
+
+    // Set it up for me: the checklist under the steps; nothing changes until she approves; drafts and private only.
+    const setup = page.locator('[data-testid="board-setup"]');
+    await setup.waitFor({ timeout: 5000 });
+    const kinds = await page.locator('[data-testid="board-setup-item"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
+    must(kinds.join() === "task,task,checkin,intention,office_hours,offer,followup", `the set-up, at most 7, in order: ${kinds.join()}`);
+    const allNotes = await page.locator('[data-testid="board-notes"]').innerText();
+    must(allNotes.includes("cash collected target of 9999: that number isn't one you gave") && allNotes.includes('"Zed": they aren\'t in your DMs') && allNotes.includes('"DM Sprint" has no price') && allNotes.includes("Jordan kept the set-up to 7 changes"), `what the set-up left out is said: ${allNotes}`);
+    must((await page.locator('[data-testid="board-setup-item"][data-kind="intention"] [data-testid="board-setup-change"]').innerText()).includes("Calm: Sleep by 10; Two walks; One rest day"), "the 3-1-3 that exists shows before → after");
+    must((await page.locator('[data-testid="board-setup-item"][data-kind="followup"] [data-testid="board-setup-change"]').innerText()).startsWith("Follow up "), "Odette's follow-up date that exists shows before → after");
+    const ticks = await page.locator('[data-testid="board-setup"] input[type=checkbox]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).checked));
+    must(ticks.join() === "true,true,true,false,false,true,false", `the changes and the Office Hours ask are never ticked for her: ${ticks.join()}`);
+    must((await page.locator('[data-testid="board-setup-approve"]').innerText()).includes("Approve 4 selected"), "Approve 4 selected");
+    const boardRef = `board:${decisionId}`;
+    must(!(await db.query.tasks.findMany({ where: eq(schema.tasks.sourceRef, boardRef) })).length && (await db.query.offers.findMany({ where: eq(schema.offers.userId, maya.id) })).length === offersBefore, "nothing changes before she approves");
+    await press(page, '[data-testid="board-setup-approve"]');
+    must((await page.locator('[data-testid="board-setup-result"]').innerText()).includes("Set up 4 changes"), "set up 4");
+    const made = await db.query.tasks.findMany({ where: eq(schema.tasks.sourceRef, boardRef) });
+    const after = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, decisionId) }))!;
+    const step1 = made.find((t) => t.id === after.stepTasks[0]);
+    must(step1 && step1.urgency === "top3" && step1.dueDate === after.answer!.steps[0].by && step1.details?.includes("Done when:") && step1.details.includes("First 5 minutes:") && step1.details.includes(`/my-board/${decisionId}`), `step 1 a Top 3 task on its day, linked back: ${JSON.stringify(step1)}`);
+    must(made.length === 3 && made.some((t) => t.title.startsWith("Board check-in:") && t.dueDate === after.answer!.steps.at(-1)!.by), `the steps and the check-in as tasks: ${made.map((t) => t.title).join(" | ")}`);
+    const draftOffer = (await db.query.offers.findMany({ where: eq(schema.offers.userId, maya.id) })).find((o) => o.name === "DM Sprint");
+    must(draftOffer && draftOffer.status === "draft" && draftOffer.botRole === "not_on_bot" && !draftOffer.price && draftOffer.notes?.startsWith("Draft from Board:"), `a draft offer, not live, not on the bot, no made-up price: ${JSON.stringify(draftOffer)}`);
+    const priyaOf = async () => (await db.query.contacts.findFirst({ where: and(eq(schema.contacts.userId, maya.id), eq(schema.contacts.name, "Odette Lane")) }))!;
+    must((await priyaOf()).nextFollowUpAt === overdue, "Odette's follow-up date she didn't tick is untouched");
+    must((await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.userId, maya.id), eq(schema.weeklyIntentions.weekOf, weekOf(today))) }))!.word === "Calm", "the 3-1-3 she didn't tick is untouched");
+    must((await db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.userId, maya.id) })).length === oohBefore, "nothing sent to the coach she didn't tick");
+    must((await page.locator('[data-testid="board-setup-done"]').count()) === 4, "each set-up item shows as done with its link");
+    // Now the three she held back: the 3-1-3 swap, Odette's new date and the Office Hours ask (its read-back on the row).
+    must((await page.locator('[data-testid="board-setup-item"][data-kind="office_hours"]').innerText()).includes("It goes to your coach") === false && (await page.locator('[data-testid="board-setup-item"][data-kind="office_hours"]').innerText()).includes("The question: Should I run a webinar"), "the Office Hours ask is read back on its row");
+    await page.locator('[data-testid="board-setup-item"][data-kind="intention"] input').check();
+    await page.locator('[data-testid="board-setup-item"][data-kind="office_hours"] input').check();
+    await page.locator('[data-testid="board-setup-item"][data-kind="followup"] input').check();
+    await press(page, '[data-testid="board-setup-approve"]');
+    const priya = await priyaOf();
+    must(priya.nextFollowUpAt && priya.nextFollowUpAt > today && (await db.query.tasks.findMany({ where: eq(schema.tasks.sourceRef, `contact:${priya.id}`) })).length === 1, "Odette's follow-up moved once ticked, with one task");
+    must((await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.userId, maya.id), eq(schema.weeklyIntentions.weekOf, weekOf(today))) }))!.word === "Reach", "the 3-1-3 swapped once she ticked it");
+    const ooh = await db.query.officeHoursRequests.findMany({ where: eq(schema.officeHoursRequests.userId, maya.id) });
+    must(ooh.length === oohBefore + 1 && ooh.some((o) => o.description.startsWith("Should I run a webinar") && o.category === "Offer Creation"), "the Office Hours ask sent through its own gate");
+    must((await db.query.tasks.findMany({ where: eq(schema.tasks.sourceRef, boardRef) })).length === 3 && (await page.locator('[data-testid="board-setup-done"]').count()) === 7 && !(await page.locator('[data-testid="board-setup-approve"]').count()), "nothing set up twice; all seven done");
+    console.log("✓ Set it up for me: seven at most, an invented number and person left out, nothing changes before Approve, the steps as tasks (step 1 Top 3), the check-in, a draft offer off the bot; the 3-1-3 swap, a moved follow-up and the Office Hours ask only when ticked");
 
     // Run the discussion again, and tap a seat during it: the playback stops on that advisor; tap again for the whole Board.
     await page.locator('[data-testid="board-replay"]').click();
@@ -243,7 +301,6 @@ async function main() {
     must(!(await page.locator('[data-testid="board-preset"]').count()) && (await page.locator('[data-testid="board-seat-danno"]').count()) && !(await page.locator('[data-testid="board-seat-tony"]').count()), "a client sees the standard five and no preset");
 
     // By voice, and a team member refused.
-    const { viewerFor } = await import("@/lib/auth");
     const { registerClient, issueCode, exchangeCode } = await import("@/lib/mcp/oauth");
     const { createHash, randomBytes } = await import("node:crypto");
     const v = (await viewerFor(maya.id, ws))!;
@@ -264,6 +321,29 @@ async function main() {
     const refused = await allTools().find((t) => t.name === "board_ask")!.handler(team, { decision: "x x x" }).then(() => "ok", (e: Error) => e.message);
     must(refused.startsWith("A team member can read the Board's decisions but can't ask it"), `a team member is refused: ${refused}`);
     console.log("✓ by voice: the recommendation first, the steps numbered; a team member can't ask");
+
+    // board_apply: the read-back first and nothing changes; then the yes. The Focus follow-up lists the drafts first.
+    const fd = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, follow.id) }))!;
+    const nOf = (kind: string) => fd.proposals.findIndex((p) => p.kind === kind) + 1;
+    const items = [nOf("content"), nOf("webinar"), nOf("proof")];
+    must(items.every((n) => n > 0), `the follow-up proposes the drafts: ${fd.proposals.map((p) => p.kind).join()}`);
+    const contentBefore = (await db.query.contentItems.findMany({ where: eq(schema.contentItems.userId, maya.id) })).length;
+    const ask = await call("board_apply", { decision: follow.id, items });
+    must(!ask.isError && ask.text.startsWith("This will set up:\n1. Draft post: Why DMs beat a cold webinar") && ask.text.includes("Nothing has changed yet"), `voice: read back first: ${ask.text.slice(0, 200)}`);
+    must((await db.query.contentItems.findMany({ where: eq(schema.contentItems.userId, maya.id) })).length === contentBefore, "nothing changes without the yes");
+    const yes = await call("board_apply", { decision: follow.id, items, confirm: true });
+    must(!yes.isError && yes.text.startsWith("Set up 3 of 3."), `voice: set up after the yes: ${yes.text}`);
+    const post = (await db.query.contentItems.findMany({ where: eq(schema.contentItems.userId, maya.id) })).find((c) => c.title === "Why DMs beat a cold webinar");
+    must(post && post.status === "creating" && post.postAt && post.notes?.includes(`/my-board/${decisionId}`), `a draft post dated on the calendar, never shipped, linked back: ${JSON.stringify(post)}`);
+    const web = (await db.query.webinars.findMany({ where: eq(schema.webinars.userId, maya.id) })).find((w) => w.title === "Spring Reset Live");
+    must(web && web.status === "draft" && web.scheduledAt && web.notes?.includes(`/my-board/${decisionId}`), `a draft webinar, dated, linked back: ${JSON.stringify(web)}`);
+    const proofsNow = (await db.query.proofs.findMany({ where: eq(schema.proofs.userId, maya.id) })).length;
+    must((await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, maya.id), eq(schema.tasks.sourceRef, boardRef)) })).some((t) => /^Ask .+ for a testimonial$/.test(t.title)) && proofsNow === proofsBefore, "a testimonial ask as a task, linked back, no proof made");
+    const again = await call("board_apply", { decision: follow.id, items, confirm: true });
+    must(again.text.startsWith("Those are already set up."), `never twice: ${again.text}`);
+    const teamApply = await allTools().find((t) => t.name === "board_apply")!.handler(team, { decision: follow.id, items: [1], confirm: true }).then(() => "ok", (e: Error) => e.message);
+    must(teamApply.startsWith("A team member can read the Board's decisions but can't approve"), `a team member can't approve: ${teamApply}`);
+    console.log("✓ board_apply: read back and nothing changes, then the yes: a draft post on the calendar, a draft webinar, a testimonial ask; never twice; a team member refused");
 
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nboard walk passed");

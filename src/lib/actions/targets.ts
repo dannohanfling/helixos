@@ -1,8 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
-import { db, schema } from "@/db";
-import { newId } from "@/lib/ids";
+import { setTarget } from "@/lib/targets-core";
 import { TARGET_METRICS } from "@/lib/engine/targets";
 import { ctx, money, num, refresh, str } from "@/lib/action-helpers";
 
@@ -14,10 +12,7 @@ export async function setTargetsAction(formData: FormData): Promise<void> {
   for (const m of TARGET_METRICS) {
     // Cash the way people write it (rev 444): "20k" is 20000, never 20; one that can't be read is refused beside its box.
     const target = m.money ? (money(formData, m.key, (e) => `/numbers?targetsError=${encodeURIComponent(e)}&field=${m.key}`) ?? 0) : num(formData, m.key);
-    const existing = await db.query.targets.findFirst({ where: and(eq(schema.targets.userId, userId), eq(schema.targets.month, month), eq(schema.targets.metric, m.key)) });
-    if (!target && existing) await db.delete(schema.targets).where(eq(schema.targets.id, existing.id));
-    else if (target && existing) await db.update(schema.targets).set({ target }).where(eq(schema.targets.id, existing.id));
-    else if (target) await db.insert(schema.targets).values({ id: newId(), workspaceId, userId, month, metric: m.key, target });
+    await setTarget({ workspaceId, userId }, month, m.key, target);
   }
   refresh();
 }

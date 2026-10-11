@@ -6,6 +6,8 @@
  */
 import { addDays, weekday } from "@/lib/dates";
 import { BOARD_PROFILE_MD, BOARD_SKILL_MD, DANNO_SOURCE_PACK_MD } from "@/content/board-spec";
+import { MODE_INFO, takesWords, type Mode } from "@/lib/engine/board-view";
+export { MODES, MODE_INFO, SEAT_SPOTS, SPEAK_MS, takesWords, type Mode } from "@/lib/engine/board-view";
 
 /* ───────────────────────── The seats ───────────────────────── */
 
@@ -32,35 +34,12 @@ export const EDGE_SEATS: Seat[] = [
   { key: "morgan", name: "Morgan, the Antagonist", short: "Morgan", role: "ANTAGONIST", emoji: "⚡", icon: "/board/morgan-antagonist.svg", job: "assumptions, downside, reversibility" },
 ];
 export type Preset = "standard" | "edge";
-/** Where each seat sits around the table (rev 698), centre point as % of the room, in speaking order: the chair first. */
-export const SEAT_SPOTS: { left: number; top: number }[] = [
-  { left: 50, top: 11 },
-  { left: 11, top: 38 },
-  { left: 89, top: 38 },
-  { left: 86, top: 80 },
-  { left: 14, top: 80 },
-];
 /** The order the seats speak in (rev 698): Danno Seat, Alex, Jordan, Morgan, Riley; the Edge Preset in its own order. */
 export const speakingOrder = (preset: Preset): string[] => seatsFor(preset).map((s) => s.key);
-/** How long each advisor holds the room (rev 698, as in the mockup). */
-export const SPEAK_MS = 3400;
 export const seatsFor = (preset: Preset): Seat[] => (preset === "edge" ? EDGE_SEATS : SEATS);
 
 /* ───────────────────────── The modes ───────────────────────── */
 
-export const MODES = ["board", "focus", "debate", "quick_vote", "workaround", "leverage", "converge", "checkin"] as const;
-export type Mode = (typeof MODES)[number];
-/** The chips (rev 664 §2), in the skill's Help Mode words. */
-export const MODE_INFO: Record<Mode, { label: string; line: string; prefix: string }> = {
-  board: { label: "Board", line: "All five advisors look at a decision.", prefix: "Board:" },
-  focus: { label: "Focus", line: "Hear from one advisor only.", prefix: "Focus:" },
-  debate: { label: "Debate", line: "The two or three advisors who disagree most argue it out.", prefix: "Debate:" },
-  quick_vote: { label: "Quick Vote", line: "See how each advisor leans on clear options.", prefix: "Quick Vote:" },
-  workaround: { label: "Workaround", line: "Find ways around a real constraint.", prefix: "Workaround:" },
-  leverage: { label: "Leverage", line: "Find the smallest move with the biggest upside.", prefix: "Leverage:" },
-  converge: { label: "Converge", line: "Turn the discussion into one decision brief.", prefix: "Converge" },
-  checkin: { label: "Check-in", line: "Review last time's action steps: done, stuck or dropped.", prefix: "Check-in:" },
-};
 
 /* ───────────────────────── The Danno Seat's principles ───────────────────────── */
 
@@ -278,12 +257,6 @@ export function checkAnswer(raw: unknown, ctx: { mode: Mode; focus?: string | nu
 }
 
 /** "Takes 45 min", "Takes 1 h 30 min". */
-export function takesWords(min: number): string {
-  if (min < 60) return `${min} min`;
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return m ? `${h} h ${m} min` : `${h} h`;
-}
 
 /** The answer read aloud: one sentence first, then the recommendation and the steps, numbered. */
 export function spokenAnswer(a: BoardAnswer, seats: Seat[]): string {

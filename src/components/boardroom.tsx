@@ -8,8 +8,9 @@
  * pulse, bars or rise: the speaker gets the gold ring and the others dim.
  */
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { MODES, MODE_INFO, SEAT_SPOTS, SPEAK_MS, takesWords, type BoardAnswer, type Mode, type Seat } from "@/lib/engine/board";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { MODES, MODE_INFO, SEAT_SPOTS, SPEAK_MS, takesWords, type Mode } from "@/lib/engine/board-view";
+import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
 
 type Props = {
@@ -27,12 +28,14 @@ type Props = {
   /** "Run the discussion" replays a decision that has an answer. */
   decisionView: boolean;
   initialMode?: Mode;
+  /** "Set it up for me" under the steps, shown once the discussion ends. */
+  setup?: ReactNode;
 };
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
 const dayWords = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", DATE_FMT);
 
-export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board" }: Props) {
+export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup }: Props) {
   const spoken = useMemo(() => (answer ? seats.filter((s) => answer.advisors.some((a) => a.seat === s.key)).map((s) => s.key) : []), [seats, answer]);
   const [phase, setPhase] = useState<"idle" | "asking" | "playing" | "done">(answer ? (autoplay ? "playing" : "done") : "idle");
   const [idx, setIdx] = useState(0);
@@ -257,6 +260,8 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
           </ol>
         </section>
       ) : null}
+
+      {showAfter && setup ? setup : null}
 
       {showAfter && answer.clarify?.length ? (
         <section aria-label="The Board would like to know">

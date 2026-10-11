@@ -174,3 +174,19 @@ export function byTitle(tasks: schema.Task[], title: string, what = "open task")
   if (!tasks.length) throw new Error(`There's no ${what} to pick from.`);
   throw new Error(`No ${what} called "${title}"${partial.length ? ` exactly; ${partial.length} match it` : ""}. Pick from: ${titles.slice(0, 25).join(", ")}${titles.length > 25 ? "…" : ""}.`);
 }
+
+/**
+ * The one open "Follow up with …" task for a person in DMs: moved to the new date when there is one, added when not. Shared by
+ * the connector's DM tools and the Board's set-up, so a person never gets two.
+ */
+export async function followUpTask(v: Viewer, c: { id: string; name: string }, day: string, details: string): Promise<string | null> {
+  const ref = `contact:${c.id}`;
+  const open = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, v.user.id), eq(schema.tasks.sourceRef, ref), ne(schema.tasks.status, "done")) });
+  if (open) {
+    if (open.dueDate !== day) await rescheduleTask(v, open.id, day);
+    return open.id;
+  }
+  const r = await addTask(v, { title: `Follow up with ${c.name}`, category: "sales", dueDate: day, details });
+  if (r?.created) await db.update(schema.tasks).set({ sourceRef: ref }).where(eq(schema.tasks.id, r.task.id));
+  return r?.task.id ?? null;
+}

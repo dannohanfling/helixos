@@ -10,14 +10,14 @@
  * refuses them (proofs, recordings, the call sheet, Office Hours).
  */
 import { z } from "zod";
-import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { createContact, logMessage, updateContact } from "@/lib/contacts-core";
 import { createProof } from "@/lib/proofs-core";
 import { createContentItem } from "@/lib/content-core";
-import { addTask, rescheduleTask } from "@/lib/tasks-core";
+import { followUpTask as sharedFollowUp } from "@/lib/tasks-core";
 import { addStepTask, stepGroupsFor, visibleRecordings } from "@/lib/recordings";
 import { saveOohRequest } from "@/lib/office-hours-core";
 import { OOH_OUTCOME_LABEL, upcomingFridays } from "@/lib/engine/office-hours";
@@ -43,17 +43,8 @@ const myContacts = (v: Viewer) => db.query.contacts.findMany({ where: and(eq(sch
 const waitingOnYou = (c: schema.Contact) => Boolean(c.lastInboundAt) && (!c.lastOutboundAt || c.lastInboundAt! > c.lastOutboundAt);
 const followUpOpen = (c: schema.Contact) => c.stage !== "cold" && c.stage !== "client";
 
-/** The one open "Follow up with …" task for this person: moved to the new date when there is one, added when not. */
-async function followUpTask(v: Viewer, c: schema.Contact, day: string): Promise<void> {
-  const ref = `contact:${c.id}`;
-  const open = await db.query.tasks.findFirst({ where: and(eq(schema.tasks.userId, v.user.id), eq(schema.tasks.sourceRef, ref), ne(schema.tasks.status, "done")) });
-  if (open) {
-    if (open.dueDate !== day) await rescheduleTask(v, open.id, day);
-    return;
-  }
-  const r = await addTask(v, { title: `Follow up with ${c.name}`, category: "sales", dueDate: day, details: `From DMs: ${appUrl()}/conversations/${c.id}` });
-  if (r?.created) await db.update(schema.tasks).set({ sourceRef: ref }).where(eq(schema.tasks.id, r.task.id));
-}
+/** The one open "Follow up with …" task for this person (tasks-core's, shared with the Board's set-up). */
+const followUpTask = (v: Viewer, c: schema.Contact, day: string) => sharedFollowUp(v, c, day, `From DMs: ${appUrl()}/conversations/${c.id}`);
 
 defineTool({
   name: "dm_log",

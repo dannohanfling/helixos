@@ -146,7 +146,9 @@ async function main() {
 
     // The phone: a list, 44px targets, the lock labelled
     await page.setViewportSize({ width: 375, height: 800 });
-    await page.goto(`${base}/bot-features`);
+    await page.goto(`${base}/bot-features`, { waitUntil: "networkidle" });
+    // The phone layout is CSS: wait for it to apply before reading what shows (a cold dev server can paint before the sheet lands).
+    await page.locator('[data-testid="bf-list"]').waitFor({ state: "visible", timeout: 15000 }).catch(() => undefined);
     must(!(await page.locator('[data-testid="bf-grid"]').isVisible()) && (await page.locator('[data-testid="bf-list"]').isVisible()), "the grid becomes a list on a phone");
     must((await page.locator('[data-testid="bf-row"]').count()) === BOT_FEATURES.length, "eight rows");
     const wide = await page.evaluate(() => document.documentElement.scrollWidth);

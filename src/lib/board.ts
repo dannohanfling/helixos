@@ -16,8 +16,12 @@ import { monthProgress, monthOf } from "@/lib/engine/targets";
 import { simplePath } from "@/lib/engine/pathway";
 import { weekOf } from "@/lib/engine/intentions";
 import { STAGE_WORDS } from "@/lib/engine/voice-pack";
-import { boardTask, checkAnswer, principlesFromPack, seatsFor, type BoardAnswer, type Mode, type Preset, type Principle } from "@/lib/engine/board";
+import { boardTask, checkAnswer, seatsFor, type BoardAnswer, type Mode, type Preset, type Principle } from "@/lib/engine/board";
 import { scoreboardFor } from "@/lib/scoreboard";
+import { principlesFor } from "@/lib/board-principles";
+export { principlesFor };
+import { buildProposals, SETUP_SHAPE } from "@/lib/engine/board-setup";
+import { setupLook } from "@/lib/board-setup";
 
 export const FEATURE = "board";
 type Member = { workspaceId: string; userId: string };
@@ -25,14 +29,6 @@ const memberOf = (v: Viewer): Member => ({ workspaceId: v.workspace.id, userId: 
 
 /* ───────────────────────── The Danno Seat's principles ───────────────────────── */
 
-/** The coach workspace's principles, in order; seeded from the pack the first time they're read. */
-export async function principlesFor(workspaceId: string): Promise<schema.BoardPrinciple[]> {
-  const rows = await db.query.boardPrinciples.findMany({ where: eq(schema.boardPrinciples.workspaceId, workspaceId), orderBy: [asc(schema.boardPrinciples.order), asc(schema.boardPrinciples.createdAt)] });
-  if (rows.length) return rows;
-  const seed = principlesFromPack();
-  await db.insert(schema.boardPrinciples).values(seed.map((p, i) => ({ id: newId(), workspaceId, title: p.title, body: p.body, goodFor: p.goodFor, order: i })));
-  return db.query.boardPrinciples.findMany({ where: eq(schema.boardPrinciples.workspaceId, workspaceId), orderBy: [asc(schema.boardPrinciples.order)] });
-}
 const asPrinciples = (rows: schema.BoardPrinciple[]): Principle[] => rows.map((r) => ({ title: r.title, body: r.body, goodFor: r.goodFor }));
 
 /* ───────────────────────── What the Board can see ───────────────────────── */
@@ -99,7 +95,8 @@ export async function boardContext(v: Viewer, question: string, mode: Mode): Pro
     const contacts = await db.query.contacts.findMany({ where: mine(schema.contacts) });
     if (contacts.length) {
       const byStage = Object.entries(STAGE_WORDS).map(([k, label]) => `${label} ${contacts.filter((c) => c.stage === k).length}`).join(", ");
-      const due = contacts.filter((c) => c.nextFollowUpAt && c.nextFollowUpAt <= today && c.stage !== "cold" && c.stage !== "client");
+      // Most overdue first: the names the Board sees are the ones waiting longest.
+      const due = contacts.filter((c) => c.nextFollowUpAt && c.nextFollowUpAt <= today && c.stage !== "cold" && c.stage !== "client").sort((a, b) => a.nextFollowUpAt!.localeCompare(b.nextFollowUpAt!));
       const named = contacts.filter((c) => new RegExp(`\\b${first(c.name).replace(/[^\p{L}]/gu, "")}\\b`, "i").test(question) && first(c.name).length > 2);
       const lines = [`By stage: ${byStage}.`, `Follow-ups due: ${due.length}${due.length ? ` (${due.slice(0, 5).map((c) => first(c.name)).join(", ")})` : ""}.`];
       for (const c of named.slice(0, 2)) {
@@ -216,11 +213,13 @@ export async function askBoard(v: Viewer, input: { question: string; mode: Mode;
   const principles = asPrinciples(await principlesFor(coachWs));
   const { sections, gaps, essence } = await boardContext(v, question, input.mode);
   const firstQuestion = !parent;
-  const task = boardTask({ mode: input.mode, focus, preset, principles, hours, today: v.today, firstQuestion });
+  // The set-up shape rides with the server's prompt only (engine/board stays light for the Boardroom's client bundle).
+  const task = `${boardTask({ mode: input.mode, focus, preset, principles, hours, today: v.today, firstQuestion })}\n\n${SETUP_SHAPE}`;
   const earlier = parent?.answer ? `# The decision so far\nQuestion: ${parent.question}\nRecommendation: ${parent.answer.recommendation}\nSteps: ${parent.answer.steps.map((s) => s.do).join("; ")}\n\n` : "";
   const user = `${earlier}# The member asks (${input.mode})\n${question}\n\n${contextText(sections, gaps)}`;
   const known = sections.map((s) => s.text).join("\n");
   let checked = null as ReturnType<typeof checkAnswer> | null;
+  let setup: unknown = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const reply = await draft(task, user, 6000, { feature: FEATURE, viewer: v });
     if (reply === null) return { ok: false, error: "Your AI key didn't answer (no key, the day's limit, or the provider said no). Settings shows why." };
@@ -231,11 +230,14 @@ export async function askBoard(v: Viewer, input: { question: string; mode: Mode;
       raw = null;
     }
     checked = checkAnswer(raw, { mode: input.mode, focus, preset, hours, today: v.today, firstQuestion, question, known });
+    setup = raw && typeof raw === "object" ? (raw as Record<string, unknown>).setup : null;
     if (!checked.problem) break;
   }
   const used = [...(essence ? [{ label: "Essence", href: "/essence" }] : []), ...sections.map((s) => ({ label: s.label, href: s.href }))];
   const id = newId();
-  await db.insert(schema.boardDecisions).values({ id, ...m, parentId: parent?.id ?? null, question, mode: input.mode, focus, preset, answer: checked && !checked.problem ? checked.answer : null, notes: checked ? [...(checked.problem ? [checked.problem] : []), ...checked.notes] : [], used });
+  // "Set it up for me" (rev 660): the proposals under a good answer, checked against the member's own rows; nothing applied yet.
+  const built = checked && !checked.problem ? buildProposals(checked.answer, setup, await setupLook(v, parent?.id ?? id, question, known)) : { proposals: [], notes: [] };
+  await db.insert(schema.boardDecisions).values({ id, ...m, parentId: parent?.id ?? null, question, mode: input.mode, focus, preset, answer: checked && !checked.problem ? checked.answer : null, notes: checked ? [...(checked.problem ? [checked.problem] : []), ...checked.notes, ...built.notes] : [], used, proposals: built.proposals });
   const decision = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, id) }))!;
   if (checked?.problem) return { ok: false, error: `The Board's answer didn't pass its checks (${checked.problem}). Ask again; your question is kept.`, decision };
   if (parent) await db.update(schema.boardDecisions).set({ updatedAt: nowIso() }).where(eq(schema.boardDecisions.id, parent.id));

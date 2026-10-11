@@ -129,9 +129,12 @@ describe("My Board: what it reads", () => {
     for (const q of src.match(/db\.query\.(offers|avatars|webinars|contacts|proofs|contentItems|ladders|weeklyIntentions|officeHoursRequests|targets)\.find\w+\(\{ where: [^,]+/g) ?? []) expect(q, q).toMatch(/mine\(schema\.\w+\)|and\(mine\(schema/);
   });
 
-  it("two tools on the new My Board tick; asking refused to a team member", () => {
-    expect(toolsFor(["board"]).map((t) => t.name).sort()).toEqual(["board_ask", "decisions_list", "whoami"]);
-    expect(read("src/lib/mcp/tools/board.ts")).toMatch(/if \(v\.team\) throw new Error/);
+  it("three tools on the new My Board tick; asking and approving the set-up refused to a team member", () => {
+    expect(toolsFor(["board"]).map((t) => t.name).sort()).toEqual(["board_apply", "board_ask", "decisions_list", "whoami"]);
+    expect(read("src/lib/mcp/tools/board.ts").match(/if \(v\.team\) throw new Error/g)).toHaveLength(2);
+    expect(read("src/lib/board-setup.ts")).toMatch(/if \(v\.team\) return \{ ok: false/);
+    // board_apply changes nothing without the member's yes.
+    expect(read("src/lib/mcp/tools/board.ts")).toMatch(/if \(input\.confirm !== true\) return \{ text: `This will set up:/);
     expect(read("src/lib/actions/board.ts")).toMatch(/ctx\(\{ whileSwitched: "refuse", reason: OWN \}\)/);
   });
 });

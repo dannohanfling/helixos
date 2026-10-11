@@ -93,6 +93,12 @@
 .br-rail { flex: 1; width: 1px; background: var(--br-hair); margin-top: 6px; }
 .br-do { font-size: 18px; font-weight: 600; }
 
+/* Set it up for me: a plain checklist with hairlines, no box. */
+.br-setup-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 14px 0; border-top: 1px solid var(--br-hair); align-items: start; }
+.br-check { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--br-gold); cursor: pointer; }
+.br-check:focus-visible { outline: 2px solid var(--br-gold-text); outline-offset: 3px; }
+.br-setup-tick { color: var(--br-gold-text); font-weight: 700; padding-left: 3px; }
+
 .br-foot { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .br-decide { font-family: "Cormorant Garamond", Georgia, serif; font-size: 34px; font-style: italic; color: var(--br-gold-text); }
 .br-log li { border-top: 1px solid var(--br-hair); padding: 12px 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }

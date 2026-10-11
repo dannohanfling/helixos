@@ -1,6 +1,6 @@
 import { requireCoach } from "@/lib/auth";
-import { principlesFor } from "@/lib/board";
-import { removePrincipleAction, savePrincipleAction } from "@/lib/actions/board";
+import { principlesFor } from "@/lib/board-principles";
+import { removePrincipleAction, savePrincipleAction } from "@/lib/actions/board-principles";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 

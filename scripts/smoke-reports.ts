@@ -151,10 +151,11 @@ async function main() {
     const askRow = page.locator(`#r-${ask.id} [data-testid="report-row"]`);
     must((await askRow.innerText()).includes("wants to talk") && (await askRow.innerText()).includes("Twelve, always."), "the Ask Danno answer shows the answer and the wish to talk");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), issueRow.locator('[data-testid="report-seen"]').click()]);
-    await page.waitForTimeout(600);
+    // The page refreshes after the action's answer; on a busy dev server that can take a few seconds, so wait for it.
+    await page.locator(`#r-${issue.id} [data-testid="report-row"][data-seen="1"]`).waitFor({ timeout: 10000 }).catch(() => undefined);
     must((await page.locator(`#r-${issue.id} [data-testid="report-row"]`).getAttribute("data-seen")) === "1", "Seen marks it");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(`#r-${ask.id} [data-testid="report-done"]`).click()]);
-    await page.waitForTimeout(600);
+    await page.locator(`#r-${ask.id}`).waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
     must(!(await page.locator(`#r-${ask.id}`).count()), "Done takes it off Open");
     await page.goto(`${base}/coach/reports?tab=done`);
     must((await page.locator(`#r-${ask.id} [data-testid="report-row"]`).getAttribute("data-done")) === "1" && (await page.locator(`#r-${ask.id} [data-testid="report-row"]`).getAttribute("data-seen")) === "1", "Done is on the Done tab, seen too");

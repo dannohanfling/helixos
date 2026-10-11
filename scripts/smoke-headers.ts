@@ -27,16 +27,21 @@ async function main() {
   // This walk has the dev server compile every page there is. After the walks before it in the gate, that compile climbed
   // past what the machine allows (1 Oct: the kernel killed the server at 13 GB, twice, mid-walk), while a fresh server with a
   // clean cache walks all the pages in under 4 GB. So the walk starts from one, on the local server only.
-  if (base === "http://localhost:3000") {
-    execFileSync("scripts/dev-server.sh", ["stop"], { stdio: "pipe" });
-    rmSync(".next/dev", { recursive: true, force: true });
-    execFileSync("scripts/dev-server.sh", ["start"], { stdio: "pipe" });
-  }
-  for (let i = 0; i < 40; i++) {
-    const ok = await fetch(`${base}/login`).then((r) => r.ok).catch(() => false);
-    if (ok) break;
-    await new Promise((r) => setTimeout(r, 2000));
-  }
+  // 12 Oct: the pages have grown to where one server compiling all of them climbs to 12 GB and the kernel kills it at the last
+  // few; so the coach's pages start from a fresh server too, each half well under the limit.
+  const fresh = async () => {
+    if (base === "http://localhost:3000") {
+      execFileSync("scripts/dev-server.sh", ["stop"], { stdio: "pipe" });
+      rmSync(".next/dev", { recursive: true, force: true });
+      execFileSync("scripts/dev-server.sh", ["start"], { stdio: "pipe" });
+    }
+    for (let i = 0; i < 40; i++) {
+      const ok = await fetch(`${base}/login`).then((r) => r.ok).catch(() => false);
+      if (ok) break;
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  };
+  await fresh();
   const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
   const problems: string[] = [];
   const page = await (await browser.newContext()).newPage();
@@ -68,6 +73,7 @@ async function main() {
   await page.goto(`${base}/content/compose`, { waitUntil: "networkidle" });
   await page.fill('textarea[placeholder^="Type content"]', "CSP check body");
   await page.waitForTimeout(500);
+  await fresh();
   await page.goto(`${base}/settings`);
   await page.click('button:has-text("Log out")');
   await page.waitForURL(/\/login/);

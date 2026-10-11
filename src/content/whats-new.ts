@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 142,
+    date: "2026-10-12",
+    title: "My Board: Set it up for me",
+    lines: [
+      "Under a Board answer's steps, \"Set it up for me\" lists what it can set up in HelixOS: the steps as tasks (step 1 in your Top 3 on its day), a check-in on the last step's date, and, when the decision calls for it, your week's 3-1-3, a monthly target, a follow-up with someone in your DMs, a content idea or draft, a draft webinar, a draft offer, a testimonial ask, or a question for Friday's Office Hours.",
+      "Nothing changes until you tick it and press Approve. Everything is a draft or private, links back to the decision, and anything that changes what you already have shows before and after. Also by voice: board_apply reads the list back first.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 141,
     date: "2026-10-11",
     title: "My Board: five advisors on a decision",

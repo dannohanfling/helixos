@@ -1,18 +1,18 @@
 "use server";
 
-import { queueProgress } from "@/lib/chat-progress";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
-import type { IntentionKeyResult, IntentionTask } from "@/db/schema";
+import type { IntentionKeyResult } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { hitTarget, readIntention, soundsLikeTask, targetOf, tasksDueOn, weekOf } from "@/lib/engine/intentions";
+import { hitTarget, readIntention, targetOf, weekOf } from "@/lib/engine/intentions";
 import { monthOf, readMonthIntention } from "@/lib/engine/month-intentions";
 import { SHARE_POINTS, monthShareRef, shareRef } from "@/lib/engine/community";
 import { monthShareFor, shareFor } from "@/lib/community";
 import { award } from "@/lib/queries/points";
+import { saveWeekIntention } from "@/lib/intentions-core";
 
 /** Where a form goes back to: the Intentions page or Today, and nothing else. */
 const backTo = (formData: FormData): "/intentions" | "/today" => (str(formData, "back") === "/intentions" ? "/intentions" : "/today");
@@ -24,7 +24,6 @@ const backTo = (formData: FormData): "/intentions" | "/today" => (str(formData, 
  */
 export async function saveIntentionAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "That's in {first}'s own words, so it's theirs to write." });
-  const week = weekOf(v.today);
   const read = readIntention({
     word: str(formData, "word"),
     kr: [str(formData, "kr1"), str(formData, "kr2"), str(formData, "kr3")],
@@ -33,39 +32,7 @@ export async function saveIntentionAction(formData: FormData): Promise<void> {
   });
   if ("error" in read) redirect(`${backTo(formData)}?weekError=${encodeURIComponent(read.error)}${read.field ? `&field=${read.field}` : ""}#week`);
   const { value } = read;
-  const existing = await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, workspaceId), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.weekOf, week)) });
-  const before = existing?.tasks ?? [];
-  const tasks: IntentionTask[] = [];
-  for (const [i, title] of value.tasks.entries()) {
-    const prior = before[i]?.taskId;
-    if (prior) {
-      await db.update(schema.tasks).set({ title }).where(and(eq(schema.tasks.id, prior), eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId)));
-      tasks.push({ title, taskId: prior });
-    } else {
-      const id = newId();
-      await db.insert(schema.tasks).values({ id, workspaceId, userId, title, status: "upcoming", urgency: "high", dueDate: tasksDueOn(v.today), source: "intention", sourceRef: week });
-      tasks.push({ title, taskId: id });
-    }
-  }
-  for (const gone of before.slice(value.tasks.length)) {
-    if (gone.taskId) await db.delete(schema.tasks).where(and(eq(schema.tasks.id, gone.taskId), eq(schema.tasks.userId, userId), eq(schema.tasks.workspaceId, workspaceId), ne(schema.tasks.status, "done")));
-  }
-  // A key result keeps its mark only while its words are unchanged.
-  // One saved as written though it reads like a task is marked for the coach (rev 158: the nudge asks, it never blocks).
-  const keyResults = value.keyResults.map((text, i) => {
-    const same = existing?.keyResults[i]?.text === text ? existing.keyResults[i] : null;
-    return { text, done: same ? same.done : null, actual: same?.actual ?? null, ...(soundsLikeTask(text) ? { kept: true } : {}) };
-  });
-  if (existing) {
-    await db
-      .update(schema.weeklyIntentions)
-      .set({ word: value.word, keyResults, initiative: value.initiative, tasks, updatedAt: nowIso() })
-      .where(and(eq(schema.weeklyIntentions.id, existing.id), eq(schema.weeklyIntentions.userId, userId), eq(schema.weeklyIntentions.workspaceId, workspaceId)));
-  } else {
-    await db.insert(schema.weeklyIntentions).values({ id: newId(), workspaceId, userId, weekOf: week, word: value.word, keyResults, initiative: value.initiative, tasks }).onConflictDoNothing();
-  // The coach's assistant learns the week (rev 241), after the response.
-  queueProgress(workspaceId, userId, "intention_set");
-  }
+  await saveWeekIntention({ workspaceId, userId, today: v.today }, value);
   refresh();
   redirect(`${backTo(formData)}?weekSaved=1#week`);
 }

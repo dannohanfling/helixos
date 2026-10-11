@@ -23,6 +23,7 @@ import { evidenceLines, insertText } from "@/lib/engine/evidence";
 import { essenceFor } from "@/lib/queries/essence";
 import { citableEvidence } from "@/lib/queries/evidence";
 import { draftAvatarBrief } from "@/lib/avatars";
+import { createWebinar } from "@/lib/webinars-core";
 
 async function own(webinarId: string, userId: string) {
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, webinarId), eq(schema.webinars.userId, userId)) });
@@ -32,13 +33,7 @@ async function own(webinarId: string, userId: string) {
 
 export async function createWebinarAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ team: "allow" });
-  const id = newId();
-  const title = str(formData, "title") || "Untitled webinar";
-  await db.insert(schema.webinars).values({ id, workspaceId, userId, title, category: str(formData, "category") || "Live", promise: opt(formData, "promise") });
-  await db.insert(schema.webinarSections).values(
-    SECTION_TEMPLATES.map((t) => ({ id: newId(), webinarId: id, sectionKey: t.key, act: t.act, order: t.order, name: t.name, durationMin: t.durationMin, status: "todo" as const })),
-  );
-  await db.insert(schema.webinarBeliefs).values((["vehicle", "internal", "external"] as const).map((type) => ({ id: newId(), webinarId: id, type })));
+  const id = await createWebinar({ workspaceId, userId }, { title: str(formData, "title") || "Untitled webinar", category: str(formData, "category") || "Live", promise: opt(formData, "promise") });
   refresh();
   redirect(`/webinars/${id}?step=foundation`);
 }

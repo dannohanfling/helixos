@@ -100,6 +100,26 @@ function reply(system: string, user: string): string {
       ],
       youDecide: "You decide. This is your call.",
       clarify: [],
+      setup: (() => {
+        // "Set it up for me" (rev 660): one of each kind, with the traps the server must catch: a target and a price the member
+        // never gave, and a person who isn't in their DMs. A Focus follow-up lists the drafts first, so both orders get applied.
+        const due = user.match(/Follow-ups due: \d+ \(([^,)]+)/)?.[1] ?? "Priya";
+        const offer = user.match(/## Offers \(\d+\)\n- (.+?) \(/)?.[1] ?? null;
+        const drafts = [
+          { kind: "content", title: "Why DMs beat a cold webinar", hook: "I stopped running webinars for a month.", date: add(2) },
+          { kind: "webinar", title: "Spring Reset Live", promise: "Leave with your first three DMs written", date: add(10), offer },
+          { kind: "proof", name: due },
+        ];
+        const rest = [
+          { kind: "intention", word: "Reach", keyResults: ["10 DMs sent", "3 replies", "1 call booked"], initiative: "DMs before content every morning", tasks: ["Pin the 10 names", "Send 5 DMs Monday", "Send 5 DMs Tuesday"] },
+          { kind: "target", metric: "cashCollected", value: 9999 },
+          { kind: "followup", name: "Zed", by: add(1) },
+          { kind: "office_hours", question: "Should I run a webinar this month or put the time into DMs?", tried: "I mapped my hours and listed the people in my DMs.", outcome: "A clear yes or no on the webinar this month.", category: "Offer Creation" },
+          { kind: "offer", name: "DM Sprint", promise: "Ten real conversations in a week", price: 9999 },
+          { kind: "followup", name: due, by: add(2) },
+        ];
+        return focus ? [...drafts, ...rest] : [...rest, ...drafts];
+      })(),
     });
   }
   // Avatars by interview (rev 639): a follow-up when an answer is short, else NEXT; the draft carries every answer as given plus

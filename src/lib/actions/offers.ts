@@ -10,6 +10,7 @@ import { OFFER_CONTAINERS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { ctx, money, opt, refresh, str } from "@/lib/action-helpers";
 import { BOT_ROLES } from "@/lib/engine/bot-fields";
+import { createOffer } from "@/lib/offers-core";
 
 async function own(id: string, userId: string) {
   const o = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, userId)) });
@@ -19,9 +20,7 @@ async function own(id: string, userId: string) {
 
 export async function createOfferAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx();
-  const id = newId();
-  await db.insert(schema.offers).values({ id, workspaceId, userId, name: str(formData, "name") || "New offer", promise: opt(formData, "promise"), price: money(formData, "price", (e) => `/offers?error=${encodeURIComponent(e)}&field=price`) ?? 0 });
-  queueProgress(workspaceId, userId, "offer_changed");
+  const id = await createOffer({ workspaceId, userId }, { name: str(formData, "name") || "New offer", promise: opt(formData, "promise"), price: money(formData, "price", (e) => `/offers?error=${encodeURIComponent(e)}&field=price`) ?? 0 });
   refresh();
   redirect(`/offers/${id}`);
 }
