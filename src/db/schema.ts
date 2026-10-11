@@ -77,6 +77,10 @@ export const memberships = sqliteTable(
     reminderHour: integer("reminder_hour").notNull().default(8),
     eveningReminderHour: integer("evening_reminder_hour").notNull().default(17),
     leaderboardOptIn: integer("leaderboard_opt_in", { mode: "boolean" }).notNull().default(true),
+    /** The Monday scoreboard email (rev 639): on unless the member turns it off; the Emails switch above still overrides it. */
+    scoreboardEmail: integer("scoreboard_email", { mode: "boolean" }).notNull().default(true),
+    /** The Monday (the member's own date) the last scoreboard went out for, so an hourly job that runs twice sends it once. */
+    scoreboardSentWeek: text("scoreboard_sent_week"),
     startedAt: text("started_at").notNull().default(sql`(date('now'))`),
     passEnabled: integer("pass_enabled", { mode: "boolean" }).notNull().default(false),
     passName: text("pass_name"),

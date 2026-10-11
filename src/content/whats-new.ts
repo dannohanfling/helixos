@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 137,
+    date: "2026-10-11",
+    title: "Your Monday scoreboard",
+    lines: [
+      "Every Monday at your morning reminder time you get last week in one email: posts shipped by channel, DMs, calls, days closed, the comments and clients you logged, your 3-1-3, and your key results and KPIs.",
+      "Ask Claude \"read me my scoreboard\" to hear it any day. Don't want the email? Untick it in Settings, under You. Coaches get one line per client instead.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 136,
     date: "2026-10-10",
     title: "More of your day by voice in Claude",

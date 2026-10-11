@@ -254,6 +254,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="leaderboardOptIn" defaultChecked={v.membership.leaderboardOptIn} /> Show me on the weekly leaderboard
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="scoreboardEmail" defaultChecked={v.membership.scoreboardEmail} data-testid="scoreboard-email" />{" "}
+              {v.role === "coach" ? "Send me the Monday roster of my clients' week" : "Send me the Monday scoreboard"}
+            </label>
             <SubmitButton className="btn btn-primary" pendingText="Saving…">
               Save
             </SubmitButton>

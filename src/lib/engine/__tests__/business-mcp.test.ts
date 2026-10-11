@@ -16,16 +16,17 @@ const fn = (src: string, name: string) => {
 };
 
 describe("the connector's business tools, steps 1 to 3 (rev 380, Danno's order at rev 418)", () => {
-  it("eight tools on the tasks and today scopes, named without dots, three reads and five writes", async () => {
+  it("nine tools on the tasks and today scopes, named without dots, three reads and six writes", async () => {
     await import("@/lib/mcp/tools/index");
     const mine = allTools().filter((t) => t.scope === "tasks" || t.scope === "today");
-    expect(mine.map((t) => t.name).sort()).toEqual(["tasks_add", "tasks_complete", "tasks_list", "tasks_reschedule", "tasks_uncomplete", "today_close", "today_lock_in", "today_lockin"]);
+    // scoreboard_read (rev 642): the Monday scoreboard read aloud, a Today read.
+    expect(mine.map((t) => t.name).sort()).toEqual(["scoreboard_read", "tasks_add", "tasks_complete", "tasks_list", "tasks_reschedule", "tasks_uncomplete", "today_close", "today_lock_in", "today_lockin"]);
     for (const t of mine) {
       expect(isToolName(t.name), t.name).toBe(true);
       expect(t.description.length, t.name).toBeGreaterThan(60);
       expect(t.scope, t.name).toBe(t.name.startsWith("tasks_") ? "tasks" : "today");
     }
-    expect(mine.filter((t) => t.kind === "read").map((t) => t.name).sort()).toEqual(["tasks_list", "today_lockin"]);
+    expect(mine.filter((t) => t.kind === "read").map((t) => t.name).sort()).toEqual(["scoreboard_read", "tasks_list", "today_lockin"]);
     const index = read("src/lib/mcp/tools/index.ts");
     expect(index).toMatch(/import "\.\/tasks";/);
     expect(index).toMatch(/import "\.\/today";/);

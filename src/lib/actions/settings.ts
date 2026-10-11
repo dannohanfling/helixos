@@ -61,6 +61,7 @@ async function updateProfile(formData: FormData): Promise<void> {
       reminderHour: Math.min(23, Math.max(0, num(formData, "reminderHour") || 8)),
       eveningReminderHour: Math.min(23, Math.max(0, num(formData, "eveningReminderHour") || 17)),
       leaderboardOptIn: formData.get("leaderboardOptIn") === "on",
+      scoreboardEmail: formData.get("scoreboardEmail") === "on",
       timezone: validTimezone(str(formData, "timezone")),
     })
     .where(eq(schema.memberships.id, v.membership.id));

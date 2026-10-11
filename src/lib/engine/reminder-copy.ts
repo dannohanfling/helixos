@@ -9,7 +9,9 @@ export type ReminderHours = { morning: number; evening: number };
 export type MorningState = { first: string; streak: number; brokenYesterday: boolean; points: number; nextTier: { name: string; minPoints: number } | null; hours: ReminderHours };
 /** `streak` is the days already closed; tonight's close makes it one more. */
 export type EveningState = { first: string; streak: number; bonus: number; hours: ReminderHours };
-export type EmailCopy = { subject: string; preheader: string; greeting: string; stateLine: string | null; asks: string[]; buttonLabel: string; pointsLine: string; path: string; footerText: string };
+import type { EmailSection } from "@/lib/engine/email-template";
+
+export type EmailCopy = { subject: string; preheader: string; greeting: string; stateLine: string | null; asks: string[]; buttonLabel: string; pointsLine: string; path: string; footerText: string; sections?: EmailSection[] };
 
 /** Within this many points of the next rank, the morning email says so. */
 export const RANK_WITHIN = 50;

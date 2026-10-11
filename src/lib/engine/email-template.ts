@@ -22,7 +22,33 @@ export type EmailSlots = {
   footerHtml?: string;
   /** The client's reminder hours as words ("6am", "5pm"), stated in the template's footer in place of its example times. */
   hourLabels?: { morning: string; evening: string };
+  /** A scoreboard (rev 639): headed blocks of label and value rows, after the asks and before the button. Absent, nothing is added. */
+  sections?: EmailSection[];
 };
+
+export type EmailSection = { heading: string; rows: { label: string; value: string }[]; note?: string | null };
+
+const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+/** The sections as one template row: a small heading, then a two-column table per block, every value escaped. */
+function sectionsHtml(sections: EmailSection[]): string {
+  const blocks = sections
+    .filter((sec) => sec.rows.length || sec.note)
+    .map((sec) => {
+      const rows = sec.rows.map((r) => `<tr><td style="padding:6px 0;border-bottom:1px solid #f0ede6;font-family:${FONT};font-size:15px;color:#2f2f2f;">${escapeHtml(r.label)}</td><td align="right" style="padding:6px 0 6px 12px;border-bottom:1px solid #f0ede6;font-family:${FONT};font-size:15px;font-weight:700;color:#1a1a1a;">${escapeHtml(r.value)}</td></tr>`).join("");
+      const note = sec.note ? `<div style="padding-top:6px;font-family:${FONT};font-size:12px;line-height:1.5;color:#8a8a8a;">${escapeHtml(sec.note)}</div>` : "";
+      return `<div style="padding-top:8px;font-family:${FONT};font-size:13px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#8a8a8a;">${escapeHtml(sec.heading)}</div>${rows ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${rows}</table>` : ""}${note}`;
+    })
+    .join(`<div style="height:14px;line-height:14px;font-size:0;">&nbsp;</div>`);
+  return blocks ? `<tr><td style="padding:0 40px 26px 40px;">${blocks}</td></tr>` : "";
+}
+
+/** The sections as plain text: the heading, then "label: value" lines, then the note. */
+export function sectionsText(sections: EmailSection[]): string {
+  return sections
+    .filter((sec) => sec.rows.length || sec.note)
+    .map((sec) => [sec.heading.toUpperCase(), ...sec.rows.map((r) => `${r.label}: ${r.value}`), sec.note ?? ""].filter(Boolean).join("\n"))
+    .join("\n\n");
+}
 
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -30,6 +56,7 @@ export function escapeHtml(s: string): string {
 
 const STATE_ROW = /<tr>\s*<td style="padding:0 40px 24px 40px;">[\s\S]*?\{\{STATE_LINE\}\}[\s\S]*?<\/table>\s*<\/td>\s*<\/tr>/;
 const ASKS_BLOCK = /<div style="margin:0 0 6px 0;">\{\{ASK_1\}\}<\/div><div style="margin:0 0 6px 0;">\{\{ASK_2\}\}<\/div><div style="margin:0 0 6px 0;">\{\{ASK_3\}\}<\/div>/;
+const BUTTON_ROW = /<tr>\s*<td style="padding:0 40px 14px 40px;">/;
 const FOOTER = /Reminders come at 8am and 5pm\. <a href="\{\{SETTINGS_URL\}\}" style="color:#C86432;text-decoration:underline;">Change them in Settings<\/a>\./;
 
 /** The HTML part. The action URL appears once, as the button's href, never as text. The template's author comment is not sent. */
@@ -38,6 +65,9 @@ export function renderEmailHtml(s: EmailSlots): string {
   html = s.stateLine ? html.replace("{{STATE_LINE}}", escapeHtml(s.stateLine)) : html.replace(STATE_ROW, "");
   const asks = s.asks.filter((a) => a.trim()).map((a) => `<div style="margin:0 0 6px 0;">${escapeHtml(a)}</div>`).join("");
   html = html.replace(ASKS_BLOCK, asks);
+  // The scoreboard goes in as its own row straight after the asks' row (the button's row follows it).
+  // A function, not a "$1" string: a value like "$4,200" must never be read as a replacement pattern.
+  if (s.sections?.length) html = html.replace(BUTTON_ROW, (row) => `${sectionsHtml(s.sections!)}${row}`);
   if (s.footerHtml !== undefined) html = html.replace(FOOTER, s.footerHtml);
   else if (s.hourLabels) html = html.replace("Reminders come at 8am and 5pm.", `Reminders come at ${escapeHtml(s.hourLabels.morning)} and ${escapeHtml(s.hourLabels.evening)}.`);
   return html
@@ -51,6 +81,6 @@ export function renderEmailHtml(s: EmailSlots): string {
 }
 
 /** The plain-text part: the same words, the URL on its own line. Always sent with the HTML. */
-export function renderEmailText(s: Pick<EmailSlots, "greeting" | "stateLine" | "asks" | "actionUrl" | "pointsLine"> & { footerText: string }): string {
-  return [s.greeting, s.stateLine, s.asks.filter((a) => a.trim()).join("\n"), s.actionUrl, s.pointsLine, s.footerText].filter((x) => x && x.trim()).join("\n\n");
+export function renderEmailText(s: Pick<EmailSlots, "greeting" | "stateLine" | "asks" | "actionUrl" | "pointsLine" | "sections"> & { footerText: string }): string {
+  return [s.greeting, s.stateLine, s.asks.filter((a) => a.trim()).join("\n"), s.sections?.length ? sectionsText(s.sections) : "", s.actionUrl, s.pointsLine, s.footerText].filter((x) => x && x.trim()).join("\n\n");
 }

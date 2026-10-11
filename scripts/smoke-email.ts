@@ -122,6 +122,66 @@ async function main() {
     }
     if (!(await runReminders(new Date(), "morning")).some((r) => r.userId === second.userId)) throw new Error("put back, they get it again");
     console.log("✓ canEmail: switched off, never signed in and removed each get nothing from the reminder run; the other member still does");
+
+    // The Monday scoreboard (rev 639): at each member's own Monday morning hour, once; the coach's roster, names only; nothing
+    // from Body; an opted-out member gets none. The run is given the instant, so the walk never waits for a Monday.
+    const { runScoreboards, scoreboardFor } = await import("@/lib/scoreboard");
+    const { hourInTz, weekday } = await import("@/lib/dates");
+    const { logsBetween } = await import("@/lib/queries/daily");
+    // The rejected address above stays rejected; give that member a deliverable one back.
+    await db.update(schema.users).set({ email: "first-member@example.com" }).where(eq(schema.users.id, first.userId));
+    process.env.SENDGRID_API_KEY = "SG.good";
+    const maya = (await db.query.users.findFirst({ where: eq(schema.users.name, "Maya Torres") }))!;
+    const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+    const ws = (await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mm.workspaceId) }))!;
+    const tz = mm.timezone || ws.timezone;
+    // The next Monday at Maya's morning hour, on the hour, found in her own zone.
+    let at = new Date(Math.ceil(Date.now() / 3600000) * 3600000);
+    for (let i = 0; i < 24 * 8 && !(weekday(todayInTz(tz, at)) === 1 && hourInTz(tz, at) === mm.reminderHour); i++) at = new Date(at.getTime() + 3600000);
+    if (!(weekday(todayInTz(tz, at)) === 1 && hourInTz(tz, at) === mm.reminderHour)) throw new Error("no Monday morning hour found in the next eight days");
+    const sentBefore = ((await (await fetch(`http://localhost:${mockPort}/_sent`)).json()) as unknown[]).length;
+    const early = await runScoreboards(new Date(at.getTime() - 3600000));
+    if (early.some((r) => r.userId === maya.id)) throw new Error("an hour early, Maya gets no scoreboard");
+    const run = await runScoreboards(at);
+    const mine = run.find((r) => r.userId === maya.id);
+    if (mine?.kind !== "scoreboard" || mine.delivery !== "sent") throw new Error(`at her Monday hour Maya's scoreboard is sent: ${JSON.stringify(run)}`);
+    const all = (await (await fetch(`http://localhost:${mockPort}/_sent`)).json()) as { personalizations: { to: { email: string }[] }[]; subject: string; content: { type: string; value: string }[] }[];
+    const fresh = all.slice(sentBefore);
+    const toMaya = fresh.find((x) => x.personalizations[0].to[0].email === maya.email)!;
+    const sbText = toMaya.content[0].value;
+    const today = todayInTz(tz, at);
+    const sb = await scoreboardFor({ workspaceId: ws.id, userId: maya.id }, tz, today);
+    const logs = await logsBetween(ws.id, maya.id, sb.week.from, sb.week.to);
+    const dms = logs.reduce((a, l) => a + l.dmsStarted, 0);
+    if (!logs.length || sb.dms.started !== dms) throw new Error(`the week's DMs are the closes summed: ${sb.dms.started} vs ${dms} over ${logs.length} logs`);
+    for (const line of [`DMs started: ${dms}`, `Days closed: ${logs.filter((l) => l.eveningDoneAt).length} of 7`, "Comments (you logged):", "Clients added (you logged):", "YOUR 3-1-3", "KEY RESULTS AND KPIS", "Posts count once GoHighLevel confirms them"]) if (!sbText.includes(line)) throw new Error(`Maya's scoreboard says "${line}": ${sbText}`);
+    if (!toMaya.subject.startsWith("Maya, your week: ")) throw new Error(`the subject: ${toMaya.subject}`);
+    const BODY_WORDS = /weigh|sleep|calorie|protein|HumanOS|workout|\bBody\b|medication/i;
+    if (BODY_WORDS.test(sbText) || BODY_WORDS.test(toMaya.content[1].value.replace(/<[^>]+>/g, " "))) throw new Error(`no Body or health word in the scoreboard: ${sbText.match(BODY_WORDS)?.[0]} in ${sbText}`);
+    const coachUser = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+    const roster = fresh.find((x) => x.personalizations[0].to[0].email === coachUser.email);
+    if (roster) {
+      const rt = roster.content[0].value;
+      if (!/Maya T: \d+ posts?, \d+ DMs?, \d+ calls?, closes \d of 7/.test(rt) || /Torres|@demo|@example/.test(rt.replace(coachUser.email, ""))) throw new Error(`the roster: names only, one line each: ${rt}`);
+      console.log("✓ the coach's roster at their Monday hour: one line per client, a first name and an initial, no contact detail");
+    } else {
+      const cm = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.userId, coachUser.id), eq(schema.memberships.role, "coach")) }))!;
+      const ctz = cm.timezone || ws.timezone;
+      let cat = at;
+      for (let i = 0; i < 48 && !(weekday(todayInTz(ctz, cat)) === 1 && hourInTz(ctz, cat) === cm.reminderHour); i++) cat = new Date(cat.getTime() + 3600000);
+      const cr = (await runScoreboards(cat)).find((r) => r.userId === coachUser.id);
+      if (cr?.kind !== "roster" || cr.delivery !== "sent") throw new Error("the coach's roster goes at their own Monday hour");
+      console.log("✓ the coach's roster goes at their own Monday hour");
+    }
+    if ((await runScoreboards(at)).some((r) => r.userId === maya.id)) throw new Error("the same hour again sends nothing: once a week");
+    // Opted out: nothing, while the other member still gets theirs (the stamps cleared so both would be due).
+    await db.update(schema.memberships).set({ scoreboardSentWeek: null }).where(eq(schema.memberships.workspaceId, ws.id));
+    await db.update(schema.memberships).set({ scoreboardEmail: false }).where(eq(schema.memberships.id, mm.id));
+    const optedOut = await runScoreboards(at);
+    if (optedOut.some((r) => r.userId === maya.id)) throw new Error("opted out, Maya gets no scoreboard");
+    if (!optedOut.some((r) => r.kind === "scoreboard" && r.userId !== maya.id && r.delivery === "sent")) throw new Error(`the other member still gets theirs: ${JSON.stringify(optedOut)}`);
+    await db.update(schema.memberships).set({ scoreboardEmail: true }).where(eq(schema.memberships.id, mm.id));
+    console.log(`✓ Monday scoreboard: nothing an hour early; at Maya's hour her week (${dms} DMs from ${logs.length} closes) with no Body word; once a week; opted out gets none`);
   } finally {
     try {
       if (mock.pid) process.kill(-mock.pid, "SIGTERM");

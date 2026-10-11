@@ -168,6 +168,16 @@ async function main() {
     must(r.text.includes(`${ask.category}: ${ask.question} (pending)`) && ((r.data!.requests as { submitted: string }[])[0].submitted === sent.createdAt), `on the list with its time: ${r.text}`);
     console.log("✓ Office Hours: the read-back first with nothing saved, a far Friday refused, sent after the yes, on the list with its time");
 
+    // 9. "Read me my scoreboard": the member hears their week; the coach hears the roster, names only.
+    const sbTool = allTools().find((t) => t.name === "scoreboard_read")!;
+    const heard = await sbTool.handler(v, { week: "this" });
+    must(heard.text.startsWith("This week so far: ") && heard.text.includes("DMs started:"), `Maya hears her week: ${heard.text.slice(0, 120)}`);
+    const coachU = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+    const coachV = (await viewerFor(coachU.id, ws))!;
+    const roster = await sbTool.handler(coachV, {});
+    must(roster.text.includes("Maya T: ") && roster.text.includes("Jordan L: ") && !/@|Torres/.test(roster.text), `the coach hears the roster, names only: ${roster.text.slice(0, 200)}`);
+    console.log("✓ scoreboard_read: Maya hears this week so far; the coach hears one line per client, names only");
+
     // 8. A team member: refused where the app refuses; DMs stay open to them.
     const teamV = { ...v, team: { teamMemberId: "walk", ownerMembershipId: m.id, ownerName: maya.name, teamName: "Walk VA" } };
     const call = (n: string, input: Record<string, unknown>) => allTools().find((t) => t.name === n)!.handler(teamV, input);

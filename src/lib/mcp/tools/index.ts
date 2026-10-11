@@ -7,3 +7,4 @@ import "./avatars";
 import "./ladders";
 import "./ship";
 import "./voice2";
+import "./scoreboard";
