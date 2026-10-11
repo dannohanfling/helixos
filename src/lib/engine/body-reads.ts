@@ -32,6 +32,8 @@ export type WorkoutInput = {
   unit: WeightUnit;
   routineName: string | null;
   note: string | null;
+  /** Rev 653: the notes on the day's sets, by exercise, in the order they were logged. */
+  setNotes?: { exercise: string; note: string }[];
   plan: { done: number; planned: number } | null;
   /** WHOOP's lifting workout for the session, when it recorded one. */
   lifting: { minutes: number; strain: number | null } | null;
@@ -139,6 +141,8 @@ export function workoutRead(w: WorkoutInput): WorkoutRead {
   lines.push(`${w.routineName ? `${w.routineName}: ` : ""}${head.join(" · ")}.`);
   if (w.gym.length) lines.push(`At the gym: ${w.gym.map((g) => `${g.sport.toLowerCase()} ${Math.round(g.minutes)} min`).join(", ")}${w.gymMinutes ? `; ${Math.round(w.gymMinutes)} min in all` : ""}.`);
   if (w.note?.trim()) lines.push(`You wrote: “${w.note.trim().slice(0, 140)}”.`);
+  const setNotes = (w.setNotes ?? []).filter((n) => n.note.trim());
+  if (setNotes.length) lines.push(`On your sets: ${setNotes.slice(0, 3).map((n) => `${n.exercise}, “${n.note.trim().slice(0, 80)}”`).join("; ")}${setNotes.length > 3 ? `; ${setNotes.length - 3} more` : ""}.`);
 
   const exercises = done.map((x) => {
     const trend = trendOf(x.today, x.last);
@@ -166,7 +170,7 @@ export function workoutRead(w: WorkoutInput): WorkoutRead {
   for (const x of done) if (x.sameTopSessions >= 3) notes.push(`${x.name} has stayed at ${setText(topSet(x.today)!, w.unit, x)} for ${x.sameTopSessions} sessions.`);
   if (w.daysSinceRoutine != null && w.daysSinceRoutine >= 14) notes.push(`The first ${w.routineName ?? "session of this routine"} in ${w.daysSinceRoutine} days.`);
   lines.push(...notes.slice(0, 4));
-  const care = !!w.note && CARE.test(w.note);
+  const care = (!!w.note && CARE.test(w.note)) || setNotes.some((n) => CARE.test(n.note));
   if (care) lines.push("Noted. If it keeps up, check with a professional.");
   const next = done.map((x) => nextFor(x, w.unit)).filter((n): n is NextTarget => !!n);
   return { lines, exercises, next, care };
@@ -221,6 +225,8 @@ export type DayInput = {
   recovery: number | null;
   strain: number | null;
   habits: { kept: number; due: number };
+  /** Rev 653: how the member said they feel, as one line ("Energy 2 of 5, a bit sore (legs)."), next to sleep and training. */
+  feeling?: string | null;
   /** The 7-day average weight now and a week before, in the member's unit. */
   weight: { avg: number | null; weekAgo: number | null; unit: WeightUnit };
   /** One correlation sentence when a link clears the bar (rev 507), else null. */
@@ -253,6 +259,7 @@ export function dayRead(d: DayInput): DayRead {
   }
   const rec = [d.sleepH != null ? `${Math.round(d.sleepH * 10) / 10} h sleep` : "", d.recovery != null ? `recovery ${Math.round(d.recovery)}%` : "", d.strain != null ? `strain ${Math.round(d.strain * 10) / 10}` : ""].filter(Boolean);
   if (rec.length) lines.push(`Recovery: ${rec.join(", ")}.`);
+  if (d.feeling) lines.push(`How you felt: ${d.feeling.replace(/^./, (c) => c.toLowerCase())}`);
   if (d.habits.due) lines.push(`Habits: ${d.habits.kept} of ${d.habits.due} kept.`);
   if (d.weight.avg != null) {
     const diff = d.weight.weekAgo != null ? Math.round((d.weight.avg - d.weight.weekAgo) * 10) / 10 : null;

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 139,
+    date: "2026-10-11",
+    title: "Tell Claude your workout, your walk and how you feel",
+    lines: [
+      "Say \"I did incline dumbbell press\" and Claude asks only for what's missing, with last time and today's plan beside it, so \"same as last time\" or \"as planned\" is enough. Warm-up sets count toward no PR, and a note can go on any set.",
+      "Claude can also log a walk or a sauna (ticking the habit), shelve a grocery haul, find and log a food you don't have yet (an estimate, only once you pick it), and note how you feel today. The notes your old training_sets.csv held can come in from HumanOS → From Airtable, with a dry run first.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 138,
     date: "2026-10-11",
     title: "HumanOS Training knows today's workout",

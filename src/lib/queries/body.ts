@@ -24,6 +24,7 @@ import { isLifting } from "@/lib/engine/body-whoop";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 import { goalsNow } from "@/lib/body-goals";
 import { goalTomorrow } from "@/lib/engine/body-goals";
+import { feelingLine } from "@/lib/engine/body-voice";
 import { EMPTY_PLAN, liftTypeIds, mainMuscles, planDays, planLine, planSetUp, roughLength, typeLabel, type PlanDay, type TrainingPlanSettings } from "@/lib/engine/body-plan";
 
 /**
@@ -236,7 +237,7 @@ const setOrder = [asc(schema.bodySets.createdAt), asc(sql`rowid`)];
 async function setsOf(workspaceId: string, userId: string, exerciseIds: string[]) {
   if (!exerciseIds.length) return [];
   return db.query.bodySets.findMany({
-    where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), inArray(schema.bodySets.exerciseId, exerciseIds)),
+    where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), inArray(schema.bodySets.exerciseId, exerciseIds)),
     orderBy: [asc(schema.bodySets.date), ...setOrder],
   });
 }
@@ -266,12 +267,15 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
   const ids = [...new Set([...(routine?.lines.map((l) => l.exerciseId) ?? []), ...daySets.map((s) => s.exerciseId)])].filter((id) => lib.byId.has(id));
   const history = await setsOf(workspaceId, userId, ids);
   // Phase 3: the routine's lines against what's logged, and whether the session was finished.
-  const plan = sessionPlan(routine?.lines ?? [], daySets);
+  // Rev 653: a warm-up shows with the day's sets, marked, and counts toward nothing: not the plan, a PR, last time or next weight.
+  const plan = sessionPlan(routine?.lines ?? [], daySets.filter((s) => !s.warmup));
   const exercises = ids.map((id) => {
     const exercise = lib.byId.get(id)!;
     const all = history.filter((s) => s.exerciseId === id);
     const flags = prFlags(all, unit);
-    const today = all.map((s, i) => ({ ...s, pr: flags[i] })).filter((s) => s.date === date);
+    const prIds = new Set(all.filter((_, i) => flags[i]).map((s) => s.id));
+    const today = daySets.filter((s) => s.exerciseId === id).map((s) => ({ ...s, pr: prIds.has(s.id) }));
+    const working = today.filter((s) => !s.warmup);
     const before = all.filter((s) => s.date < date);
     const last = lastTime(before, date);
     // The PR as of this day, the day's own sets included (rev 293): a PR set today is today's PR, not last month's.
@@ -285,9 +289,9 @@ export async function trainingDay(workspaceId: string, userId: string, date: str
       pr: pr ? { text: fmtSet(pr, unit, exercise.kind), date: pr.date } : null,
       // A weight the member accepted from a post-workout read (rev 471) opens the session's first set.
       next: (() => {
-        const n = nextSetDefaults(today, last, unit);
+        const n = nextSetDefaults(working, last, unit);
         const line = routine?.lines.find((l) => l.exerciseId === id);
-        return !today.length && line?.weight ? { ...n, weight: line.weight } : n;
+        return !working.length && line?.weight ? { ...n, weight: line.weight } : n;
       })(),
     };
   });
@@ -320,7 +324,7 @@ export async function trainingWeeks(workspaceId: string, userId: string, today: 
   const weekStart = startOfWeek(today);
   const from = addDays(weekStart, -7 * 11);
   const [sets, days, sessions, lib] = await Promise.all([
-    db.query.bodySets.findMany({ columns: { date: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, from)) }),
+    db.query.bodySets.findMany({ columns: { date: true }, where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, from)) }),
     db.query.bodyDays.findMany({ columns: { date: true, off: true, dayTypeId: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, from)) }),
     db.query.bodySessions.findMany({ columns: { date: true, routineName: true, completedAt: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), gte(schema.bodySessions.date, from)) }),
     trainingLibrary(workspaceId, userId),
@@ -387,7 +391,7 @@ export async function trainingPlanView(workspaceId: string, userId: string, toda
     db
       .select({ sessionId: schema.bodySets.sessionId, n: sql<number>`count(*)`, first: sql<string>`min(${schema.bodySets.createdAt})`, last: sql<string>`max(${schema.bodySets.createdAt})` })
       .from(schema.bodySets)
-      .where(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, since)))
+      .where(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), eq(schema.bodySets.warmup, false), gte(schema.bodySets.date, since)))
       .groupBy(schema.bodySets.sessionId),
   ]);
   const setsIn = new Map(counts.map((c) => [c.sessionId, c]));
@@ -450,6 +454,55 @@ export async function routinePreview(workspaceId: string, userId: string, routin
   });
 }
 
+/* ───────── The voice pack (rev 653) ───────── */
+
+/** Today's routine for the voice pack: the session's own, else (today only) the planned one, with its lines. */
+async function routineOfDay(workspaceId: string, userId: string, date: string, today: string) {
+  const lib = await trainingLibrary(workspaceId, userId);
+  const session = await db.query.bodySessions.findFirst({ where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), eq(schema.bodySessions.date, date)) });
+  const own = session?.routineId ? lib.routines.find((r) => r.id === session.routineId) : null;
+  if (own) return own;
+  if (date !== today) return null;
+  const plan = await trainingPlanView(workspaceId, userId, today);
+  return plan?.setUp ? (plan.days[0].routine ?? null) : null;
+}
+
+/**
+ * What body_log_exercise needs to ask well (rev 653): last time's working sets in the member's unit, today's planned line for this
+ * exercise if it's in the day's routine, and next time's weight.
+ */
+export async function exerciseContext(workspaceId: string, userId: string, exerciseId: string, date: string, today: string) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const unit = settings.weightUnit;
+  const [history, routine] = await Promise.all([setsOf(workspaceId, userId, [exerciseId]), routineOfDay(workspaceId, userId, date, today)]);
+  const last = lastTime(history.filter((s) => s.date < date), date);
+  const line = routine?.lines.find((l) => l.exerciseId === exerciseId) ?? null;
+  return {
+    unit,
+    last: last.map((s) => ({ weight: s.weight == null ? null : toUnit(s.weight, s.unit, unit), reps: s.reps })),
+    lastDate: last[0]?.date ?? null,
+    plan: line ? { sets: line.sets, reps: line.reps, weight: line.weight ?? null } : null,
+    next: line?.weight ?? null,
+    routineName: routine?.name ?? null,
+  };
+}
+
+/** How I feel on a day (rev 653), or null. The member's own read; the note is never in a coach's read (coachDayExtras). */
+export async function feelingOn(workspaceId: string, userId: string, date: string) {
+  return (await db.query.bodyFeelings.findFirst({ where: and(eq(schema.bodyFeelings.workspaceId, workspaceId), eq(schema.bodyFeelings.userId, userId), eq(schema.bodyFeelings.date, date)) })) ?? null;
+}
+
+/** "Next up: Rope Pushdowns, 3×12 at 60": the first line of today's routine with planned sets still to do. */
+export async function nextUp(workspaceId: string, userId: string, date: string, today: string): Promise<string | null> {
+  const routine = await routineOfDay(workspaceId, userId, date, today);
+  if (!routine) return null;
+  const done = await db.query.bodySets.findMany({ columns: { exerciseId: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), eq(schema.bodySets.warmup, false), eq(schema.bodySets.date, date)) });
+  const line = routine.lines.find((l) => done.filter((d) => d.exerciseId === l.exerciseId).length < l.sets);
+  if (!line) return `That's everything in ${routine.name}.`;
+  return `Next up: ${line.exercise.name}, ${line.sets}×${line.reps || "?"}${line.weight != null ? ` at ${line.weight}` : ""}.`;
+}
+
 /** One exercise's history: a point per session (oldest first), each session's sets, and the PR. Null if it isn't the member's. */
 export async function exerciseHistory(workspaceId: string, userId: string, exerciseId: string) {
   const settings = await bodySettingsFor(workspaceId, userId);
@@ -466,7 +519,7 @@ export async function exerciseHistory(workspaceId: string, userId: string, exerc
     unit,
     points: historyOf(sets, unit),
     pr: pr ? { text: fmtSet(pr, unit, exercise.kind), date: pr.date } : null,
-    sessions: dates.map((date) => ({ date, sets: sets.flatMap((s, i) => (s.date === date ? [{ text: fmtSet(s, unit, exercise.kind), pr: flags[i] }] : [])) })),
+    sessions: dates.map((date) => ({ date, sets: sets.flatMap((s, i) => (s.date === date ? [{ text: fmtSet(s, unit, exercise.kind), pr: flags[i], note: s.note }] : [])) })),
   };
 }
 
@@ -477,7 +530,7 @@ export async function recentTraining(workspaceId: string, userId: string, today:
   const from = addDays(today, -(days - 1));
   const [sessions, sets, lib, offDays] = await Promise.all([
     db.query.bodySessions.findMany({ where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), gte(schema.bodySessions.date, from)), orderBy: desc(schema.bodySessions.date) }),
-    db.query.bodySets.findMany({ where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, from)), orderBy: setOrder }),
+    db.query.bodySets.findMany({ where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, from)), orderBy: setOrder }),
     trainingLibrary(workspaceId, userId),
     db.query.bodyDays.findMany({ columns: { date: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), eq(schema.bodyDays.off, true), gte(schema.bodyDays.date, from)) }),
   ]);
@@ -641,7 +694,7 @@ export async function daysInRange(workspaceId: string, userId: string, from: str
 async function trainingWeek(workspaceId: string, userId: string, monday: string, settings: schema.BodySettings) {
   const sunday = addDays(monday, 6);
   const [sets, days, lib] = await Promise.all([
-    db.query.bodySets.findMany({ columns: { id: true, date: true, exerciseId: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, monday), lte(schema.bodySets.date, sunday)) }),
+    db.query.bodySets.findMany({ columns: { id: true, date: true, exerciseId: true }, where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, monday), lte(schema.bodySets.date, sunday)) }),
     db.query.bodyDays.findMany({ columns: { date: true, dayTypeId: true, off: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, monday), lte(schema.bodyDays.date, sunday)) }),
     trainingLibrary(workspaceId, userId),
   ]);
@@ -769,7 +822,7 @@ export async function coachBodyColumn(v: Viewer, clients: { userId: string; toda
     const monday = startOfWeek(c.today);
     const [days, sets, readings] = await Promise.all([
       daysInRange(v.workspace.id, c.userId, monday, c.today, c.today),
-      db.query.bodySets.findMany({ columns: { date: true }, where: and(eq(schema.bodySets.workspaceId, v.workspace.id), eq(schema.bodySets.userId, c.userId), gte(schema.bodySets.date, monday), lte(schema.bodySets.date, c.today)) }),
+      db.query.bodySets.findMany({ columns: { date: true }, where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, v.workspace.id), eq(schema.bodySets.userId, c.userId), gte(schema.bodySets.date, monday), lte(schema.bodySets.date, c.today)) }),
       scaleReadings(v.workspace.id, c.userId, addDays(c.today, -400)),
     ]);
     const n = nutritionWeek(days.map((d) => ({ date: d.date, logged: d.logged, totals: d.totals, bands: d.bands, worst: d.worst, final: d.final })));
@@ -785,12 +838,14 @@ export async function coachBodyColumn(v: Viewer, clients: { userId: string; toda
  * sharedClient said shared. Never the health log, which has no path to a coach.
  */
 export async function coachDayExtras(workspaceId: string, userId: string, date: string, today: string) {
-  const [night, h] = await Promise.all([nights(workspaceId, userId, date, date), habitsDay(workspaceId, userId, date, today)]);
+  const [night, h, f] = await Promise.all([nights(workspaceId, userId, date, date), habitsDay(workspaceId, userId, date, today), feelingOn(workspaceId, userId, date)]);
   const n = night[0];
+  // How the client felt (rev 653): the numbers, never the note.
+  const feeling = f ? feelingLine({ energy: f.energy, mood: f.mood, soreness: f.soreness, sorenessArea: f.sorenessArea, sleepFeel: f.sleepFeel }) || null : null;
   const sleep = n && (n.sleep_h != null || n.sleep_score != null || n.recovery != null)
     ? { hours: n.sleep_h != null ? fmtHours(n.sleep_h) : null, score: n.sleep_score ?? null, recovery: n.recovery ?? null, strain: n.strain ?? null, rhr: n.rhr ?? null, hrv: n.hrv ?? null }
     : null;
-  return { sleep, habits: h.habits.filter((x) => x.due || x.value != null).map((x) => ({ id: x.id, name: x.name, kept: x.kept, valueText: x.valueText, due: x.due })) };
+  return { sleep, feeling, habits: h.habits.filter((x) => x.due || x.value != null).map((x) => ({ id: x.id, name: x.name, kept: x.kept, valueText: x.valueText, due: x.due })) };
 }
 
 /* ───────── Habits, sleep and the health log (rev 237 phase 8, B7) ───────── */
@@ -972,6 +1027,11 @@ async function seriesFor(workspaceId: string, userId: string, key: string, from:
     for (const r of rows) byDate.set(r.date, r.value);
     return [...byDate.entries()].map(([date, value]) => ({ date, value }));
   }
+  if (key === "feel_energy" || key === "feel_mood" || key === "feel_sleep") {
+    const rows = await db.query.bodyFeelings.findMany({ where: and(eq(schema.bodyFeelings.workspaceId, workspaceId), eq(schema.bodyFeelings.userId, userId), gte(schema.bodyFeelings.date, from), lte(schema.bodyFeelings.date, to)) });
+    const col = key === "feel_energy" ? "energy" : key === "feel_mood" ? "mood" : "sleepFeel";
+    return rows.flatMap((r) => (r[col] != null ? [{ date: r.date, value: r[col]! }] : []));
+  }
   if (key === "weight" || key === "bf") {
     const readings = await scaleReadings(workspaceId, userId, from);
     return dayFigures(readings).filter((f) => f.date <= to && f.values[key] != null).map((f) => ({ date: f.date, value: f.values[key]! }));
@@ -987,7 +1047,7 @@ async function seriesFor(workspaceId: string, userId: string, key: string, from:
     });
   }
   if (key === "session" || key === "sets") {
-    const sets = await db.query.bodySets.findMany({ columns: { date: true }, where: and(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId)), gte(schema.bodySets.date, from), lte(schema.bodySets.date, to)) });
+    const sets = await db.query.bodySets.findMany({ columns: { date: true }, where: and(eq(schema.bodySets.warmup, false), and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId)), gte(schema.bodySets.date, from), lte(schema.bodySets.date, to)) });
     const count = new Map<string, number>();
     for (const x of sets) count.set(x.date, (count.get(x.date) ?? 0) + 1);
     return rangeDays(from, to).map((d) => ({ date: d, value: key === "session" ? (count.has(d) ? 1 : 0) : (count.get(d) ?? 0) }));
@@ -1081,7 +1141,7 @@ export async function trainingRange(workspaceId: string, userId: string, b: Boun
   const strip = stripBounds(b.from, b.to, rangeDates);
   const inRange = (x: { date: string }) => x.date >= b.from && x.date <= b.to;
   const [stripSets, sessions, days] = await Promise.all([
-    db.query.bodySets.findMany({ columns: { id: true, date: true, exerciseId: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, strip.from), lte(schema.bodySets.date, strip.to)) }),
+    db.query.bodySets.findMany({ columns: { id: true, date: true, exerciseId: true }, where: and(eq(schema.bodySets.warmup, false), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, strip.from), lte(schema.bodySets.date, strip.to)) }),
     db.query.bodySessions.findMany({ columns: { date: true, routineName: true, completedAt: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), gte(schema.bodySessions.date, strip.from), lte(schema.bodySessions.date, strip.to)) }),
     db.query.bodyDays.findMany({ columns: { date: true, off: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, strip.from), lte(schema.bodyDays.date, strip.to)) }),
   ]);
@@ -1335,7 +1395,7 @@ export async function workoutReadFor(workspaceId: string, userId: string, date: 
       targetWeight: x.target?.weight ?? null,
       // The member's step, else what their logged weights show, else the default (rev 486).
       step: x.exercise.step ?? learnedStep(all.map((s) => inUnit(s).weight)) ?? defaultStep(x.exercise.name, unit),
-      today: x.today.map((s) => ({ ...inUnit(s), pr: s.pr })),
+      today: x.today.filter((s) => !s.warmup).map((s) => ({ ...inUnit(s), pr: s.pr })),
       last: last.map(inUnit),
       lastDate: last[0]?.date ?? null,
       pr: pr ? { ...inUnit(pr), date: pr.date } : null,
@@ -1353,6 +1413,7 @@ export async function workoutReadFor(workspaceId: string, userId: string, date: 
     unit,
     routineName: t.routineName,
     note: t.note,
+    setNotes: t.exercises.flatMap((x) => x.today.filter((s) => s.note).map((s) => ({ exercise: x.exercise.name, note: s.note! }))),
     plan: t.plan.plannedSets ? { done: t.plan.doneSets, planned: t.plan.plannedSets } : null,
     lifting: g.lift ? { minutes: g.lift.minutes, strain: g.lift.strain } : null,
     gym: g.around,
@@ -1371,11 +1432,12 @@ export async function workoutReadFor(workspaceId: string, userId: string, date: 
 export async function dayReadFor(workspaceId: string, userId: string, date: string, today: string, hour: number, tz = "UTC"): Promise<(DayRead & { date: string }) | null> {
   const day = await bodyDay(workspaceId, userId, date, today);
   if (!day) return null;
-  const [workout, habits, daily, weights] = await Promise.all([
+  const [workout, habits, daily, weights, feeling] = await Promise.all([
     workoutReadFor(workspaceId, userId, date),
     habitsDay(workspaceId, userId, date, today),
     db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId), eq(schema.bodyDaily.date, date), inArray(schema.bodyDaily.key, ["sleep_h", "recovery", "strain"])) }),
     db.query.bodyDaily.findMany({ where: and(eq(schema.bodyDaily.workspaceId, workspaceId), eq(schema.bodyDaily.userId, userId), gte(schema.bodyDaily.date, addDays(date, -13)), lte(schema.bodyDaily.date, date)) }),
+    feelingOn(workspaceId, userId, date),
   ]);
   const unit: WeightUnit = day.settings.weightUnit;
   const figures = dayFigures(groupReadings(weights)).flatMap((f) => (f.values.weight != null ? [{ date: f.date, value: toUnit(f.values.weight, "lb", unit) }] : []));
@@ -1393,6 +1455,7 @@ export async function dayReadFor(workspaceId: string, userId: string, date: stri
     recovery: value("recovery"),
     strain: value("strain"),
     habits: { kept: due.filter((h) => h.kept).length, due: due.length },
+    feeling: feeling ? feelingLine(feeling) || null : null,
     weight: { avg: avg7(figures, date, addDays), weekAgo: avg7(figures, addDays(date, -7), addDays), unit },
     correlation: await dayCorrelation(workspaceId, userId, date, tz),
     goalTomorrow: goalTomorrow((await goalsNow({ workspaceId, userId }, today, 10)).map((g) => ({ title: g.title, kind: g.goal.kind, state: g.status.state }))),

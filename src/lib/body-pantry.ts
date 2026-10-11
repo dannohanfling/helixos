@@ -5,6 +5,7 @@
  */
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { newId } from "@/lib/ids";
 import { takeFromPantry, yieldFor } from "@/lib/engine/body-pantry";
 
 /**
@@ -34,4 +35,9 @@ export async function consumePantry(workspaceId: string, userId: string, lines: 
       else await db.update(schema.bodyPantry).set({ qty: change.qty }).where(and(eq(schema.bodyPantry.id, change.id), and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId))));
     }
   }
+}
+
+/** Something onto the shelf (rev 653: one write for the Pantry form and body_pantry_add_many). */
+export async function addPantryItem(workspaceId: string, userId: string, values: Omit<typeof schema.bodyPantry.$inferInsert, "id" | "workspaceId" | "userId">): Promise<void> {
+  await db.insert(schema.bodyPantry).values({ id: newId(), workspaceId, userId, ...values });
 }

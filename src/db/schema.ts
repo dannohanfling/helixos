@@ -3233,7 +3233,8 @@ export const bodyExercises = sqliteTable(
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
-    kind: text("kind", { enum: ["weight", "bodyweight"] }).notNull().default("weight"),
+    /** "timed" (rev 653): a treadmill, a bike; logged as an activity under the session, minutes and distance, never as reps. */
+    kind: text("kind", { enum: ["weight", "bodyweight", "timed"] }).notNull().default("weight"),
     /** How far this machine or stack steps up, in the member's weight unit (rev 486): set by the member, or learned from a next-time weight they changed. Null: learned from what they've logged, else 5 (2.5 for a dumbbell). */
     step: real("step"),
     archivedAt: text("archived_at"),
@@ -3320,6 +3321,9 @@ export const bodySets = sqliteTable(
     weight: real("weight"),
     unit: text("unit", { enum: ["lb", "kg"] }).notNull().default("lb"),
     reps: integer("reps").notNull(),
+    /** Rev 653: a note on the set ("right shoulder pinched"), and a warm-up, which no PR, volume, tally or next weight counts. */
+    note: text("note"),
+    warmup: integer("warmup", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [index("body_sets_member_exercise").on(t.workspaceId, t.userId, t.exerciseId, t.date), index("body_sets_session").on(t.sessionId)],
@@ -3595,7 +3599,8 @@ export const bodyActivities = sqliteTable(
     id: id(),
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
-    provider: text("provider", { enum: ["whoop"] }).notNull().default("whoop"),
+    /** "manual" (rev 653): logged by the member, by voice or a timed exercise; providerId is then the row's own id. */
+    provider: text("provider", { enum: ["whoop", "manual"] }).notNull().default("whoop"),
     providerId: text("provider_id").notNull(),
     date: text("date").notNull(),
     sport: text("sport").notNull(),
@@ -3609,11 +3614,38 @@ export const bodyActivities = sqliteTable(
     distanceM: real("distance_m"),
     zones: text("zones", { mode: "json" }).$type<number[]>(),
     sessionId: text("session_id"),
+    /** Rev 653: easy, moderate or hard, as the member said it; none from WHOOP, which has strain. */
+    intensity: text("intensity", { enum: ["easy", "moderate", "hard"] }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("body_activities_member_provider_id").on(t.workspaceId, t.userId, t.provider, t.providerId), index("body_activities_member_date").on(t.workspaceId, t.userId, t.date)],
 );
 export type BodyActivity = typeof bodyActivities.$inferSelect;
+
+/**
+ * How I feel (rev 653), one a day, saved again to update: energy, mood and sleep feel 1 to 5, soreness and where. The numbers follow
+ * the member's coach-sharing switch like sleep; the note is the member's alone, never shown to a coach. Not the weekly check-in.
+ */
+export const FEEL_SORENESS = ["none", "some", "sore"] as const;
+export const bodyFeelings = sqliteTable(
+  "body_feelings",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    energy: integer("energy"),
+    mood: integer("mood"),
+    soreness: text("soreness", { enum: FEEL_SORENESS }),
+    sorenessArea: text("soreness_area"),
+    sleepFeel: integer("sleep_feel"),
+    note: text("note"),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at"),
+  },
+  (t) => [uniqueIndex("body_feelings_member_date").on(t.workspaceId, t.userId, t.date)],
+);
+export type BodyFeeling = typeof bodyFeelings.$inferSelect;
 
 /**
  * B9 (rev 237): a coach's template, sent one way to a client as a snapshot of the coach's own day type, meal (with its foods) or

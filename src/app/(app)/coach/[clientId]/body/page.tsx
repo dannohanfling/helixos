@@ -118,6 +118,14 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
               </p>
             </Card>
           ) : null}
+          {extras.feeling ? (
+            /* How they felt (rev 653): the numbers only; their note is theirs. */
+            <Card title="How they felt">
+              <p className="text-sm text-ink-2" data-testid="coach-feeling">
+                {extras.feeling}
+              </p>
+            </Card>
+          ) : null}
           {extras.habits.length ? (
             <Card title="Practices">
               <ul className="space-y-0.5 text-sm" data-testid="coach-habits">

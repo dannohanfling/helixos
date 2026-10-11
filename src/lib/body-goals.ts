@@ -40,7 +40,7 @@ async function seriesFor(m: Member, g: BodyGoal, from: string): Promise<Point[]>
   }
   if (g.kind === "lift") {
     if (!g.refId) return [];
-    const sets = await db.query.bodySets.findMany({ where: and(own(schema.bodySets, m), eq(schema.bodySets.exerciseId, g.refId)), orderBy: asc(schema.bodySets.date) });
+    const sets = await db.query.bodySets.findMany({ where: and(eq(schema.bodySets.warmup, false), own(schema.bodySets, m), eq(schema.bodySets.exerciseId, g.refId)), orderBy: asc(schema.bodySets.date) });
     const best = new Map<string, number>();
     for (const s of sets) {
       if (s.weight == null || s.reps < (g.reps ?? 1)) continue;
@@ -56,7 +56,7 @@ async function seriesFor(m: Member, g: BodyGoal, from: string): Promise<Point[]>
     const logs = await db.query.bodyHabitLogs.findMany({ where: and(own(schema.bodyHabitLogs, m), eq(schema.bodyHabitLogs.habitId, g.refId), gte(schema.bodyHabitLogs.date, from)) });
     return logs.filter((l) => kept(habit, l.value)).map((l) => ({ date: l.date, value: 1 }));
   }
-  const sets = await db.query.bodySets.findMany({ where: and(own(schema.bodySets, m), gte(schema.bodySets.date, from)), columns: { date: true } });
+  const sets = await db.query.bodySets.findMany({ where: and(eq(schema.bodySets.warmup, false), own(schema.bodySets, m), gte(schema.bodySets.date, from)), columns: { date: true } });
   return [...new Set(sets.map((s) => s.date))].map((date) => ({ date, value: 1 }));
 }
 

@@ -4,6 +4,9 @@ import { HumanosHeader } from "@/components/body/humanos-header";
 import { requireBodyEnabled } from "@/lib/queries/body";
 import { HistoryForm } from "./history-form";
 import { existingHistory } from "@/lib/body-import";
+import { Card } from "@/components/ui";
+import { SetNotesImport } from "@/components/body/set-notes-import";
+import { setNotesCsvAction } from "@/lib/actions/body";
 
 export const metadata = { title: "HumanOS · From Airtable" };
 // A base of a few hundred days reads several pages from Airtable; the dry run and Approve both run under this.
@@ -46,6 +49,11 @@ export default async function BodyImportPage({ searchParams }: { searchParams: P
       ) : null}
       {/* A fresh form after each import: no old dry run left on screen. */}
       <HistoryForm key={sp.at ?? "form"} ownHistory={(await existingHistory(v.workspace.id, v.user.id)).ownHistory ?? false} />
+      {/* Rev 653: the notes the 4 Oct import left out, from the same training_sets.csv. */}
+      <Card className="mt-4" title="Notes from training_sets.csv" id="set-notes">
+        <p className="mb-2 text-sm text-ink-2">Upload the file again and each note goes onto its set, matched by date, exercise and set number. The dry run shows every note first; nothing is written until you press Apply.</p>
+        <SetNotesImport action={setNotesCsvAction} />
+      </Card>
     </>
   );
 }

@@ -5,6 +5,7 @@
  * lines the AI summary gets) plus one note in the member's words, sent even with sharing off; the coach sees only what was sent.
  */
 import type { FoodSection } from "@/db/schema";
+import type { ExerciseKind } from "@/lib/engine/body-training";
 
 export const TEMPLATE_KINDS = ["day_type", "meal", "routine"] as const;
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
@@ -16,7 +17,7 @@ export const KIND_PAGE: Record<TemplateKind, string> = { day_type: "/body/settin
 export type DayTypeTemplate = { name: string; calMin: number | null; calMax: number | null; pMin: number | null; pMax: number | null; fMin: number | null; fMax: number | null; cMin: number | null; cMax: number | null; reminder: string | null };
 export type FoodTemplate = { name: string; unit: string; cal: number; p: number; f: number; c: number; sodium: number; capTag: string | null; basis: "cooked" | "raw"; section: FoodSection | null };
 export type MealTemplate = { name: string; slot: string | null; items: { qty: number; food: FoodTemplate }[] };
-export type ExerciseTemplate = { name: string; kind: "weight" | "bodyweight" };
+export type ExerciseTemplate = { name: string; kind: ExerciseKind };
 export type RoutineTemplate = { name: string; items: { sets: number; reps: string; exercise: ExerciseTemplate }[] };
 export type TemplatePayload = { kind: "day_type"; dayType: DayTypeTemplate } | { kind: "meal"; meal: MealTemplate } | { kind: "routine"; routine: RoutineTemplate };
 

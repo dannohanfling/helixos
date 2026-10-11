@@ -72,6 +72,11 @@ export default async function ExerciseHistoryPage({ params, searchParams }: { pa
                     </span>
                   ))}
                 </span>
+                {s.sets.some((x) => x.note) ? (
+                  <ul className="basis-full text-xs text-ink-2" data-testid="history-notes">
+                    {s.sets.flatMap((x, i) => (x.note ? [<li key={i}>Set {i + 1}: {x.note}</li>] : []))}
+                  </ul>
+                ) : null}
               </li>
             ))}
           </ul>

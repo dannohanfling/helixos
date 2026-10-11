@@ -3,7 +3,7 @@
  * so the PR afterwards is the best of both histories; a routine that holds both keeps one line, the kept exercise's.
  */
 import type { BodyRoutineItem } from "@/db/schema";
-import { bestSet, fmtSet, type SetLike, type WeightUnit } from "@/lib/engine/body-training";
+import { bestSet, fmtSet, type ExerciseKind, type SetLike, type WeightUnit } from "@/lib/engine/body-training";
 import { formatDate } from "@/lib/dates";
 
 type SetRow = SetLike;
@@ -18,7 +18,7 @@ export function mergeRoutineItems(items: BodyRoutineItem[], mergedId: string, ke
 export type MergePreview = { sets: number; from: string | null; to: string | null; prBefore: string | null; prAfter: string | null; text: string };
 
 /** "Move 9 sets (Mar 21 to Apr 12) into Seated Leg Curl; PR becomes 105 × 10". */
-export function mergePreview(merged: SetRow[], kept: SetRow[], o: { mergedName: string; keptName: string; unit: WeightUnit; kind: "weight" | "bodyweight" }): MergePreview {
+export function mergePreview(merged: SetRow[], kept: SetRow[], o: { mergedName: string; keptName: string; unit: WeightUnit; kind: ExerciseKind }): MergePreview {
   const dates = merged.map((s) => s.date).sort();
   const from = dates[0] ?? null;
   const to = dates[dates.length - 1] ?? null;

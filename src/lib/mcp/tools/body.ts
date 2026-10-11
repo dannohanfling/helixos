@@ -14,14 +14,15 @@ import { MACROS, MACRO_LABEL, MARK_ICON, dayTypeIdFor, entryItem, fmtBand, fmtMa
 import { convertQty, loggableUnits, storedUnit } from "@/lib/engine/body-units";
 import { fmtSet, toUnit } from "@/lib/engine/body-training";
 import { saveNextWeight } from "@/lib/body-next";
+import { daySession, lastSetOf, logSets, markWarmups, noteSession, noteSet, setsSince } from "@/lib/body-sets";
 import { mergeExercises, previewMerge } from "@/lib/body-merge";
 import { METRIC, fmtMetric, inRange, readTime, storedValue, withDerived, type MetricKey } from "@/lib/engine/body-scale";
 import { saveReadings } from "@/lib/body-readings";
 import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
-import { consumePantry } from "@/lib/body-pantry";
+import { addPantryItem, consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
-import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, trainingPlanView, routinePreview, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayReadFor, dayTypesFor, medsView, workoutReadFor } from "@/lib/queries/body";
+import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, trainingPlanView, routinePreview, exerciseContext, nextUp, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayReadFor, dayTypesFor, medsView, workoutReadFor } from "@/lib/queries/body";
 import { zonesText } from "@/lib/engine/body-whoop";
 import { fmtDistanceIn, habitShown, isMeasures, storedFromShown, weightUnitWord } from "@/lib/engine/body-measures";
 import { fillBoxes, refill, takesFromBottle } from "@/lib/engine/body-meds";
@@ -36,6 +37,10 @@ import { startOfWeek } from "@/lib/dates";
 import { goalKey, goalsFor, setGoal } from "@/lib/body-goals";
 import { storedTarget } from "@/lib/engine/body-goals";
 import { planLine, planSpoken, typeLabel } from "@/lib/engine/body-plan";
+import { feelingReply, helpLines, matchName, needsFor, numbered, resolveSets, warmupCandidates, type SaidSet } from "@/lib/engine/body-voice";
+import { ACTIVITY_TYPES, logActivity, type ActivityType } from "@/lib/body-activities";
+import { saveFeeling } from "@/lib/body-feelings";
+import { saveFoundFood } from "@/lib/body-foods";
 import { formatDate } from "@/lib/dates";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -390,11 +395,8 @@ export const bodyLogSet = defineTool({
     const raw = input.weight == null ? null : Number(input.weight);
     const weight = raw != null && Number.isFinite(raw) && raw > 0 && raw < 5000 ? raw : null;
     if (exercise.kind === "weight" && weight == null) throw new Error(`${exercise.name} is logged as weight × reps: give the weight in ${settings.weightUnit}.`);
-    await db.insert(schema.bodySessions).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, date, routineId: null, routineName: null }).onConflictDoNothing({ target: [schema.bodySessions.workspaceId, schema.bodySessions.userId, schema.bodySessions.date] });
-    const session = (await db.query.bodySessions.findFirst({ where: and(eq(schema.bodySessions.workspaceId, v.workspace.id), eq(schema.bodySessions.userId, v.user.id), eq(schema.bodySessions.date, date)) }))!;
     const setUnit = weightUnitWord(input.weightUnit) ?? settings.weightUnit;
-    await db.insert(schema.bodySets).values({ id: newId(), workspaceId: v.workspace.id, userId: v.user.id, sessionId: session.id, exerciseId: exercise.id, date, weight, unit: setUnit, reps });
-    if (session.completedAt) await db.update(schema.bodySessions).set({ completedAt: null }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, v.workspace.id), eq(schema.bodySessions.userId, v.user.id))));
+    const { session } = await logSets(v.workspace.id, v.user.id, date, exercise.id, [{ weight, unit: setUnit, reps }]);
     const t = await trainingDay(v.workspace.id, v.user.id, date);
     const x = t?.exercises.find((e) => e.exercise.id === exercise.id);
     const set = x?.today[x.today.length - 1];
@@ -1110,5 +1112,230 @@ export const bodyGoalSet = defineTool({
     const saved = await setGoal(m, { kind, metric, refId, reps: kind === "lift" ? ((input.reps as number) ?? 1) : null, target, by, startValue: input.start != null ? storedTarget(g, Number(input.start), unit) : null }, v.today);
     const view = (await goalsFor(m, v.today, unit)).find((x) => x.goal.id === saved.id)!;
     return { text: `Set: ${view.title}. ${view.line}`, data: { title: view.title, state: view.status.state, aggressive: view.status.aggressive ? { gentlerBy: view.status.aggressive.gentlerBy } : null } };
+  },
+});
+
+/* ───────── The HumanOS voice pack (rev 653): training, notes, activities, the pantry, any food, warm-ups, how I feel ───────── */
+
+const SAID_SET = z.object({ weight: z.number().positive().optional().describe("In the member's weight unit"), reps: z.number().int().min(1).max(1000).optional() });
+const MILES = 1609.344;
+/** A distance as said, to metres: miles unless km or m is named (the member's measures decide the default). */
+function metres(distance: unknown, unit: unknown, measures: string | null): number | null {
+  const d = Number(distance);
+  if (!Number.isFinite(d) || d <= 0) return null;
+  const u = String(unit ?? "").toLowerCase();
+  if (u.startsWith("km") || u.startsWith("kilo")) return d * 1000;
+  if (u === "m" || u.startsWith("met")) return d;
+  if (u.startsWith("mi")) return d * MILES;
+  return measures === "metric" ? d * 1000 : d * MILES;
+}
+/** A timed exercise's activity type, from its name. */
+const typeOfTimed = (name: string): ActivityType => (/walk|hike|incline/i.test(name) ? "walk" : /run|jog|treadmill/i.test(name) ? "run" : /bike|cycl|spin|peloton/i.test(name) ? "bike" : /swim/i.test(name) ? "swim" : /sauna/i.test(name) ? "sauna" : "other");
+
+export const bodyLogExercise = defineTool({
+  name: "body_log_exercise",
+  scope: "body",
+  kind: "write",
+  description:
+    "Log an exercise the member says they did (\"I did incline dumbbell press\"), all its sets in one go, into today's session. Never invent a number: when sets, weights, reps or minutes are missing, this answers with `needs` (and last time, today's plan and next time's weight to make it easy): ask those questions conversationally, one short question at a time, then call again. The member may answer \"same as last time\" (same: last_time) or \"as planned\" (same: planned). An ambiguous name comes back as numbered choices and logs nothing; an unknown one asks whether to add it, and is created only when called again with create set to its kind after the member says yes. Warm-up sets go in warmups and count toward no PR. A timed exercise (treadmill, bike) takes minutes and distance and logs as an activity.",
+  input: {
+    exercise: z.string().describe("The exercise as the member said it"),
+    sets: z.array(SAID_SET).max(20).optional().describe("Each working set: weight × reps (bodyweight: reps, plus weight only if added)"),
+    setsCount: z.number().int().min(1).max(20).optional().describe("Shorthand: how many sets, with reps and weight for all of them"),
+    reps: z.number().int().min(1).max(1000).optional(),
+    weight: z.number().positive().optional().describe("In the member's weight unit"),
+    same: z.enum(["last_time", "planned"]).optional().describe("\"same as last time\" or \"as planned\""),
+    warmups: z.array(SAID_SET).max(10).optional().describe("Warm-up sets done first, weight × reps"),
+    minutes: z.number().positive().max(1440).optional().describe("For a timed exercise"),
+    distance: z.number().positive().optional(),
+    distanceUnit: z.string().optional().describe("mi, km or m"),
+    note: z.string().max(300).optional().describe("A note for the last set logged"),
+    create: z.enum(["weight", "bodyweight", "timed"]).optional().describe("Only after the member said yes to adding an unknown exercise: its kind"),
+    date: z.string().optional().describe("YYYY-MM-DD; today when left out"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const date = dayOf(v, input.date);
+    const said = String(input.exercise ?? "").trim().slice(0, 80);
+    if (!said) throw new Error("Which exercise?");
+    const lib = await trainingLibrary(v.workspace.id, v.user.id);
+    const m = matchName(said, lib.exercises);
+    if (m.kind === "choices") return { text: `Which one did you mean?\n${numbered(m.items.map((x) => x.name))}`, data: { needs: ["which exercise"], choices: m.items.map((x) => x.name), logged: false } };
+    let exercise = m.kind === "one" ? m.item : null;
+    if (!exercise) {
+      if (!input.create) return { text: `"${said}" isn't one of your exercises yet. Add it as a new exercise: 1. weight, 2. bodyweight, or 3. timed?`, data: { needs: ["add it, and its kind"], unknown: said, logged: false } };
+      const id = newId();
+      await db.insert(schema.bodyExercises).values({ id, workspaceId: v.workspace.id, userId: v.user.id, name: said.replace(/^./, (c) => c.toUpperCase()), kind: input.create as "weight" | "bodyweight" | "timed" });
+      exercise = (await db.query.bodyExercises.findFirst({ where: and(eq(schema.bodyExercises.id, id), eq(schema.bodyExercises.workspaceId, v.workspace.id), eq(schema.bodyExercises.userId, v.user.id)) }))!;
+    }
+    if (exercise.kind === "timed") {
+      const minutes = Number(input.minutes);
+      if (!Number.isFinite(minutes) || minutes <= 0) return { text: `${exercise.name}: how many minutes? And the distance, if it matters?`, data: { needs: needsFor("timed", settings.weightUnit), exercise: exercise.name, logged: false } };
+      const session = await daySession(v.workspace.id, v.user.id, date);
+      const a = await logActivity(v.workspace.id, v.user.id, { date, type: typeOfTimed(exercise.name), minutes, distanceM: metres(input.distance, input.distanceUnit, settings.measures), sport: exercise.name, sessionId: session.id });
+      return { text: `Logged ${exercise.name}: ${Math.round(minutes)} min${input.distance ? `, ${input.distance} ${input.distanceUnit ?? (settings.measures === "metric" ? "km" : "mi")}` : ""}${a.habit ? `. That ticks ${a.habit}` : ""}.`, data: { exercise: exercise.name, minutes, logged: true, habit: a.habit } };
+    }
+    const c = (await exerciseContext(v.workspace.id, v.user.id, exercise.id, date, v.today))!;
+    const ctx = { kind: exercise.kind, unit: settings.weightUnit, last: c.last, lastDate: c.lastDate, plan: c.plan, next: c.next };
+    const r = resolveSets({ sets: input.sets as SaidSet[] | undefined, setsCount: input.setsCount as number | undefined, reps: input.reps as number | undefined, weight: input.weight as number | undefined, same: input.same as "last_time" | "planned" | undefined, warmups: input.warmups as SaidSet[] | undefined }, ctx);
+    if (!r.ok) {
+      const help = helpLines(ctx);
+      return { text: `${exercise.name}: ${r.needs[0]}${r.needs.length > 1 ? ` ${r.needs.slice(1).join(" ")}` : ""}${help.length ? `\n${help.join("\n")}` : ""}\nYou can say "same as last time"${c.plan ? ' or "as planned"' : ""}.`, data: { needs: r.needs, exercise: exercise.name, last: c.last, plan: c.plan, next: c.next, logged: false } };
+    }
+    const sets = r.sets.map((s, i) => ({ ...s, unit: settings.weightUnit, note: i === r.sets.length - 1 && typeof input.note === "string" ? input.note : null }));
+    const { ids, reopened } = await logSets(v.workspace.id, v.user.id, date, exercise.id, sets);
+    const t = await trainingDay(v.workspace.id, v.user.id, date);
+    const x = t?.exercises.find((e) => e.exercise.id === exercise.id);
+    const prs = (x?.today ?? []).filter((s) => s.pr && ids.includes(s.id)).length;
+    const next = await nextUp(v.workspace.id, v.user.id, date, v.today);
+    const working = sets.filter((s) => !s.warmup);
+    const warm = sets.length - working.length;
+    return {
+      text: `Logged ${exercise.name}: ${working.map((s) => fmtSet(s, settings.weightUnit, exercise.kind)).join(", ")}${warm ? ` (after ${warm} warm-up${warm === 1 ? "" : "s"})` : ""}.${prs ? ` A new PR!` : ""}${reopened ? " The session was finished; it's open again." : ""}${next ? ` ${next}` : ""}`,
+      data: { exercise: exercise.name, date, logged: true, sets: sets.map((s) => ({ weight: s.weight, reps: s.reps, warmup: s.warmup })), prs, next },
+    };
+  },
+});
+
+export const bodyNoteAdd = defineTool({
+  name: "body_note_add",
+  scope: "body",
+  kind: "write",
+  description: "A note on the last set of a named exercise today (\"right shoulder pinched on incline press\"), or with no exercise on today's session. warmup: true marks that last set as a warm-up instead of (or as well as) a note. Notes show on Training, in the exercise's history and in the post-workout read.",
+  input: { note: z.string().max(300).optional(), exercise: z.string().optional().describe("The exercise whose last set it's on; leave out for the session"), warmup: z.boolean().optional().describe("Mark that last set as a warm-up"), date: z.string().optional() },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const date = dayOf(v, input.date);
+    const note = typeof input.note === "string" ? input.note.trim() : "";
+    if (!input.exercise) {
+      if (!note) throw new Error("What's the note?");
+      const session = await daySession(v.workspace.id, v.user.id, date);
+      const joined = session.note ? `${session.note} · ${note}` : note;
+      await noteSession(v.workspace.id, v.user.id, session.id, joined);
+      return { text: `Noted on ${date === v.today ? "today's" : `${date}'s`} session: "${note}".`, data: { on: "session", note } };
+    }
+    const lib = await trainingLibrary(v.workspace.id, v.user.id);
+    const m = matchName(String(input.exercise), lib.exercises);
+    if (m.kind === "choices") return { text: `Which one?\n${numbered(m.items.map((x) => x.name))}`, data: { choices: m.items.map((x) => x.name), saved: false } };
+    if (m.kind === "none") throw new Error(`No exercise called "${input.exercise}".`);
+    const last = await lastSetOf(v.workspace.id, v.user.id, date, m.item.id);
+    if (!last) throw new Error(`No set of ${m.item.name} ${date === v.today ? "today" : `on ${date}`} to put it on.`);
+    if (!note && !input.warmup) throw new Error("What's the note?");
+    await noteSet(v.workspace.id, v.user.id, last.id, note ? (last.note ? `${last.note} · ${note}` : note) : undefined, input.warmup ? true : undefined);
+    return { text: `${input.warmup ? `Marked ${m.item.name}'s last set as a warm-up` : `Noted on ${m.item.name}'s last set`}${note ? `: "${note}"` : ""}.`, data: { on: "set", exercise: m.item.name, note: note || null, warmup: !!input.warmup } };
+  },
+});
+
+export const bodyLogActivity = defineTool({
+  name: "body_log_activity",
+  scope: "body",
+  kind: "write",
+  description: "Log an activity the member did (\"I just walked 30 minutes\"): walk, run, bike, swim, sauna, sport or other, minutes, an optional distance and intensity. Today unless a date is given. It lands with the day's activities on Training and ticks a matching habit (Walk / steps, Sauna) the same way WHOOP's workouts do.",
+  input: { type: z.enum(ACTIVITY_TYPES), minutes: z.number().positive().max(1440), distance: z.number().positive().optional(), distanceUnit: z.string().optional().describe("mi, km or m"), intensity: z.enum(["easy", "moderate", "hard"]).optional(), name: z.string().max(60).optional().describe("For a sport or other: its name, e.g. Tennis"), date: z.string().optional() },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const date = dayOf(v, input.date);
+    const a = await logActivity(v.workspace.id, v.user.id, { date, type: input.type as ActivityType, minutes: Number(input.minutes), distanceM: metres(input.distance, input.distanceUnit, settings.measures), intensity: (input.intensity as "easy" | "moderate" | "hard" | undefined) ?? null, sport: typeof input.name === "string" ? input.name : null });
+    return { text: `Logged ${a.sport.toLowerCase()}, ${Math.round(Number(input.minutes))} min${input.distance ? `, ${input.distance} ${input.distanceUnit ?? (settings.measures === "metric" ? "km" : "mi")}` : ""}${date === v.today ? "" : ` on ${date}`}.${a.habit ? ` That ticks ${a.habit}.` : ""}`, data: { sport: a.sport, minutes: Number(input.minutes), date, habit: a.habit } };
+  },
+});
+
+export const bodyPantryAddMany = defineTool({
+  name: "body_pantry_add_many",
+  scope: "body",
+  kind: "write",
+  description: "Put a grocery haul on the pantry shelf in one go (\"chicken, a dozen eggs and 2 lb of ground beef\"): each item a food by name, quantity and unit, and optionally where (fridge, freezer, pantry) and a use-by date. Foods not in the member's library come back as a numbered list to add first, and nothing is added for them. Answers with what went on the shelf and what's still below par.",
+  input: {
+    items: z.array(z.object({ food: z.string(), qty: z.number().positive(), unit: z.string().optional().describe("Leave out for the food's own unit"), location: z.enum(PANTRY_LOCATIONS).optional(), useBy: z.string().optional().describe("YYYY-MM-DD"), state: z.enum(["raw", "cooked"]).optional() })).min(1).max(40),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const lib = await bodyLibrary(v.workspace.id, v.user.id);
+    const items = (input.items ?? []) as { food: string; qty: number; unit?: string; location?: (typeof PANTRY_LOCATIONS)[number]; useBy?: string; state?: "raw" | "cooked" }[];
+    const added: string[] = [];
+    const unknown: string[] = [];
+    const unsure: string[] = [];
+    for (const it of items) {
+      const m = matchName(it.food, lib.foods);
+      if (m.kind === "none") unknown.push(it.food);
+      else if (m.kind === "choices") unsure.push(`${it.food} (${m.items.slice(0, 3).map((f) => f.name).join(" or ")}?)`);
+      else {
+        const unit = it.unit?.trim() ? storedUnit(it.unit) : m.item.unit;
+        await addPantryItem(v.workspace.id, v.user.id, { foodId: m.item.id, qty: Number(it.qty), unit: unit.slice(0, 30), state: it.state ?? "raw", location: it.location ?? "fridge", boughtOn: v.today, useBy: it.useBy && DATE.test(it.useBy) ? it.useBy : null });
+        added.push(`${it.qty} ${unit} ${m.item.name}`);
+      }
+    }
+    const view = await pantryView(v.workspace.id, v.user.id, v.today);
+    const short = (view?.gaps ?? []).map((g) => `${g.name} (${g.short} ${g.unit} short)`);
+    const lines = [added.length ? `On the shelf: ${added.join(", ")}.` : "Nothing went on the shelf yet."];
+    if (unknown.length) lines.push(`Not in your foods yet, so not added. Add these as new foods?\n${numbered(unknown)}`);
+    if (unsure.length) lines.push(`Which did you mean?\n${numbered(unsure)}`);
+    lines.push(short.length ? `Still below par: ${short.join(", ")}.` : "Nothing's below par.");
+    return { text: lines.join("\n"), data: { added, unknown, unsure, belowPar: view?.gaps ?? [] } };
+  },
+});
+
+export const bodyLogDescribedFood = defineTool({
+  name: "body_log_described_food",
+  scope: "body",
+  kind: "write",
+  description: "Log a food the member describes that isn't in their library (\"a Chipotle chicken burrito bowl\"). First call with the description alone: it looks the food up (USDA, branded foods included) and returns the best 3, numbered, with calories, protein, fat and carbs, each an estimate. Read them out and let the member pick; then call again with pick (1 to 3) and qty (and unit) to save it to their foods and log it. Nothing is saved or logged without a pick. No restaurant database is connected, so a restaurant meal is a branded or generic estimate.",
+  input: { description: z.string().min(2).max(120), pick: z.number().int().min(1).max(3).optional(), qty: z.number().positive().optional(), unit: z.string().optional(), slot: z.string().optional(), date: z.string().optional() },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    let found;
+    try {
+      found = (await searchFoods(String(input.description), 6)).slice(0, 3);
+    } catch (e) {
+      if (e instanceof FoodSearchError) throw new Error(foodSearchProblem(e));
+      throw e;
+    }
+    if (!found.length) return { text: `Nothing came up for "${input.description}". Try other words, or a simpler name.`, data: { results: [], logged: false } };
+    const unit = settings.foodUnit;
+    if (!input.pick) {
+      const lines = found.map((f, i) => `${i + 1}. ${f.name}${f.brand ? ` (${f.brand})` : ""}: per ${unit} ${fmtPer100(perUnit(f.per100, unit))}; USDA, estimate`);
+      return { text: `Three close matches, all estimates:\n${lines.join("\n")}\nWhich one, and how much?`, data: { results: found.map((f, i) => ({ n: i + 1, name: f.name, brand: f.brand, source: f.source, per100: f.per100, perUnit: { unit, ...perUnit(f.per100, unit) }, estimate: true })), logged: false } };
+    }
+    const f = found[Number(input.pick) - 1];
+    if (!f) throw new Error(`There are ${found.length} matches; pick 1 to ${found.length}.`);
+    if (!(Number(input.qty) > 0)) return { text: `${f.name}: how much did you have (${unit}, or say the unit)?`, data: { needs: ["how much"], logged: false } };
+    const food = await saveFoundFood(v.workspace.id, v.user.id, f, unit);
+    const logged = await bodyLogFood.handler(v, { food: food.name, qty: Number(input.qty), unit: input.unit, slot: input.slot, date: input.date });
+    return { text: `Saved ${food.name} to your foods, an estimate. ${logged.text}`, data: { saved: food.name, estimate: true, ...(logged.data as object) } };
+  },
+});
+
+export const bodyMarkWarmups = defineTool({
+  name: "body_mark_warmups",
+  scope: "body",
+  kind: "write",
+  description: "Find sets that look like warm-ups (an exercise's first set on a day at under 60% of that day's top weight) and list them, numbered, changing nothing. With confirm: true, after the member says yes, marks them as warm-ups so they count toward no PR, volume or next weight.",
+  input: { confirm: z.boolean().optional(), since: z.string().optional().describe("YYYY-MM-DD; a year back when left out") },
+  handler: async (v, input): Promise<ToolResult> => {
+    const settings = await ready(v);
+    const since = typeof input.since === "string" && DATE.test(input.since) ? input.since : addDays(v.today, -365);
+    const [sets, lib] = await Promise.all([setsSince(v.workspace.id, v.user.id, since), trainingLibrary(v.workspace.id, v.user.id)]);
+    const found = warmupCandidates(sets);
+    if (!found.length) return { text: "No sets look like warm-ups.", data: { found: 0, marked: 0 } };
+    const name = (id: string) => lib.byId.get(id)?.name ?? "an exercise";
+    const list = found.slice(0, 10).map((s) => `${s.date} ${name(s.exerciseId)} ${fmtSet(s, settings.weightUnit, lib.byId.get(s.exerciseId)?.kind)}`);
+    if (!input.confirm) return { text: `${found.length} set${found.length === 1 ? "" : "s"} look like warm-ups. Nothing is changed yet.\n${numbered(list)}${found.length > 10 ? `\n…and ${found.length - 10} more.` : ""}\nMark them as warm-ups?`, data: { found: found.length, marked: 0 } };
+    const marked = await markWarmups(v.workspace.id, v.user.id, found.map((s) => s.id));
+    return { text: `Marked ${marked} set${marked === 1 ? "" : "s"} as warm-ups. They no longer count toward PRs, volume or next weight.`, data: { found: found.length, marked } };
+  },
+});
+
+export const bodyCheckin = defineTool({
+  name: "body_checkin",
+  scope: "body",
+  kind: "write",
+  description: "How the member feels today (\"energy's low, slept badly, a bit sore\"): energy, mood and sleep feel 1 to 5, soreness (none, some, sore, with an area), and a note. One a day; saving again updates what's said. Reply plainly and positively; never give medical advice or a diagnosis. Not the weekly check-in to the coach.",
+  input: { energy: z.number().int().min(1).max(5).optional(), mood: z.number().int().min(1).max(5).optional(), sleepFeel: z.number().int().min(1).max(5).optional(), soreness: z.enum(["none", "some", "sore"]).optional(), sorenessArea: z.string().max(60).optional(), note: z.string().max(500).optional(), date: z.string().optional() },
+  handler: async (v, input): Promise<ToolResult> => {
+    await ready(v);
+    const date = dayOf(v, input.date);
+    if ([input.energy, input.mood, input.sleepFeel, input.soreness, input.note].every((x) => x == null)) throw new Error("Say how energy, mood, sleep or soreness are.");
+    const f = await saveFeeling(v.workspace.id, v.user.id, date, { energy: input.energy as number | undefined, mood: input.mood as number | undefined, sleepFeel: input.sleepFeel as number | undefined, soreness: input.soreness as "none" | "some" | "sore" | undefined, sorenessArea: input.sorenessArea as string | undefined, note: input.note as string | undefined });
+    return { text: feelingReply(f), data: { date, energy: f.energy, mood: f.mood, sleepFeel: f.sleepFeel, soreness: f.soreness, sorenessArea: f.sorenessArea } };
   },
 });

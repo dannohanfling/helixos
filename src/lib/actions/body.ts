@@ -5,7 +5,7 @@
  * comment, which needs the member's share switch on at the moment it's written. No Body value is ever logged.
  */
 import { createHash } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -14,7 +14,7 @@ import { requireCoach, type Viewer } from "@/lib/auth";
 import { MACROS, entryItem, totalsOf, type Macro } from "@/lib/engine/body";
 import { newId } from "@/lib/ids";
 import { amountIn, convertQty, storedUnit } from "@/lib/engine/body-units";
-import { decodeFound, foodFromFound, gapNote } from "@/lib/engine/body-find";
+import { decodeFound, gapNote } from "@/lib/engine/body-find";
 import { photoItems, readPhotoLines, type PhotoLine } from "@/lib/engine/body-photo";
 import { IMAGE_MAX_BYTES, isImageType } from "@/lib/engine/ai-request";
 import { readPlate, summariseWeek } from "@/lib/body-ai";
@@ -25,7 +25,7 @@ import { MED_TYPES, WITH_FOOD, expiryFrom, fillBoxes, refill, takesFromBottle, t
 import { checkinNote, checkinWeekOk, copyName, dayTypeTemplate, isTemplateKind, mealTemplate, routineTemplate, sameName, templateName, type TemplatePayload } from "@/lib/engine/body-templates";
 import { bodyWeek } from "@/lib/queries/body";
 import { toBasis, yieldFor } from "@/lib/engine/body-pantry";
-import { consumePantry } from "@/lib/body-pantry";
+import { addPantryItem, consumePantry } from "@/lib/body-pantry";
 import { AirtableError, airtableProblem } from "@/lib/airtable";
 import { applyHistory, existingHistory, readHumanos } from "@/lib/body-import";
 import { buildHistoryPlan, historySummary, type Existing, type HistoryPlan, type HistorySummary } from "@/lib/engine/body-airtable";
@@ -43,6 +43,11 @@ import { addDays, daysBetween, nowIso, startOfWeek, weekday } from "@/lib/dates"
 import { bodyAccess, bodySettingsFor } from "@/lib/queries/body";
 import { saveReadings } from "@/lib/body-readings";
 import { saveNextWeight } from "@/lib/body-next";
+import { logSets } from "@/lib/body-sets";
+import { saveFoundFood } from "@/lib/body-foods";
+import { saveFeeling } from "@/lib/body-feelings";
+import { matchSetNotes, parseSetNotesCsv, type NoteMatch } from "@/lib/engine/body-voice";
+import { exerciseName } from "@/lib/engine/body-airtable";
 import { mergeExercises, undoMerge } from "@/lib/body-merge";
 import { makeHealthKey, revokeHealthKey } from "@/lib/body-health";
 import { archiveGoal, goalKey, logWaist, setGoal } from "@/lib/body-goals";
@@ -471,10 +476,7 @@ export async function saveFoundFoodAction(formData: FormData): Promise<void> {
   const settings = await setUp(v);
   const found = decodeFound(str(formData, "found"));
   if (!found) throw back("/body/foods/find", "That result couldn't be read. Search again.");
-  const food = foodFromFound(found, settings.foodUnit);
-  const have = await db.query.bodyFoods.findFirst({ where: and(and(eq(schema.bodyFoods.workspaceId, workspaceId), eq(schema.bodyFoods.userId, userId)), eq(schema.bodyFoods.name, food.name)) });
-  if (have) await db.update(schema.bodyFoods).set({ ...food, archivedAt: null }).where(eq(schema.bodyFoods.id, have.id));
-  else await db.insert(schema.bodyFoods).values({ id: newId(), workspaceId, userId, ...food });
+  const food = await saveFoundFood(workspaceId, userId, found!, settings.foodUnit);
   const note = gapNote(found);
   redirect(`/body/foods/find?saved=${encodeURIComponent(food.name)}${note ? `&note=${encodeURIComponent(note)}` : ""}`);
 }
@@ -733,6 +735,50 @@ export async function archiveRoutineAction(formData: FormData): Promise<void> {
   await settle();
 }
 
+/* ───────── How I feel (rev 653) ───────── */
+
+/** Log's "How I feel": energy, mood and sleep 1 to 5, soreness and where, a note. One a day; saving again updates it. */
+export async function saveFeelingAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date) || date > v.today) return;
+  const n = (k: string) => (/^[1-5]$/.test(str(formData, k)) ? Number(str(formData, k)) : null);
+  const sore = str(formData, "soreness");
+  await saveFeeling(workspaceId, userId, date, { energy: n("energy"), mood: n("mood"), sleepFeel: n("sleepFeel"), soreness: sore === "none" || sore === "some" || sore === "sore" ? sore : null, sorenessArea: str(formData, "sorenessArea"), note: str(formData, "note") });
+  refresh();
+  await settle();
+}
+
+/* ───────── Set notes from the old training_sets.csv (rev 653) ───────── */
+
+export type SetNotesState = { error?: string; dry?: { matched: NoteMatch[]; unmatched: number; rows: number }; applied?: number } | undefined;
+
+/**
+ * The CSV's notes onto the sets HumanOS holds, matched by date, exercise and set number: a dry run lists every note it would add
+ * and changes nothing; Apply writes them. The file is read here and trusted only as parsed here.
+ */
+export async function setNotesCsvAction(_prev: SetNotesState, f: FormData): Promise<SetNotesState> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const text = str(f, "csv");
+  if (!text) return { error: "Choose the training_sets.csv first." };
+  if (text.length > 8_000_000) return { error: "That file is too big to read in one go." };
+  const parsed = parseSetNotesCsv(text);
+  if ("missing" in parsed) return { error: `The file needs these columns: ${parsed.missing.join(", ")}.` };
+  if (!parsed.notes.length) return { error: "No row in the file has a note." };
+  const [sets, exercises] = await Promise.all([
+    db.query.bodySets.findMany({ columns: { id: true, date: true, exerciseId: true, note: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId)), orderBy: [asc(schema.bodySets.date), asc(schema.bodySets.createdAt), asc(sql`rowid`)] }),
+    db.query.bodyExercises.findMany({ columns: { id: true, name: true }, where: and(eq(schema.bodyExercises.workspaceId, workspaceId), eq(schema.bodyExercises.userId, userId)) }),
+  ]);
+  const nameOf = new Map(exercises.map((e) => [e.id, e.name]));
+  const { matched, unmatched } = matchSetNotes(parsed.notes, sets, (id) => nameOf.get(id), (n) => exerciseName(n) ?? n);
+  if (str(f, "mode") !== "apply") return { dry: { matched, unmatched: unmatched.length, rows: parsed.notes.length } };
+  for (const m of matched) await db.update(schema.bodySets).set({ note: m.note }).where(and(eq(schema.bodySets.id, m.setId), eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId)));
+  refresh();
+  return { applied: matched.length };
+}
+
 /* ───────── The training plan (rev 648) ───────── */
 
 /**
@@ -841,10 +887,8 @@ export async function logSetAction(formData: FormData): Promise<void> {
   const raw = await amount(formData, "weight", settings.weightUnit, trainingAt(date));
   const weight = raw != null && raw > 0 && raw < 5000 ? raw : null;
   if (exercise!.kind === "weight" && weight == null) back(trainingAt(date), `${exercise!.name}: enter the weight.`, "weight");
-  const session = await sessionFor(workspaceId, userId, date, null);
-  await db.insert(schema.bodySets).values({ id: newId(), workspaceId, userId, sessionId: session.id, exerciseId: exercise!.id, date, weight, unit: settings.weightUnit, reps });
-  // A set after "Finish workout" reopens the session (phase 3): finished means nothing more was logged.
-  if (session.completedAt) await db.update(schema.bodySessions).set({ completedAt: null }).where(and(eq(schema.bodySessions.id, session.id), and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId))));
+  // The one set write (rev 653), shared with the connector; a set after Finish reopens the session.
+  await logSets(workspaceId, userId, date, exercise!.id, [{ weight, unit: settings.weightUnit, reps, warmup: str(formData, "warmup") === "1" }]);
   refresh();
   await settle();
 }
@@ -958,7 +1002,7 @@ export async function savePantryItemAction(formData: FormData): Promise<void> {
   const values = { foodId: food!.id, qty, unit: storedUnit(str(formData, "unit") || food!.unit).slice(0, 30), state: stateOf(str(formData, "state")), location: locationOf(str(formData, "location")), boughtOn: dateOrNull(str(formData, "boughtOn")), useBy: dateOrNull(str(formData, "useBy")) };
   const id = str(formData, "id");
   if (id) await db.update(schema.bodyPantry).set(values).where(and(eq(schema.bodyPantry.id, id), and(eq(schema.bodyPantry.workspaceId, workspaceId), eq(schema.bodyPantry.userId, userId))));
-  else await db.insert(schema.bodyPantry).values({ id: newId(), workspaceId, userId, ...values });
+  else await addPantryItem(workspaceId, userId, values);
   refresh();
   await settle();
 }
@@ -1185,6 +1229,7 @@ export async function eraseBodyAction(formData: FormData): Promise<void> {
     db.delete(schema.bodyMeds).where(and(eq(schema.bodyMeds.workspaceId, workspaceId), eq(schema.bodyMeds.userId, userId))),
     db.delete(schema.bodyTemplateSends).where(and(eq(schema.bodyTemplateSends.workspaceId, workspaceId), eq(schema.bodyTemplateSends.userId, userId))),
     db.delete(schema.bodyCheckins).where(and(eq(schema.bodyCheckins.workspaceId, workspaceId), eq(schema.bodyCheckins.userId, userId))),
+    db.delete(schema.bodyFeelings).where(and(eq(schema.bodyFeelings.workspaceId, workspaceId), eq(schema.bodyFeelings.userId, userId))),
     db.delete(schema.bodyActivities).where(and(eq(schema.bodyActivities.workspaceId, workspaceId), eq(schema.bodyActivities.userId, userId))),
     db.delete(schema.bodyDevices).where(and(eq(schema.bodyDevices.workspaceId, workspaceId), eq(schema.bodyDevices.userId, userId))),
     db.delete(schema.bodyOrders).where(and(eq(schema.bodyOrders.workspaceId, workspaceId), eq(schema.bodyOrders.userId, userId))),

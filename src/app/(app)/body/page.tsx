@@ -9,10 +9,11 @@ import { addDays, formatDate } from "@/lib/dates";
 import { MACROS, MACRO_LABEL, MARK_ICON, MARK_WORD, fmtMacro, slotNow } from "@/lib/engine/body";
 import { LogFoodForm } from "@/components/body/unit-inputs";
 import { loggableUnits } from "@/lib/engine/body-units";
-import { bodyDay, latestComposition, recentDays, requireBodyEnabled, deviceDay, templateSendsFor } from "@/lib/queries/body";
+import { bodyDay, feelingOn, latestComposition, recentDays, requireBodyEnabled, deviceDay, templateSendsFor } from "@/lib/queries/body";
+import { feelingLine } from "@/lib/engine/body-voice";
 import { CoachSends } from "@/components/body/coach-sends";
 import { fmtMetric } from "@/lib/engine/body-scale";
-import { deleteEntryAction, logFoodAction, logMealAction, logPhotoAction, mealPhotoAction, setBodyAiAction, setBodyDayFlagAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
+import { deleteEntryAction, logFoodAction, saveFeelingAction, logMealAction, logPhotoAction, mealPhotoAction, setBodyAiAction, setBodyDayFlagAction, setBodyDayTypeAction, setupBodyAction } from "@/lib/actions/body";
 import { DAY_FLAGS, FLAG_LABEL, flagText } from "@/lib/engine/body-flags";
 import { PhotoForm } from "@/components/body/photo-form";
 import { photoReady } from "@/lib/body-ai";
@@ -55,7 +56,7 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
     );
   }
 
-  const [recent, weighIn, device] = await Promise.all([recentDays(v.workspace.id, v.user.id, v.today), latestComposition(v.workspace.id, v.user.id), deviceDay(v.workspace.id, v.user.id, date)]);
+  const [recent, weighIn, device, feeling] = await Promise.all([recentDays(v.workspace.id, v.user.id, v.today), latestComposition(v.workspace.id, v.user.id), deviceDay(v.workspace.id, v.user.id, date), feelingOn(v.workspace.id, v.user.id, date)]);
   const slots = d.settings.mealSlots;
   const defaultSlot = date === v.today ? slotNow(slots, v.hour) : slots[slots.length - 1] ?? "Meal";
   const prev = addDays(date, -1);
@@ -355,6 +356,77 @@ export default async function BodyPage({ searchParams }: { searchParams: Promise
               </ul>
             </Card>
           ) : null}
+
+          {/* How I feel (rev 653): a few taps, or said to Claude; the note is yours alone. Not the weekly check-in to a coach. */}
+          <Card title="How I feel" id="feel">
+            {feeling && feelingLine(feeling) ? (
+              <p className="text-sm" data-testid="body-feeling">
+                {feelingLine(feeling)}
+                {feeling.note ? <span className="mt-1 block text-xs text-ink-2">“{feeling.note}”</span> : null}
+              </p>
+            ) : (
+              <p className="text-sm text-ink-2">Energy, mood, sleep and soreness, 1 to 5. A few taps, or tell Claude.</p>
+            )}
+            <details className="mt-2">
+              <summary className="btn btn-soft btn-xs w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden">{feeling ? "Update" : "Check in"}</summary>
+              <form key={feeling?.updatedAt ?? feeling?.createdAt ?? "new"} action={saveFeelingAction} className="mt-2 grid grid-cols-3 gap-2" data-testid="body-feeling-form">
+                <input type="hidden" name="date" value={date} />
+                  <label>
+                    <span className="label">Energy</span>
+                    <select name="energy" className="field py-1 text-sm" defaultValue={feeling?.energy ?? ""}>
+                      <option value="">—</option>
+                      {[1, 2, 3, 4, 5].map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="label">Mood</span>
+                    <select name="mood" className="field py-1 text-sm" defaultValue={feeling?.mood ?? ""}>
+                      <option value="">—</option>
+                      {[1, 2, 3, 4, 5].map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span className="label">Sleep</span>
+                    <select name="sleepFeel" className="field py-1 text-sm" defaultValue={feeling?.sleepFeel ?? ""}>
+                      <option value="">—</option>
+                      {[1, 2, 3, 4, 5].map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                <label>
+                  <span className="label">Sore?</span>
+                  <select name="soreness" className="field py-1 text-sm" defaultValue={feeling?.soreness ?? ""}>
+                    <option value="">—</option>
+                    <option value="none">No</option>
+                    <option value="some">A bit</option>
+                    <option value="sore">Sore</option>
+                  </select>
+                </label>
+                <label className="col-span-2">
+                  <span className="label">Where (optional)</span>
+                  <input name="sorenessArea" className="field py-1 text-sm" maxLength={60} defaultValue={feeling?.sorenessArea ?? ""} placeholder="e.g. legs" />
+                </label>
+                <label className="col-span-3">
+                  <span className="label">Note (only you see it)</span>
+                  <input name="note" className="field py-1 text-sm" maxLength={500} defaultValue={feeling?.note ?? ""} />
+                </label>
+                <SubmitButton className="btn btn-humanos btn-sm col-span-3 w-fit" pendingText="Saving…" data-testid="body-feeling-save">
+                  Save
+                </SubmitButton>
+              </form>
+            </details>
+          </Card>
 
           <Card title="Last 7 days" action={<Link href="/body/week" className="text-xs text-ink-2 hover:underline" data-testid="body-week-link">This week →</Link>}>
             <ul className="space-y-1 text-sm" data-testid="body-recent">

@@ -911,6 +911,13 @@
       "when": 1791738315815,
       "tag": "0138_training_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "6",
+      "when": 1791738731997,
+      "tag": "0139_humanos_voice",
+      "breakpoints": true
     }
   ]
 }

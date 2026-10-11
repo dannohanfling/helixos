@@ -6,6 +6,8 @@
  * 0), so for pull-ups with nothing added it's simply the most reps.
  */
 export type WeightUnit = "lb" | "kg";
+/** How an exercise is logged (rev 653 adds "timed": minutes and distance, as an activity under the session, never as sets). */
+export type ExerciseKind = "weight" | "bodyweight" | "timed";
 export type SetLike = { date: string; weight: number | null; unit: WeightUnit; reps: number };
 
 const LB_PER_KG = 2.20462;
@@ -71,7 +73,7 @@ export function historyOf(sets: SetLike[], unit: WeightUnit = "lb"): HistoryPoin
 }
 
 /** "185 × 5" in the member's unit; a bodyweight set is "12 reps", or "+25 × 12" with weight added. */
-export function fmtSet(s: { weight: number | null; unit: WeightUnit; reps: number }, unit: WeightUnit, kind: "weight" | "bodyweight" = "weight"): string {
+export function fmtSet(s: { weight: number | null; unit: WeightUnit; reps: number }, unit: WeightUnit, kind: ExerciseKind = "weight"): string {
   const w = s.weight == null ? null : toUnit(s.weight, s.unit, unit);
   const n = (x: number) => x.toLocaleString("en-US", { maximumFractionDigits: 1 });
   if (kind === "bodyweight") return w ? `+${n(w)} × ${s.reps}` : `${s.reps} reps`;

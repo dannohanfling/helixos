@@ -108,6 +108,10 @@ export const METRIC_DEFS: MetricDef[] = [
   { key: "bedtime_drift", label: "Bedtime drift (minutes from the week's usual)", group: "Body", fold: "mean", unit: "min" },
   { key: "burn_cal", label: "Energy burned (device estimate)", group: "Body", fold: "mean", unit: "cal" },
   { key: "cycle_hr", label: "Average heart rate", group: "Body", fold: "mean", unit: "bpm" },
+  // Rev 653: how the member said they feel, 1 to 5.
+  { key: "feel_energy", label: "Energy (how I feel)", group: "Body", fold: "mean" },
+  { key: "feel_mood", label: "Mood (how I feel)", group: "Body", fold: "mean" },
+  { key: "feel_sleep", label: "Sleep feel (how I feel)", group: "Body", fold: "mean" },
   { key: "weight", label: "Weight", group: "Body", fold: "mean", weeklyByDefault: true, unit: "lb" },
   { key: "bf", label: "Body fat %", group: "Body", fold: "mean", weeklyByDefault: true, unit: "%" },
   { key: "cal", label: "Calories", group: "Nutrition", fold: "mean", unit: "cal" },

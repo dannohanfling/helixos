@@ -1793,6 +1793,134 @@ async function main() {
     }
     // The AI switch below is pressed on Settings, where this step started.
     await client.goto(`${base}/body/settings`);
+    // ── The HumanOS voice pack (rev 653): an exercise said with nothing else asks, "same as last time" logs, an ambiguous or
+    // unknown name logs nothing, a note and a warm-up, a walk ticking a habit, a grocery haul, a described food, the warm-up dry
+    // run, how I feel, and the old CSV's notes. Everything it adds goes again after, so the rest of the walk reads as before.
+    {
+      const vv = await viewerFor();
+      const setsNow = async () => (await db.query.bodySets.findMany({ where: mine(schema.bodySets) })).map((x) => x.id);
+      const setsBefore = new Set(await setsNow());
+      const exBefore = new Set((await db.query.bodyExercises.findMany({ where: mine(schema.bodyExercises) })).map((x) => x.id));
+      const asks = await tool("body_log_exercise").handler(vv, { exercise: "bench" });
+      const asked = asks.data as { needs: string[]; logged: boolean };
+      if (asked.logged || !asked.needs.length || !asks.text.includes("How many sets?") || !asks.text.includes("Last time") || !asks.text.includes('"same as last time"')) throw new Error(`an exercise with nothing else asks, with last time: ${asks.text}`);
+      if ((await setsNow()).length !== setsBefore.size) throw new Error("asking logs nothing");
+      const same = await tool("body_log_exercise").handler(vv, { exercise: "bench press", same: "last_time" });
+      const sameSets = (same.data as { sets: unknown[] }).sets.length;
+      if (!same.text.startsWith("Logged Bench press: ") || (await setsNow()).length !== setsBefore.size + sameSets || sameSets < 1) throw new Error(`"same as last time" logs last time's sets once: ${same.text}`);
+      // Two near-duplicates: numbered choices, nothing logged; an unknown name asks to add it, and only create makes it.
+      const curlIds = [crypto.randomUUID(), crypto.randomUUID()];
+      await db.insert(schema.bodyExercises).values([{ id: curlIds[0], workspaceId: mem.workspaceId, userId: maya.id, name: "Walk Leg Curl" }, { id: curlIds[1], workspaceId: mem.workspaceId, userId: maya.id, name: "Walk Seated Leg Curl" }]);
+      const which = await tool("body_log_exercise").handler(vv, { exercise: "walk curl", setsCount: 3, reps: 10, weight: 90 });
+      if (!which.text.includes("1. Walk Leg Curl") || !which.text.includes("2. Walk Seated Leg Curl") || (which.data as { logged: boolean }).logged) throw new Error(`an ambiguous name gives numbered choices: ${which.text}`);
+      const unknown = await tool("body_log_exercise").handler(vv, { exercise: "walk zercher squat", setsCount: 2, reps: 5, weight: 135 });
+      if (!unknown.text.includes("isn't one of your exercises yet") || (await db.query.bodyExercises.findMany({ where: mine(schema.bodyExercises) })).some((e) => e.name.toLowerCase() === "walk zercher squat")) throw new Error(`an unknown exercise asks first and makes nothing: ${unknown.text}`);
+      const made = await tool("body_log_exercise").handler(vv, { exercise: "walk zercher squat", create: "weight", warmups: [{ weight: 300, reps: 3 }], setsCount: 2, reps: 5, weight: 135, note: "felt tight" });
+      const zercher = (await db.query.bodyExercises.findMany({ where: mine(schema.bodyExercises) })).find((e) => e.name.toLowerCase() === "walk zercher squat");
+      const zSets = zercher ? await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.exerciseId, zercher.id)) }) : [];
+      if (!zercher || zSets.length !== 3 || zSets.filter((x) => x.warmup).length !== 1 || zSets.filter((x) => x.note === "felt tight").length !== 1 || !made.text.includes("after 1 warm-up")) throw new Error(`create makes it, warm-up first, the note on the last set: ${made.text} ${JSON.stringify(zSets)}`);
+      // The 300 warm-up is the heaviest set but no PR: the PR is the working 135 × 5.
+      const { trainingDay } = await import("@/lib/queries/body");
+      const zDay = await trainingDay(mem.workspaceId, maya.id, today);
+      const zx = zDay!.exercises.find((x) => x.exercise.id === zercher.id)!;
+      if (!zx.pr?.text.startsWith("135") || zx.today.filter((x) => x.pr && x.warmup).length) throw new Error(`a warm-up is never a PR: ${JSON.stringify(zx.pr)}`);
+      const noted = await tool("body_note_add").handler(vv, { exercise: "zercher", note: "go lighter" });
+      if (!noted.text.includes("Noted on Walk zercher squat's last set")) throw new Error(`body_note_add puts it on the last set: ${noted.text}`);
+      await client.goto(`${base}/body/training`);
+      const zCard = client.locator(`[data-testid="training-exercise"][data-name="${zercher.name}"]`);
+      await zCard.waitFor({ timeout: 30000 });
+      if ((await zCard.locator('[data-testid="training-set"][data-warmup="1"]').count()) !== 1 || !((await zCard.locator('[data-testid="training-set-note"]').allInnerTexts()).join(" ").includes("felt tight · go lighter"))) throw new Error("Training shows the warm-up marked and the note on its set");
+      if (!(await zCard.locator('[data-testid="training-plan"]').count()) && !(await zCard.innerText()).includes("1.")) throw new Error("working sets are numbered from 1");
+      console.log("✓ voice pack, training (rev 653): an exercise with nothing else asks with last time, \"same as last time\" logs once, near-duplicates are numbered choices, an unknown is made only with create; warm-ups first and never a PR; a note on the last set, shown on Training");
+
+      // A walk: an activity, and the habit it ticks.
+      const walkHabit = crypto.randomUUID();
+      await db.insert(schema.bodyHabits).values({ id: walkHabit, workspaceId: mem.workspaceId, userId: maya.id, name: "Walk / steps", kind: "done" });
+      const walk = await tool("body_log_activity").handler(vv, { type: "walk", minutes: 30 });
+      const walkRow = (await db.query.bodyActivities.findMany({ where: and(mine(schema.bodyActivities), eq(schema.bodyActivities.provider, "manual")) })).find((a) => a.sport === "Walking");
+      const walkLog = await db.query.bodyHabitLogs.findFirst({ where: and(eq(schema.bodyHabitLogs.habitId, walkHabit), eq(schema.bodyHabitLogs.date, today)) });
+      if (!walkRow || walkRow.minutes !== 30 || !walkLog || !walk.text.includes("ticks Walk / steps")) throw new Error(`a walk lands with the day's activities and ticks the habit: ${walk.text}`);
+      // A grocery haul: the egg on the shelf, the unknown food listed and not added.
+      const pantryIds = new Set((await db.query.bodyPantry.findMany({ where: mine(schema.bodyPantry) })).map((r) => r.id));
+      const pantryBefore = pantryIds.size;
+      const haul = await tool("body_pantry_add_many").handler(vv, { items: [{ food: fx("egg").name, qty: 12 }, { food: "walk dragonfruit", qty: 2 }] });
+      const pantryAfter = await db.query.bodyPantry.findMany({ where: mine(schema.bodyPantry) });
+      if (pantryAfter.length !== pantryBefore + 1 || !haul.text.includes("Add these as new foods?\n1. walk dragonfruit") || !haul.text.includes("On the shelf: 12")) throw new Error(`the haul adds the known food and lists the unknown: ${haul.text}`);
+      // How I feel: said back plainly, shown on Log, no advice.
+      const feel = await tool("body_checkin").handler(vv, { energy: 2, sleepFeel: 2, soreness: "some", sorenessArea: "legs", note: "walk note, mine alone" });
+      if (!feel.text.includes("Energy 2 of 5, slept 2 of 5, a bit sore (legs).") || /should|try |doctor|recommend/i.test(feel.text)) throw new Error(`the check-in says it back, no advice: ${feel.text}`);
+      await client.goto(`${base}/body`);
+      if (!((await client.locator('[data-testid="body-feeling"]').innerText()).includes("Energy 2 of 5"))) throw new Error("Log shows how I feel");
+      // The warm-up dry run changes nothing; confirm marks. A light first set (20 before 90) is the one it should find.
+      await tool("body_log_exercise").handler(vv, { exercise: "walk leg curl", sets: [{ weight: 20, reps: 10 }, { weight: 90, reps: 10 }] });
+      const light = (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.exerciseId, curlIds[0])) })).find((x) => x.weight === 20)!;
+      const dry = await tool("body_mark_warmups").handler(vv, {});
+      const found = (dry.data as { found: number; marked: number }).found;
+      if ((dry.data as { marked: number }).marked !== 0 || found < 1 || !dry.text.includes("Walk Leg Curl") || (await db.query.bodySets.findFirst({ where: eq(schema.bodySets.id, light.id) }))!.warmup) throw new Error(`the warm-up dry run lists the light set and marks nothing: ${dry.text}`);
+      const marked = await tool("body_mark_warmups").handler(vv, { confirm: true });
+      if ((marked.data as { marked: number }).marked !== found || !(await db.query.bodySets.findFirst({ where: eq(schema.bodySets.id, light.id) }))!.warmup) throw new Error(`confirm marks what the dry run found: ${marked.text}`);
+      // A described food: three numbered estimates, nothing saved; a pick and an amount save it and log it.
+      const { spawn: spawnFoods2 } = await import("node:child_process");
+      const foodsMock2 = spawnFoods2("npx", ["tsx", "scripts/mock-foods.ts", "4073"], { stdio: "ignore", detached: true });
+      try {
+        for (let i = 0; i < 100; i++) {
+          try {
+            await fetch("http://localhost:4073/__calls");
+            break;
+          } catch {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
+        // The tool runs in this process: it reads the mock as the dev server does.
+        process.env.USDA_API_URL = "http://localhost:4073/fdc/v1";
+        process.env.USDA_API_KEY = "test-usda-key";
+        const foodsBefore = (await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) })).length;
+        const entriesBefore = (await db.query.bodyEntries.findMany({ where: mine(schema.bodyEntries) })).length;
+        const offer = await tool("body_log_described_food").handler(vv, { description: "chicken breast" });
+        if (!offer.text.includes("1. ") || !offer.text.includes("estimate") || (await db.query.bodyFoods.findMany({ where: mine(schema.bodyFoods) })).length !== foodsBefore) throw new Error(`a described food offers numbered estimates and saves nothing: ${offer.text}`);
+        const ate = await tool("body_log_described_food").handler(vv, { description: "chicken breast", pick: 1, qty: 6 });
+        const saved = (ate.data as { saved: string }).saved;
+        if (!saved || (await db.query.bodyEntries.findMany({ where: mine(schema.bodyEntries) })).length !== entriesBefore + 1) throw new Error(`a pick saves the food and logs it: ${ate.text}`);
+        await db.delete(schema.bodyEntries).where(and(mine(schema.bodyEntries), eq(schema.bodyEntries.name, saved)));
+        await db.delete(schema.bodyFoods).where(and(mine(schema.bodyFoods), eq(schema.bodyFoods.name, saved)));
+      } finally {
+        if (foodsMock2.pid) process.kill(-foodsMock2.pid);
+      }
+      // The old CSV's notes: a dry run lists the note and writes nothing; Apply writes it.
+      const firstBench = (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.exerciseId, exId("Bench press"))) })).sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt))[0];
+      const csvPath = `/tmp/claude-walk-training-sets-${process.pid}.csv`;
+      (await import("node:fs")).writeFileSync(csvPath, `Date,Exercise,Set #,Weight,Reps,Notes\n${firstBench.date},Bench press,1,185,5,walk csv note\n2020-01-01,Bench press,1,100,5,no such day\n`);
+      await client.goto(`${base}/body/import`);
+      // Set again until the page is ready for it: a file set before hydration has no change handler to reach.
+      for (let i = 0; i < 10 && (await client.locator('[data-testid="set-notes-dry-run"][disabled]').count()); i++) {
+        await client.locator('[data-testid="set-notes-file"]').setInputFiles(csvPath);
+        await client.waitForTimeout(1000);
+      }
+      await client.locator('[data-testid="set-notes-dry-run"]:not([disabled])').waitFor({ timeout: 30000 });
+      await client.locator('[data-testid="set-notes-dry-run"]').click();
+      await client.locator('[data-testid="set-notes-dry"]').waitFor({ timeout: 30000 });
+      if ((await client.locator('[data-testid="set-notes-dry"]').getAttribute("data-count")) !== "1" || !(await client.locator('[data-testid="set-notes-list"]').innerText()).includes("walk csv note") || (await db.query.bodySets.findFirst({ where: eq(schema.bodySets.id, firstBench.id) }))!.note) throw new Error("the dry run lists the one matching note and writes nothing");
+      await client.locator('[data-testid="set-notes-apply"]').click();
+      await client.locator('[data-testid="set-notes-applied"]').waitFor({ timeout: 30000 });
+      if ((await db.query.bodySets.findFirst({ where: eq(schema.bodySets.id, firstBench.id) }))!.note !== "walk csv note") throw new Error("Apply writes the note onto its set");
+      await noSideScroll(client, "/body/import, the notes backfill");
+      console.log(`✓ voice pack, the rest (rev 653): a walk logged and Walk / steps ticked; a haul shelving the egg and listing the unknown; how I feel said back with no advice and shown on Log; the warm-up dry run listing ${found} and marking nothing, confirm marking them; a described food offered as numbered estimates, saved and logged only on a pick; the CSV's note dry-run, then applied`);
+
+      // Back as it was.
+      await db.update(schema.bodySets).set({ note: null }).where(eq(schema.bodySets.id, firstBench.id));
+      await db.update(schema.bodySets).set({ warmup: false }).where(mine(schema.bodySets));
+      const added = (await setsNow()).filter((id) => !setsBefore.has(id));
+      if (added.length) await db.delete(schema.bodySets).where(inArray(schema.bodySets.id, added));
+      const newEx = (await db.query.bodyExercises.findMany({ where: mine(schema.bodyExercises) })).filter((e) => !exBefore.has(e.id)).map((e) => e.id);
+      if (newEx.length) await db.delete(schema.bodyExercises).where(inArray(schema.bodyExercises.id, newEx));
+      await db.delete(schema.bodyActivities).where(and(mine(schema.bodyActivities), eq(schema.bodyActivities.provider, "manual")));
+      await db.delete(schema.bodyHabitLogs).where(eq(schema.bodyHabitLogs.habitId, walkHabit));
+      await db.delete(schema.bodyHabits).where(eq(schema.bodyHabits.id, walkHabit));
+      const shelf = pantryAfter.filter((r) => !pantryIds.has(r.id)).map((r) => r.id);
+      if (shelf.length) await db.delete(schema.bodyPantry).where(inArray(schema.bodyPantry.id, shelf));
+      await db.delete(schema.bodyFeelings).where(mine(schema.bodyFeelings));
+      await client.goto(`${base}/body/settings`);
+    }
     const trainTool = await tool("body_training").handler(await viewerFor(), { exercise: "Bench press" });
     if (!trainTool.text.includes("PR 190 × 5")) throw new Error(`body_training gives an exercise's history: ${trainTool.text}`);
     const wiTool = await tool("body_weigh_ins").handler(await viewerFor(), {});

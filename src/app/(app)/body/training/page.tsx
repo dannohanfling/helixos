@@ -19,6 +19,8 @@ export const metadata = { title: "HumanOS · Training" };
 /** One exercise in today's workout: target, PR, last time, today's sets, and the next set's form, thumb-sized. */
 function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exercises"][number]; date: string; unit: string; restricted?: string }) {
   const bw = x.exercise.kind === "bodyweight";
+  // Rev 653: warm-ups show, marked W, and count toward nothing; the plan counts working sets.
+  const working = x.today.filter((s) => !s.warmup).length;
   return (
     <section className="card p-4" data-testid="training-exercise" data-name={x.exercise.name} data-restricted={restricted ? "1" : "0"}>
       {restricted ? (
@@ -32,8 +34,8 @@ function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exerc
         </Link>
         <span className="text-xs text-ink-3">
           {x.target ? (
-            <span data-testid="training-plan" data-done={x.today.length >= x.target.sets ? "1" : "0"}>
-              {x.today.length} of {x.target.sets} sets · {x.target.reps || "?"} reps
+            <span data-testid="training-plan" data-done={working >= x.target.sets ? "1" : "0"}>
+              {working} of {x.target.sets} sets · {x.target.reps || "?"} reps
               {x.target.weight ? <span data-testid="training-target-weight"> at {x.target.weight} {unit}</span> : null}
             </span>
           ) : null}
@@ -53,10 +55,15 @@ function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exerc
       {x.today.length ? (
         <ol className="mt-2 flex flex-wrap gap-2" data-testid="training-sets">
           {x.today.map((s, i) => (
-            <li key={s.id} className="flex items-center gap-1 rounded-lg bg-humanos-soft px-2.5 py-1 text-sm tabular" data-testid="training-set" data-pr={s.pr ? "1" : "0"} data-plan={repsMark(s.reps, x.target?.reps)}>
-              <span className="text-ink-3">{i + 1}.</span> {fmtSet(s, unit as "lb" | "kg", x.exercise.kind)}
+            <li key={s.id} className={`flex flex-wrap items-center gap-1 rounded-lg px-2.5 py-1 text-sm tabular ${s.warmup ? "bg-surface-2 text-ink-3" : "bg-humanos-soft"}`} data-testid="training-set" data-pr={s.pr ? "1" : "0"} data-warmup={s.warmup ? "1" : "0"} data-plan={s.warmup ? "none" : repsMark(s.reps, x.target?.reps)}>
+              <span className="text-ink-3">{s.warmup ? <span title="Warm-up: counts toward no PR, volume or next weight">W</span> : `${x.today.slice(0, i + 1).filter((t) => !t.warmup).length}.`}</span> {fmtSet(s, unit as "lb" | "kg", x.exercise.kind)}
               {s.pr ? <span title="A new PR">🏆</span> : null}
-              {repsMark(s.reps, x.target?.reps) === "under" ? <span title={`Under the planned ${x.target!.reps} reps`} className="text-warn" aria-label="under plan">▾</span> : null}
+              {s.note ? (
+                <span className="basis-full text-xs font-normal text-ink-2" data-testid="training-set-note">
+                  {s.note}
+                </span>
+              ) : null}
+              {!s.warmup && repsMark(s.reps, x.target?.reps) === "under" ? <span title={`Under the planned ${x.target!.reps} reps`} className="text-warn" aria-label="under plan">▾</span> : null}
               <form action={deleteSetAction}>
                 <input type="hidden" name="id" value={s.id} />
                 <SubmitButton className="ml-1 text-ink-3 hover:text-danger" pendingText="…" aria-label={`Delete set ${i + 1}`} data-testid="training-delete-set">
@@ -80,6 +87,9 @@ function ExerciseCard({ x, date, unit, restricted }: { x: TrainingDayView["exerc
         <label className="w-20">
           <span className="label">Reps</span>
           <input name="reps" type="text" autoComplete="off" inputMode="numeric" defaultValue={x.next.reps ?? ""} required className="field py-2 text-base tabular sm:py-1 sm:text-sm" />
+        </label>
+        <label className="flex items-center gap-1 pb-2 text-xs text-ink-2">
+          <input type="checkbox" name="warmup" value="1" data-testid="training-warmup" /> Warm-up
         </label>
         <SubmitButton className="btn btn-humanos" pendingText="Logging…" data-testid="training-log-set">
           Log set
