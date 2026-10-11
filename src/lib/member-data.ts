@@ -43,6 +43,8 @@ export const MEMBER_TABLES = {
   avatar_offers: schema.avatarOffers,
   // The interviews behind them (rev 639): the member's own answers, exported and erased with them.
   avatar_interviews: schema.avatarInterviews,
+  // My Board (rev 664): the member's own decisions, private to them; exported and erased with them.
+  board_decisions: schema.boardDecisions,
   pathways: schema.pathways,
   webinars: schema.webinars,
   client_records: schema.clientRecords,
@@ -186,6 +188,8 @@ export const WORKSPACE_TABLES = {
   fathom_workspace_connections: schema.fathomWorkspaceConnections,
   // Client headshots: the coach's review list of imported photos no member was matched to; its photos go with it.
   headshot_reviews: schema.headshotReviews,
+  // The Danno Seat's principles (rev 664): the coach's, read by every client's Board.
+  board_principles: schema.boardPrinciples,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */

@@ -63,6 +63,7 @@ const ROUTES: Record<string, Route> = {
   "/magnets/[id]": { kind: "owned", table: "leadMagnets" },
   "/avatars/[id]": { kind: "owned", table: "avatars" },
   "/avatars/interview/[id]": { kind: "owned", table: "avatarInterviews" },
+  "/my-board/[id]": { kind: "owned", table: "boardDecisions" },
   "/offers/[id]": { kind: "owned", table: "offers" },
   "/goals/[id]": { kind: "owned", table: "planRecords" },
   "/proof/[id]": { kind: "owned", table: "proofs" },
@@ -256,7 +257,17 @@ async function main() {
     }
     return r;
   };
-  await Promise.all([ensureAvatar(), ensureInterview(), ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording(), ensureReport()]);
+  // My Board (rev 664): a B-owned decision, private to B.
+  const ensureDecision = async () => {
+    let r = await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.userId, B.id) });
+    if (!r) {
+      const id = newId();
+      await db.insert(schema.boardDecisions).values({ id, workspaceId: ws, userId: B.id, question: "B's private decision" });
+      r = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, id) }))!;
+    }
+    return r;
+  };
+  await Promise.all([ensureAvatar(), ensureInterview(), ensureDecision(), ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording(), ensureReport()]);
 
   // One B-owned id per table the routes name, so the walk can substitute B's id into A's request.
   const first = async <T>(q: Promise<T | undefined>): Promise<T> => {
@@ -289,6 +300,7 @@ async function main() {
     planRecords: (await ensurePlanRecord()).id,
     kpis: (await ensureKpi()).id,
     avatarInterviews: (await ensureInterview()).id,
+    boardDecisions: (await ensureDecision()).id,
     // B's profile photo (client headshots): set on the record, so the route has something of B's to refuse.
     memberships: await (async () => { await db.update(schema.memberships).set({ headshotUrl: "https://private.invalid/b-original.jpg", headshotDisplayUrl: "https://private.invalid/b-512.jpg", headshotMime: "image/jpeg", headshotSource: "import" }).where(eq(schema.memberships.id, bMem.id)); return bMem.id; })(),
   };
@@ -303,6 +315,7 @@ async function main() {
     planRecords: (await ensurePlanRecord()).title,
     kpis: (await ensureKpi()).name,
     avatarInterviews: "B's private interview answer",
+    boardDecisions: "B's private decision",
   };
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });

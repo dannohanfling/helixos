@@ -68,6 +68,40 @@ function reply(system: string, user: string): string {
   if (/search terms/i.test(system) && /"terms"/.test(system)) {
     return JSON.stringify({ terms: ["foot-in-the-door", "compliance", "small request", "commitment"], effect: "Foot-in-the-door effect", field: "Social psychology, compliance research", openalexField: "Psychology" });
   }
+  // My Board (rev 664): an answer in the skill's shape from the seats in play, with things the server must catch: a figure the
+  // member never gave, a sentence claiming to be Danno, a step dated on a weekend, and steps that run past the member's hours.
+  if (/MY_BOARD/.test(system)) {
+    const today = system.match(/Today is (\d{4}-\d{2}-\d{2})/)?.[1] ?? "2026-10-12";
+    const add = (n: number) => new Date(Date.parse(`${today}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+    const sat = (() => { for (let i = 1; i < 8; i++) if (new Date(Date.parse(`${today}T12:00:00Z`) + i * 86400000).getUTCDay() === 6) return add(i); return add(5); })();
+    const focus = system.match(/Only this advisor answers: (\w+)/)?.[1];
+    const keys = Array.from(system.matchAll(/^(\w+): (?:The |Alex|Jordan|Morgan|Riley|Tony|Dean|Igor)[^\n]*\(/gm)).map((m) => m[1]);
+    const said: Record<string, string> = {
+      danno: "Be painfully specific: name the number and the date. As Danno, I'd say start small. What will you measure this week?",
+      alex: "Every yes is a no to something else. What are you saying no to?",
+      jordan: "Fit it to your hours: one thing first, then the next.",
+      morgan: "What has to be true for this to work? It could cost you $9,999 if it fails.",
+      riley: "How would your client say this in their own words?",
+      tony: "Raise the standard and take massive action today.",
+      dean: "Keep the offer simple enough to say in one line.",
+      igor: "Play the long game with your community.",
+    };
+    const seats = focus ? [focus] : keys.length ? keys : ["danno", "alex", "jordan", "morgan", "riley"];
+    return JSON.stringify({
+      decision: "Mock decision: where to put this month's hours",
+      assumptions: [{ text: "You can give the hours you said", guess: false }, { text: "Your list is warm enough to reply", guess: true }],
+      advisors: seats.map((seat) => ({ seat, text: said[seat] ?? "Mock advice.", question: `What would ${seat === "danno" ? "you measure" : "change your mind"} this week?` })),
+      split: "The Danno Seat pushes for volume; Jordan holds it to your hours.",
+      recommendation: "Put this week into DMs to people already in your list.",
+      steps: [
+        { do: "Message 10 past clients with the new offer", by: add(1), takesMinutes: 60, doneWhen: "10 messages sent", first5: "Open your DMs and pin the 10 names", dependsOn: null },
+        { do: "Write the one-line offer", by: sat, takesMinutes: 90, doneWhen: "The line is on your offer page", first5: "Open the offer and read the promise aloud", dependsOn: null },
+        { do: "Book three follow-up calls", by: add(3), takesMinutes: 240, doneWhen: "Three calls on the calendar", first5: "Open your calendar", dependsOn: 1 },
+      ],
+      youDecide: "You decide. This is your call.",
+      clarify: [],
+    });
+  }
   // Avatars by interview (rev 639): a follow-up when an answer is short, else NEXT; the draft carries every answer as given plus
   // one phrase and one number the member never said and a field with no answer behind it, which the server must drop.
   if (/AVATAR_INTERVIEW_FOLLOWUP/.test(system)) {

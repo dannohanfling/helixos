@@ -23,6 +23,8 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   sales: { label: "Sales calls", line: "Read your call sheet before a call. Read-only." },
   recordings: { label: "Recordings", line: "Read a recorded call's action steps and add yours to your tasks." },
   office_hours: { label: "Office Hours", line: "Ask for help at a Friday Office Hours call, only after reading it back and hearing your yes; list your requests." },
+  // My Board (rev 664): write-level, because approving "Set it up for me" makes changes, only after reading them back and a yes.
+  board: { label: "My Board", line: "Ask your Board about a decision and read past decisions; set up what it proposes only after reading it back and hearing your yes." },
   library: { label: "Library", line: "Search your library and assets." },
   webinars: { label: "Webinars", line: "Read your webinars and proofs." },
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },

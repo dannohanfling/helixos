@@ -40,6 +40,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Build",
     items: [
+      { href: "/my-board", label: "My Board", icon: "🧭", line: "Five advisors on a decision" },
       { href: "/webinars", label: "Webinars", icon: "🎤", team: true, hint: "wizard" },
       { href: "/images", label: "Images", icon: "🖼️", team: true, line: "Your deck pictures" },
       { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent" },
@@ -76,6 +77,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/rewards", label: "Rewards", icon: "🏆" },
       { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
+      { href: "/coach/board", label: "Danno Seat", icon: "🧭", coachOnly: true, hint: "Board principles" },
       { href: "/coach/feedback", label: "Feedback", icon: "💬", coachOnly: true, hint: "monthly" },
       { href: "/coach/reports", label: "Issues and ideas", icon: "🛟", coachOnly: true, hint: "from members" },
       { href: "/coach/community", label: "Community posts", icon: "📣", coachOnly: true, hint: "Monday 3-1-3" },

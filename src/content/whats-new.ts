@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 141,
+    date: "2026-10-11",
+    title: "My Board: five advisors on a decision",
+    lines: [
+      "Build → My Board: say what you're deciding and five advisors look at it, grounded in your own HelixOS. The Danno Seat, Alex the Strategist, Jordan the Operator, Morgan the Antagonist and Riley the Customer Champion each give a short view; then where they split, one recommendation, and one to three action steps sized to your weekly hours.",
+      "Choose Board, Focus on one advisor, Debate, Quick Vote, Workaround, Leverage, Converge or Check-in. Every decision is kept under Decisions, private to you. It runs on your own AI key; you decide.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 140,
     date: "2026-10-11",
     title: "Build an avatar by being interviewed",

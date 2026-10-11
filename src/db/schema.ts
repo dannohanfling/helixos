@@ -81,6 +81,12 @@ export const memberships = sqliteTable(
     scoreboardEmail: integer("scoreboard_email", { mode: "boolean" }).notNull().default(true),
     /** The Monday (the member's own date) the last scoreboard went out for, so an hourly job that runs twice sends it once. */
     scoreboardSentWeek: text("scoreboard_sent_week"),
+    /** My Board (rev 664): the hours a week the member can give their business; asked on first use. Jordan keeps every plan within it. */
+    boardHours: integer("board_hours"),
+    /** "Let my Board see my energy, sleep and training": off unless the member turns it on; the daily summary only, never meds or body numbers. */
+    boardSeesBody: integer("board_sees_body", { mode: "boolean" }).notNull().default(false),
+    /** The coach's own Board may use the Edge Preset; a client's is always standard. */
+    boardPreset: text("board_preset", { enum: ["standard", "edge"] }).notNull().default("standard"),
     startedAt: text("started_at").notNull().default(sql`(date('now'))`),
     passEnabled: integer("pass_enabled", { mode: "boolean" }).notNull().default(false),
     passName: text("pass_name"),
@@ -3139,7 +3145,7 @@ export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
  * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
  * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
  */
-export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "library", "webinars", "essence", "body"] as const;
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "essence", "body"] as const;
 
 /** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
 export const oauthClients = sqliteTable("oauth_clients", {
@@ -3923,3 +3929,61 @@ export const headshotReviews = sqliteTable(
   (t) => [uniqueIndex("headshot_reviews_attachment").on(t.workspaceId, t.attachmentId)],
 );
 export type HeadshotReview = typeof headshotReviews.$inferSelect;
+
+/* ───────────────────────── My Board (rev 664) ───────────────────────── */
+
+/**
+ * One question to the member's Board, and its answer as the server checked it. A follow-up on the same decision points at the
+ * first (parentId), so the first question hears all five advisors and later ones the few who matter. Private to the member;
+ * shared with the coach only when they say so. Steps become tasks only through "Set it up for me", and their status is read
+ * live from those tasks, never copied here.
+ */
+export type BoardUsed = { label: string; href: string };
+export type BoardProposal = { id: string; kind: string; title: string; detail: string; before?: string | null; after?: string | null; payload: Record<string, unknown> };
+export type BoardApplied = { proposalId: string; kind: string; ref: string | null; href: string | null; at: string };
+export type BoardCheckin = { at: string; steps: { index: number; state: "done" | "stuck" | "dropped" }[]; note?: string | null };
+export const boardDecisions = sqliteTable(
+  "board_decisions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    parentId: text("parent_id"),
+    question: text("question").notNull(),
+    mode: text("mode").notNull().default("board"),
+    focus: text("focus"),
+    preset: text("preset", { enum: ["standard", "edge"] }).notNull().default("standard"),
+    answer: text("answer", { mode: "json" }).$type<import("@/lib/engine/board").BoardAnswer>(),
+    /** What the server changed or left out, said to the member. */
+    notes: text("notes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** "The Board used: …": what was read for this answer, each with its page. */
+    used: text("used", { mode: "json" }).$type<BoardUsed[]>().notNull().default([]),
+    proposals: text("proposals", { mode: "json" }).$type<BoardProposal[]>().notNull().default([]),
+    applied: text("applied", { mode: "json" }).$type<BoardApplied[]>().notNull().default([]),
+    /** The tasks the steps became, by step index; null for a step not set up. */
+    stepTasks: text("step_tasks", { mode: "json" }).$type<(string | null)[]>().notNull().default([]),
+    checkins: text("checkins", { mode: "json" }).$type<BoardCheckin[]>().notNull().default([]),
+    sharedAt: text("shared_at"),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [index("board_decisions_member").on(t.workspaceId, t.userId, t.createdAt), index("board_decisions_parent").on(t.parentId)],
+);
+export type BoardDecision = typeof boardDecisions.$inferSelect;
+
+/** The Danno Seat's principles (rev 664 §8), the coach's to edit, seeded from docs/board/danno-source-pack.md. */
+export const boardPrinciples = sqliteTable(
+  "board_principles",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    goodFor: text("good_for").notNull().default(""),
+    order: integer("order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [index("board_principles_ws").on(t.workspaceId, t.order)],
+);
+export type BoardPrinciple = typeof boardPrinciples.$inferSelect;
