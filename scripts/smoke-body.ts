@@ -1682,6 +1682,117 @@ async function main() {
     if (dayRowBefore) await db.update(schema.bodyDays).set({ dayTypeId: dayRowBefore.dayTypeId }).where(eq(schema.bodyDays.id, dayRowBefore.id));
     else await db.delete(schema.bodyDays).where(and(mine(schema.bodyDays), eq(schema.bodyDays.date, flipDate)));
     console.log("✓ set-up tools: a food added per its unit and a duplicate offered back; a meal saved from it with its totals; Sunlight from the starters; an exercise put on a routine; day types read, a band set saying what it replaced, a date run as a type; every duplicate and an upside-down band refused");
+    // ── The training plan (rev 648): a rotation and a weekend routine set on Settings, Today's card and the next 7 days from them,
+    // a swap of two days and back, Today's line, and the connector reading the same plan. Everything goes back as it was after.
+    {
+      const before = (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!;
+      const liftType = types0[0];
+      const pushA = (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.name === ROUTINE.name)!;
+      const backId = crypto.randomUUID();
+      const legsId = crypto.randomUUID();
+      await db.insert(schema.bodyRoutines).values([
+        { id: backId, workspaceId: mem.workspaceId, userId: maya.id, name: "Walk Back Day", items: [{ exerciseId: exId("Pull-up"), sets: 3, reps: "8" }] },
+        { id: legsId, workspaceId: mem.workspaceId, userId: maya.id, name: "Walk Leg Day", items: [{ exerciseId: exId("Bench press"), sets: 2, reps: "5" }] },
+      ]);
+      // Danno's week: Tuesday and Thursday off, every other day the lift type; no refeed in the way.
+      await db.update(schema.bodySettings).set({ weekPattern: { "0": liftType.id, "1": liftType.id, "2": null, "3": liftType.id, "4": null, "5": liftType.id, "6": liftType.id }, refeedAnchor: null }).where(eq(schema.bodySettings.id, before.id));
+      // A new address, not just a hash: the page is open already, and the routines just made must be on it.
+      await client.goto(`${base}/body/settings?plan=1#training-plan`);
+      const planForm = '[data-testid="training-plan-form"]';
+      await client.locator(planForm).waitFor({ timeout: 30000 });
+      for (const name of [ROUTINE.name, "Walk Back Day"]) await client.locator(`${planForm} [data-testid="training-plan-routine"][data-name="${name}"] input[type="checkbox"]`).check();
+      await client.locator(`${planForm} [data-testid="training-plan-weekend"]`).selectOption(legsId);
+      for (const t of types0) await client.locator(`${planForm} input[name="lift_${t.id}"]`).setChecked(t.id === liftType.id);
+      const savedPlan = async () => (await db.query.bodySettings.findFirst({ where: mine(schema.bodySettings) }))!.trainingPlan;
+      await press(client, `${planForm} [data-testid="training-plan-save"]`, async () => (await savedPlan())?.weekend === legsId, "the training plan saved");
+      const plan1 = (await savedPlan())!;
+      if (plan1.rotation.length !== 2 || !plan1.rotation.includes(pushA.id) || !plan1.rotation.includes(backId) || JSON.stringify(plan1.liftTypes) !== JSON.stringify([liftType.id])) throw new Error(`the plan saved as ticked: ${JSON.stringify(plan1)}`);
+      // ↓ on the first moves it below the second.
+      await client.locator(`${planForm} [data-testid="training-plan-routine"][data-in="1"]`).first().waitFor();
+      await press(client, `${planForm} [data-testid="training-plan-routine"][data-in="1"] >> nth=0 >> [data-testid="training-plan-down"]`, async () => (await savedPlan())?.rotation[0] === plan1.rotation[1], "a routine moved down");
+      if (!((await client.locator('[data-testid="training-plan-week"]').innerText()).includes("Tue —"))) throw new Error("the plan shows the week pattern, Tuesday off");
+      await noSideScroll(client, "/body/settings, the training plan");
+
+      // Today has Push A finished: the card says so, and the 7 days start with it.
+      await client.goto(`${base}/body/training`);
+      const todayCard = client.locator('[data-testid="training-today"]');
+      await todayCard.waitFor({ timeout: 30000 });
+      const title = await client.locator('[data-testid="training-today-title"]').innerText();
+      // Earlier steps logged on after Finish, which reopens the session: done reads Done with its sets, going names the routine.
+      const todayWhy = await todayCard.getAttribute("data-why");
+      if (todayWhy === "done" ? !title.startsWith(`Done · ${ROUTINE.name} · `) || !/\d+ sets?/.test(title) : todayWhy !== "started" || !title.startsWith("Today · ") || !title.endsWith(` · ${ROUTINE.name}`)) throw new Error(`today's logged session leads the card: ${todayWhy}, "${title}"`);
+      const rows = client.locator('[data-testid="training-plan-day"]');
+      if ((await rows.count()) !== 7) throw new Error("the next 7 days, a row each");
+      const days = await rows.evaluateAll((els) => els.map((e) => ({ date: e.getAttribute("data-date")!, routine: e.getAttribute("data-routine")!, why: e.getAttribute("data-why")!, lift: e.getAttribute("data-lift") === "1" })));
+      if (days[0].date !== today || days[0].routine !== ROUTINE.name) throw new Error(`the 7 days start with today, as the card: ${JSON.stringify(days[0])}`);
+      for (const d of days) {
+        const wd = new Date(`${d.date}T00:00:00Z`).getUTCDay();
+        if ((wd === 2 || wd === 4) && d.lift) throw new Error(`Tuesday and Thursday are off: ${JSON.stringify(d)}`);
+        if (wd >= 1 && wd <= 5 && d.routine === "Walk Leg Day") throw new Error(`Legs is never planned on a weekday: ${JSON.stringify(d)}`);
+        if (wd === 6 && d.date !== today && d.routine !== "Walk Leg Day") throw new Error(`Legs goes on Saturday: ${JSON.stringify(d)}`);
+      }
+      const upper = days.slice(1).filter((d) => d.why === "rotation").map((d) => d.routine);
+      for (let i = 1; i < upper.length; i++) if (upper[i] === upper[i - 1]) throw new Error(`the rotation takes turns: ${upper.join(", ")}`);
+      const tally = await client.locator('[data-testid="training-week"]').innerText();
+      if (!/ of \d+ session/.test(tally)) throw new Error(`the week's planned count is filled: "${tally}"`);
+      await noSideScroll(client, "/body/training, the plan");
+
+      // Swap two upcoming lift days with different routines, then put one back to the plan.
+      const open = days.slice(1).filter((d) => d.why === "rotation" || d.why === "weekend");
+      const a = open[0];
+      const b = open.find((d) => d.routine !== a.routine)!;
+      const rowOf = (date: string) => `[data-testid="training-plan-day"][data-date="${date}"]`;
+      await client.locator(`${rowOf(a.date)} summary`).click();
+      await client.locator(`${rowOf(a.date)} [data-testid="training-plan-swap-with"]`).selectOption(b.date);
+      const picks = async () => new Map((await db.query.bodyDays.findMany({ where: mine(schema.bodyDays) })).filter((r) => r.routineId).map((r) => [r.date, r.routineId]));
+      await press(client, `${rowOf(a.date)} [data-testid="training-plan-swap"]`, async () => (await picks()).size === 2, "two days swapped");
+      const routineIdOf = async (name: string) => (await db.query.bodyRoutines.findMany({ where: mine(schema.bodyRoutines) })).find((r) => r.name === name)!.id;
+      const p = await picks();
+      if (p.get(a.date) !== (await routineIdOf(b.routine)) || p.get(b.date) !== (await routineIdOf(a.routine))) throw new Error(`the two days trade routines: ${JSON.stringify([...p])}`);
+      await client.reload();
+      if ((await client.locator(rowOf(a.date)).getAttribute("data-routine")) !== b.routine || (await client.locator(rowOf(a.date)).getAttribute("data-why")) !== "swap") throw new Error("the swapped day shows its new routine, by hand");
+      await client.locator(`${rowOf(a.date)} summary`).click();
+      await press(client, `${rowOf(a.date)} [data-testid="training-plan-reset"]`, async () => !(await picks()).has(a.date), "back to the plan");
+
+      // Today's line, and the connector's week: the same plan.
+      await client.goto(`${base}/today`);
+      const line = await client.locator('[data-testid="today-training"]').innerText();
+      if (!line.includes(todayWhy === "done" ? `Done · ${ROUTINE.name}` : `· ${ROUTINE.name} · going`)) throw new Error(`Today's HumanOS line names the day's training: "${line}"`);
+      const weekPlan = await tool("body_week_plan").handler(await viewerFor(), {});
+      const toolDays = (weekPlan.data as { days: { date: string; routine: string | null }[] }).days;
+      await client.goto(`${base}/body/training`);
+      const pageDays = await client.locator('[data-testid="training-plan-day"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-date")} ${e.getAttribute("data-routine")}`));
+      if (!weekPlan.text.startsWith("This week: ") || JSON.stringify(toolDays.map((d) => `${d.date} ${d.routine ?? ""}`)) !== JSON.stringify(pageDays)) throw new Error(`body_week_plan says the page's plan: ${weekPlan.text} vs ${pageDays.join(", ")}`);
+
+      // Before anything's logged today: the card plans a routine (or rest), and body_training gives it with its exercises.
+      const session = (await db.query.bodySessions.findFirst({ where: and(mine(schema.bodySessions), eq(schema.bodySessions.date, today)) }))!;
+      await db.update(schema.bodySessions).set({ date: "2020-01-01" }).where(eq(schema.bodySessions.id, session.id));
+      await db.update(schema.bodySets).set({ date: "2020-01-01" }).where(eq(schema.bodySets.sessionId, session.id));
+      try {
+        await client.reload();
+        await todayCard.waitFor();
+        const why = (await todayCard.getAttribute("data-why"))!;
+        const planned = await todayCard.getAttribute("data-routine");
+        const dayTool = await tool("body_training").handler(await viewerFor(), {});
+        if (why === "rest") {
+          if (!(await client.locator('[data-testid="training-today-title"]').innerText()).includes("Rest")) throw new Error("a rest day reads Rest");
+        } else {
+          const n = await client.locator('[data-testid="training-today-exercise"]').count();
+          const want = planned === ROUTINE.name ? ROUTINE.lines.length : 1;
+          if (!planned || n !== want || !(await client.locator('[data-testid="training-today-start"]').innerText()).includes(`Start ${planned}`)) throw new Error(`today's routine is ready with its ${want} exercises: ${planned}, ${n}`);
+          if (!dayTool.text.startsWith(`Today: ${(await client.locator('[data-testid="training-today-title"]').innerText()).split(" · ").slice(1).join(" · ")}`) || !dayTool.text.includes("1. ")) throw new Error(`body_training gives today's planned routine before a set: ${dayTool.text.slice(0, 300)}`);
+        }
+        console.log(`✓ the training plan (rev 648): rotation and weekend routine saved on Settings, ↓ reorders; Today reads "${title}" with a session and "${planned || "Rest"}" (${why}) before a set; the next 7 days start with it, Tue/Thu rest, Legs on Saturday never a weekday, the rotation takes turns; a swap of ${a.date} and ${b.date} and back; the week's planned count filled; Today's line and body_week_plan read the same plan`);
+      } finally {
+        await db.update(schema.bodySessions).set({ date: today }).where(eq(schema.bodySessions.id, session.id));
+        await db.update(schema.bodySets).set({ date: today }).where(eq(schema.bodySets.sessionId, session.id));
+        await db.update(schema.bodySettings).set({ weekPattern: before.weekPattern, refeedAnchor: before.refeedAnchor, trainingPlan: null }).where(eq(schema.bodySettings.id, before.id));
+        await db.update(schema.bodyDays).set({ routineId: null }).where(mine(schema.bodyDays));
+        await db.delete(schema.bodyRoutines).where(inArray(schema.bodyRoutines.id, [backId, legsId]));
+      }
+    }
+    // The AI switch below is pressed on Settings, where this step started.
+    await client.goto(`${base}/body/settings`);
     const trainTool = await tool("body_training").handler(await viewerFor(), { exercise: "Bench press" });
     if (!trainTool.text.includes("PR 190 × 5")) throw new Error(`body_training gives an exercise's history: ${trainTool.text}`);
     const wiTool = await tool("body_weigh_ins").handler(await viewerFor(), {});

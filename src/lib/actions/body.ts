@@ -34,7 +34,7 @@ import { daysFrom } from "@/lib/engine/body-habits";
 import { parseHours, recoveryInRange, sleepReadingId } from "@/lib/engine/body-recovery";
 import { instacartLines } from "@/lib/engine/body-shopping";
 import { INSTACART_OPEN, INSTACART_SOON_LINE, InstacartError, createShoppingListLink, instacartProblem } from "@/lib/instacart";
-import { shoppingView } from "@/lib/queries/body";
+import { shoppingView, trainingPlanView } from "@/lib/queries/body";
 import { disconnectWhoop, syncWhoop } from "@/lib/body-whoop";
 import { syncWords } from "@/lib/engine/body-whoop";
 import { WhoopError, whoopProblem } from "@/lib/whoop";
@@ -429,7 +429,7 @@ export async function setBodyDayTypeAction(formData: FormData): Promise<void> {
   const existing = await db.query.bodyDays.findFirst({ where: and(and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId)), eq(schema.bodyDays.date, date)) });
   if (!typeId || !types.some((t) => t.id === typeId)) {
     // A day marked Off (B2) keeps its row: only the hand-set type goes.
-    if (existing?.off) await db.update(schema.bodyDays).set({ dayTypeId: null }).where(eq(schema.bodyDays.id, existing.id));
+    if (existing?.off || existing?.routineId) await db.update(schema.bodyDays).set({ dayTypeId: null }).where(eq(schema.bodyDays.id, existing.id));
     else if (existing) await db.delete(schema.bodyDays).where(eq(schema.bodyDays.id, existing.id));
   } else if (existing) await db.update(schema.bodyDays).set({ dayTypeId: typeId }).where(eq(schema.bodyDays.id, existing.id));
   else await db.insert(schema.bodyDays).values({ id: newId(), workspaceId, userId, date, dayTypeId: typeId });
@@ -733,6 +733,76 @@ export async function archiveRoutineAction(formData: FormData): Promise<void> {
   await settle();
 }
 
+/* ───────── The training plan (rev 648) ───────── */
+
+/**
+ * Settings → Training plan: which routines rotate and in what order (↑ ↓ move one and save the rest), the routine pinned to the
+ * weekend, and the day types that are lift days. The plan itself is never stored; Training works it out from these.
+ */
+export async function saveTrainingPlanAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  const settings = await setUp(v);
+  const [routines, types] = await Promise.all([
+    db.query.bodyRoutines.findMany({ columns: { id: true, name: true, archivedAt: true }, where: and(eq(schema.bodyRoutines.workspaceId, workspaceId), eq(schema.bodyRoutines.userId, userId)) }),
+    db.query.bodyDayTypes.findMany({ columns: { id: true }, where: and(eq(schema.bodyDayTypes.workspaceId, workspaceId), eq(schema.bodyDayTypes.userId, userId)) }),
+  ]);
+  const live = new Set(routines.filter((r) => !r.archivedAt).map((r) => r.id));
+  const order = [...new Set(str(formData, "order").split(",").filter((id) => live.has(id)))];
+  const weekend = live.has(str(formData, "weekend")) ? str(formData, "weekend") : null;
+  const rotation = order.filter((id) => formData.get(`rot_${id}`) === "on" && id !== weekend);
+  const [dir, moved] = str(formData, "move").split(":");
+  const at = rotation.indexOf(moved ?? "");
+  const to = dir === "up" ? at - 1 : dir === "down" ? at + 1 : -1;
+  if (at >= 0 && to >= 0 && to < rotation.length) [rotation[at], rotation[to]] = [rotation[to], rotation[at]];
+  const liftTypes = types.filter((t) => formData.get(`lift_${t.id}`) === "on").map((t) => t.id);
+  await db
+    .update(schema.bodySettings)
+    .set({ trainingPlan: { rotation, weekend, liftTypes }, updatedAt: nowIso() })
+    .where(eq(schema.bodySettings.id, settings.id));
+  refresh();
+  await settle();
+}
+
+/** A routine picked by hand for one date (rev 648), or back to the plan with none. Only that day changes; nothing is stored for the rest. */
+async function pickRoutine(workspaceId: string, userId: string, date: string, routineId: string | null): Promise<void> {
+  const where = and(and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId)), eq(schema.bodyDays.date, date));
+  const existing = await db.query.bodyDays.findFirst({ where });
+  if (existing && (routineId || existing.dayTypeId || existing.off || existing.flag)) await db.update(schema.bodyDays).set({ routineId }).where(where);
+  else if (existing) await db.delete(schema.bodyDays).where(where);
+  else if (routineId) await db.insert(schema.bodyDays).values({ id: newId(), workspaceId, userId, date, routineId });
+}
+
+/** The next 7 days' "Do another routine" and "Back to the plan": today up to six days on, never a day with a session. */
+export async function setPlanDayAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const date = str(formData, "date");
+  if (!DATE.test(date) || date < v.today || date > addDays(v.today, 6)) back(TRAINING, "Only the next 7 days can be changed.");
+  const view = await trainingPlanView(workspaceId, userId, v.today);
+  const day = view?.days.find((d) => d.date === date);
+  if (!day || day.why === "done" || day.why === "started") back(TRAINING, "That day already has a workout logged.");
+  const routineId = str(formData, "routineId");
+  if (routineId && !view!.routines.some((r) => r.id === routineId)) back(TRAINING, "Pick one of your routines.");
+  await pickRoutine(workspaceId, userId, date, routineId || null);
+  refresh();
+  await settle();
+}
+
+/** "Swap with another day": two upcoming lift days trade routines, each kept by hand from then on. */
+export async function swapPlanDaysAction(formData: FormData): Promise<void> {
+  const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: R });
+  await setUp(v);
+  const view = await trainingPlanView(workspaceId, userId, v.today);
+  const a = view?.days.find((d) => d.date === str(formData, "date"));
+  const b = view?.days.find((d) => d.date === str(formData, "with"));
+  const open = (d: typeof a) => !!d && d.lift && !!d.routineId && d.why !== "done" && d.why !== "started";
+  if (!open(a) || !open(b) || a!.date === b!.date) back(TRAINING, "Pick two upcoming lift days with nothing logged.");
+  await pickRoutine(workspaceId, userId, a!.date, b!.routineId);
+  await pickRoutine(workspaceId, userId, b!.date, a!.routineId);
+  refresh();
+  await settle();
+}
+
 /** The day's session, made on first use: from a routine (its name copied) or empty. One per date; a second start is a no-op. */
 async function sessionFor(workspaceId: string, userId: string, date: string, routine: schema.BodyRoutine | null) {
   await db
@@ -864,7 +934,7 @@ export async function setDayOffAction(formData: FormData): Promise<void> {
     else await db.insert(schema.bodyDays).values({ id: newId(), workspaceId, userId, date, off: true });
     // An empty session started by mistake goes with it.
     await db.delete(schema.bodySessions).where(and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), eq(schema.bodySessions.date, date)));
-  } else if (existing?.dayTypeId) await db.update(schema.bodyDays).set({ off: false }).where(where);
+  } else if (existing?.dayTypeId || existing?.routineId) await db.update(schema.bodyDays).set({ off: false }).where(where);
   else if (existing) await db.delete(schema.bodyDays).where(where);
   refresh();
   await settle();

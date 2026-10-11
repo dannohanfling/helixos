@@ -21,7 +21,7 @@ import { PANTRY_LOCATIONS, toBasis, yieldFor } from "@/lib/engine/body-pantry";
 import { consumePantry } from "@/lib/body-pantry";
 import { fmtPer100, perUnit, readBarcode } from "@/lib/engine/body-find";
 import { FoodSearchError, foodSearchProblem, lookupBarcode, searchFoods } from "@/lib/food-search";
-import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayReadFor, dayTypesFor, medsView, workoutReadFor } from "@/lib/queries/body";
+import { activitiesOn, bodyDay, bodyLibrary, bodyRange, bodySettingsFor, bodyWeek, canAiUseBody, correlate, habitsRange, sleepRange, trainingRange, trainingPlanView, routinePreview, dayComposition, exerciseHistory, habitsDay, habitsFor, insightMetrics, latestComposition, pantryView, shoppingView, sleepView, trainingDay, trainingLibrary, trainingWeeks, weighIns, dayReadFor, dayTypesFor, medsView, workoutReadFor } from "@/lib/queries/body";
 import { zonesText } from "@/lib/engine/body-whoop";
 import { fmtDistanceIn, habitShown, isMeasures, storedFromShown, weightUnitWord } from "@/lib/engine/body-measures";
 import { fillBoxes, refill, takesFromBottle } from "@/lib/engine/body-meds";
@@ -35,6 +35,8 @@ import { fmtBedtime, fmtHours, fmtWake, parseHours, recoveryInRange, sleepReadin
 import { startOfWeek } from "@/lib/dates";
 import { goalKey, goalsFor, setGoal } from "@/lib/body-goals";
 import { storedTarget } from "@/lib/engine/body-goals";
+import { planLine, planSpoken, typeLabel } from "@/lib/engine/body-plan";
+import { formatDate } from "@/lib/dates";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -270,17 +272,41 @@ export const bodyTraining = defineTool({
       return { text: `${ex.name}${h.pr ? `, PR ${h.pr.text} on ${h.pr.date}` : ", no sets yet"}.\n${sessions.join("\n")}`, data: { exercise: ex.name, kind: ex.kind, unit: h.unit, pr: h.pr, points: h.points, sessions: h.sessions.slice(0, 12) } };
     }
     const date = dayOf(v, input.date);
-    const [t, weeks, activities] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), activitiesOn(v.workspace.id, v.user.id, date)]);
+    const [t, weeks, activities, planView] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), activitiesOn(v.workspace.id, v.user.id, date), date === v.today ? trainingPlanView(v.workspace.id, v.user.id, v.today) : null]);
     if (!t) throw new Error("HumanOS isn't set up for this member yet.");
+    const today = planView?.setUp && !t.session && !t.off ? planView.days[0] : null;
+    const planned = today ? { day: today, preview: today.routine ? await routinePreview(v.workspace.id, v.user.id, today.routine, date, t.unit) : null } : null;
     const lines: string[] = [];
     if (t.off) lines.push(`${date === v.today ? "Today" : date} is marked Off.`);
     else if (t.session) lines.push(`${date === v.today ? "Today" : date}: ${t.routineName ?? "a workout"}${t.plan.plannedSets ? `, ${t.plan.doneSets} of ${t.plan.plannedSets} planned sets` : `, ${t.plan.doneSets} sets`}${t.completedAt ? `, finished${t.note ? ` ("${t.note}")` : ""}` : ""}.`);
-    else lines.push(`${date === v.today ? "Today" : date}: no workout started${t.suggested ? `; ${t.suggested.name} is on the plan for this day type` : ""}.`);
+    else if (!planned) lines.push(`${date === v.today ? "Today" : date}: no workout started${t.suggested ? `; ${t.suggested.name} is on the plan for this day type` : ""}.`);
+    // Rev 648: today's planned routine and its exercises, before a set is logged, from the same plan Training shows.
+    if (planned) {
+      lines.unshift(`Today: ${planLine({ ...planned.day, typeName: typeLabel(planned.day) })}${planned.day.minutes ? `, about ${planned.day.minutes} min` : ""}${planned.day.carried ? " (legs missed last weekend)" : ""}.`);
+      planned.preview?.forEach((x, i) => lines.push(`${i + 1}. ${x.exercise.name}: ${x.sets} × ${x.reps || "?"}${x.weight != null ? ` at ${x.weight} ${t.unit}` : ""}${x.last.length ? `; last time ${x.lastDate}: ${x.last.join(", ")}` : ""}${x.pr ? `; PR ${x.pr}` : ""}.`));
+    }
     for (const x of t.exercises) lines.push(`${x.exercise.name}${x.target ? ` (plan ${x.target.sets} × ${x.target.reps || "?"})` : ""}: ${x.today.length ? x.today.map((s) => `${fmtSet(s, t.unit, x.exercise.kind)}${s.pr ? " (PR)" : ""}`).join(", ") : "no sets yet"}${x.last.length ? `; last time ${x.lastDate}: ${x.last.join(", ")}` : ""}${x.pr ? `; PR ${x.pr.text}` : ""}.`);
     if (weeks) lines.push(`This week: ${weeks.tally.done}${weeks.tally.planned != null ? ` of ${weeks.tally.planned}` : ""} session${weeks.tally.done === 1 && weeks.tally.planned == null ? "" : "s"}.`);
     // Phase 16b: the device's workouts that day, under the session.
     if (activities.length) lines.push(`Recorded by the device: ${activities.map((a) => `${a.sport} ${Math.round(a.minutes)} min${a.strain != null ? `, strain ${a.strain}` : ""}${a.avgHr != null ? `, ${a.avgHr} bpm` : ""}${fmtDistanceIn(a.distanceM, isMeasures(t.measures) ? t.measures : "us") ? `, ${fmtDistanceIn(a.distanceM, isMeasures(t.measures) ? t.measures : "us")}` : ""}${zonesText(a.zones) ? `, zones ${zonesText(a.zones)}` : ""}`).join("; ")}.`);
-    return { text: lines.join("\n"), data: { date, off: t.off, routine: t.routineName, finished: !!t.completedAt, plan: t.plan, exercises: t.exercises.map((x) => ({ name: x.exercise.name, kind: x.exercise.kind, target: x.target, today: x.today.map((s) => ({ weight: s.weight, unit: s.unit, reps: s.reps, pr: s.pr })), last: x.last, pr: x.pr })), week: weeks?.tally ?? null, activities: activities.map((a) => ({ sport: a.sport, minutes: a.minutes, strain: a.strain, avgHr: a.avgHr, maxHr: a.maxHr, distanceM: a.distanceM, zones: a.zones, underSession: !!a.sessionId })) } };
+    return { text: lines.join("\n"), data: { date, off: t.off, routine: t.routineName, finished: !!t.completedAt, plan: t.plan, planned: planned ? { routine: planned.day.name, dayType: typeLabel(planned.day), lift: planned.day.lift, minutes: planned.day.minutes, exercises: planned.preview?.map((x) => ({ name: x.exercise.name, sets: x.sets, reps: x.reps, weight: x.weight, last: x.last, pr: x.pr })) ?? [] } : null, exercises: t.exercises.map((x) => ({ name: x.exercise.name, kind: x.exercise.kind, target: x.target, today: x.today.map((s) => ({ weight: s.weight, unit: s.unit, reps: s.reps, pr: s.pr })), last: x.last, pr: x.pr })), week: weeks?.tally ?? null, activities: activities.map((a) => ({ sport: a.sport, minutes: a.minutes, strain: a.strain, avgHr: a.avgHr, maxHr: a.maxHr, distanceM: a.distanceM, zones: a.zones, underSession: !!a.sessionId })) } };
+  },
+});
+
+export const bodyWeekPlan = defineTool({
+  name: "body_week_plan",
+  scope: "body",
+  kind: "read",
+  description: "The training plan for the next 7 days, today first: each day's type (Lift, Off, Refeed), its routine or rest, the number of exercises and the main muscle groups, as Training shows it. Read-only; says the week in one line first.",
+  input: {},
+  handler: async (v): Promise<ToolResult> => {
+    await ready(v);
+    const p = await trainingPlanView(v.workspace.id, v.user.id, v.today);
+    if (!p) throw new Error("HumanOS isn't set up for this member yet.");
+    if (!p.setUp) return { text: "There's no training plan yet. It's set under HumanOS Settings, Training plan: the routines that rotate and the one for the weekend.", data: { setUp: false, days: [] } };
+    const lines = [`This week: ${planSpoken(p.days.map((d) => ({ weekday: d.weekday, routineName: d.name, lift: d.lift })))}.`];
+    p.days.forEach((d, i) => lines.push(`${i + 1}. ${i === 0 ? "Today" : formatDate(d.date, { weekday: "long" })} ${d.date}: ${planLine({ ...d, typeName: typeLabel(d) })}${d.muscles.length ? ` (${d.muscles.join(", ")})` : ""}${d.carried ? ", legs missed last weekend" : ""}${d.why === "swap" ? ", picked by hand" : ""}.`));
+    return { text: lines.join("\n"), data: { setUp: true, days: p.days.map((d) => ({ date: d.date, dayType: typeLabel(d), lift: d.lift, routine: d.name, why: d.why, exercises: d.routine?.lines.map((l) => ({ name: l.exercise.name, sets: l.sets, reps: l.reps })) ?? [], muscles: d.muscles, minutes: d.minutes, carried: d.carried })) } };
   },
 });
 

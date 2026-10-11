@@ -24,6 +24,7 @@ import { isLifting } from "@/lib/engine/body-whoop";
 import { MACROS, bodyAccessFor, bodyAiAllowedFor, capUse, dayMarks, dayTypeIdFor, formatBodyForAi, hasBands, nextRefeed, portionMacros, sumMacros, summaryLine, whatFits, worstMark, type BodyAccess, type Bands, type Macro, type Macros } from "@/lib/engine/body";
 import { goalsNow } from "@/lib/body-goals";
 import { goalTomorrow } from "@/lib/engine/body-goals";
+import { EMPTY_PLAN, liftTypeIds, mainMuscles, planDays, planLine, planSetUp, roughLength, typeLabel, type PlanDay, type TrainingPlanSettings } from "@/lib/engine/body-plan";
 
 /**
  * Body ships dark (rev 195): a member whose Body is off gets a 404 from every Body page and from the Body export, as if Body did
@@ -203,7 +204,11 @@ export async function todayBody(v: Viewer) {
   if (!d) return null;
   // The one-tap chips (B7, placed by rev 201): only the habits due today, done-type ones toggle in place, measured ones open Practices.
   const habits = hd.habits.filter((h) => h.due).slice(0, 8).map((h) => ({ id: h.id, name: h.name, kind: h.kind, kept: h.kept, valueText: h.valueText, streak: h.streak, difficulty: h.difficulty }));
-  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag, meds };
+  // Rev 648: "Lift · Back Day · 6 exercises" once a training plan is set up.
+  const plan = await trainingPlanView(v.workspace.id, v.user.id, v.today);
+  const day = plan?.setUp ? plan.days[0] : null;
+  const training = day ? planLine({ ...day, typeName: typeLabel(day) }) : null;
+  return { dayType: d.dayType?.name ?? null, line: d.bands ? summaryLine(d.totals, d.bands, d.marks) : null, reminder: d.bands ? (d.dayType?.reminder ?? null) : null, habits, flag: d.flag, meds, training };
 }
 
 /* ───────── B2, workouts (rev 182) ───────── */
@@ -325,7 +330,8 @@ export async function trainingWeeks(workspaceId: string, userId: string, today: 
   const dayRow = new Map(days.map((d) => [d.date, d]));
   const sessionOn = new Map(sessions.map((s) => [s.date, s]));
   const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
-  const offered = (date: string) => !!routineForDay(lib.routines, dayTypeIdFor(date, settings.weekPattern, refeed, dayRow.get(date)?.dayTypeId ?? null));
+  const lift = await liftDayFor(workspaceId, userId, settings);
+  const offered = (date: string) => (lift ? lift(date, dayTypeIdFor(date, settings.weekPattern, refeed, dayRow.get(date)?.dayTypeId ?? null), !!dayRow.get(date)?.off) : !!routineForDay(lib.routines, dayTypeIdFor(date, settings.weekPattern, refeed, dayRow.get(date)?.dayTypeId ?? null)));
   const weeks = Array.from({ length: 12 }, (_, i) => addDays(from, i * 7)).map((monday) => ({
     monday,
     days: rangeDays(monday, addDays(monday, 6)).map((date) => {
@@ -337,6 +343,111 @@ export async function trainingWeeks(workspaceId: string, userId: string, today: 
   }));
   const thisWeek = rangeDays(weekStart, addDays(weekStart, 6));
   return { weeks, weekStart, tally: weekTally(thisWeek, (d) => (setsOn.get(d) ?? 0) > 0, offered) };
+}
+
+/* ───────── The training plan (rev 648) ───────── */
+
+/** Once a training plan is set up, whether a date is a lift day (its day type ticked, not marked Off); null without a plan. */
+async function liftDayFor(workspaceId: string, userId: string, settings: schema.BodySettings): Promise<((date: string, dayTypeId: string | null, off: boolean) => boolean) | null> {
+  if (!planSetUp(settings.trainingPlan)) return null;
+  const lifts = liftTypeIds(settings.trainingPlan, await dayTypesFor(workspaceId, userId));
+  return (_date, dayTypeId, off) => !off && !!dayTypeId && lifts.has(dayTypeId);
+}
+
+export type PlannedDay = PlanDay & {
+  dayType: schema.BodyDayType | null;
+  routine: TrainingLibrary["routines"][number] | null;
+  /** The routine's name, or what the session was logged as when the routine is gone. */
+  name: string | null;
+  exercises: number;
+  muscles: string[];
+  minutes: number | null;
+  /** Off by hand (not by day type), and a routine picked by hand for this date. */
+  offByHand: boolean;
+  picked: string | null;
+  sets: number;
+};
+
+/**
+ * The next 7 days of training, today first (rev 648): each day's type, whether it's a lift day, its routine and why, the
+ * routine's exercise count, main muscle groups and rough length. Worked out on every read from the day types, the plan in
+ * Settings → Training plan and what's logged; nothing of it is stored. `setUp` false: no plan yet (Training works as before).
+ */
+export async function trainingPlanView(workspaceId: string, userId: string, today: string) {
+  const settings = await bodySettingsFor(workspaceId, userId);
+  if (!settings) return null;
+  const plan: TrainingPlanSettings = settings.trainingPlan ?? EMPTY_PLAN;
+  const end = addDays(today, 6);
+  const since = addDays(today, -365);
+  const [types, lib, rows, sessions, counts] = await Promise.all([
+    dayTypesFor(workspaceId, userId),
+    trainingLibrary(workspaceId, userId),
+    db.query.bodyDays.findMany({ where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, today), lte(schema.bodyDays.date, end)) }),
+    db.query.bodySessions.findMany({ columns: { id: true, date: true, routineId: true, routineName: true, completedAt: true }, where: and(eq(schema.bodySessions.workspaceId, workspaceId), eq(schema.bodySessions.userId, userId), gte(schema.bodySessions.date, since), lte(schema.bodySessions.date, end)), orderBy: asc(schema.bodySessions.date) }),
+    db
+      .select({ sessionId: schema.bodySets.sessionId, n: sql<number>`count(*)`, first: sql<string>`min(${schema.bodySets.createdAt})`, last: sql<string>`max(${schema.bodySets.createdAt})` })
+      .from(schema.bodySets)
+      .where(and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, since)))
+      .groupBy(schema.bodySets.sessionId),
+  ]);
+  const setsIn = new Map(counts.map((c) => [c.sessionId, c]));
+  const rowOn = new Map(rows.map((r) => [r.date, r]));
+  const sessionOn = new Map(sessions.map((x) => [x.date, x]));
+  const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
+  const liftTypes = liftTypeIds(plan, types);
+  const routineIds = new Set(lib.routines.map((r) => r.id));
+  const dates = rangeDays(today, end);
+  const days = planDays(
+    dates.map((date) => {
+      const row = rowOn.get(date);
+      const sess = sessionOn.get(date);
+      return { date, dayTypeId: dayTypeIdFor(date, settings.weekPattern, refeed, row?.dayTypeId ?? null), off: !!row?.off, pick: row?.routineId ?? null, session: sess ? { routineId: sess.routineId, sets: setsIn.get(sess.id)?.n ?? 0, completed: !!sess.completedAt } : null };
+    }),
+    plan,
+    { liftTypes, routineIds, history: sessions.filter((x) => x.date < today && (setsIn.get(x.id)?.n ?? 0) > 0).map((x) => ({ date: x.date, routineId: x.routineId })) },
+  );
+  const minutesOf = (routineId: string) => roughLength(sessions.filter((x) => x.routineId === routineId && x.date < today && (setsIn.get(x.id)?.n ?? 0) > 1).map((x) => ({ first: setsIn.get(x.id)!.first, last: setsIn.get(x.id)!.last })));
+  const out: PlannedDay[] = days.map((d) => {
+    const routine = d.routineId ? (lib.routines.find((r) => r.id === d.routineId) ?? null) : null;
+    const sess = sessionOn.get(d.date);
+    return {
+      ...d,
+      dayType: types.find((t) => t.id === d.dayTypeId) ?? null,
+      routine,
+      name: routine?.name ?? sess?.routineName ?? null,
+      exercises: routine?.lines.length ?? 0,
+      muscles: routine ? mainMuscles(routine.lines.map((l) => l.exercise.name)) : [],
+      minutes: routine ? minutesOf(routine.id) : null,
+      offByHand: !!rowOn.get(d.date)?.off,
+      picked: rowOn.get(d.date)?.routineId ?? null,
+      sets: sess ? (setsIn.get(sess.id)?.n ?? 0) : 0,
+    };
+  });
+  return { setUp: planSetUp(settings.trainingPlan), plan, types, liftTypes, routines: lib.routines, days: out };
+}
+export type TrainingPlanView = NonNullable<Awaited<ReturnType<typeof trainingPlanView>>>;
+
+/**
+ * A routine before it's started (rev 648's Today card): each line's target, the weight to start at (accepted from a post-workout
+ * read, else what the next set's form would open with), last time and the PR, as Training shows them once it's going.
+ */
+export async function routinePreview(workspaceId: string, userId: string, routine: TrainingLibrary["routines"][number], date: string, unit: WeightUnit) {
+  const history = await setsOf(workspaceId, userId, routine.lines.map((l) => l.exerciseId));
+  return routine.lines.map((l) => {
+    const before = history.filter((s) => s.exerciseId === l.exerciseId && s.date < date);
+    const last = lastTime(before, date);
+    const pr = bestSet(before, unit);
+    const next = nextSetDefaults([], last, unit);
+    return {
+      exercise: l.exercise,
+      sets: l.sets,
+      reps: l.reps,
+      weight: l.weight ?? next.weight,
+      last: last.map((s) => fmtSet(s, unit, l.exercise.kind)),
+      lastDate: last[0]?.date ?? null,
+      pr: pr ? fmtSet(pr, unit, l.exercise.kind) : null,
+    };
+  });
 }
 
 /** One exercise's history: a point per session (oldest first), each session's sets, and the PR. Null if it isn't the member's. */
@@ -531,12 +642,14 @@ async function trainingWeek(workspaceId: string, userId: string, monday: string,
   const sunday = addDays(monday, 6);
   const [sets, days, lib] = await Promise.all([
     db.query.bodySets.findMany({ columns: { id: true, date: true, exerciseId: true }, where: and(eq(schema.bodySets.workspaceId, workspaceId), eq(schema.bodySets.userId, userId), gte(schema.bodySets.date, monday), lte(schema.bodySets.date, sunday)) }),
-    db.query.bodyDays.findMany({ columns: { date: true, dayTypeId: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, monday), lte(schema.bodyDays.date, sunday)) }),
+    db.query.bodyDays.findMany({ columns: { date: true, dayTypeId: true, off: true }, where: and(eq(schema.bodyDays.workspaceId, workspaceId), eq(schema.bodyDays.userId, userId), gte(schema.bodyDays.date, monday), lte(schema.bodyDays.date, sunday)) }),
     trainingLibrary(workspaceId, userId),
   ]);
   const refeed = { dayTypeId: settings.refeedDayTypeId, anchor: settings.refeedAnchor, everyDays: settings.refeedEveryDays };
   const dayRow = new Map(days.map((d) => [d.date, d]));
-  const tally = weekTally(rangeDays(monday, sunday), (d) => sets.some((s) => s.date === d), (d) => !!routineForDay(lib.routines, dayTypeIdFor(d, settings.weekPattern, refeed, dayRow.get(d)?.dayTypeId ?? null)));
+  const lift = await liftDayFor(workspaceId, userId, settings);
+  const typeOf = (d: string) => dayTypeIdFor(d, settings.weekPattern, refeed, dayRow.get(d)?.dayTypeId ?? null);
+  const tally = weekTally(rangeDays(monday, sunday), (d) => sets.some((s) => s.date === d), (d) => (lift ? lift(d, typeOf(d), !!dayRow.get(d)?.off) : !!routineForDay(lib.routines, typeOf(d))));
   // A PR is judged against everything before it, so the week's exercises need their whole history.
   const ids = [...new Set(sets.map((s) => s.exerciseId))];
   const history = await setsOf(workspaceId, userId, ids);

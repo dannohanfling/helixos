@@ -8,9 +8,10 @@ import { SubmitButton } from "@/components/submit-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { MACROS, MACRO_NAME, nextRefeed } from "@/lib/engine/body";
-import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory, templateSendsFor, whoopStatus } from "@/lib/queries/body";
+import { bodySettingsFor, dayTypesFor, requireBodyEnabled, shareHistory, templateSendsFor, trainingLibrary, whoopStatus } from "@/lib/queries/body";
+import { EMPTY_PLAN, liftTypeIds } from "@/lib/engine/body-plan";
 import { CoachSends } from "@/components/body/coach-sends";
-import { deleteDayTypeAction, disconnectWhoopAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, setBodyAiAction, setBodyShareAction, syncWhoopAction } from "@/lib/actions/body";
+import { deleteDayTypeAction, disconnectWhoopAction, eraseBodyAction, saveBodySettingsAction, saveDayTypeAction, saveTrainingPlanAction, setBodyAiAction, setBodyShareAction, syncWhoopAction } from "@/lib/actions/body";
 import type * as schema from "@/db/schema";
 import { MEASURES, MEASURES_LABEL } from "@/lib/engine/body-measures";
 import { EraseBodyForm } from "@/components/body/unit-inputs";
@@ -70,7 +71,12 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
   // Danno's ready-made Shortcut, once he's built and shared it (an iCloud link only; set in Vercel as HEALTH_SHORTCUT_URL).
   const shortcutUrl = /^https:\/\/www\.icloud\.com\/shortcuts\/[\w-]+$/.test(process.env.HEALTH_SHORTCUT_URL ?? "") ? process.env.HEALTH_SHORTCUT_URL! : null;
   if (!s) redirect("/body");
-  const [types, history, sends] = await Promise.all([dayTypesFor(v.workspace.id, v.user.id), shareHistory(v.workspace.id, v.user.id), templateSendsFor(v.workspace.id, v.user.id, "day_type")]);
+  const [types, history, sends, lib] = await Promise.all([dayTypesFor(v.workspace.id, v.user.id), shareHistory(v.workspace.id, v.user.id), templateSendsFor(v.workspace.id, v.user.id, "day_type"), trainingLibrary(v.workspace.id, v.user.id)]);
+  // Training plan (rev 648): the rotation's routines in their order, then the rest by name.
+  const plan = s.trainingPlan ?? EMPTY_PLAN;
+  const rotation = plan.rotation.filter((id) => id !== plan.weekend && lib.routines.some((r) => r.id === id));
+  const ordered = [...rotation.map((id) => lib.routines.find((r) => r.id === id)!), ...lib.routines.filter((r) => !rotation.includes(r.id))];
+  const lifts = liftTypeIds(plan, types);
   const refeedNext = nextRefeed(v.today, { dayTypeId: s.refeedDayTypeId, anchor: s.refeedAnchor, everyDays: s.refeedEveryDays });
   const capRows = [...s.caps, null];
 
@@ -260,6 +266,79 @@ export default async function BodySettingsPage({ searchParams }: { searchParams:
             Save
           </SubmitButton>
         </form>
+      </Card>
+
+      <Card className="mb-4" title="Training plan" id="training-plan">
+        <p className="text-sm text-ink-2">Training plans each lift day from this. The weekend routine goes on Saturday, or Sunday if Saturday&apos;s doesn&apos;t happen. The other lift days take turns through the rotation, the routine you did longest ago first.</p>
+        {lib.routines.length ? (
+          /* Keyed on what's saved: after a save the form opens again on it, rather than React's reset to the first defaults. */
+          <form key={JSON.stringify([plan, lib.routines.map((r) => r.id)])} action={saveTrainingPlanAction} className="mt-3 space-y-4" data-testid="training-plan-form">
+            <input type="hidden" name="order" value={ordered.map((r) => r.id).join(",")} />
+            <div>
+              <span className="label">Rotation</span>
+              <ol className="divide-y rounded-lg border" data-testid="training-plan-rotation">
+                {ordered.map((r) => {
+                  const i = rotation.indexOf(r.id);
+                  return (
+                    <li key={r.id} className="flex items-center gap-2 p-2 text-sm" data-testid="training-plan-routine" data-name={r.name} data-in={i >= 0 ? "1" : "0"}>
+                      <label className="flex min-w-0 flex-1 items-center gap-2">
+                        <input type="checkbox" name={`rot_${r.id}`} defaultChecked={i >= 0} aria-label={`${r.name} in the rotation`} />
+                        {i >= 0 ? <span className="tabular text-ink-3">{i + 1}.</span> : null}
+                        <span className="min-w-0 break-words">{r.name}</span>
+                      </label>
+                      {i >= 0 ? (
+                        <span className="flex gap-1">
+                          <SubmitButton name="move" value={`up:${r.id}`} className="btn btn-ghost btn-xs" disabled={i === 0} aria-label={`Move ${r.name} up`} data-testid="training-plan-up" pendingText="…">
+                            ↑
+                          </SubmitButton>
+                          <SubmitButton name="move" value={`down:${r.id}`} className="btn btn-ghost btn-xs" disabled={i === rotation.length - 1} aria-label={`Move ${r.name} down`} data-testid="training-plan-down" pendingText="…">
+                            ↓
+                          </SubmitButton>
+                        </span>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ol>
+              <p className="mt-1 text-xs text-ink-3">Tick the routines that take turns. ↑ and ↓ set the order a new rotation starts in.</p>
+            </div>
+            <label className="block sm:w-72">
+              <span className="label">Weekend routine</span>
+              <select name="weekend" className="field py-1 text-sm" defaultValue={plan.weekend ?? ""} data-testid="training-plan-weekend">
+                <option value="">None</option>
+                {lib.routines.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-ink-3">Saturday first, Sunday as the fallback, never on a weekday.</span>
+            </label>
+            <div>
+              <span className="label">Lift days</span>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm" data-testid="training-plan-lift-types">
+                {types.map((t) => (
+                  <label key={t.id} className="flex items-center gap-1.5">
+                    <input type="checkbox" name={`lift_${t.id}`} defaultChecked={lifts.has(t.id)} /> {t.name}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-ink-2" data-testid="training-plan-week">
+                Your week: {[1, 2, 3, 4, 5, 6, 0].map((d) => `${DAYS[d]} ${types.find((t) => t.id === s.weekPattern[String(d) as "0"])?.name ?? "—"}`).join(" · ")}.{" "}
+                <a href="#week" className="underline">
+                  Change it
+                </a>
+              </p>
+            </div>
+            <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…" data-testid="training-plan-save">
+              Save training plan
+            </SubmitButton>
+          </form>
+        ) : (
+          <p className="mt-2 text-sm text-ink-2">
+            Make your routines first. <Link href="/body/training/routines" className="underline">Exercises &amp; routines →</Link>
+          </p>
+        )}
       </Card>
 
       <Card className="mb-4" title="From Airtable" id="airtable">

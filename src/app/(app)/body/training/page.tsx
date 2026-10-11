@@ -6,7 +6,8 @@ import { SubmitButton } from "@/components/submit-button";
 import { HumanosHeader } from "@/components/body/humanos-header";
 import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet, fmtTarget, repsMark } from "@/lib/engine/body-training";
-import { activitiesOn, requireBodyEnabled, restrictedNow, trainingDay, trainingWeeks, workoutReadFor, type TrainingDayView } from "@/lib/queries/body";
+import { activitiesOn, habitsDay, requireBodyEnabled, restrictedNow, routinePreview, trainingDay, trainingPlanView, trainingWeeks, workoutReadFor, type TrainingDayView } from "@/lib/queries/body";
+import { TodayPlanCard, WeekPlanList } from "@/components/body/training-plan";
 import { isLifting, zonesText } from "@/lib/engine/body-whoop";
 import { gymGroup } from "@/lib/engine/body-reads";
 import { WorkoutReadCard } from "@/components/body/workout-read";
@@ -95,6 +96,14 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= v.today ? sp.date : v.today;
   const [t, weeks, restricted, activities, read] = await Promise.all([trainingDay(v.workspace.id, v.user.id, date), trainingWeeks(v.workspace.id, v.user.id, v.today), restrictedNow(v.workspace.id, v.user.id, v.today), activitiesOn(v.workspace.id, v.user.id, date), workoutReadFor(v.workspace.id, v.user.id, date)]);
   const gym = gymGroup(activities, isLifting);
+  // Rev 648: today's planned routine and the next 7 days, once a training plan is set up; any other date works as before.
+  const planView = date === v.today ? await trainingPlanView(v.workspace.id, v.user.id, v.today) : null;
+  const plan = planView?.setUp ? planView : null;
+  const today = plan?.days[0] ?? null;
+  const [preview, dueHabits] = await Promise.all([
+    today?.routine && (today.why === "rotation" || today.why === "weekend" || today.why === "swap") && t ? routinePreview(v.workspace.id, v.user.id, today.routine, date, t.unit) : null,
+    today && !today.lift ? habitsDay(v.workspace.id, v.user.id, date, v.today).then((h) => h.habits.filter((x) => x.due).slice(0, 8).map((x) => ({ id: x.id, name: x.name, kept: x.kept }))) : [],
+  ]);
   if (!t) {
     return (
       <>
@@ -178,6 +187,13 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
         </p>
       ) : null}
 
+      {today && plan ? (
+        <>
+          <TodayPlanCard day={today} preview={preview} unit={t.unit} prs={t.exercises.reduce((n, x) => n + x.today.filter((s) => s.pr).length, 0)} habits={dueHabits} />
+          <WeekPlanList days={plan.days} routines={plan.routines} />
+        </>
+      ) : null}
+
       {!t.library.exercises.length && !t.session ? (
         <Card title="Start here">
           <p className="text-sm text-ink-2" data-testid="training-empty">
@@ -187,7 +203,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
             </Link>
           </p>
         </Card>
-      ) : t.off ? (
+      ) : t.off && today ? null : t.off ? (
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3" data-testid="training-off">
             <p className="text-lg font-semibold text-humanos-ink">😴 {label === "Today" ? "Off today" : "Off"}. Rest is part of the plan.</p>
@@ -201,9 +217,9 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
           </div>
         </Card>
       ) : !t.session ? (
-        <Card title={label === "Today" ? "Today's workout" : "Workout"}>
+        <Card title={today ? (today.lift ? "Or another routine today" : "Train anyway") : label === "Today" ? "Today's workout" : "Workout"}>
           <div className="space-y-3">
-            {t.suggested ? (
+            {t.suggested && !today ? (
               <form action={startSessionAction} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-humanos p-3">
                 <input type="hidden" name="date" value={date} />
                 <input type="hidden" name="routineId" value={t.suggested.id} />
@@ -216,10 +232,10 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
                 </SubmitButton>
               </form>
             ) : null}
-            {t.library.routines.filter((r) => r.id !== t.suggested?.id).length ? (
+            {t.library.routines.filter((r) => r.id !== (today ? today.routineId : t.suggested?.id)).length ? (
               <ul className="divide-y rounded-lg border">
                 {t.library.routines
-                  .filter((r) => r.id !== t.suggested?.id)
+                  .filter((r) => r.id !== (today ? today.routineId : t.suggested?.id))
                   .map((r) => (
                     <li key={r.id} className="p-2.5">
                       <form action={startSessionAction} className="flex flex-wrap items-center justify-between gap-2">
@@ -254,7 +270,7 @@ export default async function TrainingPage({ searchParams }: { searchParams: Pro
           </div>
         </Card>
       ) : (
-        <section className="card mb-3 p-4" data-testid="training-session" data-complete={t.completedAt ? "1" : "0"}>
+        <section className="card mb-3 scroll-mt-4 p-4" id="workout-read" data-testid="training-session" data-complete={t.completedAt ? "1" : "0"}>
           <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
             <span>
               <span className="font-semibold">{t.routineName ?? "Workout"}</span>

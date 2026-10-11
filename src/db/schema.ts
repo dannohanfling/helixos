@@ -2941,12 +2941,16 @@ export const bodySettings = sqliteTable(
     refeedEveryDays: integer("refeed_every_days").notNull().default(14),
     mealSlots: text("meal_slots", { mode: "json" }).$type<string[]>().notNull().default(["Breakfast", "Lunch", "Dinner", "Snacks"]),
     caps: text("caps", { mode: "json" }).$type<BodyCap[]>().notNull().default([]),
+    /** Settings → Training plan (rev 648): the upper-body rotation in order, the routine pinned to the weekend, the lift day types. */
+    trainingPlan: text("training_plan", { mode: "json" }).$type<BodyTrainingPlan>(),
     createdAt: createdAt(),
     updatedAt: text("updated_at"),
   },
   (t) => [uniqueIndex("body_settings_member").on(t.workspaceId, t.userId)],
 );
 export type BodySettings = typeof bodySettings.$inferSelect;
+/** Rev 648: see src/lib/engine/body-plan.ts. `liftTypes` null means every day type but one named Off or Rest. */
+export type BodyTrainingPlan = { rotation: string[]; weekend: string | null; liftTypes: string[] | null };
 
 /**
  * A day type with its own bands for calories, protein, fat and carbs, and an optional reminder shown on those days. Every band is
@@ -3062,6 +3066,8 @@ export const bodyDays = sqliteTable(
     off: integer("off", { mode: "boolean" }).notNull().default(false),
     /** Rev 237 phase 15 (revs 196/231): a day marked travelling or ill, left out of Patterns when asked; nothing else reads it. */
     flag: text("flag", { enum: ["travel", "illness"] }),
+    /** Rev 648: a routine picked by hand for this date ("do Shoulder today instead", or a swap with another day). Only that day. */
+    routineId: text("routine_id"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("body_days_member_date").on(t.workspaceId, t.userId, t.date)],

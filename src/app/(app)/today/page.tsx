@@ -541,6 +541,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               <Link href="/body#log" className="btn btn-humanos btn-sm" data-testid="today-log-meal">
                 Log a meal
               </Link>
+              {body.training ? (
+                <Link href="/body/training" className="w-full text-sm hover:underline" data-testid="today-training">
+                  🏋️ <span className="font-medium">{body.training}</span> →
+                </Link>
+              ) : null}
               {body.habits.length ? (
                 /* B7 habits (rev 196), placed by rev 201: one row of one-tap chips inside this same card, below the line. */
                 <div className="flex w-full flex-wrap items-center gap-1.5" data-testid="today-habits" data-kept={body.habits.filter((h) => h.kept).length} data-due={body.habits.length}>

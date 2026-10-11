@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 138,
+    date: "2026-10-11",
+    title: "HumanOS Training knows today's workout",
+    lines: [
+      "Set a training plan in HumanOS Settings: the routines that take turns, and the one for the weekend. Training then opens on today's routine with its exercises, next time's weights, last time and your PRs, ready to start.",
+      "Below it, the next 7 days at a glance. A missed day slides along rather than being skipped, the weekend routine moves to Sunday if Saturday doesn't happen, and you can swap two days or do another routine on any day. Ask Claude \"what's my training this week\" to hear it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 137,
     date: "2026-10-11",
     title: "Your Monday scoreboard",
