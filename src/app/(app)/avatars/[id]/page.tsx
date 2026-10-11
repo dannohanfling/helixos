@@ -4,6 +4,9 @@ import { AVATAR_FIELDS } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { avatarData } from "@/lib/avatars";
 import { archiveAvatarAction, duplicateAvatarAction, linkAvatarOfferAction, makePrimaryAvatarAction, saveAvatarAction } from "@/lib/actions/avatars";
+import { startInterviewAction } from "@/lib/actions/avatar-interview";
+import { NO_KEY, canInterview, interviewsBehind } from "@/lib/avatar-interview";
+import { fieldsToAsk } from "@/lib/engine/avatar-interview";
 import { AVATAR_FIELD_INFO, IMPORTED_NOTE, offersOf } from "@/lib/engine/avatars";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -11,9 +14,9 @@ import { DraftKeeper } from "@/components/draft-keeper";
 
 export const metadata = { title: "Avatar" };
 
-const SAVED: Record<string, string> = { "1": "Saved.", copy: "Duplicated: this is the copy. Rename it and change what differs.", back: "Brought back.", link: "Offers updated." };
+const SAVED: Record<string, string> = { interview: "Saved from your interview. Who is this avatar for? Pick its offers below.", "1": "Saved.", copy: "Duplicated: this is the copy. Rename it and change what differs.", back: "Brought back.", link: "Offers updated." };
 
-export default async function AvatarPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; field?: string; saved?: string }> }) {
+export default async function AvatarPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; field?: string; saved?: string; interview?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
@@ -25,6 +28,10 @@ export default async function AvatarPage({ params, searchParams }: { params: Pro
   const parents = rows.filter((x) => !x.archivedAt && !x.parentId && x.id !== a.id);
   const linked = offersOf(a.id, links, offers);
   const unlinked = offers.filter((o) => !linked.some((l) => l.id === o.id));
+  // Avatars by interview (rev 639): the empty fields can be filled by an interview; one it came from is shown with its answers.
+  const empty = fieldsToAsk(a);
+  const [interviewable, behind] = await Promise.all([v.switchedInto || !empty.length || a.archivedAt ? Promise.resolve(false) : canInterview(v), interviewsBehind({ workspaceId: v.workspace.id, userId: v.user.id }, a.id)]);
+  const behindAnswers = behind.flatMap((iv) => iv.turns.filter((t) => t.answer));
   return (
     <>
       {sp.error ? (
@@ -47,6 +54,7 @@ export default async function AvatarPage({ params, searchParams }: { params: Pro
             {a.primary ? <Badge tone="accent">★ Primary</Badge> : null}
             {a.imported ? <Badge tone="warn">{IMPORTED_NOTE}</Badge> : null}
             {a.archivedAt ? <Badge>archived</Badge> : null}
+            {behind.length ? <Badge tone="good">from an interview</Badge> : null}
           </span>
         }
         action={
@@ -76,6 +84,45 @@ export default async function AvatarPage({ params, searchParams }: { params: Pro
           </div>
         }
       />
+      {sp.interview ? (
+        <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="interview-start-error">
+          {sp.interview}
+        </p>
+      ) : null}
+      {!v.switchedInto && empty.length && !a.archivedAt ? (
+        <div className="card mb-4 flex flex-wrap items-center justify-between gap-2 p-3 text-sm" id="interview">
+          <span>
+            {empty.length} field{empty.length === 1 ? "" : "s"} still empty. An interview asks about those only; what&apos;s filled stays as it is.
+          </span>
+          {interviewable ? (
+            <form action={startInterviewAction}>
+              <input type="hidden" name="avatarId" value={a.id} />
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Starting…" data-testid="interview-start">
+                Interview me
+              </SubmitButton>
+            </form>
+          ) : (
+            <span className="text-ink-3" data-testid="interview-no-key">
+              {NO_KEY}
+            </span>
+          )}
+        </div>
+      ) : null}
+      {behindAnswers.length ? (
+        <details className="card mb-4 p-3 text-sm" data-testid="interview-behind">
+          <summary className="cursor-pointer font-medium">
+            The interview{behind.length === 1 ? "" : "s"} this came from ({behindAnswers.length} answers)
+          </summary>
+          <ol className="mt-2 space-y-2">
+            {behindAnswers.map((t, i) => (
+              <li key={i}>
+                <p className="text-ink-3">{t.question}</p>
+                <p>{t.answer}</p>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         <form action={saveAvatarAction} className="space-y-4" data-testid="avatar-form">
           <input type="hidden" name="id" value={a.id} />

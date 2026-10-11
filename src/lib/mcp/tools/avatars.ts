@@ -5,10 +5,12 @@
  */
 import { z } from "zod";
 import type { Viewer } from "@/lib/auth";
-import { AVATAR_FIELDS, type Avatar, type AvatarField } from "@/db/schema";
+import { AVATAR_FIELDS, type Avatar, type AvatarField, type AvatarInterview } from "@/db/schema";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { avatarData, byName, linkOffer, saveAvatar, type AvatarInput } from "@/lib/avatars";
 import { AVATAR_FIELD_INFO, avatarTree, offersOf, type LinkRow, type OfferRef } from "@/lib/engine/avatars";
+import { answerInterview, openInterviews, startInterview } from "@/lib/avatar-interview";
+import { draftSummary, openTurn, progressWords } from "@/lib/engine/avatar-interview";
 
 const member = (v: Viewer) => ({ workspaceId: v.workspace.id, userId: v.user.id });
 
@@ -124,4 +126,72 @@ export const offerLinkAvatar = defineTool({
     const text = input.unlink ? `Unlinked "${a.name}" from ${o.name}.` : `Linked "${a.name}" to ${o.name}${r.main ? " as its main avatar" : ""}.`;
     return { text, data: { avatar: a.name, offer: o.name, linked: !input.unlink, main: r.main } };
   },
+});
+
+/* ───────── Avatars by interview (rev 642): spoken, one question at a time; saved interviews make stop and resume work. ───────── */
+
+const appUrl = () => (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+/** Where the interview stands, in words to read aloud: the next question, or the draft's summary with the page to keep it on. */
+function interviewOut(row: AvatarInterview, rows: Avatar[]) {
+  const target = row.avatarId ? (rows.find((a) => a.id === row.avatarId)?.name ?? "an avatar") : "a new avatar";
+  const open = openTurn(row.turns);
+  const fields: AvatarField[] = row.avatarId ? [...new Set(row.turns.map((t) => t.field))] : [...AVATAR_FIELDS];
+  const link = `${appUrl()}/avatars/interview/${row.id}`;
+  if (row.status === "draft" && row.draft) {
+    const d = row.draft;
+    const lines = fields.map((f) => `${AVATAR_FIELD_INFO[f].label}: ${d.fields[f]?.text.replace(/\n/g, " / ") ?? "not covered"}`);
+    const text = [`The draft for ${target} is ready: ${draftSummary(d, fields)}.`, ...lines, d.dropped.length ? `Left out: ${d.dropped.join("; ")}.` : "", `Nothing is saved yet. Open it to keep, edit or skip each field and save: ${link}`].filter(Boolean).join("\n");
+    return { text, data: { id: row.id, status: row.status, target, draft: d, link } };
+  }
+  if (row.status !== "open") return { text: `That interview is ${row.status}.`, data: { id: row.id, status: row.status, link } };
+  if (!open) return { text: `Every question for ${target} is answered. Call avatar_interview_answer with enough: true to draft it.`, data: { id: row.id, status: row.status, link } };
+  return { text: `${progressWords(row.turns, fields.length ? fields : [...AVATAR_FIELDS])} for ${target}: ${open.question}`, data: { id: row.id, status: row.status, question: open.question, field: open.field, followUp: open.followUp, answered: row.turns.filter((t) => t.answer !== null).length, link } };
+}
+async function currentInterview(v: Viewer): Promise<AvatarInterview> {
+  const [row] = await openInterviews(v);
+  if (!row) throw new Error("There's no interview under way. Start one with avatar_interview_start.");
+  return row;
+}
+
+defineTool({
+  name: "avatar_interview_start",
+  scope: "offers",
+  kind: "write",
+  description:
+    "Starts an interview that builds a buyer avatar from the member's own answers, or fills the empty fields of an avatar they name; picks up the one already under way, so stopping and coming back works. Read the question aloud and pass their answer, in their words, to avatar_interview_answer. Never answer for them or suggest an answer. Needs their AI key in HelixOS.",
+  input: { avatar: z.string().max(120).optional().describe("Optional: the avatar to fill, by name; left out, a new avatar") },
+  handler: async (v, input): Promise<ToolResult> => {
+    const { rows } = await avatarData(member(v));
+    const target = input.avatar ? byName(rows, String(input.avatar)) : null;
+    const r = await startInterview(v, target?.id ?? null);
+    if (!r.ok) throw new Error(r.error);
+    return interviewOut(r.interview, rows);
+  },
+});
+
+defineTool({
+  name: "avatar_interview_answer",
+  scope: "offers",
+  kind: "write",
+  description:
+    "Gives the member's answer to the interview's current question, word for word as they said it (an empty answer skips it), and returns the next question, or the draft once every field is asked. enough: true drafts it now from the answers so far. The draft keeps only what they said; nothing is saved until they keep each field in HelixOS.",
+  input: {
+    answer: z.string().max(4000).optional().describe("Their answer, as they said it"),
+    enough: z.boolean().optional().describe("true when the member says that's enough and wants the draft"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    const row = await currentInterview(v);
+    const r = await answerInterview(v, row.id, input.answer ? String(input.answer) : "", input.enough === true);
+    if (!r.ok) throw new Error(r.error);
+    return interviewOut(r.interview, (await avatarData(member(v))).rows);
+  },
+});
+
+defineTool({
+  name: "avatar_interview_status",
+  scope: "offers",
+  kind: "read",
+  description: "Where the member's interview stands: the question waiting for an answer, or the draft with what was left out and the link to keep it. Read-only.",
+  input: {},
+  handler: async (v): Promise<ToolResult> => interviewOut(await currentInterview(v), (await avatarData(member(v))).rows),
 });

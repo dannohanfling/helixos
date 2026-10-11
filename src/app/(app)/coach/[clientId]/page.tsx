@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { KIT_STATUS_WORDS, kitFor, kitStatus } from "@/lib/queries/brand-kit";
 import { notFound } from "next/navigation";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { switchToClientAction } from "@/lib/actions/switch";
@@ -114,6 +114,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const noteTasks = await tasksFromNotes(ws, notes.map((n) => n.id));
   // Their buyer avatars and which offers each is for, read-only (rev 501 §7).
   const avatars = await avatarData({ workspaceId: ws, userId: m.userId });
+  // The interviews behind them (rev 639): the coach sees that an avatar came from one, and its answers.
+  const interviews = await db.query.avatarInterviews.findMany({ where: and(eq(schema.avatarInterviews.workspaceId, ws), eq(schema.avatarInterviews.userId, m.userId), eq(schema.avatarInterviews.status, "saved")), orderBy: asc(schema.avatarInterviews.createdAt) });
   // Business goals (BG1), read-only: the plan as the client sees it, counted.
   const plan = await planData({ workspaceId: ws, userId: m.userId }, v.today);
   const planSum = coachSummary(plan.tree);
@@ -684,6 +686,22 @@ export default async function CoachClientPage({ params, searchParams }: { params
                     {a.primary ? "★ " : ""}
                     {a.name}
                     <span className="text-xs text-ink-3"> → {offersOf(a.id, avatars.links, avatars.offers).map((o) => `${o.name}${o.main ? " (main)" : ""}`).join(", ") || "no offer"}</span>
+                    {(() => {
+                      const said = interviews.filter((x) => x.savedAvatarId === a.id).flatMap((x) => x.turns.filter((t) => t.answer));
+                      if (!said.length) return null;
+                      return (
+                        <details className="mt-1 text-xs" data-testid="coach-avatar-interview">
+                          <summary className="cursor-pointer text-ink-2">from an interview ({said.length} answers)</summary>
+                          <ol className="mt-1 space-y-1 pl-2">
+                            {said.map((t, i) => (
+                              <li key={i}>
+                                <span className="text-ink-3">{t.question}</span> {t.answer}
+                              </li>
+                            ))}
+                          </ol>
+                        </details>
+                      );
+                    })()}
                   </li>
                 ))}
               </ul>

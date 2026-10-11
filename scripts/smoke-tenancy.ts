@@ -62,6 +62,7 @@ const ROUTES: Record<string, Route> = {
   "/library/[id]": { kind: "owned", table: "libraryPosts" },
   "/magnets/[id]": { kind: "owned", table: "leadMagnets" },
   "/avatars/[id]": { kind: "owned", table: "avatars" },
+  "/avatars/interview/[id]": { kind: "owned", table: "avatarInterviews" },
   "/offers/[id]": { kind: "owned", table: "offers" },
   "/goals/[id]": { kind: "owned", table: "planRecords" },
   "/proof/[id]": { kind: "owned", table: "proofs" },
@@ -245,7 +246,17 @@ async function main() {
   const ensureAvatar = async () => {
     if (!(await db.query.avatars.findFirst({ where: eq(schema.avatars.userId, B.id) }))) await db.insert(schema.avatars).values({ id: newId(), workspaceId: ws, userId: B.id, name: "B's Private Avatar", pains: "B only." });
   };
-  await Promise.all([ensureAvatar(), ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording(), ensureReport()]);
+  // Avatars by interview (rev 639): a B-owned interview, its answer B's own words.
+  const ensureInterview = async () => {
+    let r = await db.query.avatarInterviews.findFirst({ where: eq(schema.avatarInterviews.userId, B.id) });
+    if (!r) {
+      const id = newId();
+      await db.insert(schema.avatarInterviews).values({ id, workspaceId: ws, userId: B.id, turns: [{ field: "who", question: "Who are they?", answer: "B's private interview answer", followUp: false }] });
+      r = (await db.query.avatarInterviews.findFirst({ where: eq(schema.avatarInterviews.id, id) }))!;
+    }
+    return r;
+  };
+  await Promise.all([ensureAvatar(), ensureInterview(), ensureMagnet(), ensureLibrary(), ensureScript(), ensureClaim(), ensureAttachment(), ensureDeckImage(), ensureExercise(), ensureHabit(), ensureHealth(), ensureRecording(), ensureReport()]);
 
   // One B-owned id per table the routes name, so the walk can substitute B's id into A's request.
   const first = async <T>(q: Promise<T | undefined>): Promise<T> => {
@@ -277,6 +288,7 @@ async function main() {
     memberReports: (await ensureReport()).id,
     planRecords: (await ensurePlanRecord()).id,
     kpis: (await ensureKpi()).id,
+    avatarInterviews: (await ensureInterview()).id,
     // B's profile photo (client headshots): set on the record, so the route has something of B's to refuse.
     memberships: await (async () => { await db.update(schema.memberships).set({ headshotUrl: "https://private.invalid/b-original.jpg", headshotDisplayUrl: "https://private.invalid/b-512.jpg", headshotMime: "image/jpeg", headshotSource: "import" }).where(eq(schema.memberships.id, bMem.id)); return bMem.id; })(),
   };
@@ -290,6 +302,7 @@ async function main() {
     recordings: (await ensureRecording()).title,
     planRecords: (await ensurePlanRecord()).title,
     kpis: (await ensureKpi()).name,
+    avatarInterviews: "B's private interview answer",
   };
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });

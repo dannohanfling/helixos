@@ -1201,6 +1201,34 @@ export const avatars = sqliteTable(
 );
 export type Avatar = typeof avatars.$inferSelect;
 
+/**
+ * An avatar interview (rev 636, answered rev 639): the questions asked and the member's answers, kept so they can stop and
+ * resume (in the app or by voice) and so the coach can read the answers behind an avatar. The draft is what the server kept
+ * after its checks; nothing reaches the avatar until the member keeps a field and saves.
+ */
+export type InterviewTurn = { field: AvatarField; question: string; answer: string | null; followUp: boolean };
+export type InterviewDraft = { name: string | null; fields: Partial<Record<AvatarField, { text: string; from: number[] }>>; dropped: string[] };
+export const AVATAR_INTERVIEW_STATUSES = ["open", "draft", "saved", "stopped"] as const;
+export const avatarInterviews = sqliteTable(
+  "avatar_interviews",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** The avatar whose empty fields it fills; null for a new avatar. */
+    avatarId: text("avatar_id"),
+    status: text("status", { enum: AVATAR_INTERVIEW_STATUSES }).notNull().default("open"),
+    turns: text("turns", { mode: "json" }).$type<InterviewTurn[]>().notNull().default([]),
+    draft: text("draft", { mode: "json" }).$type<InterviewDraft>(),
+    /** The avatar it was saved into, so the avatar can say it came from an interview and show the answers. */
+    savedAvatarId: text("saved_avatar_id"),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [index("avatar_interviews_member").on(t.workspaceId, t.userId), index("avatar_interviews_saved").on(t.savedAvatarId)],
+);
+export type AvatarInterview = typeof avatarInterviews.$inferSelect;
+
 /** Which of a member's avatars an offer is for: many to many, with at most one `main` per offer. Owned like the avatar. */
 export const avatarOffers = sqliteTable(
   "avatar_offers",

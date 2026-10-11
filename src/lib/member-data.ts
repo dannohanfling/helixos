@@ -41,6 +41,8 @@ export const MEMBER_TABLES = {
   // Buyer avatars and which offers each is for (rev 501, built by Body): the member's own, in their export and erased with them.
   avatars: schema.avatars,
   avatar_offers: schema.avatarOffers,
+  // The interviews behind them (rev 639): the member's own answers, exported and erased with them.
+  avatar_interviews: schema.avatarInterviews,
   pathways: schema.pathways,
   webinars: schema.webinars,
   client_records: schema.clientRecords,

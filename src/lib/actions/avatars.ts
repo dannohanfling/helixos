@@ -96,3 +96,4 @@ export async function linkAvatarOfferAction(fd: FormData): Promise<void> {
   refresh();
   go(back, { saved: "link" }, back.startsWith("/offers/") ? "who-for" : "offers");
 }
+

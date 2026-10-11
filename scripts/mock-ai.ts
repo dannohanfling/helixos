@@ -68,6 +68,24 @@ function reply(system: string, user: string): string {
   if (/search terms/i.test(system) && /"terms"/.test(system)) {
     return JSON.stringify({ terms: ["foot-in-the-door", "compliance", "small request", "commitment"], effect: "Foot-in-the-door effect", field: "Social psychology, compliance research", openalexField: "Psychology" });
   }
+  // Avatars by interview (rev 639): a follow-up when an answer is short, else NEXT; the draft carries every answer as given plus
+  // one phrase and one number the member never said and a field with no answer behind it, which the server must drop.
+  if (/AVATAR_INTERVIEW_FOLLOWUP/.test(system)) {
+    const answer = user.match(/^Answer: ([\s\S]*)$/m)?.[1]?.trim() ?? "";
+    return answer.length < 30 ? "What did that cost them?" : "NEXT";
+  }
+  if (/AVATAR_INTERVIEW_DRAFT/.test(system)) {
+    const fields: Record<string, { text: string; from: number[] }> = {};
+    for (const m of user.matchAll(/^A(\d+) \((\w+)\): (.+)$/gm)) {
+      const [, n, field, answer] = m;
+      const at = fields[field];
+      fields[field] = at ? { text: `${at.text}\n${answer}`, from: [...at.from, Number(n)] } : { text: answer, from: [Number(n)] };
+    }
+    if (fields.phrases) fields.phrases = { text: `${fields.phrases.text.split(/[,.;]/)[0].trim()}\nI'm drowning in admin`, from: fields.phrases.from };
+    if (fields.wants) fields.wants = { text: `${fields.wants.text}\nDoubles revenue in 47 days`, from: fields.wants.from };
+    if (!fields.notFor) fields.notFor = { text: "Tire kickers", from: [99] };
+    return JSON.stringify({ name: "Mock interview avatar", fields });
+  }
   if (/JSON object keyed by/i.test(system)) {
     const keys = Array.from(user.matchAll(/^- ([\w:_-]+):/gm)).map((m) => m[1]);
     return JSON.stringify(Object.fromEntries(keys.map((k) => [k, { body: `Mock AI draft for ${k}.\nOne thought per line.\nWhat would you try first?` }])));

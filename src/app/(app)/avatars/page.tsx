@@ -2,8 +2,10 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { avatarData, importFromOffers } from "@/lib/avatars";
 import { archiveAvatarAction, saveAvatarAction } from "@/lib/actions/avatars";
+import { startInterviewAction } from "@/lib/actions/avatar-interview";
+import { NO_KEY, canInterview, openInterviews } from "@/lib/avatar-interview";
 import { avatarTree, filledCount, IMPORTED_NOTE, offersOf, type AvatarRow, type LinkRow, type OfferRef } from "@/lib/engine/avatars";
-import { Badge, Disclosure, Empty, Field, PageHeader } from "@/components/ui";
+import { Badge, Card, Disclosure, Empty, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Avatars" };
@@ -36,7 +38,7 @@ function Head({ a, sub = false }: { a: AvatarRow; sub?: boolean }) {
   );
 }
 
-export default async function AvatarsPage({ searchParams }: { searchParams: Promise<{ error?: string; field?: string; archived?: string }> }) {
+export default async function AvatarsPage({ searchParams }: { searchParams: Promise<{ error?: string; field?: string; archived?: string; interview?: string; saved?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
@@ -50,6 +52,8 @@ export default async function AvatarsPage({ searchParams }: { searchParams: Prom
   const archived = rows.filter((a) => a.archivedAt);
   const tops = rows.filter((a) => !a.archivedAt && !a.parentId);
   const justArchived = sp.archived ? rows.find((a) => a.id === sp.archived && a.archivedAt) : undefined;
+  // Avatars by interview (rev 639): offered with a working AI key; one already under way is picked up where it was.
+  const [interviewable, going] = v.switchedInto ? [false, []] : await Promise.all([canInterview(v), openInterviews(v)]);
   return (
     <>
       <PageHeader
@@ -88,6 +92,40 @@ export default async function AvatarsPage({ searchParams }: { searchParams: Prom
           </Disclosure>
         }
       />
+      {v.switchedInto ? null : (
+        <Card id="interview" className="mb-3" title="Interview me">
+          {sp.interview ? (
+            <p className="mb-2 rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="interview-start-error">
+              {sp.interview}
+            </p>
+          ) : sp.saved === "stopped" ? (
+            <p className="mb-2 text-sm text-ink-3" role="status">Interview stopped. Your answers are kept.</p>
+          ) : null}
+          <p className="mb-3 text-sm text-ink-2">Answer about ten plain questions about one real buyer, by typing or by voice, and get an avatar in your own words. Nothing is saved until you keep it.</p>
+          {interviewable ? (
+            <form action={startInterviewAction}>
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Starting…" data-testid="interview-start">
+                Interview me
+              </SubmitButton>
+            </form>
+          ) : (
+            <p className="text-sm text-ink-3" data-testid="interview-no-key">
+              {NO_KEY} <Link href="/settings#ai" className="underline">Settings</Link>
+            </p>
+          )}
+          {going.length ? (
+            <ul className="mt-3 space-y-1 text-sm" data-testid="interview-going">
+              {going.map((g) => (
+                <li key={g.id}>
+                  <Link href={`/avatars/interview/${g.id}`} className="underline">
+                    Pick up where you left off: {g.avatarId ? (rows.find((a) => a.id === g.avatarId)?.name ?? "an avatar") : "a new avatar"}, {g.turns.filter((t) => t.answer !== null).length} answered{g.status === "draft" ? ", draft ready" : ""}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </Card>
+      )}
       {justArchived ? (
         <form action={archiveAvatarAction} className="card mb-3 flex flex-wrap items-center justify-between gap-2 p-3 text-sm" data-testid="avatar-archived">
           <span>Archived &ldquo;{justArchived.name}&rdquo;. It stays under Archived below.</span>

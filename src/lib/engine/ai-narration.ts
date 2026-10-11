@@ -6,6 +6,7 @@
 export const NARRATION: Record<string, string[]> = {
   meal_photo: ["Looking at the plate.", "Naming each food and guessing the portion.", "Working out the macros for you to check."],
   body_week_summary: ["Reading the week's numbers.", "Finding what went well and what to watch.", "Writing it in a few lines."],
+  avatar_interview: ["Reading your answers.", "Putting each one under its field.", "Checking every word and number against what you said."],
   ladder: ["Reading your brief.", "Checking your proof and real numbers.", "Choosing the shape for this format.", "Writing the body, then the rungs.", "Checking every claim against what you gave it."],
   graphic_background: ["Reading the headline's words.", "Picturing a place, no people in it.", "Making the scene.", "Adding it to your Images."],
   webinar_section: ["Reading your offer and your audience.", "Finding the beliefs this section has to move.", "Drafting the section.", "Tightening it to the act it sits in."],

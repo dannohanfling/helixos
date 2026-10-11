@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 140,
+    date: "2026-10-11",
+    title: "Build an avatar by being interviewed",
+    lines: [
+      "On Avatars, press Interview me: about ten plain questions about one real buyer, typed or said, and you get an avatar in your own words. Their words, numbers and pains come only from what you said; anything else is left out and listed.",
+      "Keep or skip each field before it saves. Stop any time and pick up where you left off, here or by voice with Claude. An avatar's empty fields can be filled the same way.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 139,
     date: "2026-10-11",
     title: "Tell Claude your workout, your walk and how you feel",
