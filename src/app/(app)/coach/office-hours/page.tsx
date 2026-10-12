@@ -8,6 +8,7 @@ import { OohStamps as Stamps } from "@/components/ooh-stamps";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, PageHeader } from "@/components/ui";
+import { sharedDecisionsFor } from "@/lib/board-steps";
 
 export const metadata = { title: "Office Hours requests" };
 
@@ -27,6 +28,8 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
   // Inside each Friday, newest first unless the coach asks for the order they came in (rev 625).
   const order = sp.order === "oldest" ? "oldest" : "newest";
   const group = (f: string) => requests.filter((r) => r.friday === f).sort(byStamp(order));
+  // My Board (rev 664 §7): only the decisions a member chose to share; the only way one reaches the coach.
+  const shared = await sharedDecisionsFor(v.workspace.id);
 
   return (
     <>
@@ -40,6 +43,41 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
       ) : (
         <p className="mb-4 text-sm text-ink-2">No requests yet. Members ask from Office Hours in their menu.</p>
       )}
+      {shared.length ? (
+        <div className="mb-4" data-testid="ooh-shared-decisions">
+        <Card title="Office Hours: shared decisions">
+          <p className="mb-2 text-xs text-ink-3">Board decisions your clients shared with you. Only what they share shows here; they can stop sharing at any time.</p>
+          <ul className="divide-y">
+            {shared.map((d) => (
+              <li key={d.id} className="py-3 text-sm" data-testid="ooh-shared-decision">
+                <details>
+                  <summary className="cursor-pointer">
+                    <b>{d.member}</b>: {d.answer?.decision ?? d.question} <span className="text-xs text-ink-3">· shared {formatDate(d.sharedAt.slice(0, 10))}</span>
+                  </summary>
+                  <div className="mt-2 space-y-1">
+                    <p><span className="text-ink-3">They asked:</span> {d.question}</p>
+                    {d.answer ? (
+                      <>
+                        <p><span className="text-ink-3">The Board recommended:</span> {d.answer.recommendation}</p>
+                        {d.answer.split ? <p><span className="text-ink-3">Where it split:</span> {d.answer.split}</p> : null}
+                        <ol className="list-decimal pl-5">
+                          {d.answer.steps.map((s, i) => (
+                            <li key={i}>{s.do} <span className="text-ink-3">(by {formatDate(s.by)})</span></li>
+                          ))}
+                        </ol>
+                      </>
+                    ) : null}
+                    {d.followUps.map((f, i) => (
+                      <p key={i} className="text-ink-2"><span className="text-ink-3">Then:</span> {f.question}{f.recommendation ? ` → ${f.recommendation}` : ""}</p>
+                    ))}
+                  </div>
+                </details>
+              </li>
+            ))}
+          </ul>
+        </Card>
+        </div>
+      ) : null}
       <div className="space-y-4">
         {[...upcoming, ...past].map((f) => (
           <Card key={f} title={formatDate(f, { weekday: "long", month: "long", day: "numeric" })} action={<Badge tone={f >= v.today ? "accent" : "neutral"}>{group(f).length} {f >= v.today ? "upcoming" : "past"}</Badge>}>

@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 143,
+    date: "2026-10-12",
+    title: "My Board: check in, and share with your coach",
+    lines: [
+      "When a Board decision's steps come due, Today says so. Check in on the decision: say done, stuck or dropped for each step. Jordan shrinks a stuck step, Morgan kindly asks whether a dropped one was a decision or an avoidance, and the Board gives you one to three fresh steps. Ticking a step's task on Tasks counts on the decision too.",
+      "Decisions stay private to you. \"Share with my coach\" on a decision puts it on your coach's Office Hours card, and you can stop sharing any time. Your Monday scoreboard counts your Board steps for the week. Also by voice: board_checkin.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 142,
     date: "2026-10-12",
     title: "My Board: Set it up for me",

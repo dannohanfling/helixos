@@ -41,7 +41,7 @@ async function main() {
   const failures: string[] = [];
   try {
     const { db, schema } = await import("@/db");
-    const { and, eq } = await import("drizzle-orm");
+    const { and, desc, eq } = await import("drizzle-orm");
     const { seal } = await import("@/lib/crypto");
     const { newId } = await import("@/lib/ids");
     const { principlesFromPack, SEATS, MODES, SPEAK_MS } = await import("@/lib/engine/board");
@@ -344,6 +344,69 @@ async function main() {
     const teamApply = await allTools().find((t) => t.name === "board_apply")!.handler(team, { decision: follow.id, items: [1], confirm: true }).then(() => "ok", (e: Error) => e.message);
     must(teamApply.startsWith("A team member can read the Board's decisions but can't approve"), `a team member can't approve: ${teamApply}`);
     console.log("✓ board_apply: read back and nothing changes, then the yes: a draft post on the calendar, a draft webinar, a testimonial ask; never twice; a team member refused");
+
+    // Slice 3: the check-in line on Today, ticking a step's task, the check-in itself, the scoreboard's count, and sharing.
+    const { boardStepsFor } = await import("@/lib/board-steps");
+    const top = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, decisionId) }))!;
+    const [t1, t2] = top.stepTasks as string[];
+    await db.update(schema.tasks).set({ dueDate: addDays(today, -1), status: "today" }).where(eq(schema.tasks.id, t1));
+    await page.goto(`${base}/today`);
+    const line = await page.locator('[data-testid="today-board-checkin"]').first().innerText();
+    must(line.startsWith("Board check-in: 1 step from") && line.includes("is due"), `Today asks for the check-in: ${line}`);
+    const m0 = { workspaceId: ws, userId: maya.id };
+    const before = await boardStepsFor(m0, addDays(today, -7), addDays(today, 14), today);
+    must(before.overdue >= 1, `an open step past its date counts as overdue: ${JSON.stringify(before)}`);
+    // Ticking the step's task on Tasks updates the decision.
+    await db.update(schema.tasks).set({ status: "done", completedAt: new Date().toISOString() }).where(eq(schema.tasks.id, t2));
+    const after2 = await boardStepsFor(m0, addDays(today, -7), addDays(today, 14), today);
+    must(after2.done === before.done + 1, `the scoreboard counts the ticked step: ${JSON.stringify(after2)}`);
+    await page.goto(`${base}/my-board/${decisionId}`);
+    await page.locator('[data-testid="board-checkin"]').waitFor();
+    // The check-in reads the latest answer with steps (the Focus follow-up): one done, one stuck.
+    const nSteps = await page.locator('[data-testid="board-checkin-step"]').count();
+    must(nSteps >= 1, "the check-in lists the steps");
+    await page.locator('[data-testid="board-checkin-done-0"]').check();
+    for (let i = 1; i < nSteps; i++) await page.locator(`[data-testid="board-checkin-stuck-${i}"]`).check();
+    const threadBefore = (await db.query.boardDecisions.findMany({ where: eq(schema.boardDecisions.parentId, decisionId) })).length;
+    await page.locator('[data-testid="board-checkin-submit"]').click();
+    await page.waitForURL(/\?play=1/, { timeout: 60000 });
+    const thread = await db.query.boardDecisions.findMany({ where: eq(schema.boardDecisions.parentId, decisionId), orderBy: desc(schema.boardDecisions.createdAt) });
+    must(thread.length === threadBefore + 1 && thread[0].mode === "checkin" && thread[0].question.startsWith("Check-in on this decision.") && (nSteps < 2 || thread[0].answer?.advisors.some((a) => a.seat === "jordan")), `the Board answers the check-in on the same decision, Jordan there for a stuck step: ${thread[0].question.slice(0, 120)}`);
+    const sysCheckin = ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] }).system.map((b) => b.text).join("\n");
+    must(sysCheckin.includes("Mode: Check-in"), "asked in Check-in mode");
+    await page.locator('[data-testid="board-table-recommends"]').waitFor({ timeout: 40000 });
+    must((await page.locator('[data-testid="board-checkins"]').innerText()).includes(`1 done, ${nSteps - 1} stuck, 0 dropped`), "the check-in is recorded on the decision");
+    console.log("✓ the check-in: Today's line for a step past its date, a ticked task counted on the scoreboard, done and stuck per step, the Board answering in Check-in mode with Jordan");
+
+    // Sharing: private until she shares; then on the coach's Office Hours card; off again.
+    await press(page, '[data-testid="board-share"]');
+    must((await page.locator('[data-testid="board-shared"]').innerText()).startsWith("Shared with your coach"), "shared");
+    await logout(page);
+    await login(page, "As the coach");
+    await page.goto(`${base}/coach/office-hours`);
+    const card = await page.locator('[data-testid="ooh-shared-decisions"]').innerText();
+    must(card.includes(maya.name) && card.includes("Mock decision: where to put this month's hours"), `the coach sees the shared decision: ${card.slice(0, 200)}`);
+    must(!card.includes("Should I post daily"), "never a decision she didn't share");
+    await logout(page);
+    await login(page, "As a client");
+    await page.goto(`${base}/my-board/${decisionId}`);
+    await press(page, '[data-testid="board-unshare"]');
+    await logout(page);
+    await login(page, "As the coach");
+    await page.goto(`${base}/coach/office-hours`);
+    must(!(await page.locator('[data-testid="ooh-shared-decisions"]').count()), "stop sharing takes it off the coach's card");
+    await logout(page);
+    await login(page, "As a client");
+    console.log("✓ sharing: private until shared, then on the coach's Office Hours card alone, off again when she stops");
+
+    // board_checkin by voice, and refused to a team member.
+    const latestSteps = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.parentId, decisionId), orderBy: desc(schema.boardDecisions.createdAt) }))!.answer!.steps;
+    const said = latestSteps.map((_, i) => ({ n: i + 1, state: i === 0 ? "done" : "dropped" }));
+    const ci = await call("board_checkin", { decision: decisionId, steps: said });
+    must(!ci.isError && ci.text.includes("The Board recommends: "), `voice: the check-in answered: ${ci.text.slice(0, 160)}`);
+    const teamCheck = await allTools().find((t) => t.name === "board_checkin")!.handler(team, { decision: decisionId, steps: said }).then(() => "ok", (e: Error) => e.message);
+    must(teamCheck.startsWith("A team member can read the Board's decisions but can't check in"), `a team member can't check in: ${teamCheck}`);
+    console.log("✓ board_checkin by voice; a team member refused");
 
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nboard walk passed");

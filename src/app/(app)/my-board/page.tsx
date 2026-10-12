@@ -10,6 +10,9 @@ import "./boardroom.css";
 
 export const metadata = { title: "My Board" };
 
+/** What a decision set up, across its follow-ups (rev 664 §6: the log says what it set up). */
+const setUp = (d: { applied: unknown[] }, followUps: { applied: unknown[] }[]) => d.applied.length + followUps.reduce((n, f) => n + f.applied.length, 0);
+
 /** My Board, the Boardroom (revs 664, 698): five advisors on a decision, grounded in the member's own HelixOS. */
 export default async function MyBoardPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const v = await requireViewer();
@@ -77,7 +80,15 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
                     {formatDate(d.createdAt.slice(0, 10))}
                     {d.answer ? ` · ${done} of ${d.answer.steps.length} steps done` : " · no answer yet"}
                     {followUps.length ? ` · ${followUps.length} follow-up${followUps.length === 1 ? "" : "s"}` : ""}
+                    {setUp(d, followUps) ? ` · ${setUp(d, followUps)} set up` : ""}
+                    {d.sharedAt ? " · shared with your coach" : ""}
                   </span>
+                  {d.answer ? (
+                    <span className="br-muted" style={{ flexBasis: "100%", fontSize: 14 }}>
+                      {d.answer.recommendation}
+                      {d.answer.split ? <span className="br-quiet"> Split: {d.answer.split}</span> : null}
+                    </span>
+                  ) : null}
                 </li>
               );
             })}

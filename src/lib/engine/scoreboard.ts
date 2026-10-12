@@ -53,6 +53,8 @@ export type Scoreboard = {
   thisIntention: { word: string; keyResults: string[] } | null;
   keyResults: { title: string; pace: Pace }[];
   kpis: { name: string; period: string; actual: string; target: string; pace: Pace }[];
+  /** My Board's steps due in the week and how many are done; open steps past their date (counts only). */
+  boardSteps?: { due: number; done: number; overdue: number };
 };
 
 const PACE_WORD: Record<Pace, string> = { ahead: "ahead", on: "on pace", behind: "behind", done: "done", none: "no target" };
@@ -80,6 +82,7 @@ export function scoreboardSections(s: Scoreboard): EmailSection[] {
       { label: "Calls booked", value: String(s.calls) },
       { label: "Clients added (you logged)", value: String(s.clientsAdded) },
       { label: "Days closed", value: `${s.closes} of ${s.days}` },
+      ...(s.boardSteps?.due ? [{ label: "Board steps", value: `${s.boardSteps.done} of ${s.boardSteps.due} done` }] : []),
     ],
     note: `Posts count once GoHighLevel confirms them, or when you mark a pasted post posted. DMs and calls come from your evening closes (${s.closes} of ${s.days} closed), so an unclosed day reads as zero.`,
   };
@@ -132,7 +135,9 @@ export function rosterName(full: string): string {
 export function rosterLine(name: string, s: Scoreboard): string {
   const intention = s.lastIntention ? (s.lastIntention.reviewed ? "3-1-3 reviewed" : "3-1-3 not reviewed") : "no 3-1-3";
   const krs = s.keyResults.length ? `key results: ${paceTally(s.keyResults)}` : "no key results";
-  return `${rosterName(name)}: ${plural(s.posts.total, "post")}, ${plural(s.dms.started, "DM")}, ${plural(s.calls, "call")}, closes ${s.closes} of ${s.days}, ${intention}, ${krs}`;
+  // A Board step overdue is a count, never the decision's words (rev 664 §7).
+  const board = s.boardSteps?.overdue ? `, ${plural(s.boardSteps.overdue, "Board step")} overdue` : "";
+  return `${rosterName(name)}: ${plural(s.posts.total, "post")}, ${plural(s.dms.started, "DM")}, ${plural(s.calls, "call")}, closes ${s.closes} of ${s.days}, ${intention}, ${krs}${board}`;
 }
 
 /** The coach's Monday roster: one line per active client, names only. One button: Open the Coach view. */

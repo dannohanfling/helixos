@@ -12,6 +12,7 @@ import { requireCoach } from "@/lib/auth";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { askBoard } from "@/lib/board";
 import { applySetup } from "@/lib/board-setup";
+import { runCheckin, shareDecision, type StepState } from "@/lib/board-checkin";
 import { MODES, type Mode } from "@/lib/engine/board";
 
 const OWN = "The Board answers {first} on their own AI key, so it's theirs to ask.";
@@ -39,6 +40,34 @@ export async function applySetupAction(fd: FormData): Promise<void> {
   refresh();
   if (!r.ok) go(`/my-board/${back}`, { setupError: r.error }, "setup");
   else go(`/my-board/${back}`, { setUp: String(r.applied.length), ...(r.skipped.length ? { skipped: r.skipped.join(" | ").slice(0, 600) } : {}) }, "setup");
+}
+
+/** The check-in (rev 664 §6): done, stuck or dropped per step, then the Board in Check-in mode on the same decision. */
+export async function checkinAction(fd: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: OWN });
+  const id = str(fd, "id");
+  const n = Math.min(3, Math.max(0, Number(str(fd, "steps")) || 0));
+  const states: StepState[] = [];
+  for (let i = 0; i < n; i++) {
+    const state = str(fd, `s${i}`);
+    if (state !== "done" && state !== "stuck" && state !== "dropped") go(`/my-board/${id}`, { checkinError: "Say done, stuck or dropped for every step." }, "checkin");
+    states.push({ index: i, state: state as StepState["state"], note: str(fd, `n${i}`).slice(0, 500) || null });
+  }
+  const r = await runCheckin(v, id, states, str(fd, "note").slice(0, 1000) || null);
+  refresh();
+  if (!r.ok) go(`/my-board/${id}`, { checkinError: r.error }, "checkin");
+  else if (!r.result.ok) go(`/my-board/${id}`, { error: r.result.error });
+  else go(`/my-board/${id}`, { play: "1" });
+}
+
+/** "Share with my coach" (rev 664 §7): the only way a decision reaches the coach; off again at any time. */
+export async function shareDecisionAction(fd: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: OWN });
+  const id = str(fd, "id");
+  const on = str(fd, "on") === "1";
+  await shareDecision(v, id, on);
+  refresh();
+  go(`/my-board/${id}`, { shared: on ? "1" : "0" });
 }
 
 /** "Hours I can give my business each week": Jordan keeps every plan within it. */

@@ -154,7 +154,7 @@ export type Checked = { answer: BoardAnswer; notes: string[]; problem: string | 
  * the Danno Seat never claiming to be Danno and sending personal questions to Office Hours, and "You decide" always there.
  * A problem means the answer can't be shown as it is (the caller asks once more, then says so).
  */
-export function checkAnswer(raw: unknown, ctx: { mode: Mode; focus?: string | null; preset: Preset; hours: number; today: string; firstQuestion: boolean; question: string; known: string }): Checked {
+export function checkAnswer(raw: unknown, ctx: { mode: Mode; focus?: string | null; preset: Preset; hours: number; today: string; firstQuestion: boolean; question: string; known: string; need?: string[] }): Checked {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const notes: string[] = [];
   const seatKeys = new Set(seatsFor(ctx.preset).map((s) => s.key));
@@ -197,6 +197,9 @@ export function checkAnswer(raw: unknown, ctx: { mode: Mode; focus?: string | nu
     advisors.splice(0, advisors.length, ...one);
   } else if (ctx.mode === "board" && ctx.firstQuestion && advisors.length !== 5) problem = `The Board gave ${advisors.length} of its five advisors.`;
   else if (!advisors.length && ctx.mode !== "quick_vote") problem = "No advisor answered.";
+  // A check-in (rev 664 §6): Jordan shrinks a stuck step, Morgan asks about a dropped one; neither may be missing.
+  const missing = (ctx.need ?? []).filter((k) => !advisors.some((a) => a.seat === k));
+  if (!problem && missing.length) problem = `The check-in needs ${missing.map((k) => SEATS.find((x) => x.key === k)?.short ?? k).join(" and ")}.`;
 
   // The steps: one to three, all five parts, a real Do, working-day dates, within the hours.
   const steps: Step[] = [];

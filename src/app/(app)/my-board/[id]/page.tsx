@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
-import { decisionsFor, ownDecision } from "@/lib/board";
-import { applySetupAction, askBoardAction } from "@/lib/actions/board";
+import { decisionsFor, ownDecision, stepStatus } from "@/lib/board";
+import { applySetupAction, askBoardAction, checkinAction, shareDecisionAction } from "@/lib/actions/board";
 import { BoardSetup } from "@/components/board-setup";
 import { seatsFor, type Mode } from "@/lib/engine/board";
 import { Boardroom } from "@/components/boardroom";
@@ -16,7 +16,7 @@ export const metadata = { title: "A Board decision" };
  * One decision in the Boardroom: its latest answer played back (on arrival from an ask, or with "Run the discussion"), the
  * earlier answers on it below, and the box to ask more. An answer that didn't pass the checks shows why, with Ask again.
  */
-export default async function DecisionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; play?: string; setUp?: string; setupError?: string; skipped?: string }> }) {
+export default async function DecisionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; play?: string; setUp?: string; setupError?: string; skipped?: string; checkinError?: string; shared?: string }> }) {
   const v = await requireViewer();
   const { id } = await params;
   const sp = await searchParams;
@@ -29,12 +29,38 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const earlier = all.filter((x) => x.answer && x.id !== latest?.id);
   const seats = seatsFor(d.preset);
   const canAsk = !v.switchedInto && !v.team;
+  // The check-in reads the latest answer that has steps; each step's state is its task's, live.
+  const withSteps = [...all].reverse().find((x) => x.answer?.steps.length) ?? null;
+  const states = withSteps ? await stepStatus(v.user.id, withSteps) : [];
+  const checkins = all.flatMap((x) => x.checkins);
   return (
     <div className="br-page" data-testid="board-page">
       <div className="br-wrap" style={{ marginBottom: 16 }}>
-        <Link href="/my-board#decisions" style={{ fontSize: 13 }}>
-          ← My Board
-        </Link>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+          <Link href="/my-board#decisions" style={{ fontSize: 13 }}>
+            ← My Board
+          </Link>
+          {canAsk ? (
+            <form action={shareDecisionAction} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13 }}>
+              <input type="hidden" name="id" value={d.id} />
+              <input type="hidden" name="on" value={d.sharedAt ? "0" : "1"} />
+              {d.sharedAt ? (
+                <span className="br-goldtext" data-testid="board-shared">
+                  Shared with your coach on {formatDate(d.sharedAt.slice(0, 10))}
+                </span>
+              ) : (
+                <span className="br-quiet">Private to you.</span>
+              )}
+              <SubmitButton className="br-tab" pendingText="…" data-testid={d.sharedAt ? "board-unshare" : "board-share"}>
+                {d.sharedAt ? "Stop sharing" : "Share with my coach"}
+              </SubmitButton>
+            </form>
+          ) : d.sharedAt ? (
+            <span className="br-quiet" style={{ fontSize: 13 }}>
+              Shared with the coach
+            </span>
+          ) : null}
+        </div>
       </div>
       {sp.error ? (
         <p className="br-wrap" role="alert" data-testid="board-error" style={{ color: "#f5b0a0", marginBottom: 24 }}>
@@ -85,9 +111,63 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             canAsk={canAsk}
             decisionView
             initialMode={(latest.mode as Mode) ?? "board"}
+            stepStates={latest.id === withSteps?.id ? states : []}
             setup={latest.proposals.length ? <BoardSetup key={`${latest.id}-${latest.applied.length}`} decisionId={latest.id} back={d.id} proposals={latest.proposals} applied={latest.applied} canApprove={canAsk} action={applySetupAction} /> : null}
           />
         </>
+      ) : null}
+      {withSteps?.answer ? (
+        <section className="br-wrap" style={{ marginTop: 44 }} aria-label="Check in" id="checkin" data-testid="board-checkin">
+          <div className="br-sechead">
+            <h2 className="br-h2">Check in</h2>
+            <span className="br-quiet" style={{ fontSize: 13 }}>
+              How did the steps go? Jordan shrinks a stuck one; Morgan asks about a dropped one.
+            </span>
+          </div>
+          {sp.checkinError ? (
+            <p role="alert" style={{ color: "#f5b0a0", margin: "0 0 12px" }} data-testid="board-checkin-error">
+              {sp.checkinError}
+            </p>
+          ) : null}
+          {canAsk ? (
+            <form action={checkinAction} style={{ display: "flex", flexDirection: "column" }}>
+              <input type="hidden" name="id" value={d.id} />
+              <input type="hidden" name="steps" value={withSteps.answer.steps.length} />
+              {withSteps.answer.steps.map((s, i) => (
+                <fieldset key={i} className="br-setup-row" style={{ border: 0, margin: 0, gridTemplateColumns: "minmax(0, 1fr)" }} data-testid="board-checkin-step">
+                  <legend style={{ fontWeight: 600, padding: 0, marginBottom: 8 }}>
+                    {i + 1}. {s.do}
+                    {states[i] === "done" ? <span className="br-goldtext" style={{ fontWeight: 400, fontSize: 13 }}> · done on Tasks</span> : null}
+                  </legend>
+                  <div className="br-tabs" style={{ justifyContent: "flex-start" }}>
+                    {(["done", "stuck", "dropped"] as const).map((st) => (
+                      <label key={st} className="br-tab" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                        <input type="radio" name={`s${i}`} value={st} defaultChecked={states[i] === "done" ? st === "done" : false} required data-testid={`board-checkin-${st}-${i}`} />
+                        {st === "done" ? "Done" : st === "stuck" ? "Stuck" : "Dropped"}
+                      </label>
+                    ))}
+                  </div>
+                  <input name={`n${i}`} className="br-field" placeholder="What happened (optional)" style={{ width: "100%" }} maxLength={500} />
+                </fieldset>
+              ))}
+              <input name="note" className="br-field" placeholder="Anything else the Board should know (optional)" style={{ marginTop: 12 }} maxLength={1000} />
+              <div style={{ marginTop: 16 }}>
+                <SubmitButton className="br-pill" pendingText="The Board is thinking…" data-testid="board-checkin-submit">
+                  Check in with the Board
+                </SubmitButton>
+              </div>
+            </form>
+          ) : null}
+          {checkins.length ? (
+            <ul className="br-quiet" style={{ listStyle: "none", margin: "16px 0 0", padding: 0, fontSize: 13 }} data-testid="board-checkins">
+              {checkins.map((c) => (
+                <li key={c.at}>
+                  Checked in {formatDate(c.at.slice(0, 10))}: {(["done", "stuck", "dropped"] as const).map((st) => `${c.steps.filter((x) => x.state === st).length} ${st}`).join(", ")}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
       ) : null}
       {earlier.length ? (
         <section className="br-wrap" style={{ marginTop: 44 }} aria-label="Earlier on this decision">

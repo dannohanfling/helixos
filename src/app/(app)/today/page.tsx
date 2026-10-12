@@ -37,6 +37,7 @@ import { CLOSE_MONEY, ENERGY_WORDS } from "@/lib/daily-core";
 import { newMonthlyFeedback, unseenReports } from "@/lib/queries/reports";
 import { openClaims } from "@/lib/queries/rewards";
 import { recentlyOn, waitingFeatures } from "@/lib/bot-features";
+import { checkinsDue } from "@/lib/board-steps";
 import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
@@ -115,6 +116,8 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   // The coach's notice (rev 432 item 4): new monthly feedback and issues not yet opened, so neither can be missed.
   // Bot Features switched on for this member in the last seven days (rev 618): one line each, to the feature.
   const featuresOn = await recentlyOn(v.workspace.id, v.user.id);
+  // My Board (rev 664 §6): a decision whose steps are due or overdue asks for a check-in.
+  const boardDue = v.team ? [] : await checkinsDue(v);
   const coachNew = v.role === "coach" && !v.switchedInto ? await Promise.all([newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt), unseenReports(v.workspace.id), openClaims(v.workspace.id), waitingFeatures(v.workspace.id)]) : null;
   return (
     <>
@@ -147,6 +150,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           {featuresOn.map((f) => (
             <Link key={f.key} href={`/bot-features/${f.key}`} className="rounded-lg bg-good-soft px-3 py-2 text-sm font-medium hover:underline" data-testid="feature-on-line">
               {f.name} is on · running in your bot →
+            </Link>
+          ))}
+        </div>
+      ) : null}
+      {boardDue.length ? (
+        <div className="mb-4 flex flex-wrap gap-2" data-testid="today-board">
+          {boardDue.map((b) => (
+            <Link key={b.id} href={`/my-board/${b.id}#checkin`} className="rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-board-checkin">
+              Board check-in: {b.due} step{b.due === 1 ? "" : "s"} from &ldquo;{b.decision}&rdquo; {b.due === 1 ? "is" : "are"} due →
             </Link>
           ))}
         </div>

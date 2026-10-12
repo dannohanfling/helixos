@@ -196,7 +196,7 @@ export type AskResult = { ok: true; decision: schema.BoardDecision } | { ok: fal
  * message), the server's checks, one more try when an answer fails them, and the decision saved with what it used. A follow-up
  * (parentId) belongs to its decision: the first question hears all five, later ones the few who matter.
  */
-export async function askBoard(v: Viewer, input: { question: string; mode: Mode; focus?: string | null; parentId?: string | null }): Promise<AskResult> {
+export async function askBoard(v: Viewer, input: { question: string; mode: Mode; focus?: string | null; parentId?: string | null; need?: string[] }): Promise<AskResult> {
   const question = input.question.trim().slice(0, 4000);
   if (question.length < 3) return { ok: false, error: "Say what you're deciding." };
   const hours = v.membership.boardHours;
@@ -229,7 +229,7 @@ export async function askBoard(v: Viewer, input: { question: string; mode: Mode;
     } catch {
       raw = null;
     }
-    checked = checkAnswer(raw, { mode: input.mode, focus, preset, hours, today: v.today, firstQuestion, question, known });
+    checked = checkAnswer(raw, { mode: input.mode, focus, preset, hours, today: v.today, firstQuestion, question, known, need: input.need });
     setup = raw && typeof raw === "object" ? (raw as Record<string, unknown>).setup : null;
     if (!checked.problem) break;
   }

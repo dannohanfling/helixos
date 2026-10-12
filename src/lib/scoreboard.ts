@@ -8,6 +8,7 @@
  */
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { boardStepsFor } from "@/lib/board-steps";
 import { brandedEmail } from "@/lib/branded-email";
 import { canEmail } from "@/lib/email-gate";
 import { sendEmail } from "@/lib/email";
@@ -73,9 +74,13 @@ export async function scoreboardFor(m: Member, tz: string, today: string, which:
   const paces = pacesOf(reads);
   const krs = await db.query.planRecords.findMany({ where: and(eq(schema.planRecords.workspaceId, m.workspaceId), eq(schema.planRecords.userId, m.userId), eq(schema.planRecords.kind, "key_result"), isNull(schema.planRecords.archivedAt)) });
 
+  // My Board's steps due that week (rev 664 §6), and any open past their date: counts only.
+  const boardSteps = await boardStepsFor(m, week.from, week.to, today);
+
   return {
     week,
     days,
+    boardSteps,
     posts: { byChannel: channels, total: channels.reduce((a, c) => a + c.count, 0), waiting },
     comments,
     dms: { started: sum("dmsStarted"), conversations: sum("conversations") },

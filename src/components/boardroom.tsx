@@ -30,12 +30,14 @@ type Props = {
   initialMode?: Mode;
   /** "Set it up for me" under the steps, shown once the discussion ends. */
   setup?: ReactNode;
+  /** Each step's task, read live: a ticked task shows the step as done. */
+  stepStates?: string[];
 };
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
 const dayWords = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", DATE_FMT);
 
-export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup }: Props) {
+export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [] }: Props) {
   const spoken = useMemo(() => (answer ? seats.filter((s) => answer.advisors.some((a) => a.seat === s.key)).map((s) => s.key) : []), [seats, answer]);
   const [phase, setPhase] = useState<"idle" | "asking" | "playing" | "done">(answer ? (autoplay ? "playing" : "done") : "idle");
   const [idx, setIdx] = useState(0);
@@ -246,7 +248,15 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
                   {i < answer.steps.length - 1 ? <span className="br-rail" /> : null}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 4 }}>
-                  <div className="br-do">{s.do}</div>
+                  <div className="br-do">
+                    {s.do}
+                    {stepStates[i] === "done" ? (
+                      <span className="br-goldtext" style={{ fontSize: 13, fontWeight: 500 }} data-testid="board-step-done">
+                        {" "}
+                        · Done
+                      </span>
+                    ) : null}
+                  </div>
                   <div className="br-muted" style={{ fontSize: 14 }}>
                     {dayWords(s.by)} · {takesWords(s.takesMinutes)} · Done when {s.doneWhen}
                     {s.dependsOn ? ` · after step ${s.dependsOn}` : ""}

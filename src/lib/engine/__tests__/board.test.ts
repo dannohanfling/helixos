@@ -129,8 +129,9 @@ describe("My Board: what it reads", () => {
     for (const q of src.match(/db\.query\.(offers|avatars|webinars|contacts|proofs|contentItems|ladders|weeklyIntentions|officeHoursRequests|targets)\.find\w+\(\{ where: [^,]+/g) ?? []) expect(q, q).toMatch(/mine\(schema\.\w+\)|and\(mine\(schema/);
   });
 
-  it("three tools on the new My Board tick; asking and approving the set-up refused to a team member", () => {
-    expect(toolsFor(["board"]).map((t) => t.name).sort()).toEqual(["board_apply", "board_ask", "decisions_list", "whoami"]);
+  it("four tools on the new My Board tick; asking, approving the set-up and checking in refused to a team member", () => {
+    expect(toolsFor(["board"]).map((t) => t.name).sort()).toEqual(["board_apply", "board_ask", "board_checkin", "decisions_list", "whoami"]);
+    expect(read("src/lib/board-checkin.ts")).toMatch(/if \(v\.team\) return \{ ok: false/);
     expect(read("src/lib/mcp/tools/board.ts").match(/if \(v\.team\) throw new Error/g)).toHaveLength(2);
     expect(read("src/lib/board-setup.ts")).toMatch(/if \(v\.team\) return \{ ok: false/);
     // board_apply changes nothing without the member's yes.

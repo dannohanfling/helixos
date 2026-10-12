@@ -8,6 +8,7 @@ import { askBoard, decisionsFor, stepStatus } from "@/lib/board";
 import { MODES, seatsFor, spokenAnswer, type Mode } from "@/lib/engine/board";
 import { setupReadBack } from "@/lib/engine/board-setup";
 import { applySetup } from "@/lib/board-setup";
+import { runCheckin } from "@/lib/board-checkin";
 import { db, schema } from "@/db";
 import { and, eq } from "drizzle-orm";
 
@@ -48,7 +49,7 @@ defineTool({
     const lines = await Promise.all(
       rows.map(async ({ decision: d }, i) => {
         const st = await stepStatus(v.user.id, d);
-        return { n: i + 1, id: d.id, question: d.question, decision: d.answer?.decision ?? null, recommendation: d.answer?.recommendation ?? null, stepsDone: st.filter((x) => x === "done").length, steps: st.length, date: d.createdAt.slice(0, 10) };
+        return { n: i + 1, id: d.id, question: d.question, decision: d.answer?.decision ?? null, setUp: d.applied.length, shared: Boolean(d.sharedAt), recommendation: d.answer?.recommendation ?? null, stepsDone: st.filter((x) => x === "done").length, steps: st.length, date: d.createdAt.slice(0, 10) };
       }),
     );
     return { text: `${lines.length} decision${lines.length === 1 ? "" : "s"}:\n${lines.map((l) => `${l.n}. ${l.question}${l.recommendation ? ` The Board recommends: ${l.recommendation}` : " No answer yet."} (${l.stepsDone} of ${l.steps} steps done)`).join("\n")}`, data: { decisions: lines } };
@@ -81,5 +82,27 @@ defineTool({
     const r = await applySetup(v, d.id, todo.map((p) => p.id));
     if (!r.ok) throw new Error(r.error);
     return { text: `Set up ${r.applied.length} of ${todo.length}.${r.skipped.length ? ` Not set up: ${r.skipped.join("; ")}.` : ""} Each links back to the decision: ${appUrl()}/my-board/${d.parentId ?? d.id}`, data: { applied: r.applied, skipped: r.skipped } };
+  },
+});
+
+defineTool({
+  name: "board_checkin",
+  scope: "board",
+  kind: "write",
+  description:
+    "Checks in on a Board decision's action steps, the same as Check in on the decision's page: say done, stuck or dropped for every step (decisions_list or board_ask give the steps). Done steps are ticked on the member's Tasks. Then the Board answers in Check-in mode: Jordan shrinks a stuck step, Morgan kindly asks whether a dropped one was a decision or an avoidance, and one to three fresh steps. Read the recommendation first, then the steps.",
+  input: {
+    decision: z.string().min(3).max(60).describe("The decision's id, from decisions_list or board_ask"),
+    steps: z.array(z.object({ n: z.number().int().min(1).max(3), state: z.enum(["done", "stuck", "dropped"]), note: z.string().max(500).optional() })).min(1).max(3).describe("Every step by its number, with done, stuck or dropped, and what happened if they said"),
+    note: z.string().max(1000).optional().describe("Anything else the member wants the Board to know"),
+  },
+  handler: async (v, input): Promise<ToolResult> => {
+    const steps = (input.steps as { n: number; state: "done" | "stuck" | "dropped"; note?: string }[]).map((x) => ({ index: x.n - 1, state: x.state, note: x.note ?? null }));
+    const r = await runCheckin(v, String(input.decision ?? ""), steps, input.note ? String(input.note) : null);
+    if (!r.ok) throw new Error(r.error);
+    if (!r.result.ok) throw new Error(r.result.error);
+    const d = r.result.decision;
+    const link = `${appUrl()}/my-board/${d.parentId ?? d.id}`;
+    return { text: `${r.ticked ? `Ticked ${r.ticked} done on your Tasks. ` : ""}${spokenAnswer(d.answer!, seatsFor(d.preset))}\n\nOpen it: ${link}`, data: { id: d.id, ticked: r.ticked, recommendation: d.answer!.recommendation, steps: d.answer!.steps, link } };
   },
 });
