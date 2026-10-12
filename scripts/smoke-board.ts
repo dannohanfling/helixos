@@ -577,6 +577,7 @@ async function main() {
       await page.locator('[data-testid="council-picker"]').waitFor();
       await page.waitForLoadState("networkidle");
       // Expert seats off: the archetypes and her own seats only.
+      must(!(await page.locator('[data-testid="council-edge"]').count()), "a client never sees the Edge Preset");
       must(await page.locator('[data-testid="council-experts-off"]').count(), "while expert seats are off, the picker says so");
       must(!(await page.locator('[data-testid="council-tab-area"]').count()) && !(await page.locator('[data-testid="council-tab-all"]').count()), "no skill-area tabs while off");
       must((await page.locator('[data-testid="council-card"]').count()) === 4, "the four archetypes");
@@ -670,7 +671,23 @@ async function main() {
       // Back as it was for the other walks.
       await db.update(schema.memberships).set({ boardCouncil: null }).where(eq(schema.memberships.id, m.id));
       await db.delete(schema.boardSeats).where(and(eq(schema.boardSeats.workspaceId, ws), eq(schema.boardSeats.userId, maya.id)));
-      console.log("✓ Choose your council: the first-visit prompt and the classic four; experts hidden while off; two custom seats, Marie as my read; Save held for four and an operator; Add, tap and drag to swap; her plates and the picker at 1440, 1024 and 390; live, Dean's detail and chair; off again, paused; the coach sees it");
+      // The Edge Preset (rev 837): at the top of Choose your council, the coach's own Board only; one tap, then back. An earlier
+      // section leaves the coach's Board on the Edge Preset, so it starts from the standard council here.
+      const coachUser = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
+      await db.update(schema.memberships).set({ boardPreset: "standard" }).where(eq(schema.memberships.userId, coachUser.id));
+      await logout(page);
+      await login(page, "As the coach");
+      await page.goto(`${base}/my-board/council`);
+      await press(page, '[data-testid="council-edge-toggle"]');
+      must(page.url().includes("/my-board/council") && (await page.locator('[data-testid="council-edge-on"]').count()), "the Edge Preset on, back on the picker");
+      await page.goto(`${base}/my-board`);
+      for (const [k, n] of [["tony", "Tony Robbins style"], ["dean", "Dean Graziosi style"], ["igor", "Igor Pogany style"], ["jordan", "Jordan"], ["morgan", "Morgan"]]) must((await page.locator(`[data-testid="board-plate-${k}"]`).innerText()).includes(n), `the Edge Preset's plate: ${n}`);
+      await page.goto(`${base}/my-board/council`);
+      await press(page, '[data-testid="council-edge-toggle"]');
+      must(!(await page.locator('[data-testid="council-edge-on"]').count()), "back to the coach's own council");
+      await logout(page);
+      await login(page, "As a client");
+      console.log("✓ Choose your council: the Edge Preset for the coach only, one tap on and off, its five plates; the first-visit prompt and the classic four; experts hidden while off; two custom seats, Marie as my read; Save held for four and an operator; Add, tap and drag to swap; her plates and the picker at 1440, 1024 and 390; live, Dean's detail and chair; off again, paused; the coach sees it");
     }
 
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);

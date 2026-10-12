@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { customSeatsOf, pickerFor } from "@/lib/board-seats";
 import { deleteCustomSeatAction, saveCouncilAction, saveCustomSeatAction } from "@/lib/actions/council";
+import { setBoardPresetAction } from "@/lib/actions/board";
 import { MAX_CUSTOM_SEATS } from "@/lib/engine/board-seats";
 import type { BoardSeat } from "@/db/schema";
 import { CouncilPicker } from "@/components/council-picker";
@@ -21,7 +22,7 @@ const SAVED: Record<string, string> = {
  * My Board → Choose your council (rev 756 §2 and §3): Danno at the head, the member's four chairs, the library to choose from,
  * and their own custom seats (up to two, private to them; their coach sees them on the client page).
  */
-export default async function CouncilPage({ searchParams }: { searchParams: Promise<{ tab?: string; error?: string; saved?: string; edit?: string; make?: string }> }) {
+export default async function CouncilPage({ searchParams }: { searchParams: Promise<{ tab?: string; error?: string; saved?: string; edit?: string; make?: string; preset?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const { seats, chairs, live } = await pickerFor(v);
@@ -72,7 +73,30 @@ export default async function CouncilPage({ searchParams }: { searchParams: Prom
           {SAVED[sp.saved]}
         </p>
       ) : null}
-      {edgeNote ? <p className="mb-4 text-sm text-ink-3">Your own Board is on the Edge Preset. The council you choose here is the one it uses when you switch back to the standard five.</p> : null}
+      {v.role === "coach" && !v.switchedInto ? (
+        // The Edge Preset (rev 837): your own Board only, never offered to clients. One tap fills the room with its five.
+        <section className={`card mb-4 p-4 sm:p-5 ${edgeNote ? "border-accent" : ""}`} aria-label="Edge Preset" data-testid="council-edge">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Your own Board only</div>
+              <h2 className="font-semibold">Edge Preset</h2>
+              <p className="text-sm text-ink-2">Tony Robbins style, Dean Graziosi style, Igor Pogany style, Jordan the Operator and Morgan the Antagonist. Clients never see this.</p>
+              {edgeNote ? (
+                <p className="mt-1 text-sm font-medium" data-testid="council-edge-on">
+                  On: your Board sits with the Edge Preset. The council below is the one it uses when you switch back.
+                </p>
+              ) : null}
+            </div>
+            <form action={setBoardPresetAction}>
+              <input type="hidden" name="preset" value={edgeNote ? "standard" : "edge"} />
+              <input type="hidden" name="back" value="council" />
+              <SubmitButton className={`btn btn-sm ${edgeNote ? "btn-ghost" : "btn-primary"}`} pendingText="Saving…" data-testid="council-edge-toggle">
+                {edgeNote ? "Back to my council" : "Use the Edge Preset"}
+              </SubmitButton>
+            </form>
+          </div>
+        </section>
+      ) : null}
       {!canEdit ? <p className="mb-4 text-sm text-ink-3">{v.user.name.split(" ")[0]} chooses their own council. This is what it is now.</p> : null}
       <CouncilPicker seats={seats} initial={chairs} live={live} canEdit={canEdit} action={saveCouncilAction} startTab={startTab} customPanel={customPanel} />
     </>

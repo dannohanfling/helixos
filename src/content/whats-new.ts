@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 158,
+    date: "2026-10-12",
+    title: "Edge Preset, one tap from Choose your council",
+    lines: [
+      "My Board → Choose your council now opens with an Edge Preset card, on your own Board only: one tap seats Tony Robbins style, Dean Graziosi style, Igor Pogany style, Jordan the Operator and Morgan the Antagonist in the Council Chamber, and \"Back to my council\" returns your own picks. Clients never see it.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 157,
     date: "2026-10-12",
     title: "Ladders: NONE means no keyword, the Five-0 check, and a photo preview",

@@ -94,5 +94,6 @@ export async function setBoardPresetAction(fd: FormData): Promise<void> {
   if (coach.switchedInto) return;
   await db.update(schema.memberships).set({ boardPreset: str(fd, "preset") === "edge" ? "edge" : "standard" }).where(eq(schema.memberships.id, coach.membership.id));
   refresh();
-  go("/my-board");
+  // From Choose your council's Edge Preset card (rev 837), back to the picker; from My Board's fold, back to the room.
+  go(str(fd, "back") === "council" ? "/my-board/council" : "/my-board", str(fd, "back") === "council" ? { preset: "saved" } : {});
 }
