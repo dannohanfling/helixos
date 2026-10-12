@@ -58,7 +58,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           ["Check-ins", checkins.filter((x) => x.kind !== "note").length],
           ["Cash collected", `$${cash.toLocaleString()}`],
           ["Last NPS", lastNps ?? "—"],
-          v.membership.passEnabled ? ["Pass points", `${total.toLocaleString()} · ${TIER_ICONS[tier.current.name]} ${tier.current.name}`] : ["Next call", c.nextCallAt ? formatDateTime(c.nextCallAt, v.workspace.timezone) : "—"],
+          v.membership.passEnabled ? ["Pass points", `${total.toLocaleString()} · ${TIER_ICONS[tier.current.name]} ${tier.current.name}`] : ["Next call", c.nextCallAt ? formatDateTime(c.nextCallAt, v.tz) : "—"],
         ].map(([k, val]) => (
           <div key={String(k)} className="card p-3">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">{k}</div>

@@ -55,10 +55,15 @@ export function formatDate(d: string, opts: Intl.DateTimeFormatOptions = { month
   return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...opts }).format(toDate(d));
 }
 
-export function formatDateTime(iso: string, tz: string): string {
-  return new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(
-    new Date(iso),
-  );
+/** A stored instant as a Date. A database timestamp with no zone ("2026-10-12 19:32:00", SQLite's datetime('now')) is UTC. */
+export function instantOf(stamp: string): Date {
+  const t = stamp.trim();
+  return new Date(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(t) ? `${t.replace(" ", "T")}Z` : t);
+}
+
+/** "Oct 12, 1:32 PM" in the zone given; `zone` adds its short name ("1:32 PM EDT", rev 843) so a time never reads as the reader's own by mistake. */
+export function formatDateTime(iso: string, tz: string, opts: { zone?: boolean } = {}): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...(opts.zone ? { timeZoneName: "short" } : {}) }).format(instantOf(iso));
 }
 
 export function relativeDay(d: string, today: string): string {

@@ -57,8 +57,18 @@ function useLiftLauncher() {
         }
       }
     };
+    // At most every 150 ms (rev 843): the chat animating fires many changes a second, and reading every box on each one made
+    // the chat feel stuck on a phone.
+    let last = 0;
+    let timer = 0;
     const soon = () => {
-      if (!frame) frame = requestAnimationFrame(settle);
+      if (frame || timer) return;
+      const wait = Math.max(0, 150 - (Date.now() - last));
+      timer = window.setTimeout(() => {
+        timer = 0;
+        last = Date.now();
+        frame = requestAnimationFrame(settle);
+      }, wait);
     };
     const watch = new MutationObserver(soon);
     watch.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
@@ -68,6 +78,7 @@ function useLiftLauncher() {
       watch.disconnect();
       window.removeEventListener("resize", soon);
       if (frame) cancelAnimationFrame(frame);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 }

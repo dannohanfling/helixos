@@ -16,7 +16,8 @@ export const metadata = { title: "Which HelixOS?" };
  */
 export default async function ChoosePage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const session = await readSession();
-  if (!session) redirect("/login");
+  // A cookie that doesn't verify is cleared, never bounced between sign-in and here (rev 843).
+  if (!session) redirect("/api/session/clear");
   const choices = await choicesFor(session.userId);
   if (choices.length <= 1) redirect("/today");
   const { next } = await searchParams;

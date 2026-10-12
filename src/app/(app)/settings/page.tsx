@@ -1,3 +1,4 @@
+import { siteUrl } from "@/lib/app-url";
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
 import { after } from "next/server";
@@ -88,7 +89,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
   const [goal, conn, ghlIntegration, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel"), linkedChats(v.workspace.id, v.user.id)]);
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const appUrl = siteUrl();
   // The owner's team (Danno, 6 Oct): who is on it, the open invites, the seats, and what the team changed. Not while switched.
   const [team, invites, seats, teamChangeRows] = v.switchedInto
     ? [[], [], null, []]

@@ -2,7 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { db, schema } from "@/db";
-import { readSession } from "@/lib/session";
+import { cookies } from "next/headers";
+import { SESSION_COOKIE, readSession } from "@/lib/session";
 import { hourInTz, nowIso, todayInTz } from "@/lib/dates";
 
 export type Viewer = {
@@ -149,8 +150,10 @@ export async function requireViewer(opts: TeamAccess = {}): Promise<Viewer> {
         if (m?.removedAt) redirect("/removed");
       }
     }
-    // A cookie that no longer verifies (password changed elsewhere, user gone) must be cleared, or /login bounces straight back here.
-    redirect(session ? "/api/session/clear" : "/login");
+    // A cookie that no longer verifies (password changed elsewhere, user gone, a changed secret, a stale or broken token) must be
+    // cleared, or /login bounces straight back here (rev 843: the loop Nyki met).
+    const present = Boolean((await cookies()).get(SESSION_COOKIE)?.value);
+    redirect(session || present ? "/api/session/clear" : "/login");
   }
   if (v.team && opts.team !== "allow") notFound();
   return v;

@@ -41,7 +41,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
     payloadFor(m),
     stage1Preview(m),
     changedSinceLastPush(m),
-    lastPushedLine(m, v.user.id, v.workspace.timezone),
+    lastPushedLine(m, v.user.id, v.tz),
     briefAccessFor(m),
   ]);
   const coachLines = input.coach ?? {};
@@ -194,13 +194,13 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
                 <dd data-testid="brief-changes">
                   {/* What the bot holds now, read live, never what the last sync record says (23 Sep: the record said the sentence; the bot was empty). */}
                   {heldValue !== null && isFaqEmptyValue(heldValue) ? (
-                    <p className="text-ink-2" data-testid="brief-holds-none">Your bot holds no approved answers{lastSent ? ` (sent ${formatDateTime(lastSent.createdAt, v.workspace.timezone)})` : ""}.</p>
+                    <p className="text-ink-2" data-testid="brief-holds-none">Your bot holds no approved answers{lastSent ? ` (sent ${formatDateTime(lastSent.createdAt, v.tz)})` : ""}.</p>
                   ) : null}
                   {heldValue !== null && !heldValue.trim() ? (
                     <p className="text-warn" data-testid="brief-holds-empty">Your bot&apos;s FAQ field is empty{lastSent ? " (changed outside HelixOS)" : ""}.</p>
                   ) : null}
                   {lastSent ? (
-                    <span className="text-ink-2">{changes.added.length} added, {changes.edited.length} edited, {changes.removed.length} removed since {formatDateTime(lastSent.createdAt, v.workspace.timezone)}.</span>
+                    <span className="text-ink-2">{changes.added.length} added, {changes.edited.length} edited, {changes.removed.length} removed since {formatDateTime(lastSent.createdAt, v.tz)}.</span>
                   ) : (
                     <span className="text-ink-2">Never sent yet: all {composed.included.length} approved answers would go.</span>
                   )}
@@ -245,7 +245,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
               <ul className="mb-3 space-y-1 text-xs" data-testid="sync-log">
                 {syncs.map((x) => (
                   <li key={x.id} data-status={x.status}>
-                    {formatDateTime(x.createdAt, v.workspace.timezone)} · {x.status} · {x.entryCount} answers, {x.chars.toLocaleString()} chars{x.dropped.length ? `, ${x.dropped.length} dropped` : ""} · value {x.valueReadBack ? "read back" : "not read back"}, token {x.tokenReadBack ? "present" : "not confirmed"} · by {x.sentBy ?? "—"}{x.note ? ` · ${x.note}` : ""}
+                    {formatDateTime(x.createdAt, v.tz)} · {x.status} · {x.entryCount} answers, {x.chars.toLocaleString()} chars{x.dropped.length ? `, ${x.dropped.length} dropped` : ""} · value {x.valueReadBack ? "read back" : "not read back"}, token {x.tokenReadBack ? "present" : "not confirmed"} · by {x.sentBy ?? "—"}{x.note ? ` · ${x.note}` : ""}
                   </li>
                 ))}
               </ul>
@@ -254,7 +254,7 @@ export default async function BrainPage({ searchParams }: { searchParams: Promis
               <ul className="space-y-1 text-xs text-ink-2" data-testid="faq-log">
                 {log.map((ev) => (
                   <li key={ev.id} data-event={ev.event}>
-                    {formatDateTime(ev.createdAt, v.workspace.timezone)} · {ev.event.replace("faq.", "")} · {String((ev.payload as Record<string, unknown>).question ?? (ev.payload as Record<string, unknown>).entries ?? "")} · {ev.note ?? ""}
+                    {formatDateTime(ev.createdAt, v.tz)} · {ev.event.replace("faq.", "")} · {String((ev.payload as Record<string, unknown>).question ?? (ev.payload as Record<string, unknown>).entries ?? "")} · {ev.note ?? ""}
                   </li>
                 ))}
               </ul>

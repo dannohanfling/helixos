@@ -7,6 +7,7 @@ import { nowIso } from "@/lib/dates";
 import { actionId, actionName, refuseSwitched, whereFrom } from "@/lib/switch";
 import { actionWords } from "@/lib/engine/switch";
 import { TEAM_REFUSAL } from "@/lib/engine/team";
+import type { SessionPayload } from "@/lib/session";
 
 /**
  * Team access (Danno, 6 Oct), on the server: every write a team member makes in the owner's HelixOS passes through here from
@@ -99,3 +100,8 @@ export const TEAM_INVITE_COOKIE = "helix_team_invite";
 
 /** How an owner's refused team action reads to a coach switched into their HelixOS. */
 export const TEAM_IS_THEIRS = "{first}'s team is theirs to manage. Remove a team member from their client page, or ask them to.";
+
+/** The session for one of a person's HelixOS: their own membership, or a team they are on (sign-in, Choose, and a reset). */
+export function sessionFor(user: { id: string; sessionVersion: number }, c: Choice): SessionPayload {
+  return c.kind === "team" ? { userId: user.id, workspaceId: c.workspaceId, role: "client", sv: user.sessionVersion, tm: c.key.slice(2) } : { userId: user.id, workspaceId: c.workspaceId, role: c.role, sv: user.sessionVersion };
+}

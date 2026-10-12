@@ -1,5 +1,6 @@
 "use server";
 
+import { siteUrl } from "@/lib/app-url";
 import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -59,7 +60,7 @@ export async function nudgeMemberAction(formData: FormData): Promise<void> {
   if (!user) return;
   // The comeback email the reminders send: the same gate. Emails off, never signed in, or removed sends nothing.
   if (!(await canEmail(m.id))) return;
-  const c = comebackEmail(user.name.split(" ")[0], { morning: m.reminderHour, evening: m.eveningReminderHour }, process.env.APP_URL ?? "http://localhost:3000");
+  const c = comebackEmail(user.name.split(" ")[0], { morning: m.reminderHour, evening: m.eveningReminderHour }, siteUrl());
   try {
     await sendEmail(user.email, c.subject, c.text, c.html);
     await db.update(schema.memberships).set({ lastNudgedAt: nowIso(), lastComebackAt: nowIso() }).where(eq(schema.memberships.id, m.id));

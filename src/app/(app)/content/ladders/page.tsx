@@ -157,7 +157,7 @@ export default async function LaddersPage() {
                       </Link>
                       <Badge tone={st.tone}>{st.label}</Badge>
                       <span className="text-xs text-ink-3">{LADDER_FORMATS.find((f) => f.key === l.format)?.name} · {l.rungs.length} rungs · {score.fails ? `${score.fails} to fix` : "checklist clear"}</span>
-                      {l.launchedAt ? <span className="text-xs text-ink-3">· {formatDateTime(l.launchedAt, v.workspace.timezone)}</span> : null}
+                      {l.launchedAt ? <span className="text-xs text-ink-3">· {formatDateTime(l.launchedAt, v.tz)}</span> : null}
                       <form action={deleteLadderAction}>
                         <input type="hidden" name="id" value={l.id} />
                         <ConfirmDelete what="this comment ladder" label="Delete" className="text-xs text-ink-3 underline" />

@@ -1,7 +1,8 @@
 "use server";
 
 import { demoLoginEnabled } from "@/lib/demo";
-import { allow, clientIp } from "@/lib/rate-limit";
+import { allow, bumpLimit, clearLimit, clientIp, peekLimit } from "@/lib/rate-limit";
+import { LOGIN_LIMITS, pausedLine, safeNext } from "@/lib/engine/next-path";
 
 import { and, eq, isNull, or } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -9,11 +10,11 @@ import { z } from "zod";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { clearSession, readSession, writeSession, type SessionPayload } from "@/lib/session";
+import { clearSession, readSession, writeSession } from "@/lib/session";
 import { seedNewClient } from "@/lib/queries/onboarding";
 import { markSignedIn } from "@/lib/email-gate";
 import { hashSecret } from "@/lib/crypto";
-import { choicesFor, logTeamEvent, type Choice } from "@/lib/team";
+import { choicesFor, logTeamEvent, sessionFor, type Choice } from "@/lib/team";
 import { inviteState } from "@/lib/engine/team";
 
 export type AuthState = { error?: string; email?: string } | undefined;
@@ -23,11 +24,19 @@ const loginSchema = z.object({ email: z.string().email(), password: z.string().m
 export async function loginAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const parsed = loginSchema.safeParse({ email: String(formData.get("email") ?? "").trim().toLowerCase(), password: formData.get("password") });
   if (!parsed.success) return { error: "Enter your email and password." };
+  // Rev 843: only wrong passwords count, a right one clears the email's count, and a pause says how long and what to do. A
+  // network with no address shared by everyone ("unknown") is never paused as one.
   const ip = await clientIp();
-  const [ipOk, emailOk] = await Promise.all([allow(`login:ip:${ip}`, 30, 15 * 60000), allow(`login:email:${parsed.data.email}`, 8, 15 * 60000)]);
-  if (!ipOk || !emailOk) return { error: "Too many attempts. Wait 15 minutes and try again.", email: parsed.data.email };
+  const emailKey = `login:email:${parsed.data.email}`;
+  const ipKey = ip === "unknown" ? null : `login:ip:${ip}`;
+  const [byEmail, byIp] = await Promise.all([peekLimit(emailKey, LOGIN_LIMITS.perEmail, LOGIN_LIMITS.windowMs), ipKey ? peekLimit(ipKey, LOGIN_LIMITS.perIp, LOGIN_LIMITS.windowMs) : null]);
+  if (byEmail.blocked || byIp?.blocked) return { error: pausedLine(Math.max(byEmail.retryInMs, byIp?.blocked ? byIp.retryInMs : 0)), email: parsed.data.email };
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, parsed.data.email) });
-  if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) return { error: "That email and password don't match.", email: parsed.data.email };
+  if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+    await Promise.all([bumpLimit(emailKey, LOGIN_LIMITS.windowMs), ipKey ? bumpLimit(ipKey, LOGIN_LIMITS.windowMs) : null]);
+    return { error: "That email and password don't match. If your browser filled in a saved password, try typing it yourself.", email: parsed.data.email };
+  }
+  await clearLimit(emailKey);
   // Every HelixOS this person may be in (Danno, 6 Oct): their own memberships, coach first, then the teams they are on. One
   // signs them straight in; more than one signs them into the first and asks which. Before, the first membership found, in
   // no order, removed or not.
@@ -44,15 +53,10 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
   await markSignedIn(user.id);
   await writeSession(sessionFor(user, choices[0]));
   await noteTeamSignIn(user.id, choices[0]);
-  const next = String(formData.get("next") ?? "");
-  const to = next.startsWith("/") && !next.startsWith("//") ? next : "/today";
+  const to = safeNext(String(formData.get("next") ?? ""));
   redirect(choices.length > 1 ? `/choose?next=${encodeURIComponent(to)}` : to);
 }
 
-/** The session for one of a person's HelixOS: their own membership, or a team they are on. */
-function sessionFor(user: { id: string; sessionVersion: number }, c: Choice): SessionPayload {
-  return c.kind === "team" ? { userId: user.id, workspaceId: c.workspaceId, role: "client", sv: user.sessionVersion, tm: c.key.slice(2) } : { userId: user.id, workspaceId: c.workspaceId, role: c.role, sv: user.sessionVersion };
-}
 
 /** A team member's sign-in, on the owner's team log. */
 async function noteTeamSignIn(userId: string, c: Choice): Promise<void> {
@@ -67,17 +71,17 @@ async function noteTeamSignIn(userId: string, c: Choice): Promise<void> {
  */
 export async function chooseMembershipAction(formData: FormData): Promise<void> {
   const session = await readSession();
-  if (!session) redirect("/login");
+  // A cookie that no longer verifies is cleared, never bounced between sign-in and Today (rev 843).
+  if (!session) redirect("/api/session/clear");
   const user = await db.query.users.findFirst({ where: eq(schema.users.id, session.userId) });
-  if (!user) redirect("/login");
+  if (!user) redirect("/api/session/clear");
   const key = String(formData.get("choice") ?? "");
   const c = (await choicesFor(user.id)).find((x) => x.key === key);
   if (!c) redirect("/choose");
   await markSignedIn(user.id);
   await writeSession(sessionFor(user, c));
   await noteTeamSignIn(user.id, c);
-  const next = String(formData.get("next") ?? "");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/today");
+  redirect(safeNext(String(formData.get("next") ?? "")));
 }
 
 const joinSchema = z.object({

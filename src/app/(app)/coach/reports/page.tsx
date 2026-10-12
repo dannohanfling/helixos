@@ -28,7 +28,9 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
   ]);
   const users = rows.length ? await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(rows.map((r) => r.userId))]) }) : [];
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
-  const tz = v.workspace.timezone;
+  // Rev 843: each report in the sender's own zone, labelled ("1:32 PM EDT"), never the workspace's unlabelled.
+  const senders = rows.length ? await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, v.workspace.id), inArray(schema.memberships.userId, [...new Set(rows.map((r) => r.userId))])), columns: { userId: true, timezone: true } }) : [];
+  const tzOf = new Map(senders.map((m) => [m.userId, m.timezone ?? v.tz]));
   return (
     <>
       <PageHeader title="Issues and ideas" subtitle="What members send from “I have an issue or a suggestion”, newest first." action={<Link href="/coach" className="btn btn-ghost btn-sm">Back</Link>} />
@@ -46,7 +48,7 @@ export default async function CoachReportsPage({ searchParams }: { searchParams:
                     <span className="text-xs text-ink-3">{SEVERITY_LABEL[r.severity]}</span>
                     {!r.seenAt ? <Badge tone="danger">new</Badge> : null}
                     {r.talkToCoach ? <Badge tone="warn">wants to talk</Badge> : null}
-                    <span className="ml-auto text-xs text-ink-3">{formatDateTime(r.createdAt.includes("T") ? r.createdAt : `${r.createdAt.replace(" ", "T")}Z`, tz)}</span>
+                    <span className="ml-auto text-xs text-ink-3">{formatDateTime(r.createdAt, tzOf.get(r.userId) ?? v.tz, { zone: true })}</span>
                   </div>
                   {r.page ? <p className="mt-1 text-xs text-ink-3">From <code className="break-all">{r.page}</code></p> : null}
                   {r.kind === "ask_danno" ? (

@@ -2,6 +2,7 @@
  * Turns an email's copy into the two parts the adapter sends: the branded HTML (template, logo served from the app's own
  * domain, one button carrying the link) and the plain text with the URL on its own line. The raw URL never appears in the HTML.
  */
+import { siteUrl } from "@/lib/app-url";
 import { renderEmailHtml, renderEmailText, escapeHtml } from "@/lib/engine/email-template";
 import type { EmailCopy } from "@/lib/engine/reminder-copy";
 
@@ -12,7 +13,7 @@ function hourLabelsOf(footer: string): { morning: string; evening: string } | un
 }
 
 export function appUrl(): string {
-  return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  return siteUrl();
 }
 
 export function brandedEmail(copy: EmailCopy, opts: { base?: string; settingsLink?: boolean } = {}): { subject: string; text: string; html: string } {

@@ -89,7 +89,7 @@ export default async function RewardsPage() {
             <p className="text-ink-2">Your points are tracked here. Wallet passes aren&apos;t switched on yet — when they are, your balance comes with you.</p>
             <div className="mt-2 flex flex-wrap gap-3 text-xs text-ink-3">
               {v.membership.eoPassSerial ? <span>Serial {v.membership.eoPassSerial}</span> : null}
-              {v.membership.eoPassLastPushAt ? <span>· last message {formatDateTime(v.membership.eoPassLastPushAt, v.workspace.timezone)}</span> : null}
+              {v.membership.eoPassLastPushAt ? <span>· last message {formatDateTime(v.membership.eoPassLastPushAt, v.tz)}</span> : null}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -154,7 +154,7 @@ export default async function RewardsPage() {
               <li key={l.id} className="flex items-center gap-3 py-1.5">
                 <span>{TYPE_ICON[l.type] ?? "•"}</span>
                 <span className="min-w-0 flex-1 break-words">{l.reason}</span>
-                <span className="text-[11px] text-ink-3">{formatDateTime(l.createdAt.includes("T") ? l.createdAt : l.createdAt.replace(" ", "T") + "Z", v.workspace.timezone)}</span>
+                <span className="text-[11px] text-ink-3">{formatDateTime(l.createdAt, v.tz)}</span>
                 <span className={`tabular font-semibold ${l.points < 0 ? "text-danger" : "text-good"}`}>
                   {l.points > 0 ? "+" : ""}
                   {l.points}

@@ -2,6 +2,7 @@
  * My Board by voice (rev 664 §10): the same Board as the page, through the same askBoard (the same context, prompt and checks),
  * spoken summary first and the steps numbered. The decision is saved to the member's log exactly as one asked on the page.
  */
+import { siteUrl } from "@/lib/app-url";
 import { z } from "zod";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { askBoard, decisionsFor, stepStatus } from "@/lib/board";
@@ -12,7 +13,7 @@ import { runCheckin } from "@/lib/board-checkin";
 import { db, schema } from "@/db";
 import { and, eq } from "drizzle-orm";
 
-const appUrl = () => (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const appUrl = siteUrl;
 
 defineTool({
   name: "board_ask",

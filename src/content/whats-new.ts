@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 161,
+    date: "2026-10-12",
+    title: "Signing in, times in your own zone, and a stuck chat",
+    lines: [
+      "Signing in no longer loops between the sign-in page and Today when your browser holds an old sign-in: it's cleared and you sign in once, then go back to where you were. Only wrong passwords count toward a pause, a right one resets the count, and a pause says how many minutes are left. After a reset, your browser can save the new password over the old one.",
+      "Times on your own pages (messages, Rewards, Ladders, your bot page, Settings) now show in your own time zone. Issues and ideas shows each one in the sender's time, with the zone written beside it.",
+      "If Ask Danno gets stuck, \"I have an issue or a suggestion\" → Ask Danno now has Restart the chat, and the conversation comes back with it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 160,
     date: "2026-10-12",
     title: "The Coach view, laid out for a wide screen",

@@ -1,10 +1,12 @@
 "use server";
 
+import { siteUrl } from "@/lib/app-url";
 import { markSignedIn } from "@/lib/email-gate";
 
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
+import { choicesFor, sessionFor } from "@/lib/team";
 import { safeEqual } from "@/lib/crypto";
 import { emailConfigured, sendEmail } from "@/lib/email";
 import { brandedEmail } from "@/lib/branded-email";
@@ -23,7 +25,7 @@ export type ResetState = { error?: string } | undefined;
 export type PasswordState = { error?: string; ok?: true } | undefined;
 
 function appUrl(): string {
-  return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  return siteUrl();
 }
 
 /** First-run setup. Fails closed without SETUP_TOKEN, refuses once any workspace exists, and never reveals which of those it was. */
@@ -65,7 +67,8 @@ export async function forgotAction(_prev: ForgotState, formData: FormData): Prom
   const ip = await clientIp();
   const [ipOk, emailOk] = await Promise.all([allow(`forgot:ip:${ip}`, 10, 15 * 60000), allow(`forgot:email:${email}`, 3, 15 * 60000)]);
   const message = "If that email has an account, a reset link is on its way. It works for 60 minutes.";
-  if (!ipOk || !emailOk) return { message };
+  // Said, never a silent "on its way" (rev 843). The same words whether or not the email has an account.
+  if (!ipOk || !emailOk) return { error: "Several reset links were asked for in a short time, so no new one was sent. Use the newest email you have, or wait 15 minutes and ask again." };
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
   if (!user) return { message };
   const token = await issueResetToken(user.id);
@@ -112,11 +115,12 @@ export async function resetAction(_prev: ResetState, formData: FormData): Promis
   const sessionVersion = user.sessionVersion + 1;
   await db.update(schema.users).set({ passwordHash: await hashPassword(password), sessionVersion }).where(eq(schema.users.id, user.id));
   await db.update(schema.passwordResets).set({ usedAt: nowIso() }).where(and(eq(schema.passwordResets.userId, user.id), isNull(schema.passwordResets.usedAt)));
-  const membership = await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, user.id) });
-  if (!membership) return { error: "Password updated, but this account isn't in a workspace yet. Ask your coach for an invite link." };
+  // Into the right HelixOS, as sign-in does (rev 843): their own live choices, through Choose when there's more than one.
+  const choices = await choicesFor(user.id);
+  if (!choices.length) return { error: "Password updated, but this account isn't in a workspace yet. Ask your coach for an invite link." };
   await markSignedIn(user.id);
-  await writeSession({ userId: user.id, workspaceId: membership.workspaceId, role: membership.role, sv: sessionVersion });
-  redirect("/today");
+  await writeSession(sessionFor({ id: user.id, sessionVersion }, choices[0]));
+  redirect(choices.length > 1 ? "/choose" : "/today");
 }
 
 /** Signed-in password change. Needs the current password; signs every other session out and keeps this one. */

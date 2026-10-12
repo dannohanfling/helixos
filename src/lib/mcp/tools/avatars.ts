@@ -3,6 +3,7 @@
  * avatars with their offers, add one, update one, and link one to an offer. Through the same functions the Avatars page uses
  * (src/lib/avatars.ts), scoped to the member. Nothing here deletes or archives; the member's words are kept as given.
  */
+import { siteUrl } from "@/lib/app-url";
 import { z } from "zod";
 import type { Viewer } from "@/lib/auth";
 import { AVATAR_FIELDS, type Avatar, type AvatarField, type AvatarInterview } from "@/db/schema";
@@ -130,7 +131,7 @@ export const offerLinkAvatar = defineTool({
 
 /* ───────── Avatars by interview (rev 642): spoken, one question at a time; saved interviews make stop and resume work. ───────── */
 
-const appUrl = () => (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const appUrl = siteUrl;
 /** Where the interview stands, in words to read aloud: the next question, or the draft's summary with the page to keep it on. */
 function interviewOut(row: AvatarInterview, rows: Avatar[]) {
   const target = row.avatarId ? (rows.find((a) => a.id === row.avatarId)?.name ?? "an avatar") : "a new avatar";

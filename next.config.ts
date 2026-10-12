@@ -34,7 +34,8 @@ const csp = [
   "img-src 'self' data: blob: https:",
   "media-src 'self' https:",
   `font-src 'self' data: ${chatHosts} https://fonts.gstatic.com`,
-  `connect-src 'self' ${blobApiSource} ${chatHosts} ${chatSdkHosts} wss://communityloyalty.io wss://*.communityloyalty.io${dev ? " ws: wss:" : ""}`,
+  // Rev 843: the SDK's live connection for replies (Ask Danno froze, replies came later); by name, like the rest.
+  `connect-src 'self' ${blobApiSource} ${chatHosts} ${chatSdkHosts} wss://communityloyalty.io wss://*.communityloyalty.io wss://sdk.dfktv2.com${dev ? " ws: wss:" : ""}`,
   `frame-src 'self' ${chatHosts} ${chatFrameHosts}`,
   "object-src 'none'",
   "base-uri 'self'",

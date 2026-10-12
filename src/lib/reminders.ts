@@ -1,3 +1,4 @@
+import { siteUrl } from "@/lib/app-url";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { addDays, hourInTz, nowIso, todayInTz } from "@/lib/dates";
@@ -40,7 +41,7 @@ async function deliver(out: ReminderResult[], m: { userId: string }, email: stri
 export async function runReminders(now: Date = new Date(), force?: "morning" | "evening"): Promise<ReminderResult[]> {
   const out: ReminderResult[] = [];
   const workspaces = await db.query.workspaces.findMany();
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const appUrl = siteUrl();
   for (const ws of workspaces) {
     const members = await db.query.memberships.findMany({ where: and(eq(schema.memberships.workspaceId, ws.id), eq(schema.memberships.role, "client"), isNull(schema.memberships.removedAt)) });
     for (const m of members) {

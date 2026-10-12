@@ -14,6 +14,7 @@
  * ("01" to "1") fails the match on the safe side until the live call says how it behaves. Partial failure and the host are
  * Danno's call to run. Tokens are sealed at rest and decrypted for the request.
  */
+import { siteUrl } from "@/lib/app-url";
 import { createHash } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -627,7 +628,7 @@ export async function keywordPayloadFor(m: schema.Membership): Promise<Record<(t
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, m.workspaceId), eq(schema.ladderProfiles.userId, m.userId)) }),
     db.query.leadMagnets.findMany({ where: eq(schema.leadMagnets.userId, m.userId) }),
   ]);
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const appUrl = siteUrl();
   const refs: MagnetRef[] = magnets.map((x) => ({ id: x.id, title: x.title, promise: x.promise, url: x.publishedAt || x.pdfKey || x.fileKey ? `${appUrl}/g/${x.slug}` : null }));
   return keywordFieldsPayload(profile?.keywords ?? [], { name: profile?.productName ?? null, pitch: profile?.productPitch ?? null, priceLine: profile?.priceLine ?? null, trialLine: profile?.trialLine ?? null }, refs, m.clAgentNs);
 }

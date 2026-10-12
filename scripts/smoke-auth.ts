@@ -171,6 +171,57 @@ async function resetWalk(browser: Browser) {
   console.log("✓ change password: current required, other session invalidated, own session kept");
 }
 
+/**
+ * Sign-in (rev 843, Nyki's "lots of sign-in steps"): a cookie that no longer verifies is cleared, never looped between sign-in
+ * and Today; where you were going is kept; only wrong passwords count, a right one clears the count, and a pause says how long
+ * and that even the right password waits.
+ */
+async function signInWalk(browser: Browser) {
+  const ctx = await browser.newContext();
+  const host = new URL(base).hostname;
+  await ctx.addCookies([{ name: "helix_session", value: "not-a-real-token", domain: host, path: "/" }]);
+  const page = await ctx.newPage();
+  await page.goto(`${base}/today`);
+  await page.waitForURL(/\/login/);
+  if (!new URL(page.url()).searchParams.get("reason")) throw new Error(`a broken cookie lands on sign-in with a reason: ${page.url()}`);
+  await expectText(page, "You were signed out on this browser", "a plain line, no blame on a password change");
+  if ((await ctx.cookies()).some((c) => c.name === "helix_session")) throw new Error("the broken cookie is cleared");
+  console.log("✓ sign-in: a cookie that no longer verifies is cleared on the way to sign-in, no loop");
+
+  // Signed in, a sign-in link that names where to go goes there.
+  await page.click('button:has-text("As the coach")');
+  await page.waitForURL(/\/today/);
+  await page.goto(`${base}/login?next=${encodeURIComponent("/goals")}`);
+  await page.waitForURL(/\/goals/);
+  await page.goto(`${base}/login?next=${encodeURIComponent("/\\evil.example.com")}`);
+  await page.waitForURL(/\/today/);
+  console.log("✓ sign-in: already signed in, /login?next= goes there; a path that leaves HelixOS goes to Today");
+
+  // Wrong passwords only: seven wrong and a right one, twice, still signs in (the old limit counted all of them).
+  const fresh = await (await browser.newContext()).newPage();
+  const tryOnce = async (email: string, password: string) => {
+    await fresh.goto(`${base}/login`);
+    await fresh.fill('input[name="email"]', email);
+    await fresh.fill('input[name="password"]', password);
+    await Promise.all([fresh.waitForResponse((r) => r.request().method() === "POST"), fresh.click('button:has-text("Sign in")')]);
+    await fresh.waitForLoadState("networkidle").catch(() => undefined);
+  };
+  for (let round = 0; round < 2; round++) {
+    for (let i = 0; i < 7; i++) await tryOnce("client@demo.helixos.app", `wrong-${i}`);
+    await tryOnce("client@demo.helixos.app", "changed-pass-123");
+    await fresh.waitForURL(/\/today/);
+    await fresh.context().clearCookies();
+  }
+  // Eight wrong for one email: paused, said with how long, and the right password waits too.
+  for (let i = 0; i < 8; i++) await tryOnce("lockout-walk@example.com", `wrong-${i}`);
+  await tryOnce("lockout-walk@example.com", "anything");
+  const paused = await fresh.locator('[data-testid="login-error"]').innerText();
+  if (!/paused for \d+ more minutes?/.test(paused) || !paused.includes("Even the right password waits")) throw new Error(`the pause says how long and that the right password waits: ${paused}`);
+  console.log("✓ sign-in: only wrong passwords count and a right one clears them; eight wrong pause that email, said with the minutes left");
+  await ctx.close();
+  await fresh.context().close();
+}
+
 async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   try {
@@ -178,6 +229,7 @@ async function main() {
     if (r.status !== 404) throw new Error(`/setup on the main server (workspace exists) should be 404, got ${r.status}`);
     console.log("✓ setup: 404 once a workspace exists");
     await resetWalk(browser);
+    await signInWalk(browser);
     await setupWalk(browser);
     await setupDisabledWalk(browser);
   } finally {

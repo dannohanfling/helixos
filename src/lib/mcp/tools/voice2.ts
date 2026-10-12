@@ -9,6 +9,7 @@
  * so it is read back and sent only with confirm: true after the member's yes. A team member is refused wherever the app
  * refuses them (proofs, recordings, the call sheet, Office Hours).
  */
+import { siteUrl } from "@/lib/app-url";
 import { z } from "zod";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -29,7 +30,7 @@ import { numbered } from "@/lib/engine/voice-ship";
 import { STAGE_WORDS, contentTypeFrom, dayFrom, dayWords, findByName, fridayFrom, fridayWords, oohReadBack, pickCall, proofFrom, quickSheet, sheetForVoice, stageFrom } from "@/lib/engine/voice-pack";
 import { formatDate, todayInTz } from "@/lib/dates";
 
-const appUrl = () => (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const appUrl = siteUrl;
 const first = (name: string) => name.trim().split(/\s+/)[0] || name.trim();
 const member = (v: Viewer) => ({ workspaceId: v.workspace.id, userId: v.user.id, today: v.today });
 /** The app refuses a team member here; so does the connector. */

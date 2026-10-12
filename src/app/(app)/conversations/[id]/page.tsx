@@ -70,7 +70,7 @@ export default async function ContactPage({ params, searchParams }: { params: Pr
                   <li key={m.id} className={`flex ${m.direction === "out" ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${m.direction === "out" ? "bg-ink text-bg" : "bg-surface-2"}`}>
                       <div className="whitespace-pre-line">{m.body}</div>
-                      <div className={`mt-1 text-[10px] ${m.direction === "out" ? "text-bg/70" : "text-ink-3"}`}>{formatDateTime(m.sentAt, v.workspace.timezone)}</div>
+                      <div className={`mt-1 text-[10px] ${m.direction === "out" ? "text-bg/70" : "text-ink-3"}`}>{formatDateTime(m.sentAt, v.tz)}</div>
                     </div>
                   </li>
                 ))}

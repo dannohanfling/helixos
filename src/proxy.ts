@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/session";
+import { safeNext } from "@/lib/engine/next-path";
 
 // Inbound machine endpoints authenticate with their own secrets, never a browser session.
 // The manifest and icons must load without a session: the browser fetches them on the login page and when installing the app.
@@ -21,8 +22,10 @@ export function proxy(request: NextRequest) {
     url.searchParams.set("next", pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
+  // Signed in already: on to where they were going (rev 843 keeps it), else Today. A cookie that doesn't verify is cleared by
+  // the page it lands on (/api/session/clear), so this never loops.
   if (pathname === "/login" && hasSession) {
-    return NextResponse.redirect(new URL("/today", request.url));
+    return NextResponse.redirect(new URL(safeNext(request.nextUrl.searchParams.get("next")), request.url));
   }
   return NextResponse.next();
 }

@@ -75,7 +75,7 @@ export async function AiKeyCard({ v }: { v: Viewer }) {
           ) : null}
           {status.provider ? (
             <div className="flex flex-wrap items-center gap-3 text-xs text-ink-3">
-              {cred?.lastValidatedAt ? <span>Checked {formatDateTime(cred.lastValidatedAt, v.workspace.timezone)}</span> : null}
+              {cred?.lastValidatedAt ? <span>Checked {formatDateTime(cred.lastValidatedAt, v.tz)}</span> : null}
               <span>Models: {MODELS[status.provider].strong} for long drafts, {MODELS[status.provider].light} for polish.</span>
               <form action={recheckAiKeyAction}>
                 <SubmitButton className="underline" pendingText="Checking…">Check again</SubmitButton>

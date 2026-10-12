@@ -13,7 +13,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <div className="card p-6">
         <h1 className="text-xl font-bold">Welcome back</h1>
         <p className="mb-4 mt-1 text-sm text-ink-2">Log in, lock in your day, keep the streak alive.</p>
-        {reason === "signed-out" ? <p className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">You were signed out because the password for this account changed. Sign in again.</p> : null}
+        {reason === "signed-out" ? <p data-testid="login-signed-out" className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">You were signed out on this browser. Sign in again and you&apos;ll go straight back to where you were.</p> : null}
         <LoginForm next={next} />
         <p className="mt-3 text-center text-sm">
           <Link href="/forgot" className="text-ink-2 underline">

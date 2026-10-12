@@ -8,6 +8,7 @@
  * exactly this ladder, these channels and this text, within 15 minutes, and confirm: true. Failing checks, a shipped ladder
  * or a team member are refused here, whatever Claude says.
  */
+import { siteUrl } from "@/lib/app-url";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -26,7 +27,7 @@ import { connectionFor } from "@/lib/ghl";
 import { checkPreviewToken, issuePreviewToken } from "@/lib/ship-preview";
 import { formatDate } from "@/lib/dates";
 
-const appUrl = () => (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const appUrl = siteUrl;
 const linkTo = (id: string) => `${appUrl()}/content/ladders/${id}`;
 const headlineText = (h: string) => headlineParts(h).text.replace(/\s*\/\s*/g, " ");
 const stateOf = (l: schema.Ladder) => (l.shippedAt ? "shipped" : l.graphicImageId ? "graphic made" : "draft");

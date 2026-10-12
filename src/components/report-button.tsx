@@ -172,6 +172,14 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
             </fieldset>
             {kind === "ask_danno" ? (
               <>
+                {/* Rev 843: the chat window is Community Loyalty's; a stuck one comes back with a fresh load of the page, and its conversation with it. */}
+                <p className="rounded-lg bg-surface-2 p-2 text-xs text-ink-2" data-testid="chat-restart-line">
+                  Chat stuck or not answering?{" "}
+                  <button type="button" className="underline" data-testid="chat-restart" onClick={() => window.location.reload()}>
+                    Restart the chat
+                  </button>
+                  . Your conversation comes back with it.
+                </p>
                 <label className="block text-sm font-medium">
                   The question you asked
                   <textarea className="field mt-1" name="question" rows={2} required data-testid="report-question" />

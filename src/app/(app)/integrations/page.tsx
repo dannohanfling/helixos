@@ -1,3 +1,4 @@
+import { siteUrl } from "@/lib/app-url";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -43,7 +44,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   }
   const users = members.length ? await db.query.users.findMany({ where: inArray(schema.users.id, members.map((m) => m.userId)) }) : [];
   const userName = new Map(users.map((u) => [u.id, u.name]));
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const appUrl = siteUrl();
   // A secret just created or rotated is shown once, from a 10-minute cookie; only its hash is in the database.
   let fresh: { provider: string; secret: string } | null = null;
   try {
