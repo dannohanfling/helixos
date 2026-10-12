@@ -13,6 +13,7 @@ import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { composePage, mfAvailable, setupFor } from "@/lib/mf/data";
 import { DAILY_CAP_DEFAULT, DEFAULT_PROMPT, EMPTY_DEFAULTS, MF_MAX, SECTION_MAX, clip, cleanDomain, cleanFirstName, type MfDefaults, type MfPitch, type MfProfile, type MfSection, type SectionSource } from "@/lib/engine/magic-funnel";
+import { parseTags } from "@/lib/engine/magic-funnel";
 
 const line = (fd: FormData, key: string, max: number) => clip(str(fd, key), max);
 const list = (fd: FormData, key: string, max: number, most: number) =>
@@ -72,6 +73,11 @@ export async function saveMfSetupAction(fd: FormData): Promise<void> {
   const wantLive = str(fd, "live") === "1";
   const problems = wantLive ? liveProblems({ available: mfAvailable(v.membership), registrationUrl: w.registrationUrl, pillars: pillars.length, defaults, when: w.scheduledAt }) : [];
   const values = { pillars, agenda, objections, urgency, defaults, proofIds, prompt: !prompt || prompt === DEFAULT_PROMPT ? null : prompt, live: wantLive && !problems.length, updatedAt: nowIso() };
+  // The proof tags edited on this page (Magic funnel C) are the Proof Bank's own: only this member's, only those on the form.
+  for (const [k, raw] of fd.entries()) {
+    if (typeof raw !== "string" || !k.startsWith("proofTags_")) continue;
+    await db.update(schema.proofs).set({ tags: parseTags(raw) }).where(and(eq(schema.proofs.id, k.slice("proofTags_".length)), eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId)));
+  }
   const had = await setupFor(m, w.id);
   if (had) await db.update(schema.mfSetups).set(values).where(eq(schema.mfSetups.id, had.id));
   else await db.insert(schema.mfSetups).values({ id: newId(), workspaceId, userId, webinarId: w.id, ...values });

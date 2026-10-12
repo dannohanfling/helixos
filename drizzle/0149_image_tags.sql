@@ -1,0 +1,1 @@
+ALTER TABLE `deck_images` ADD `tags` text DEFAULT '[]' NOT NULL;

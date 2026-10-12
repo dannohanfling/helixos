@@ -5,6 +5,7 @@
  * prospect said or what their page says.
  */
 import { randomBytes } from "node:crypto";
+import { siteUrl } from "@/lib/app-url";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { magicFunnelCall, magicFunnelKeySet } from "@/lib/ai";
@@ -28,6 +29,7 @@ import {
   originAllowed,
   parseObject,
   personalUrl,
+  pickHero,
   pitchInput,
   pitchRules,
   profileInput,
@@ -79,6 +81,31 @@ async function proofsFor(m: Member): Promise<Proofish[]> {
   return rows.map((r) => ({ id: r.id, who: r.who?.trim() || r.name, quote: (r.quote ?? r.shortVersion ?? r.resultAfter ?? "").trim(), tags: r.tags ?? [], status: r.status, permissionAt: r.permissionAt })).filter((r) => r.quote);
 }
 
+/** The member's pictures a hero may come from: photos and graphics with tags. */
+async function heroCandidates(m: Member): Promise<{ id: string; kind: string; tags: string[] }[]> {
+  const rows = await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, m.workspaceId), eq(schema.deckImages.userId, m.userId)), columns: { id: true, kind: true, tags: true } });
+  return rows.filter((r) => (r.kind === "photo" || r.kind === "graphic") && r.tags.length);
+}
+
+/**
+ * The hero picture for one page, by its code (GET /api/mf/<code>/hero): only while the page is live and personal or
+ * registered, only the picture its pitch chose, and only one of that member's own. The code is the only key: an <img> sends no
+ * origin, and the picture is one the member chose to show on their public page.
+ */
+export async function heroFor(code: string): Promise<{ url: string; mime: string } | null> {
+  const s = await db.query.webinarSignups.findFirst({ where: eq(schema.webinarSignups.pageCode, code) });
+  const id = s?.pitch?.hero_image_id;
+  if (!s || !id) return null;
+  const m = { workspaceId: s.workspaceId, userId: s.userId };
+  const [setup, membership, img] = await Promise.all([
+    setupFor(m, s.webinarId),
+    db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, m.workspaceId), eq(schema.memberships.userId, m.userId)) }),
+    db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, m.workspaceId), eq(schema.deckImages.userId, m.userId)) }),
+  ]);
+  if (!setup?.live || !membership || membership.removedAt || !mfAvailable(membership) || !img) return null;
+  return { url: img.blobUrl, mime: img.mime };
+}
+
 export type Written = { profile: MfProfile | null; pitch: MfPitch; sources: Record<MfSection, SectionSource>; status: "personal" | "partial" | "default"; note: string | null; failed: Partial<Record<MfSection, string>> };
 
 /**
@@ -122,6 +149,8 @@ export async function composePage(o: { member: Member; tz: string; cap: number; 
     retryCheck = checkSections(retry, ctx);
   }
   const { pitch, sources } = assemble(first, firstCheck, retry, retryCheck, fallback(profile));
+  // The hero picture (Magic funnel C): one of their own Images tagged for this industry, or none.
+  pitch.hero_image_id = pickHero(await heroCandidates(o.member), profile);
   const personal = Object.values(sources).filter((x) => x === "personal").length;
   const failed = Object.fromEntries(failing.filter((s) => sources[s] === "default").map((s) => [s, retryCheck?.[s] ?? firstCheck[s]!])) as Partial<Record<MfSection, string>>;
   return { profile, pitch, sources, status: personal === 0 ? "default" : personal === Object.keys(sources).length ? "personal" : "partial", note: personal === 0 ? "failed" : null, failed };
@@ -231,7 +260,8 @@ export async function publicRead(code: string, origin: string | null, now = new 
   if (state === "personal" && !s.pitch) return { ...base, status: 200, body: { state, ready: false, webinar: { title: facts.title, starts_at: facts.startsAt, when: facts.when }, prefill: { first_name: s.firstName, last_name: s.lastName ?? "", email: s.email, phone: s.phone ?? "" } }, outcome: "writing" };
   const proofRows = s.pitch?.proof_ids.length ? await proofsFor(m) : [];
   const proofs = (s.pitch?.proof_ids ?? []).map((id) => proofRows.find((p) => p.id === id && p.permissionAt)).filter((p): p is Proofish => Boolean(p)).map((p) => ({ id: p.id, who: p.who, quote: p.quote }));
-  const body = publicBody({ state, pitch: s.pitch, facts, proofs, prefill: state === "personal" ? { first_name: s.firstName, last_name: s.lastName ?? "", email: s.email, phone: s.phone ?? "" } : null });
+  const heroUrl = s.pitch?.hero_image_id ? `${siteUrl()}/api/mf/${code}/hero` : null;
+  const body = publicBody({ state, pitch: s.pitch, facts, proofs, prefill: state === "personal" ? { first_name: s.firstName, last_name: s.lastName ?? "", email: s.email, phone: s.phone ?? "" } : null, heroUrl });
   return { ...base, status: 200, body: state === "personal" ? { ...body, ready: true } : body, outcome: state };
 }
 

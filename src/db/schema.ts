@@ -1443,6 +1443,8 @@ export const deckImages = sqliteTable(
     consentAt: text("consent_at"),
     /** Where the picture came from (Make the graphic): uploaded by the member, rendered by HelixOS, or an AI background (rev 524). */
     source: text("source", { enum: DECK_IMAGE_SOURCES }).notNull().default("upload"),
+    /** The industries a picture suits (Magic funnel C): a funnel page's hero is chosen only from pictures tagged for theirs. */
+    tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default([]),
     createdAt: createdAt(),
   },
   (t) => [index("deck_images_user").on(t.userId, t.createdAt)],

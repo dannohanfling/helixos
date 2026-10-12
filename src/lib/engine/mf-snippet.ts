@@ -12,6 +12,7 @@ export const MF_CLASSES: { cls: string; what: string }[] = [
   { cls: "mf-header", what: "The headline" },
   { cls: "mf-subheader", what: "The line under it" },
   { cls: "mf-cta", what: "The register button's words" },
+  { cls: "mf-hero-image", what: "The hero picture (an image, or a block with a background): swapped for one of your Images tagged for their industry, when one fits" },
   { cls: "mf-when", what: "The date and time, from the webinar" },
   { cls: "mf-why-you", what: "Three bullets (a list, or three text blocks inside it)" },
   { cls: "mf-pillar-p1 / -p2 / -p3", what: "Each pillar block, reordered for them; a text inside marked mf-pillar-line gets their line" },
@@ -53,6 +54,7 @@ export function mfSnippet(apiBase: string): string {
     hidden();
     var s=d.sections; if(!s) return;
     text("mf-header",s.hero.header); text("mf-subheader",s.hero.subheader); text("mf-cta",s.hero.cta_label);
+    if(s.hero_image&&/^https?:\\/\\/[^"'()\\s]+$/.test(s.hero_image)){ all(".mf-hero-image").forEach(function(el){ var img=el.tagName==="IMG"?el:el.querySelector("img"); if(img){ img.removeAttribute("srcset"); img.src=s.hero_image; } else { el.style.backgroundImage='url("'+s.hero_image+'")'; } }); }
     list("mf-why-you",s.why_you);
     reorder("mf-pillar-",s.pillars.order);
     s.pillars.order.forEach(function(id){ var line=s.pillars.lines[id]; all(".mf-pillar-"+id+" .mf-pillar-line").forEach(function(el){el.innerText=line;}); });

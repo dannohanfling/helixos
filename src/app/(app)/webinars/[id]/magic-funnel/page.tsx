@@ -142,7 +142,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
           </label>
         </Card>
         <Card title="Proof it may show">
-          <p className="mb-2 text-xs text-ink-3">Approved items with the permission tick only, quoted word for word. Tick none to let it pick from all of them; tags matching their industry or pain go first.</p>
+          <p className="mb-2 text-xs text-ink-3">Approved items with the permission tick only, quoted word for word. Tick none to let it pick from all of them; tags matching their industry or pain go first. Edit the tags here; they&apos;re the Proof Bank&apos;s own.</p>
           {consented.length ? (
             <ul className="grid gap-1 sm:grid-cols-2" data-testid="mf-proofs">
               {consented.map((p) => (
@@ -151,9 +151,9 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
                     <input type="checkbox" name="proofIds" value={p.id} defaultChecked={(setup?.proofIds ?? []).includes(p.id)} className="mt-1" />
                     <span className="min-w-0 [overflow-wrap:anywhere]">
                       <span className="font-medium">{p.who || p.name}</span>
-                      {p.tags.length ? <span className="text-xs text-ink-3"> · {p.tags.join(", ")}</span> : null}
                     </span>
                   </label>
+                  <input className="field mt-1 py-1 text-xs" name={`proofTags_${p.id}`} defaultValue={p.tags.join(", ")} placeholder="Tags: industry, pain" aria-label={`Tags for ${p.who || p.name}`} data-testid="mf-proof-tags" />
                 </li>
               ))}
             </ul>

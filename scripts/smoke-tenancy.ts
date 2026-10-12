@@ -89,6 +89,7 @@ const ROUTES: Record<string, Route> = {
   "/api/webhooks/fathom/[connectionId]": { kind: "public", why: "Fathom's signed delivery for one workspace connection: POST only, verified against the connection's sealed secret, 401 unsigned; a GET answers 405 for every id" },
   "/files/[...key]": { kind: "public", why: "the public object store; a private proof file is served by /api/proofs/attachments/[id]" },
   "/api/mf/[code]": { kind: "public", why: "a Magic funnel page by its 43-character code, read by the member's own GoHighLevel page: only their funnel domains get an answer (CORS), a wrong code is the generic page, rate limited" },
+  "/api/mf/[code]/hero": { kind: "public", why: "the one hero picture a Magic funnel page's pitch chose from that member's own tagged Images, by the page's code, only while the page is live; a code with none is a 404" },
   "/api/mf/[code]/registered": { kind: "public", why: "the Magic funnel snippet's backup signal on submit: marks that one code registered, only from the member's funnel domains, nothing returned" },
   "/g/[slug]": { kind: "public", why: "a lead magnet's public tracked link, read by strangers" },
   "/m/[slug]": { kind: "public", why: "a lead magnet's public hosted page, read by strangers" },

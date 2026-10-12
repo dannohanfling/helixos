@@ -66,6 +66,23 @@ async function main() {
   const aiUp = await fetch("http://localhost:4020/").then(() => true).catch(() => false);
   const ai = aiUp ? null : spawn("npx", ["tsx", "scripts/mock-ai.ts", "4020"], { stdio: "ignore", detached: true });
   for (let i = 0; !aiUp && i < 40 && !(await fetch("http://localhost:4020/").then(() => true).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
+  // The hero pictures (Magic funnel C) live in the private store (scripts/mock-blob.ts): two of Maya's photos, tagged.
+  const blobUp = await fetch("http://localhost:4050/").then(() => true).catch(() => false);
+  const blob = blobUp ? null : spawn("npx", ["tsx", "scripts/mock-blob.ts", "4050"], { stdio: "ignore", detached: true });
+  for (let i = 0; !blobUp && i < 40 && !(await fetch("http://localhost:4050/").then(() => true).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
+  const { default: sharp } = await import("sharp");
+  const heroBytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: "#2a6" } }).jpeg().toBuffer();
+  const putHero = async (name: string) => {
+    const r = await fetch(`http://localhost:4050/?pathname=${encodeURIComponent(`deck/${ws}/${maya.id}/${name}.jpg`)}`, { method: "PUT", body: new Uint8Array(heroBytes), headers: { authorization: "Bearer vercel_blob_rw_PROOFSTORE_testsecret", "x-vercel-blob-access": "private", "x-content-type": "image/jpeg", "x-allow-overwrite": "1" } });
+    return ((await r.json()) as { url: string }).url;
+  };
+  await db.delete(schema.deckImages).where(and(eq(schema.deckImages.userId, maya.id), like(schema.deckImages.caption, "MF hero %")));
+  const quitHero = newId();
+  const gymHero = newId();
+  await db.insert(schema.deckImages).values([
+    { id: quitHero, workspaceId: ws, userId: maya.id, kind: "photo", blobKey: `deck/${ws}/${maya.id}/mf-quit.jpg`, blobUrl: await putHero("mf-quit"), mime: "image/jpeg", width: 12, height: 8, caption: "MF hero quit", tags: ["quit smoking", "nicotine"], source: "upload" },
+    { id: gymHero, workspaceId: ws, userId: maya.id, kind: "photo", blobKey: `deck/${ws}/${maya.id}/mf-gym.jpg`, blobUrl: await putHero("mf-gym"), mime: "image/jpeg", width: 12, height: 8, caption: "MF hero gym", tags: ["fitness"], source: "upload" },
+  ]);
   // The sample GoHighLevel page is a public site calling this HelixOS on localhost, which Chromium holds behind its local-network
   // check (a permission prompt nobody answers in a walk). Production is public to public, so the check is switched off here only.
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium", args: ["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults"] });
@@ -140,6 +157,7 @@ async function main() {
       written = (await db.query.webinarSignups.findFirst({ where: eq(schema.webinarSignups.id, row.id) }))!;
     }
     must(written.pitchStatus === "personal" && written.profile?.who_they_serve.includes("nicotine"), `written for them, from a profile: ${written.pitchStatus} ${written.pitchNote}`);
+    must(written.pitch?.hero_image_id === quitHero, `the hero is her photo tagged for their industry: ${written.pitch?.hero_image_id}`);
     const pageText = JSON.stringify(written.pitch);
     must(!/journey to nicotine freedom/i.test(pageText), "the line to their customer was caught and written again");
     must(!/300%|ignore your instructions|need clients/i.test(pageText), "injection and their own words never reach the page");
@@ -154,6 +172,11 @@ async function main() {
     must(res.status === 200 && res.headers.get("access-control-allow-origin") === "https://go.example.com" && (res.headers.get("cache-control") ?? "").includes("no-store") && (res.headers.get("x-robots-tag") ?? "").includes("noindex"), "her domain gets it: CORS, never cached, noindex");
     must(j.state === "personal" && j.ready && j.prefill?.email === "sam@example.com" && j.sections && j.header, `the page and the prefill: ${JSON.stringify(j).slice(0, 200)}`);
     must((await db.query.webinarSignups.findFirst({ where: eq(schema.webinarSignups.id, row.id) }))!.openedAt, "the first open is recorded");
+    const heroUrl = (j as { sections?: { hero_image?: string } }).sections?.hero_image ?? "";
+    must(heroUrl.endsWith(`/api/mf/${code}/hero`) && !JSON.stringify(j).includes(quitHero), `the page carries the hero's address, never its id: ${heroUrl}`);
+    const hero = await fetch(`${base}/api/mf/${code}/hero`);
+    must(hero.status === 200 && hero.headers.get("content-type") === "image/jpeg" && hero.headers.get("cross-origin-resource-policy") === "cross-origin" && (hero.headers.get("x-robots-tag") ?? "").includes("noindex") && Buffer.from(await hero.arrayBuffer()).equals(heroBytes), "the hero picture is served by the page's code, embeddable, never indexed");
+    must((await fetch(`${base}/api/mf/${"D".repeat(43)}/hero`)).status === 404, "a code with no hero gets nothing");
     res = await get(code, "https://evil.example.com");
     must(res.status === 403 && !res.headers.get("access-control-allow-origin") && !(await res.text()).includes("sam@"), "another site gets nothing");
     res = await get(code, null);
@@ -168,7 +191,7 @@ async function main() {
       const snippet = mfSnippet(base);
       must(!/<style>[^<]*(^|[\s}])(body|div|p|h1|input|button)\s*\{/m.test(snippet) && snippet.includes(".hx-mf{"), "every rule sits under the wrapper class, none on a bare element");
       const sample = (code: string) => `<!doctype html><html><head><meta name="viewport" content="width=device-width"></head><body>
-        <h1 class="mf-header">Default header</h1><p class="mf-subheader">Default subheader</p><p class="untouched">Leave me alone</p>
+        <h1 class="mf-header">Default header</h1><p class="mf-subheader">Default subheader</p><p class="untouched">Leave me alone</p><img class="mf-hero-image" src="https://go.example.com/default-hero.jpg" alt="">
         <div id="pillars"><div class="mf-pillar-p1"><h3>Attract</h3><p class="mf-pillar-line">a</p></div><div class="mf-pillar-p2"><h3>Convert</h3><p class="mf-pillar-line">b</p></div><div class="mf-pillar-p3"><h3>Keep</h3><p class="mf-pillar-line">c</p></div></div>
         <p class="mf-emotional">Default emotional</p><p class="mf-when">date</p>
         <form><input name="first_name"><input name="email"><input type="hidden" name="mf_code"><button>Save my seat</button></form>
@@ -187,6 +210,7 @@ async function main() {
       const order = await ghl.locator("#pillars > div").evaluateAll((els) => els.map((e) => e.className));
       must((await ghl.locator(".mf-header").innerText()) !== "Default header" && (await ghl.locator(".untouched").innerText()) === "Leave me alone", "the marked blocks are filled, the unmarked one untouched");
       must(order[0] === "mf-pillar-p3", `the pillars are reordered for them: ${order.join(",")}`);
+      must((await ghl.getAttribute(".mf-hero-image", "src"))?.endsWith(`/api/mf/${joCode}/hero`) ?? false, "the hero picture is swapped for her fitness photo");
       must((await ghl.inputValue('input[name="email"]')) === "jo@example.com" && (await ghl.inputValue('input[name="first_name"]')) === "Jo" && (await ghl.inputValue('input[name="mf_code"]')) === joCode, "the form filled by its field names, the code in mf_code");
       must((await ghl.evaluate(() => document.documentElement.scrollWidth)) <= 390, "no sideways scroll at 390");
       // The thank-you page: no ?mf=, the same site: the code comes from this site's session.
@@ -265,6 +289,7 @@ async function main() {
   } finally {
     await browser.close();
     if (ai?.pid) try { process.kill(-ai.pid); } catch { /* already gone */ }
+    if (blob?.pid) try { process.kill(-blob.pid); } catch { /* already gone */ }
   }
 }
 

@@ -9,6 +9,8 @@ import {
   cleanFirstName,
   customerWordsFrom,
   defaultPitch,
+  parseTags,
+  pickHero,
   echoes,
   factNumbers,
   fillPrompt,
@@ -164,5 +166,31 @@ describe("the link and the public read (rev 812 §4)", () => {
     const p = readPitch(parseObject('{"hero":{"header":"H"}}'));
     expect(p.hero.header).toBe("H");
     expect(p.why_you).toEqual([]);
+  });
+});
+
+describe("Magic funnel C: the hero picture and tags", () => {
+  const profile = { industry: "quit-smoking coaching", who_they_serve: "people who want to quit nicotine", their_offer: "", main_pain: "", stage: "growing" as const, likely_objection: "" };
+  it("a hero comes only from a photo or graphic tagged for their industry; none fits, no swap", () => {
+    const images = [
+      { id: "logo", kind: "logo", tags: ["smoking"] },
+      { id: "gym", kind: "photo", tags: ["fitness coaching"] },
+      { id: "quit", kind: "photo", tags: ["Quit smoking", "nicotine"] },
+      { id: "untagged", kind: "photo", tags: [] },
+    ];
+    expect(pickHero(images, profile)).toBe("quit");
+    expect(pickHero(images.filter((i) => i.id !== "quit"), profile)).toBeNull();
+    expect(pickHero(images, null)).toBeNull();
+  });
+  it("tags are trimmed, unique, at most 8 of 40 characters", () => {
+    expect(parseTags(" fitness ,Fitness, real estate,, ")).toEqual(["fitness", "real estate"]);
+    expect(parseTags(Array.from({ length: 12 }, (_, i) => `t${i}`).join(","))).toHaveLength(8);
+    expect(parseTags("x".repeat(60))[0]).toHaveLength(40);
+  });
+  it("the public page carries the hero's address, never the picture's id", () => {
+    const pitch: MfPitch = { ...good, hero_image_id: "img_123" };
+    const body = publicBody({ state: "personal", pitch, facts, proofs: [], prefill: null, heroUrl: "https://h.example.com/api/mf/abc/hero" }) as { sections: Record<string, unknown> };
+    expect(body.sections.hero_image).toBe("https://h.example.com/api/mf/abc/hero");
+    expect(JSON.stringify(body)).not.toContain("img_123");
   });
 });

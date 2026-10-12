@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 165,
+    date: "2026-10-12",
+    title: "Magic funnel: a hero picture for their industry",
+    lines: [
+      "Tag your photos and graphics in Images with the industries they suit. A Magic funnel page now swaps its hero picture for one of yours tagged for that prospect's industry, and keeps its own picture when none fits. Mark the picture on your GoHighLevel page with mf-hero-image.",
+      "The Magic funnel page now lets you edit each proof's tags right where you choose it; they're the Proof Bank's own tags, and the ones matching a prospect's industry or pain go first.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 164,
     date: "2026-10-12",
     title: "Phone photos in Images, Groups that always opens, and your Platforms links",

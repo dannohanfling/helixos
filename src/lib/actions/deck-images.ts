@@ -11,6 +11,7 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
 import { DECK_IMAGE_REENCODE_EDGE, consentRecord, consentSatisfied, deckImageNeedsReencode, deckImageRefusal, deckKeyOwner } from "@/lib/engine/deck-image";
 import { redactUrls } from "@/lib/engine/storage-policy";
 import { heicToJpeg, imageDimensions } from "@/lib/proof-renditions";
+import { parseTags } from "@/lib/engine/magic-funnel";
 import sharp from "sharp";
 import { deleteProofObject, headProofObject, putDeckObject, readProofObject } from "@/lib/proof-storage";
 
@@ -168,7 +169,9 @@ export async function updateDeckImageCaptionAction(formData: FormData): Promise<
   const id = str(formData, "id");
   const img = await db.query.deckImages.findFirst({ where: and(eq(schema.deckImages.id, id), eq(schema.deckImages.workspaceId, workspaceId), eq(schema.deckImages.userId, userId)) });
   if (!img) return;
-  await db.update(schema.deckImages).set({ caption: str(formData, "caption").slice(0, 200) || null }).where(eq(schema.deckImages.id, img.id));
+  // Tags (Magic funnel C) ride the same form on a photo or a graphic; a form without the field leaves them as they are.
+  const tags = formData.has("tags") ? { tags: parseTags(str(formData, "tags")) } : {};
+  await db.update(schema.deckImages).set({ caption: str(formData, "caption").slice(0, 200) || null, ...tags }).where(eq(schema.deckImages.id, img.id));
   refresh();
 }
 

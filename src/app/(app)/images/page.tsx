@@ -31,7 +31,7 @@ export default async function ImagesPage({ searchParams }: { searchParams: Promi
   // Search by caption or who is in it, one kind at a time, a page of 48 (friction walk IM1 step 2).
   const q = (sp.q ?? "").trim().toLowerCase();
   const kind = sp.kind && sp.kind in KIND_LABEL ? sp.kind : "";
-  const matching = all.filter((img) => (!kind || img.kind === kind) && (!q || `${img.caption ?? ""} ${img.consentName ?? ""} ${KIND_LABEL[img.kind]}`.toLowerCase().includes(q)));
+  const matching = all.filter((img) => (!kind || img.kind === kind) && (!q || `${img.caption ?? ""} ${img.consentName ?? ""} ${KIND_LABEL[img.kind]} ${img.tags.join(" ")}`.toLowerCase().includes(q)));
   const pages = Math.max(1, Math.ceil(matching.length / IMAGES_PAGE_SIZE));
   const page = Math.min(pages, Math.max(1, Number(sp.page) || 1));
   const images = matching.slice((page - 1) * IMAGES_PAGE_SIZE, page * IMAGES_PAGE_SIZE);
@@ -73,10 +73,15 @@ export default async function ImagesPage({ searchParams }: { searchParams: Promi
                     <Badge>{KIND_LABEL[img.kind] ?? img.kind}</Badge>
                     <span className="text-[11px] text-ink-3">{formatDate(img.createdAt.slice(0, 10))}</span>
                   </div>
-                  <form action={updateDeckImageCaptionAction} className="mt-2 flex gap-1">
+                  <form action={updateDeckImageCaptionAction} className="mt-2 space-y-1">
                     <input type="hidden" name="id" value={img.id} />
-                    <input className="field flex-1" name="caption" defaultValue={img.caption ?? ""} placeholder="Caption" data-testid="library-image-caption" />
-                    <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
+                    <div className="flex gap-1">
+                      <input className="field flex-1" name="caption" defaultValue={img.caption ?? ""} placeholder="Caption" data-testid="library-image-caption" />
+                      <SubmitButton className="btn btn-ghost btn-xs" pendingText="Saving…">Save</SubmitButton>
+                    </div>
+                    {img.kind === "photo" || img.kind === "graphic" ? (
+                      <input className="field py-1 text-xs" name="tags" defaultValue={img.tags.join(", ")} placeholder="Industries it suits, e.g. fitness coaching, real estate" aria-label="Industries it suits" title="A Magic funnel page's hero picture comes only from pictures tagged for that prospect's industry." data-testid="library-image-tags" />
+                    ) : null}
                   </form>
                   {img.consentTick ? (
                     <p className="mt-1 text-[11px] text-ink-3" data-testid="library-image-consent">

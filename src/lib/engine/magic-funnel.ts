@@ -75,8 +75,10 @@ export const DAILY_CAP_DEFAULT = 300;
 export const PROFILE_STAGES = ["starting", "growing", "scaling"] as const;
 export type MfProfile = { industry: string; who_they_serve: string; their_offer: string; main_pain: string; stage: (typeof PROFILE_STAGES)[number]; likely_objection: string };
 
-/** The page, one JSON per prospect (rev 815 §3). The hero image is chosen in commit B, from Images tagged by industry. */
+/** The page, one JSON per prospect (rev 815 §3). The hero picture is not written: it is chosen from Images tagged by industry. */
 export type MfPitch = {
+  /** One of the member's own Images tagged for their industry (pickHero), or none: the page keeps its own picture. */
+  hero_image_id?: string | null;
   hero: { header: string; subheader: string; cta_label: string };
   why_you: string[];
   pillars: { order: string[]; lines: Record<string, string> };
@@ -477,6 +479,32 @@ export function rankProof<T extends { id: string; status: string; permissionAt: 
   return [...ok].map((r, i) => ({ r, i, s: score(r) })).sort((a, b) => b.s - a.s || (a.r.tags.length ? 1 : 0) - (b.r.tags.length ? 1 : 0) || a.i - b.i).map((x) => x.r);
 }
 
+const GENERIC = new Set(["coach", "coaches", "coaching", "business", "businesses", "service", "services", "consulting", "consultant", "company", "industry", "clients", "client", "customers"]);
+
+/**
+ * The hero picture (rev 812 §3, Magic funnel C): only from the member's own Images tagged for that industry; a photo or a
+ * graphic, never a logo, a screenshot or a proof image. No tag that fits is no swap: the page keeps the picture it has.
+ */
+export function pickHero<T extends { id: string; kind: string; tags: string[] }>(images: T[], profile: MfProfile | null): string | null {
+  if (!profile) return null;
+  // A word every coach shares ("coaching", "business") says nothing about the industry: it never picks a picture alone.
+  const terms = words(`${profile.industry} ${profile.who_they_serve}`).filter((w) => w.length > 3 && !STOP.has(w) && !GENERIC.has(w));
+  if (!terms.length) return null;
+  const score = (r: T) => r.tags.reduce((n, t) => n + (words(t).some((w) => terms.some((x) => x === w || (x.length > 4 && w.startsWith(x.slice(0, 4))))) ? 1 : 0), 0);
+  const best = images.filter((r) => (r.kind === "photo" || r.kind === "graphic") && r.tags.length).map((r, i) => ({ r, i, s: score(r) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s || a.i - b.i)[0];
+  return best ? best.r.id : null;
+}
+
+/** Tags as typed: comma separated, trimmed, at most 8 of 40 characters, no repeats (Images and the Proof Bank alike). */
+export function parseTags(raw: string): string[] {
+  const seen = new Set<string>();
+  return raw
+    .split(",")
+    .map((t) => t.replace(/\s+/g, " ").trim().slice(0, 40))
+    .filter((t) => t && !seen.has(t.toLowerCase()) && (seen.add(t.toLowerCase()), true))
+    .slice(0, 8);
+}
+
 /* ───────────────────────── the public page ───────────────────────── */
 
 export type MfState = "personal" | "registered" | "generic";
@@ -488,14 +516,15 @@ export function stateFor(o: { registeredAt: string | null; startsAt: string | nu
 }
 
 /** What /api/mf/<code> sends, by state. The legacy keys (header, subheader, scarcity) ride along for the CL fields in use. */
-export function publicBody(o: { state: MfState; pitch: MfPitch | null; facts: MfFacts; proofs: { id: string; who: string; quote: string }[]; prefill: { first_name: string; last_name: string; email: string; phone: string } | null }) {
+export function publicBody(o: { state: MfState; pitch: MfPitch | null; facts: MfFacts; proofs: { id: string; who: string; quote: string }[]; prefill: { first_name: string; last_name: string; email: string; phone: string } | null; heroUrl?: string | null }) {
   const facts = { title: o.facts.title, starts_at: o.facts.startsAt, when: o.facts.when };
   if (o.state !== "personal" || !o.pitch) return { state: o.state, webinar: facts, ...(o.state === "registered" && o.pitch ? { confirmation: o.pitch.confirmation } : {}) };
-  const p = o.pitch;
+  const { hero_image_id: _hero, ...p } = o.pitch;
+  void _hero;
   return {
     state: o.state,
     webinar: facts,
-    sections: { ...p, example: { label: "Example", title: p.example.title, text: p.example.text }, proof: o.proofs },
+    sections: { ...p, example: { label: "Example", title: p.example.title, text: p.example.text }, proof: o.proofs, hero_image: o.heroUrl ?? null },
     header: p.hero.header,
     subheader: p.hero.subheader,
     emotional: p.emotional,
