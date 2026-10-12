@@ -88,7 +88,7 @@ async function main() {
       await page.waitForURL(/\/today/);
     };
     await signIn("coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const mayaForm = 'form:has(input[name="eoPassUrl"][value*="maya-torres"])';
     const mayaRow = page.locator(`li:has(${mayaForm})`).first();
     await mayaRow.waitFor({ timeout: 15000 });
@@ -274,7 +274,7 @@ async function main() {
 
     await signIn("coach");
     // Nothing pushes on its own, so the Coach page says the record moved since the last push, from HelixOS's data alone.
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const changedLine = page.locator(`li:has(${mayaForm}) [data-testid="bot-changed-since"]`);
     await changedLine.waitFor({ timeout: 15000 });
     if ((await changedLine.innerText()).trim() !== "changed since the last push") throw new Error("the row says changed since the last push");
@@ -293,7 +293,7 @@ async function main() {
     await preview.waitFor({ timeout: 20000 });
     if ((await after(PRODUCT_FIELD)) !== offersText(PRICE_ANSWER_DEFAULT) || (await after(PRODUCT_FIELD)).includes('""')) throw new Error("an empty answer uses the default, never an empty quote");
     await db.update(schema.memberships).set({ priceAnswer: PRICE_LINE }).where(eq(schema.memberships.id, membership.id));
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await page.locator(`li:has(${mayaForm}) [data-testid="review-bot"]`).waitFor({ timeout: 15000 });
     if (await page.locator(`li:has(${mayaForm}) [data-testid="bot-changed-since"]`).count()) throw new Error("after the push, the row no longer says changed");
     console.log(`✓ the early price answer: set on the client's page, nothing sent on save, the page quotes it; the offers field goes with it and no price, no new line to approve; the Coach row said "changed since the last push" until it went`);

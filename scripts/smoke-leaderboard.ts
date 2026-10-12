@@ -52,7 +52,7 @@ async function main() {
 
     // The coach connects Maya's key; with several templates the check says so and names them.
     await login(page, "As the coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const row = page.locator("li", { has: page.locator('form:has(input[name="eoPassUrl"][value*="maya-torres"])') }).first();
     await row.waitFor({ timeout: 15000 });
     const box = row.locator('[data-testid="leaderboard-row"]');
@@ -110,7 +110,7 @@ async function main() {
     await fetch(`${HOST}/__mode?status=200`);
     await logout(page);
     await login(page, "As the coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     // The block opens by itself once a client has a feed.
     must(await page.locator('li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-row"]').getAttribute("open") !== null, "a client with a feed shows the block open");
     await submit(page, 'li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-remove"]');

@@ -101,7 +101,7 @@ async function main() {
 
     // ── The coach, a new client, a bad token, then one base's token on the other base. ──
     await signIn("coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await Promise.all([page.waitForURL(/\/coach\/import/), page.locator('[data-testid="coach-import-link"]').click()]);
     await page.locator('[data-testid="import-client"]').selectOption("new");
     await page.locator('[data-testid="import-new-name"]').fill(name);
@@ -379,7 +379,7 @@ async function main() {
       const original = await page.request.get(`${base}/api/headshots/${jordan1.id}?size=original`);
       const orMeta = await sharp(Buffer.from(await original.body())).metadata();
       if (orMeta.format !== "png" || orMeta.width !== 900 || orMeta.height !== 1200) throw new Error(`the original is kept as it came: ${orMeta.format} ${orMeta.width}x${orMeta.height}`);
-      await page.goto(`${base}/coach`);
+      await page.goto(`${base}/coach?connections=open`);
       if (!(await page.locator('[data-testid="member-avatar"][data-photo="1"]').count())) throw new Error("the coach's client list shows the photos");
 
       // Review: the row with no email goes to the coach (picked), the one nobody matches is dismissed.

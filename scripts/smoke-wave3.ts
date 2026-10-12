@@ -177,7 +177,7 @@ async function main() {
   await expectText(page, "To score", "coach cert queue");
   await page.fill('input[name="score"]', "96");
   await submit(page, 'button:has-text("Score it")');
-  await page.goto(`${base}/coach`);
+  await page.goto(`${base}/coach?connections=open`);
   await expectText(page, "Programs and passes", "coach programs card");
   await shot(page, "x13-coach");
 
@@ -214,7 +214,7 @@ async function main() {
   if (JSON.stringify(dump).includes("passwordHash") || JSON.stringify(dump).includes("manualToken")) throw new Error("export leaked a secret column");
   const csv = await page.request.get(`${base}/api/export?format=csv&table=leads`);
   if (!csv.ok() || !(csv.headers()["content-type"] ?? "").includes("text/csv")) throw new Error("csv export failed");
-  await page.goto(`${base}/coach`);
+  await page.goto(`${base}/coach?connections=open`);
   const clientExportHref = await page.locator('li:has-text("Maya") a[href^="/api/export?format=json&user="]').first().getAttribute("href");
   if (!clientExportHref) throw new Error("coach page has no per-client export link");
   const clientDump = (await (await page.request.get(`${base}${clientExportHref}`)).json()) as Record<string, unknown[]>;

@@ -185,7 +185,7 @@ async function main() {
     await page.waitForURL(/\/login/);
     await page.click('button:has-text("As the coach")');
     await page.waitForURL(/\/today/);
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await expectText(page, "Essence: what clients actually fill in", "coach counts card");
     const nameCount = await page.locator('[data-testid="essence-counts"] [data-field="identity.name"]').getAttribute("data-count");
     if (nameCount !== "1") throw new Error(`identity.name should count one client, got ${nameCount}`);

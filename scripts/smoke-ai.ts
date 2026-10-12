@@ -129,7 +129,7 @@ async function main() {
 
     // Coach sees who has a key and their volume; sets the cap to 2 so the member is blocked
     await login(page, "coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await expectText(page, "AI keys and usage", "coach card");
     const coachAi = await page.locator('[data-testid="coach-ai"]').innerText();
     if (!/anthropic ····good/.test(coachAi)) throw new Error("coach does not see the client's key");
@@ -145,7 +145,7 @@ async function main() {
     await page.goto(`${base}/content/ladders`);
     await expectText(page, "Build the skeleton", "ai paused on ladders");
     await login(page, "coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await submit(page, '[data-testid="coach-ai"] li:has-text("Maya") button:has-text("cap on")');
     await expectText(page, "cap lifted", "exempt");
     await login(page, "client");

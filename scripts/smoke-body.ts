@@ -1387,7 +1387,7 @@ async function main() {
     if (Object.keys(coachDump).some((k) => k.startsWith("body_"))) throw new Error("a coach's export of a client carries no Body section");
     // The coach's client table (rev 237 phase 12): the Body cell is there and empty while private.
     const bodyCell = async () => (await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"]`).innerText()).trim();
-    await coach.goto(`${base}/coach`);
+    await coach.goto(`${base}/coach?connections=open`);
     if ((await bodyCell()) !== "") throw new Error(`the client table's Body cell is blank while private: "${await bodyCell()}"`);
     console.log("✓ private: no Body card, a blank Body cell on the client table, the coach's view says private, and the coach's export has no Body section");
 
@@ -1404,7 +1404,7 @@ async function main() {
     // On a Monday the week has no finished day to judge yet; any other day it has.
     const firstDayOfWeek = (await import("@/lib/dates")).startOfWeek(today) === today;
     if (!expectedCell || (!firstDayOfWeek && expectedCell.judged < 1) || !expectedCell.lastWeighIn || expectedCell.sessions < 1) throw new Error(`the query has a cell with judged days, a weigh-in and sessions for a sharing client: ${JSON.stringify(expectedCell)}`);
-    await coach.goto(`${base}/coach`);
+    await coach.goto(`${base}/coach?connections=open`);
     if ((await bodyCell()) !== expectedCell.short) throw new Error(`the client table's Body cell reads "${await bodyCell()}", the query says "${expectedCell.short}"`);
     await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] a`).click();
     await coach.waitForURL(/\/body/);
@@ -1441,7 +1441,7 @@ async function main() {
     if (!(await coach.locator('[data-testid="coach-body-private"]').count()) || (await coach.locator('[data-testid="body-tiles"]').count())) throw new Error("revoking hides the client's Body from the coach again");
     await coach.goto(`${base}/coach/${mem.id}`);
     if (await coach.locator('[data-testid="coach-body-link"]').count()) throw new Error("revoking removes the Body card");
-    await coach.goto(`${base}/coach`);
+    await coach.goto(`${base}/coach?connections=open`);
     if ((await bodyCell()) !== "") throw new Error(`revoking blanks the client table's Body cell: "${await bodyCell()}"`);
     const events = await db.query.bodyShareEvents.findMany({ where: mine(schema.bodyShareEvents) });
     if (events.length !== 2 || events.filter((e) => e.shared).length !== 1) throw new Error(`both changes are logged: ${events.length}`);
@@ -2040,7 +2040,7 @@ async function main() {
     await press(client, '[data-testid="checkin-send"]', async () => /checkin=sent/.test(client.url()) && (await client.locator('[data-testid="checkin-sent"]').count()) > 0, "check-in sent");
     const checkinRow = (await db.query.bodyCheckins.findMany({ where: mine(schema.bodyCheckins) }))[0];
     if (!checkinRow || checkinRow.monday !== mondayOf(today) || !checkinRow.lines.some((l) => l.startsWith("Days logged:")) || checkinRow.lines.some((l) => l.includes(clientFoodName)) || checkinRow.note !== "Travel week, but I kept the protein up.") throw new Error("the check-in is this week's numbers as lines, no food named, plus the note");
-    await coach.goto(`${base}/coach`);
+    await coach.goto(`${base}/coach?connections=open`);
     if (!(await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-checkin-mark"]`).count())) throw new Error("the roster marks the week's check-in while the client's days stay private");
     await coach.goto(`${base}/coach/${mem.id}`);
     if ((await coach.locator('[data-testid="coach-checkin"]').count()) !== 1 || !(await coach.locator('[data-testid="coach-checkin-note"]').textContent())?.includes("kept the protein up") || (await coach.locator('[data-testid="coach-body-link"]').count())) throw new Error("the coach reads the sent check-in and still nothing else");
@@ -2259,11 +2259,11 @@ async function main() {
     // The coach's path: nothing on the roster while the client's working access is off; the control once it's on; the switch turns it on and shares nothing.
     const coachUser = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     await db.update(schema.memberships).set({ coachCanWork: false }).where(eq(schema.memberships.id, mem.id));
-    await coach.goto(`${base}/coach`);
+    await coach.goto(`${base}/coach?connections=open`);
     await coach.locator('[data-testid="coach-body-cell"]').first().waitFor({ timeout: 30000 });
     if (await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-humanos-on"]`).count()) throw new Error("no coach control without the client's working access");
     await db.update(schema.memberships).set({ coachCanWork: true }).where(eq(schema.memberships.id, mem.id));
-    await coach.goto(`${base}/coach`);
+    await coach.goto(`${base}/coach?connections=open`);
     await press(coach, `[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-humanos-on"]`, async () => !!(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mem.id) }))!.bodyEnabled, "the coach turned HumanOS on");
     // The refreshed roster lands a beat after the action: wait for the control to go, then read the cell.
     await coach.locator(`[data-testid="coach-body-cell"][data-member="${mem.id}"] [data-testid="coach-humanos-on"]`).waitFor({ state: "detached", timeout: 30000 });

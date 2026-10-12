@@ -598,7 +598,7 @@ async function main() {
     await sharedRowM.waitFor({ timeout: 20000 });
     const notSharedM = (await sharedRowM.locator('[data-testid="community-month-not-shared"]').textContent()) ?? "";
     if ((await sharedRowM.locator('[data-testid="community-month-shares"]').innerText()).trim() !== "1" || notSharedM.includes(maya.name) || !notSharedM.includes(jordan.name)) throw new Error(`the coach sees the month's shares and who hasn't shared: ${notSharedM}`);
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await page.locator('[data-testid="month-coach-shares"]').waitFor({ timeout: 20000 });
     if ((await page.locator('[data-testid="month-coach-shares"]').innerText()).trim() !== "1") throw new Error("the coach view's month card counts who has shared to the thread");
     console.log("✓ the coach's month log and the coach view's month card show the month's shares and who hasn't shared yet");

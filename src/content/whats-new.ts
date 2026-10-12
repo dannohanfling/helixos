@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 160,
+    date: "2026-10-12",
+    title: "The Coach view, laid out for a wide screen",
+    lines: [
+      "Clients now takes the full width of the Coach view, so names, Today, Streak, Level, Kit and Last active read on one line and each row stays short. On a narrower window the table scrolls inside its card, not the page.",
+      "Each client's connections (pass, Community Loyalty, webhooks, FAQ field, leaderboard) now open from their own row under Programs and passes, with CL, GHL and Pass shown at a glance. \"Open all\" opens every one. The fields and how they save are unchanged.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 159,
     date: "2026-10-12",
     title: "Your picture now goes with your post",

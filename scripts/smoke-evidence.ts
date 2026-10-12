@@ -319,7 +319,7 @@ async function main() {
     console.log("✓ each shelf is its own: the coach's has all nine and none of the client's");
 
     // The coach sees the shared pool: today's real count against the budget, what OpenAlex reported, the last seven days
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await expectText(page, "Evidence searches: the shared OpenAlex key", "quota card");
     const today = await page.locator('[data-testid="evidence-quota-today"]').innerText();
     if (!/^4 of 10,000 today$/.test(today.trim())) throw new Error(`four real searches today (the results one, the leaderboard one, the refused-filter one and the empty one), the cache hit and the 429 not counted; got "${today}"`);

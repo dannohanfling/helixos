@@ -442,7 +442,7 @@ async function main() {
     await page.waitForURL(/\/login/);
     await page.click('button:has-text("As the coach")');
     await page.waitForURL(/\/today/);
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const mayaForm = 'form:has(input[name="eoPassUrl"][value*="maya-torres"])';
     await page.locator(mayaForm).first().waitFor({ timeout: 15000 });
     await page.locator(`${mayaForm} input[name="clDripWebhookUrl"]`).fill(DRIP_HOOK);

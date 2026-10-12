@@ -97,7 +97,7 @@ async function main() {
     // The coach's page, from the Coach view
     await login(page, "As the coach");
     await connectAi(page);
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await Promise.all([page.waitForURL(/\/coach\/teaching/), page.click('[data-testid="coach-teaching-link"]')]);
     await expectText(page, "No stories yet", "empty bank");
 

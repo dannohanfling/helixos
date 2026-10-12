@@ -112,7 +112,7 @@ async function main() {
     if (!/accent on inverseGround is 1\.24:1/.test(warnings)) throw new Error(`the accent pair warns with the ratio, got "${warnings}"`);
     if ((await page.locator('[data-testid="brand-aliases"]').inputValue()) !== "Turas") throw new Error("the permitted name is read back");
     console.log("✓ brand kit (§6.1): faces from the list or typed under Other with the who-will-not-see line; the preview draws the kit as typed and marks the slide that cannot read; the check proposes an ink with Apply; ash grey on cream still refused on the server with the ratio; the Turas kit saved and read back; the accent pair warns with its ratio");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     // The tier (rev 442): its own form, saved the moment it changes with the green, never touching the pass; read in full.
     const mayaRow = page.locator("tr", { has: page.locator('[data-testid="client-link"]', { hasText: "Maya" }) }).first();
     const heads = await page.locator("table", { has: page.locator('[data-testid="client-link"]') }).first().locator("thead th").allInnerTexts();
@@ -133,6 +133,34 @@ async function main() {
     if (!/^🎟️ Pass: (on|off)$/.test(passLabel) || !(await mayaRow.locator('[data-testid="pass-toggle"]').getAttribute("title"))?.includes("wallet pass")) throw new Error(`the pass says it is the pass: "${passLabel}"`);
     await db.update(schema.memberships).set({ programTier: mm.programTier }).where(eq(schema.memberships.id, mm.id));
     console.log(`✓ tier: saved on change to ${nextTier} with the green, the pass untouched; read in full; Level and Tier columns; "${passLabel}" with its line`);
+    // The Coach view's layout (rev 844): Clients at full width, nothing wrapped a letter a line, rows short, the page short with
+    // every client's connections closed; at 1024 the table scrolls inside its card; on a phone nothing is wider than the screen.
+    for (const width of [1920, 1440, 1024, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${base}/coach`);
+      await page.locator('[data-testid="client-link"]').first().waitFor({ state: "visible", timeout: 15000 });
+      const m = await page.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll("main table tbody tr")) as HTMLElement[];
+        const cells = Array.from(document.querySelectorAll("main table th, main table td")) as HTMLElement[];
+        const squeezed = cells.filter((c) => c.innerText.trim().length > 2 && c.clientWidth < 28).map((c) => c.innerText.trim().slice(0, 20));
+        const wrap = document.querySelector("main table")!.parentElement as HTMLElement;
+        return { tallest: Math.max(...rows.map((r) => r.getBoundingClientRect().height)), squeezed, page: document.documentElement.scrollHeight, pageWide: document.documentElement.scrollWidth, tableScrolls: wrap.scrollWidth > wrap.clientWidth, open: document.querySelectorAll('details[data-testid="client-connections"][open]').length };
+      });
+      if (m.squeezed.length) throw new Error(`at ${width}px no cell is squeezed to a letter a line: ${m.squeezed.join(", ")}`);
+      if (m.pageWide > width) throw new Error(`at ${width}px the page itself never scrolls sideways: ${m.pageWide}px`);
+      if (width >= 1440 && (m.tallest > 80 || m.page > 4000 || m.open)) throw new Error(`at ${width}px a client row is at most 80px and the page under 4,000px, connections closed: ${JSON.stringify(m)}`);
+      if (width === 1024 && m.tallest > 80 && !m.tableScrolls) throw new Error(`at 1024px the table scrolls inside its card: ${JSON.stringify(m)}`);
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    // Each client's connections open from their row, with its small status; Open all opens every one.
+    const conn = page.locator('details[data-testid="client-connections"]').first();
+    const status = await conn.locator('[data-testid="client-connections-status"]').innerText();
+    if (!/CL [✓–]/.test(status) || !/GHL [✓–]/.test(status) || !/Pass (on|off)/.test(status)) throw new Error(`the row says CL, GHL and Pass at a glance: ${status}`);
+    await conn.locator("> summary").click();
+    await conn.locator('input[name="eoPassUrl"]').waitFor({ state: "visible", timeout: 5000 });
+    await page.goto(`${base}/coach?connections=open`);
+    if ((await page.locator('details[data-testid="client-connections"]:not([open])').count()) !== 0) throw new Error("Open all opens every client's connections");
+    console.log("✓ the Coach view at 1920, 1440, 1024 and 390: Clients full width, no squeezed cells, rows at most 80px, the page under 4,000px, connections one tap from each row");
     await page.reload();
     await page.locator('[data-testid="client-link"]', { hasText: "Maya" }).first().click();
     await page.waitForURL(new RegExp(`/coach/${mm.id}$`));
@@ -208,7 +236,7 @@ async function main() {
     await page.reload();
     const claimsText = await page.locator('[data-testid="client-claims"]').innerText();
     if ((claimsText.match(/booked for/g) ?? []).length !== 2) throw new Error(`detail view should show both claims booked:\n${claimsText}`);
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const coachClaims = await page.locator('[data-testid="claims-list"]').innerText();
     if (!/VIP Laser Coaching Call[\s\S]*booked for/.test(coachClaims)) throw new Error(`coach claims card should say booked:\n${coachClaims}`);
     await machine.close();

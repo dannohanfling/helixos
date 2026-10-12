@@ -300,7 +300,7 @@ async function main() {
 
     // ── The coach: who has set it, who hasn't, the quiet list from Tuesday, and each member's history. ──
     await signIn("coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const mayaRow = page.locator('[data-testid="week-coach-row"]', { hasText: maya.name });
     const jordanRow = page.locator('[data-testid="week-coach-row"]', { hasText: jordan.name });
     await mayaRow.waitFor({ timeout: 20000 });
@@ -315,7 +315,7 @@ async function main() {
     if ((await history.count()) !== 2 || !(await history.nth(1).innerText()).includes("Patient") || !(await history.first().innerText()).includes("Show up daily") || !(await history.first().innerText()).includes("Follow up with 12 leads")) throw new Error("the client page lists the member's weeks, newest first, with the word, key results and tasks");
     if ((await history.first().locator('[data-testid="their-kr-kept"]').count()) !== 1) throw new Error("the coach sees the key result kept as written though it reads like a task");
     console.log(`✓ the coach: Maya set (Show up daily), Jordan not set${jordanLate ? " and under the quiet list" : " (Monday: not yet on the quiet list)"}; Maya's history on Maya's page`);
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const mayaMonth = page.locator('[data-testid="month-coach-row"]', { hasText: maya.name });
     await mayaMonth.waitFor({ timeout: 20000 });
     if ((await mayaMonth.getAttribute("data-set")) !== "yes" || !(await mayaMonth.innerText()).includes("Rooted") || (await page.locator('[data-testid="month-coach-row"]', { hasText: jordan.name }).getAttribute("data-set")) !== "no") throw new Error("the coach sees Maya's month and word, and Jordan's not set");
@@ -383,7 +383,7 @@ async function main() {
 
     // ── The coach: requests by Friday, who takes it, how it went, notes; the lists. ──
     await signIn("coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await Promise.all([page.waitForURL(/\/coach\/office-hours/), page.locator('[data-testid="coach-ooh-link"]').click()]);
     const req = page.locator('[data-testid="ooh-request"]', { hasText: maya.name });
     await req.waitFor({ timeout: 20000 });
@@ -489,7 +489,7 @@ async function main() {
     const avg = monthSummary(all.filter((f) => f.month === month).map((f) => f.referralScore)).average;
     const trend = trendLine(avg, monthSummary(all.filter((f) => f.month === prevMonth(month)).map((f) => f.referralScore)).average);
     await signIn("coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await Promise.all([page.waitForURL(/\/coach\/feedback/), page.locator('[data-testid="coach-feedback-link"]').click()]);
     const monthBox = page.locator(`[data-testid="feedback-month"][data-month="${month}"]`);
     await monthBox.waitFor({ timeout: 20000 });

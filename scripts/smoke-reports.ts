@@ -135,7 +135,7 @@ async function main() {
     must((await page.locator('[data-testid="coach-new-reports"]').innerText()).includes("3 new issues and ideas"), "Today says three new issues and ideas");
     must((await page.locator('[data-testid="coach-new-feedback"]').innerText()).includes("1 new monthly feedback"), "Today says one new monthly feedback");
     must(!(await page.locator('[data-testid="report-open"]').count()), "the coach has the inbox, not the button");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     must((await page.locator('[data-testid="coach-reports-new"]').innerText()) === "3 new" && (await page.locator('[data-testid="coach-feedback-new"]').innerText()) === "1 new", "the Coach page counts both");
     await page.goto(`${base}/coach/reports`);
     const rows = page.locator('[data-testid="report-row"]');
@@ -168,7 +168,7 @@ async function main() {
     // ── 5. Monthly feedback: new until the coach opens it. ──
     await page.goto(`${base}/coach/feedback`);
     must((await page.locator('[data-testid="feedback-proud"] li[data-new="1"]').count()) === 1, "the new response is marked new on the page");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     must(!(await page.locator('[data-testid="coach-feedback-new"]').count()), "once opened, the count clears");
     console.log("✓ new monthly feedback is counted until the coach opens Monthly feedback, marked new there once");
 

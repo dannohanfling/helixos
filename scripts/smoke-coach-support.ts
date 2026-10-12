@@ -84,7 +84,7 @@ async function main() {
     const removed = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, bMem.id) }))!;
     if (!removed.removedAt || !removed.removedBy) throw new Error("removedAt and removedBy are set on the membership");
     // Removed from the coach's counts, present in the Removed card.
-    await coach.goto(`${base}/coach`);
+    await coach.goto(`${base}/coach?connections=open`);
     if (!(await coach.locator('[data-testid="removed-clients"]').count())) throw new Error("a removed client appears in the Removed card");
     if (!(await coach.locator('[data-testid="removed-clients"]').getByText(B.name).count())) throw new Error("the Removed card names the client");
     console.log("✓ (2b) remove: removedAt/removedBy on the record, and the client is in the Removed card, out of the active counts");

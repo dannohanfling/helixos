@@ -77,7 +77,7 @@ async function main() {
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), ghlForm.locator('button:has-text("Save")').click()]);
     await page.waitForLoadState("networkidle");
     // Danno installs the client's Community Loyalty drip: the webhook URL (a credential, never shown back) and the contact.
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const mayaRow = page.locator('form:has(input[name="eoPassUrl"][value*="maya-torres"])').first();
     await mayaRow.locator('input[name="clDripWebhookUrl"]').fill(`http://localhost:${mockPort}/api/iwh/abcdef0123456789abcdef0123456789`);
     await mayaRow.locator('input[name="clUserNs"]').fill("f52594u50757435");

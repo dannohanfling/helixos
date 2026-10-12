@@ -87,7 +87,7 @@ async function main() {
 
     // ── The coach picks a client, the webinar and the proof, and sees the plan. ──
     await signIn("coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await Promise.all([page.waitForURL(/\/coach\/move/), page.locator('[data-testid="coach-move-link"]').click()]);
     const items = await page.locator('[data-testid="move-item"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
     const coachOffers = await db.query.offers.findMany({ where: and(eq(schema.offers.workspaceId, ws), eq(schema.offers.userId, coach.id)) });

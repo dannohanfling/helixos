@@ -43,9 +43,12 @@ import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
-export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string }> }) {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string }> }) {
   const v = await requireCoach();
-  const claimsShown = (await searchParams).claims === "done" ? "done" : "open";
+  const sp = await searchParams;
+  const claimsShown = sp.claims === "done" ? "done" : "open";
+  // Every client's connections open at once (rev 844): ?connections=open.
+  const allOpen = sp.connections === "open";
   const [reportsNew, feedbackNew] = await Promise.all([unseenReports(v.workspace.id), newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt)]);
   const now = new Date();
   const wsId = v.workspace.id;
@@ -154,6 +157,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const changedSince = await Promise.all(withBots.map((m) => (m.clApiToken ? changedSinceLastPush(m) : null)));
   const changedOf = new Map(withBots.map((m, i) => [m.id, changedSince[i]]));
   const myBot = v.membership;
+  // The row's small status for each client's connections (rev 844): Community Loyalty token, GoHighLevel, the pass.
+  const ghlUsers = new Set(userIds.length ? (await db.query.socialConnections.findMany({ where: and(eq(schema.socialConnections.workspaceId, wsId), inArray(schema.socialConnections.userId, userIds)), columns: { userId: true, manualToken: true } })).filter((c) => c.manualToken).map((c) => c.userId) : []);
   // Body (rev 237 phase 12): a cell only for clients who share it with the coach; blank for the rest, private or off alike.
   const bodyOf = await coachBodyColumn(v, rows.map((r) => ({ userId: r.m.userId, today: theirToday(r.m) })));
   // B9: a ✉️ for a client who sent this week's check-in, shared or not.
@@ -161,6 +166,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
+      <span hidden data-page-wide />
       <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex flex-wrap gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/headshots" className="btn btn-ghost btn-sm" data-testid="coach-headshots-link">Client headshots</Link><Link href="/coach/late-closes" className="btn btn-ghost btn-sm" data-testid="coach-late-link">Late close-outs</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/coach/teaching" className="btn btn-ghost btn-sm" data-testid="coach-teaching-link">Teaching library</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
       <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">Your bot →</Link>}>
         <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your bot page can send nothing until the token is here.</p>
@@ -177,14 +183,13 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
         </form>
         {myBot.clApiToken ? <BotPushLine m={myBot} productField={productFieldOf.get(myBot.id) ?? null} changed={changedOf.get(myBot.id) ?? null} tz={v.workspace.timezone} /> : <p className="mt-2 text-xs text-ink-3">Once the token is saved, your business facts can be pushed to your bot, field by field, after you have seen what will change.</p>}
       </Card>
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-        <Card title="Clients">
+      <Card title="Clients" className="mb-4">
           {rows.length ? (
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-ink-2">
+                <thead className="whitespace-nowrap text-left text-xs uppercase tracking-wide text-ink-2">
                   <tr>
-                    <th className="py-2 pr-3">Client</th>
+                    <th className="min-w-[220px] py-2 pr-3">Client</th>
                     <th className="py-2 pr-3">Today</th>
                     <th className="py-2 pr-3">Streak</th>
                     <th className="py-2 pr-3" title="Days in band this week · last weigh-in · sessions this week, for clients sharing HumanOS with you">HumanOS</th>
@@ -201,11 +206,11 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                       <td className="py-2 pr-3">
                         <div className="flex items-center gap-2">
                           <MemberAvatar membershipId={r.m.id} hasPhoto={hasHeadshot(r.m)} emoji={r.u?.avatarEmoji} size={32} version={r.m.headshotUpdatedAt} name={r.u?.name} />
-                          <div>
-                            <Link href={`/coach/${r.m.id}`} className="font-medium underline-offset-2 hover:underline" data-testid="client-link">
+                          <div className="min-w-0 max-w-[16rem]">
+                            <Link href={`/coach/${r.m.id}`} className="block truncate font-medium underline-offset-2 hover:underline" data-testid="client-link" title={r.u?.name ?? undefined}>
                               {r.u?.name}
                             </Link>
-                            <div className="text-xs text-ink-3">{r.m.businessName ?? r.m.programTier}</div>
+                            <div className="truncate text-xs text-ink-3" title={r.m.businessName ?? r.m.programTier}>{r.m.businessName ?? r.m.programTier}</div>
                           </div>
                           {/* Switch to client (rev 216): into their HelixOS as they see it; Work is chosen on the client page. */}
                           <form action={switchToClientAction} className="ml-auto">
@@ -217,10 +222,10 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                           </form>
                         </div>
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="whitespace-nowrap py-2 pr-3">
                         <span title="Locked in">{r.todayLocked ? "☀️" : "○"}</span> <span title="Closed">{r.todayClosed ? "🌙" : "○"}</span>
                       </td>
-                      <td className="py-2 pr-3 tabular">🔥 {r.streak}</td>
+                      <td className="whitespace-nowrap py-2 pr-3 tabular">🔥 {r.streak}</td>
                       <td className="py-2 pr-3 whitespace-nowrap text-xs tabular" data-testid="coach-body-cell" data-member={r.m.id} title={bodyOf.get(r.m.userId)?.long}>
                         {bodyOf.get(r.m.userId) ? (
                           <Link href={`/coach/${r.m.id}/body`} className="text-ink-2 underline-offset-2 hover:underline">{bodyOf.get(r.m.userId)!.short}</Link>
@@ -235,17 +240,17 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                         ) : null}
                         {sentCheckin.has(r.m.userId) ? <Link href={`/coach/${r.m.id}#checkins`} className="ml-1" title="Sent this week's check-in" data-testid="coach-checkin-mark">✉️</Link> : null}
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="whitespace-nowrap py-2 pr-3">
                         {TIER_ICONS[r.tier.name]} {r.tier.name} <span className="text-xs text-ink-3 tabular">{r.pts.toLocaleString()}</span>
                       </td>
-                      <td className="py-2 pr-3 text-xs" data-testid="coach-kit-cell" data-member={r.m.id} data-status={kitStatus(kitOf.get(r.m.userId))}>
+                      <td className="whitespace-nowrap py-2 pr-3 text-xs" data-testid="coach-kit-cell" data-member={r.m.id} data-status={kitStatus(kitOf.get(r.m.userId))}>
                         <span className={kitStatus(kitOf.get(r.m.userId)) === "set" ? "text-ink-2" : "text-warn"}>{KIT_STATUS_WORDS[kitStatus(kitOf.get(r.m.userId))]}</span>
                       </td>
-                      <td className="py-2 pr-3 text-right tabular">
+                      <td className="whitespace-nowrap py-2 pr-3 text-right tabular">
                         {r.verified}/{pathTotal}
                         {r.waiting ? <Badge tone="accent">{r.waiting} waiting</Badge> : null}
                       </td>
-                      <td className="py-2 pr-3 text-right text-xs">
+                      <td className="whitespace-nowrap py-2 pr-3 text-right text-xs">
                         {r.lastActive ? (
                           <span className={r.daysSilent >= 3 ? "font-semibold text-warn" : "text-ink-2"}>
                             {r.daysSilent === 0 ? "today" : r.daysSilent === 1 ? "yesterday" : `${r.daysSilent}d ago`}
@@ -255,7 +260,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                         )}
                       </td>
                       <td className="py-2 text-right text-xs">
-                        <div className="flex flex-wrap items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                           {/* Who has turned coach working access off (on by default since 1 Oct): the one mark, nothing beside anyone else. */}
                           {!r.m.coachCanWork ? <span title="Turned off coach working access" className="text-ink-3" data-testid="coach-work-off">⊘</span> : null}
                           <TierSelect membershipId={r.m.id} value={r.m.programTier} tiers={PROGRAM_ORDER} name={r.u?.name ?? "This client"} />
@@ -275,28 +280,25 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
           ) : (
             <Empty icon="👥" title="No clients yet" hint="Share your invite link from Settings." />
           )}
-        </Card>
-        {removedMembers.length ? (
-          <Card title="Removed clients" action={<span className="text-xs text-ink-3">access ended · data kept</span>}>
-            <ul className="divide-y text-sm" data-testid="removed-clients">
-              {removedMembers.map((m) => (
-                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="font-medium">{removedNameOf.get(m.userId) ?? m.businessName ?? "Client"}</span>
-                  <form action={reinstateClientAction}>
-                    <input type="hidden" name="membershipId" value={m.id} />
-                    <SubmitButton className="btn btn-soft btn-xs" data-testid="reinstate-client" pendingText="Restoring…">Reinstate</SubmitButton>
-                  </form>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ) : null}
-        <Card title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
-          {rows.length ? (
+      </Card>
+        <Card className="mb-4" title="Programs and passes" action={<span className="flex gap-3 text-xs"><Link href={allOpen ? "/coach" : "/coach?connections=open"} className="underline" data-testid="connections-all">{allOpen ? "Close all" : "Open all"}</Link><Link href="/certification" className="underline">Certification queue</Link><Link href="/integrations" className="underline">Integrations</Link></span>}>
+        {rows.length ? (
             <ul className="divide-y">
               {rows.map((r) => (
-                <li key={r.m.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                  <span className="w-36 truncate font-medium">{r.u?.avatarEmoji} {r.u?.name}</span>
+                <li key={r.m.id} className="py-1 text-sm">
+                  <details className="group" data-testid="client-connections" data-member={r.m.id} open={allOpen}>
+                  <summary className="flex min-h-11 cursor-pointer list-none flex-wrap [&::-webkit-details-marker]:hidden items-center gap-x-3 gap-y-1 py-1">
+                    <span className="min-w-0 max-w-[16rem] truncate font-medium" title={r.u?.name ?? undefined}>{r.u?.avatarEmoji} {r.u?.name}</span>
+                    <span className="flex flex-wrap items-center gap-2 text-xs text-ink-3" data-testid="client-connections-status">
+                      <span title="Community Loyalty token">CL {r.m.clApiToken ? "✓" : "–"}</span>
+                      <span title="GoHighLevel connected">GHL {ghlUsers.has(r.m.userId) ? "✓" : "–"}</span>
+                      <span title="The wallet pass">Pass {r.m.passEnabled ? "on" : "off"}</span>
+                      <span title="Certification track">Cert {r.m.certEnabled ? "on" : "off"}</span>
+                    </span>
+                    <span className="ml-auto text-xs underline group-open:hidden">Connections</span>
+                    <span className="ml-auto hidden text-xs underline group-open:inline">Close</span>
+                  </summary>
+                  <div className="flex flex-wrap items-center gap-2 pb-3 pt-1">
                   <form action={setCertEnabledAction}>
                     <input type="hidden" name="membershipId" value={r.m.id} />
                     <SubmitButton className={`btn btn-xs ${r.m.certEnabled ? "btn-accent" : "btn-ghost"}`} name="enabled" value={r.m.certEnabled ? "0" : "1"} title="Certification track" pendingText="Saving…">
@@ -345,12 +347,30 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                     ) : null}
                   </details>
                   {r.m.clApiToken ? <BotPushLine m={r.m} clientName={r.u?.name ?? null} productField={productFieldOf.get(r.m.id) ?? null} changed={changedOf.get(r.m.id) ?? null} tz={v.workspace.timezone} /> : null}
+                  </div>
+                  </details>
                 </li>
               ))}
             </ul>
           ) : null}
         </Card>
-        <div className="space-y-4">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        {removedMembers.length ? (
+          <Card title="Removed clients" action={<span className="text-xs text-ink-3">access ended · data kept</span>}>
+            <ul className="divide-y text-sm" data-testid="removed-clients">
+              {removedMembers.map((m) => (
+                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="font-medium">{removedNameOf.get(m.userId) ?? m.businessName ?? "Client"}</span>
+                  <form action={reinstateClientAction}>
+                    <input type="hidden" name="membershipId" value={m.id} />
+                    <SubmitButton className="btn btn-soft btn-xs" data-testid="reinstate-client" pendingText="Restoring…">Reinstate</SubmitButton>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
+        <div className="contents">
           <Card title="Verify submissions" action={<Badge tone="accent">{submitted.length}</Badge>}>
             {submitted.length ? (
               <ul className="space-y-3">

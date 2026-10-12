@@ -298,7 +298,7 @@ async function main() {
 
     // Coach nudge for the quiet client (Jordan)
     await login(page, "coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     await expectText(page, "Who needs a nudge", "nudge card");
     await submit(page, '[data-testid="nudge-row"] button:has-text("Nudge")');
     await expectText(page, "nudged today", "nudge recorded");
@@ -311,7 +311,7 @@ async function main() {
     {
       const { inArray } = await import("drizzle-orm");
       const readCount = async () => Number((await page.locator('[data-testid="late-closes-found"]').innerText()).replace(/\D/g, ""));
-      await page.goto(`${base}/coach`);
+      await page.goto(`${base}/coach?connections=open`);
       await page.click('[data-testid="coach-late-link"]');
       await page.waitForURL(/\/coach\/late-closes/);
       const before = await readCount();

@@ -465,7 +465,7 @@ async function main() {
   await page.waitForURL(/\/login/);
   await page.click('button:has-text("As the coach")');
   await page.waitForURL(/\/today/);
-  await page.goto(`${base}/coach`);
+  await page.goto(`${base}/coach?connections=open`);
   await expectText(page, "Tier", "coach tier column");
   await browser.close();
   // Never vacuous: every walk asserts page content before this runs, so the responses this reads over are never an empty set.

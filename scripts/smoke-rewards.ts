@@ -121,7 +121,7 @@ async function main() {
 
     // Coach sees every open claim with its booking signal, and closes one once it's delivered
     await login(page, "coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const claims = page.locator('[data-testid="claims-list"]');
     await claims.waitFor();
     const text = await claims.innerText();

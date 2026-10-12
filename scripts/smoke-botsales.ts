@@ -145,7 +145,7 @@ async function main() {
     };
     // The coach saves the client's token on the Coach page, as always (sealed, never shown back).
     await signIn("coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const mayaForm = 'form:has(input[name="eoPassUrl"][value*="maya-torres"])';
     await page.locator(`li:has(${mayaForm})`).first().waitFor({ timeout: 15000 });
     await page.locator(`${mayaForm} [data-testid="cl-api-token"]`).fill(TOKEN);
@@ -320,7 +320,7 @@ async function main() {
     // ── The coach sees it against the client's row, with the time. ──
     await signOut();
     await signIn("coach");
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const byClient = page.locator(`li:has(${mayaForm}) [data-testid="bot-pushed-by-client"]`);
     await byClient.waitFor({ timeout: 15000 });
     const line = (await byClient.innerText()).trim();

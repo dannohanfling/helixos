@@ -74,7 +74,7 @@ async function main() {
     await page.goto(`${base}/login`);
     await page.click('button:has-text("As the coach")');
     await page.waitForURL(/\/today/);
-    await page.goto(`${base}/coach`);
+    await page.goto(`${base}/coach?connections=open`);
     const row = page.locator('form:has(input[name="eoPassUrl"][value*="maya-torres"])').first();
     await row.waitFor({ timeout: 15000 });
     await row.locator('[data-testid="cl-api-token"]').fill(TOKEN);
@@ -232,7 +232,7 @@ async function main() {
     await coachPage.goto(`${base}/login`);
     await coachPage.click('button:has-text("As the coach")');
     await coachPage.waitForURL(/\/today/);
-    await coachPage.goto(`${base}/coach`);
+    await coachPage.goto(`${base}/coach?connections=open`);
     const mayaForm = 'form:has(input[name="eoPassUrl"][value*="maya-torres"])';
     await coachPage.locator(`${mayaForm} [data-testid="faq-overwrite-ok"]`).check();
     await submit(coachPage, `${mayaForm} button:has-text("Save")`);
@@ -252,7 +252,7 @@ async function main() {
     if (!/2 agents \(Community FAQ Agent, Booking Agent\)/.test(ask) || !/Choose the one that answers/.test(ask)) throw new Error(`the Brief asks which agent answers, got "${ask}"`);
     if (await clientPage.locator('[data-testid="send-bot"]').count()) throw new Error("no send button while the agent is not chosen");
     // The coach chooses the agent that answers, by name: no coach knows an ai_agent_ns. The name is shown, the ns is stored.
-    await coachPage.goto(`${base}/coach`);
+    await coachPage.goto(`${base}/coach?connections=open`);
     const named = await coachPage.locator(`${mayaForm} [data-testid="cl-agent-ns"] option`).allTextContents();
     for (const a of TWO_AGENTS(field)) if (!named.some((o) => o.trim() === a.name)) throw new Error(`the chooser lists every agent on the bot by name, missing ${a.name}, got ${JSON.stringify(named)}`);
     await coachPage.selectOption(`${mayaForm} [data-testid="cl-agent-ns"]`, { label: "Community FAQ Agent" });
@@ -270,14 +270,14 @@ async function main() {
     await coachPage.goto(`${base}/brain`);
     const noToken = await coachPage.locator('[data-testid="no-token"]').innerText();
     if (!/Add it yourself under My bot/.test(noToken)) throw new Error(`a coach's own Brief points at My bot, not at their coach, got "${noToken}"`);
-    await coachPage.goto(`${base}/coach`);
+    await coachPage.goto(`${base}/coach?connections=open`);
     await coachPage.locator('[data-testid="my-cl-api-token"]').fill(COACH_TOKEN);
     await submit(coachPage, '[data-testid="my-bot"] button:has-text("Save")');
     const mineNow = () => db.query.memberships.findFirst({ where: eq(schema.memberships.id, coachMembership.id) });
     const sealed = (await mineNow())!.clApiToken;
     if (!sealed || sealed.includes(COACH_TOKEN)) throw new Error("the coach's own token is stored, and stored sealed");
     // With a token saved the agents are read with it, so the coach picks their own by name too.
-    await coachPage.goto(`${base}/coach`);
+    await coachPage.goto(`${base}/coach?connections=open`);
     await coachPage.selectOption('[data-testid="my-cl-agent-ns"]', { label: "Community FAQ Agent" });
     await submit(coachPage, '[data-testid="my-bot"] button:has-text("Save")');
     if ((await mineNow())!.clAgentNs !== TWO_AGENTS(field)[0].ai_agent_ns) throw new Error("the coach's own agent is stored by ns from the name they picked");
@@ -293,9 +293,9 @@ async function main() {
     // The agent list is cached a minute per bot: two more renders of the Coach page (Maya's bot and the coach's own) read it
     // no more times. The first render refills anything the walk's pace let expire.
     const listReads = async () => ((await (await fetch(`${mock}/__agent-list-reads`)).json()) as { reads: number }).reads;
-    await coachPage.goto(`${base}/coach`);
+    await coachPage.goto(`${base}/coach?connections=open`);
     const before = await listReads();
-    for (let i = 0; i < 2; i++) await coachPage.goto(`${base}/coach`);
+    for (let i = 0; i < 2; i++) await coachPage.goto(`${base}/coach?connections=open`);
     if ((await listReads()) !== before) throw new Error(`the agent list is cached for a minute per bot: ${before} reads before two renders, ${await listReads()} after`);
     console.log("✓ the agent list is cached a minute per bot: two Coach page renders read it no more times");
     await coachPage.close();
