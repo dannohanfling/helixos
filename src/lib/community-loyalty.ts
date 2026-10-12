@@ -338,6 +338,7 @@ export async function productFieldFor(m: schema.Membership): Promise<{ name: str
 
 import { FAQ_BOT_FIELD_DEFAULT, FAQ_FIELD_BUDGET, agentReadsFields, FAQ_EMPTY_SENT, faqFieldValue, chooseAgentLine, composeField, faqFieldRefusal, fieldMissingLine, holdsForeignText, notReadWarning, parseAgentInfo, parseAgents, pickAgent, rankEntries, type AgentInfo } from "@/lib/engine/faq";
 import { newId } from "@/lib/ids";
+import { clRefusal } from "@/lib/engine/connect-copy";
 
 const APPROVED = ["ai_accepted", "edited", "coach"] as const;
 /** An entry the Bot Brief has approved: accepted, edited (an edit is a review) or the coach's own words. Never ai_unreviewed. */
@@ -397,6 +398,25 @@ export async function listAgents(token: string, opts: { fresh?: boolean } = {}):
   } catch {
     agentLists.delete(key);
     return [];
+  }
+}
+
+/**
+ * The one tiny test call a member's own key gets before anything is saved (rev 850): GET /flow/ai-agents, live. On a refusal the
+ * answer is a plain sentence (bad key, plan, unreachable) and nothing is kept; the key never reaches a log or the answer.
+ */
+export async function testClKey(token: string): Promise<{ ok: true; agents: { ns: string; name: string }[] } | { ok: false; error: string }> {
+  try {
+    const res = await withTimeout(`${uchatBase()}/flow/ai-agents`, { method: "GET", headers: authed(token) });
+    if (!res.ok) {
+      logPlatformRefusal("GET /flow/ai-agents (connect)", res.status, await res.text());
+      return { ok: false, error: clRefusal(res.status) };
+    }
+    const agents = parseAgents(await res.json().catch(() => null));
+    agentLists.set(botKey(token), { at: Date.now(), agents });
+    return { ok: true, agents };
+  } catch {
+    return { ok: false, error: clRefusal(null) };
   }
 }
 

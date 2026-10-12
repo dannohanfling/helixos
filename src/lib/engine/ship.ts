@@ -6,7 +6,12 @@
  */
 export type ShipStepKey = "graphic" | "page" | "instagram" | "drip" | "keywords";
 export type ShipState = "done" | "ready" | "held";
-export type ShipStep = { key: ShipStepKey; label: string; state: ShipState; why: string | null };
+/** A held step the member can clear themself carries where (rev 850: "What's holding this up", with Fix it). */
+export type ShipFix = { href: string; label: string };
+export type ShipStep = { key: ShipStepKey; label: string; state: ShipState; why: string | null; fix?: ShipFix };
+const FIX_GHL: ShipFix = { href: "/connect-tools#publishing", label: "Connect GoHighLevel" };
+const FIX_PUBLISHING: ShipFix = { href: "/settings#publishing", label: "Fix it on Settings" };
+const FIX_CL: ShipFix = { href: "/connect-tools#community-loyalty", label: "Connect Community Loyalty" };
 export const SHIP_CHANNELS = ["fb_page", "instagram"] as const;
 
 export type ShipFacts = {
@@ -24,7 +29,7 @@ export type ShipFacts = {
 };
 export type PostFact = { state: "none" | "sent" | "published" | "failed"; reason: string | null };
 
-const GHL_FIX = "Connect your GoHighLevel sub-account on Settings → Publishing";
+const GHL_FIX = "Connect your GoHighLevel on Connect your tools";
 
 /** The steps in order, each done, ready to run, or held with the reason in plain words. */
 export function shipSteps(f: ShipFacts): ShipStep[] {
@@ -39,9 +44,9 @@ export function shipSteps(f: ShipFacts): ShipStep[] {
     if (post.state === "published") { steps.push({ key, label: LABEL[key], state: "done", why: null }); continue; }
     if (post.state === "sent") { steps.push({ key, label: LABEL[key], state: "done", why: "Sent to the Social Planner; Check status reads it back." }); continue; }
     if (!f.hasGraphic) { steps.push({ key, label: LABEL[key], state: "held", why: "Needs the graphic." }); continue; }
-    if (!f.ghl.connected) { steps.push({ key, label: LABEL[key], state: "held", why: `${GHL_FIX}.` }); continue; }
-    if (!f.ghl.userId) { steps.push({ key, label: LABEL[key], state: "held", why: "Add your GHL user ID on Settings → Publishing; the Social Planner won't take a post without it." }); continue; }
-    if (!f.ghl[key]) { steps.push({ key, label: LABEL[key], state: "held", why: `No ${key === "page" ? "Facebook business page" : "Instagram account"} chosen for this channel on Settings → Publishing.` }); continue; }
+    if (!f.ghl.connected) { steps.push({ key, label: LABEL[key], state: "held", why: `${GHL_FIX}.`, fix: FIX_GHL }); continue; }
+    if (!f.ghl.userId) { steps.push({ key, label: LABEL[key], state: "held", why: "Pick which GoHighLevel user you are on Settings → Publishing; the Social Planner won't take a post without it.", fix: FIX_PUBLISHING }); continue; }
+    if (!f.ghl[key]) { steps.push({ key, label: LABEL[key], state: "held", why: `No ${key === "page" ? "Facebook business page" : "Instagram account"} chosen for this channel on Settings → Publishing.`, fix: FIX_PUBLISHING }); continue; }
     steps.push({ key, label: LABEL[key], state: "ready", why: post.state === "failed" ? post.reason : null });
   }
   if (f.drip.handed) steps.push({ key: "drip", label: LABEL.drip, state: "done", why: null });
@@ -51,7 +56,7 @@ export function shipSteps(f: ShipFacts): ShipStep[] {
   else steps.push({ key: "drip", label: LABEL.drip, state: "ready", why: null });
   if (!f.keyword.set) steps.push({ key: "keywords", label: LABEL.keywords, state: "held", why: "This ladder has no keyword (NONE): nothing to write to the bot." });
   else if (f.keyword.pushed) steps.push({ key: "keywords", label: LABEL.keywords, state: "done", why: null });
-  else if (!f.keyword.token) steps.push({ key: "keywords", label: LABEL.keywords, state: "held", why: "No Community Loyalty API token on your membership yet: your coach adds it on the Coach page." });
+  else if (!f.keyword.token) steps.push({ key: "keywords", label: LABEL.keywords, state: "held", why: "Your Community Loyalty isn't connected yet: connect it with your own key on Connect your tools.", fix: FIX_CL });
   else if (f.keyword.blocked) steps.push({ key: "keywords", label: LABEL.keywords, state: "held", why: f.keyword.blocked });
   else steps.push({ key: "keywords", label: LABEL.keywords, state: "ready", why: null });
   return steps;

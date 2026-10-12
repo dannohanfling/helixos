@@ -62,6 +62,13 @@ async function cron(page: Page) {
   return (await r.json()) as { community: { action: string; ok: boolean; note?: string }[] };
 }
 
+/** "Which user are you?" is a list when the key can read the users (rev 850), else a typed field. */
+async function pickUser(page: Page, selector: string, id: string) {
+  const el = page.locator(selector).first();
+  if ((await el.evaluate((e) => e.tagName)) === "SELECT") await el.selectOption(id);
+  else await el.fill(id);
+}
+
 async function main() {
   const { db, schema } = await import("@/db");
   const { and, desc, eq } = await import("drizzle-orm");
@@ -115,7 +122,7 @@ async function main() {
       await page.goto(`${base}/settings`);
       if (await page.locator('[data-testid="ghl-connected"]').count()) {
         await page.locator('[data-testid="ghl-reconnect"] > summary').click();
-        await page.fill('[data-testid="ghl-reconnect-user"]', ghlUserId);
+        await pickUser(page, '[data-testid="ghl-reconnect-user"]', ghlUserId);
         await page.fill('[data-testid="ghl-reconnect-token"]', token);
         await submit(page, '[data-testid="ghl-reconnect"] button:has-text("Reconnect")');
       } else {
@@ -124,8 +131,8 @@ async function main() {
         await page.fill('[data-testid="ghl-token"]', token);
         await submit(page, '[data-testid="ghl-steps"] button:has-text("Connect")');
       }
-      if (await page.locator('[data-testid="ghl-no-user"] input[name="ghlUserId"]').count()) {
-        await page.fill('[data-testid="ghl-no-user"] input[name="ghlUserId"]', ghlUserId);
+      if (await page.locator('[data-testid="ghl-no-user"] [name="ghlUserId"]').count()) {
+        await pickUser(page, '[data-testid="ghl-no-user"] [name="ghlUserId"]', ghlUserId);
         await submit(page, '[data-testid="ghl-no-user"] button:has-text("Save")');
       }
     };

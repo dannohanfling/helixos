@@ -24,6 +24,7 @@ export const GHL_SCOPES: GhlScope[] = [
   { scope: "emails/builder.write", why: "POST /emails/builder and /emails/builder/data: HelixOS writes the client's marketing email template", use: "next" },
   { scope: "contacts.readonly", why: "GET /contacts/ (the search's total): a client's contact count for the 10 Million Lives tracker, pulled only when the member confirms it; not called today, on the list now while no client has connected (Danno, rev 464)", use: "next" },
   { scope: "contacts.write", why: "POST /contacts/upsert: booked calls and new clients become contacts in the sub-account", use: "now" },
+  { scope: "users.readonly", why: "GET /users/?locationId=: the account's users, so \"Which user are you?\" is a pick from a list instead of a typed GHL user ID (rev 850). Keys made before it get the typed field", use: "now" },
   { scope: "locations.readonly", why: "GET /locations/{locationId}: the sub-account's name, shown in the green Connected state so the client sees which account is connected", use: "now" },
   { scope: "locations/customFields.write", why: "POST /locations/{locationId}/customFields: creating the helixos_user_ns custom field that carries a chatbot lead's id; not called today, on the list so the Community Loyalty path never needs a new token", use: "next" },
   { scope: "locations/customFields.readonly", why: "GET /locations/{locationId}/customFields: reading the sub-account's field definitions so the chatbot-lead path can see whether helixos_user_ns exists before creating it; not called today", use: "next" },

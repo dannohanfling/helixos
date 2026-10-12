@@ -42,8 +42,9 @@ describe("emails from HelixOS: who may be emailed automatically (29 Sep)", () =>
     // reminders: the hourly cron (automated). coach: the Nudge (the comeback email, gated) and the reset link (pressed by
     // the coach, not gated). account: the member's own forgotten password (asked for by them, not gated). bot-features: a
     // feature switched on (rev 618), sent when the coach marks it, gated like the Nudge. scoreboard: the Monday scoreboard and
-    // the coach's roster (rev 639), from the same hourly cron, gated like the reminders.
-    expect(senders).toEqual(["src/lib/actions/account.ts", "src/lib/actions/bot-features.ts", "src/lib/actions/coach.ts", "src/lib/reminders.ts", "src/lib/scoreboard.ts"]);
+    // the coach's roster (rev 639), from the same hourly cron, gated like the reminders. connect: the setup link a coach sends
+    // one client by hand (rev 850), asked for like the reset link, not gated.
+    expect(senders).toEqual(["src/lib/actions/account.ts", "src/lib/actions/bot-features.ts", "src/lib/actions/coach.ts", "src/lib/actions/connect.ts", "src/lib/reminders.ts", "src/lib/scoreboard.ts"]);
     const reminders = readFileSync(join(SRC, "lib/reminders.ts"), "utf8");
     expect(body(reminders, "runReminders")).toMatch(/await canEmail\(m\.id\)/);
     const coach = readFileSync(join(SRC, "lib/actions/coach.ts"), "utf8");

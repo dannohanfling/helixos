@@ -23,7 +23,10 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { ScrollToHash } from "@/components/scroll-to-hash";
 import { AiKeyCard } from "@/components/ai-key-card";
 import { FathomKeyCard } from "@/components/fathom-key-card";
-import { connectionFor } from "@/lib/ghl";
+import { connectionFor, listUsers } from "@/lib/ghl";
+import { CL_COPY, GHL_COPY } from "@/lib/engine/connect-copy";
+import { ClConnect } from "@/components/cl-connect";
+import { agentChoicesFor, clTokenSet } from "@/lib/community-loyalty";
 import { getIntegration, onboardingOpen } from "@/lib/integrations";
 import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
@@ -54,7 +57,7 @@ export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
   if (v.team) return <TeamSettings v={v} />;
@@ -67,7 +70,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -158,6 +161,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     const status: [string, string][] = [
       ["Sign-in, name, email, password and time zone", `${first}'s own`],
       ["GoHighLevel publishing", conn ? "set" : "not set"],
+      ["Community Loyalty bot", clTokenSet(v.membership) ? "set" : "not set"],
       ["AI key", clientAi ? "set" : "not set"],
       ["Emails from HelixOS", `${v.membership.emailsEnabled ? "on" : "off"} (changed on your client page)`],
       ["Let my coach work in my HelixOS", v.membership.coachCanWork ? "on" : "off"],
@@ -185,18 +189,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </>
     );
   }
+  // "Which user are you?" is a pick from the account's users, asked of GoHighLevel only while it is unanswered (rev 850).
+  const ghlUsers = conn && conn.accounts.length && !conn.lastError && !conn.ghlUserId?.trim() ? await listUsers(conn) : [];
+  const clAgents = clTokenSet(v.membership) ? await agentChoicesFor(v.membership) : [];
   return (
     <>
       <ScrollToHash />
       <PageHeader title="Settings" />
-      <Card id="publishing" className="mb-4 scroll-mt-20" title="🚀 Publishing (your GoHighLevel sub-account)">
-        <p className="mb-3 text-sm text-ink-2">Connect your own GoHighLevel sub-account once. Posts you schedule in the composer land in your Social Planner and go out on their own. Your token is encrypted and only ever used for your sub-account.</p>
+      <Card id="publishing" className="mb-4 scroll-mt-20" title={GHL_COPY.title} action={<Link href="/connect-tools" className="text-xs text-ink-2 hover:underline" data-testid="settings-connect-tools">Connect your tools, step by step →</Link>}>
         {conn?.mediaScopeMissingAt ? (
           <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" role="status" data-testid="ghl-add-permission">
             {ADD_PERMISSION}
           </p>
         ) : null}
-        <GhlConnect conn={conn ?? null} tz={v.tz} role={v.role} open={onboardingOpen(ghlIntegration?.config)} />
+        <GhlConnect conn={conn ?? null} tz={v.tz} role={v.role} open={onboardingOpen(ghlIntegration?.config)} users={ghlUsers} />
+      </Card>
+      <Card id="community-loyalty" className="mb-4 scroll-mt-20" title={CL_COPY.title}>
+        <ClConnect connected={clTokenSet(v.membership)} m={v.membership} agents={clAgents} notice={clNotice ?? null} back="/settings" tz={v.tz} />
       </Card>
       <div className="mb-4" id="ai">
         <AiKeyCard v={v} />

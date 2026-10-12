@@ -21,6 +21,7 @@ import { runningStreak, streakDayOf } from "@/lib/engine/streak";
 import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
 import { KIT_STATUS_WORDS, kitStatus, kitsByMember } from "@/lib/queries/brand-kit";
 import { setClientHumanosAction } from "@/lib/actions/body";
+import { sendConnectLinkAction } from "@/lib/actions/connect";
 import { daysBetween, formatDate, formatDateTime, todayInTz, hourInTz } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
 import { lateForMonth, monthOf } from "@/lib/engine/month-intentions";
@@ -158,7 +159,15 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
   const changedOf = new Map(withBots.map((m, i) => [m.id, changedSince[i]]));
   const myBot = v.membership;
   // The row's small status for each client's connections (rev 844): Community Loyalty token, GoHighLevel, the pass.
-  const ghlUsers = new Set(userIds.length ? (await db.query.socialConnections.findMany({ where: and(eq(schema.socialConnections.workspaceId, wsId), inArray(schema.socialConnections.userId, userIds)), columns: { userId: true, manualToken: true } })).filter((c) => c.manualToken).map((c) => c.userId) : []);
+  // GoHighLevel per client (rev 850): connected once a token answered with pages and no error since; the date it first did.
+  const ghlUsers = new Map(
+    userIds.length
+      ? (await db.query.socialConnections.findMany({ where: and(eq(schema.socialConnections.workspaceId, wsId), inArray(schema.socialConnections.userId, userIds)), columns: { userId: true, manualToken: true, connectedAt: true, lastError: true } }))
+          .filter((c) => c.manualToken && c.connectedAt && !c.lastError)
+          .map((c) => [c.userId, c.connectedAt as string] as const)
+      : [],
+  );
+  const chipDate = (iso: string | null | undefined) => (iso ? ` ${formatDate(iso.slice(0, 10))}` : "");
   // Body (rev 237 phase 12): a cell only for clients who share it with the coach; blank for the rest, private or off alike.
   const bodyOf = await coachBodyColumn(v, rows.map((r) => ({ userId: r.m.userId, today: theirToday(r.m) })));
   // B9: a ✉️ for a client who sent this week's check-in, shared or not.
@@ -290,8 +299,8 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                   <summary className="flex min-h-11 cursor-pointer list-none flex-wrap [&::-webkit-details-marker]:hidden items-center gap-x-3 gap-y-1 py-1">
                     <span className="min-w-0 max-w-[16rem] truncate font-medium" title={r.u?.name ?? undefined}>{r.u?.avatarEmoji} {r.u?.name}</span>
                     <span className="flex flex-wrap items-center gap-2 text-xs text-ink-3" data-testid="client-connections-status">
-                      <span title="Community Loyalty token">CL {r.m.clApiToken ? "✓" : "–"}</span>
-                      <span title="GoHighLevel connected">GHL {ghlUsers.has(r.m.userId) ? "✓" : "–"}</span>
+                      <span title="GoHighLevel: connected by the client" className={ghlUsers.has(r.m.userId) ? "text-good" : undefined} data-testid="chip-ghl" data-on={ghlUsers.has(r.m.userId) ? "1" : "0"}>GHL {ghlUsers.has(r.m.userId) ? `✓${chipDate(ghlUsers.get(r.m.userId))}` : "–"}</span>
+                      <span title="Community Loyalty: the client's own key" className={r.m.clApiToken ? "text-good" : undefined} data-testid="chip-cl" data-on={r.m.clApiToken ? "1" : "0"}>CL {r.m.clApiToken ? `✓${chipDate(r.m.clConnectedAt)}` : "–"}</span>
                       <span title="The wallet pass">Pass {r.m.passEnabled ? "on" : "off"}</span>
                       <span title="Certification track">Cert {r.m.certEnabled ? "on" : "off"}</span>
                     </span>
@@ -299,6 +308,15 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                     <span className="ml-auto hidden text-xs underline group-open:inline">Close</span>
                   </summary>
                   <div className="flex flex-wrap items-center gap-2 pb-3 pt-1">
+                  {!ghlUsers.has(r.m.userId) || !r.m.clApiToken ? (
+                    <form action={sendConnectLinkAction} className="flex items-center gap-2" data-testid="send-connect-link">
+                      <input type="hidden" name="membershipId" value={r.m.id} />
+                      <SubmitButton className="btn btn-soft btn-xs" pendingText="Sending…">
+                        Send setup link
+                      </SubmitButton>
+                      {r.m.connectLinkSentAt ? <span className="text-xs text-ink-3" data-testid="connect-link-sent">sent{chipDate(r.m.connectLinkSentAt)}</span> : null}
+                    </form>
+                  ) : null}
                   <form action={setCertEnabledAction}>
                     <input type="hidden" name="membershipId" value={r.m.id} />
                     <SubmitButton className={`btn btn-xs ${r.m.certEnabled ? "btn-accent" : "btn-ghost"}`} name="enabled" value={r.m.certEnabled ? "0" : "1"} title="Certification track" pendingText="Saving…">

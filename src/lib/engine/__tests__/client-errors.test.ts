@@ -203,7 +203,7 @@ describe("the drip webhook URL is a credential", () => {
 describe("the client's Community Loyalty API token is a credential", () => {
   const TOKEN = /\bclApiToken\b|cl_api_token/;
   // member-data.ts names it only in the export's strip list: the one place it is named so that it is never sent.
-  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/community-loyalty.ts", "src/app/(app)/coach/page.tsx", "src/lib/member-data.ts"];
+  const ALLOWED = ["src/db/schema.ts", "src/lib/actions/integrations.ts", "src/lib/community-loyalty.ts", "src/app/(app)/coach/page.tsx", "src/lib/member-data.ts", "src/lib/actions/connect.ts"];
   const LEAK = /console\.|\bnote:|\bthrow\b|new Error\(|redirect\(|defaultValue=|\bvalue=\{|JSON\.stringify\(|logSync\(/;
   it("is named only where it is stored, sealed, opened or blanked, and never on a line that logs, notes, throws, redirects or renders a value", () => {
     for (const f of walk(SRC)) {

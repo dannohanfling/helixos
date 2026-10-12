@@ -27,6 +27,7 @@ let agents: { ai_agent_ns: string; name: string; description: string; prompts: {
     { section: "Product & Service Information", text: "What we offer: {ai_product_&_service_information_cbf}" },
   ] },
 ];
+const AGENTS_AT_START = JSON.stringify(agents);
 /** Every read-back, with the page and limit asked, so a walk can prove the client paged. */
 const reads: { limit: number; page: number; returned: number }[] = [];
 const DEFAULT_LIMIT = 10;
@@ -45,7 +46,7 @@ const read = (req: import("node:http").IncomingMessage) => new Promise<string>((
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://localhost");
-  if (url.pathname === "/__reset") { fields = {}; types = {}; requests.length = 0; reads.length = 0; skipped = null; refuseNext = false; delayNext = 0; return json(res, 200, { ok: true }); }
+  if (url.pathname === "/__reset") { fields = {}; types = {}; requests.length = 0; reads.length = 0; skipped = null; refuseNext = false; delayNext = 0; agents = JSON.parse(AGENTS_AT_START); return json(res, 200, { ok: true }); }
   if (url.pathname === "/__refuse-next" && req.method === "POST") { refuseNext = true; return json(res, 200, { ok: true }); }
   if (url.pathname === "/__delay" && req.method === "POST") { delayNext = Number((JSON.parse((await read(req)) || "{}") as { ms?: number }).ms ?? 0); return json(res, 200, { ok: true, delayNext }); }
   if (url.pathname === "/__types" && req.method === "POST") { Object.assign(types, JSON.parse(await read(req))); return json(res, 200, { ok: true, types }); }
@@ -61,6 +62,9 @@ createServer(async (req, res) => {
   if (url.pathname === "/__fields") return json(res, 200, fields);
   const auth = req.headers.authorization ?? "";
   if (!auth.startsWith("Bearer ") || auth.length < 12) return json(res, 401, { status: "error", message: "Unauthenticated." });
+  // Connect your tools (rev 850): a key Community Loyalty doesn't know, and one on a plan without API access.
+  if (auth.startsWith("Bearer badkey")) return json(res, 401, { status: "error", message: "Unauthenticated." });
+  if (auth.startsWith("Bearer noplan")) return json(res, 403, { status: "error", message: "Your plan does not include API access." });
   if (url.pathname === "/flow/bot-fields" && req.method === "GET") {
     // BotFieldResource as the spec documents it: data[] of BotField (name, var_type, value, var_ns, description, is_template_field), paged by limit and page, no total.
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? DEFAULT_LIMIT) || DEFAULT_LIMIT));

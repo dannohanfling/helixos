@@ -82,6 +82,14 @@ createServer((req, res) => {
       Object.assign(c, JSON.parse(Buffer.concat(chunks).toString() || "{}"), { updates: Number(c.updates ?? 0) + 1 });
       return json(200, { succeded: true, contact: { id: c.id } });
     }
+    // GET /users/?locationId= (users.readonly; rev 850): the account's users. A location whose id says "nousers" refuses the scope.
+    if (url.startsWith("/users/") && req.method === "GET") {
+      const loc = new URL(url, "http://localhost").searchParams.get("locationId") ?? "";
+      if (!token.startsWith("pit-")) return json(401, { message: "Invalid JWT" });
+      if (loc.includes("nousers") || token === "pit-noscope") return json(403, { message: "The token does not have access to this scope: users.readonly" });
+      if (token !== `pit-${loc}`) return json(404, { message: `Location not found: ${loc}` });
+      return json(200, { users: [{ id: "JD8kLxeYM3FqbWLQXC4p", name: "Maya Torres", email: "maya@example.com" }, { id: "user_assistant_1", firstName: "Sam", lastName: "Helper", email: "sam@example.com" }, { id: "user_refused", name: "Old Login" }, { id: "user_danno", name: "Coach Login" }] });
+    }
     const lm = url.match(/^\/locations\/([^/?]+)$/);
     if (lm && req.method === "GET") {
       // As the real endpoint (locations.readonly): the sub-account itself, its name among the rest. A location whose id says

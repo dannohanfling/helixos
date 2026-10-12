@@ -137,6 +137,10 @@ export const memberships = sqliteTable(
     clUserNs: text("cl_user_ns"),
     /** The client's own Community Loyalty (uChat) API token: sealed at rest, never rendered, never logged. One per client workspace. */
     clApiToken: text("cl_api_token"),
+    /** When the member's own key last passed its test call (rev 850): the coach's row shows CL ✓ with this date. */
+    clConnectedAt: text("cl_connected_at"),
+    /** When the coach last emailed this member the link to Connect your tools (rev 850). */
+    connectLinkSentAt: text("connect_link_sent_at"),
     /** The bot fields last pushed, by name: the Stage 1 names and their values only, never the token and never a webhook URL. */
     clBotFields: text("cl_bot_fields", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     clBotFieldsPushedAt: text("cl_bot_fields_pushed_at"),

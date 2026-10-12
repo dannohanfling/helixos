@@ -4,13 +4,16 @@ import { composerContext } from "@/lib/queries/compose";
 import { Composer } from "@/components/composer";
 import { PageHeader } from "@/components/ui";
 import { libraryPostFor } from "@/lib/queries/library-posts";
+import { connectionFor } from "@/lib/ghl";
+import { publishBlockers } from "@/lib/engine/connect-copy";
+import { HoldingUp } from "@/components/holding-up";
 
 export const metadata = { title: "New post" };
 
 export default async function ComposePage({ searchParams }: { searchParams: Promise<{ hook?: string; body?: string; title?: string; from?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   const sp = await searchParams;
-  const [c, from] = await Promise.all([composerContext(v), sp.from ? libraryPostFor(sp.from, v.workspace.id, v.user.id) : null]);
+  const [c, from, conn] = await Promise.all([composerContext(v), sp.from ? libraryPostFor(sp.from, v.workspace.id, v.user.id) : null, v.team ? null : connectionFor(v.user.id)]);
   // A library entry's CTA lands in the CTA field, never folded into the body: each channel version places it once at render.
   const initial = from
     ? { title: from.kind === "post" || from.kind === "pattern" ? from.title : "", hook: from.hook ?? "", body: from.kind === "cta" ? "" : from.body, cta: from.cta ?? (from.kind === "cta" ? from.body : ""), hasCta: from.hasCta, contentType: from.contentType ?? undefined }
@@ -18,6 +21,7 @@ export default async function ComposePage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader title="New post" subtitle={<span className="flex gap-2"><Link href="/content" className="hover:underline">← Content</Link>{from ? <span className="text-ink-3">· starting from “{from.title}”</span> : null}</span>} />
+      {v.team ? null : <HoldingUp items={publishBlockers(conn ?? null)} />}
       <Composer {...c} initial={initial} />
     </>
   );

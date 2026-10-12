@@ -2,7 +2,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { connectionFor, refreshAccounts, upsertConnection } from "@/lib/ghl";
+import { connectionFor, listUsers, refreshAccounts, upsertConnection } from "@/lib/ghl";
 import { recordReadback, reconcileLostId } from "@/lib/planner-status";
 import { PUBLISHABLE } from "@/lib/engine/ghl-map";
 import { ctx, opt, refresh, str } from "@/lib/action-helpers";
@@ -26,6 +26,12 @@ export async function connectGhlAction(formData: FormData): Promise<void> {
     return;
   }
   await refreshAccounts(r.data);
+  // Rev 850: with one user on the account there is nothing to ask, so it is picked for them.
+  const fresh = await connectionFor(userId);
+  if (fresh && !fresh.lastError && !fresh.ghlUserId?.trim()) {
+    const users = await listUsers(fresh);
+    if (users.length === 1) await db.update(schema.socialConnections).set({ ghlUserId: users[0].id }).where(eq(schema.socialConnections.id, fresh.id));
+  }
   refresh();
 }
 

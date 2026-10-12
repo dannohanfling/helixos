@@ -9,6 +9,8 @@ import { ConfirmButton } from "./confirm-button";
 import { DISCONNECT_MESSAGE } from "@/lib/engine/ghl-scopes";
 import { SubmitButton } from "@/components/submit-button";
 import { CopyButton } from "@/components/copy-button";
+import { ConnectBox } from "@/components/connect-box";
+import { GHL_COPY, GHL_HELP } from "@/lib/engine/connect-copy";
 
 /**
  * The GoHighLevel connect card as a client sees it (rev 333): two states and nothing else. Not connected: one sentence and a
@@ -19,7 +21,7 @@ import { CopyButton } from "@/components/copy-button";
  * ID is read off GoHighLevel's answer when it carries one and asked for only when it cannot be found. The same card serves
  * the coach's Settings and a client's; the setup opens to clients on Integrations.
  */
-export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | null; tz: string; role: string; open: boolean }) {
+export function GhlConnect({ conn, tz, role, open, users = [] }: { conn: SocialConnection | null; tz: string; role: string; open: boolean; users?: { id: string; name: string }[] }) {
   // Scopes are granted once, so no client is walked through creating a Private Integration until the coach opens the setup.
   if (role !== "coach" && !open && !conn) {
     return (
@@ -66,11 +68,11 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
         </div>
         {!hasUser ? (
           <form action={connectGhlAction} className="rounded-lg bg-warn-soft p-3 text-sm" data-testid="ghl-no-user">
-            <p className="font-medium">One more thing: your GoHighLevel user ID.</p>
-            <p className="mt-1 text-ink-2">GoHighLevel&apos;s answer didn&apos;t say which user owns the connected pages, and the Social Planner refuses a post without it, so nothing publishes until it is filled in. In GoHighLevel open Settings → My Staff → your profile and copy the ID from the address bar.</p>
+            <p className="font-medium">One more thing: which user are you?</p>
+            <p className="mt-1 text-ink-2">The Social Planner posts as the user who owns your connected pages, so nothing publishes until you pick one.</p>
             <input type="hidden" name="locationId" value={conn.locationId} />
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input className="field max-w-xs" name="ghlUserId" defaultValue="" placeholder="Your GHL user ID" required />
+              <UserField users={users} current="" testId="ghl-user" />
               <SubmitButton className="btn btn-primary btn-sm" pendingText="Saving…">Save</SubmitButton>
             </div>
           </form>
@@ -128,8 +130,8 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
             <Field label="New token (optional)" hint="Paste the token from a new Private Integration in GoHighLevel; leave it empty to keep the saved one. Stored encrypted; never shown again here.">
               <input className="field" name="manualToken" type="password" autoComplete="off" placeholder="pit-…" data-testid="ghl-reconnect-token" />
             </Field>
-            <Field label="Your GHL user ID" hint="The user who owns the connected pages (Settings → My Staff in GoHighLevel). The Social Planner refuses a post from any other.">
-              <input className="field" name="ghlUserId" defaultValue={conn.ghlUserId ?? ""} data-testid="ghl-reconnect-user" />
+            <Field label="Which user are you?" hint={users.length ? "The user who owns your connected pages. The Social Planner refuses a post from any other." : GHL_HELP.user}>
+              <UserField users={users} current={conn.ghlUserId ?? ""} testId="ghl-reconnect-user" required={false} />
             </Field>
             <div className="sm:col-span-2">
               <SubmitButton className="btn btn-soft btn-sm" pendingText="Connecting…">Reconnect</SubmitButton>
@@ -140,14 +142,25 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
     );
   }
 
-  const stepsOpen = Boolean(conn); // a saved attempt that failed keeps the steps open, with the reason under them
+  // Connected to GoHighLevel but no page or profile answered: the token works, the Social Planner is empty.
+  const noPages = Boolean(conn && !conn.lastError && conn.connectedAt && !conn.accounts.length);
+
+  // Rev 850: the AI key card's layout, Danno's words (src/lib/engine/connect-copy.ts), open from the start.
   return (
     <div className="space-y-3" data-testid="ghl-not-connected">
-      <p className="text-sm text-ink-2">Connect your GoHighLevel account so HelixOS can post for you.</p>
+      <p className="text-sm text-ink-2">{GHL_COPY.intro}</p>
+      {noPages ? (
+        <div className="rounded-lg bg-warn-soft p-3 text-sm" data-testid="ghl-no-pages">
+          {GHL_HELP.noPages}{" "}
+          <form action={refreshGhlAccountsAction} className="inline">
+            <SubmitButton className="underline" pendingText="Checking…">Check again</SubmitButton>
+          </form>
+        </div>
+      ) : null}
       {conn?.lastError ? (
         <p className="rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="ghl-error">
           {conn.lastError}
-          {/missing permissions/i.test(conn.lastError) ? (
+          {/missing (one )?permission/i.test(conn.lastError) ? (
             <>
               {" "}
               <CopyButton text={scopeList} label="Copy the list" className="btn btn-ghost btn-xs" />
@@ -155,54 +168,70 @@ export function GhlConnect({ conn, tz, role, open }: { conn: SocialConnection | 
           ) : null}
         </p>
       ) : null}
-      <details open={stepsOpen} data-testid="ghl-steps">
-        <summary className="btn btn-primary btn-sm inline-flex cursor-pointer list-none" data-testid="ghl-connect-open">Connect</summary>
-        <form action={connectGhlAction} className="mt-3 space-y-3 text-sm">
-          <ol className="space-y-3 pl-5 text-ink-2 [&>li]:list-decimal">
-            <li>
-              <span className="font-medium text-ink">Open GoHighLevel</span> and go to <b>Settings → Private Integrations</b>.
-            </li>
-            <li>
-              <span className="font-medium text-ink">Create a new integration</span> and name it <b>HelixOS</b>.
-            </li>
-            <li>
-              <span className="font-medium text-ink">Tick the permissions.</span> Copy the list and paste each name into GoHighLevel&apos;s search box, one at a time.
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <CopyButton text={scopeList} label="Copy the list" className="btn btn-soft btn-xs" />
-                <span className="text-xs text-ink-3">{REQUIRED_SCOPES.length} permissions, nothing else.</span>
-              </div>
-              <details className="mt-1 text-xs">
-                <summary className="cursor-pointer text-ink-3">Read the list instead</summary>
-                <ul className="mt-1 grid gap-x-4 sm:grid-cols-2" data-testid="ghl-scope-list">
-                  {GHL_SCOPES.map((sc) => (
-                    <li key={sc.scope}>
-                      <code className="text-xs">{sc.scope}</code>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            </li>
-            <li>
-              <span className="font-medium text-ink">Copy the token GoHighLevel shows you and paste it here.</span> It is shown only once.
-              <input className="field mt-1" name="manualToken" type="password" autoComplete="off" placeholder="pit-…" required={!conn?.manualToken} data-testid="ghl-token" />
-            </li>
-            <li>
-              <span className="font-medium text-ink">Paste your Location ID.</span> It is under Settings → Business Profile in the same sub-account.
-              <input className="field mt-1" name="locationId" defaultValue={conn?.locationId ?? ""} required placeholder="ve9EPM428h8vShlRW1KT" data-testid="ghl-location" />
-            </li>
-          </ol>
-          <input type="hidden" name="ghlUserId" value={conn?.ghlUserId ?? ""} />
-          <div className="flex items-center gap-2">
-            <SubmitButton className="btn btn-primary btn-sm" pendingText="Connecting…">
-              Connect
-            </SubmitButton>
-            <span className="text-xs text-ink-3">HelixOS checks the token with GoHighLevel right away.</span>
-          </div>
-        </form>
+      <details open data-testid="ghl-steps">
+        <summary className="sr-only" data-testid="ghl-connect-open">Connect GoHighLevel</summary>
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+          <ConnectBox copy={GHL_COPY} testId="ghl-howto">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <CopyButton text={scopeList} label="Copy the list" className="btn btn-soft btn-xs" />
+              <span className="text-xs text-ink-3">{REQUIRED_SCOPES.length} permissions, nothing else.</span>
+            </div>
+            <ul className="mt-2 grid gap-x-4 text-xs sm:grid-cols-2" data-testid="ghl-scope-list">
+              {GHL_SCOPES.map((sc) => (
+                <li key={sc.scope}>
+                  <code className="text-xs">{sc.scope}</code>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-ink-3">{GHL_COPY.after}</p>
+          </ConnectBox>
+          <form action={connectGhlAction} className="space-y-3 text-sm">
+            <Field label="Your GoHighLevel key" hint="Stored encrypted. Never shown again.">
+              <input className="field" name="manualToken" type="password" autoComplete="off" placeholder="pit-…" required={!conn?.manualToken} data-testid="ghl-token" />
+            </Field>
+            <Field label="Location ID" hint={GHL_HELP.location}>
+              <input className="field" name="locationId" defaultValue={conn?.locationId ?? ""} required placeholder="ve9EPM428h8vShlRW1KT" data-testid="ghl-location" />
+            </Field>
+            <input type="hidden" name="ghlUserId" value={conn?.ghlUserId ?? ""} />
+            <div className="flex flex-wrap items-center gap-2">
+              <SubmitButton className="btn btn-primary btn-sm" pendingText="Connecting…">
+                Connect
+              </SubmitButton>
+              <span className="text-xs text-ink-3">One small test call, and you&apos;ll know right away.</span>
+            </div>
+          </form>
+        </div>
       </details>
       {role === "coach" && !open ? (
         <p className="text-xs text-ink-3" data-testid="ghl-coach-gate-note">Clients don&apos;t see this setup yet. Open it on Integrations once the scope list is final.</p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * "Which user are you?" (rev 850): a pick from the account's users when the key can read them (users.readonly), else the typed
+ * User ID with where to find it. Keys made before users.readonly was on the list get the typed field.
+ */
+function UserField({ users, current, testId, required = true }: { users: { id: string; name: string }[]; current: string; testId: string; required?: boolean }) {
+  if (users.length) {
+    const known = users.some((u) => u.id === current);
+    return (
+      <select className="field max-w-xs" name="ghlUserId" defaultValue={current} required={required} data-testid={testId}>
+        <option value="">Pick yourself</option>
+        {!known && current ? <option value={current}>The saved user ({current})</option> : null}
+        {users.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <span className="block">
+      <input className="field max-w-xs" name="ghlUserId" defaultValue={current} placeholder="Your GHL user ID" required={required} data-testid={testId} />
+      <span className="mt-0.5 block text-xs text-ink-3">{GHL_HELP.user}</span>
+    </span>
   );
 }

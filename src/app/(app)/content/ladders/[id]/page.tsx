@@ -8,6 +8,7 @@ import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
 import { markRungAction, pushLadderUpdateAction, regenerateLadderAction, revokeGraphicLinkAction, sendLadderToComposerAction, setLadderStatusAction, shipLadderAction, updateLadderAction } from "@/lib/actions/ladders";
 import { shipFacts } from "@/lib/queries/ship";
+import { HoldingUp } from "@/components/holding-up";
 import { graphicPublicPath, shipLine, shipRuns } from "@/lib/engine/ship";
 import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK } from "@/lib/engine/compose-media";
 import { staleScheduledFor } from "@/lib/queries/ladders";
@@ -261,6 +262,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
         <div className="space-y-4">
           <Card id="ship" title="Ship" action={<span className="text-xs text-ink-3" data-testid="ship-line">{shipLine(ship.steps)}</span>}>
             {shipNotice === "ran" ? <p className="mb-2 rounded-lg bg-good-soft p-2 text-xs" role="status" data-testid="ship-ran">Ship ran: {ran}. The steps below say where each stands.</p> : shipNotice === "held" ? <p className="mb-2 rounded-lg bg-warn-soft p-2 text-xs" role="status" data-testid="ship-held">Nothing was ready to run. The steps below say why.</p> : shipNotice === "revoked" ? <p className="mb-2 rounded-lg bg-surface-2 p-2 text-xs" role="status" data-testid="ship-revoked">The public address is dead. The graphic stays in Images.</p> : null}
+            <HoldingUp items={ship.steps.filter((st) => st.state === "held" && st.fix).map((st) => ({ what: `${st.label}: ${st.why ?? "held"}`, fix: st.fix! }))} />
             <ul className="divide-y text-sm" data-testid="ship-steps">
               {ship.steps.map((st) => (
                 <li key={st.key} className="flex items-start justify-between gap-2 py-1.5" data-testid="ship-step" data-step={st.key} data-state={st.state}>

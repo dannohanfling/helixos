@@ -31,6 +31,12 @@ async function submit(page: Page, selector: string) {
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(400);
 }
+/** "Which user are you?" is a list when the key can read the users (rev 850), else a typed field. */
+async function pickUser(page: Page, selector: string, id: string) {
+  const el = page.locator(selector).first();
+  if ((await el.evaluate((e) => e.tagName)) === "SELECT") await el.selectOption(id);
+  else await el.fill(id);
+}
 async function saveConnection(page: Page, locationId: string, token: string, ghlUserId = "") {
   // The card (rev 333): Connect opens the steps; the token and the Location ID are the two boxes; the user id is asked only after.
   if (!(await page.locator('[data-testid="ghl-connected"]').count())) {
@@ -39,13 +45,13 @@ async function saveConnection(page: Page, locationId: string, token: string, ghl
     if (token) await page.fill('[data-testid="ghl-token"]', token);
     await submit(page, '[data-testid="ghl-steps"] button:has-text("Connect")');
   }
-  if (ghlUserId && (await page.locator('[data-testid="ghl-no-user"] input[name="ghlUserId"]').count())) {
-    await page.fill('[data-testid="ghl-no-user"] input[name="ghlUserId"]', ghlUserId);
+  if (ghlUserId && (await page.locator('[data-testid="ghl-no-user"] [name="ghlUserId"]').count())) {
+    await pickUser(page, '[data-testid="ghl-no-user"] [name="ghlUserId"]', ghlUserId);
     await submit(page, '[data-testid="ghl-no-user"] button:has-text("Save")');
   } else if ((ghlUserId || token) && (await page.locator('[data-testid="ghl-connected"]').count())) {
     // Already connected with a user: a different user id or a new token goes through Reconnect.
     await page.locator('[data-testid="ghl-reconnect"] > summary').click();
-    if (ghlUserId) await page.fill('[data-testid="ghl-reconnect-user"]', ghlUserId);
+    if (ghlUserId) await pickUser(page, '[data-testid="ghl-reconnect-user"]', ghlUserId);
     if (token) await page.fill('[data-testid="ghl-reconnect-token"]', token);
     await submit(page, '[data-testid="ghl-reconnect"] button:has-text("Reconnect")');
   }
@@ -120,19 +126,18 @@ async function main() {
     await page.click('button:has-text("As a client")');
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/settings`);
-    await expectText(page, "Connect your GoHighLevel account so HelixOS can post for you", "one sentence and a Connect button");
-    if (await page.locator('[data-testid="ghl-token"]').isVisible()) throw new Error("the steps are behind Connect");
-    await page.click('[data-testid="ghl-connect-open"]');
-    await expectText(page, "Settings → Private Integrations", "the steps, one at a time");
-    if ((await page.locator('[data-testid="ghl-steps"]').innerText()).includes("socialplanner/post.write")) throw new Error("no scope name on screen until the fold is opened");
+    // Rev 850: Danno's words, laid out like the AI key card and open from the start: the numbered steps, the list with Copy the
+    // list, and the key and Location ID beside them.
+    await expectText(page, "Connect your own GoHighLevel once.", "Danno's words for the GoHighLevel step");
+    await expectText(page, "Settings → Private Integrations", "the numbered steps");
+    if (!(await page.locator('[data-testid="ghl-token"]').isVisible())) throw new Error("the key box sits beside the steps");
     if (!(await page.locator('[data-testid="ghl-steps"] button:has-text("Copy the list")').count())) throw new Error("Copy the list puts the names on the clipboard");
-    await page.locator('[data-testid="ghl-steps"] summary:has-text("Read the list instead")').click();
     const listedScopes = await page.locator('[data-testid="ghl-scope-list"] li').evaluateAll((els) => els.map((e) => e.textContent?.trim()));
-    if (listedScopes.length !== 19 || !listedScopes.includes("locations.readonly") || !listedScopes.includes("contacts.readonly") || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
+    if (listedScopes.length !== 20 || !listedScopes.includes("users.readonly") || !listedScopes.includes("locations.readonly") || !listedScopes.includes("contacts.readonly") || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
     await saveConnection(page, "loc_maya", "wrong-token");
-    await expectText(page, "GoHighLevel didn't accept that token", "bad token reason, in plain words");
+    await expectText(page, "That key didn't work. Make a new one and copy it straight away.", "bad token reason, in plain words");
     await saveConnection(page, "loc_maya", "pit-noscope");
-    await expectText(page, "The token is missing permissions: socialplanner/account.readonly", "the missing permission is named");
+    await expectText(page, "Your key is missing one permission: socialplanner/account.readonly", "the missing permission is named");
     if (!(await page.locator('[data-testid="ghl-error"] button:has-text("Copy the list")').count())) throw new Error("Copy the list sits beside the missing-permissions reason");
     await saveConnection(page, "loc_other", "pit-loc_maya");
     await expectText(page, "That Location ID doesn't match this token", "wrong location reason, in plain words");
@@ -172,7 +177,7 @@ async function main() {
     await expectOutcome(page, "fb_page", "failed", "a fixable refusal is a failure, not a hand-pasted channel", "Add your GHL user ID on Settings → Publishing");
     if ((await plannerPosts()).length) throw new Error("nothing is sent to the planner without a user id");
     await page.goto(`${base}/settings`);
-    await expectText(page, "nothing publishes until it is filled in", "Settings says the user id is missing");
+    await expectText(page, "nothing publishes until you pick one", "Settings says the user id is missing");
     await expectText(page, "0/5 channels will auto-publish", "readiness is nothing without the user id");
     // A user id GoHighLevel refuses: a 422 on the post, named as the user id where the post is, never as the location; the connection stays green
     await saveConnection(page, "loc_maya", "", "user_refused");

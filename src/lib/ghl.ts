@@ -345,3 +345,14 @@ export async function uploadMedia(conn: SocialConnection, file: { bytes: Buffer;
   if (!r.data?.url || !/^https:\/\//.test(r.data.url)) return { ok: false, error: "GoHighLevel took the picture but gave back no address for it." };
   return { ok: true, data: { fileId: String(r.data.fileId ?? ""), url: r.data.url } };
 }
+
+/** The account's users (users.readonly, rev 850), so a member picks who they are instead of typing an id. Empty when not allowed. */
+export async function listUsers(conn: SocialConnection): Promise<{ id: string; name: string }[]> {
+  const cred = await credentials(conn);
+  if (!cred.ok) return [];
+  const r = await call<{ users?: { id?: string; name?: string; firstName?: string; lastName?: string; email?: string; deleted?: boolean }[] }>(cred.data.base, cred.data.token, `/users/?locationId=${encodeURIComponent(conn.locationId)}`);
+  if (!r.ok) return [];
+  return (r.data?.users ?? [])
+    .filter((u) => u.id && !u.deleted)
+    .map((u) => ({ id: String(u.id), name: (u.name || [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || String(u.id)).trim() }));
+}

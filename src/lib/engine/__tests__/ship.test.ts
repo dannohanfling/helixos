@@ -18,8 +18,9 @@ describe("Ship a ladder", () => {
     const noGraphic = shipSteps({ ...ok(), hasGraphic: false });
     expect(noGraphic.find((x) => x.key === "graphic")?.why).toContain("Make the graphic first");
     expect(noGraphic.find((x) => x.key === "page")?.state).toBe("held");
-    expect(shipSteps({ ...ok(), ghl: { connected: false, userId: false, page: false, instagram: false } }).find((x) => x.key === "page")?.why).toContain("Settings → Publishing");
-    expect(shipSteps({ ...ok(), ghl: { connected: true, userId: false, page: true, instagram: true } }).find((x) => x.key === "instagram")?.why).toContain("GHL user ID");
+    expect(shipSteps({ ...ok(), ghl: { connected: false, userId: false, page: false, instagram: false } }).find((x) => x.key === "page")?.why).toContain("Connect your tools");
+    expect(shipSteps({ ...ok(), ghl: { connected: false, userId: false, page: false, instagram: false } }).find((x) => x.key === "page")?.fix?.href).toBe("/connect-tools#publishing");
+    expect(shipSteps({ ...ok(), ghl: { connected: true, userId: false, page: true, instagram: true } }).find((x) => x.key === "instagram")?.why).toContain("which GoHighLevel user you are");
     expect(shipSteps({ ...ok(), ghl: { connected: true, userId: true, page: true, instagram: false } }).find((x) => x.key === "instagram")?.why).toContain("No Instagram account chosen");
     // With no graphic the posts are held, but the keyword can still go: the line names what Ship would run.
     expect(shipLine(shipSteps({ ...ok(), hasGraphic: false }))).toBe("Ship runs: keyword on your bot.");
@@ -37,7 +38,7 @@ describe("Ship a ladder", () => {
     expect(done.every((x) => x.state === "done")).toBe(true);
     expect(shipLine(done)).toBe("Shipped: every step is done.");
     expect(shipSteps({ ...ok(), keyword: { set: false, token: false, pushed: false, blocked: null } }).find((x) => x.key === "keywords")?.why).toContain("NONE");
-    expect(shipSteps({ ...ok(), keyword: { set: true, token: false, pushed: false, blocked: null } }).find((x) => x.key === "keywords")?.why).toContain("API token");
+    expect(shipSteps({ ...ok(), keyword: { set: true, token: false, pushed: false, blocked: null } }).find((x) => x.key === "keywords")?.why).toContain("your own key");
     expect(shipSteps({ ...ok(), keyword: { set: true, token: true, pushed: false, blocked: "Your bot has no keyword router yet." } }).find((x) => x.key === "keywords")?.why).toBe("Your bot has no keyword router yet.");
     expect(Object.keys(LABEL)).toEqual(["graphic", "page", "instagram", "drip", "keywords"]);
   });

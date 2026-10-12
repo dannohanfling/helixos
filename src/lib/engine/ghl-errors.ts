@@ -10,6 +10,7 @@ export type GhlCall = "accounts" | "post" | "contact";
 export type GhlFailure = { error: string; status?: number; detail?: string };
 
 import { REQUIRED_SCOPES, scopeNamedIn } from "./ghl-scopes";
+import { CONNECT_ERRORS } from "./connect-copy";
 export { REQUIRED_SCOPES };
 
 const LOCATION = "That Location ID doesn't match this token. Copy the Location ID from Settings → Business Profile in the same sub-account where you created the token.";
@@ -29,12 +30,13 @@ export function refusedField(detail: string): "userId" | "accountIds" | "schedul
 
 export function explainGhl(r: GhlFailure, call: GhlCall): string {
   const lower = (r.detail ?? "").toLowerCase();
-  if (r.status === 401) return "GoHighLevel didn't accept that token. It was pasted incompletely, or it was deleted in GoHighLevel. Create a new Private Integration and paste the new token.";
+  // Rev 850's words: a bad key is made again; a missing permission is named, and fixed with a new key (GoHighLevel can't add
+  // a permission to a key that exists).
+  if (r.status === 401) return CONNECT_ERRORS.ghlBadKey;
   if (r.status === 403 || lower.includes("scope")) {
-    // GoHighLevel names the scope it refused; the client fixes that one alone. Without a name, the whole list (Copy the list sits beside this on the card).
     const named = scopeNamedIn(r.detail ?? "");
-    if (named) return `The token is missing permissions: ${named}. Edit the Private Integration in GoHighLevel, tick it, and paste the new token.`;
-    return `The token is missing permissions. Edit the Private Integration in GoHighLevel, tick every permission on the list, and paste the new token.`;
+    if (named) return CONNECT_ERRORS.ghlMissing(named);
+    return "Your key is missing permissions. Make a new key with everything in the list ticked.";
   }
   if (r.status === 429) return "GoHighLevel is rate-limiting requests (429). Wait a minute and try again.";
   if (lower.includes("abort") || lower.includes("fetch failed") || lower.includes("econn")) return "Couldn't reach GoHighLevel. Check the API base URL on Integrations, or try again in a minute.";

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 162,
+    date: "2026-10-12",
+    title: "Connect your tools, step by step",
+    lines: [
+      "A new page, Connect your tools, walks you through connecting your own GoHighLevel and your own Community Loyalty bot, one step at a time, with the steps in plain words. Today shows how many are left until both are done, and Settings links to it.",
+      "Community Loyalty: paste your own key and press Connect. HelixOS makes one tiny test call first, saves nothing if the key is refused and says why, then shows it only as saved. Pick the agent that answers questions (the FAQ one is chosen for you), and add your contact ID. GoHighLevel: \"Which user are you?\" is now a pick from a list.",
+      "Ship and the composer now say what's holding a post up, each with a Fix it link. Coaches see GHL and CL with the date each was connected on every client's row, and can email a client the setup link.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 161,
     date: "2026-10-12",
     title: "Signing in, times in your own zone, and a stuck chat",

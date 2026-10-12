@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { connectionFor } from "@/lib/ghl";
+import { connectProgress } from "@/lib/engine/connect-copy";
+import { clTokenSet } from "@/lib/community-loyalty";
 import { requireViewer } from "@/lib/auth";
 import { eveningCloseAction, morningCheckinAction, repairStreakAction } from "@/lib/actions/daily";
 import type { TodayActivity } from "@/lib/queries/daily";
@@ -124,6 +127,9 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const featuresOn = await recentlyOn(v.workspace.id, v.user.id);
   // My Board (rev 664 §6): a decision whose steps are due or overdue asks for a check-in.
   const boardDue = v.team ? [] : await checkinsDue(v);
+  // Connect your tools (rev 850): until both are connected, one line points at the page. Never in a coach's switched-in view.
+  const toolsConn = !v.switchedInto && !v.team ? await connectionFor(v.user.id) : null;
+  const tools = !v.switchedInto && !v.team ? connectProgress({ ghl: Boolean(toolsConn && toolsConn.accounts.length && !toolsConn.lastError && toolsConn.ghlUserId?.trim()), cl: clTokenSet(v.membership) }) : null;
   const coachNew = v.role === "coach" && !v.switchedInto ? await Promise.all([newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt), unseenReports(v.workspace.id), openClaims(v.workspace.id), waitingFeatures(v.workspace.id)]) : null;
   return (
     <>
@@ -168,6 +174,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Link>
           ))}
         </div>
+      ) : null}
+      {tools && tools.done < tools.total ? (
+        <Link href="/connect-tools" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink hover:underline" data-testid="today-connect-tools">
+          Connect your tools: {tools.line}. GoHighLevel posts for you, Community Loyalty runs your bot →
+        </Link>
       ) : null}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>

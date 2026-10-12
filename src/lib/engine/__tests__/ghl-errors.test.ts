@@ -23,9 +23,9 @@ describe("what GoHighLevel's reply means, by the call that was made", () => {
   });
   it("the token and scope reasons hold on every call; the vendor's words never reach the sentence", () => {
     for (const call of ["accounts", "post", "contact"] as const) {
-      expect(explainGhl({ error: "x", status: 401, detail: "Invalid JWT" }, call)).toContain("didn't accept that token");
-      expect(explainGhl({ error: "x", status: 403, detail: "The token does not have access to this scope: socialplanner/post.write" }, call)).toContain("missing permissions: socialplanner/post.write");
-      expect(explainGhl({ error: "x", status: 403, detail: "Forbidden" }, call)).toContain("missing permissions. Edit the Private Integration");
+      expect(explainGhl({ error: "x", status: 401, detail: "Invalid JWT" }, call)).toContain("That key didn't work. Make a new one");
+      expect(explainGhl({ error: "x", status: 403, detail: "The token does not have access to this scope: socialplanner/post.write" }, call)).toContain("missing one permission: socialplanner/post.write");
+      expect(explainGhl({ error: "x", status: 403, detail: "Forbidden" }, call)).toContain("missing permissions. Make a new key with everything in the list ticked");
       expect(explainGhl({ error: "x", status: 429, detail: "Too many requests" }, call)).toContain("429");
       const odd = explainGhl({ error: "x", status: 500, detail: "MongoServerError: E11000 duplicate key at /internal/path" }, call);
       expect(odd).not.toContain("Mongo");
