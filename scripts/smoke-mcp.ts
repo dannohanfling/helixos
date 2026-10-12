@@ -274,6 +274,8 @@ async function main() {
     if ((await page.locator('[data-testid="consent-refused"]').getAttribute("data-state")) !== "switched") throw new Error("a coach switched into a client can't connect for them");
     await submit(page, '[data-testid="switch-back"]');
     await page.goto(`${base}/settings?at=${Date.now()}#connected-apps`);
+    // Settings streams in after navigation; a tick before it settles is reset when the form re-renders (cold server).
+    await page.waitForLoadState("networkidle");
     await page.locator('[data-testid="apps-open-toggle"]').check();
     await submit(page, '[data-testid="apps-open-save"]');
     await page.waitForURL(/apps=open/);

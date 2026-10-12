@@ -4,10 +4,10 @@ import { removePrincipleAction, savePrincipleAction } from "@/lib/actions/board-
 import { Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
-export const metadata = { title: "The Danno Seat" };
+export const metadata = { title: "Danno's principles" };
 
 /**
- * The Danno Seat's principles (rev 664 §8): seeded from docs/board/danno-source-pack.md, Danno's to add, edit or remove. Every
+ * Danno's principles (rev 664 §8): seeded from docs/board/danno-source-pack.md, Danno's to add, edit or remove. Every
  * client's Board reads the current list from its next answer. Only his own, ok-to-use material: no prices, no client names, no
  * stories marked to check or needing permission.
  */
@@ -17,7 +17,7 @@ export default async function DannoSeatPage({ searchParams }: { searchParams: Pr
   const rows = await principlesFor(coach.workspace.id);
   return (
     <>
-      <PageHeader title="The Danno Seat" subtitle="The principles the Danno Seat uses on every client's Board. It never claims to be you, never invents your quotes, stories or numbers, never quotes your prices, and sends personal questions to Office Hours." />
+      <PageHeader title="Danno's principles" subtitle="The principles Danno uses on every client's Board. It never claims to be you, never invents your quotes, stories or numbers, never quotes your prices, and sends personal questions to Office Hours." />
       {sp.error ? (
         <p className="mb-4 rounded-xl border border-danger bg-danger-soft p-3 text-sm" role="alert" data-testid="principle-error">
           {sp.error}

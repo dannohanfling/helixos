@@ -3,7 +3,7 @@
  * question played back in the Boardroom in seat order (about 3.4s a speaker, the rows appearing as each speaks, a tapped seat
  * stopping it, reduced motion, the keyboard, 1440/1024/390 wide), with the server's checks visible (a figure she never gave and a claim to be Danno left out, a
  * weekend step moved to a working day, a step dropped to fit her hours); "The Board used" naming what was read; a Focus
- * follow-up from one advisor; the decision log; the coach's Danno Seat principles (seeded from the pack, a price refused, a
+ * follow-up from one advisor; the decision log; the coach's Danno principles (seeded from the pack, a price refused, a
  * new one reaching the next answer's prompt); the Edge Preset on the coach's own Board only; the same Board by voice; and a team
  * member refused.
  */
@@ -115,7 +115,7 @@ async function main() {
     console.log(`✓ the Boardroom plays it back: ${heard.join(" → ")}, ${took} ms for the last four turns, rows appearing as each speaks, the recommendation last`);
     for (const x of SEATS) must(await page.locator(`[data-testid="board-minute-${x.key}"]`).count(), `the ${x.name} row in the minutes`);
     const danno = await page.locator('[data-testid="board-minute-danno"]').innerText();
-    must(!/As Danno/i.test(danno) && danno.includes("Be painfully specific"), `the Danno Seat never claims to be Danno: ${danno}`);
+    must(!/As Danno/i.test(danno) && danno.includes("Be painfully specific"), `the chair never claims to be Danno: ${danno}`);
     must((await page.locator('[data-testid^="board-minute-"] .br-ask').count()) === 5, "each advisor's question under their counsel");
     const morgan = await page.locator('[data-testid="board-minute-morgan"]').innerText();
     must(!morgan.includes("9,999"), "a figure she never gave is left out");
@@ -299,7 +299,7 @@ async function main() {
     must((await page.locator('[data-testid="board-decisions"]').innerText()).includes("1 follow-up"), "the decision log");
     console.log("✓ a Focus follow-up from Morgan only, on the same decision; the decision log lists it");
 
-    // The coach's Danno Seat: seeded from the pack, a price refused, a new principle reaching the next prompt.
+    // The coach's Danno: seeded from the pack, a price refused, a new principle reaching the next prompt.
     await logout(page);
     await login(page, "As the coach");
     await page.goto(`${base}/coach/board`);
@@ -331,7 +331,7 @@ async function main() {
     const last = (await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] };
     const sys = last.system.map((b) => b.text).join("\n");
     must(sys.includes("Walk the floor") && sys.includes("never claim to be them"), "the new principle and the Edge rules reach the prompt");
-    console.log("✓ the Danno Seat: seeded from the pack, a price refused, a new principle in the next prompt; Edge Preset on the coach's own Board");
+    console.log("✓ Danno: seeded from the pack, a price refused, a new principle in the next prompt; Edge Preset on the coach's own Board");
 
     // Maya's Board is never Edge, whatever is stored.
     await db.update(schema.memberships).set({ boardPreset: "edge" }).where(eq(schema.memberships.id, m.id));
@@ -458,7 +458,7 @@ async function main() {
     const names = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
     must(names.length === 3 && names.every((n) => n.startsWith("evolve-omega-board/")) && names.includes("evolve-omega-board/SKILL.md") && names.includes("evolve-omega-board/references/board-profile.md"), `the folder at the archive's root: ${names.join(", ")}`);
     const pack = await zip.file("evolve-omega-board/references/danno-source-pack.md")!.async("string");
-    must(pack.includes("Walk the floor") && pack.includes("## Boundaries for the Danno Seat"), "the skill carries the coach's current principles");
+    must(pack.includes("Walk the floor") && pack.includes("## Boundaries for Danno"), "the skill carries the coach's current principles");
     console.log("✓ the Board in Claude: six install steps; evolve-omega-board.skill with its folder at the root and the current principles");
 
     const energy = "I'm tired all the time; should I cut my hours this month?";

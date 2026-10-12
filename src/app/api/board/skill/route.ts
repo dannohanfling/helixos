@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/board/skill: "Download your Board for Claude" (rev 664 §9). evolve-omega-board.skill, a zip with the skill's folder at
- * its root, built now from the workspace's current Danno Seat principles. Any signed-in member of the workspace may download it;
+ * its root, built now from the workspace's current Danno principles. Any signed-in member of the workspace may download it;
  * nothing of any member's own data is in it.
  */
 export async function GET() {

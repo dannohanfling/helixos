@@ -1,6 +1,6 @@
 /**
- * My Board: the Danno Seat's principles (rev 664 §8), the coach workspace's own, seeded from the source pack the first time
- * they're read. Apart from src/lib/board.ts so Coach → Danno Seat loads only this.
+ * My Board: Danno's principles (rev 664 §8), the coach workspace's own, seeded from the source pack the first time
+ * they're read. Apart from src/lib/board.ts so Coach → Danno loads only this.
  */
 import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";

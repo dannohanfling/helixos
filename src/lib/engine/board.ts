@@ -1,5 +1,5 @@
 /**
- * My Board (rev 664), the pure parts: the five seats, the modes, the Danno Seat's principles seeded from the pack, the prompt
+ * My Board (rev 664), the pure parts: the five seats, the modes, Danno's principles seeded from the pack, the prompt
  * built from Cowork's spec (docs/board/, copied in src/content/board-spec.ts), and the checks the server applies to every answer
  * before the member sees it. The spec is ported, never re-invented: the voices, modes and hard rules are the files' own words.
  * Nothing here reads the database or calls the AI.
@@ -16,7 +16,7 @@ export type SeatKey = (typeof SEAT_KEYS)[number];
 export type Seat = { key: string; name: string; emoji: string; icon: string | null; job: string; short: string; role: string };
 /** The Board, exactly five, fixed for clients (rev 664 §1), with Cowork's seat icons. */
 export const SEATS: Seat[] = [
-  { key: "danno", name: "The Danno Seat", short: "The Danno Seat", role: "CHAIR", emoji: "🧭", icon: "/board/danno-seat.svg", job: "Danno's teaching, from the approved principles only" },
+  { key: "danno", name: "Danno", short: "Danno", role: "CHAIR", emoji: "🧭", icon: "/board/danno-seat.svg", job: "Danno's teaching, from the approved principles only" },
   { key: "alex", name: "Alex, the Strategist", short: "Alex", role: "STRATEGIST", emoji: "🎯", icon: "/board/alex-strategist.svg", job: "direction, positioning, opportunity cost" },
   { key: "jordan", name: "Jordan, the Operator", short: "Jordan", role: "OPERATOR", emoji: "⚙️", icon: "/board/jordan-operator.svg", job: "feasibility, hours, sequence; owns the action steps" },
   { key: "morgan", name: "Morgan, the Antagonist", short: "Morgan", role: "ANTAGONIST", emoji: "⚡", icon: "/board/morgan-antagonist.svg", job: "assumptions, downside, reversibility" },
@@ -34,14 +34,14 @@ export const EDGE_SEATS: Seat[] = [
   { key: "morgan", name: "Morgan, the Antagonist", short: "Morgan", role: "ANTAGONIST", emoji: "⚡", icon: "/board/morgan-antagonist.svg", job: "assumptions, downside, reversibility" },
 ];
 export type Preset = "standard" | "edge";
-/** The order the seats speak in (rev 698): Danno Seat, Alex, Jordan, Morgan, Riley; the Edge Preset in its own order. */
+/** The order the seats speak in (rev 698): Danno, Alex, Jordan, Morgan, Riley; the Edge Preset in its own order. */
 export const speakingOrder = (preset: Preset): string[] => seatsFor(preset).map((s) => s.key);
 export const seatsFor = (preset: Preset): Seat[] => (preset === "edge" ? EDGE_SEATS : SEATS);
 
 /* ───────────────────────── The modes ───────────────────────── */
 
 
-/* ───────────────────────── The Danno Seat's principles ───────────────────────── */
+/* ───────────────────────── Danno's principles ───────────────────────── */
 
 export type Principle = { title: string; body: string; goodFor: string };
 /**
@@ -69,10 +69,10 @@ export function principlesFromPack(md: string = DANNO_SOURCE_PACK_MD): Principle
   return out;
 }
 
-/** The principles as the Danno Seat reads them: the pack's own header and boundaries around the coach's current rows. */
+/** The principles as Danno reads them: the pack's own header and boundaries around the coach's current rows. */
 export function packText(principles: Principle[]): string {
   const header = DANNO_SOURCE_PACK_MD.split("\n## ")[0].trim();
-  const boundaries = `## Boundaries for the Danno Seat${DANNO_SOURCE_PACK_MD.split("## Boundaries for the Danno Seat")[1] ?? ""}`.trim();
+  const boundaries = `## Boundaries for Danno${DANNO_SOURCE_PACK_MD.split("## Boundaries for Danno")[1] ?? ""}`.trim();
   const groups = new Map<string, Principle[]>();
   for (const p of principles) groups.set(p.goodFor || "Principles", [...(groups.get(p.goodFor || "Principles") ?? []), p]);
   const body = [...groups].map(([g, ps]) => `## ${g}\n\n${ps.map((p) => `- **${p.title}.** ${p.body.replace(/\n/g, "\n  ")}`).join("\n")}`).join("\n\n");
@@ -128,7 +128,7 @@ export const ANSWER_SHAPE = `Reply with JSON only, in this shape:
 "votes" only for Quick Vote ({"seat", "option", "why"}); "changed" and "unresolved" only for Debate; "strongestCase", "biggestRisk" and "owner" only for Converge. "clarify" only when a missing fact would change the recommendation, at most three.`;
 
 /**
- * The task for one ask: the skill and the profile word for word, the Danno Seat's current principles, the mode, the seats in
+ * The task for one ask: the skill and the profile word for word, Danno's current principles, the mode, the seats in
  * play (the Edge Preset's for Danno's own Board), the member's hours, today's date, and the JSON shape.
  */
 export function boardTask(opts: { mode: Mode; focus?: string | null; preset: Preset; principles: Principle[]; hours: number; today: string; firstQuestion: boolean }): string {
@@ -140,7 +140,7 @@ export function boardTask(opts: { mode: Mode; focus?: string | null; preset: Pre
     "MY_BOARD. You are the member's Evolve Omega Board inside HelixOS. Follow the skill and the profile below exactly; they are the spec.",
     `# The skill\n\n${BOARD_SKILL_MD}`,
     `# The board profile\n\n${BOARD_PROFILE_MD}`,
-    `# The Danno Seat's approved principles\n\n${packText(opts.principles)}`,
+    `# Danno's approved principles\n\n${packText(opts.principles)}`,
     `# This answer\n\nMode: ${MODE_INFO[opts.mode].label} (${MODE_INFO[opts.mode].line})\n${who}\nThe seats, by key:\n${roster}${edge}\nToday is ${opts.today}. The member can give their business ${opts.hours} hours a week: the steps' total time never goes over it. Dates are real working days on or after today.\nThe member's HelixOS data follows under "What the Board can see". Use only it and what the member says; say what is missing instead of guessing. Prospects are first names and counts only. Never ask to add tasks: HelixOS offers that itself.`,
     ANSWER_SHAPE,
   ].join("\n\n");
@@ -168,7 +168,7 @@ export type Checked = { answer: BoardAnswer; notes: string[]; problem: string | 
  * Board question (or the one in Focus), one split and one recommendation, one to three steps each with all five parts and a real
  * Do, dates moved to a working day on or after today, total time within the member's weekly hours (steps dropped from the end
  * until it fits, and said), no money or percentage in a card, assumption or recommendation that isn't in what the member gave,
- * the Danno Seat never claiming to be Danno and sending personal questions to Office Hours, and "You decide" always there.
+ * the chair never claiming to be Danno and sending personal questions to Office Hours, and "You decide" always there.
  * A problem means the answer can't be shown as it is (the caller asks once more, then says so).
  */
 export function checkAnswer(raw: unknown, ctx: { mode: Mode; focus?: string | null; preset: Preset; hours: number; today: string; firstQuestion: boolean; question: string; known: string; need?: string[] }): Checked {

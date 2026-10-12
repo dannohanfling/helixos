@@ -188,7 +188,7 @@ export const WORKSPACE_TABLES = {
   fathom_workspace_connections: schema.fathomWorkspaceConnections,
   // Client headshots: the coach's review list of imported photos no member was matched to; its photos go with it.
   headshot_reviews: schema.headshotReviews,
-  // The Danno Seat's principles (rev 664): the coach's, read by every client's Board.
+  // Danno's principles (rev 664): the coach's, read by every client's Board.
   board_principles: schema.boardPrinciples,
 } as const;
 

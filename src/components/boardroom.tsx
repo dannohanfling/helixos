@@ -40,7 +40,7 @@ type Props = {
 const LOOKS: SceneLook[] = ["day", "night"];
 /** The photo behind a speaking statue's copy: WebP where the browser takes it, the JPG otherwise. */
 const photoVar = (k: SceneLook) => `image-set(url("/board/council-${k}.webp") type("image/webp"), url("/board/council-${k}.jpg") type("image/jpeg"))`;
-/** A plate shows the name: "Alex", "The Danno Seat", or an Edge style advisor's name without the word "Advisor". */
+/** A plate shows the name: "Alex", "Danno", or an Edge style advisor's name without the word "Advisor". */
 const plateName = (s: Seat) => s.short.replace(/ Advisor$/, "");
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
@@ -343,7 +343,7 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
             You decide.
           </div>
           <p className="br-quiet" style={{ margin: 0, fontSize: 13, maxWidth: 520 }}>
-            {answer.youDecide && answer.youDecide !== "You decide. This is your call." ? `${answer.youDecide} ` : ""}The Board maps the options and the risks. The call is yours. The Danno Seat is guided by Danno&apos;s teaching; it is not Danno live.
+            {answer.youDecide && answer.youDecide !== "You decide. This is your call." ? `${answer.youDecide} ` : ""}The Board maps the options and the risks. The call is yours. Danno here is guided by Danno&apos;s teaching; it is not Danno live.
           </p>
           {decisionView ? (
             <button type="button" className="br-tab" onClick={replay} data-testid="board-run-again">

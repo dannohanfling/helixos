@@ -329,9 +329,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </form>
           <p className="mt-2 text-xs text-ink-3">{v.membership.bodyEnabled ? "Turning it off hides HumanOS and keeps everything you logged; turn it back on and it's all still there." : "Nothing is deleted when it's off, and nothing is shared when it's on."}</p>
         </Card>
-        {/* My Board (rev 664 §9): the same Board in Claude, built from the Danno Seat's current principles. */}
+        {/* My Board (rev 664 §9): the same Board in Claude, built from Danno's current principles. */}
         <Card id="board-in-claude" title="Use your Board in Claude">
-          <p className="text-sm text-ink-2">Your Board&apos;s five advisors as a Claude skill, for deciding things away from HelixOS. It carries the Danno Seat&apos;s current principles and nothing of your own data. Connect HelixOS to Claude as well and the Board there reads your HelixOS too.</p>
+          <p className="text-sm text-ink-2">Your Board&apos;s five advisors as a Claude skill, for deciding things away from HelixOS. It carries Danno&apos;s current principles and nothing of your own data. Connect HelixOS to Claude as well and the Board there reads your HelixOS too.</p>
           <a href="/api/board/skill" className="btn btn-primary btn-sm mt-3 inline-block" download data-testid="board-skill-download">
             Download your Board for Claude
           </a>

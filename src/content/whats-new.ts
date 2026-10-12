@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 150,
+    date: "2026-10-12",
+    title: "My Board: the chair is now called Danno",
+    lines: [
+      "The seat at the head of your Board is now simply \"Danno\": on the statue's plate, in the minutes, in the Board's answers and in the skill you download for Claude. It's still guided by Danno's teaching and is not Danno live; anything personal goes to Office Hours on Friday.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 149,
     date: "2026-10-12",
     title: "Fits your phone again",
@@ -44,7 +53,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: "2026-10-12",
     title: "My Board meets in the Council Chamber",
     lines: [
-      "My Board now sits in a marble council chamber: five statues around the table, the Danno Seat at the head. When the Board answers, each advisor speaks in turn: the one speaking glows and their words appear on the tabletop. Tap a statue to read what that advisor said.",
+      "My Board now sits in a marble council chamber: five statues around the table, Danno at the head. When the Board answers, each advisor speaks in turn: the one speaking glows and their words appear on the tabletop. Tap a statue to read what that advisor said.",
       "Pick \"Golden hour\" or \"Night\" under the room and HelixOS remembers it. Until you choose, the room turns to night from 7pm to 6am your time. With reduced motion on, the room keeps still and the speaker keeps the glow.",
     ],
     audience: "everyone",
@@ -64,7 +73,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: "2026-10-12",
     title: "My Board: in Claude, and HumanOS if you want it",
     lines: [
-      "Settings → Use your Board in Claude: download your Board as a Claude skill, built from the Danno Seat's current principles, with the six steps to install it. Nothing of your own data is in it.",
+      "Settings → Use your Board in Claude: download your Board as a Claude skill, built from Danno's current principles, with the six steps to install it. Nothing of your own data is in it.",
       "With HumanOS on, My Board can read your HumanOS summary when a decision touches your energy, health or time. It's your switch under My Board, off until you turn it on, and HumanOS's own AI setting still has to allow it.",
     ],
     audience: "everyone",
@@ -94,7 +103,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     date: "2026-10-11",
     title: "My Board: five advisors on a decision",
     lines: [
-      "Build → My Board: say what you're deciding and five advisors look at it, grounded in your own HelixOS. The Danno Seat, Alex the Strategist, Jordan the Operator, Morgan the Antagonist and Riley the Customer Champion each give a short view; then where they split, one recommendation, and one to three action steps sized to your weekly hours.",
+      "Build → My Board: say what you're deciding and five advisors look at it, grounded in your own HelixOS. Danno, Alex the Strategist, Jordan the Operator, Morgan the Antagonist and Riley the Customer Champion each give a short view; then where they split, one recommendation, and one to three action steps sized to your weekly hours.",
       "Choose Board, Focus on one advisor, Debate, Quick Vote, Workaround, Leverage, Converge or Check-in. Every decision is kept under Decisions, private to you. It runs on your own AI key; you decide.",
     ],
     audience: "everyone",

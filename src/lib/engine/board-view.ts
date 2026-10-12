@@ -43,7 +43,7 @@ export const SKILL_INSTALL_STEPS = [
   "Make sure code execution and file creation is on: skills need it.",
   "Under Skills, choose Upload skill and pick evolve-omega-board.skill.",
   "Switch the Evolve Omega Board skill on.",
-  "In any chat, start with \"Board:\" and what you're deciding (or \"Set up my board\"). Download it again whenever your coach updates the Danno Seat.",
+  "In any chat, start with \"Board:\" and what you're deciding (or \"Set up my board\"). Download it again whenever your coach updates Danno.",
 ];
 
 /* ───────────────────────── The Council Chamber (rev 738) ───────────────────────── */

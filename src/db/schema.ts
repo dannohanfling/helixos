@@ -3975,7 +3975,7 @@ export const boardDecisions = sqliteTable(
 );
 export type BoardDecision = typeof boardDecisions.$inferSelect;
 
-/** The Danno Seat's principles (rev 664 §8), the coach's to edit, seeded from docs/board/danno-source-pack.md. */
+/** Danno's principles (rev 664 §8), the coach's to edit, seeded from docs/board/danno-source-pack.md. */
 export const boardPrinciples = sqliteTable(
   "board_principles",
   {

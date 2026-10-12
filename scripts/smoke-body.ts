@@ -1890,9 +1890,10 @@ async function main() {
       const firstBench = (await db.query.bodySets.findMany({ where: and(mine(schema.bodySets), eq(schema.bodySets.exerciseId, exId("Bench press"))) })).sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt))[0];
       const csvPath = `/tmp/claude-walk-training-sets-${process.pid}.csv`;
       (await import("node:fs")).writeFileSync(csvPath, `Date,Exercise,Set #,Weight,Reps,Notes\n${firstBench.date},Bench press,1,185,5,walk csv note\n2020-01-01,Bench press,1,100,5,no such day\n`);
-      await client.goto(`${base}/body/import`);
-      // Set again until the page is ready for it: a file set before hydration has no change handler to reach.
-      for (let i = 0; i < 10 && (await client.locator('[data-testid="set-notes-dry-run"][disabled]').count()); i++) {
+      // Loaded first (a cold server can take a while to compile the page), then set again until the page is ready for it: a file
+      // set before hydration has no change handler to reach.
+      await client.goto(`${base}/body/import`, { waitUntil: "networkidle" });
+      for (let i = 0; i < 30 && (await client.locator('[data-testid="set-notes-dry-run"][disabled]').count()); i++) {
         await client.locator('[data-testid="set-notes-file"]').setInputFiles(csvPath);
         await client.waitForTimeout(1000);
       }

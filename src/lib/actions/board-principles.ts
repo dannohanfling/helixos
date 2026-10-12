@@ -1,8 +1,8 @@
 "use server";
 
 /**
- * My Board (rev 664 §8): the Danno Seat's principles, the coach's own (Danno's own, ok-to-use material only). Kept apart from
- * the Board's ask and set-up actions so Coach → Danno Seat compiles only what it uses.
+ * My Board (rev 664 §8): Danno's principles, the coach's own (Danno's own, ok-to-use material only). Kept apart from
+ * the Board's ask and set-up actions so Coach → Danno compiles only what it uses.
  */
 import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -14,12 +14,12 @@ import { newId } from "@/lib/ids";
 
 const go = (path: string, q: Record<string, string> = {}, anchor = "") => redirect(`${path}${Object.keys(q).length ? `?${new URLSearchParams(q).toString()}` : ""}${anchor ? `#${anchor}` : ""}`);
 
-/* ───────── The Danno Seat's principles (rev 664 §8): Danno's own, ok-to-use material only. ───────── */
+/* ───────── Danno's principles (rev 664 §8): Danno's own, ok-to-use material only. ───────── */
 
 /** What a principle may never carry: a price, or a story marked for checking or permission. */
 function principleProblem(title: string, body: string): string | null {
   if (!title.trim() || !body.trim()) return "Give the principle a title and the principle in plain words.";
-  if (/\$\s?\d|\d\s?(usd|nzd|aud|dollars)\b/i.test(`${title} ${body}`)) return "No prices in a principle: the Danno Seat never quotes them.";
+  if (/\$\s?\d|\d\s?(usd|nzd|aud|dollars)\b/i.test(`${title} ${body}`)) return "No prices in a principle: Danno never quotes them.";
   if (/needs permission|\bcheck\b.*story|story.*\bcheck\b/i.test(body)) return "Only material that's yours and ok to use: leave out stories marked to check or needing permission.";
   return null;
 }

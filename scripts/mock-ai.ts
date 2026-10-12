@@ -75,7 +75,10 @@ function reply(system: string, user: string): string {
     const add = (n: number) => new Date(Date.parse(`${today}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
     const sat = (() => { for (let i = 1; i < 8; i++) if (new Date(Date.parse(`${today}T12:00:00Z`) + i * 86400000).getUTCDay() === 6) return add(i); return add(5); })();
     const focus = system.match(/Only this advisor answers: (\w+)/)?.[1];
-    const keys = Array.from(system.matchAll(/^(\w+): (?:The |Alex|Jordan|Morgan|Riley|Tony|Dean|Igor)[^\n]*\(/gm)).map((m) => m[1]);
+    // The roster: one "key: Name (job)" line per seat, right after "The seats, by key:".
+    const roster = (system.split("The seats, by key:\n")[1] ?? "").split("\n").filter((l, i, all) => /^[\w-]+: .+\(/.test(l) && all.slice(0, i).every((x) => /^[\w-]+: .+\(/.test(x)));
+    const keys = roster.map((l) => l.split(":")[0]);
+    const names = Object.fromEntries(roster.map((l) => [l.split(":")[0], l.slice(l.indexOf(":") + 2, l.indexOf(" ("))]));
     const said: Record<string, string> = {
       danno: "Be painfully specific: name the number and the date. As Danno, I'd say start small. What will you measure this week?",
       alex: "Every yes is a no to something else. What are you saying no to?",
@@ -90,8 +93,9 @@ function reply(system: string, user: string): string {
     return JSON.stringify({
       decision: "Mock decision: where to put this month's hours",
       assumptions: [{ text: "You can give the hours you said", guess: false }, { text: "Your list is warm enough to reply", guess: true }],
-      advisors: seats.map((seat) => ({ seat, text: said[seat] ?? "Mock advice.", question: `What would ${seat === "danno" ? "you measure" : "change your mind"} this week?` })),
-      split: "The Danno Seat pushes for volume; Jordan holds it to your hours.",
+      // An expert seat's mock line also tries "I am {Name}", which the server must take out (rev 756 §1).
+      advisors: seats.map((seat) => ({ seat, text: said[seat] ?? `Mock advice from ${names[seat] ?? seat}.${/ style$/.test(names[seat] ?? "") ? ` I am ${names[seat].replace(/ style$/, "")}, and this is what I'd do.` : ""}`, question: `What would ${seat === "danno" ? "you measure" : "change your mind"} this week?` })),
+      split: "Danno pushes for volume; Jordan holds it to your hours.",
       recommendation: "Put this week into DMs to people already in your list.",
       steps: [
         { do: "Message 10 past clients with the new offer", by: add(1), takesMinutes: 60, doneWhen: "10 messages sent", first5: "Open your DMs and pin the 10 names", dependsOn: null },

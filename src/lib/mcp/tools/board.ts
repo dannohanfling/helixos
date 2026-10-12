@@ -19,7 +19,7 @@ defineTool({
   scope: "board",
   kind: "write",
   description:
-    "Asks the member's Board (five advisors: the Danno Seat, Alex the Strategist, Jordan the Operator, Morgan the Antagonist, Riley the Customer Champion) about a decision, grounded in their own HelixOS. Modes: board, focus (with advisor: danno, alex, jordan, morgan or riley), debate, quick_vote, workaround, leverage, converge, checkin. Read the recommendation first, then the numbered action steps; the member decides. Saved to their decision log. Needs their AI key and their weekly hours set in HelixOS.",
+    "Asks the member's Board (five advisors: Danno, Alex the Strategist, Jordan the Operator, Morgan the Antagonist, Riley the Customer Champion) about a decision, grounded in their own HelixOS. Modes: board, focus (with advisor: danno, alex, jordan, morgan or riley), debate, quick_vote, workaround, leverage, converge, checkin. Read the recommendation first, then the numbered action steps; the member decides. Saved to their decision log. Needs their AI key and their weekly hours set in HelixOS.",
   input: {
     decision: z.string().min(3).max(4000).describe("What the member is deciding, in their words"),
     mode: z.enum(MODES).optional().describe("board (the default), focus, debate, quick_vote, workaround, leverage, converge or checkin"),

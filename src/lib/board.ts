@@ -1,6 +1,6 @@
 /**
  * My Board (rev 664) on the server: what the Board may read for one member (their own rows only, chosen by what the decision is
- * about), the ask itself on their own AI key with the server's checks, the decision log, and the Danno Seat's principles (the
+ * about), the ask itself on their own AI key with the server's checks, the decision log, and Danno's principles (the
  * coach's, seeded from the pack). Never read: HumanOS (its switch comes later, through Body's own read), the teaching library or
  * story bank, anything of another member's.
  */
@@ -28,7 +28,7 @@ export const FEATURE = "board";
 type Member = { workspaceId: string; userId: string };
 const memberOf = (v: Viewer): Member => ({ workspaceId: v.workspace.id, userId: v.user.id });
 
-/* ───────────────────────── The Danno Seat's principles ───────────────────────── */
+/* ───────────────────────── Danno's principles ───────────────────────── */
 
 const asPrinciples = (rows: schema.BoardPrinciple[]): Principle[] => rows.map((r) => ({ title: r.title, body: r.body, goodFor: r.goodFor }));
 

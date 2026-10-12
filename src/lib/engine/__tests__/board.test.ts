@@ -22,7 +22,7 @@ describe("My Board: the spec, ported", () => {
   });
 
   it("exactly five seats for clients, named as the profile names them, with their icons; the Edge Preset only by preset", () => {
-    expect(SEATS.map((s) => s.name)).toEqual(["The Danno Seat", "Alex, the Strategist", "Jordan, the Operator", "Morgan, the Antagonist", "Riley, the Customer Champion"]);
+    expect(SEATS.map((s) => s.name)).toEqual(["Danno", "Alex, the Strategist", "Jordan, the Operator", "Morgan, the Antagonist", "Riley, the Customer Champion"]);
     for (const s of SEATS) expect(BOARD_PROFILE_MD).toContain(`## ${s.name} ${s.emoji}`);
     for (const s of SEATS) expect(read(`public${s.icon}`)).toContain(`aria-label="${s.name}"`);
     expect(seatsFor("standard")).toBe(SEATS);
@@ -33,7 +33,7 @@ describe("My Board: the spec, ported", () => {
     expect(MODES).toEqual(["board", "focus", "debate", "quick_vote", "workaround", "leverage", "converge", "checkin"]);
   });
 
-  it("the Danno Seat's principles come from the pack; its boundaries stay rules", () => {
+  it("Danno's principles come from the pack; its boundaries stay rules", () => {
     const ps = principlesFromPack();
     expect(ps.length).toBeGreaterThanOrEqual(15);
     expect(ps.map((p) => p.title)).toContain("Kind, not nice");
@@ -84,7 +84,7 @@ describe("My Board: the server's checks", () => {
     expect(checkAnswer({ advisors: five, recommendation: "X", steps: [] }, ctx).problem).toMatch(/usable action step/);
   });
 
-  it("no money or percentage the member didn't give; the Danno Seat never claims to be Danno; personal questions go to Office Hours", () => {
+  it("no money or percentage the member didn't give; the chair never claims to be Danno; personal questions go to Office Hours", () => {
     const c = checkAnswer(
       {
         advisors: [
@@ -154,7 +154,7 @@ describe("My Board in Claude (rev 664 §9)", () => {
     expect(files[1].text).toBe(read("docs/board/board-profile.md"));
     const pack = files[2].text;
     expect(pack).toContain("## Offers\n\n- **Walk the floor.** Spend an hour inside your client's day.");
-    expect(pack).toContain("## Boundaries for the Danno Seat");
+    expect(pack).toContain("## Boundaries for Danno");
     expect(SKILL_INSTALL_STEPS).toHaveLength(6);
   });
 });

@@ -2,7 +2,7 @@
 
 /**
  * My Board (rev 664): the page's actions. Asking runs on the member's own AI key, so a coach switched in and a team member are
- * refused before anything runs (a team member can read the decisions, never ask or approve). The Danno Seat's principles are
+ * refused before anything runs (a team member can read the decisions, never ask or approve). Danno's principles are
  * the coach's alone.
  */
 import { eq } from "drizzle-orm";
