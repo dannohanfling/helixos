@@ -14,7 +14,7 @@ const base = process.argv[2] ?? "http://localhost:3000";
 const PHONE_WIDTHS = [390, 360];
 const MEASURE = `(() => {
   const net = document.createElement("style");
-  net.textContent = "html,body{overflow-x:visible !important}";
+  net.textContent = "html,body,[data-app-shell]{overflow-x:visible !important}";
   document.head.appendChild(net);
   const vw = window.innerWidth;
   const docW = document.documentElement.scrollWidth;
@@ -107,6 +107,24 @@ async function main() {
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
   await visit(PAGES_CLIENT);
+  // ?debug=overflow (Danno, 12 Oct): the panel on a phone says nothing is too wide, then names a planted element that is.
+  {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${base}/more?debug=overflow`, { waitUntil: "networkidle" });
+    const panel = page.locator('[data-testid="overflow-debug"]');
+    await panel.waitFor({ timeout: 15000 });
+    const before = await page.locator('[data-testid="overflow-debug-count"]').innerText();
+    if (!before.includes("Nothing is wider than the screen")) throw new Error(`debug=overflow on /more found something: ${await panel.innerText()}`);
+    await page.evaluate(`(() => { const d = document.createElement("div"); d.setAttribute("data-testid", "planted-wide"); d.style.width = "600px"; d.style.height = "10px"; document.querySelector("main").appendChild(d); })()`);
+    await page.locator('[data-testid="overflow-debug-recheck"]').click();
+    await page.waitForTimeout(300);
+    const list = await page.locator('[data-testid="overflow-debug-list"]').innerText();
+    const box = await panel.boundingBox();
+    if (!list.includes("planted-wide") || !box || box.x < 0 || box.x + box.width > 390.5) throw new Error(`debug=overflow didn't name the planted element, or doesn't fit: ${list} ${JSON.stringify(box)}`);
+    const plain = await (await page.goto(`${base}/more`, { waitUntil: "networkidle" }), page.locator('[data-testid="overflow-debug"]').count());
+    if (plain) throw new Error("the overflow panel shows without ?debug=overflow");
+    console.log("✓ ?debug=overflow: nothing too wide on /more at 390, a planted 600px element named and outlined, the panel fits, and it's off without the flag");
+  }
   // interact a little so client-side handlers run under the policy
   await page.goto(`${base}/content/compose`, { waitUntil: "networkidle" });
   await page.fill('textarea[placeholder^="Type content"]', "CSP check body");

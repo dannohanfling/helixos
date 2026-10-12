@@ -32,13 +32,12 @@ export function findByName<T extends { name: string }>(rows: readonly T[], said:
 }
 
 /** The DMs page's own stage names, and the ways a member says them. */
-export const STAGE_WORDS: Record<Stage, string> = { new: "Reached out", replied: "Replied", conversation: "In conversation", call_booked: "Call booked", no_show: "No-show", client: "Client", cold: "Cold" };
+export const STAGE_WORDS: Record<Stage, string> = { new: "Reached out", replied: "Replied", conversation: "In conversation", call_booked: "Call booked", client: "Client", cold: "Cold" };
 const STAGE_SAID: [RegExp, Stage][] = [
   [/^(reached out|new|messaged|sent)$/, "new"],
   [/^(replied|reply|answered)$/, "replied"],
   [/^(in conversation|conversation|talking|chatting)$/, "conversation"],
   [/^(call booked|booked|booked a call|call)$/, "call_booked"],
-  [/^(no show|no-show|noshow|didn't show|did not show|missed the call)$/, "no_show"],
   [/^(client|signed|closed|won)$/, "client"],
   [/^(cold|lost|not interested|dead)$/, "cold"],
 ];

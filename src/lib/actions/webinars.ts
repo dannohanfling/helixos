@@ -409,7 +409,6 @@ export async function updateRunAction(formData: FormData): Promise<void> {
     .set({
       scheduledAt: scheduled,
       registrationUrl: opt(formData, "registrationUrl"),
-      joinUrl: opt(formData, "joinUrl"),
       replayUrl: opt(formData, "replayUrl"),
       deckUrl: opt(formData, "deckUrl"),
       registered: optNum(formData, "registered"),

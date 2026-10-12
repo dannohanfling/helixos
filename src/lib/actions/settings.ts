@@ -76,14 +76,9 @@ export async function updateBotFactsAction(formData: FormData): Promise<void> {
   const { userId, workspaceId } = await ctx();
   const n = (key: string): number | undefined => (str(formData, key) ? num(formData, key) : undefined);
   const conditions = str(formData, "termsConditions").split("\n").map((l) => l.trim()).filter(Boolean);
-  // Bot connection (rev 808): the link the bot sends to book a call, and what to expect. A link must be a full https:// one.
-  const bookingUrl = opt(formData, "bookingUrl");
-  if (bookingUrl && !/^https:\/\/[^\s]+$/.test(bookingUrl)) redirect(`/settings?botError=${encodeURIComponent("The booking link has to be a full link starting with https://.")}#your-bot`);
   await db
     .update(schema.memberships)
     .set({
-      bookingUrl: bookingUrl?.slice(0, 500) ?? null,
-      bookingExpect: opt(formData, "bookingExpect")?.slice(0, 500) ?? null,
       whatIDo: opt(formData, "whatIDo"),
       botQuestion1: opt(formData, "botQuestion1"),
       botQuestion2: opt(formData, "botQuestion2"),

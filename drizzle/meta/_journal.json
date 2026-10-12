@@ -953,13 +953,6 @@
       "when": 1791781244918,
       "tag": "0143_board_seats",
       "breakpoints": true
-    },
-    {
-      "idx": 136,
-      "version": "6",
-      "when": 1791813048783,
-      "tag": "0144_bot_connection",
-      "breakpoints": true
     }
   ]
 }

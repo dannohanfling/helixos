@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PHONE_MAX_WIDTH, isLauncher, liftPx, staysLifted } from "@/lib/engine/chat-lift";
 
 /**
@@ -26,6 +26,7 @@ type Chatbot = { hasLoaded?: boolean; setUser?: (id: string, user: { name: strin
 function useLiftLauncher() {
   useEffect(() => {
     const LIFTED = "data-helix-lifted";
+    const NARROWED = "data-helix-narrowed";
     let frame = 0;
     const theirs = (): Element[] =>
       Array.from(document.body.children).filter((c) => !c.querySelector("[data-app-shell]") && !c.hasAttribute("data-app-shell") && !c.closest("[data-testid]") && !c.querySelector("[data-testid]") && !c.tagName.includes("-") && c.tagName !== "SCRIPT" && c.tagName !== "STYLE");
@@ -42,6 +43,18 @@ function useLiftLauncher() {
         for (const el of [root, ...Array.from(root.querySelectorAll<HTMLElement>("div,iframe,button,a,section,aside"))].slice(0, 300) as HTMLElement[]) {
           const box = el.getBoundingClientRect();
           const fixed = getComputedStyle(el).position === "fixed";
+          // On a phone, a chat window wider than the screen lets iOS Safari pan the whole page sideways (Danno, 12 Oct):
+          // nothing of theirs may be wider than the screen there. Wider screens get theirs back as the script made it.
+          const narrowed = el.hasAttribute(NARROWED);
+          if (vp.width <= PHONE_MAX_WIDTH && !narrowed && box.width > vp.width + 0.5) {
+            el.setAttribute(NARROWED, el.style.getPropertyValue("max-width"));
+            el.style.setProperty("max-width", "100vw", "important");
+          } else if (vp.width > PHONE_MAX_WIDTH && narrowed) {
+            const was = el.getAttribute(NARROWED);
+            if (was) el.style.setProperty("max-width", was);
+            else el.style.removeProperty("max-width");
+            el.removeAttribute(NARROWED);
+          }
           const lifted = el.hasAttribute(LIFTED);
           if (lifted && (lift === null || !fixed || !staysLifted(box))) {
             // Opened into the chat, or no longer on a phone: back where the script put it.
@@ -74,6 +87,10 @@ function useLiftLauncher() {
 
 export function ChatWidget({ src, userId, name, email, hash, flowNs }: { src: string; userId: string; name: string; email: string; hash: string; flowNs: string | null }) {
   const called = useRef(false);
+  // ?debug=overflow-nochat: the page without the bubble's script, to tell whether it is what makes a phone pan sideways.
+  const [load, setLoad] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- the address, read once after mounting, never during render
+  useEffect(() => setLoad(!/[?&]debug=overflow-nochat/.test(window.location.search)), []);
   useLiftLauncher();
   useEffect(() => {
     const w = window as Window & { $chatbot?: Chatbot };
@@ -105,7 +122,7 @@ export function ChatWidget({ src, userId, name, email, hash, flowNs }: { src: st
   }, [userId, name, email, hash]);
   return (
     <>
-      <Script src={src} strategy="afterInteractive" />
+      {load ? <Script src={src} strategy="afterInteractive" /> : null}
       <span hidden data-testid="chat-widget" data-user-id={userId} data-hash={hash} data-flow={flowNs ?? ""} />
     </>
   );

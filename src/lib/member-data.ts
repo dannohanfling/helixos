@@ -48,10 +48,6 @@ export const MEMBER_TABLES = {
   // Choose your council (rev 756): a member's custom seats are theirs, out and away with them. The library's rows in the same
   // table have no user and go only with the workspace (src/lib/erase.ts).
   board_seats: schema.boardSeats,
-  // Bot connection (rev 696): the member's bot key (its hash and last four only), and the sign-ups their bot made for their
-  // webinars, prospects' names, emails and answers among them: theirs, exported and erased with them.
-  bot_keys: schema.botKeys,
-  webinar_signups: schema.webinarSignups,
   pathways: schema.pathways,
   webinars: schema.webinars,
   client_records: schema.clientRecords,

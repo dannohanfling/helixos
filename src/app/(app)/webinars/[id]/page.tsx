@@ -143,8 +143,6 @@ export default async function WebinarWizardPage({
     ),
   });
   if (!w) notFound();
-  // Sign-ups made by the member's bot (Bot connection, rev 808), newest first.
-  const signups = await db.query.webinarSignups.findMany({ where: and(eq(schema.webinarSignups.webinarId, w.id), eq(schema.webinarSignups.userId, v.user.id)), orderBy: [desc(schema.webinarSignups.createdAt)], limit: 200 });
   const [
     sections,
     beliefs,
@@ -1646,15 +1644,6 @@ export default async function WebinarWizardPage({
                     defaultValue={w.registrationUrl ?? ""}
                   />
                 </Field>
-                <Field label="Join link" hint="What your bot sends someone it signs up. Blank sends the registration page.">
-                  <input
-                    className="field"
-                    name="joinUrl"
-                    type="url"
-                    defaultValue={w.joinUrl ?? ""}
-                    data-testid="webinar-join-url"
-                  />
-                </Field>
                 <Field label="Deck link">
                   <input
                     className="field"
@@ -1672,19 +1661,6 @@ export default async function WebinarWizardPage({
                   />
                 </Field>
               </div>
-              {signups.length ? (
-                <details className="rounded-lg border p-3 text-sm" data-testid="webinar-signups">
-                  <summary className="cursor-pointer font-medium">Signed up by your bot: {signups.length}</summary>
-                  <ul className="mt-2 space-y-1">
-                    {signups.map((x) => (
-                      <li key={x.id} className="min-w-0 [overflow-wrap:anywhere]">
-                        {x.firstName} · {x.email}
-                        {Object.keys(x.custom).length ? <span className="text-ink-3"> · {Object.entries(x.custom).map(([k, val]) => `${k}: ${val}`).join(" · ")}</span> : null}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ) : null}
               <div className="label">The numbers (fill after the event)</div>
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
                 {[
