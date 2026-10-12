@@ -5,6 +5,35 @@ import { join } from "node:path";
 import { chromium } from "@playwright/test";
 
 const base = process.argv[2] ?? "http://localhost:3000";
+/**
+ * Phones (Danno, 12 Oct): at 360 and 390 wide, every page is exactly the screen's width. Measured with the html/body
+ * overflow-x clip taken away, so a cause can't hide behind the safety net; an element inside its own scroller (a table or a row
+ * of tabs that scrolls sideways on purpose) doesn't count, nor the contents of a closed disclosure. Plain JS: a named function
+ * here would reach the browser as tsx's __name helper.
+ */
+const PHONE_WIDTHS = [390, 360];
+const MEASURE = `(() => {
+  const net = document.createElement("style");
+  net.textContent = "html,body{overflow-x:visible !important}";
+  document.head.appendChild(net);
+  const vw = window.innerWidth;
+  const docW = document.documentElement.scrollWidth;
+  const inScroller = (el) => { for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) { if (getComputedStyle(a).overflowX !== "visible") return true; } return false; };
+  const wide = [];
+  for (const el of Array.from(document.querySelectorAll("body *"))) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.right <= vw + 1 || inScroller(el)) continue;
+    if (el.closest("details:not([open])") && !el.closest("summary")) continue;
+    if (Array.from(el.children).some((c) => c.getBoundingClientRect().right > vw + 1 && !inScroller(c))) continue;
+    const id = el.getAttribute("data-testid");
+    wide.push(el.tagName.toLowerCase() + (id ? "[" + id + "]" : "") + " right " + Math.round(r.right) + 'px "' + (el.textContent || "").trim().slice(0, 30) + '"');
+  }
+  net.remove();
+  window.scrollTo(400, 0);
+  const panned = window.scrollX;
+  window.scrollTo(0, 0);
+  return { vw, docW, panned, wide: wide.slice(0, 4) };
+})()`;
 /** Every static page under src/app/(app), read off the tree: a dynamic segment ([id]) needs a record and is walked elsewhere. */
 function routedPages(dir: string, prefix = ""): string[] {
   const out: string[] = [];
@@ -44,7 +73,9 @@ async function main() {
   await fresh();
   const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
   const problems: string[] = [];
-  const page = await (await browser.newContext()).newPage();
+  // A phone, so the pages lay out the way an iPhone lays them out (the security headers are the same at any size).
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
+  const tooWide: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error" && /Content Security Policy|Refused to/.test(m.text())) problems.push(`${page.url()}: ${m.text().slice(0, 200)}`);
   });
@@ -61,6 +92,13 @@ async function main() {
       if (!policy.includes(wantCamera)) throw new Error(`${p}: Permissions-Policy "${policy}" should carry ${wantCamera}`);
       visited++;
       await page.waitForTimeout(300);
+      for (const w of PHONE_WIDTHS) {
+        await page.setViewportSize({ width: w, height: 844 });
+        await page.waitForTimeout(150);
+        const m = (await page.evaluate(MEASURE)) as { vw: number; docW: number; panned: number; wide: string[] };
+        if (m.docW > m.vw || m.panned > 0 || m.wide.length) tooWide.push(`${p} at ${w}px: page ${m.docW}px wide, pans ${m.panned}px; ${m.wide.join("; ") || "no single element"}`);
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
     }
   };
   // Body ships dark (rev 195): switched on for the demo client, by the same script used in production, so its pages load and count.
@@ -75,7 +113,7 @@ async function main() {
   await page.waitForTimeout(500);
   await fresh();
   await page.goto(`${base}/settings`);
-  await page.click('button:has-text("Log out")');
+  await page.click('[data-testid="logout-header"]');
   await page.waitForURL(/\/login/);
   await page.click('button:has-text("As the coach")');
   await page.waitForURL(/\/today/);
@@ -86,6 +124,8 @@ async function main() {
     process.exit(1);
   }
   if (visited !== PAGES_CLIENT.length + PAGES_COACH.length) throw new Error(`visited ${visited} of ${PAGES_CLIENT.length + PAGES_COACH.length} pages`);
+  if (tooWide.length) throw new Error(`wider than a phone's screen:\n${tooWide.join("\n")}`);
+  console.log(`✓ phones: all ${visited} pages exactly the screen's width at ${PHONE_WIDTHS.join(" and ")}px, no sideways scroll`);
   console.log(`CSP check passed: ${visited} pages loaded, no violations, no page errors`);
 }
 main().catch((e) => {

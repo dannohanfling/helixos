@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
@@ -34,18 +35,26 @@ export default async function MorePage() {
             <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">{g.label}</div>
             {g.items.map((n) =>
               n.external ? (
-                <a key={n.href} href={n.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2" data-testid="more-platform">
-                  <span className="w-6 text-center text-lg">{n.icon}</span>
-                  <span className="font-medium">{n.label}</span>
-                  <span className="ml-auto text-xs text-ink-3">
-                    {n.line} <span aria-label="opens in a new tab">↗</span>
-                  </span>
+                <a key={n.href} href={n.href} target="_blank" rel="noopener noreferrer" className={ROW} data-testid="more-platform">
+                  <span className="w-6 shrink-0 text-center text-lg">{n.icon}</span>
+                  <RowText label={n.label} line={<>{n.line} <span aria-label="opens in a new tab">↗</span></>} />
                 </a>
               ) : (
-                <Link key={n.href} href={n.href} className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2">
-                  <span className="w-6 text-center text-lg">{n.icon}</span>
-                  <span className="font-medium">{n.label}</span>
-                  {n.href === "/intentions" && due ? <DueBadge count={due} /> : n.href === "/whats-new" && unseen ? <NewDot /> : n.line ?? n.hint ? <span className="ml-auto text-xs text-ink-3">{n.line ?? n.hint}</span> : null}
+                <Link key={n.href} href={n.href} className={ROW}>
+                  <span className="w-6 shrink-0 text-center text-lg">{n.icon}</span>
+                  {n.href === "/intentions" && due ? (
+                    <>
+                      <RowText label={n.label} />
+                      <DueBadge count={due} />
+                    </>
+                  ) : n.href === "/whats-new" && unseen ? (
+                    <>
+                      <RowText label={n.label} />
+                      <NewDot />
+                    </>
+                  ) : (
+                    <RowText label={n.label} line={n.line ?? n.hint} />
+                  )}
                 </Link>
               ),
             )}
@@ -67,5 +76,24 @@ export default async function MorePage() {
         </Link>
       </div>
     </>
+  );
+}
+
+/** A menu row: never wider than the screen (Danno, 12 Oct, an iPhone). */
+const ROW = "flex min-w-0 items-center gap-3 rounded-lg px-2 py-2.5 text-sm hover:bg-surface-2";
+/**
+ * The label and its grey line: under the label below 480px, on the right from there up; either way it wraps rather than push
+ * the card past the screen.
+ */
+function RowText({ label, line }: { label: string; line?: ReactNode }) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col min-[480px]:flex-row min-[480px]:items-center min-[480px]:gap-3">
+      <span className="font-medium">{label}</span>
+      {line ? (
+        <span className="min-w-0 text-xs text-ink-3 [overflow-wrap:anywhere] min-[480px]:ml-auto min-[480px]:text-right" data-testid="more-line">
+          {line}
+        </span>
+      ) : null}
+    </span>
   );
 }

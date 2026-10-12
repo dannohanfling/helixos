@@ -31,6 +31,8 @@ describe("streak break", () => {
     expect(brokenStreak(twoMissed, "2026-09-07")!.repairable).toBe(false);
     const stale = closedRun("2026-08-03", "2026-08-13"); // missed Fri 14 Aug, today 7 Sep: too long ago to mend
     expect(brokenStreak(stale, "2026-09-07")!.repairable).toBe(false);
+    // A weekend close after the missed Friday neither ends nor hides the break (2026-09-06 is a Sunday).
+    expect(brokenStreak(new Set([...closed, "2026-09-06"]), "2026-09-07")).toMatchObject({ lost: 9, endedOn: "2026-09-03", missed: ["2026-09-04"], repairable: true });
     // Mending Friday restores the run
     closed.add("2026-09-04");
     expect(runningStreak(closed, "2026-09-07")).toBe(10);

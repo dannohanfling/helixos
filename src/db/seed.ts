@@ -385,7 +385,9 @@ async function seedClientActivity(
   let cash = 0;
   for (let d = opts.days; d >= 0; d--) {
     const date = addDays(today, -d);
-    if (!isWeekday(date) && d !== 0) continue;
+    // Yesterday is always there and closed, weekend or not: near midnight the late close-out window (rev 731) would otherwise
+    // send a walk's close to an open Sunday.
+    if (!isWeekday(date) && d > 1) continue;
     if (opts.missDays.includes(date)) continue;
     const isToday = d === 0;
     const seed = (d * 7919) % 13;
@@ -400,7 +402,8 @@ async function seedClientActivity(
       cashCollected: seed % 9 === 0 ? 1500 : 0,
     };
     cash += numbers.cashCollected;
-    const morningAt = `${date}T15:05:00.000Z`;
+    // Never later than now: a lock-in can't be in the future (today's 15:05 UTC is still ahead in the small hours).
+    const morningAt = [`${date}T15:05:00.000Z`, new Date().toISOString()].sort()[0];
     const eveningAt = `${date}T01:10:00.000Z`;
     const closeIt = !isToday;
     const streakDay = closeIt ? weeklyStreakDay(closed, date) : 0;

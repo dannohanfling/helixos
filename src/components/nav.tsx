@@ -135,7 +135,7 @@ export function BottomNav({ role, badges = {} }: { role: "coach" | "client"; bad
       {items.map((n) => {
         const active = n.href === "/more" ? moreActive && pathname !== "/today" : isActive(pathname, n.href);
         return (
-          <Link key={n.href} href={n.href} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${active ? "text-ink" : "text-ink-3"}`}>
+          <Link key={n.href} href={n.href} className={`flex min-w-0 flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${active ? "text-ink" : "text-ink-3"}`}>
             <span className="relative text-lg leading-none">
               {n.icon}
               {n.href === "/more" && Object.values(badges).some(Boolean) ? <span className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-accent" aria-label="Something is due" data-testid="more-due-dot" /> : null}

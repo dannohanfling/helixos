@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 149,
+    date: "2026-10-12",
+    title: "Fits your phone again",
+    lines: [
+      "On a narrow phone some pages could be dragged sideways, taking the top bar and the bottom menu with them. Every page now fits the screen: long words wrap, rows of buttons wrap, the descriptions in the More menu sit under each item's name, and the top bar keeps to the screen (on the narrowest phones the HelixOS name hides and big point totals show as 12.3K).",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 148,
     date: "2026-10-12",
     title: "Coach → Late close-outs: the dry run",

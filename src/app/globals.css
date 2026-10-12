@@ -122,6 +122,33 @@ body {
   min-height: 100%;
 }
 
+/*
+ * Phones (Danno, 12 Oct): nothing may be wider than the screen, or iOS widens the page and the fixed header and bottom menu pan
+ * with it. Long words, links and code (today_close) break instead of pushing; clip, not hidden, so sticky headers keep working.
+ * The gate's headers walk checks every page at 360 and 390 wide with this net taken away, so a cause can't hide behind it.
+ */
+html,
+body {
+  overflow-x: clip;
+}
+/*
+ * In the base layer, under Tailwind's utilities: a class that sets a width (min-w-[12rem]) or wrapping always wins over these
+ * defaults (an unlayered rule would beat every utility, whatever its specificity).
+ */
+@layer base {
+  main {
+    overflow-wrap: anywhere;
+  }
+  /*
+   * In a row (a flex line), plain text may shrink and wrap instead of holding the row at its natural width: WebKit on iPhones
+   * sized menu and list rows to their full text and pushed the card past the screen (Danno, 12 Oct, the More page). Buttons,
+   * badges and anything marked shrink-0 keep their size.
+   */
+  :where(main .flex > :is(span, a, p, label):not(.btn, .badge, .shrink-0)) {
+    min-width: 0;
+  }
+}
+
 * {
   border-color: var(--line);
 }

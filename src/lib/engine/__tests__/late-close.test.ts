@@ -47,6 +47,14 @@ describe("late close-outs: which day a close-out is for (rev 731)", () => {
     expect(target(marks, "2026-10-13T01:00:00")).toEqual({ date: "2026-10-13", late: false, same: false });
   });
 
+  it("a lock-in stamped in the future doesn't start a new close-out", () => {
+    const marks = [
+      { date: "2026-10-12", eveningDoneAt: at("2026-10-12T23:00:00").toISOString(), morningDoneAt: null },
+      { date: "2026-10-13", eveningDoneAt: null, morningDoneAt: at("2026-10-13T08:05:00").toISOString() },
+    ];
+    expect(target(marks, "2026-10-13T01:00:00")).toEqual({ date: "2026-10-12", late: false, same: true });
+  });
+
   it("a repaired day is never the last close-out", () => {
     const marks = [{ date: "2026-10-09", eveningDoneAt: at("2026-10-13T10:00:00").toISOString(), morningDoneAt: null, repairedAt: at("2026-10-13T10:00:00").toISOString() }];
     expect(target(marks, "2026-10-13T15:00:00")).toEqual({ date: "2026-10-13", late: false, same: false });

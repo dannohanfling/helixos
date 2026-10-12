@@ -15,7 +15,7 @@ export function HumanosHeader({ title, subtitle, action, gear = true }: { title:
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         {subtitle ? <p className="mt-1 text-sm text-ink-2">{subtitle}</p> : null}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 [&>*]:flex-wrap">
         {action}
         {gear ? (
           <Link href="/body/settings" className="btn btn-ghost btn-sm text-base" aria-label="HumanOS settings" title="HumanOS settings" data-testid="humanos-gear">

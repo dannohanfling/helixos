@@ -60,7 +60,8 @@ export function runningStreak(closed: Set<string>, today: string): number {
  */
 export function brokenStreak(closed: Set<string>, today: string): { lost: number; endedOn: string; missed: string[]; repairable: boolean } | null {
   if (runningStreak(closed, today) > 0 || closed.size === 0) return null;
-  const endedOn = [...closed].filter((d) => d < today).sort().at(-1);
+  // The last closed weekday: a weekend close after the break neither ends nor mends a streak.
+  const endedOn = [...closed].filter((d) => d < today && isWeekday(d)).sort().at(-1);
   if (!endedOn) return null;
   const lost = runningStreak(closed, endedOn);
   if (lost < 2) return null;
@@ -109,7 +110,8 @@ export function closeTarget(marks: CloseMark[], today: string, hour: number, now
     .sort((a, b) => (a.eveningDoneAt! < b.eveningDoneAt! ? 1 : -1))[0];
   if (last) {
     const at = Date.parse(last.eveningDoneAt!);
-    const lockedInSince = marks.some((m) => m.morningDoneAt && Date.parse(m.morningDoneAt) > at);
+    // A lock-in after that close-out, and not in the future (no real lock-in is; a bad clock or a seed shouldn't count).
+    const lockedInSince = marks.some((m) => m.morningDoneAt && Date.parse(m.morningDoneAt) > at && Date.parse(m.morningDoneAt) <= now.getTime());
     if (Number.isFinite(at) && now.getTime() - at < SAME_CLOSE_HOURS * 3600000 && now.getTime() >= at && !lockedInSince) return { date: last.date, late: false, same: true };
   }
   const yesterday = addDays(today, -1);

@@ -71,7 +71,7 @@ export default async function RewardsPage() {
               const isNext = tier.next?.level === t.level;
               const status = isCurrent ? "you are here" : reached ? "reached" : isNext ? `${(t.minPoints - points).toLocaleString()} more to unlock` : "locked";
               return (
-                <li key={t.level} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm ${isCurrent ? "bg-accent-soft" : ""} ${reached || isNext ? "" : "opacity-70"}`} data-tier={t.name} data-state={isCurrent ? "current" : reached ? "reached" : isNext ? "next" : "locked"}>
+                <li key={t.level} className={`flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-lg px-2 py-1.5 text-sm ${isCurrent ? "bg-accent-soft" : ""} ${reached || isNext ? "" : "opacity-70"}`} data-tier={t.name} data-state={isCurrent ? "current" : reached ? "reached" : isNext ? "next" : "locked"}>
                   <span className="w-6 text-center text-base">{reached ? TIER_ICONS[t.name] : "🔒"}</span>
                   <span className="w-24 font-semibold">{t.name}</span>
                   <span className="text-xs text-ink-3 tabular">{t.minPoints.toLocaleString()}+</span>
@@ -135,7 +135,7 @@ export default async function RewardsPage() {
               {topBoard.map((b, i) => {
                 const u = nameOf.get(b.userId);
                 return (
-                  <li key={b.userId} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm ${b.userId === v.user.id ? "bg-accent-soft" : ""}`}>
+                  <li key={b.userId} className={`flex min-w-0 items-center gap-3 rounded-lg px-2 py-1.5 text-sm ${b.userId === v.user.id ? "bg-accent-soft" : ""}`}>
                     <span className="w-5 text-center text-xs font-bold text-ink-3">{i + 1}</span>
                     <span className="text-base">{u?.avatarEmoji ?? "🧭"}</span>
                     <span className="font-medium">{u?.name ?? "Member"}</span>

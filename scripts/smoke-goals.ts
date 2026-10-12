@@ -135,6 +135,16 @@ async function main() {
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('[data-testid="kpi-form-save"]').click()]);
     await page.locator('[data-testid="kpi-row"]', { hasText: "Discovery calls" }).waitFor({ timeout: 20000 });
     const asked = (await db.query.kpis.findFirst({ where: and(eq(schema.kpis.userId, maya.id), eq(schema.kpis.name, "Discovery calls")) }))!;
+    // Maya has locked in today and yesterday is closed, as on any working day: the close is today's whatever the hour (an earlier
+    // walk's close just before midnight would otherwise still be open for edits, and this close would land on yesterday).
+    const { addDays: shift } = await import("@/lib/dates");
+    const yesterday = shift(today, -1);
+    const yRow = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, yesterday)) });
+    if (!yRow) await db.insert(schema.dailyLogs).values({ id: crypto.randomUUID(), workspaceId: ws.id, userId: maya.id, date: yesterday, eveningDoneAt: `${yesterday}T01:00:00.000Z` });
+    else if (!yRow.eveningDoneAt) await db.update(schema.dailyLogs).set({ eveningDoneAt: `${yesterday}T01:00:00.000Z` }).where(eq(schema.dailyLogs.id, yRow.id));
+    const tRow = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, today)) });
+    if (!tRow) await db.insert(schema.dailyLogs).values({ id: crypto.randomUUID(), workspaceId: ws.id, userId: maya.id, date: today, morningDoneAt: new Date().toISOString() });
+    else await db.update(schema.dailyLogs).set({ morningDoneAt: new Date().toISOString() }).where(eq(schema.dailyLogs.id, tRow.id));
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="close-form"]').waitFor({ state: "attached", timeout: 30000 });
     // Opened only once the page has settled: a click before Today finishes loading is undone when it does. Until the field
@@ -142,18 +152,24 @@ async function main() {
     await page.waitForLoadState("networkidle");
     const field = page.locator(`[data-testid="close-kpi-${asked.id}"]`);
     for (let i = 0; i < 20 && !(await field.isVisible()); i++) {
-      const editClose = page.locator('summary:has-text("Edit today")');
+      const editClose = page.locator('summary:has-text("Edit today"), summary:has-text("Edit yesterday")');
       const early = page.locator('[data-testid="close-early"]');
       if (await editClose.isVisible()) await editClose.click();
       else if ((await early.count()) && !(await early.evaluate((d) => (d as HTMLDetailsElement).open))) await early.locator("> summary").click();
       await page.waitForTimeout(500);
     }
+    // The day this close is for, by the app's own rule (rev 731): near midnight it can be yesterday's late close-out, or the
+    // same close-out as one an earlier walk made under 6 hours ago. The KPI value lands on that day.
+    const { closeTargetFor } = await import("@/lib/queries/daily");
+    const { hourInTz } = await import("@/lib/dates");
+    const closeDate = (await closeTargetFor(ws.id, maya.id, today, hourInTz(mayaM.timezone || ws.timezone))).date;
+    if (closeDate !== today) throw new Error(`after a lock-in, with yesterday closed, the close is today's: ${closeDate}`);
     await page.fill(`[data-testid="close-kpi-${asked.id}"]`, "2");
     await page.fill('input[name="win"]', "Two discovery calls held.");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('button:has-text("Close the day")').first().click()]);
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(600);
-    const value = await db.query.kpiValues.findFirst({ where: and(eq(schema.kpiValues.kpiId, asked.id), eq(schema.kpiValues.date, today)) });
+    const value = await db.query.kpiValues.findFirst({ where: and(eq(schema.kpiValues.kpiId, asked.id), eq(schema.kpiValues.date, closeDate)) });
     if (value?.value !== 2) throw new Error(`the close writes the KPI's value for the day: ${JSON.stringify(value)}`);
     await page.goto(`${base}/goals/${primary.id}`);
     const askedRow = page.locator('[data-testid="kpi-row"]', { hasText: "Discovery calls" });

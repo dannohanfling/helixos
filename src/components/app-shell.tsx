@@ -95,22 +95,26 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
         {viewer.switchedInto ? <SwitchBanner sw={viewer.switchedInto} /> : null}
         {viewer.team ? <TeamBanner team={viewer.team} choices={choices} /> : null}
         <PinToViewport edge="top">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b bg-bg/90 px-4 py-2.5 backdrop-blur md:hidden">
-          <Link href="/today" className="flex items-center gap-2 text-sm font-bold">
+        {/* Fits a 360px phone (Danno, 12 Oct): the name hides below 400px, points go compact ("12.3K pts"), and nothing in
+            the row may push it wider than the screen. */}
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b bg-bg/90 px-3 py-2.5 backdrop-blur min-[400px]:gap-3 min-[400px]:px-4 md:hidden" data-testid="mobile-header">
+          <Link href="/today" className="flex shrink-0 items-center gap-2 text-sm font-bold" aria-label="HelixOS, Today">
             <AppLogo size={40} />
-            HelixOS
+            <span className="hidden min-[400px]:inline">HelixOS</span>
           </Link>
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-xs min-[400px]:gap-2">
             {team ? null : (
               <>
-                <span className="badge badge-accent">🔥 {streak}</span>
-                <span className="badge">{points.toLocaleString()} pts</span>
+                <span className="badge badge-accent shrink-0">🔥 {streak}</span>
+                <span className="badge shrink-0" title={`${points.toLocaleString()} points`}>
+                  {compactPoints(points)} pts
+                </span>
               </>
             )}
-            <Link href="/settings" className="text-lg" aria-label="Settings" data-testid="header-avatar">
+            <Link href="/settings" className="shrink-0 text-lg" aria-label="Settings" data-testid="header-avatar">
               {team ? who.avatarEmoji : <MemberAvatar membershipId={viewer.membership.id} hasPhoto={Boolean(viewer.membership.headshotDisplayUrl)} emoji={who.avatarEmoji} size={28} version={viewer.membership.headshotUpdatedAt} name={who.name} />}
             </Link>
-            <form action={logoutAction}>
+            <form action={logoutAction} className="shrink-0">
               <SubmitButton className="text-ink-3 hover:text-ink" aria-label="Log out" data-testid="logout-header" pendingText="Logging out…">
                 Log out
               </SubmitButton>
@@ -139,4 +143,9 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
       {chat ? <ChatWidget {...chat} /> : null}
     </div>
   );
+}
+
+/** "980", "12.3K", "1.2M": the phone header's points, full in its title. */
+function compactPoints(n: number): string {
+  return n < 10000 ? n.toLocaleString() : new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
