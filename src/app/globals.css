@@ -129,25 +129,7 @@ body {
  */
 html,
 body {
-  overflow-x: hidden;
-}
-/* clip where the browser has it (iOS 16 on); hidden, the fallback above, would stop sticky headers sticking. */
-@supports (overflow-x: clip) {
-  html,
-  body {
-    overflow-x: clip;
-  }
-}
-/*
- * iOS Safari zooms the page in when a field under 16px is tapped, and the page then stays zoomed and pans sideways. Every
- * text field is 16px there (an iOS-only test: -webkit-touch-callout exists nowhere else), whatever size class it carries.
- */
-@supports (-webkit-touch-callout: none) {
-  input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]),
-  select,
-  textarea {
-    font-size: max(16px, 1em) !important;
-  }
+  overflow-x: clip;
 }
 /*
  * In the base layer, under Tailwind's utilities: a class that sets a width (min-w-[12rem]) or wrapping always wins over these

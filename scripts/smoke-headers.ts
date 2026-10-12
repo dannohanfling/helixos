@@ -14,7 +14,7 @@ const base = process.argv[2] ?? "http://localhost:3000";
 const PHONE_WIDTHS = [390, 360];
 const MEASURE = `(() => {
   const net = document.createElement("style");
-  net.textContent = "html,body,[data-app-shell]{overflow-x:visible !important}";
+  net.textContent = "html,body{overflow-x:visible !important}";
   document.head.appendChild(net);
   const vw = window.innerWidth;
   const docW = document.documentElement.scrollWidth;
@@ -107,25 +107,11 @@ async function main() {
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
   await visit(PAGES_CLIENT);
-  // ?debug=overflow (Danno, 12 Oct): the panel on a phone says nothing is too wide, then names a planted element that is.
+  // Coming soon (rev 816): six greyed items on More, none a link, each disabled for screen readers and at least 44px tall;
+  // a tap shows the subtitle and goes nowhere.
   {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${base}/more?debug=overflow`, { waitUntil: "networkidle" });
-    const panel = page.locator('[data-testid="overflow-debug"]');
-    await panel.waitFor({ timeout: 15000 });
-    const before = await page.locator('[data-testid="overflow-debug-count"]').innerText();
-    if (!before.includes("Nothing is wider than the screen")) throw new Error(`debug=overflow on /more found something: ${await panel.innerText()}`);
-    await page.evaluate(`(() => { const d = document.createElement("div"); d.setAttribute("data-testid", "planted-wide"); d.style.width = "600px"; d.style.height = "10px"; document.querySelector("main").appendChild(d); })()`);
-    await page.locator('[data-testid="overflow-debug-recheck"]').click();
-    await page.waitForTimeout(300);
-    const list = await page.locator('[data-testid="overflow-debug-list"]').innerText();
-    const box = await panel.boundingBox();
-    if (!list.includes("planted-wide") || !box || box.x < 0 || box.x + box.width > 390.5) throw new Error(`debug=overflow didn't name the planted element, or doesn't fit: ${list} ${JSON.stringify(box)}`);
-    const plain = await (await page.goto(`${base}/more`, { waitUntil: "networkidle" }), page.locator('[data-testid="overflow-debug"]').count());
-    if (plain) throw new Error("the overflow panel shows without ?debug=overflow");
-    console.log("✓ ?debug=overflow: nothing too wide on /more at 390, a planted 600px element named and outlined, the panel fits, and it's off without the flag");
-    // Coming soon (rev 816): six greyed items on More, none a link, each disabled for screen readers and at least 44px tall;
-    // a tap shows the subtitle and goes nowhere.
+    await page.goto(`${base}/more`, { waitUntil: "networkidle" });
     const soon = page.locator('[data-testid="nav-coming-soon"]');
     if ((await soon.count()) !== 6) throw new Error(`six Coming soon items on More: ${await soon.count()}`);
     for (let i = 0; i < 6; i++) {
@@ -133,9 +119,9 @@ async function main() {
       const box = await it.boundingBox();
       if ((await it.getAttribute("aria-disabled")) !== "true" || (await it.evaluate("(el) => el.closest('a') !== null")) || !box || box.height < 44 || box.x + box.width > 390.5) throw new Error(`a Coming soon item is a link, isn't marked disabled, or is too small or too wide: ${await it.innerText()}`);
     }
-    const before390 = page.url();
+    const here = page.url();
     await soon.filter({ hasText: "The Forum" }).click();
-    if (!(await soon.filter({ hasText: "The Forum" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== before390) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
+    if (!(await soon.filter({ hasText: "The Forum" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== here) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
     console.log("✓ Coming soon: six greyed items on More, none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
   }
   // interact a little so client-side handlers run under the policy

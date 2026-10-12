@@ -16,7 +16,6 @@ import { ChatWidget } from "@/components/chat-widget";
 import { ReportButton } from "@/components/report-button";
 import type { ChatWidgetProps } from "@/lib/chat";
 import { MemberAvatar } from "@/components/member-avatar";
-import { OverflowDebug } from "@/components/overflow-debug";
 
 export function AppShell({ viewer, chat = null, points, streak, badges = {}, recordingsEnabled = false, coachFirst = null, choices = 1, children }: { viewer: Viewer; chat?: ChatWidgetProps | null; points: number; streak: number; badges?: Record<string, number>; recordingsEnabled?: boolean; coachFirst?: string | null; /** How many HelixOS the signed-in person may be in (own memberships and teams): more than one shows the way to switch. */ choices?: number; children: ReactNode }) {
   const tier = tierProgress(points);
@@ -25,9 +24,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
   // except a team member, who is shown as themself.
   const who = team ? viewer.actor : viewer.user;
   return (
-    // overflow-x-clip here as well as on the page: iOS Safari can let a finger pan past html and body's clip, never past this.
-    <div className="min-h-screen overflow-x-clip md:flex" data-app-shell>
-      <OverflowDebug />
+    <div className="min-h-screen md:flex" data-app-shell>
       {/* The logo and the account block (with Log out) stay fixed; only the nav list scrolls, so Log out is never below the fold. */}
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-surface py-4 md:flex md:sticky md:top-0 md:h-screen">
         <Link href="/today" className="mb-5 flex items-center gap-2.5 px-5">
