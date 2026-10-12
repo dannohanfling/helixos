@@ -198,6 +198,9 @@ export const memberships = sqliteTable(
     botQuestion1: text("bot_question_1"),
     botQuestion2: text("bot_question_2"),
     botQuestion3: text("bot_question_3"),
+    /** Bot connection (rev 696, rev 808): the link the bot sends to book a call, and what to expect when you book. */
+    bookingUrl: text("booking_url"),
+    bookingExpect: text("booking_expect"),
     /** Who pressed the last Stage 1 push that landed: the member themself or their coach. */
     clBotFieldsPushedBy: text("cl_bot_fields_pushed_by"),
     /** The Community Loyalty agent the Bot Brief reads and pushes to (ai_agent_ns). Empty means the workspace's first agent. */
@@ -456,7 +459,7 @@ export const contentItems = sqliteTable(
   (t) => [index("content_user_status").on(t.userId, t.status), index("content_user_post_at").on(t.userId, t.postAt)],
 );
 
-export const CONTACT_STAGES = ["new", "replied", "conversation", "call_booked", "client", "cold"] as const;
+export const CONTACT_STAGES = ["new", "replied", "conversation", "call_booked", "no_show", "client", "cold"] as const;
 export const CONTACT_PLATFORMS = ["Facebook", "Instagram", "LinkedIn", "Skool", "Email", "SMS", "Other"] as const;
 
 export const contacts = sqliteTable(
@@ -1311,6 +1314,8 @@ export const webinars = sqliteTable(
     ctaType: text("cta_type").notNull().default("Book a call"),
     scheduledAt: text("scheduled_at"),
     registrationUrl: text("registration_url"),
+    /** The link a sign-up is sent to join (rev 808); the registration link when it's empty. */
+    joinUrl: text("join_url"),
     replayUrl: text("replay_url"),
     deckUrl: text("deck_url"),
     /** Null until entered: a funnel cannot tell "not yet logged" from zero, so nothing is logged for it. */
@@ -3618,6 +3623,53 @@ export type BodyDevice = typeof bodyDevices.$inferSelect;
  * stored; the key itself is shown once, when made, and never logged, shown again or exported. Revoke stops it for good.
  * Body table: the member's export (without the hash) and delete-all, never a coach's export.
  */
+/**
+ * Bot connection (rev 696): the key a member's Community Loyalty bot sends to HelixOS's bot server, one live key per member.
+ * Shown once in full; kept only as its hash and its last four. Revoking it stops every call at once.
+ */
+export const botKeys = sqliteTable(
+  "bot_keys",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    last4: text("last4").notNull(),
+    /** Who made it: the member, or their coach on the client's bot page. */
+    createdBy: text("created_by").notNull(),
+    lastUsedAt: text("last_used_at"),
+    revokedAt: text("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("bot_keys_hash").on(t.tokenHash), index("bot_keys_member").on(t.workspaceId, t.userId)],
+);
+export type BotKey = typeof botKeys.$inferSelect;
+
+/**
+ * A sign-up for one of a member's webinars, made by their bot (rev 808): who, the custom fields the bot passed (industry, pain,
+ * problem, desire and any others, cleaned and length-limited: they come from strangers), and a long random code set aside for
+ * their own page (the Magic funnel, coming). The person is in the member's DMs too, as a "webinar" lead.
+ */
+export const webinarSignups = sqliteTable(
+  "webinar_signups",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    webinarId: text("webinar_id").notNull(),
+    firstName: text("first_name").notNull(),
+    email: text("email").notNull(),
+    contactId: text("contact_id"),
+    /** The bot's contact id for this person, when the flow passed one. */
+    clContactId: text("cl_contact_id"),
+    custom: text("custom", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
+    pageCode: text("page_code").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("webinar_signups_person").on(t.webinarId, t.email), uniqueIndex("webinar_signups_page").on(t.pageCode), index("webinar_signups_member").on(t.workspaceId, t.userId)],
+);
+export type WebinarSignup = typeof webinarSignups.$inferSelect;
+
 export const bodyIngestTokens = sqliteTable(
   "body_ingest_tokens",
   {

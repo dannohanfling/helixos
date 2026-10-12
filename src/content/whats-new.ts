@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 156,
+    date: "2026-10-12",
+    title: "Bot connection: your chatbot can use HelixOS",
+    lines: [
+      "Settings → Bot connection gives your Community Loyalty bot an address and a key (shown once; Rotate and Revoke beside it). With them your bot can, mid-chat: tell people about your offers (prices only where you allow them), answer from your FAQ, send your booking link and what to expect, give the next webinar's date in the person's own time zone, add or update the person in your DMs (booked sets the booked-on date your Weekly scoreboard counts; there's a new No-show stage), and sign them up for your next webinar, sending back its join link.",
+      "It never sees your numbers, tasks, Proof Bank, other leads or anything private, and it can't send messages or delete anything. New in Settings: your booking link and what to expect when someone books. New on each webinar: a join link, and the list of people your bot signed up.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 155,
     date: "2026-10-12",
     title: "Coming soon, in your menu",
