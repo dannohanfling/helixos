@@ -29,6 +29,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const size = url.searchParams.get("size") === "1080" && img.kind === "graphic" ? 1080 : null;
   const name = `${(img.caption ?? img.kind).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 60) || img.kind}${size ? "-1080x1350" : ""}.${img.mime === "image/png" ? "png" : img.mime === "image/jpeg" ? "jpg" : "img"}`;
   if (url.searchParams.get("download") === "1") headers.set("content-disposition", `attachment; filename="${name}"`);
+  // The photo preview (rev 839): a small 4:5 crop for the Photo dropdown, never the full-size file.
+  if (url.searchParams.get("thumb") === "1" && img.mime.startsWith("image/") && img.mime !== "image/svg+xml") {
+    const { photoThumb } = await import("@/lib/graphic-render");
+    const small = await photoThumb(Buffer.from(await upstream.arrayBuffer()));
+    headers.set("content-type", "image/jpeg");
+    headers.set("content-length", String(small.length));
+    return new NextResponse(new Uint8Array(small), { status: 200, headers });
+  }
   if (size) {
     const { downscaleGraphic } = await import("@/lib/graphic-render");
     const small = await downscaleGraphic(Buffer.from(await upstream.arrayBuffer()), size);

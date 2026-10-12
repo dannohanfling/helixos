@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 157,
+    date: "2026-10-12",
+    title: "Ladders: NONE means no keyword, the Five-0 check, and a photo preview",
+    lines: [
+      "A ladder made with keyword NONE now has no keyword, no \"comment\" or \"message me\" line, no product pitch and no price anywhere: not in the rungs, the carousel, the Instagram caption or Threads. The final rung closes with a question, and a new check stops it if anything slipped in. Clearing the keyword box saves NONE, and a ladder made from Claude uses only a keyword you name, never your first one by default.",
+      "The check \"No Book 'Em Danno name puns\" is now \"No Hawaii Five-0 puns\": it looks only for the TV show (Hawaii Five-0, McGarrett, the catchphrase as a joke, the theme). Your product name and your own keywords are always fine.",
+      "Picking a photo for the graphic now shows it straight away: a thumbnail in the graphic's own 4:5 frame beside the Photo box, with its description and size, before you make anything. \"No photo\" shows the plain dark ground, and \"See all\" opens your Images to tap one. On the ladder page and the New ladder form.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 156,
     date: "2026-10-12",
     title: "Bot connection: your chatbot can use HelixOS",

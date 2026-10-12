@@ -13,7 +13,7 @@ import { pushKeywordFields } from "@/lib/community-loyalty";
 import { nowIso } from "@/lib/dates";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { evidenceLines } from "@/lib/engine/evidence";
-import { LADDER_FORMATS, channelBodies, checklist, formatFor, keywordOf, masterBlock, outputContract, parseLadderOutput, perPostInput, publishBlockers, scaffold, targetWords, type Brief, type LadderFormatKey, type Parsed } from "@/lib/engine/ladder";
+import { LADDER_FORMATS, channelBodies, checklist, formatFor, keywordOf, masterBlock, outputContract, parseLadderOutput, perPostInput, publishBlockers, scaffold, targetWords, withoutKeyword, type Brief, type LadderFormatKey, type Parsed } from "@/lib/engine/ladder";
 import { LADDER_FORMAT_KEYS } from "@/db/schema";
 import { rungsQueuedLine } from "@/lib/engine/rung-drip";
 import { graphicPublicPath, shipRuns } from "@/lib/engine/ship";
@@ -63,7 +63,8 @@ export async function generate(workspaceId: string, userId: string, brief: Brief
     citableEvidence(userId),
   ]);
   const member = { name: user?.name ?? "the coach", businessName: membership?.businessName, bigPromise: membership?.bigPromise };
-  const system = `${masterBlock(profile ?? null, proofs, member, evidenceLines(evidence))}\n\n${outputContract()}`;
+  const noKeyword = !brief.keyword || brief.keyword.toUpperCase() === "NONE";
+  const system = `${masterBlock(profile ?? null, proofs, member, evidenceLines(evidence), noKeyword)}\n\n${outputContract()}`;
   // Who the post is for: the member's Primary avatar in their own words, when they've written one (rev 501 §6).
   const avatar = await draftAvatarBrief({ workspaceId, userId }, null);
   // The teaching library and story bank (rev 618): the coach's own ladders only. A client's ladder never reads any of it.
@@ -72,7 +73,8 @@ export async function generate(workspaceId: string, userId: string, brief: Brief
   const library = material ? libraryBlock(material.teaching, material.stories) : "";
   const text = await draft(system, [perPostInput(brief), avatar, library].filter(Boolean).join("\n\n"), 8000, { feature: "ladder", viewer });
   if (text) {
-    const parsed = scrub(parseLadderOutput(text));
+    // NONE means none (rev 838): whatever the writer did, no keyword, call to action or price is kept, and the field says NONE.
+    const parsed = noKeyword ? withoutKeyword(scrub(parseLadderOutput(text)), profile ?? null) : scrub(parseLadderOutput(text));
     if (parsed.rungs.length >= 3 && parsed.copy) return { parsed, generatedBy: "claude", offered };
     // The model refused (stop rule) or answered outside the contract: keep what it said as the notes on a skeleton.
     const sk = scaffold(brief, profile ?? null, proofs);
@@ -234,7 +236,7 @@ export async function updateLadderPart(v: Viewer, l: schema.Ladder, part: Ladder
     ]);
     const member = { name: user?.name ?? "the coach", businessName: v.membership.businessName, bigPromise: v.membership.bigPromise };
     const what = part === "rung" ? `rung ${n} of a comment ladder (40 to 90 words, ending with one short quotable line on its own line)` : part === "headline" ? 'the ladder\'s headline (8 to 14 words, ALL CAPS, two lines separated by " / ", one phrase marked "(gold: PHRASE)")' : part === "body" ? "the ladder's post body (hook, the read-them-in-order line, the save line, one open question; no keyword prompt)" : "the ladder's Instagram caption";
-    const task = `${masterBlock(profile ?? null, proofs, member)}\n\nYou are changing ONE part of an existing ladder: ${what}. Apply the member's instruction to it and keep everything else about it. Return only the new text of that part, nothing before or after it.`;
+    const task = `${masterBlock(profile ?? null, proofs, member, [], !l.keyword || l.keyword.toUpperCase() === "NONE")}\n\nYou are changing ONE part of an existing ladder: ${what}. Apply the member's instruction to it and keep everything else about it. Return only the new text of that part, nothing before or after it.`;
     const out = await draft(task, `TOPIC: ${l.topic}\n\nTHE PART NOW:\n${current}\n\nTHE MEMBER'S INSTRUCTION: ${change.instruction.trim()}`, 1500, { feature: "ladder", viewer: v });
     if (!out) return { ok: false, error: "The writer didn't answer (no AI key, or today's AI limit is reached). Say the new words instead, or change it in HelixOS." };
     next = stripFabricated(out.trim()).text;

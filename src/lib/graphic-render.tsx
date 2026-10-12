@@ -96,6 +96,11 @@ export async function renderGraphic(input: RenderInput): Promise<Buffer> {
 }
 
 /** The 1080×1350 copy, made when asked (rev 514): the master downscaled with a Lanczos filter, still PNG. */
+/** A photo's preview beside the Photo dropdown (rev 839): 320 × 400, cropped to the graphic's own 4:5 frame, a small JPEG. */
+export async function photoThumb(original: Buffer): Promise<Buffer> {
+  return sharp(original).rotate().resize({ width: 320, height: 400, fit: "cover", position: "centre" }).jpeg({ quality: 72 }).toBuffer();
+}
+
 export async function downscaleGraphic(master: Buffer, width = GRAPHIC.width): Promise<Buffer> {
   return sharp(master).resize({ width, kernel: sharp.kernel.lanczos3 }).png().toBuffer();
 }

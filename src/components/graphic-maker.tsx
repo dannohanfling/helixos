@@ -5,6 +5,7 @@ import { generateBackgroundAction, makeGraphicAction } from "@/lib/actions/ladde
 import { ANTHROPIC_NO_IMAGES, FACEBOOK_NOTE } from "@/lib/engine/graphic";
 import { DeckImageUpload } from "@/components/deck-image-upload";
 import { SubmitButton } from "@/components/submit-button";
+import { PhotoPicker } from "@/components/photo-picker";
 
 export type PhotoChoice = { id: string; caption: string | null; kind: string; source: string; width: number; height: number };
 /**
@@ -18,25 +19,24 @@ export function GraphicMaker({ ladderId, choices, suggestedId, preselectId, head
   const [headline, setHeadline] = useState<string>(headlines.includes(options?.headline ?? "") ? (options?.headline ?? headlines[0] ?? "") : (headlines[0] ?? ""));
   const [strongFade, setStrongFade] = useState(options?.strongFade ?? false);
   const [aiBackground, setAiBackground] = useState(options?.aiBackground ?? aiAllowed);
-  const picked = photos.find((p) => p.id === photoId) ?? null;
   return (
     <div className="space-y-3" data-testid="graphic-maker">
       <form action={makeGraphicAction} className="grid gap-3 sm:grid-cols-2" data-testid="graphic-form">
         <input type="hidden" name="id" value={ladderId} />
-        <label className="block sm:col-span-2">
-          <span className="label">Photo</span>
-          <select className="field text-sm" name="photoImageId" value={photoId} onChange={(e) => setPhotoId(e.target.value)} data-testid="graphic-photo">
-            <option value="">No photo: a plain dark ground</option>
-            {photos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.id === suggestedId ? "Suggested · " : ""}{p.caption?.trim() || p.kind}{p.source === "ai" ? " (AI background)" : ""} · {p.width}×{p.height}
-              </option>
-            ))}
-          </select>
-          <span className="mt-0.5 block text-[11px] text-ink-3">{suggestedId ? "The suggestion matches the headline's words against your Images captions. " : "Nothing in your Images fits yet. "}Any person in it is you, in your own photo; a face is never generated.</span>
-        </label>
-        {/* eslint-disable-next-line @next/next/no-img-element -- a private, signed-in route; next/image cannot fetch it */}
-        {picked ? <img src={`/api/deck-images/${picked.id}`} alt={picked.caption ?? ""} className="max-h-40 rounded-lg object-cover sm:col-span-2" data-testid="graphic-photo-preview" /> : null}
+        <div className="sm:col-span-2">
+          <PhotoPicker
+            name="photoImageId"
+            label="Photo"
+            photos={photos}
+            suggestedId={suggestedId}
+            emptyLabel="No photo: a plain dark ground"
+            empty="plain"
+            value={photoId}
+            onChange={setPhotoId}
+            testId="graphic-photo"
+            hint={<>{suggestedId ? "The suggestion matches the headline's words against your Images captions. " : "Nothing in your Images fits yet. "}Any person in it is you, in your own photo; a face is never generated.</>}
+          />
+        </div>
         <label className="block sm:col-span-2">
           <span className="label">Headline</span>
           <select className="field text-sm" name="headline" value={headline} onChange={(e) => setHeadline(e.target.value)} data-testid="graphic-headline">

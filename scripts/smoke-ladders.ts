@@ -280,6 +280,32 @@ async function main() {
     await page.locator('[data-testid="graphic-maker"]').waitFor({ timeout: 20000 });
     if ((await page.locator('[data-testid="graphic-photo"]').inputValue()) !== photoId) throw new Error("the photo whose caption shares the headline's words is suggested and picked");
     if (!(await page.locator('[data-testid="graphic-photo"] option').first().innerText()).includes("No photo")) throw new Error("a plain ground is offered");
+    // The photo preview (rev 839): the chosen photo's thumbnail at once, the plain ground's swatch for "No photo", nothing saved.
+    const thumb = page.locator('[data-testid="graphic-photo-thumb"]');
+    if (!((await thumb.getAttribute("src")) ?? "").includes(`/api/deck-images/${photoId}?thumb=1`) || !(await thumb.getAttribute("alt"))) throw new Error("the picked photo's thumbnail shows, with alt text");
+    await page.selectOption('[data-testid="graphic-photo"]', "");
+    await page.locator('[data-testid="graphic-photo-swatch"]').waitFor({ timeout: 5000 });
+    if (!(await page.locator('[data-testid="graphic-photo-caption"]').innerText()).includes("plain dark ground")) throw new Error("No photo shows the plain dark ground");
+    await page.selectOption('[data-testid="graphic-photo"]', otherId);
+    await page.locator(`[data-testid="graphic-photo-thumb"][src*="${otherId}"]`).waitFor({ timeout: 5000 });
+    if ((await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!.graphicOptions?.photoImageId === otherId) throw new Error("the preview saves nothing");
+    await page.click('[data-testid="graphic-photo-all"] summary');
+    await page.locator(`[data-testid="graphic-photo-tile"]`).first().click();
+    if ((await page.locator('[data-testid="graphic-photo"]').inputValue()) !== photoId) throw new Error("See all: tapping a tile sets the dropdown, suggested first");
+    const th = await page.request.get(`${base}/api/deck-images/${photoId}?thumb=1`);
+    const tmeta = await sharp(Buffer.from(await th.body())).metadata();
+    if (th.status() !== 200 || tmeta.format !== "jpeg" || tmeta.width !== 320 || tmeta.height !== 400 || th.headers()["cache-control"] !== "private, no-store") throw new Error(`the thumbnail is a small private 4:5 JPEG, never the full file: ${th.status()} ${tmeta.format} ${tmeta.width}×${tmeta.height}`);
+    const stranger = await browser.newContext();
+    // With no session the proxy sends the request to the login page: no picture comes back.
+    const anon = await stranger.request.get(`${base}/api/deck-images/${photoId}?thumb=1`, { maxRedirects: 0 });
+    if (![307, 401].includes(anon.status()) || (anon.headers()["content-type"] ?? "").startsWith("image/")) throw new Error(`no thumbnail without signing in: ${anon.status()} ${anon.headers()["content-type"]}`);
+    await stranger.close();
+    const viewport = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+    if (wide > 390) throw new Error(`the picker fits a phone: ${wide}px wide`);
+    if (viewport) await page.setViewportSize(viewport);
+    console.log("✓ the photo preview: the thumbnail follows the dropdown before saving, No photo shows the swatch, See all sets it, a private 320×400 JPEG, fits 390");
     const headlines = await page.locator('[data-testid="graphic-headline"] option').allInnerTexts();
     if (headlines.length !== 2 || !headlines[1].startsWith("Alternate")) throw new Error(`the headline and its alternate are offered: ${headlines.join(" | ")}`);
     if (!(await page.locator('[data-testid="graphic-none"]').count())) throw new Error("no graphic yet");

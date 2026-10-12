@@ -155,7 +155,8 @@ export async function updateLadderAction(formData: FormData): Promise<void> {
       hook: str(formData, "hook"),
       copy: str(formData, "copy"),
       rungs,
-      dmKeyword: str(formData, "dmKeyword"),
+      // A blank keyword is NONE (rev 838), in both fields: never silently the first keyword on the Ladder facts.
+      dmKeyword: str(formData, "dmKeyword").toUpperCase().replace(/[^A-Z0-9]/g, "") || "NONE",
       keyword: str(formData, "dmKeyword").toUpperCase().replace(/[^A-Z0-9]/g, "") || "NONE",
       carousel: lines(formData, "carousel"),
       igCaption: str(formData, "igCaption"),

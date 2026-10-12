@@ -93,6 +93,7 @@ defineTool({
     idea: z.string().min(2).max(300).optional().describe("Optional: an idea on their Content board, by words from its title (ideas_list)"),
     format: z.string().max(60).optional().describe(`Optional. One of: ${LADDER_FORMATS.map((f) => f.name).join(", ")}. Left out, the best fit is picked.`),
     notes: z.string().max(4000).optional().describe("Optional: an angle, a story, an offer or an avatar to lean on"),
+    keyword: z.string().max(40).optional().describe("Optional: one of the keywords on their Ladder facts, for the final rung. Left out, or NONE: no keyword, and the ladder closes with a question."),
   },
   handler: async (v, input): Promise<ToolResult> => {
     const idea = input.idea ? await ideaFor(v, String(input.idea)) : null;
@@ -104,7 +105,10 @@ defineTool({
     if (asked && !named) throw new Error(`"${input.format}" isn't one of the formats: ${LADDER_FORMATS.map((f) => f.name).join(", ")}.`);
     const format: LadderFormatKey = named?.key ?? (await pickFormat(topic, notes, v));
     const profile = await db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) });
-    const keyword = profile?.keywords?.[0]?.keyword ?? "NONE";
+    // A keyword is only ever the one asked for (rev 838): left out is NONE, never silently the first on the Ladder facts.
+    const askedKw = String(input.keyword ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (askedKw && askedKw !== "NONE" && !(profile?.keywords ?? []).some((k) => k.keyword.trim().toUpperCase() === askedKw)) throw new Error(`"${input.keyword}" isn't a keyword on their Ladder facts. Their keywords: ${(profile?.keywords ?? []).map((k) => k.keyword).join(", ") || "none yet"}, or NONE.`);
+    const keyword = askedKw || "NONE";
     const { id, generatedBy } = await createLadder({ workspaceId: v.workspace.id, userId: v.user.id }, { format, topic, audience: "warm", keyword, sourceMaterial: notes, realNumbers: null, leadMagnet: null, leadMagnetId: null }, v);
     const l = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, id) }))!;
     // The idea it came from moves to Creating on the board (rev 642).

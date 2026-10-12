@@ -10,6 +10,7 @@ import { LADDER_FORMATS, cadenceNotes, checkScore, checklist, targetWords } from
 import { addDays, formatDate, formatDateTime, weekday } from "@/lib/dates";
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
+import { PhotoPicker } from "@/components/photo-picker";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Ladders" };
@@ -116,14 +117,9 @@ export default async function LaddersPage() {
                   <textarea className="field" name="realNumbers" rows={2} placeholder="Last month: 100 leads, 12 calls, 4 clients at $497" />
                 </Field>
               </div>
-              <Field label="Photo for the graphic (optional)" hint="Blank: HelixOS suggests one from your Images by the headline's words.">
-                <select className="field" name="photoImageId" defaultValue="" data-testid="ladder-photo">
-                  <option value="">Suggest one from my Images</option>
-                  {photos.map((p) => (
-                    <option key={p.id} value={p.id}>{p.caption?.trim() || "photo"} · {p.width}×{p.height}</option>
-                  ))}
-                </select>
-              </Field>
+              <div className="sm:col-span-2">
+                <PhotoPicker name="photoImageId" label="Photo for the graphic (optional)" hint="Blank: HelixOS suggests one from your Images by the headline's words." photos={photos.map((p) => ({ id: p.id, caption: p.caption, kind: "photo", width: p.width, height: p.height }))} emptyLabel="Suggest one from my Images" empty="suggest" testId="ladder-photo" />
+              </div>
               <label className="flex items-start gap-2 text-sm">
                 <input type="checkbox" name="makeGraphic" value="1" defaultChecked className="mt-1" data-testid="ladder-make-graphic" />
                 <span>

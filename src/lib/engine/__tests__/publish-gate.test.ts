@@ -14,7 +14,7 @@ describe("outward fields are checked", () => {
 });
 
 describe("block on truth and compliance, warn on craft", () => {
-  it("name puns, unverified statistics and unmarked dollars block; lengths and headline shape only warn", () => {
+  it("Hawaii Five-0 puns, unverified statistics and unmarked dollars block; lengths and headline shape only warn", () => {
     const base = scaffold({ format: "method_resource", topic: "Test", audience: "warm", keyword: "NONE" }, null, []);
     const rung = (body: string) => ({ n: 1, label: "one", body, postedAt: null });
     const l = { ...base, keyword: "NONE", realNumbers: null, format: "method_resource" as const, copy: "Plan below.\nRead them in order.\nWhat would you try?", rungs: [rung("Fine rung.\nQuotable.")], igCaption: "x".repeat(2300), threadsChain: ["y".repeat(600)], headline: "ONE LINE ONLY", carousel: [], hook: "" };
@@ -24,7 +24,7 @@ describe("block on truth and compliance, warn on craft", () => {
     expect(levels["headline-lines"]).toBe("warn");
     expect(levels["headline-gold"]).toBe("warn");
     const keys = (x: typeof l) => publishBlockers(checklist(x, null, [])).map((b) => b.key);
-    expect(keys({ ...l, rungs: [rung("Book 'em, that's the badge talking.\nQuotable.")] })).toContain("namepun");
+    expect(keys({ ...l, rungs: [rung("Book 'em, Danno! Cue the Five-0 theme.\nQuotable.")] })).toContain("namepun");
     expect(keys({ ...l, rungs: [rung("Studies show 73% of coaches quit.\nQuotable.")] })).toContain("stats");
     expect(keys({ ...l, rungs: [rung("You'd make $4,000 a month.\nQuotable.")] })).toContain("illustrative");
     expect(keys({ ...l, rungs: [rung("You'd make $4,000 a month. (Illustrative. Your numbers will differ.)\nQuotable.")] })).not.toContain("illustrative");

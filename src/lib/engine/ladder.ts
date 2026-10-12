@@ -51,8 +51,54 @@ const REVENUE_GUARANTEE = /\b(guarantee[ds]?|sure[- ]fire|sure thing|can't fail|
 const FAKE_SCARCITY = /\b(only \d+ spots?|spots? left|seats? left|closing soon|last chance|doors close|ends tonight|limited time)\b/i;
 const PLACEHOLDER = /\[(?:[A-Z][A-Z0-9 _'/-]*|verify price|numbers placeholder|proof placeholder|placeholder)\]/;
 const COMMENT_BAIT = /\b[Cc]omment\s+["“]?[A-Z]{3,}["”]?\b/;
-/** The Book 'Em Danno name puns: the brand's, not a client's. */
-const NAME_PUN = /\b(police|badge|handcuffs?|book\s?['’]?em)\b/i;
+/**
+ * Hawaii Five-0 puns (rev 838): references to the TV show only, the same rule for every workspace. The show's name, its
+ * characters and cast, the catchphrase written as the show's line (with its comma: "Book 'em, Danno"), and the theme. Never
+ * the product name "Book 'Em Danno" or a keyword: the member's own keywords and product name are taken out before this runs.
+ */
+export const SHOW_PUN = /\bhawaii\s*five[\s-]?(?:0|o|oh)\b|\bfive-(?:0|o)\b|\bmc\s?garrett\b|\bbook\s+['’]?em,\s*dann?o\b|\b(?:jack lord|alex o['’]loughlin|scott caan|chin ho|kono kalakaua|danny williams)\b|\bcue the (?:theme|drums|music)\b/i;
+/** The first show reference in a text, after the member's own keywords and product name are taken out; null when there's none. */
+export function showPun(text: string, profile: Pick<LadderProfile, "keywords" | "productName"> | null): string | null {
+  const own = [profile?.productName ?? "", ...(profile?.keywords ?? []).map((k) => k.keyword)].map((x) => x.trim()).filter(Boolean);
+  const clean = own.reduce((t, x) => t.replace(new RegExp(x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " "), text);
+  return clean.match(SHOW_PUN)?.[0] ?? null;
+}
+
+/** With keyword NONE (rev 838): any of the member's keywords, a "comment X" or "message me X" call, the product's name, or a price. */
+export function noKeywordHits(text: string, profile: Pick<LadderProfile, "keywords" | "priceLine" | "productName"> | null): string[] {
+  const hits: string[] = [];
+  const product = profile?.productName?.trim();
+  if (product && text.toLowerCase().includes(product.toLowerCase())) hits.push(product);
+  for (const k of profile?.keywords ?? []) {
+    const kw = k.keyword.trim();
+    if (kw && new RegExp(`\\b${kw.replace(/[^A-Za-z0-9]/g, "")}\\b`, "i").test(text)) hits.push(kw.toUpperCase());
+  }
+  const cta = text.match(/\b(?:[Cc]omment|[Mm]essage me|[Dd][Mm] me|[Rr]eply)\s+["“']?[A-Z]{3,}\b/);
+  if (cta) hits.push(cta[0]);
+  for (const m of (profile?.priceLine ?? "").matchAll(/\$\s?\d[\d,]*/g)) if (text.includes(m[0])) hits.push(m[0]);
+  const perMonth = text.match(/\$\s?\d[\d,]*(?:\.\d+)?\s*(?:\/|a |per )\s*(?:month|mo|year|yr|week)\b/i);
+  if (perMonth) hits.push(perMonth[0]);
+  return Array.from(new Set(hits));
+}
+
+/**
+ * A NONE ladder's output, made safe (rev 838): the keyword field says NONE whatever the writer put there, and any line that
+ * carries a keyword, a comment or message-me call, the product's name or a price is taken out of the rungs, the carousel, the caption and the
+ * Threads chain. What's left is checked: the final rung must still close with a question.
+ */
+export function withoutKeyword(p: Parsed, profile: Pick<LadderProfile, "keywords" | "priceLine" | "productName"> | null): Parsed {
+  const keep = (line: string) => !noKeywordHits(line, profile).length;
+  const lines = (t: string) => t.split("\n").filter(keep).join("\n").trim();
+  return {
+    ...p,
+    dmKeyword: "NONE",
+    copy: lines(p.copy),
+    rungs: p.rungs.map((r) => ({ ...r, body: lines(r.body) })),
+    carousel: p.carousel.filter(keep),
+    igCaption: lines(p.igCaption),
+    threadsChain: p.threadsChain.map(lines).filter(Boolean),
+  };
+}
 /** A percentage or a "studies show" is a statistic; it has to be on the verified list. */
 const STAT = /(\d+(?:\.\d+)?\s?%)|\b(?:studies|research|data|surveys?)\s+(?:show|shows|found|say|says|prove|proves)\b/gi;
 
@@ -106,7 +152,8 @@ function testimonialLines(proofs: Proof[]): string[] {
 
 /** Section A, adapted: the same rules, written from this client's facts instead of Danno's. */
 /** `evidence`: the client's citable studies as "claim (citation)" lines, from src/lib/engine/evidence; nothing unverified ever reaches here. */
-export function masterBlock(profile: LadderProfile | null, proofs: Proof[], member: Member, evidence: string[] = []): string {
+/** `noKeyword` (rev 838): the post's keyword is NONE, so the product, its price and the keywords are kept out of the prompt's selling parts. */
+export function masterBlock(profile: LadderProfile | null, proofs: Proof[], member: Member, evidence: string[] = [], noKeyword = false): string {
   const keywords = (profile?.keywords ?? []).filter((k) => k.keyword);
   const stats = (profile?.verifiedStats ?? []).filter((s) => s.stat);
   const banned = [...DEFAULT_BANNED, ...(profile?.bannedPhrases ?? [])];
@@ -149,7 +196,9 @@ A reader who never buys must still walk away with a usable system. If a rung onl
 4. COMPANY REVENUE ≠ PERSONAL INCOME. Say precisely whose number it is.
 5. IF A QUOTE CAN'T BE VERIFIED TO A PRIMARY SOURCE, REFUSE TO WRITE THE POST. Say so rather than paraphrasing.
 6. IF REAL DATA ISN'T SUPPLIED FOR A NUMBERS POST, WRITE [NUMBERS PLACEHOLDER] AND SAY THE POST CANNOT GO LIVE. Never invent figures.${profile?.claimsRules?.trim() ? `\n7. CLIENT-SPECIFIC: ${profile.claimsRules.trim()}` : ""}`,
-    `## PRODUCT
+    noKeyword
+      ? `## PRODUCT\nThis post has no keyword. Never pitch ${product}, never give a price or entry terms, and never name a keyword. It is a trust and story post.`
+      : `## PRODUCT
 ${product}${profile?.productPitch ? `. ${profile.productPitch}` : ""}${profile?.priceLine ? `\nPrice: ${profile.priceLine}` : ""}${profile?.trialLine ? `\nTrial / entry: ${profile.trialLine}` : ""}
 Sell methodology and transformation, never program names.`,
     stats.length
@@ -161,9 +210,11 @@ Sell methodology and transformation, never program names.`,
     evidence.length
       ? `## VERIFIED EVIDENCE — USE ONLY THESE\nEach line is a claim and its citation. Use them together, never the claim alone.\n${evidence.join("\n")}\nAny other study is off limits. Write [EVIDENCE PLACEHOLDER] rather than inventing or half-remembering one.`
       : `## EVIDENCE\nNo verified research is on this client's shelf. Do not cite a study. Write [EVIDENCE PLACEHOLDER] where one would help.`,
-    `## KEYWORD ROUTING\n${keywords.length ? keywords.map((k) => `- ${k.keyword} — ${k.use} — fetches ${targetWords(k)}`).join("\n") : "- (no keywords set up)"}\n- NONE — pure trust/story posts close with a question instead. Pitching at the end of a personal story breaks it.`,
+    noKeyword ? `## KEYWORD\nNONE. No keyword anywhere: not in the rungs, the carousel, the caption or Threads. No "comment" or "message me" call to action.` : `## KEYWORD ROUTING\n${keywords.length ? keywords.map((k) => `- ${k.keyword} — ${k.use} — fetches ${targetWords(k)}`).join("\n") : "- (no keywords set up)"}\n- NONE — pure trust/story posts close with a question instead. Pitching at the end of a personal story breaks it.`,
     profile?.originStory?.trim() ? `## ORIGIN STORY (recurring source material)\n${profile.originStory.trim()}${profile.positioningLine ? `\nPositioning line: ${profile.positioningLine}` : ""}\nKeep the odd specific details. They're what make it feel lived rather than constructed. Give it one rung at most, unless the format is Origin Story: told again and again it stops being a story.` : "",
-    `## CTA — FINAL RUNG ONLY, BUILT FROM WHAT THE KEYWORD FETCHES
+noKeyword
+      ? `## CLOSE — FINAL RUNG\nRecap the system in short lines, then close with one open question to the reader. The carousel's slide 9, the Instagram caption and the last Threads post close with a question too. No pitch, no price, no keyword.`
+      :     `## CTA — FINAL RUNG ONLY, BUILT FROM WHAT THE KEYWORD FETCHES
 Recap the system in short lines. Then, by the keyword's target:
 - the product: the price and entry terms exactly as given above. ${profile?.scarcityLine?.trim() ? "Then the permitted scarcity line verbatim. " : ""}Then "Comment [KEYWORD] and I'll send you the link."
 - a lead magnet: name the magnet once, as fulfilment. Then "Comment [KEYWORD] and I'll send you the link." No price, no entry terms, no product name.
@@ -263,6 +314,9 @@ export function perPostInput(brief: Brief): string {
     `TOPIC: ${brief.topic}`,
     `AUDIENCE: ${brief.audience === "cold" ? "cold business owners who don't know the client yet" : "warm audience who already follows the client"}`,
     `KEYWORD: ${brief.keyword || "NONE"}`,
+    !brief.keyword || brief.keyword.toUpperCase() === "NONE"
+      ? "NO KEYWORD ON THIS POST, A HARD RULE: write no keyword anywhere (not in the rungs, carousel, caption or Threads), no \"comment\" or \"message me\" call to action, no product pitch and no price. DM_KEYWORD is NONE. The final rung, carousel slide 9, the Instagram caption and the last Threads post each close with a question."
+      : "",
     brief.leadMagnet ? `LEAD MAGNET (what the keyword gets them; name it in the final rung only, never in the post body): ${brief.leadMagnet.title}${brief.leadMagnet.promise ? ` — ${brief.leadMagnet.promise}` : ""}` : "",
     brief.sourceMaterial?.trim() ? `SOURCE MATERIAL:\n${brief.sourceMaterial.trim()}` : "",
     brief.realNumbers?.trim() ? `REAL NUMBERS (use exactly, nothing else may be presented as real):\n${brief.realNumbers.trim()}` : "",
@@ -479,7 +533,9 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
     const pitched = target && target.kind !== "product" ? productPitchHits(final, profile) : [];
     add("target-pitch", `Final rung pitches only what "${keyword}" fetches`, !pitched.length, `${keyword} fetches ${targetWords(k ?? { target }, undefined)}, but the final rung names ${pitched.map((h) => `"${h}"`).join(", ")}. Take the product out of it.`);
   } else {
-    add("cta", "No keyword: final rung closes with a question", /\?\s*$/.test(lastLine(final)) || /\?/.test(final), "Trust and story posts close with a question, not a pitch.");
+    add("cta", "No keyword: final rung closes with a question", /\?\s*$/.test(lastLine(final)), "Trust and story posts close with a question, not a pitch.");
+    const leaks = noKeywordHits([...rungs.map((r) => r.body), ...(l.carousel ?? []), l.igCaption, ...l.threadsChain, l.copy].join("\n"), profile);
+    add("no-keyword", "No keyword: no keyword, pitch or price anywhere", !leaks.length, `This ladder has no keyword, but it still says ${leaks.map((h) => `"${h}"`).join(", ")}. Take it out of the rungs, the carousel, the caption and Threads.`);
   }
 
   // Claims discipline
@@ -498,8 +554,8 @@ export function checklist(l: LadderLike, profile: LadderProfile | null, proofs: 
   // The origin story once (rev 618): two or more rungs retelling it, outside the Origin Story format, is a warning.
   const retold = l.format === "origin_story" ? [] : originRungs(profile?.originStory, rungs.map((r) => r.body)).map((i) => rungs[i].n);
   add("origin-once", "The origin story gets one rung at most", retold.length < 2, `Rungs ${retold.join(", ")} each retell your origin story. Keep it to one and give the others a new point.`, "warn");
-  const pun = all.match(NAME_PUN);
-  add("namepun", "No Book 'Em Danno name puns", !pun, `"${pun?.[0]}" is the brand's pun, not this client's.`);
+  const pun = showPun(all, profile);
+  add("namepun", "No Hawaii Five-0 puns", !pun, `"${pun}" is a Hawaii Five-0 reference. Take it out; the product name and your keywords are fine.`);
   const verified = (profile?.verifiedStats ?? []).map((s) => s.stat.toLowerCase());
   const statHits = Array.from(all.matchAll(STAT)).map((m) => m[0]).filter((hit) => !verified.some((v) => v.includes(hit.toLowerCase().trim())));
   add("stats", "Every statistic is on the verified list", !statHits.length, `"${statHits[0]}" is not among your verified stats. Add it there with its source, or write [STAT PLACEHOLDER].`);
