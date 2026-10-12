@@ -121,9 +121,15 @@ export async function handleInbound(provider: Provider, request: Request): Promi
       const callAt = s(body.startTime ?? body.appointmentTime ?? appt.startTime);
       if (name) {
         const existing = await db.query.contacts.findFirst({ where: and(eq(schema.contacts.workspaceId, ctx.workspaceId), eq(schema.contacts.userId, ctx.userId), eq(schema.contacts.name, name)) });
-        const stage = /appointment/i.test(event) ? ("call_booked" as const) : ("new" as const);
-        if (existing) await db.update(schema.contacts).set({ stage: existing.stage === "client" ? "client" : stage, callAt: callAt || existing.callAt }).where(eq(schema.contacts.id, existing.id));
-        else await db.insert(schema.contacts).values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, name, platform: "Other", stage, source: "GoHighLevel", callAt: callAt || null });
+        const isAppt = /appointment/i.test(event);
+        const stage = isAppt ? ("call_booked" as const) : ("new" as const);
+        // "Booked on" (rev 639's answer): when the call was booked, which the scoreboard counts by week. GoHighLevel's own dateAdded
+        // when it sends one, else now. Moving a call that's still ahead keeps the date it was first booked; a booking after the last
+        // call has passed is a new one.
+        const bookedNow = s(body.dateAdded ?? appt.dateAdded) || nowIso();
+        const bookedAt = (c: { callBookedAt: string | null; callAt: string | null } | undefined) => (!isAppt ? (c?.callBookedAt ?? null) : !c?.callBookedAt || (c.callAt && c.callAt < nowIso()) ? bookedNow : c.callBookedAt);
+        if (existing) await db.update(schema.contacts).set({ stage: existing.stage === "client" ? "client" : stage, callAt: callAt || existing.callAt, callBookedAt: bookedAt(existing) }).where(eq(schema.contacts.id, existing.id));
+        else await db.insert(schema.contacts).values({ id: newId(), workspaceId: ctx.workspaceId, userId: ctx.userId, name, platform: "Other", stage, source: "GoHighLevel", callAt: callAt || null, callBookedAt: bookedAt(undefined) });
         note = existing ? `Updated contact ${name}` : `Created contact ${name}`;
       }
       if (/appointment/i.test(event)) {

@@ -102,6 +102,17 @@ describe("Monday scoreboard: the words", () => {
   });
 });
 
+describe("Monday scoreboard: GoHighLevel bookings (booked on)", () => {
+  it("counts calls booked in GoHighLevel on their own row, never added to the calls from the closes", async () => {
+    const { scoreboardSections } = await import("@/lib/engine/scoreboard");
+    const rows = scoreboardSections(board({ ghlBooked: 3 }))[0].rows;
+    expect(rows.find((r) => r.label === "Calls booked")?.value).toBe("2");
+    expect(rows.find((r) => r.label === "Calls booked in GoHighLevel")?.value).toBe("3");
+    expect(scoreboardSections(board())[0].rows.some((r) => r.label === "Calls booked in GoHighLevel")).toBe(false);
+    expect(read("src/lib/webhooks.ts")).toMatch(/callBookedAt: bookedAt\(existing\)/);
+  });
+});
+
 describe("Monday scoreboard: the rules", () => {
   it("never reads a Body or health table, anywhere it is built", () => {
     for (const f of ["src/lib/scoreboard.ts", "src/lib/engine/scoreboard.ts", "src/lib/mcp/tools/scoreboard.ts"]) {

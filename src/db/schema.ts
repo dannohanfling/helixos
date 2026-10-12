@@ -478,6 +478,8 @@ export const contacts = sqliteTable(
     lastInboundAt: text("last_inbound_at"),
     nextFollowUpAt: text("next_follow_up_at"),
     callAt: text("call_at"),
+    /** When the call was booked (GoHighLevel's appointment webhook): the date the scoreboard counts it in, not the call's own date. */
+    callBookedAt: text("call_booked_at"),
     createdAt: createdAt(),
   },
   (t) => [index("contacts_user_stage").on(t.userId, t.stage), index("contacts_user_followup").on(t.userId, t.nextFollowUpAt)],

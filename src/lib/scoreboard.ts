@@ -6,7 +6,7 @@
  * rule the content card uses), the per-post Comments they typed, their evening closes, the clients they added, their 3-1-3,
  * and their key results and KPIs. No Body or health table is ever read here (a unit test holds this file to it).
  */
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { boardStepsFor } from "@/lib/board-steps";
 import { brandedEmail } from "@/lib/branded-email";
@@ -74,6 +74,10 @@ export async function scoreboardFor(m: Member, tz: string, today: string, which:
   const paces = pacesOf(reads);
   const krs = await db.query.planRecords.findMany({ where: and(eq(schema.planRecords.workspaceId, m.workspaceId), eq(schema.planRecords.userId, m.userId), eq(schema.planRecords.kind, "key_result"), isNull(schema.planRecords.archivedAt)) });
 
+  // Calls booked through GoHighLevel that week, by the day they were booked (the appointment webhook's "booked on").
+  const booked = await db.query.contacts.findMany({ where: and(eq(schema.contacts.workspaceId, m.workspaceId), eq(schema.contacts.userId, m.userId), isNotNull(schema.contacts.callBookedAt)), columns: { callBookedAt: true } });
+  const ghlBooked = booked.filter((c) => inWeek(dayOf(c.callBookedAt, tz), week)).length;
+
   // My Board's steps due that week (rev 664 §6), and any open past their date: counts only.
   const boardSteps = await boardStepsFor(m, week.from, week.to, today);
 
@@ -81,6 +85,7 @@ export async function scoreboardFor(m: Member, tz: string, today: string, which:
     week,
     days,
     boardSteps,
+    ghlBooked,
     posts: { byChannel: channels, total: channels.reduce((a, c) => a + c.count, 0), waiting },
     comments,
     dms: { started: sum("dmsStarted"), conversations: sum("conversations") },

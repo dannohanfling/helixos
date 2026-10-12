@@ -145,6 +145,11 @@ export default async function ContactPage({ params, searchParams }: { params: Pr
               </Field>
               <Field label="Call booked for">
                 <input className="field" name="callAt" type="datetime-local" defaultValue={contact.callAt ? contact.callAt.slice(0, 16) : ""} />
+                {contact.callBookedAt ? (
+                  <span className="mt-1 block text-xs text-ink-3" data-testid="call-booked-on">
+                    Booked on {new Date(contact.callBookedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: v.tz })} in GoHighLevel
+                  </span>
+                ) : null}
               </Field>
               <Field label="What they're building">
                 <input className="field" name="whatTheyreBuilding" defaultValue={contact.whatTheyreBuilding ?? ""} />

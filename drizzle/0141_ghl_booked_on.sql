@@ -1,0 +1,1 @@
+ALTER TABLE `contacts` ADD `call_booked_at` text;

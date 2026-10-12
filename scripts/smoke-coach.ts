@@ -189,6 +189,20 @@ async function main() {
     if (!/Booked "Offer \+ Messaging Alignment Session" \(only open claim\)/.test(remaining)) throw new Error(`single open claim should book: "${remaining}"`);
     const none = await post({ id: "appt-4", appointment: { startTime: "2030-01-07T17:00:00.000Z" } });
     if (!/No open reward claim/.test(none)) throw new Error(`no open claim should book nothing: "${none}"`);
+    // "Booked on": the first appointment stamps when the call was booked; moving a call that's still ahead keeps that date;
+    // GoHighLevel's own dateAdded wins when it sends one; a booking after the last call has passed is a new one.
+    const contactOf = async (name: string) => (await db.query.contacts.findFirst({ where: and(eq(schema.contacts.userId, maya.id), eq(schema.contacts.name, name)) }))!;
+    const firstBooked = (await contactOf("Maya Torres")).callBookedAt;
+    if (!firstBooked || firstBooked.slice(0, 10) !== nowIso().slice(0, 10)) throw new Error(`the appointment stamps the day it was booked: ${firstBooked}`);
+    await post({ id: "appt-5", full_name: "Bea Booker", dateAdded: "2026-10-06T15:30:00.000Z", appointment: { startTime: "2030-02-01T17:00:00.000Z" } });
+    if ((await contactOf("Bea Booker")).callBookedAt !== "2026-10-06T15:30:00.000Z") throw new Error("GoHighLevel's own booking time is kept");
+    await post({ id: "appt-6", full_name: "Bea Booker", dateAdded: "2026-10-09T09:00:00.000Z", appointment: { startTime: "2030-02-03T17:00:00.000Z" } });
+    const bea = await contactOf("Bea Booker");
+    if (bea.callBookedAt !== "2026-10-06T15:30:00.000Z" || !bea.callAt?.startsWith("2030-02-03")) throw new Error(`moving a call still ahead keeps its booked-on date: ${JSON.stringify(bea)}`);
+    await db.update(schema.contacts).set({ callAt: "2026-01-01T17:00:00.000Z" }).where(eq(schema.contacts.id, bea.id));
+    await post({ id: "appt-7", full_name: "Bea Booker", dateAdded: "2026-10-10T11:00:00.000Z", appointment: { startTime: "2030-03-01T17:00:00.000Z" } });
+    if ((await contactOf("Bea Booker")).callBookedAt !== "2026-10-10T11:00:00.000Z") throw new Error("a booking after the last call has passed is a new one");
+    console.log("✓ booked on: stamped by the appointment, GoHighLevel's own time kept, a moved call keeps it, a new booking after a past call restamps it");
     const vipRow = await db.query.rewardClaims.findFirst({ where: eq(schema.rewardClaims.id, claimA) });
     if (vipRow?.bookedAt !== "2030-01-05T17:00:00.000Z" || vipRow.bookedRef !== "appt-2") throw new Error(`VIP claim not stamped from the appointment: ${JSON.stringify(vipRow)}`);
     await page.reload();

@@ -55,6 +55,8 @@ export type Scoreboard = {
   kpis: { name: string; period: string; actual: string; target: string; pace: Pace }[];
   /** My Board's steps due in the week and how many are done; open steps past their date (counts only). */
   boardSteps?: { due: number; done: number; overdue: number };
+  /** Calls booked through GoHighLevel in the week, by the day they were booked. */
+  ghlBooked?: number;
 };
 
 const PACE_WORD: Record<Pace, string> = { ahead: "ahead", on: "on pace", behind: "behind", done: "done", none: "no target" };
@@ -80,11 +82,12 @@ export function scoreboardSections(s: Scoreboard): EmailSection[] {
       { label: "DMs started", value: String(s.dms.started) },
       { label: "Conversations", value: String(s.dms.conversations) },
       { label: "Calls booked", value: String(s.calls) },
+      ...(s.ghlBooked ? [{ label: "Calls booked in GoHighLevel", value: String(s.ghlBooked) }] : []),
       { label: "Clients added (you logged)", value: String(s.clientsAdded) },
       { label: "Days closed", value: `${s.closes} of ${s.days}` },
       ...(s.boardSteps?.due ? [{ label: "Board steps", value: `${s.boardSteps.done} of ${s.boardSteps.due} done` }] : []),
     ],
-    note: `Posts count once GoHighLevel confirms them, or when you mark a pasted post posted. DMs and calls come from your evening closes (${s.closes} of ${s.days} closed), so an unclosed day reads as zero.`,
+    note: `Posts count once GoHighLevel confirms them, or when you mark a pasted post posted. DMs and calls come from your evening closes (${s.closes} of ${s.days} closed), so an unclosed day reads as zero.${s.ghlBooked ? " Calls booked in GoHighLevel are counted on the day they were booked." : ""}`,
   };
   const li = s.lastIntention;
   const lastRows = li

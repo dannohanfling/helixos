@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 145,
+    date: "2026-10-12",
+    title: "Calls booked in GoHighLevel, on your scoreboard",
+    lines: [
+      "When someone books a call through GoHighLevel, HelixOS now keeps the day they booked it. Your Monday scoreboard counts those bookings on their own line, by the week they were booked, next to the calls from your evening closes.",
+      "The person's page in DMs shows the booked-on date under the call. Moving a call keeps the day it was first booked.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 144,
     date: "2026-10-12",
     title: "My Board: in Claude, and HumanOS if you want it",
