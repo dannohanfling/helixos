@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 163,
+    date: "2026-10-12",
+    title: "The Magic funnel: a registration page written for each person",
+    lines: [
+      "Once your coach turns it on for you, each webinar can have a Magic funnel: your bot learns a little about someone in your DMs, and the link it sends opens your GoHighLevel registration page with their name filled in and the words written for them (why it's for them, the pillar and the proof that fit, their likely doubt answered).",
+      "Set it up on the webinar's Magic funnel page: mark the blocks on your page with the class names listed there, paste the one snippet into a Custom Code element on the registration and thank-you pages, and preview a page before anyone sees it. With no code, or if anything fails, your page shows its own words.",
+      "The page counts pages written, opened and registered. Settings → Magic funnel holds your page's web address and a daily limit; coaches turn it on per client from that client's bot page.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 162,
     date: "2026-10-12",
     title: "Connect your tools, step by step",

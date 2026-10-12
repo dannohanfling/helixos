@@ -66,7 +66,7 @@ export function bookingInfo(m: BotMember) {
   return { booking_link: m.membership.bookingUrl?.trim() || null, what_to_expect: m.membership.bookingExpect?.trim() || null, call_minutes: m.membership.callMinutes ?? null };
 }
 
-async function upcoming(m: BotMember, now = new Date()) {
+export async function upcoming(m: BotMember, now = new Date()) {
   const rows = await db.query.webinars.findMany({ where: mine(schema.webinars, m), columns: { id: true, title: true, status: true, isExample: true, scheduledAt: true, registrationUrl: true, joinUrl: true } });
   return nextWebinar(rows, now, (wall) => wallTimeToUtc(wall, m.tz));
 }
@@ -121,39 +121,65 @@ export async function leadLog(m: BotMember, input: { contactId: string; firstNam
 }
 
 /**
+ * The person in the member's DMs for a sign-up: the one with this bot contact id, else this email, else a new "webinar" lead.
+ * Returns their contact id. A dated note says what happened.
+ */
+export async function personInDms(m: BotMember, input: { firstName: string; email: string; contactId: string | null; note: string }): Promise<string> {
+  const now = nowIso();
+  const day = todayInTz(m.tz);
+  const byNs = input.contactId ? await db.query.contacts.findFirst({ where: and(mine(schema.contacts, m), eq(schema.contacts.userNs, input.contactId)) }) : undefined;
+  const person = byNs ?? (await db.query.contacts.findFirst({ where: and(mine(schema.contacts, m), eq(schema.contacts.email, input.email)) }));
+  if (person) {
+    await db
+      .update(schema.contacts)
+      .set({ ...(person.email ? {} : { email: input.email }), ...(person.userNs || !input.contactId ? {} : { userNs: input.contactId }), notes: withNote(person.notes, input.note, day), lastInboundAt: now })
+      .where(eq(schema.contacts.id, person.id));
+    return person.id;
+  }
+  const id = newId();
+  await db.insert(schema.contacts).values({ id, workspaceId: m.workspaceId, userId: m.userId, name: input.firstName, platform: "Chatbot", stage: "new", warmth: "warm", source: "webinar", email: input.email, userNs: input.contactId, notes: withNote(null, input.note, day), lastInboundAt: now });
+  return id;
+}
+
+/** One more in the webinar's Registered number. */
+export async function countRegistered(webinarId: string): Promise<void> {
+  const row = await db.query.webinars.findFirst({ where: eq(schema.webinars.id, webinarId), columns: { registered: true } });
+  await db.update(schema.webinars).set({ registered: (row?.registered ?? 0) + 1 }).where(eq(schema.webinars.id, webinarId));
+}
+
+/**
  * webinar_register: signs a person up for the member's next webinar, once per email; adds them to DMs as a "webinar" lead (or
  * updates the one with this contact id or email); counts them in the webinar's Registered number; and keeps a long random code
- * for their own page (the Magic funnel, coming). Returns the join link.
+ * for their own page. Someone sent a Magic funnel page who then signs up in the chat is registered on the same row. Returns
+ * the join link.
  */
 export async function webinarRegister(m: BotMember, input: { firstName: string; email: string; contactId: string | null; custom: Record<string, string> }): Promise<{ status: "registered" | "already registered"; title: string; join_link: string | null } | null> {
   const w = await upcoming(m);
   if (!w) return null;
   const email = input.email.toLowerCase();
   const join = w.joinUrl?.trim() || w.registrationUrl?.trim() || null;
-  const had = await db.query.webinarSignups.findFirst({ where: and(eq(schema.webinarSignups.webinarId, w.id), eq(schema.webinarSignups.email, email)), columns: { id: true } });
-  if (had) return { status: "already registered", title: w.title, join_link: join };
-
-  // The person in DMs: the one with this bot contact id, else this email, else new.
-  const now = nowIso();
-  const byNs = input.contactId ? await db.query.contacts.findFirst({ where: and(mine(schema.contacts, m), eq(schema.contacts.userNs, input.contactId)) }) : undefined;
-  const person = byNs ?? (await db.query.contacts.findFirst({ where: and(mine(schema.contacts, m), eq(schema.contacts.email, email)) }));
-  let contactId = person?.id ?? null;
-  if (person) {
-    await db
-      .update(schema.contacts)
-      .set({ ...(person.email ? {} : { email }), ...(person.userNs || !input.contactId ? {} : { userNs: input.contactId }), notes: withNote(person.notes, `Signed up for "${w.title}".`, todayInTz(m.tz)), lastInboundAt: now })
-      .where(eq(schema.contacts.id, person.id));
-  } else {
-    contactId = newId();
-    await db.insert(schema.contacts).values({ id: contactId, workspaceId: m.workspaceId, userId: m.userId, name: input.firstName, platform: "Chatbot", stage: "new", warmth: "warm", source: "webinar", email, userNs: input.contactId, notes: withNote(null, `Signed up for "${w.title}".`, todayInTz(m.tz)), lastInboundAt: now });
+  const had = await db.query.webinarSignups.findFirst({ where: and(eq(schema.webinarSignups.webinarId, w.id), eq(schema.webinarSignups.email, email)), columns: { id: true, registeredAt: true, custom: true } });
+  if (had?.registeredAt) return { status: "already registered", title: w.title, join_link: join };
+  if (had) {
+    const done = await db
+      .update(schema.webinarSignups)
+      .set({ registeredAt: nowIso(), registeredVia: "chat", custom: { ...had.custom, ...input.custom } })
+      .where(and(eq(schema.webinarSignups.id, had.id), isNull(schema.webinarSignups.registeredAt)))
+      .returning({ id: schema.webinarSignups.id });
+    if (done.length) {
+      await personInDms(m, { firstName: input.firstName, email, contactId: input.contactId, note: `Signed up for "${w.title}".` });
+      await countRegistered(w.id);
+    }
+    return { status: done.length ? "registered" : "already registered", title: w.title, join_link: join };
   }
+
+  const contactId = await personInDms(m, { firstName: input.firstName, email, contactId: input.contactId, note: `Signed up for "${w.title}".` });
   try {
-    await db.insert(schema.webinarSignups).values({ id: newId(), workspaceId: m.workspaceId, userId: m.userId, webinarId: w.id, firstName: input.firstName, email, contactId, clContactId: input.contactId, custom: input.custom, pageCode: randomBytes(PAGE_CODE_BYTES).toString("base64url") });
+    await db.insert(schema.webinarSignups).values({ id: newId(), workspaceId: m.workspaceId, userId: m.userId, webinarId: w.id, firstName: input.firstName, email, contactId, clContactId: input.contactId, custom: input.custom, pageCode: randomBytes(PAGE_CODE_BYTES).toString("base64url"), source: "chat", registeredAt: nowIso(), registeredVia: "chat" });
   } catch {
     // Two sign-ups for the same email at the same moment: the second finds the first.
     return { status: "already registered", title: w.title, join_link: join };
   }
-  const row = await db.query.webinars.findFirst({ where: eq(schema.webinars.id, w.id), columns: { registered: true } });
-  await db.update(schema.webinars).set({ registered: (row?.registered ?? 0) + 1 }).where(eq(schema.webinars.id, w.id));
+  await countRegistered(w.id);
   return { status: "registered", title: w.title, join_link: join };
 }

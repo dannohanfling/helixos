@@ -1672,6 +1672,12 @@ export default async function WebinarWizardPage({
                   />
                 </Field>
               </div>
+              <p className="text-sm">
+                <Link href={`/webinars/${w.id}/magic-funnel`} className="underline" data-testid="webinar-mf-link">
+                  🪄 Magic funnel
+                </Link>
+                <span className="text-ink-3"> · a registration page written for each person your bot sends</span>
+              </p>
               {signups.length ? (
                 <details className="rounded-lg border p-3 text-sm" data-testid="webinar-signups">
                   <summary className="cursor-pointer font-medium">Signed up by your bot: {signups.length}</summary>

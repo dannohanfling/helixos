@@ -3,6 +3,7 @@ import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-or
 import { OOH_CATEGORIES_DEFAULT, OOH_HOSTS_DEFAULT } from "@/lib/engine/office-hours";
 import { MATERIAL_KINDS, STORY_STATUSES, STORY_TYPES } from "@/lib/engine/teaching-kinds";
 import { BOT_FEATURE_KEYS, REQUEST_STATES, UNLOCK_TYPES, type Behavior } from "@/lib/engine/bot-features";
+import { EMPTY_DEFAULTS, type MfAgendaItem, type MfDefaults, type MfObjection, type MfPillar, type MfPitch, type MfProfile, type MfUrgency } from "@/lib/engine/magic-funnel";
 
 const id = () => text("id").primaryKey();
 const createdAt = () => text("created_at").notNull().default(sql`(datetime('now'))`);
@@ -93,6 +94,12 @@ export const memberships = sqliteTable(
     sceneLook: text("scene_look", { enum: ["auto", "day", "night"] }).notNull().default("auto"),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
+    /** The Magic funnel (rev 812 §8): a client's switch, off until Danno turns it on for that client; the coach's own is always on. */
+    mfEnabled: integer("mf_enabled", { mode: "boolean" }).notNull().default(false),
+    /** Pages written a day, at most (rev 837: 300, editable in Coach). Past it, pages use the default copy. */
+    mfDailyCap: integer("mf_daily_cap").notNull().default(300),
+    /** The hosts the member's GoHighLevel pages live on: the only origins /api/mf answers (CORS). */
+    mfDomains: text("mf_domains", { mode: "json" }).$type<string[]>().notNull().default([]),
     startedAt: text("started_at").notNull().default(sql`(date('now'))`),
     passEnabled: integer("pass_enabled", { mode: "boolean" }).notNull().default(false),
     passName: text("pass_name"),
@@ -3693,11 +3700,61 @@ export const webinarSignups = sqliteTable(
     clContactId: text("cl_contact_id"),
     custom: text("custom", { mode: "json" }).$type<Record<string, string>>().notNull().default({}),
     pageCode: text("page_code").notNull(),
+    /** The Magic funnel (revs 812, 815): "chat" signed up inside the chat; "mf" was sent a personal page and isn't in until they register. */
+    source: text("source", { enum: ["chat", "mf"] }).notNull().default("chat"),
+    lastName: text("last_name"),
+    phone: text("phone"),
+    /** The prospect's own words for the writer (pain, industry, the conversation summary): cleaned and cut, never shown on the page. */
+    said: text("said", { mode: "json" }).$type<{ pain: string; industry: string; summary: string }>(),
+    /** Who they are as a business owner, written first (rev 815 §2); shown on their DMs lead, counts only for a coach. */
+    profile: text("profile", { mode: "json" }).$type<MfProfile>(),
+    /** Their page, one JSON (rev 815 §3), and which sections are personal and which fell back to the member's default copy. */
+    pitch: text("pitch", { mode: "json" }).$type<MfPitch>(),
+    pitchSources: text("pitch_sources", { mode: "json" }).$type<Record<string, "personal" | "default">>(),
+    pitchStatus: text("pitch_status", { enum: ["none", "writing", "personal", "partial", "default"] }).notNull().default("none"),
+    /** Why the page is the default copy, when it is: "no key", "daily cap", "no profile" or "failed". */
+    pitchNote: text("pitch_note"),
+    pitchAt: text("pitch_at"),
+    /** The first time their page asked for it. */
+    openedAt: text("opened_at"),
+    /** When they registered, and how HelixOS heard: inside the chat, GHL's workflow webhook, or the page's own signal. */
+    registeredAt: text("registered_at"),
+    registeredVia: text("registered_via", { enum: ["chat", "webhook", "page"] }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("webinar_signups_person").on(t.webinarId, t.email), uniqueIndex("webinar_signups_page").on(t.pageCode), index("webinar_signups_member").on(t.workspaceId, t.userId)],
 );
 export type WebinarSignup = typeof webinarSignups.$inferSelect;
+
+/**
+ * The Magic funnel's setup for one webinar (revs 812, 815; Coach → Webinars → Magic funnel): the switch, the voice and prompt
+ * box, three pillars, the agenda, objections answered from the facts, real urgency only, the Proof Bank items it may pick from,
+ * and default copy for every section. The facts themselves (title, date, promise, what they'll learn, who it's for) are the
+ * webinar's own fields.
+ */
+export const mfSetups = sqliteTable(
+  "mf_setups",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    webinarId: text("webinar_id").notNull(),
+    live: integer("live", { mode: "boolean" }).notNull().default(false),
+    /** Null: Danno's IGDITD prompt (DEFAULT_PROMPT), adapted for a page shown before they register. */
+    prompt: text("prompt"),
+    pillars: text("pillars", { mode: "json" }).$type<MfPillar[]>().notNull().default([]),
+    agenda: text("agenda", { mode: "json" }).$type<MfAgendaItem[]>().notNull().default([]),
+    objections: text("objections", { mode: "json" }).$type<MfObjection[]>().notNull().default([]),
+    urgency: text("urgency", { mode: "json" }).$type<MfUrgency>().notNull().default({ seatCap: null, bonusDeadline: null, bonusLine: "", liveOnly: false }),
+    defaults: text("defaults", { mode: "json" }).$type<MfDefaults>().notNull().default(EMPTY_DEFAULTS),
+    /** The Proof Bank items it may pick from; empty means every approved item with the permission tick. */
+    proofIds: text("proof_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at"),
+  },
+  (t) => [uniqueIndex("mf_setups_webinar").on(t.webinarId), index("mf_setups_member").on(t.workspaceId, t.userId)],
+);
+export type MfSetup = typeof mfSetups.$inferSelect;
 
 export const bodyIngestTokens = sqliteTable(
   "body_ingest_tokens",

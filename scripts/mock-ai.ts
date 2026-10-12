@@ -27,6 +27,35 @@ function reply(system: string, user: string): string {
   }
   // A ladder (Voice to Ship, rev 638; the teaching library, rev 618): a full ladder in the contract's shape that passes the
   // checks with no keyword, so a walk can ship it. Given the coach's library, it names the first answer and story it used.
+  // The Magic funnel (revs 812, 815): a profile from the prospect's words, then the page as JSON in the contract's shape. Walk
+  // hooks: "WALK_SCARCITY" in their words rides the profile (the page writer sees only the profile) and writes invented scarcity (caught, so urgency falls back); "nicotine" writes to their
+  // customer the first time (caught), and to them as a business owner when asked again.
+  if (/MAGIC_FUNNEL_PROFILE/.test(system)) {
+    const nic = /nicotine|vap/i.test(user);
+    return JSON.stringify(nic ? { industry: "quit-smoking coaching", who_they_serve: "people who want to quit nicotine", their_offer: "a nicotine freedom coaching program", main_pain: "not enough new clients each month", stage: "growing", likely_objection: "no time for another program" } : { industry: "fitness coaching", who_they_serve: "busy parents who want to get fit", their_offer: "online coaching", main_pain: /WALK_SCARCITY/.test(user) ? "WALK_SCARCITY inconsistent leads" : "inconsistent leads", stage: "starting", likely_objection: "it won't work for my niche" });
+  }
+  if (/MAGIC_FUNNEL_PITCH/.test(system)) {
+    const order = JSON.parse(system.match(/"order": \[([^\]]*)\]/)?.[0].replace(/^"order": /, "") ?? "[]") as string[];
+    const proofs = JSON.parse(system.match(/"proof_ids": 2 or 3 of (\[[^\]]*\])/)?.[1] ?? "[]") as string[];
+    const agenda = JSON.parse(system.match(/"id": one of (\[[^\]]*\])/)?.[1] ?? "[]") as string[];
+    const retry = /Your last version broke the rules/.test(user);
+    const nic = /nicotine/i.test(user);
+    const name = user.match(/<first_name>([^<]*)<\/first_name>/)?.[1] ?? "there";
+    const reordered = order.length ? [order[order.length - 1], ...order.slice(0, -1)] : [];
+    return JSON.stringify({
+      hero: { header: nic ? "Fill your quit-smoking practice without chasing anyone" : "More clients for your coaching business, without sales calls", subheader: "A plain plan for the next ninety days of your business", cta_label: `Save my seat, ${name}` },
+      why_you: ["You already help people change", "Your calendar has room for more clients", "You want a way to sell that feels like you"],
+      pillars: { order: reordered, lines: Object.fromEntries(order.map((id) => [id, "How this part grows your business, week by week."])) },
+      example: { title: nic ? "What this looks like for a quit-smoking coach" : "What this looks like for a fitness coach", text: "A short post brings a conversation. The conversation becomes a call you never had to chase." },
+      proof_ids: proofs.slice(0, 2),
+      objection: { objection: "I don't have time", answer: "The session shows the few steps that matter first." },
+      agenda: { id: agenda[0] ?? "", why: "It is the part that fixes the gap in your week." },
+      urgency: /WALK_SCARCITY/.test(user) ? "Spots are filling up fast.\nDon't miss out." : "Every month you wait is another month of the same.\nStart now.",
+      emotional: nic && !retry ? `${name}, picture your journey to nicotine freedom.\nYou deserve it.` : `${name}, you started this business to help people.\nIt should feel that way.`,
+      logical: "A simple system beats more hours.\nThe session shows the system.",
+      confirmation: { ticket_title: "You're in", bring: ["Your calendar", "One question about your business"] },
+    });
+  }
   if (/SUPPORTING_COMMENTS/.test(system)) {
     const ids = Array.from(user.matchAll(/^\[([TS]\d+)\]/gm)).map((m) => m[1]);
     const used = [ids.find((i) => i.startsWith("T")), ids.find((i) => i.startsWith("S"))].filter(Boolean).join(", ") || "NONE";

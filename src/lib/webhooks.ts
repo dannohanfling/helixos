@@ -115,6 +115,15 @@ export async function handleInbound(provider: Provider, request: Request): Promi
       note = ok ? `Awarded ${pts} points` : "Nothing awarded";
     }
   } else if (provider === "gohighlevel") {
+    // The Magic funnel (rev 837's answer): GoHighLevel's "Form submitted → Webhook" workflow sends the form's mf_code. That is
+    // the person registering; nothing else of the form is kept, and the log holds only the code's start.
+    const mfCode = s(body.mf_code ?? body.mf ?? (body.customData as Body | undefined)?.mf_code ?? (body.contact as Body | undefined)?.mf_code);
+    if (/^[A-Za-z0-9_-]{43}$/.test(mfCode)) {
+      const { webhookRegistered } = await import("@/lib/mf/data");
+      const said = await webhookRegistered(integ.workspaceId, mfCode);
+      await logSync({ workspaceId: integ.workspaceId, userId: null, provider, direction: "in", event: "mf:registered", payload: { mf: `${mfCode.slice(0, 6)}…` }, status: "received", note: said });
+      return NextResponse.json({ ok: true, note: said });
+    }
     if (ctx && /contact|opportunity|appointment/i.test(event)) {
       const appt = (body.appointment as Body | undefined) ?? {};
       const name = s(body.full_name ?? body.name ?? `${s(body.first_name ?? body.firstName)} ${s(body.last_name ?? body.lastName)}`).trim();

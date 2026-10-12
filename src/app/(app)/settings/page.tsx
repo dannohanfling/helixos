@@ -16,6 +16,8 @@ import { ConfirmDelete } from "@/components/confirm-delete";
 import { STARTER_KIT } from "@/lib/engine/deck";
 import { CopyButton } from "@/components/copy-button";
 import { ADD_PERMISSION } from "@/lib/engine/post-picture";
+import { saveMfDomainsAction } from "@/lib/actions/magic-funnel";
+import { mfAvailable } from "@/lib/mf/data";
 import { BotConnectionCard } from "@/components/bot-connection-card";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
@@ -57,7 +59,7 @@ export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
   if (v.team) return <TeamSettings v={v} />;
@@ -70,7 +72,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError, cl: clNotice, mf: mfNotice, mfError } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -343,6 +345,34 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </form>
         </Card>
         {v.switchedInto || v.team ? null : <BotConnectionCard workspaceId={v.workspace.id} userId={v.user.id} membershipId={v.membership.id} tz={v.membership.timezone ?? v.workspace.timezone} />}
+        {v.switchedInto || v.team || !mfAvailable(v.membership) ? null : (
+          <Card id="magic-funnel" className="scroll-mt-20" title="🪄 Magic funnel">
+            {mfError ? (
+              <p className="mb-2 rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="mf-domains-error">
+                {mfError}
+              </p>
+            ) : mfNotice === "saved" ? (
+              <p className="mb-2 rounded-lg bg-good-soft p-2 text-sm" role="status" data-testid="mf-domains-saved">
+                Saved.
+              </p>
+            ) : null}
+            <form action={saveMfDomainsAction} className="space-y-3">
+              <Field label="Your funnel domains" hint="The hosts your GoHighLevel registration pages are on, like go.yourdomain.com, one a line. Only these pages can read a person's Magic funnel page.">
+                <textarea className="field" name="domains" rows={3} defaultValue={v.membership.mfDomains.join("\n")} data-testid="mf-domains" />
+              </Field>
+              {v.membership.role === "coach" ? (
+                <Field label="Pages a day, at most" hint="Past it, pages use your default copy until tomorrow.">
+                  <input className="field tabular" name="dailyCap" type="number" min={0} max={5000} defaultValue={v.membership.mfDailyCap} data-testid="mf-daily-cap" />
+                </Field>
+              ) : (
+                <p className="text-xs text-ink-3">Up to {v.membership.mfDailyCap} pages a day; your coach sets it.</p>
+              )}
+              <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…" data-testid="mf-domains-save">
+                Save
+              </SubmitButton>
+            </form>
+          </Card>
+        )}
         {/* HumanOS (rev 320/322): the member's own switch, off by default. Off hides the group and keeps the data; on shows it as it was. */}
         <Card id="humanos" title="HumanOS">
           <p className="text-sm text-ink-2">Food, training, sleep, practices and weigh-ins, in your HelixOS. Everything in it is private to you by default; sharing with your coach is a separate switch inside HumanOS settings, and so is letting AI use it.</p>

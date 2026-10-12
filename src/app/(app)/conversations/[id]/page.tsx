@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import Link from "next/link";
@@ -28,9 +28,11 @@ export default async function ContactPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const contact = await db.query.contacts.findFirst({ where: and(eq(schema.contacts.id, id), eq(schema.contacts.userId, v.user.id)) });
   if (!contact) notFound();
-  const [messages, templates] = await Promise.all([
+  const [messages, templates, mfRow] = await Promise.all([
     db.query.messages.findMany({ where: eq(schema.messages.contactId, id), orderBy: asc(schema.messages.sentAt) }),
     templatesFor(v.workspace.id),
+    // The Magic funnel's profile of this person (rev 815 §2), on their own lead only: the latest sign-up that has one.
+    db.query.webinarSignups.findFirst({ where: and(eq(schema.webinarSignups.contactId, id), eq(schema.webinarSignups.userId, v.user.id), isNotNull(schema.webinarSignups.profile)), orderBy: desc(schema.webinarSignups.createdAt), columns: { profile: true, pitchStatus: true, openedAt: true, registeredAt: true } }),
   ]);
   const firstName = contact.name.split(" ")[0];
   const values = { Name: firstName, "Pass URL": "[Pass URL]", Points: "", Tier: "", "Points to Next Tier": "", "Specific Post Reference": "" };
@@ -105,6 +107,25 @@ export default async function ContactPage({ params, searchParams }: { params: Pr
           </Card>
         </div>
         <div className="space-y-4">
+          {mfRow?.profile ? (
+            <Card title="🪄 Magic funnel profile">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm" data-testid="mf-profile">
+                <dt className="text-ink-3">Industry</dt>
+                <dd>{mfRow.profile.industry}</dd>
+                <dt className="text-ink-3">Serves</dt>
+                <dd>{mfRow.profile.who_they_serve}</dd>
+                <dt className="text-ink-3">Sells</dt>
+                <dd>{mfRow.profile.their_offer}</dd>
+                <dt className="text-ink-3">Main pain</dt>
+                <dd>{mfRow.profile.main_pain}</dd>
+                <dt className="text-ink-3">Stage</dt>
+                <dd>{mfRow.profile.stage}</dd>
+                <dt className="text-ink-3">Likely doubt</dt>
+                <dd>{mfRow.profile.likely_objection}</dd>
+              </dl>
+              <p className="mt-2 text-xs text-ink-3">{mfRow.registeredAt ? "Registered." : mfRow.openedAt ? "Opened their page; not registered yet." : "Page sent; not opened yet."}</p>
+            </Card>
+          ) : null}
           <Card title="Where this stands">
             {needsIdentity ? (
               <p className="mb-3 rounded-lg bg-warn-soft p-2 text-sm" data-testid="needs-identity">

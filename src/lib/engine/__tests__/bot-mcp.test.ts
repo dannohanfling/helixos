@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { BOT_TOOLS, LIMITS, MAX, bookedOnIso, cleanCustom, cleanText, faqMatches, isBotKeyShape, isContactId, isEmail, isTimezone, isWrite, nextStage, nextWebinar, offerFacts, whenLine, withNote, type OfferRow } from "@/lib/engine/bot-mcp";
 
-describe("Bot connection: the six tools and nothing else (rev 696)", () => {
-  it("lists exactly the six, two of them writes, and no never-list area has a tool", () => {
-    expect([...BOT_TOOLS]).toEqual(["offer_info", "faq_answer", "booking_info", "webinar_next", "lead_log", "webinar_register"]);
-    expect(BOT_TOOLS.filter(isWrite)).toEqual(["lead_log", "webinar_register"]);
+describe("Bot connection: the seven tools and nothing else (rev 696; mf_prepare at rev 812)", () => {
+  it("lists exactly the seven, three of them writes, and no never-list area has a tool", () => {
+    expect([...BOT_TOOLS]).toEqual(["offer_info", "faq_answer", "booking_info", "webinar_next", "lead_log", "webinar_register", "mf_prepare"]);
+    expect(BOT_TOOLS.filter(isWrite)).toEqual(["lead_log", "webinar_register", "mf_prepare"]);
     for (const never of ["essence_read", "scoreboard_read", "tasks_list", "proofs_list", "contacts_list", "pathway_read", "body_today", "teaching_search", "story_bank", "dm_send", "contact_delete"]) expect((BOT_TOOLS as readonly string[]).includes(never), never).toBe(false);
     expect(LIMITS).toEqual({ readsPerMinute: 60, writesPerMinute: 10, writesPerDay: 200 });
   });

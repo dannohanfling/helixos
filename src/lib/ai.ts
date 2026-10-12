@@ -196,3 +196,24 @@ export async function validateKey(provider: AiProvider, key: string): Promise<{ 
 }
 
 
+
+/**
+ * The Magic funnel's writer (revs 812, 815; rev 837): the one house key in HelixOS, Danno's MAGIC_FUNNEL_ANTHROPIC_KEY in
+ * Vercel, on the small model. It never touches a member's own key or their ai_usage cap; the funnel's own daily cap per
+ * member is counted by the caller. No key, or any failure: null, and the page uses the member's default copy. Nothing of the
+ * prompt, the prospect or the reply is logged.
+ */
+export const MAGIC_FUNNEL_MODEL = "claude-haiku-5-5";
+export const magicFunnelKeySet = () => Boolean(process.env.MAGIC_FUNNEL_ANTHROPIC_KEY?.trim());
+export async function magicFunnelCall(system: string, user: string, maxTokens: number): Promise<string | null> {
+  const key = process.env.MAGIC_FUNNEL_ANTHROPIC_KEY?.trim();
+  if (!key) return null;
+  try {
+    const r = await callAnthropic(key, MAGIC_FUNNEL_MODEL, [{ text: system, cached: true }], user, maxTokens);
+    return r && !r.cut ? r.text : null;
+  } catch (e) {
+    const err = e as { status?: number };
+    console.error("[ai] magic funnel call failed", JSON.stringify({ model: MAGIC_FUNNEL_MODEL, status: err.status ?? null }));
+    return null;
+  }
+}

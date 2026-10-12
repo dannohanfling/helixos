@@ -51,6 +51,7 @@ export const MEMBER_TABLES = {
   // Bot connection (rev 696): the member's bot key (its hash and last four only), and the sign-ups their bot made for their
   // webinars, prospects' names, emails and answers among them: theirs, exported and erased with them.
   bot_keys: schema.botKeys,
+  mf_setups: schema.mfSetups,
   webinar_signups: schema.webinarSignups,
   pathways: schema.pathways,
   webinars: schema.webinars,

@@ -1,7 +1,7 @@
 /**
  * Bot connection's server (rev 696): /api/bot-mcp, separate from the member connector at /api/mcp. A member's Community
  * Loyalty bot sends its key as a Bearer token; the key alone says whose bot it is. Stateless, one message per request, like the
- * member connector. Exactly six tools, all scoped to that one member; the limits are checked before a call runs and answered
+ * member connector. Exactly seven tools, all scoped to that one member; the limits are checked before a call runs and answered
  * with a 429 and a line the bot can say. Each call is logged as the tool, the member and the outcome: never what was said or
  * who said it.
  */
@@ -12,6 +12,9 @@ import { allow } from "@/lib/rate-limit";
 import { logSync } from "@/lib/integrations";
 import { APP_VERSION } from "@/lib/version";
 import { BOT_STAGES, BUSY_LINE, LIMITS, MAX, cleanCustom, cleanText, isContactId, isEmail, isTimezone, isWrite, type BotTool } from "@/lib/engine/bot-mcp";
+import { after } from "next/server";
+import { mfPrepare, writeForSignup } from "@/lib/mf/data";
+import { MF_MAX, cleanFirstName, cleanPhone } from "@/lib/engine/magic-funnel";
 import { bookingInfo, faqAnswer, leadLog, memberForKey, offerInfo, touchKey, webinarNext, webinarRegister, type BotMember } from "@/lib/bot-mcp/data";
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -110,6 +113,39 @@ function tools(m: BotMember): { name: BotTool; description: string; input: z.Zod
         if (!custom.ok) return text(custom.error, true);
         const r = await webinarRegister(m, { firstName, email, contactId, custom: custom.fields });
         return text(r ? JSON.stringify(r) : "There's no webinar scheduled right now.");
+      },
+    },
+    {
+      name: "mf_prepare",
+      write: true,
+      description: "The Magic funnel: makes a personal registration page for the person in this conversation for the next webinar, and returns personal_url to send them (the Finalize Spot button). It doesn't register them; they register on the page with one tap. Give their Community Loyalty contact id, name, email and phone from the contact, their biggest pain and industry, any other answers, and an optional short summary of the conversation.",
+      input: {
+        contact_id: z.string().max(MAX.contactId).describe("The Community Loyalty contact id of the person in this conversation."),
+        first_name: field(MAX.name),
+        last_name: field(MAX.name).optional(),
+        email: z.string().max(MAX.email).describe("Their email address."),
+        phone: z.string().max(MF_MAX.phone * 2).optional().describe("Their phone number, if the contact has one."),
+        pain: field(MF_MAX.pain).optional().describe("Their biggest pain in business, in their words."),
+        industry: field(MF_MAX.industry).optional().describe("Their industry, in their words."),
+        conversation_summary: field(MF_MAX.summary).optional().describe("A short summary of the conversation, 1,000 characters at most."),
+        custom: z.record(z.string().max(MAX.customKey), z.string().max(MAX.customValue * 2)).optional().describe("Optional other answers (12 at most, 300 characters each)."),
+      },
+      run: async (a) => {
+        const contactId = String(a.contact_id).trim();
+        if (!isContactId(contactId)) return text("That contact id isn't one HelixOS can use.", true);
+        const email = String(a.email).trim().toLowerCase();
+        if (!isEmail(email)) return text("That email address doesn't look right. Please check it.", true);
+        const firstName = cleanFirstName(a.first_name);
+        if (!firstName) return text("A first name is needed.", true);
+        const custom = cleanCustom(a.custom as Record<string, unknown> | undefined);
+        if (!custom.ok) return text(custom.error, true);
+        const r = await mfPrepare(m, { contactId, firstName, lastName: cleanText(String(a.last_name ?? "")).slice(0, MF_MAX.lastName), email, phone: cleanPhone(a.phone), pain: String(a.pain ?? ""), industry: String(a.industry ?? ""), summary: String(a.conversation_summary ?? ""), custom: custom.fields });
+        if (!r.ok) return text(r.line, true);
+        if (r.signupId) {
+          const id = r.signupId;
+          after(() => writeForSignup(id));
+        }
+        return text(JSON.stringify(r.body));
       },
     },
   ];

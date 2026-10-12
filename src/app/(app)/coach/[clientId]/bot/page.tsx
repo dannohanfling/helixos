@@ -7,6 +7,8 @@ import { requireCoach } from "@/lib/auth";
 import { changedSinceLastPush, lastPushedLine, stage1Preview } from "@/lib/community-loyalty";
 import { YourBotPanel } from "@/components/your-bot";
 import { PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/submit-button";
+import { setMfClientAction } from "@/lib/actions/magic-funnel";
 
 export const metadata = { title: "Their bot" };
 
@@ -29,6 +31,23 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
     <>
       <PageHeader title={own ? "Your bot" : `${u.name}'s bot`} subtitle="Read from the bot just now. Nothing is sent until the Push below." action={<Link href={own ? "/coach" : `/coach/${m.id}`} className="btn btn-ghost btn-sm">Back</Link>} />
       <YourBotPanel m={m} preview={preview} own={own} whose={whose} sp={sp} lastPushedLine={`${line}${changed ? " · changed since the last push" : ""}`} />
+      {own ? null : (
+        <section id="magic-funnel" className="card mt-6 scroll-mt-20 p-4 sm:p-5" data-testid="mf-client">
+          <h2 className="font-semibold">🪄 Magic funnel</h2>
+          <p className="mt-1 text-sm text-ink-2">Off until you turn it on for {u.name}. On, their bot can send each prospect a registration page written for them.</p>
+          <form action={setMfClientAction} className="mt-3 flex flex-wrap items-end gap-3">
+            <input type="hidden" name="membershipId" value={m.id} />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="enabled" value="1" defaultChecked={m.mfEnabled} data-testid="mf-client-enabled" /> On for {u.name}
+            </label>
+            <label className="block text-sm">
+              <span className="label">Pages a day, at most</span>
+              <input className="field tabular w-28" name="dailyCap" type="number" min={0} max={5000} defaultValue={m.mfDailyCap} data-testid="mf-client-cap" />
+            </label>
+            <SubmitButton className="btn btn-ghost btn-sm" pendingText="Saving…" data-testid="mf-client-save">Save</SubmitButton>
+          </form>
+        </section>
+      )}
       <div className="mt-6">
         <BotConnectionCard workspaceId={m.workspaceId} userId={m.userId} membershipId={m.id} tz={m.timezone ?? v.workspace.timezone} forClient={!own} />
       </div>

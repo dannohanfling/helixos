@@ -28,6 +28,7 @@ main() {
     SESSION_SECRET="${SESSION_SECRET:-dev-secret-dev-secret-dev-secret-123}" \
     GHL_WEBHOOK_PUBLIC_KEY="${GHL_WEBHOOK_PUBLIC_KEY:-LcZjV/epRdfWK7Ah/K3pR4K5ulVZRnaRt6vHVnshlMg=}" \
     AI_BASE_URL="${AI_BASE_URL:-http://localhost:4020}" \
+    MAGIC_FUNNEL_ANTHROPIC_KEY="${MAGIC_FUNNEL_ANTHROPIC_KEY:-sk-ant-good}" \
     FATHOM_BASE_URL="${FATHOM_BASE_URL:-http://localhost:4030}" \
     OPENALEX_BASE_URL="${OPENALEX_BASE_URL:-http://localhost:4040}" \
     OPENALEX_API_KEY="${OPENALEX_API_KEY:-test-key}" \

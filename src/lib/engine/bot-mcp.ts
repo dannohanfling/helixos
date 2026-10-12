@@ -6,10 +6,10 @@
  */
 import { formatPrice } from "@/lib/engine/offer-score";
 
-/** The six tools, and nothing else: the never-list (Essence, numbers, tasks, Proof Bank, other prospects...) has no tool. */
-export const BOT_TOOLS = ["offer_info", "faq_answer", "booking_info", "webinar_next", "lead_log", "webinar_register"] as const;
+/** The seven tools, and nothing else: the never-list (Essence, numbers, tasks, Proof Bank, other prospects...) has no tool. mf_prepare is the Magic funnel's (rev 812 §6). */
+export const BOT_TOOLS = ["offer_info", "faq_answer", "booking_info", "webinar_next", "lead_log", "webinar_register", "mf_prepare"] as const;
 export type BotTool = (typeof BOT_TOOLS)[number];
-export const WRITE_TOOLS: readonly BotTool[] = ["lead_log", "webinar_register"];
+export const WRITE_TOOLS: readonly BotTool[] = ["lead_log", "webinar_register", "mf_prepare"];
 export const isWrite = (t: string) => (WRITE_TOOLS as readonly string[]).includes(t);
 
 /** A bot key: "hxb_" and 32 random bytes. Never the member connector's "mcpa_" shape, so neither server takes the other's. */

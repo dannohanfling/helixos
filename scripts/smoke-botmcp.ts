@@ -3,7 +3,7 @@
  *  1. Settings: the booking link and what to expect (a link that isn't https:// is refused); Bot connection makes a key, shows
  *     it once, then only its last four.
  *  2. The server: no key, a wrong key, a member-connector token, or the bot key at the member connector all get 401; the bot key
- *     lists exactly the six tools, and every never-list name is refused.
+ *     lists exactly the seven tools (mf_prepare since rev 812), and every never-list name is refused.
  *  3. The reads: offers with prices only where allowed, the FAQ, the booking link, the next webinar in the asker's time zone.
  *  4. lead_log: adds and updates only the person with that contact id, replies only "logged" or "updated", sets booked-on for
  *     booked (the scoreboard counts it), the No-show stage, over-long input refused; another member's key never touches hers.
@@ -117,12 +117,12 @@ async function main() {
     const init = await rpc(key, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "walk", version: "1" } });
     must(init.status === 200, `initialize: ${init.status}`);
     const listed = (await rpc(key, "tools/list")).json?.result?.tools?.map((t) => t.name).sort();
-    must(JSON.stringify(listed) === JSON.stringify(["booking_info", "faq_answer", "lead_log", "offer_info", "webinar_next", "webinar_register"]), `exactly the six tools: ${listed}`);
+    must(JSON.stringify(listed) === JSON.stringify(["booking_info", "faq_answer", "lead_log", "mf_prepare", "offer_info", "webinar_next", "webinar_register"]), `exactly the seven tools: ${listed}`);
     for (const never of ["essence_read", "scoreboard_read", "tasks_list", "proofs_list", "contacts_list", "pathway_read", "body_today", "dm_send", "contact_delete", "whoami"]) {
       const r = await call(key, never);
       must(r.json?.error || r.json?.result?.isError, `the never-list tool ${never} is refused: ${r.body.slice(0, 120)}`);
     }
-    console.log("✓ no key, a wrong key, a member token, and the bot key at the member connector: 401; exactly six tools; every never-list name refused");
+    console.log("✓ no key, a wrong key, a member token, and the bot key at the member connector: 401; exactly seven tools; every never-list name refused");
 
     // 3. The reads.
     const offers = JSON.parse(said(await call(key, "offer_info"))).offers as { name: string; main: boolean; price: string | null; price_answer: string | null }[];
