@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { NAV_GROUPS, navVisible } from "@/components/nav-groups";
+import { ComingSoonItem } from "@/components/coming-soon-item";
 import { DueBadge } from "@/components/nav";
 import { intentionsDueFor } from "@/lib/queries/intentions";
 import { NewDot } from "@/components/nav";
@@ -34,7 +35,9 @@ export default async function MorePage() {
           <div key={g.label} className="card p-2">
             <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">{g.label}</div>
             {g.items.map((n) =>
-              n.external ? (
+              n.comingSoon ? (
+                <ComingSoonItem key={n.href} item={n} row />
+              ) : n.external ? (
                 <a key={n.href} href={n.href} target="_blank" rel="noopener noreferrer" className={ROW} data-testid="more-platform">
                   <span className="w-6 shrink-0 text-center text-lg">{n.icon}</span>
                   <RowText label={n.label} line={<>{n.line} <span aria-label="opens in a new tab">↗</span></>} />

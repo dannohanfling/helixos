@@ -2,6 +2,7 @@
 
 import { PinToViewport } from "@/components/pin-to-viewport";
 import { NAV_GROUPS, navVisible, type NavItem } from "./nav-groups";
+import { ComingSoonItem } from "./coming-soon-item";
 const STORAGE_KEY = "helix.nav.collapsed";
 
 import Link from "next/link";
@@ -54,7 +55,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
   const toggle = (label: string) => writeCollapsed({ ...collapsed, [label]: !collapsed[label] });
   // The most specific item wins: on /body/foods that's Nutrition, not Log (/body) as well (a prefix match alone lit both).
   const activeHref = NAV_GROUPS.flatMap((g) => g.items)
-    .filter((n) => !n.external && navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team }) && isActive(pathname, n.href))
+    .filter((n) => !n.external && !n.comingSoon && navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team }) && isActive(pathname, n.href))
     .reduce<string | null>((best, n) => (!best || n.href.length > best.length ? n.href : best), null);
   return (
     <nav className="space-y-2">
@@ -83,7 +84,9 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
             {open ? (
               <div className="flex flex-col gap-0.5">
                 {items.map((n) =>
-                  n.external ? (
+                  n.comingSoon ? (
+                    <ComingSoonItem key={n.href} item={n} />
+                  ) : n.external ? (
                     // An outbound platform (Danno, 7 Oct): a new tab, the ↗ mark, never the active page.
                     <a key={n.href} href={n.href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium text-ink-2 transition hover:bg-surface-2 hover:text-ink" data-testid="nav-platform">
                       <span className="w-5 text-center text-base">{n.icon}</span>

@@ -5,7 +5,11 @@ import { PLATFORMS } from "@/lib/platforms";
 /** `recordingsOnly`: shown to a client only once a recording is published for them (Recordings R1). */
 /** `team`: shown to a team member working in the owner's HelixOS (Danno, 6 Oct); everything without it is hidden from them, and closed on the server. */
 /** `external`: an outbound link (the Platforms section, Danno 7 Oct): opens in a new tab with the ↗ mark, and is never the active page. */
-export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; hint?: string; line?: string };
+/**
+ * `comingSoon` (rev 816): a page on its way. Shown greyed with a "Coming soon" pill and its subtitle (`line`), never a link: its
+ * `href` is only where it will live. The commit that ships the page drops the flag, and the item becomes a normal link.
+ */
+export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -13,6 +17,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Daily",
     items: [
       { href: "/today", label: "Today", icon: "☀️", team: true },
+      { href: "/my-helix", label: "My Helix", icon: "🌀", line: "your progress at a glance", comingSoon: true },
       { href: "/intentions", label: "Intentions", icon: "🌱", hint: "week + month" },
       { href: "/tasks", label: "Tasks", icon: "✅", team: true },
       { href: "/content", label: "Content", icon: "✍️", team: true, hint: "post + repurpose" },
@@ -55,6 +60,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/proof", label: "Proof Bank", icon: "🏆", line: "Your clients' results" },
       { href: "/evidence", label: "Evidence", icon: "📚", line: "Published research" },
       { href: "/magnets", label: "Lead magnets", icon: "🧲", hint: "keyword + link" },
+      { href: "/forum", label: "The Forum", icon: "🏛️", line: "watch your AI agents work", comingSoon: true },
+      { href: "/glossary", label: "Building with AI", icon: "📖", line: "plain-English glossary", comingSoon: true },
     ],
   },
   {
@@ -75,6 +82,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/numbers", label: "Numbers", icon: "📊" },
       { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives" },
       { href: "/rewards", label: "Rewards", icon: "🏆" },
+      { href: "/colosseum", label: "The Colosseum", icon: "🏟️", line: "wins, ranks and challenges", comingSoon: true },
+      { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak", comingSoon: true },
+      { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", comingSoon: true },
       { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
       { href: "/coach/board", label: "Danno's principles", icon: "🧭", coachOnly: true, hint: "Board principles" },

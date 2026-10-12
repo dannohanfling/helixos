@@ -124,6 +124,19 @@ async function main() {
     const plain = await (await page.goto(`${base}/more`, { waitUntil: "networkidle" }), page.locator('[data-testid="overflow-debug"]').count());
     if (plain) throw new Error("the overflow panel shows without ?debug=overflow");
     console.log("✓ ?debug=overflow: nothing too wide on /more at 390, a planted 600px element named and outlined, the panel fits, and it's off without the flag");
+    // Coming soon (rev 816): six greyed items on More, none a link, each disabled for screen readers and at least 44px tall;
+    // a tap shows the subtitle and goes nowhere.
+    const soon = page.locator('[data-testid="nav-coming-soon"]');
+    if ((await soon.count()) !== 6) throw new Error(`six Coming soon items on More: ${await soon.count()}`);
+    for (let i = 0; i < 6; i++) {
+      const it = soon.nth(i);
+      const box = await it.boundingBox();
+      if ((await it.getAttribute("aria-disabled")) !== "true" || (await it.evaluate("(el) => el.closest('a') !== null")) || !box || box.height < 44 || box.x + box.width > 390.5) throw new Error(`a Coming soon item is a link, isn't marked disabled, or is too small or too wide: ${await it.innerText()}`);
+    }
+    const before390 = page.url();
+    await soon.filter({ hasText: "The Forum" }).click();
+    if (!(await soon.filter({ hasText: "The Forum" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== before390) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
+    console.log("✓ Coming soon: six greyed items on More, none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
   }
   // interact a little so client-side handlers run under the policy
   await page.goto(`${base}/content/compose`, { waitUntil: "networkidle" });

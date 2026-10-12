@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 155,
+    date: "2026-10-12",
+    title: "Coming soon, in your menu",
+    lines: [
+      "Six pages on their way now show in the menu, greyed with a \"Coming soon\" pill: My Helix, The Colosseum, The Aqueduct, the Magic funnel, The Forum and Building with AI. Tap one to see what it will be; each becomes a normal link the day it arrives.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 154,
     date: "2026-10-12",
     title: "Steadier on iPhone",
