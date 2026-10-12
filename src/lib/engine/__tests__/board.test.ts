@@ -121,9 +121,13 @@ describe("My Board: what it reads", () => {
     for (const q of ["x", "price"]) expect(sectionsFor(q, "board")).toEqual(expect.arrayContaining(["numbers", "tasks", "intentions", "pathway", "scoreboard", "decisions"]));
   });
 
-  it("never HumanOS, never the teaching library; always the member's own rows", () => {
+  it("HumanOS only through Body's one gate and the member's own switch; never the teaching library; always the member's own rows", () => {
     const src = read("src/lib/board.ts");
-    expect(src).not.toMatch(/@\/lib\/queries\/body|schema\.body[A-Z]|db\.query\.body[A-Z]/);
+    // The one Body read is bodyAiContext (which checks Body's own AI switch), behind HumanOS on and the Board's switch on.
+    expect(src).not.toMatch(/schema\.body[A-Z]|db\.query\.body[A-Z]/);
+    expect(src).toMatch(/import \{ bodyAiContext \} from "@\/lib\/queries\/body";/);
+    expect(src).toMatch(/if \(v\.membership\.bodyEnabled && v\.membership\.boardSeesBody && \(BODY_TOPIC\.test\(question\)/);
+    expect(src.match(/bodyAiContext\(/g)).toHaveLength(1);
     expect(src).not.toMatch(/teachingEntries|teaching_entries|storyBank/);
     // Every member query is scoped to the workspace and the member.
     for (const q of src.match(/db\.query\.(offers|avatars|webinars|contacts|proofs|contentItems|ladders|weeklyIntentions|officeHoursRequests|targets)\.find\w+\(\{ where: [^,]+/g) ?? []) expect(q, q).toMatch(/mine\(schema\.\w+\)|and\(mine\(schema/);
@@ -137,5 +141,20 @@ describe("My Board: what it reads", () => {
     // board_apply changes nothing without the member's yes.
     expect(read("src/lib/mcp/tools/board.ts")).toMatch(/if \(input\.confirm !== true\) return \{ text: `This will set up:/);
     expect(read("src/lib/actions/board.ts")).toMatch(/ctx\(\{ whileSwitched: "refuse", reason: OWN \}\)/);
+  });
+});
+
+describe("My Board in Claude (rev 664 §9)", () => {
+  it("the skill's folder sits at the archive's root, word for word, with the coach's current principles", async () => {
+    const { boardSkillFiles, SKILL_FOLDER, SKILL_INSTALL_STEPS } = await import("@/lib/engine/board");
+    const files = boardSkillFiles([{ title: "Walk the floor", body: "Spend an hour inside your client's day.", goodFor: "Offers" }]);
+    expect(files.map((f) => f.path)).toEqual([`${SKILL_FOLDER}/SKILL.md`, `${SKILL_FOLDER}/references/board-profile.md`, `${SKILL_FOLDER}/references/danno-source-pack.md`]);
+    expect(files.every((f) => f.path.startsWith("evolve-omega-board/"))).toBe(true);
+    expect(files[0].text).toBe(read("docs/board/SKILL.md"));
+    expect(files[1].text).toBe(read("docs/board/board-profile.md"));
+    const pack = files[2].text;
+    expect(pack).toContain("## Offers\n\n- **Walk the floor.** Spend an hour inside your client's day.");
+    expect(pack).toContain("## Boundaries for the Danno Seat");
+    expect(SKILL_INSTALL_STEPS).toHaveLength(6);
   });
 });

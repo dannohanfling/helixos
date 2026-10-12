@@ -7,7 +7,7 @@
 import { addDays, weekday } from "@/lib/dates";
 import { BOARD_PROFILE_MD, BOARD_SKILL_MD, DANNO_SOURCE_PACK_MD } from "@/content/board-spec";
 import { MODE_INFO, takesWords, type Mode } from "@/lib/engine/board-view";
-export { MODES, MODE_INFO, SEAT_SPOTS, SPEAK_MS, takesWords, type Mode } from "@/lib/engine/board-view";
+export { MODES, MODE_INFO, SEAT_SPOTS, SKILL_INSTALL_STEPS, SPEAK_MS, takesWords, type Mode } from "@/lib/engine/board-view";
 
 /* ───────────────────────── The seats ───────────────────────── */
 
@@ -78,6 +78,23 @@ export function packText(principles: Principle[]): string {
   const body = [...groups].map(([g, ps]) => `## ${g}\n\n${ps.map((p) => `- **${p.title}.** ${p.body.replace(/\n/g, "\n  ")}`).join("\n")}`).join("\n\n");
   return [header, body, boundaries].join("\n\n");
 }
+
+/* ───────────────────────── The skill for Claude (rev 664 §9) ───────────────────────── */
+
+export const SKILL_FOLDER = "evolve-omega-board";
+/**
+ * The files of evolve-omega-board.skill, folder at the archive's root: the skill and the profile word for word, and the source
+ * pack rebuilt around the coach's current principles (its own header and boundaries kept), so a download always matches the
+ * Board in HelixOS today.
+ */
+export function boardSkillFiles(principles: Principle[]): { path: string; text: string }[] {
+  return [
+    { path: `${SKILL_FOLDER}/SKILL.md`, text: BOARD_SKILL_MD },
+    { path: `${SKILL_FOLDER}/references/board-profile.md`, text: BOARD_PROFILE_MD },
+    { path: `${SKILL_FOLDER}/references/danno-source-pack.md`, text: `${packText(principles)}\n` },
+  ];
+}
+
 
 /* ───────────────────────── The answer ───────────────────────── */
 

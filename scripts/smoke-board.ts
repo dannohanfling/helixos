@@ -288,6 +288,8 @@ async function main() {
     await page.locator('[data-testid="board-submit"]').click();
     await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
     for (const k of ["tony", "dean", "igor", "jordan", "morgan"]) must(await page.locator(`[data-testid="board-seat-${k}"]`).count(), `the Edge seat ${k}`);
+    const edgeNote = await page.locator('[data-testid="board-edge-note"]').innerText();
+    must(edgeNote.includes("Tony Robbins, Dean Graziosi, Igor Pogany sit as style advisors") && edgeNote.includes("aren't the people"), `the Edge Preset says what its seats are: ${edgeNote}`);
     const last = (await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] };
     const sys = last.system.map((b) => b.text).join("\n");
     must(sys.includes("Walk the floor") && sys.includes("never claim to be them"), "the new principle and the Edge rules reach the prompt");
@@ -407,6 +409,40 @@ async function main() {
     const teamCheck = await allTools().find((t) => t.name === "board_checkin")!.handler(team, { decision: decisionId, steps: said }).then(() => "ok", (e: Error) => e.message);
     must(teamCheck.startsWith("A team member can read the Board's decisions but can't check in"), `a team member can't check in: ${teamCheck}`);
     console.log("✓ board_checkin by voice; a team member refused");
+
+    // Slice 4: the skill for Claude, built from the current principles; the HumanOS switch behind Body's own gate.
+    await page.goto(`${base}/settings#board-in-claude`);
+    must((await page.locator('[data-testid="board-skill-steps"] li').count()) === 6, "six install steps");
+    const skill = await page.request.get(`${base}/api/board/skill`);
+    must(skill.status() === 200 && (skill.headers()["content-disposition"] ?? "").includes("evolve-omega-board.skill"), `the skill downloads: ${skill.status()}`);
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(await skill.body());
+    const names = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
+    must(names.length === 3 && names.every((n) => n.startsWith("evolve-omega-board/")) && names.includes("evolve-omega-board/SKILL.md") && names.includes("evolve-omega-board/references/board-profile.md"), `the folder at the archive's root: ${names.join(", ")}`);
+    const pack = await zip.file("evolve-omega-board/references/danno-source-pack.md")!.async("string");
+    must(pack.includes("Walk the floor") && pack.includes("## Boundaries for the Danno Seat"), "the skill carries the coach's current principles");
+    console.log("✓ the Board in Claude: six install steps; evolve-omega-board.skill with its folder at the root and the current principles");
+
+    const energy = "I'm tired all the time; should I cut my hours this month?";
+    const lastUser = async () => ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { user: string }).user;
+    await db.update(schema.memberships).set({ bodyEnabled: true, boardSeesBody: false }).where(eq(schema.memberships.id, m.id));
+    await call("board_ask", { decision: energy });
+    must(!(await lastUser()).includes("HumanOS"), "the switch off: nothing of HumanOS");
+    await page.goto(`${base}/my-board`);
+    await page.locator("#hours-edit summary").click();
+    await press(page, '[data-testid="board-sees-body-toggle"]');
+    must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, m.id) }))!.boardSeesBody, "the member's own switch");
+    const settings = await db.query.bodySettings.findFirst({ where: and(eq(schema.bodySettings.workspaceId, ws), eq(schema.bodySettings.userId, maya.id)) });
+    if (settings) await db.update(schema.bodySettings).set({ aiUse: false }).where(eq(schema.bodySettings.id, settings.id));
+    else await db.insert(schema.bodySettings).values({ id: newId(), workspaceId: ws, userId: maya.id, aiUse: false });
+    await call("board_ask", { decision: energy });
+    must((await lastUser()).includes("HumanOS isn't open to AI in its own settings"), "Body's own AI switch still decides");
+    await db.update(schema.bodySettings).set({ aiUse: true }).where(and(eq(schema.bodySettings.workspaceId, ws), eq(schema.bodySettings.userId, maya.id)));
+    await call("board_ask", { decision: energy });
+    must((await lastUser()).includes("## HumanOS summary"), "both switches on and an energy question: the HumanOS summary");
+    await call("board_ask", { decision: "Should I raise the price of my offer?" });
+    must(!(await lastUser()).includes("HumanOS"), "a decision that doesn't touch energy, health or time: no HumanOS");
+    console.log("✓ HumanOS: nothing with the Board's switch off; with it on, Body's own AI switch still decides; read only for an energy, health or time decision");
 
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nboard walk passed");

@@ -179,6 +179,12 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
         })}
       </section>
 
+      {seats.some((s) => s.role === "STYLE ADVISOR") ? (
+        <p className="br-quiet" style={{ margin: "-24px 0 0", textAlign: "center", fontSize: 13 }} data-testid="board-edge-note">
+          Edge Preset: {seats.filter((s) => s.role === "STYLE ADVISOR").map((s) => s.short.replace(/ Advisor$/, "")).join(", ")} sit as style advisors, in their manner only. They aren&apos;t the people and never speak as them. Yours alone.
+        </p>
+      ) : null}
+
       {answer ? (
         <section aria-label="The discussion" style={{ display: "flex", flexDirection: "column" }} data-testid="board-advisors">
           <div className="br-sechead">

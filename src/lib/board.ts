@@ -18,6 +18,7 @@ import { weekOf } from "@/lib/engine/intentions";
 import { STAGE_WORDS } from "@/lib/engine/voice-pack";
 import { boardTask, checkAnswer, seatsFor, type BoardAnswer, type Mode, type Preset, type Principle } from "@/lib/engine/board";
 import { scoreboardFor } from "@/lib/scoreboard";
+import { bodyAiContext } from "@/lib/queries/body";
 import { principlesFor } from "@/lib/board-principles";
 export { principlesFor };
 import { buildProposals, SETUP_SHAPE } from "@/lib/engine/board-setup";
@@ -45,6 +46,8 @@ const TOPICS: { key: string; re: RegExp }[] = [
   { key: "recordings", re: /call|coaching|recording|action step|what did danno/i },
   { key: "officeHours", re: /office hours|friday|stuck|help/i },
 ];
+/** A decision that touches the member's energy, health or time: the only kind the HumanOS summary is read for. */
+const BODY_TOPIC = /\b(energy|tired|exhausted|burn ?out|sleep|health|stress|overwhelm|workout|training|gym|weight|food|eat|hours|time|schedule|capacity|rest)\b/i;
 const ALWAYS = ["numbers", "tasks", "intentions", "pathway", "scoreboard", "decisions"];
 /** The sections a question reads: the always-on few and every topic its words touch; a question that names none reads them all. */
 export function sectionsFor(question: string, mode: Mode): string[] {
@@ -175,9 +178,16 @@ export async function boardContext(v: Viewer, question: string, mode: Mode): Pro
       out.push({ key: "decisions", label: `Past decisions (${answered.length})`, href: "/my-board#decisions", text: answered.map((d) => `- ${d.createdAt.slice(0, 10)}: ${d.answer!.decision} → ${d.answer!.recommendation} (${d.stepTasks.filter((x) => x && done.has(x)).length} of ${d.answer!.steps.length} steps done)`).join("\n") });
     }
   }
-  // HumanOS (rev 664 §3): never read here. The member's own switch and its daily-summary read come in slice 4, through Body's own
-  // function, so Body data keeps reaching AI only by Body's gate.
-  const body = false;
+  // HumanOS (rev 664 §3): only with the member's own My Board switch on, only when the decision touches energy, health or time,
+  // and only through Body's one gate for AI (bodyAiContext checks Body's own AI switch first). Off, nothing of HumanOS is read.
+  let body = false;
+  if (v.membership.bodyEnabled && v.membership.boardSeesBody && (BODY_TOPIC.test(question) || mode === "checkin" || mode === "leverage")) {
+    const summary = await bodyAiContext(v);
+    if (summary) {
+      out.push({ key: "humanos", label: "HumanOS summary", href: "/body", text: summary });
+      body = true;
+    } else gaps.push("HumanOS isn't open to AI in its own settings, so the Board didn't read it.");
+  }
   const essence = Boolean(await essenceBlockFor(m.workspaceId, m.userId));
   return { sections: out, gaps, essence, body };
 }

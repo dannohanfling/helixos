@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 144,
+    date: "2026-10-12",
+    title: "My Board: in Claude, and HumanOS if you want it",
+    lines: [
+      "Settings → Use your Board in Claude: download your Board as a Claude skill, built from the Danno Seat's current principles, with the six steps to install it. Nothing of your own data is in it.",
+      "With HumanOS on, My Board can read your HumanOS summary when a decision touches your energy, health or time. It's your switch under My Board, off until you turn it on, and HumanOS's own AI setting still has to allow it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 143,
     date: "2026-10-12",
     title: "My Board: check in, and share with your coach",

@@ -80,6 +80,14 @@ export async function setBoardHoursAction(fd: FormData): Promise<void> {
   go(str(fd, "back") || "/my-board");
 }
 
+/** "Let my Board read my HumanOS summary" (rev 664 §3): the member's own switch, off by default; never a coach's to set. */
+export async function setBoardSeesBodyAction(fd: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "That's {first}'s own switch." });
+  await db.update(schema.memberships).set({ boardSeesBody: str(fd, "on") === "1" }).where(eq(schema.memberships.id, v.membership.id));
+  refresh();
+  go("/my-board", {}, "hours-edit");
+}
+
 /** The coach's own Board: the standard five, or the Edge Preset. Never a client's. */
 export async function setBoardPresetAction(fd: FormData): Promise<void> {
   const coach = await requireCoach();

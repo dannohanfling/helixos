@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { decisionsFor, stepStatus } from "@/lib/board";
-import { askBoardAction, setBoardHoursAction, setBoardPresetAction } from "@/lib/actions/board";
+import { askBoardAction, setBoardHoursAction, setBoardPresetAction, setBoardSeesBodyAction } from "@/lib/actions/board";
 import { seatsFor } from "@/lib/engine/board";
 import { Boardroom } from "@/components/boardroom";
 import { SubmitButton } from "@/components/submit-button";
@@ -112,6 +112,17 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
               Save
             </SubmitButton>
           </form>
+          {v.membership.bodyEnabled ? (
+            <form action={setBoardSeesBodyAction} style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12, flexWrap: "wrap" }} data-testid="board-sees-body">
+              <input type="hidden" name="on" value={v.membership.boardSeesBody ? "0" : "1"} />
+              <span className="br-muted">
+                HumanOS: {v.membership.boardSeesBody ? "the Board reads your HumanOS summary when a decision touches your energy, health or time." : "the Board doesn't read HumanOS."}
+              </span>
+              <SubmitButton className="br-tab" pendingText="Saving…" data-testid="board-sees-body-toggle">
+                {v.membership.boardSeesBody ? "Stop" : "Let it read my HumanOS summary"}
+              </SubmitButton>
+            </form>
+          ) : null}
           {v.role === "coach" ? (
             <form action={setBoardPresetAction} style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12, flexWrap: "wrap" }} data-testid="board-preset">
               <span className="br-muted">Your own Board:</span>

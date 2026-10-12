@@ -45,6 +45,7 @@ import { MemberAvatar } from "@/components/member-avatar";
 import { HeadshotUpload } from "@/components/headshot-upload";
 import { hasHeadshot } from "@/lib/headshots";
 import { removeMyHeadshotAction } from "@/lib/actions/headshots";
+import { SKILL_INSTALL_STEPS } from "@/lib/engine/board-view";
 
 export const metadata = { title: "Settings" };
 
@@ -327,6 +328,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {v.membership.bodyEnabled ? <Link href="/body" className="text-xs underline">Open HumanOS →</Link> : null}
           </form>
           <p className="mt-2 text-xs text-ink-3">{v.membership.bodyEnabled ? "Turning it off hides HumanOS and keeps everything you logged; turn it back on and it's all still there." : "Nothing is deleted when it's off, and nothing is shared when it's on."}</p>
+        </Card>
+        {/* My Board (rev 664 §9): the same Board in Claude, built from the Danno Seat's current principles. */}
+        <Card id="board-in-claude" title="Use your Board in Claude">
+          <p className="text-sm text-ink-2">Your Board&apos;s five advisors as a Claude skill, for deciding things away from HelixOS. It carries the Danno Seat&apos;s current principles and nothing of your own data. Connect HelixOS to Claude as well and the Board there reads your HelixOS too.</p>
+          <a href="/api/board/skill" className="btn btn-primary btn-sm mt-3 inline-block" download data-testid="board-skill-download">
+            Download your Board for Claude
+          </a>
+          <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm" data-testid="board-skill-steps">
+            {SKILL_INSTALL_STEPS.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
         </Card>
         <Card title="Your data">
           <p className="text-sm text-ink-2">Everything you&apos;ve put into HelixOS belongs to you. Download it any time; it&apos;s the same file you&apos;d get when you leave.</p>

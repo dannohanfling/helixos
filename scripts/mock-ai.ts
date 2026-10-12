@@ -177,7 +177,7 @@ createServer((req, res) => {
       const images = blocks ? blocks.filter((b) => b.type === "image") : [];
       // The system message may be a string or an array of text blocks; a block with cache_control is the cached prefix.
       const sysBlocks = Array.isArray(body.system) ? (body.system as { text?: string; cache_control?: unknown }[]).map((b) => ({ text: String(b.text ?? ""), cached: Boolean(b.cache_control) })) : [{ text: String(body.system ?? ""), cached: false }];
-      last = { system: sysBlocks, instructions: null, images: images.length, imageBytes: images.reduce((n, b) => n + (b.source?.data?.length ?? 0), 0), user: user.slice(0, 4000) };
+      last = { system: sysBlocks, instructions: null, images: images.length, imageBytes: images.reduce((n, b) => n + (b.source?.data?.length ?? 0), 0), user: user.slice(0, 40000) };
       const systemText = sysBlocks.map((b) => b.text).join("\n\n");
       const cut = user.includes(CUT);
       const text = cut ? "Mock AI draft that stops at the budget, mid-sentence, what I've built, and" : reply(systemText, user);

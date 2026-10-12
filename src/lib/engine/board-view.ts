@@ -35,3 +35,13 @@ export function takesWords(min: number): string {
   const m = min % 60;
   return m ? `${h} h ${m} min` : `${h} h`;
 }
+
+/** The six install steps beside the download (Claude's own words for its settings). */
+export const SKILL_INSTALL_STEPS = [
+  "Download your Board (the button above). It's one file, evolve-omega-board.skill.",
+  "Open Claude (claude.ai or the Claude app) and go to Settings, then Capabilities.",
+  "Make sure code execution and file creation is on: skills need it.",
+  "Under Skills, choose Upload skill and pick evolve-omega-board.skill.",
+  "Switch the Evolve Omega Board skill on.",
+  "In any chat, start with \"Board:\" and what you're deciding (or \"Set up my board\"). Download it again whenever your coach updates the Danno Seat.",
+];
