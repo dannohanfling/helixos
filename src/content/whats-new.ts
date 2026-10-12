@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 153,
+    date: "2026-10-12",
+    title: "My Board: choose your council",
+    lines: [
+      "Pick the four seats that sit with Danno on every decision, in My Board → Choose your council: the classic four, up to two seats of your own, and the expert style-advisor seats once your coach opens them. One seat must turn the advice into your action steps. Add a seat, tap two chairs to swap them (or drag one onto another), then save.",
+      "Your own seats are private to you; your coach can see them. One named after a real person ends in \"style\", and without sources it answers as \"my read\" only. Changing your council never changes past decisions: each keeps the seats it sat with. The first time you open My Board it asks; \"Keep the classic four\" leaves things as they are.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 152,
     date: "2026-10-12",
     title: "Coach → Board seats: the council library",

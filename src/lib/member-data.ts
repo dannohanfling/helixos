@@ -45,6 +45,9 @@ export const MEMBER_TABLES = {
   avatar_interviews: schema.avatarInterviews,
   // My Board (rev 664): the member's own decisions, private to them; exported and erased with them.
   board_decisions: schema.boardDecisions,
+  // Choose your council (rev 756): a member's custom seats are theirs, out and away with them. The library's rows in the same
+  // table have no user and go only with the workspace (src/lib/erase.ts).
+  board_seats: schema.boardSeats,
   pathways: schema.pathways,
   webinars: schema.webinars,
   client_records: schema.clientRecords,
@@ -190,9 +193,6 @@ export const WORKSPACE_TABLES = {
   headshot_reviews: schema.headshotReviews,
   // Danno's principles (rev 664): the coach's, read by every client's Board.
   board_principles: schema.boardPrinciples,
-  // My Board's seat library (rev 756): the coach workspace's library, read by every client's council. Members' own custom seats
-  // (Choose your council, the next commit) go out and away with them, by owner.
-  board_seats: schema.boardSeats,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */

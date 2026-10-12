@@ -98,6 +98,8 @@ async function main() {
       certification_submissions: { deliverableId },
       deck_images: { blobKey: deckKey, blobUrl: urls.deck, mime: "image/png" },
       lead_magnets: { slug, pdfKey: magnetKey, keyword: marker },
+      // A member's own row in board_seats is a custom seat (the library's rows have no user).
+      board_seats: { kind: "custom" },
     };
     for (const [label, table] of Object.entries(MEMBER_TABLES)) {
       // A link between two of the member's own rows points at the ones just made (avatars, rev 501).

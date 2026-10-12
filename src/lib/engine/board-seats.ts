@@ -222,10 +222,17 @@ export function operatorOf<T extends { isOperator: boolean }>(chairs: T[]): T | 
   return chairs.find((c) => c.isOperator) ?? null;
 }
 
+/**
+ * Who a seat is, for "a person appears only once" (rev 756 §2): an archetype by its key, an expert or custom seat by the person
+ * it's named after, so a custom "Seth Godin style" and the library's are the same person.
+ */
+export const personKey = (s: { slug: string; name?: string; kind?: SeatKind }) => (s.kind && s.kind !== "archetype" && s.name ? slugOf(s.name) : s.slug);
+
 /** Can this council be saved (rev 756 §2)? Four seats, one an operator, each person once. */
-export function councilProblem(chairs: ({ slug: string; isOperator: boolean } | null)[]): string | null {
+export function councilProblem(chairs: ({ slug: string; name?: string; kind?: SeatKind; isOperator: boolean } | null)[]): string | null {
   if (chairs.length !== 4 || chairs.some((c) => !c)) return "Pick four seats for your council.";
   if (new Set(chairs.map((c) => c!.slug)).size !== 4) return "A seat can sit in one chair only.";
+  if (new Set(chairs.map((c) => personKey(c!))).size !== 4) return "A person can sit in one chair only.";
   if (!chairs.some((c) => c!.isOperator)) return "Pick at least one operator seat so your Board ends with clear action steps.";
   return null;
 }
@@ -330,6 +337,59 @@ export function seatFromForm(f: SeatForm, kind: SeatKind): { ok: true; seat: Omi
         boundaries: f.boundaries.trim(),
         contribution: f.contribution.trim(),
         sources: lines(f.sources).map(source),
+      },
+    },
+  };
+}
+
+/* ───────────────────────── A member's custom seats (rev 756 §3) ───────────────────────── */
+
+/** Each member makes up to two. */
+export const MAX_CUSTOM_SEATS = 2;
+export type CustomSeatForm = { name: string; focus: string; questions: string[]; voice: string; sources: string; realPerson: boolean; operator: boolean };
+export type CustomSeat = { name: string; card: string; realPerson: boolean; operator: boolean; profile: SeatProfile };
+
+/**
+ * A member's custom seat, or why not: a name (a real person's ends in "style", added when it's missing), what it focuses on,
+ * three questions, its voice and any sources. The standard boundaries are added; with a real person and no sources it runs as
+ * "my read" only (src/lib/board-seats.ts reads that from the row). It owns the action steps only when the member ticks it.
+ */
+export function customSeatFromForm(f: CustomSeatForm): { ok: true; seat: CustomSeat } | { ok: false; error: string } {
+  let name = f.name.trim().replace(/\s+/g, " ");
+  if (!name) return { ok: false, error: "Give the seat a name." };
+  if (name.length > 60) return { ok: false, error: "Keep the name to 60 characters." };
+  if (/^danno\b/i.test(name)) return { ok: false, error: "Danno already sits at the head of your Board. Give this seat another name." };
+  if (f.realPerson && !/\sstyle$/i.test(name)) name = `${name} style`;
+  const focus = f.focus.trim().replace(/\s+/g, " ");
+  if (!focus) return { ok: false, error: "Say what this seat focuses on." };
+  if (focus.length > 400) return { ok: false, error: "Keep the focus to 400 characters." };
+  const questions = f.questions.map((q) => q.trim().replace(/\s+/g, " ")).filter(Boolean);
+  if (questions.length < 3) return { ok: false, error: "Add the three questions this seat asks." };
+  if (questions.some((q) => q.length > 200)) return { ok: false, error: "Keep each question to 200 characters." };
+  const voice = f.voice.trim().replace(/\s+/g, " ");
+  if (!voice) return { ok: false, error: "Say how this seat talks." };
+  const sources = lines(f.sources).slice(0, 6).map(source);
+  if (sources.some((x) => x.url && !/^https:\/\//.test(x.url))) return { ok: false, error: "Source links start with https://." };
+  const words = focus.split(" ");
+  return {
+    ok: true,
+    seat: {
+      name,
+      card: words.length > 20 ? `${words.slice(0, 20).join(" ")}…` : focus,
+      realPerson: f.realPerson,
+      operator: f.operator,
+      profile: {
+        purpose: focus,
+        stance: focus,
+        questions: questions.slice(0, 3),
+        frameworks: [],
+        speaksUpOn: focus,
+        evidence: 'Only the member\'s context and this seat\'s focus. Anything beyond them is labelled "my read".',
+        blindSpot: "",
+        voice: voice.slice(0, 300),
+        boundaries: CUSTOM_BOUNDARIES,
+        contribution: focus,
+        sources,
       },
     },
   };

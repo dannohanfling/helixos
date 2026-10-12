@@ -13,7 +13,7 @@
  *   4. one audit row: who ran it, the email, when, the counts. No content.
  * The tables come from src/lib/member-data.ts, the same list the export reads.
  */
-import { and, eq, inArray, like, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, ne, sql } from "drizzle-orm";
 import type { SQLiteColumn, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
@@ -75,6 +75,8 @@ export async function planErase(workspaceId: string, membershipId: string): Prom
       ids[label] = ((await db.select({ id: col(table, key) }).from(table).where(eq(col(table, "workspaceId"), workspaceId))) as { id: string }[]).map((r) => r.id);
     }
     ids.lessons = await childIds(schema.lessons, "courseId", ids.courses ?? []);
+    // The Board's seat library sits in board_seats beside members' custom seats, with no user: it goes with the workspace.
+    ids.board_seat_library = ((await db.select({ id: schema.boardSeats.id }).from(schema.boardSeats).where(and(eq(schema.boardSeats.workspaceId, workspaceId), isNull(schema.boardSeats.userId)))) as { id: string }[]).map((r) => r.id);
   }
 
   // The stored objects, each with the row that points at it.
@@ -206,6 +208,7 @@ export async function eraseMember(plan: ErasePlan, ranByUserId: string): Promise
   if (plan.workspaceGoes) {
     await db.transaction(async (tx) => {
       await drop(tx, schema.lessons, plan.ids.lessons ?? []);
+      await drop(tx, schema.boardSeats, plan.ids.board_seat_library ?? []);
       for (const [label, table] of Object.entries(WORKSPACE_TABLES)) await drop(tx, table, plan.ids[label] ?? [], label === "files" ? "key" : "id");
       await drop(tx, schema.workspaces, [plan.workspaceId]);
     });

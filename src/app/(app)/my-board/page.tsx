@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { decisionsFor, stepStatus } from "@/lib/board";
 import { askBoardAction, setBoardHoursAction, setBoardPresetAction, setBoardSeesBodyAction } from "@/lib/actions/board";
+import { keepClassicCouncilAction } from "@/lib/actions/council";
 import { councilFor } from "@/lib/board-seats";
 import { forRoom } from "@/lib/engine/board";
 import { BoardCouncilNote } from "@/components/board-council-note";
@@ -17,7 +18,7 @@ export const metadata = { title: "My Board" };
 const setUp = (d: { applied: unknown[] }, followUps: { applied: unknown[] }[]) => d.applied.length + followUps.reduce((n, f) => n + f.applied.length, 0);
 
 /** My Board, the Boardroom (revs 664, 698): five advisors on a decision, grounded in the member's own HelixOS. */
-export default async function MyBoardPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function MyBoardPage({ searchParams }: { searchParams: Promise<{ error?: string; council?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const hours = v.membership.boardHours;
@@ -32,6 +33,35 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
         <p className="br-wrap" role="alert" data-testid="board-error" style={{ color: "#f5b0a0", marginBottom: 24 }}>
           {sp.error}
         </p>
+      ) : null}
+      {sp.council ? (
+        <p className="br-wrap br-muted" role="status" data-testid="board-council-saved" style={{ marginBottom: 16 }}>
+          {sp.council === "classic" ? "Kept: the classic four sit with Danno. You can choose your council any time." : "Your council is saved. Your next question sits with them; past decisions keep the seats they had."}
+        </p>
+      ) : null}
+      {canAsk && hours && !v.membership.boardCouncil && preset === "standard" ? (
+        <div className="br-wrap" data-testid="board-pick-council">
+          <div className="br-head" style={{ marginBottom: 20 }}>
+            <div className="br-eyebrow">NEW</div>
+            <h2 className="br-question" style={{ margin: 0, fontSize: 30 }}>
+              Pick your council
+            </h2>
+            <p className="br-muted" style={{ margin: 0 }}>
+              Choose the four seats that sit with Danno on every decision: the classic four, seats of your own, or{" "}
+              {v.workspace.expertSeatsLive ? "expert style advisors from the library" : "expert style advisors once your coach opens them"}. One of them turns the advice into your action steps.
+            </p>
+            <div className="br-askrow">
+              <Link href="/my-board/council" className="br-pill" data-testid="board-pick-council-go">
+                Pick your council
+              </Link>
+              <form action={keepClassicCouncilAction}>
+                <SubmitButton className="br-tab" pendingText="Saving…" data-testid="board-keep-classic">
+                  Keep the classic four
+                </SubmitButton>
+              </form>
+            </div>
+          </div>
+        </div>
       ) : null}
       {canAsk && !hours ? (
         <div className="br-wrap">
@@ -55,6 +85,13 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
         <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} seats={seats} answer={null} question="" used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
       )}
       {hours ? <BoardCouncilNote seats={seats} /> : null}
+      {hours && preset === "standard" ? (
+        <p className="br-wrap" style={{ fontSize: 14, marginTop: 8 }}>
+          <Link href="/my-board/council" className="br-muted" style={{ textDecoration: "underline" }} data-testid="board-council-link">
+            {canAsk ? "Choose your council" : "Their council"}
+          </Link>
+        </p>
+      ) : null}
       {!canAsk ? <p className="br-wrap br-muted">The Board answers {v.user.name.split(" ")[0]} on their own AI key, so only they can ask it. Their decisions are below.</p> : null}
 
       <section className="br-wrap" id="decisions" style={{ marginTop: 44 }} aria-label="Decisions">

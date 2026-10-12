@@ -3997,8 +3997,8 @@ export const boardSeats = sqliteTable(
     slug: text("slug").notNull(),
     name: text("name").notNull(),
     kind: text("kind", { enum: ["expert", "archetype", "custom"] }).notNull(),
-    /** A custom seat's member; null for the library. */
-    ownerUserId: text("owner_user_id"),
+    /** A custom seat's member; null for the library. (Named userId so the member-data lists key on it; the column keeps its name.) */
+    userId: text("owner_user_id"),
     areas: text("areas", { mode: "json" }).$type<string[]>().notNull().default([]),
     card: text("card").notNull().default(""),
     profile: text("profile", { mode: "json" }).$type<import("@/lib/engine/board-seats").SeatProfile>().notNull(),
@@ -4010,7 +4010,7 @@ export const boardSeats = sqliteTable(
     createdAt: createdAt(),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
   },
-  (t) => [uniqueIndex("board_seats_slug").on(t.workspaceId, t.slug), index("board_seats_owner").on(t.workspaceId, t.ownerUserId)],
+  (t) => [uniqueIndex("board_seats_slug").on(t.workspaceId, t.slug), index("board_seats_owner").on(t.workspaceId, t.userId)],
 );
 export type BoardSeat = typeof boardSeats.$inferSelect;
 

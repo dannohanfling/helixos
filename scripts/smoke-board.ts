@@ -498,7 +498,7 @@ async function main() {
       await page.locator('[data-testid="seat-card"]').fill("Builds small habits into systems that make the next step automatic.");
       await press(page, '[data-testid="seat-save"]');
       must((await page.locator('[data-testid="seat-row"][data-slug="james-clear"]').getAttribute("data-version")) === "2", "an edit bumps the version");
-      // Maya's council, set directly here (her own picker is the next commit): two expert seats, Riley, and an operator expert.
+      // Maya's council, set directly here (as if picked while live; her own picker is walked below): two expert seats, Riley, and an operator expert.
       const council = [await seatId("alex-hormozi"), await seatId("james-clear"), await seatId("riley"), await seatId("seth-godin")];
       await db.update(schema.memberships).set({ boardCouncil: council }).where(eq(schema.memberships.id, m.id));
       await logout(page);
@@ -550,6 +550,127 @@ async function main() {
       await db.update(schema.memberships).set({ boardCouncil: null }).where(eq(schema.memberships.id, m.id));
       await db.update(schema.workspaces).set({ expertSeatsLive: false }).where(eq(schema.workspaces.id, ws));
       console.log("✓ the seat library: 66 seats, an edit bumps the version; paused while off, her council's names at 1440, 1024 and 390 once live; the answer sat with exactly her five, no \"I am {Name}\", and keeps the version it used");
+    }
+
+    // Choose your council, the member's page (rev 756 §2 and §3, rev 766): the first-visit prompt and "Keep the classic four";
+    // with expert seats off only the archetypes and her own seats; two custom seats (a real person with no sources runs as "my
+    // read"); Save held until four seats and an operator; Add, tap to swap, drag to swap; the room's plates at three widths; once
+    // live an expert seat's detail and Add into a tapped chair; the switch off again pauses it; the coach sees it all.
+    {
+      const chairSlugs = async () => Promise.all([0, 1, 2, 3].map(async (i) => (await page.locator(`[data-testid="council-chair-${i}"]`).getAttribute("data-seat")) ?? ""));
+      const saveOn = async () => !(await page.locator('[data-testid="council-save"]').isDisabled());
+      const problem = async () => ((await page.locator('[data-testid="council-problem"]').count()) ? await page.locator('[data-testid="council-problem"]').innerText() : "");
+      await db.delete(schema.boardSeats).where(and(eq(schema.boardSeats.workspaceId, ws), eq(schema.boardSeats.userId, maya.id)));
+      await db.update(schema.memberships).set({ boardCouncil: null }).where(eq(schema.memberships.id, m.id));
+      await page.setViewportSize({ width: 1280, height: 950 });
+      await page.goto(`${base}/my-board`);
+      must(await page.locator('[data-testid="board-pick-council"]').count(), "the first visit: \"Pick your council\" above the room");
+      await press(page, '[data-testid="board-keep-classic"]');
+      must(!(await page.locator('[data-testid="board-pick-council"]').count()) && (await page.locator('[data-testid="board-council-saved"]').innerText()).includes("classic four"), "\"Keep the classic four\" saves and the prompt goes");
+      const kept = (await db.query.memberships.findFirst({ where: eq(schema.memberships.id, m.id) }))!.boardCouncil!;
+      const slugOfId = async (id: string) => (await db.query.boardSeats.findFirst({ where: eq(schema.boardSeats.id, id) }))!.slug;
+      must(JSON.stringify(await Promise.all(kept.map(slugOfId))) === JSON.stringify(["alex", "jordan", "riley", "morgan"]), "the classic four, chair by chair");
+      await db.update(schema.memberships).set({ boardCouncil: null }).where(eq(schema.memberships.id, m.id));
+      await page.goto(`${base}/my-board`);
+      await page.locator('[data-testid="board-pick-council-go"]').click();
+      await page.waitForURL(/\/my-board\/council/);
+      await page.locator('[data-testid="council-picker"]').waitFor();
+      await page.waitForLoadState("networkidle");
+      // Expert seats off: the archetypes and her own seats only.
+      must(await page.locator('[data-testid="council-experts-off"]').count(), "while expert seats are off, the picker says so");
+      must(!(await page.locator('[data-testid="council-tab-area"]').count()) && !(await page.locator('[data-testid="council-tab-all"]').count()), "no skill-area tabs while off");
+      must((await page.locator('[data-testid="council-card"]').count()) === 4, "the four archetypes");
+      await page.locator('[data-testid="council-search"]').fill("Hormozi");
+      must(!(await page.locator('[data-testid="council-card"]').count()), "the switch hides expert seats from members, search too");
+      await page.locator('[data-testid="council-search"]').fill("");
+      must(JSON.stringify(await chairSlugs()) === JSON.stringify(["alex", "jordan", "riley", "morgan"]) && !(await saveOn()), "her chairs start as the classic four, nothing to save");
+      // Two custom seats: a real person with no sources, and one she ticks as turning advice into steps.
+      const makeSeat = async (name: string, operator: boolean) => {
+        await page.goto(`${base}/my-board/council?tab=custom&make=1#custom-form`);
+        await page.locator('[data-testid="council-custom-form"]').waitFor();
+        await page.waitForLoadState("networkidle");
+        await page.locator('[data-testid="council-custom-name"]').fill(name);
+        await page.locator('[data-testid="council-custom-focus"]').fill("Turning a messy idea into a clear first offer people say yes to.");
+        for (const i of [0, 1, 2]) await page.locator(`[data-testid="council-custom-q${i}"]`).fill(["Who is it for?", "What will they pay for first?", "What stops them saying yes?"][i]);
+        await page.locator('[data-testid="council-custom-voice"]').fill("Warm, quick and practical.");
+        if (operator) await page.locator('[data-testid="council-custom-operator"]').check();
+        return page.locator('[data-testid="council-custom-real"]').isChecked();
+      };
+      must(await makeSeat("Marie Forleo", false), "a name that looks like a person pre-ticks \"named after a real person\"");
+      await press(page, '[data-testid="council-custom-save"]');
+      const marie = page.locator('[data-testid="council-custom-row"]', { hasText: "Marie Forleo style" });
+      must((await marie.count()) === 1 && (await marie.locator('[data-testid="council-custom-my-read"]').count()) === 1, "saved as \"Marie Forleo style\", labelled my read with no sources");
+      must(!(await makeSeat("The cash-flow hawk", true)), "a name that isn't a person stays unticked");
+      await press(page, '[data-testid="council-custom-save"]');
+      must((await page.locator('[data-testid="council-custom-row"]').count()) === 2 && !(await page.locator('[data-testid="council-custom-make"]').count()), "two custom seats, the most there can be");
+      must((await page.locator('[data-testid="council-card"][data-slug^="custom-"] [data-testid="council-card-my-read"]').count()) === 1, "Marie's card carries the my-read note");
+      // The chairs: empty one, Save waits for four; a non-operator seat in Jordan's place, Save waits for an operator.
+      await page.locator('[data-testid="council-chair-1-empty"]').click();
+      must(!(await saveOn()) && (await problem()) === "Pick four seats for your council.", "three seats: Save is off");
+      const cards = page.locator('[data-testid="council-card"]');
+      await cards.filter({ hasText: "Marie Forleo style" }).locator('[data-testid="council-card-add"]').click();
+      must((await chairSlugs())[1].startsWith("custom-"), "Add fills the empty chair");
+      must(!(await saveOn()) && (await problem()) === "Pick at least one operator seat so your Board ends with clear action steps.", "no operator: Save is off and says why");
+      // Tap two chairs to swap, then drag one onto another.
+      await page.locator('[data-testid="council-chair-0-tap"]').click();
+      await page.locator('[data-testid="council-chair-2-tap"]').click();
+      must(JSON.stringify((await chairSlugs()).filter((s) => !s.startsWith("custom-"))) === JSON.stringify(["riley", "alex", "morgan"]) && (await chairSlugs())[0] === "riley", `tap two chairs to swap them: ${await chairSlugs()}`);
+      await page.locator('[data-testid="council-chair-2"]').dragTo(page.locator('[data-testid="council-chair-3"]'));
+      must((await chairSlugs())[2] === "morgan" && (await chairSlugs())[3] === "alex", `drag a chair onto another to swap: ${await chairSlugs()}`);
+      // Tap Alex's chair, then Add the hawk: it takes that chair. Four seats with an operator: Save.
+      await page.locator('[data-testid="council-chair-3-tap"]').click();
+      await cards.filter({ hasText: "The cash-flow hawk" }).locator('[data-testid="council-card-add"]').click();
+      must((await chairSlugs())[3].startsWith("custom-") && (await saveOn()) && !(await problem()), "the tapped chair takes the added seat; four with an operator, Save is on");
+      await press(page, '[data-testid="council-save"]');
+      await page.waitForURL(/\/my-board\?council=saved/);
+      const saved = await Promise.all((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, m.id) }))!.boardCouncil!.map(slugOfId));
+      must(saved[0] === "riley" && saved[1].startsWith("custom-") && saved[2] === "morgan" && saved[3].startsWith("custom-"), `saved in chair order: ${saved}`);
+      for (const width of [1440, 1024, 390]) {
+        await page.setViewportSize({ width, height: 950 });
+        await page.goto(`${base}/my-board`);
+        must((await page.locator(`[data-testid="board-plate-${saved[1]}"]`).innerText()).includes("Marie Forleo style") && (await page.locator(`[data-testid="board-plate-${saved[3]}"]`).innerText()).includes("The cash-flow hawk"), `${width} wide: her plates in the room`);
+        await page.goto(`${base}/my-board/council`);
+        await page.locator('[data-testid="council-chairs"]').waitFor();
+        const fit = JSON.parse(await page.evaluate("JSON.stringify({ doc: document.documentElement.scrollWidth, view: window.innerWidth })")) as { doc: number; view: number };
+        must(fit.doc <= fit.view, `${width} wide: the picker fits the screen ${JSON.stringify(fit)}`);
+      }
+      // Live: the library's expert seats, a detail, and Add into a tapped chair.
+      await page.setViewportSize({ width: 1280, height: 950 });
+      await db.update(schema.workspaces).set({ expertSeatsLive: true }).where(eq(schema.workspaces.id, ws));
+      await page.goto(`${base}/my-board/council`);
+      await page.waitForLoadState("networkidle");
+      must((await page.locator('[data-testid="council-tab-area"]').count()) === 12 && (await page.locator('[data-testid="council-card"]').count()) === 62, "once live: 12 skill areas and the 62 expert seats, each person once");
+      await page.locator('[data-testid="council-tab-area"][data-area="Habits & productivity"]').click();
+      must((await page.locator('[data-testid="council-card"]').count()) === 5, "an area tab");
+      await page.locator('[data-testid="council-search"]').fill("Graziosi");
+      await page.locator('[data-testid="council-card"][data-slug="dean-graziosi"] [data-testid="council-card-open"]').click();
+      const dean = await page.locator('[data-testid="council-detail"]').innerText();
+      must(dean.includes("Inspired by Dean Graziosi's public work") && !/edge preset/i.test(dean) && (await page.locator('[data-testid="council-detail-sources"] a').count()) > 0, "the detail: inspired-by line, sources as links, never an Edge-preset source");
+      await page.locator('[data-testid="council-detail-close"]').click();
+      await page.locator('[data-testid="council-chair-0-tap"]').click();
+      await page.locator('[data-testid="council-card"][data-slug="dean-graziosi"] [data-testid="council-card-add"]').click();
+      must((await chairSlugs())[0] === "dean-graziosi", "Dean takes the tapped chair");
+      await press(page, '[data-testid="council-save"]');
+      await page.waitForURL(/\/my-board\?council=saved/);
+      must((await page.locator('[data-testid="board-plate-dean-graziosi"]').innerText()).includes("Dean Graziosi style") && (await page.locator('[data-testid="board-style-note"]').count()) === 1, "his plate, with the style-advisor line");
+      // Off again: the expert pick pauses, and the picker hides experts but shows her paused chair.
+      await db.update(schema.workspaces).set({ expertSeatsLive: false }).where(eq(schema.workspaces.id, ws));
+      await page.goto(`${base}/my-board/council`);
+      must((await page.locator('[data-testid="council-chair-0"]').innerText()).includes("Paused") && (await page.locator('[data-testid="council-card"][data-slug="dean-graziosi"]').count()) === 0, "off again: Dean's chair says paused, and he's out of the library");
+      must(!(await page.locator('[data-testid="council-custom-remove"]').count()), "a custom seat on her council can't be removed");
+      // The coach sees her council and her custom seats on her client page.
+      await logout(page);
+      await login(page, "As the coach");
+      await page.goto(`${base}/coach/${m.id}`);
+      const cc = await page.locator('[data-testid="coach-council"]').innerText();
+      const cs = await page.locator('[data-testid="coach-custom-seats"]').innerText();
+      must(cc.includes("their expert pick is paused") && cc.includes("Marie Forleo style") && cs.includes("Marie Forleo style") && cs.includes("my read only") && cs.includes("The cash-flow hawk"), `the coach sees her council and custom seats: ${cc} | ${cs}`);
+      await logout(page);
+      await login(page, "As a client");
+      // Back as it was for the other walks.
+      await db.update(schema.memberships).set({ boardCouncil: null }).where(eq(schema.memberships.id, m.id));
+      await db.delete(schema.boardSeats).where(and(eq(schema.boardSeats.workspaceId, ws), eq(schema.boardSeats.userId, maya.id)));
+      console.log("✓ Choose your council: the first-visit prompt and the classic four; experts hidden while off; two custom seats, Marie as my read; Save held for four and an operator; Add, tap and drag to swap; her plates and the picker at 1440, 1024 and 390; live, Dean's detail and chair; off again, paused; the coach sees it");
     }
 
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);

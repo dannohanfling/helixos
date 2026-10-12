@@ -7,8 +7,11 @@ import { SEATS, boardSkillFiles, boardTask, checkAnswer, councilSpec, type Seat 
 import {
   OPERATOR_AREAS,
   SEAT_AREAS,
+  CUSTOM_BOUNDARIES,
   councilProblem,
+  customSeatFromForm,
   effectiveCouncil,
+  personKey,
   isEdgeSource,
   looksLikePerson,
   parseArchetypes,
@@ -186,5 +189,40 @@ describe("My Board: the coach's seat editor (rev 756 §4)", () => {
     expect(looksLikePerson("Pat Example")).toBe(true);
     expect(looksLikePerson("Pat Example style")).toBe(true);
     expect(looksLikePerson("My money coach")).toBe(false);
+  });
+});
+
+describe("My Board: a member's custom seats (rev 756 §3)", () => {
+  const form = { name: "Marie Forleo", focus: "Turning a messy idea into a clear first offer.", questions: ["Who is it for?", "What will they pay for first?", "What stops them saying yes?"], voice: "Warm, quick and practical.", sources: "", realPerson: true, operator: false };
+  it("a real person's seat ends in \"style\", carries the standard boundaries, and has its three questions", () => {
+    const r = customSeatFromForm(form);
+    expect(r.ok).toBe(true);
+    const seat = (r as Extract<typeof r, { ok: true }>).seat;
+    expect(seat.name).toBe("Marie Forleo style");
+    expect(seat.profile.boundaries).toBe(CUSTOM_BOUNDARIES);
+    expect(seat.profile.questions).toHaveLength(3);
+    expect(seat.realPerson && !seat.profile.sources.length).toBe(true);
+    expect(seat.operator).toBe(false);
+    // With no sources, the engine reads it as "my read" only.
+    expect(profileBlock({ name: seat.name, kind: "custom", profile: seat.profile, operator: false, myRead: true })).toContain('everything it says is labelled "my read"');
+  });
+  it("refuses a seat without its three questions, a voice, or with a link that isn't https", () => {
+    expect(customSeatFromForm({ ...form, questions: ["One?", "", "Three?"] })).toEqual({ ok: false, error: "Add the three questions this seat asks." });
+    expect(customSeatFromForm({ ...form, voice: " " })).toEqual({ ok: false, error: "Say how this seat talks." });
+    expect(customSeatFromForm({ ...form, sources: "Blog: http://example.com" })).toEqual({ ok: false, error: "Source links start with https://." });
+    expect(customSeatFromForm({ ...form, name: "Danno two" }).ok).toBe(false);
+  });
+  it("a seat that isn't a person keeps its name; sources are kept as links; the operator only when ticked", () => {
+    const r = customSeatFromForm({ ...form, name: "The cash-flow hawk", realPerson: false, operator: true, sources: "Profit First: https://example.com/pf" });
+    const seat = (r as Extract<typeof r, { ok: true }>).seat;
+    expect(seat.name).toBe("The cash-flow hawk");
+    expect(seat.operator).toBe(true);
+    expect(seat.profile.sources).toEqual([{ label: "Profit First", url: "https://example.com/pf" }]);
+  });
+  it("a person appears once: a custom seat named after a library person is the same person", () => {
+    expect(personKey({ slug: "custom-x", name: "Seth Godin style", kind: "custom" })).toBe("seth-godin");
+    expect(personKey({ slug: "riley", name: "Riley, the Customer Champion", kind: "archetype" })).toBe("riley");
+    const c = (slug: string, name: string, kind: "expert" | "archetype" | "custom", isOperator = false) => ({ slug, name, kind, isOperator });
+    expect(councilProblem([c("seth-godin", "Seth Godin style", "expert"), c("custom-x", "Seth Godin style", "custom"), c("jordan", "Jordan", "archetype", true), c("morgan", "Morgan", "archetype")])).toBe("A person can sit in one chair only.");
   });
 });

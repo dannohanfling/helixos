@@ -50,8 +50,12 @@ import { hasHeadshot } from "@/lib/headshots";
 import { behaviorsOf, featuresFor, unlockedCount } from "@/lib/bot-features";
 import { BEHAVIORS, BEHAVIOR_SOURCE, BEHAVIOR_WORDS } from "@/lib/engine/bot-features";
 import { setBotUnlocksAction } from "@/lib/actions/bot-features";
+import { councilChairs, customSeatsOf } from "@/lib/board-seats";
+import { operatorOf } from "@/lib/engine/board-seats";
 
 export const metadata = { title: "Client" };
+
+const CHAIR_NAMES = ["Left", "Right", "Front left", "Front right"];
 
 /**
  * One client, before a call. The page answers "what do I say to this person today": where they are, what they wrote in
@@ -114,6 +118,9 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const noteTasks = await tasksFromNotes(ws, notes.map((n) => n.id));
   // Their buyer avatars and which offers each is for, read-only (rev 501 §7).
   const avatars = await avatarData({ workspaceId: ws, userId: m.userId });
+  // Their Board's council (rev 756): the chairs they sit with now, and their own custom seats, private to them and you.
+  const councilNow = await councilChairs(ws, m.boardCouncil ?? null, v.workspace.expertSeatsLive);
+  const customSeats = await customSeatsOf(ws, m.userId);
   // The interviews behind them (rev 639): the coach sees that an avatar came from one, and its answers.
   const interviews = await db.query.avatarInterviews.findMany({ where: and(eq(schema.avatarInterviews.workspaceId, ws), eq(schema.avatarInterviews.userId, m.userId), eq(schema.avatarInterviews.status, "saved")), orderBy: asc(schema.avatarInterviews.createdAt) });
   // Business goals (BG1), read-only: the plan as the client sees it, counted.
@@ -709,6 +716,43 @@ export default async function CoachClientPage({ params, searchParams }: { params
             ) : (
               <p className="text-sm text-ink-2">No avatars yet.</p>
             )}
+          </Card>
+
+          <Card title="Board council" action={<span className="text-xs text-ink-3">{m.boardCouncil ? "chosen" : "the classic four"}</span>}>
+            <ol className="space-y-1 text-sm" data-testid="coach-council">
+              {councilNow.map((c, i) => (
+                <li key={i}>
+                  <span className="text-ink-3">{CHAIR_NAMES[i]}:</span> {c.name}
+                  {c.isOperator && operatorOf(councilNow)?.id === c.id ? <span className="text-xs text-ink-3"> · operator</span> : null}
+                  {c.paused ? <span className="text-xs text-ink-3"> · their expert pick is paused</span> : null}
+                  {c.retired ? <span className="text-xs text-ink-3"> · retired</span> : null}
+                </li>
+              ))}
+            </ol>
+            {customSeats.length ? (
+              <div className="mt-3 space-y-2" data-testid="coach-custom-seats">
+                <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Their custom seats</div>
+                {customSeats.map((c) => (
+                  <details key={c.id} className="text-sm">
+                    <summary className="cursor-pointer">
+                      {c.name}
+                      <span className="text-xs text-ink-3">
+                        {c.isOperator ? " · operator" : ""}
+                        {c.realPerson && !c.profile.sources.length ? " · my read only" : ""} · version {c.version}
+                      </span>
+                    </summary>
+                    <p className="mt-1 text-ink-2">{c.profile.purpose}</p>
+                    <ul className="mt-1 list-disc pl-5 text-xs text-ink-2">
+                      {c.profile.questions.map((q) => (
+                        <li key={q}>{q}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-1 text-xs text-ink-3">Voice: {c.profile.voice}</p>
+                    {c.profile.sources.length ? <p className="mt-1 text-xs text-ink-3">Sources: {c.profile.sources.map((x) => (x.url ? `${x.label} (${x.url})` : x.label)).join("; ")}</p> : null}
+                  </details>
+                ))}
+              </div>
+            ) : null}
           </Card>
 
           <Card title={`Revenue by pillar · ${formatDate(`${month}-01`, { month: "long" })}`}>

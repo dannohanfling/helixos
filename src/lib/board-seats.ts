@@ -11,7 +11,7 @@ import { newId } from "@/lib/ids";
 import { BOARD_PROFILE_MD } from "@/content/board-spec";
 import { BOARD_SEAT_LIBRARY_MD } from "@/content/board-seat-library";
 import { EDGE_SEATS, SEATS, type Seat } from "@/lib/engine/board";
-import { DEFAULT_COUNCIL, effectiveCouncil, parseArchetypes, parseSeatLibrary, profileBlock, type CouncilChair, type CouncilRow, type LibrarySeat } from "@/lib/engine/board-seats";
+import { DEFAULT_COUNCIL, effectiveCouncil, parseArchetypes, parseSeatLibrary, personKey, profileBlock, type CouncilChair, type CouncilRow, type LibrarySeat } from "@/lib/engine/board-seats";
 
 let seeded = new Set<string>();
 const LIBRARY: LibrarySeat[] = [...parseArchetypes(BOARD_PROFILE_MD), ...parseSeatLibrary(BOARD_SEAT_LIBRARY_MD)];
@@ -36,7 +36,7 @@ export const forgetSeeded = () => (seeded = new Set());
 /** Every seat in the workspace's library a viewer may see: the library, and their own custom seats (a coach sees all). */
 export async function librarySeats(workspaceId: string, opts: { userId?: string; coach?: boolean } = {}): Promise<BoardSeat[]> {
   await ensureSeatLibrary(workspaceId);
-  const own = opts.coach ? undefined : or(isNull(schema.boardSeats.ownerUserId), eq(schema.boardSeats.ownerUserId, opts.userId ?? "-"));
+  const own = opts.coach ? undefined : or(isNull(schema.boardSeats.userId), eq(schema.boardSeats.userId, opts.userId ?? "-"));
   return db.query.boardSeats.findMany({ where: and(eq(schema.boardSeats.workspaceId, workspaceId), own), orderBy: schema.boardSeats.name });
 }
 
@@ -102,4 +102,72 @@ export async function seatUse(workspaceId: string): Promise<Map<string, number>>
   const n = new Map<string, number>();
   for (const m of ms) for (const id of m.boardCouncil ?? []) n.set(id, (n.get(id) ?? 0) + 1);
   return n;
+}
+
+/** One seat as the member's picker shows it (rev 756 §2): what the card and the detail need, never an Edge-preset source. */
+export type PickerSeat = {
+  id: string;
+  slug: string;
+  person: string;
+  name: string;
+  kind: "expert" | "archetype" | "custom";
+  areas: string[];
+  card: string;
+  operator: boolean;
+  /** Shown in the library (on, and open to this member); a chair can still hold a paused or retired pick that isn't. */
+  listed: boolean;
+  paused: boolean;
+  retired: boolean;
+  myRead: boolean;
+  realPerson: boolean;
+  purpose: string;
+  questions: string[];
+  frameworks: { name: string; text: string }[];
+  sources: { label: string; url: string | null }[];
+  voice: string;
+};
+
+/**
+ * The picker's seats for a member: the library they may choose from (every archetype, the expert seats while "Expert seats
+ * live" is on, or always for the coach, and their own custom seats), plus whatever their chairs already hold that isn't
+ * listed (a paused or retired pick), and their four chairs in order.
+ */
+export async function pickerFor(v: Viewer): Promise<{ seats: PickerSeat[]; chairs: string[]; live: boolean; chose: boolean }> {
+  const live = v.role === "coach" || v.workspace.expertSeatsLive;
+  const rows = await librarySeats(v.workspace.id, { userId: v.user.id });
+  const archetypes = rows.filter((r) => r.kind === "archetype");
+  const picked = v.membership.boardCouncil ?? null;
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const chairs = [0, 1, 2, 3].map((i) => (picked?.[i] && byId.has(picked[i]) ? picked[i] : (archetypes.find((a) => a.slug === DEFAULT_COUNCIL[i])?.id ?? "")));
+  const seats = rows
+    .map((r): PickerSeat => {
+      const listed = r.enabled && (r.kind !== "expert" || live);
+      return {
+        id: r.id,
+        slug: r.slug,
+        person: personKey(r),
+        name: r.name,
+        kind: r.kind,
+        areas: r.areas,
+        card: r.card,
+        operator: r.isOperator,
+        listed,
+        paused: r.kind === "expert" && !live,
+        retired: !r.enabled,
+        myRead: r.kind === "custom" && r.realPerson && !r.profile.sources.length,
+        realPerson: r.kind === "expert" || r.realPerson,
+        purpose: r.profile.purpose,
+        questions: r.profile.questions,
+        frameworks: r.profile.frameworks.map((f) => ({ name: f.name, text: f.text })),
+        sources: r.profile.sources,
+        voice: r.kind === "custom" ? r.profile.voice : "",
+      };
+    })
+    .filter((s) => s.listed || chairs.includes(s.id));
+  return { seats, chairs, live, chose: Boolean(picked) };
+}
+
+/** A member's own custom seats. */
+export async function customSeatsOf(workspaceId: string, userId: string): Promise<BoardSeat[]> {
+  return db.query.boardSeats.findMany({ where: and(eq(schema.boardSeats.workspaceId, workspaceId), eq(schema.boardSeats.userId, userId), eq(schema.boardSeats.kind, "custom")), orderBy: schema.boardSeats.createdAt });
 }
