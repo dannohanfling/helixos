@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BotConnectionCard } from "@/components/bot-connection-card";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -28,6 +29,9 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
     <>
       <PageHeader title={own ? "Your bot" : `${u.name}'s bot`} subtitle="Read from the bot just now. Nothing is sent until the Push below." action={<Link href={own ? "/coach" : `/coach/${m.id}`} className="btn btn-ghost btn-sm">Back</Link>} />
       <YourBotPanel m={m} preview={preview} own={own} whose={whose} sp={sp} lastPushedLine={`${line}${changed ? " · changed since the last push" : ""}`} />
+      <div className="mt-6">
+        <BotConnectionCard workspaceId={m.workspaceId} userId={m.userId} membershipId={m.id} tz={m.timezone ?? v.workspace.timezone} forClient={!own} />
+      </div>
     </>
   );
 }

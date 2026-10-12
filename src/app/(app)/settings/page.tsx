@@ -14,6 +14,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { STARTER_KIT } from "@/lib/engine/deck";
 import { CopyButton } from "@/components/copy-button";
+import { BotConnectionCard } from "@/components/bot-connection-card";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
 import { ChangePasswordForm } from "@/components/change-password-form";
@@ -51,7 +52,7 @@ export const metadata = { title: "Settings" };
 
 const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Sao_Paulo", "Europe/London", "Europe/Berlin", "Asia/Dubai", "Asia/Singapore", "Australia/Sydney"];
 
-export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string }> }) {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string }> }) {
   const v = await requireViewer({ team: "allow" });
   // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
   if (v.team) return <TeamSettings v={v} />;
@@ -64,7 +65,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // the page never waits on the store, and a store that is down costs the reader nothing.
   after(() => reapOrphans(v.workspace.id));
   const storage = await storageQuota(v.workspace.id);
-  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice } = await searchParams;
+  const { fathom: fathomNotice, brand: brandNotice, draft, chat: chatParam, apps: appsParam, goalError, team: teamParam, photo: photoNotice, botError } = await searchParams;
   const appsNote = appsParam === "disconnected" ? "Disconnected. That app can't reach your HelixOS any more." : appsParam === "open" ? "Clients may connect apps." : appsParam === "closed" ? "Clients can't connect apps, and their existing connections are cut." : null;
   const chatNote = chatParam === "linked" ? "Chat linked. Your coach's assistant knows it's you." : chatParam === "unlinked" ? "Chat unlinked." : chatParam === "missing" ? "That link isn't valid any more. Ask the assistant for a new one." : chatParam === "share-on" ? "Your progress is shared with your coach's assistant." : chatParam === "share-off" ? "Your progress is no longer shared." : null;
   // The member's own kit (rev 568): every member has the card; a coach switched in sees and, with Work on, sets the client's.
@@ -275,6 +276,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <input className="field" name={`botQuestion${i + 1}`} defaultValue={q ?? ""} placeholder={QUALIFYING_DEFAULTS[i]} data-testid={`bot-question-${i + 1}`} />
               </Field>
             ))}
+            {botError ? (
+              <p className="rounded-lg border border-danger bg-danger-soft p-2 text-sm" role="alert" data-testid="bot-facts-error">
+                {botError}
+              </p>
+            ) : null}
+            <Field label="Booking link" hint="The link your bot sends when someone wants to book a call.">
+              <input className="field" name="bookingUrl" type="url" maxLength={500} placeholder="https://" defaultValue={v.membership.bookingUrl ?? ""} data-testid="booking-url" />
+            </Field>
+            <Field label="What to expect when you book" hint="A few lines your bot can say about the call: how long, what you'll cover, what to bring.">
+              <textarea className="field" name="bookingExpect" rows={3} maxLength={500} defaultValue={v.membership.bookingExpect ?? ""} data-testid="booking-expect" />
+            </Field>
             <details className="rounded-lg border p-3">
               <summary className="cursor-pointer text-sm font-medium">Your guarantee&apos;s full terms</summary>
               <p className="mt-2 text-xs text-ink-3">Kept here for the terms page and, later, for tracking who has earned it. Your bot is sent only the guarantee line you approve on Your bot.</p>
@@ -314,6 +326,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </SubmitButton>
           </form>
         </Card>
+        {v.switchedInto || v.team ? null : <BotConnectionCard workspaceId={v.workspace.id} userId={v.user.id} membershipId={v.membership.id} tz={v.membership.timezone ?? v.workspace.timezone} />}
         {/* HumanOS (rev 320/322): the member's own switch, off by default. Off hides the group and keeps the data; on shows it as it was. */}
         <Card id="humanos" title="HumanOS">
           <p className="text-sm text-ink-2">Food, training, sleep, practices and weigh-ins, in your HelixOS. Everything in it is private to you by default; sharing with your coach is a separate switch inside HumanOS settings, and so is letting AI use it.</p>
