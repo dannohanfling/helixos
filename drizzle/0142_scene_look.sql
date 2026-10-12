@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `scene_look` text DEFAULT 'auto' NOT NULL;

@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My Board: the Council Chamber</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0E0C09}
+a{color:#E2BE6A}a:hover{color:#F2E6CF}
+.room{position:relative;width:100%;aspect-ratio:1680/944;border-radius:20px;overflow:hidden;background:#1A150F}
+.room img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.seat{position:absolute;background:none;border:0;padding:0;margin:0;cursor:pointer;border-radius:40%;color:inherit;font:inherit}
+.seat:focus-visible{outline:2px solid #E2BE6A;outline-offset:2px}
+.live{position:absolute;inset:0;pointer-events:none;opacity:0;background-repeat:no-repeat;transform-origin:50% 85%;-webkit-mask-image:radial-gradient(closest-side,#000 72%,transparent 100%);mask-image:radial-gradient(closest-side,#000 72%,transparent 100%);transition:opacity .5s}
+.day .live{background-image:url(/_blob/703888d9afcc299572a76d277ed558a1)}
+.night .live{background-image:url(/_blob/c1f8cf11e13e062768d5a34705eedda3)}
+.seat.speaking .live{opacity:1;animation:speak 1.7s ease-in-out infinite}
+@keyframes speak{0%,100%{transform:scale(1) translateY(0);filter:brightness(1.05) saturate(1.05)}35%{transform:scale(1.035) translateY(-1.2%) rotate(-.4deg);filter:brightness(1.16) saturate(1.12)}70%{transform:scale(1.02) translateY(-.6%) rotate(.3deg);filter:brightness(1.1) saturate(1.08)}}
+.glow,.shade{position:absolute;inset:-12%;border-radius:50%;pointer-events:none;opacity:0;transition:opacity .5s}
+.glow{background:radial-gradient(closest-side,rgba(255,214,130,.55),rgba(255,200,110,.18) 60%,rgba(255,200,110,0));mix-blend-mode:screen}
+.shade{background:radial-gradient(closest-side,rgba(8,6,4,.62),rgba(8,6,4,.38) 65%,rgba(8,6,4,0))}
+.seat.speaking .glow{opacity:1;animation:breathe 2.4s ease-in-out infinite}
+.seat.dim .shade{opacity:1}
+.plate{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 14px 7px;border-radius:999px;background:rgba(14,12,9,.72);border:1px solid rgba(201,162,74,.55);color:#F2E6CF;white-space:nowrap;pointer-events:none;transition:opacity .5s,border-color .5s}
+.plate .nm{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:clamp(12px,1.35vw,18px);line-height:1}
+.plate .rl{font-size:clamp(8px,.72vw,10px);letter-spacing:2px;color:#C9A24A;line-height:1}
+.seat.speaking .plate{border-color:#E2BE6A;background:rgba(14,12,9,.86)}
+.seat.dim .plate{opacity:.45}
+.eq{display:flex;gap:3px;align-items:flex-end;height:10px;margin-top:2px}
+.eq i{display:block;width:3px;height:3px;background:#E2BE6A;border-radius:2px}
+.seat.speaking .eq i{animation:eq .9s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:.15s}.eq i:nth-child(3){animation-delay:.3s}.eq i:nth-child(4){animation-delay:.45s}
+.tabletext{position:absolute;left:41.07%;width:18.45%;top:42.37%;height:30.72%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;pointer-events:none}
+.tabletext .lbl{font-size:clamp(8px,.72vw,10px);letter-spacing:3px;color:#E2BE6A}
+.tabletext .ln{font-family:'Cormorant Garamond',serif;font-size:clamp(13px,1.45vw,19px);font-weight:500;line-height:1.28;color:#F2E6CF;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.caption{display:none}
+.say{animation:rise .5s ease-out}
+@keyframes breathe{0%,100%{opacity:.75}50%{opacity:1}}
+@keyframes eq{0%,100%{height:3px}50%{height:10px}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.minute{display:grid;grid-template-columns:40px minmax(0,1fr);gap:16px;padding:18px 0;border-top:1px solid #241F18;transition:opacity .4s}
+.steps li{display:grid;grid-template-columns:36px minmax(0,1fr);gap:18px;position:relative;padding-bottom:26px}
+@media (max-width:760px){
+.tabletext{display:none}
+.caption{display:flex}
+.plate{padding:3px 8px 4px}
+.plate .rl,.eq{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+.seat.speaking .glow,.seat.speaking .eq i,.seat.speaking .live,.say{animation:none}
+}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0E0C09; color: #F2E6CF; font-family: Manrope, system-ui, sans-serif; padding: 44px 20px 80px">
+<div style="max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 44px">
+
+<header style="display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center">
+<div style="font-size: 12px; letter-spacing: 5px; font-weight: 600; color: #C9A24A">MY BOARD</div>
+<label for="ask" style="font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 44px; line-height: 1.05">What are you deciding?</label>
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; width: 100%; max-width: 820px">
+<input id="ask" type="text" value="Run my first webinar on Oct 28, or wait until I can post in my group again?" style="flex: 999 1 420px; min-width: 0; min-height: 52px; box-sizing: border-box; padding: 0 4px; background: transparent; color: #F2E6CF; border: 0; border-bottom: 1px solid #5E4C27; font: inherit; font-size: 17px; text-align: center">
+<button type="button" onClick="{{run}}" style="flex: 0 0 auto; min-height: 48px; padding: 0 24px; background: #C9A24A; color: #0E0C09; border: 0; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 700; letter-spacing: 1.5px; cursor: pointer">{{runLabel}}</button>
+</div>
+<div role="group" aria-label="Mode" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px">
+<sc-for list="{{modes}}" as="m" hint-placeholder-count="8">
+<button type="button" onClick="{{m.pick}}" aria-pressed="{{m.pressed}}" style="{{m.style}}">{{m.label}}</button>
+</sc-for>
+</div>
+</header>
+
+<section aria-label="The boardroom" style="display: flex; flex-direction: column; gap: 14px">
+<div class="{{roomCls}}">
+<sc-if value="{{isDay}}" hint-placeholder-val="{{ true }}"><img class="bg" src="/_blob/703888d9afcc299572a76d277ed558a1" alt=""></sc-if>
+<sc-if value="{{isNight}}" hint-placeholder-val="{{ false }}"><img class="bg" src="/_blob/c1f8cf11e13e062768d5a34705eedda3" alt=""></sc-if>
+<button type="button" class="{{cls.danno}}" onClick="{{pickDanno}}" aria-pressed="{{pressed.danno}}" aria-label="The Danno Seat, chair" style="{{geo.danno.box}}">
+<span class="shade"></span><span class="live" style="{{geo.danno.live}}"></span><span class="glow"></span>
+<span class="plate" style="{{geo.danno.plate}}"><span class="nm">The Danno Seat</span><span class="rl">CHAIR</span><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span>
+</button>
+<button type="button" class="{{cls.alex}}" onClick="{{pickAlex}}" aria-pressed="{{pressed.alex}}" aria-label="Alex, strategist" style="{{geo.alex.box}}">
+<span class="shade"></span><span class="live" style="{{geo.alex.live}}"></span><span class="glow"></span>
+<span class="plate" style="{{geo.alex.plate}}"><span class="nm">Alex</span><span class="rl">STRATEGIST</span><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span>
+</button>
+<button type="button" class="{{cls.jordan}}" onClick="{{pickJordan}}" aria-pressed="{{pressed.jordan}}" aria-label="Jordan, operator" style="{{geo.jordan.box}}">
+<span class="shade"></span><span class="live" style="{{geo.jordan.live}}"></span><span class="glow"></span>
+<span class="plate" style="{{geo.jordan.plate}}"><span class="nm">Jordan</span><span class="rl">OPERATOR</span><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span>
+</button>
+<button type="button" class="{{cls.riley}}" onClick="{{pickRiley}}" aria-pressed="{{pressed.riley}}" aria-label="Riley, customer champion" style="{{geo.riley.box}}">
+<span class="shade"></span><span class="live" style="{{geo.riley.live}}"></span><span class="glow"></span>
+<span class="plate" style="{{geo.riley.plate}}"><span class="nm">Riley</span><span class="rl">CUSTOMER CHAMPION</span><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span>
+</button>
+<button type="button" class="{{cls.morgan}}" onClick="{{pickMorgan}}" aria-pressed="{{pressed.morgan}}" aria-label="Morgan, antagonist" style="{{geo.morgan.box}}">
+<span class="shade"></span><span class="live" style="{{geo.morgan.live}}"></span><span class="glow"></span>
+<span class="plate" style="{{geo.morgan.plate}}"><span class="nm">Morgan</span><span class="rl">ANTAGONIST</span><span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span>
+</button>
+<div class="tabletext" aria-live="polite">
+<sc-if value="{{showSpeech}}" hint-placeholder-val="{{ false }}">
+<div class="say" style="display: flex; flex-direction: column; align-items: center; gap: 8px"><div class="lbl">{{speakerLabel}}</div><div class="ln">{{speakerLine}}</div></div>
+</sc-if>
+<sc-if value="{{showRec}}" hint-placeholder-val="{{ true }}">
+<div class="say" style="display: flex; flex-direction: column; align-items: center; gap: 8px"><div class="lbl">THE BOARD RECOMMENDS</div><div class="ln">{{recLine}}</div></div>
+</sc-if>
+</div>
+</div>
+<div class="caption" style="flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 4px 8px">
+<div style="font-size: 10px; letter-spacing: 3px; color: #E2BE6A">{{captionLabel}}</div>
+<div style="font-family: 'Cormorant Garamond', serif; font-size: 19px; line-height: 1.3">{{captionLine}}</div>
+</div>
+<div role="group" aria-label="Time of day" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px">
+<sc-for list="{{looks}}" as="k" hint-placeholder-count="2">
+<button type="button" onClick="{{k.pick}}" aria-pressed="{{k.pressed}}" style="{{k.style}}">{{k.label}}</button>
+</sc-for>
+</div>
+</section>
+
+<section aria-label="The discussion" style="display: flex; flex-direction: column">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; padding-bottom: 6px">
+<h2 style="margin: 0; font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 600">The discussion</h2>
+<span style="font-size: 13px; color: #8C806C">The Board used: <a href="#offers">Main offer</a> · <a href="#avatar">Primary avatar</a> · <a href="#numbers">October numbers</a> · <a href="#dms">Open DMs</a></span>
+</div>
+<sc-for list="{{minutes}}" as="r" hint-placeholder-count="5">
+<sc-if value="{{r.shown}}" hint-placeholder-val="{{ true }}">
+<div class="minute" style="{{r.style}}">
+<div style="font-family: 'Cormorant Garamond', serif; font-size: 22px; color: #C9A24A; line-height: 1.2">{{r.initial}}</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 12px; letter-spacing: 2px; color: #C9A24A">{{r.who}}</div>
+<div style="font-size: 16px; line-height: 1.6">{{r.line}}</div>
+<div style="font-size: 14px; color: #A89C86; font-style: italic">{{r.ask}}</div>
+</div>
+</div>
+</sc-if>
+</sc-for>
+<sc-if value="{{showRec}}" hint-placeholder-val="{{ true }}">
+<div style="border-top: 1px solid #241F18; padding: 22px 0 0 56px; font-size: 15px; color: #A89C86; font-style: italic">Where the Board splits: Alex and the Danno Seat say set the date now. Morgan wants the safety net built first.</div>
+</sc-if>
+</section>
+
+<sc-if value="{{showRec}}" hint-placeholder-val="{{ true }}">
+<section aria-label="Your action steps" style="display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px">
+<h2 style="margin: 0; font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 600">Your next three moves</h2>
+<span style="font-size: 13px; color: #8C806C">3 h 15 m of the 6 h you set aside this week</span>
+</div>
+<ol class="steps" style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="3">
+<li>
+<div style="display: flex; flex-direction: column; align-items: center">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #C9A24A; color: #E2BE6A; font-family: 'Cormorant Garamond', serif; font-size: 20px; font-weight: 700">{{s.n}}</span>
+<span style="{{s.line}}"></span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px">
+<div style="font-size: 18px; font-weight: 600">{{s.do}}</div>
+<div style="font-size: 14px; color: #A89C86">{{s.by}} · {{s.takes}} · Done when {{s.done}}</div>
+<div style="font-size: 14px; color: #E2BE6A">First 5 minutes: {{s.first}}</div>
+</div>
+</li>
+</sc-for>
+</ol>
+</section>
+</sc-if>
+
+<sc-if value="{{showRec}}" hint-placeholder-val="{{ true }}">
+<section aria-label="Set it up for me" style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 600">Set it up for me</h2>
+<p style="margin: 0 0 6px; font-size: 13px; color: #8C806C">Drafts and private only. Nothing posts or sends.</p>
+<sc-for list="{{proposals}}" as="p" hint-placeholder-count="5">
+<label style="display: flex; align-items: center; gap: 14px; min-height: 46px; border-top: 1px solid #241F18; cursor: pointer">
+<input type="checkbox" checked="{{p.on}}" onChange="{{p.toggle}}" style="width: 20px; height: 20px; margin: 0; accent-color: #C9A24A">
+<span style="font-size: 15px">{{p.text}}</span>
+</label>
+</sc-for>
+<div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding-top: 12px">
+<button type="button" style="min-height: 48px; padding: 0 24px; background: #C9A24A; color: #0E0C09; border: 0; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 700; letter-spacing: 1px; cursor: pointer">{{approveLabel}}</button>
+<a href="#share" style="font-size: 14px">Share with my coach</a>
+</div>
+</section>
+</sc-if>
+
+<footer style="display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center">
+<div style="font-family: 'Cormorant Garamond', serif; font-size: 34px; font-style: italic; color: #E2BE6A">You decide.</div>
+<p style="margin: 0; font-size: 13px; color: #8C806C; max-width: 520px">The Board maps the options and the risks. The call is yours. The Danno Seat is guided by Danno’s teaching; it is not Danno live.</p>
+</footer>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { phase: 'done', idx: -1, focus: null, mode: 'Board', off: {}, look: 'day' };
+    // statue hit areas and name plates, % of the 1680x944 photo (same for both looks)
+    this.G = {"danno": {"l": 45.54, "t": 11.65, "w": 9.52, "h": 21.19, "px": 50.3, "py": 7.63}, "alex": {"l": 25.0, "t": 22.78, "w": 13.1, "h": 37.08, "px": 27.98, "py": 20.13}, "jordan": {"l": 62.2, "t": 24.15, "w": 14.7, "h": 36.76, "px": 70.83, "py": 21.19}, "riley": {"l": 19.64, "t": 52.97, "w": 22.32, "h": 42.9, "px": 12.8, "py": 81.57}, "morgan": {"l": 57.14, "t": 53.5, "w": 23.81, "h": 42.9, "px": 87.2, "py": 81.57}};
+    this.timer = null;
+  }
+  componentWillUnmount() { if (this.timer) clearTimeout(this.timer); }
+  renderVals() {
+    var self = this;
+    var order = ['danno', 'alex', 'jordan', 'morgan', 'riley'];
+    var info = {
+      danno: { who: 'THE DANNO SEAT', initial: 'D', label: 'THE DANNO SEAT', line: 'Be painfully specific. How many people in the room, and how many buyers, before you pick the date?', ask: 'What does the webinar promise, from what to what, without what?' },
+      alex: { who: 'ALEX · STRATEGIST', initial: 'A', label: 'ALEX', line: 'A date on the calendar builds momentum. Waiting for the group ties your plan to something you do not control.', ask: 'What are you saying no to if you wait?' },
+      jordan: { who: 'JORDAN · OPERATOR', initial: 'J', label: 'JORDAN', line: 'Oct 28 fits your hours if invites start this week. Registration through your bot keeps it to one workflow.', ask: 'Who posts the invite while you cannot?' },
+      morgan: { who: 'MORGAN · ANTAGONIST', initial: 'M', label: 'MORGAN', line: 'A small room can feel like failure even when it is not. Plan the second date and the replay before the first.', ask: 'What counts as a good first webinar?' },
+      riley: { who: 'RILEY · CUSTOMER CHAMPION', initial: 'R', label: 'RILEY', line: 'Your people want to see it work, not hear about it. Let them try the assistant live on the call.', ask: 'How would they describe the problem, in their words?' }
+    };
+    var st = this.state;
+    var playing = st.phase === 'playing';
+    var speaker = playing ? order[st.idx] : st.focus;
+
+    var tick = function () {
+      var next = self.state.idx + 1;
+      if (next < order.length) {
+        self.setState({ idx: next });
+        self.timer = setTimeout(tick, 3400);
+      } else {
+        self.setState({ phase: 'done', idx: -1 });
+        self.timer = null;
+      }
+    };
+    var run = function () {
+      if (self.timer) clearTimeout(self.timer);
+      self.setState({ phase: 'playing', idx: 0, focus: null });
+      self.timer = setTimeout(tick, 3400);
+    };
+    var pick = function (id) {
+      return function () {
+        if (self.timer) { clearTimeout(self.timer); self.timer = null; }
+        self.setState({ phase: 'done', idx: -1, focus: self.state.focus === id ? null : id });
+      };
+    };
+
+    var G = this.G, geoV = {};
+    Object.keys(G).forEach(function (k) {
+      var g = G[k];
+      geoV[k] = {
+        box: 'left: ' + g.l + '%; top: ' + g.t + '%; width: ' + g.w + '%; height: ' + g.h + '%',
+        plate: 'left: ' + ((g.px - g.l) / g.w * 100).toFixed(1) + '%; top: ' + ((g.py - g.t) / g.h * 100).toFixed(1) + '%',
+        live: 'background-size: ' + (10000 / g.w).toFixed(2) + '% ' + (10000 / g.h).toFixed(2) + '%; background-position: ' + (g.l / (100 - g.w) * 100).toFixed(2) + '% ' + (g.t / (100 - g.h) * 100).toFixed(2) + '%'
+      };
+    });
+    var recLine = 'Set Oct 28. Book a second date and the replay the same day, so a small room is a start, not a verdict.';
+    var looks = [['day', 'Golden hour'], ['night', 'Night']].map(function (x) { var on = st.look === x[0]; return { label: x[1], pressed: on ? 'true' : 'false', pick: function () { self.setState({ look: x[0] }); }, style: 'min-height: 44px; padding: 0 18px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; ' + (on ? 'background: #C9A24A; color: #0E0C09; border: 1px solid #C9A24A' : 'background: none; color: #E2BE6A; border: 1px solid #5E4C27') }; });
+    var cls = {}; var pressed = {};
+    order.forEach(function (id) {
+      var on = speaker === id;
+      cls[id] = 'seat' + (on ? ' speaking' : '') + (speaker && !on ? ' dim' : '');
+      pressed[id] = on ? 'true' : 'false';
+    });
+
+    var minutes = order.map(function (id, i) {
+      var shown = playing ? i <= st.idx : true;
+      var on = speaker === id;
+      var faded = speaker && !on;
+      return { who: info[id].who, initial: info[id].initial, line: info[id].line, ask: info[id].ask, shown: shown, style: faded ? 'opacity: 0.4' : '' };
+    });
+
+    var modeNames = ['Board', 'Focus', 'Debate', 'Quick Vote', 'Workaround', 'Leverage', 'Converge', 'Check-in'];
+    var modes = modeNames.map(function (label) {
+      var on = st.mode === label;
+      return {
+        label: label, pressed: on ? 'true' : 'false',
+        style: 'min-height: 44px; padding: 0 2px; background: none; border: 0; border-bottom: 2px solid ' + (on ? '#C9A24A' : 'transparent') + '; color: ' + (on ? '#F2E6CF' : '#8C806C') + '; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer',
+        pick: function () { self.setState({ mode: label }); }
+      };
+    });
+
+    var raw = [
+      { id: 'p1', text: 'Task: lock the date and title, Mon Oct 13 (Top 3 that day)' },
+      { id: 'p2', text: 'Draft webinar for Oct 28, linked to your main offer' },
+      { id: 'p3', text: 'Task: write the bot registration message, Tue Oct 14' },
+      { id: 'p4', text: 'Follow up with everyone marked interested in your DMs, Thu Oct 16' },
+      { id: 'p5', text: 'Board check-in, Fri Oct 17' }
+    ];
+    var proposals = raw.map(function (p) {
+      return { text: p.text, on: !st.off[p.id], toggle: function () { var o = Object.assign({}, self.state.off); o[p.id] = !o[p.id]; self.setState({ off: o }); } };
+    });
+    var count = proposals.filter(function (p) { return p.on; }).length;
+
+    var stepsRaw = [
+      { n: '1', do: 'Lock the webinar date and title', by: 'Mon Oct 13', takes: '30 min', done: 'it is in your calendar', first: 'open Webinars and tap New' },
+      { n: '2', do: 'Write the bot registration message', by: 'Tue Oct 14', takes: '45 min', done: 'the keyword reply works on your phone', first: 'draft three lines in your notes' },
+      { n: '3', do: 'Invite your warm list personally', by: 'Thu Oct 16', takes: '2 h', done: 'every warm contact has one message', first: 'pin the first 10 names' }
+    ];
+    var steps = stepsRaw.map(function (s, i) {
+      return Object.assign({}, s, { line: i < stepsRaw.length - 1 ? 'display: block; width: 1px; flex: 1 1 auto; min-height: 30px; margin-top: 6px; background: #3A3226' : 'display: none' });
+    });
+
+    return {
+      run: run,
+      runLabel: playing ? 'IN SESSION…' : (st.phase === 'done' ? 'RUN THE DISCUSSION' : 'CONVENE THE BOARD'),
+      modes: modes, cls: cls, pressed: pressed,
+      pickDanno: pick('danno'), pickAlex: pick('alex'), pickJordan: pick('jordan'), pickMorgan: pick('morgan'), pickRiley: pick('riley'),
+      showSpeech: !!speaker,
+      showRec: !speaker,
+      speakerLabel: speaker ? info[speaker].label + ' SAYS' : '',
+      speakerLine: speaker ? info[speaker].line : '',
+      minutes: minutes, steps: steps, proposals: proposals,
+      approveLabel: 'APPROVE ' + count + ' SELECTED',
+      geo: geoV, looks: looks, roomCls: 'room ' + st.look, isDay: st.look === 'day', isNight: st.look === 'night', recLine: recLine,
+      captionLabel: speaker ? info[speaker].label + ' SAYS' : 'THE BOARD RECOMMENDS',
+      captionLine: speaker ? info[speaker].line : recLine
+    };
+  }
+}
+</script>
+</body>
+</html>

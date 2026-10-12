@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 146,
+    date: "2026-10-12",
+    title: "My Board meets in the Council Chamber",
+    lines: [
+      "My Board now sits in a marble council chamber: five statues around the table, the Danno Seat at the head. When the Board answers, each advisor speaks in turn: the one speaking glows and their words appear on the tabletop. Tap a statue to read what that advisor said.",
+      "Pick \"Golden hour\" or \"Night\" under the room and HelixOS remembers it. Until you choose, the room turns to night from 7pm to 6am your time. With reduced motion on, the room keeps still and the speaker keeps the glow.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 145,
     date: "2026-10-12",
     title: "Calls booked in GoHighLevel, on your scoreboard",

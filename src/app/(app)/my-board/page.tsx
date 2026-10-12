@@ -4,6 +4,7 @@ import { decisionsFor, stepStatus } from "@/lib/board";
 import { askBoardAction, setBoardHoursAction, setBoardPresetAction, setBoardSeesBodyAction } from "@/lib/actions/board";
 import { seatsFor } from "@/lib/engine/board";
 import { Boardroom } from "@/components/boardroom";
+import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
 import { formatDate } from "@/lib/dates";
 import "./boardroom.css";
@@ -49,7 +50,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
           </form>
         </div>
       ) : (
-        <Boardroom seats={seats} answer={null} question="" used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
+        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} seats={seats} answer={null} question="" used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
       )}
       {!canAsk ? <p className="br-wrap br-muted">The Board answers {v.user.name.split(" ")[0]} on their own AI key, so only they can ask it. Their decisions are below.</p> : null}
 

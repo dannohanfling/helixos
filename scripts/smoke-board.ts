@@ -188,61 +188,98 @@ async function main() {
     console.log("✓ Run the discussion again; a seat tapped mid-playback stops it on that advisor, tapped again returns to the Board");
 
     // Every seat and tab reachable by keyboard.
-    await page.goto(`${base}/my-board/${decisionId}`);
+    await page.goto(`${base}/my-board/${decisionId}`, { waitUntil: "networkidle" });
+    await page.locator('[data-testid="board-seat-riley"]').waitFor({ state: "visible" });
     // From the ask box onward (the sidebar's links come before it): every tab and seat follows in order.
-    await page.locator('[data-testid="board-question"]').focus();
+    await page.locator('[data-testid="board-question"]').click();
     const reached = new Set<string>(["board-question"]);
     for (let i = 0; i < 40; i++) {
       await page.keyboard.press("Tab");
       const id = await page.evaluate(() => document.activeElement?.getAttribute("data-testid") ?? "");
       if (id) reached.add(id);
     }
-    const want = [...SEATS.map((x) => `board-seat-${x.key}`), ...MODES.map((x) => `board-mode-${x}`), "board-question"];
-    must(want.every((x) => reached.has(x)), `every seat and tab by keyboard; missed ${want.filter((x) => !reached.has(x)).join(", ")}`);
+    const want = [...SEATS.map((x) => `board-seat-${x.key}`), ...MODES.map((x) => `board-mode-${x}`), "board-question", "board-look-day", "board-look-night"];
+    must(want.every((x) => reached.has(x)), `every statue, tab and look by keyboard; missed ${want.filter((x) => !reached.has(x)).join(", ")}`);
     await page.locator('[data-testid="board-seat-alex"]').focus();
     await page.keyboard.press("Enter");
     must((await page.locator('[data-testid="board-speaking"] .br-says-label').innerText()) === "ALEX SAYS", "Enter on a seat spotlights it");
-    console.log(`✓ the keyboard reaches every seat and all ${MODES.length} mode tabs; Enter on a seat spotlights it`);
+    console.log(`✓ the keyboard reaches every statue, all ${MODES.length} mode tabs and both looks; Enter on a statue spotlights it`);
 
-    // Reduced motion: no pulse, bars or rise; the speaker keeps the gold ring and the others dim.
+    // Reduced motion: no lean, breathing or bars; the speaker keeps the glow and the others dim.
     const still = await (await browser.newContext({ viewport: { width: 1280, height: 950 }, reducedMotion: "reduce", storageState: await page.context().storageState() })).newPage();
     await still.goto(`${base}/my-board/${decisionId}?play=1`);
     await still.locator(".br-seat.br-speaking").waitFor({ timeout: 5000 });
     const motion = await still.evaluate(() => {
-      const disc = document.querySelector(".br-seat.br-speaking .br-disc")!;
-      const cs = getComputedStyle(disc);
-      return { anim: cs.animationName, transform: cs.transform, ring: cs.borderTopColor, eq: getComputedStyle(document.querySelector(".br-seat.br-speaking .br-eq")!).visibility, rise: getComputedStyle(document.querySelector(".br-says")!).animationName, dim: document.querySelectorAll(".br-seat.br-dim").length };
+      const seat = document.querySelector(".br-seat.br-speaking")!;
+      const live = getComputedStyle(seat.querySelector(".br-live")!);
+      const glow = getComputedStyle(seat.querySelector(".br-glow")!);
+      return { lean: live.animationName, leanShown: live.opacity, breathe: glow.animationName, glow: glow.opacity, bars: getComputedStyle(seat.querySelector(".br-eq i")!).animationName, dim: document.querySelectorAll(".br-seat.br-dim").length };
     });
-    must(motion.anim === "none" && motion.transform === "none" && motion.eq === "hidden" && motion.rise === "none", `reduced motion: nothing moves ${JSON.stringify(motion)}`);
-    must(motion.ring === "rgb(226, 190, 106)" && motion.dim === 4, `reduced motion: the gold ring and the others dim ${JSON.stringify(motion)}`);
+    must(motion.lean === "none" && motion.leanShown === "0" && motion.breathe === "none" && motion.bars === "none", `reduced motion: nothing moves ${JSON.stringify(motion)}`);
+    must(motion.glow === "1" && motion.dim === 4, `reduced motion: the speaker keeps the glow, the others dim ${JSON.stringify(motion)}`);
     await still.context().close();
-    console.log("✓ reduced motion: no pulse, bars or rise; the speaker keeps the gold ring, the others dim");
+    console.log("✓ reduced motion: no lean, breathing or bars; the speaker keeps the glow, the others dim");
 
-    // Widths 1440, 1024 and 390: nothing scrolls sideways, every seat in the room and at least 44px, none on top of another.
+    // The look: Golden hour or Night, the member's own and remembered.
+    await page.goto(`${base}/my-board/${decisionId}`);
+    const lookNow = await page.locator('[data-testid="board-room"]').getAttribute("data-look");
+    const other = lookNow === "day" ? "night" : "day";
+    await page.locator(`[data-testid="board-look-${other}"]`).click();
+    must((await page.locator('[data-testid="board-room"]').getAttribute("data-look")) === other && (await page.locator(`[data-testid="board-photo-${other}"]`).isVisible()), "the toggle changes the look at once");
+    await page.waitForTimeout(800);
+    await page.reload();
+    must((await page.locator('[data-testid="board-room"]').getAttribute("data-look")) === other, "the look is remembered");
+    must((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, m.id) }))!.sceneLook === other, "stored on her membership");
+    console.log(`✓ Golden hour / Night: ${lookNow} to ${other} at once, remembered after a reload`);
+
+    // Widths 1440, 1024 and 390, in both looks: nothing scrolls sideways; every statue's button sits on its chair (rev 738's
+    // percentages), at least 44px; no plate over a face (8% to 40% down its statue); the tabletop words or, on a phone, the caption.
+    const { CHAIRS } = await import("@/lib/engine/board-view");
     for (const width of [1440, 1024, 390]) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto(`${base}/my-board/${decisionId}`);
-      await page.locator('[data-testid="board-seat-riley"]').waitFor({ state: "visible", timeout: 20000 });
-      await page.waitForTimeout(300);
-      const box = await page.evaluate(() => {
-        const room = document.querySelector('[data-testid="board-room"]')!.getBoundingClientRect();
-        const seats = [...document.querySelectorAll(".br-seat")].map((e) => e.getBoundingClientRect()).map((r) => ({ l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }));
-        const head = document.querySelector(".br-head")!.getBoundingClientRect();
-        return { sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth, width: document.documentElement.clientWidth, headBottom: head.bottom, room: { l: room.left, r: room.right, t: room.top, b: room.bottom }, seats };
-      });
-      must(box.sideways <= 0, `${width}px: nothing scrolls sideways (${box.sideways}px)`);
-      // Each seat is centred on its spot in the room, on screen, and clear of the header above it.
-      const inRoom = (x: (typeof box.seats)[number]) => {
-        const cx = (x.l + x.r) / 2;
-        const cy = (x.t + x.b) / 2;
-        return cx > box.room.l && cx < box.room.r && cy > box.room.t && cy < box.room.b;
-      };
-      must(box.seats.length === 5 && box.seats.every((x) => x.w >= 44 && x.h >= 44 && inRoom(x) && x.l >= 0 && x.r <= box.width && x.t >= box.headBottom), `${width}px: the seats sit around the table ${JSON.stringify(box)}`);
-      const overlap = box.seats.some((a, i) => box.seats.some((b, j) => j > i && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b));
-      must(!overlap, `${width}px: no seat on top of another`);
+      for (const k of ["day", "night"]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base}/my-board/${decisionId}`);
+        await page.locator(`[data-testid="board-look-${k}"]`).click();
+        await page.locator('[data-testid="board-seat-riley"]').waitFor({ state: "visible", timeout: 20000 });
+        await page.waitForTimeout(200);
+        // Plain rects from the page (a named helper inside evaluate would carry the bundler's __name with it).
+        type R = { left: number; right: number; top: number; bottom: number; width: number; height: number };
+        const raw = (await page.evaluate(
+          (keys) =>
+            JSON.stringify({
+              sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              room: document.querySelector('[data-testid="board-room"]')!.getBoundingClientRect(),
+              seats: keys.map((key) => ({ key, seat: document.querySelector(`[data-testid="board-seat-${key}"]`)!.getBoundingClientRect(), plate: document.querySelector(`[data-testid="board-plate-${key}"]`)!.getBoundingClientRect() })),
+              table: getComputedStyle(document.querySelector(".br-table")!).display,
+              caption: getComputedStyle(document.querySelector('[data-testid="board-caption"]')!).display,
+            }),
+          SEATS.map((x) => x.key),
+        )) as string;
+        const j = JSON.parse(raw) as { sideways: number; room: R; seats: { key: string; seat: R; plate: R }[]; table: string; caption: string };
+        const rr = (x: R) => ({ l: x.left, r: x.right, t: x.top, b: x.bottom, w: x.width, h: x.height });
+        const box = { sideways: j.sideways, room: rr(j.room), seats: j.seats.map((x) => ({ key: x.key, seat: rr(x.seat), plate: rr(x.plate) })), table: j.table, caption: j.caption };
+        must(box.sideways <= 0, `${width}px ${k}: nothing scrolls sideways (${box.sideways}px)`);
+        must(Math.abs(box.room.h / box.room.w - 944 / 1680) < 0.01, `${width}px ${k}: the room keeps the photo's shape`);
+        box.seats.forEach((x, i) => {
+          const g = CHAIRS[i];
+          const cx = ((x.seat.l + x.seat.r) / 2 - box.room.l) / box.room.w * 100;
+          const cy = ((x.seat.t + x.seat.b) / 2 - box.room.t) / box.room.h * 100;
+          must(Math.abs(cx - (g.l + g.w / 2)) < 1 && Math.abs(cy - (g.t + g.h / 2)) < 1 && x.seat.w >= 44 && x.seat.h >= 44, `${width}px ${k}: ${x.key} on its chair ${JSON.stringify({ cx, cy, w: x.seat.w, h: x.seat.h })}`);
+          // The face: from 8% to 40% of the statue's box (the box's top edge is the crown, above the face).
+          const faceTop = box.room.t + ((g.t + 0.08 * g.h) / 100) * box.room.h;
+          const faceBottom = box.room.t + ((g.t + 0.4 * g.h) / 100) * box.room.h;
+          const faceL = box.room.l + (g.l / 100) * box.room.w;
+          const faceR = faceL + (g.w / 100) * box.room.w;
+          // How far the plate reaches into the face zone, in pixels: a brush of the hairline is fine, covering the face isn't.
+          const overX = Math.min(x.plate.r, faceR) - Math.max(x.plate.l, faceL);
+          const overY = Math.min(x.plate.b, faceBottom) - Math.max(x.plate.t, faceTop);
+          must(!(overX > 0 && overY > 6), `${width}px ${k}: ${x.key}'s plate clear of the face (${overY.toFixed(1)}px into it) ${JSON.stringify({ plate: x.plate, faceTop, faceBottom })}`);
+        });
+        must(width > 760 ? box.table === "flex" && box.caption === "none" : box.table === "none" && box.caption !== "none", `${width}px: the words on the table, or under the room on a phone`);
+      }
     }
     await page.setViewportSize({ width: 1280, height: 950 });
-    console.log("✓ 1440, 1024 and 390 wide: nothing scrolls sideways, the five seats sit around the table, none overlapping, each at least 44px");
+    console.log("✓ 1440, 1024 and 390 wide in both looks: the room keeps its shape, every statue's button on its chair and at least 44px, no plate over a face, the caption on a phone");
 
     // A Focus follow-up: only Morgan.
     await page.goto(`${base}/my-board/${decisionId}`);
@@ -288,6 +325,7 @@ async function main() {
     await page.locator('[data-testid="board-submit"]').click();
     await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
     for (const k of ["tony", "dean", "igor", "jordan", "morgan"]) must(await page.locator(`[data-testid="board-seat-${k}"]`).count(), `the Edge seat ${k}`);
+    must((await page.locator('[data-testid="board-plate-tony"]').innerText()).includes("Tony Robbins") && (await page.locator('[data-testid="board-seat-tony"]').getAttribute("style"))!.startsWith("left: 50.3%"), "the Edge Preset's names on the same chairs");
     const edgeNote = await page.locator('[data-testid="board-edge-note"]').innerText();
     must(edgeNote.includes("Tony Robbins, Dean Graziosi, Igor Pogany sit as style advisors") && edgeNote.includes("aren't the people"), `the Edge Preset says what its seats are: ${edgeNote}`);
     const last = (await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] };

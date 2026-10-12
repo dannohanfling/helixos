@@ -1,15 +1,16 @@
 "use client";
 
 /**
- * My Board, the Boardroom (rev 698): the ask, the room with its five seats, the discussion played back one advisor at a time
+ * My Board, the Council Chamber (revs 698, 738): the ask, the photo room with its five statues, the discussion played back one advisor at a time
  * (about 3.4 s each, in speaking order), the minutes, the steps and "You decide". The playback only ever plays the answer the
  * server checked and saved: while the Board is being asked, the table shows a quiet "…" and no seat moves. Tapping a seat stops
  * the playback and spotlights that advisor; tapping it again returns to the whole Board. With reduced motion on there is no
- * pulse, bars or rise: the speaker gets the gold ring and the others dim.
+ * lean, breathing or bars: the speaker keeps the glow and the others dim. "Golden hour / Night" is the member's own look.
  */
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { MODES, MODE_INFO, SEAT_SPOTS, SPEAK_MS, takesWords, type Mode } from "@/lib/engine/board-view";
+import { CHAIRS, COUNCIL_CLIPS, MODES, MODE_INFO, SPEAK_MS, takesWords, type Mode, type SceneLook } from "@/lib/engine/board-view";
+import { setSceneLookAction } from "@/lib/actions/scene";
 import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -32,12 +33,20 @@ type Props = {
   setup?: ReactNode;
   /** Each step's task, read live: a ticked task shows the step as done. */
   stepStates?: string[];
+  /** The Council Chamber's look for this member (rev 738): their own choice, or night from 19:00 to 06:00. */
+  initialLook?: SceneLook;
 };
+
+const LOOKS: SceneLook[] = ["day", "night"];
+/** The photo behind a speaking statue's copy: WebP where the browser takes it, the JPG otherwise. */
+const photoVar = (k: SceneLook) => `image-set(url("/board/council-${k}.webp") type("image/webp"), url("/board/council-${k}.jpg") type("image/jpeg"))`;
+/** A plate shows the name: "Alex", "The Danno Seat", or an Edge style advisor's name without the word "Advisor". */
+const plateName = (s: Seat) => s.short.replace(/ Advisor$/, "");
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
 const dayWords = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", DATE_FMT);
 
-export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [] }: Props) {
+export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day" }: Props) {
   const spoken = useMemo(() => (answer ? seats.filter((s) => answer.advisors.some((a) => a.seat === s.key)).map((s) => s.key) : []), [seats, answer]);
   const [phase, setPhase] = useState<"idle" | "asking" | "playing" | "done">(answer ? (autoplay ? "playing" : "done") : "idle");
   const [idx, setIdx] = useState(0);
@@ -45,6 +54,20 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
   const [mode, setMode] = useState<Mode>(initialMode);
   const [text, setText] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [look, setLook] = useState<SceneLook>(initialLook);
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const set = () => setStill(q.matches);
+    set();
+    q.addEventListener("change", set);
+    return () => q.removeEventListener("change", set);
+  }, []);
+  // The member's own look, remembered for the Council Chamber, the Colosseum and the Aqueduct.
+  const chooseLook = (k: SceneLook) => {
+    setLook(k);
+    if (canAsk) void setSceneLookAction(k);
+  };
 
   // The playback: one speaker after another, then the recommendation.
   useEffect(() => {
@@ -71,6 +94,29 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
     if (phase === "playing") setPhase("done");
     setSpot((cur) => (cur === k ? null : k));
   };
+  // The table's words: "…" while the Board is asked, the speaker's line, or the recommendation. On a phone they sit under the room.
+  const words = (ids: boolean) =>
+    phase === "asking" ? (
+      <div className="br-says-line br-quiet" data-testid={ids ? "board-waiting" : undefined}>
+        …
+      </div>
+    ) : speaker && card(speaker) ? (
+      <div className="br-says br-rise" key={`${speaker}-${phase}`} data-testid={ids ? "board-speaking" : undefined}>
+        <div className="br-says-label">{`${seatOf(speaker)?.short.toUpperCase()} SAYS`}</div>
+        <div className="br-says-line">{card(speaker)!.text}</div>
+      </div>
+    ) : answer && phase === "done" ? (
+      <div className="br-says br-rise" data-testid={ids ? "board-table-recommends" : undefined}>
+        <div className="br-says-label">THE BOARD RECOMMENDS</div>
+        <div className="br-says-line">{answer.recommendation}</div>
+      </div>
+    ) : (
+      <div className="br-says-line br-quiet">{answer ? "" : "Say what you're deciding, and the Board will sit."}</div>
+    );
+  // A speaking clip plays for the speaker's turn when one is in the repo, never with reduced motion; only the next one preloads.
+  const clipFor = (k: string | undefined | null) => (k && !still ? COUNCIL_CLIPS.find((x) => x === `/board/council-${look}-${k}.mp4`) ?? null : null);
+  const clip = clipFor(speaker);
+  const nextClip = phase === "playing" ? clipFor(spoken[idx + 1]) : null;
   const rowShown = (k: string) => (phase === "playing" ? spoken.indexOf(k) <= idx : phase === "done");
   const minutes = spoken;
   const totalMin = answer?.steps.reduce((a, s) => a + s.takesMinutes, 0) ?? 0;
@@ -123,60 +169,61 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
         )}
       </header>
 
-      <section aria-label="The boardroom" className="br-room" data-testid="board-room">
-        <div className="br-table" aria-live="polite">
-          {phase === "asking" ? (
-            <div className="br-says-line br-quiet" data-testid="board-waiting">…</div>
-          ) : speaker && card(speaker) ? (
-            <div className="br-says br-rise" key={`${speaker}-${phase}`} data-testid="board-speaking">
-              <div className="br-says-label">{`${seatOf(speaker)?.short.toUpperCase()} SAYS`}</div>
-              <div className="br-says-line">{card(speaker)!.text}</div>
-            </div>
-          ) : answer && phase === "done" ? (
-            <div className="br-says br-rise" data-testid="board-table-recommends">
-              <div className="br-says-label">THE BOARD RECOMMENDS</div>
-              <div className="br-says-line">{answer.recommendation}</div>
-            </div>
-          ) : (
-            <div className="br-says-line br-quiet">{answer ? "" : "Say what you're deciding, and the Board will sit."}</div>
-          )}
-        </div>
-        {seats.map((s, i) => {
-          const active = speaker === s.key;
-          const dim = (speaker && !active) || (answer && !spoken.includes(s.key));
-          const spot0 = SEAT_SPOTS[i];
-          return (
-            <button
-              key={s.key}
-              type="button"
-              className={`br-seat${active ? " br-speaking" : ""}${dim ? " br-dim" : ""}`}
-              style={{ left: `${spot0.left}%`, top: `${spot0.top}%` }}
-              aria-pressed={spot === s.key}
-              aria-label={`${s.name}${card(s.key) ? "" : " (didn't speak on this one)"}`}
-              onClick={() => tapSeat(s.key)}
-              data-testid={`board-seat-${s.key}`}
-            >
-              <span className="br-disc">
-                {s.icon ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- a static seat icon from public/board
-                  <img src={s.icon} alt="" />
-                ) : (
-                  <span className="br-emoji" aria-hidden>
-                    {s.emoji}
+      <section aria-label="The boardroom" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className={`br-room br-${look}`} data-testid="board-room" data-look={look} style={{ ["--br-photo" as string]: photoVar(look) }}>
+          {LOOKS.map((k) => (
+            <picture key={k}>
+              <source type="image/webp" srcSet={`/board/council-${k}.webp`} />
+              <img className="br-photo" src={`/board/council-${k}.jpg`} alt="" hidden={k !== look} loading={k === look ? "eager" : "lazy"} decoding="async" data-testid={`board-photo-${k}`} />
+            </picture>
+          ))}
+          {clip ? <video key={clip} className="br-photo" src={clip} muted autoPlay loop playsInline aria-hidden data-testid="board-clip" /> : null}
+          {nextClip ? <link rel="preload" as="video" href={nextClip} /> : null}
+          {seats.map((s, i) => {
+            const g = CHAIRS[i];
+            const active = speaker === s.key;
+            const dim = Boolean((speaker && !active) || (answer && !spoken.includes(s.key)));
+            return (
+              <button
+                key={s.key}
+                type="button"
+                className={`br-seat${active ? " br-speaking" : ""}${dim ? " br-dim" : ""}`}
+                style={{ left: `${+(g.l + g.w / 2).toFixed(3)}%`, top: `${+(g.t + g.h / 2).toFixed(3)}%`, width: `${g.w}%`, height: `${g.h}%` }}
+                aria-pressed={spot === s.key}
+                aria-label={`${s.short}, ${s.role.toLowerCase()}${card(s.key) || !answer ? "" : " (didn't speak on this one)"}`}
+                onClick={() => tapSeat(s.key)}
+                data-testid={`board-seat-${s.key}`}
+              >
+                <span className="br-shade" />
+                <span className="br-live" style={{ backgroundSize: `${(10000 / g.w).toFixed(2)}% ${(10000 / g.h).toFixed(2)}%`, backgroundPosition: `${((g.l / (100 - g.w)) * 100).toFixed(2)}% ${((g.t / (100 - g.h)) * 100).toFixed(2)}%` }} />
+                <span className="br-glow" />
+                <span className="br-plate" style={{ left: `${(((g.px - g.l) / g.w) * 100).toFixed(1)}%`, top: `${(((g.py - g.t) / g.h) * 100).toFixed(1)}%` }} data-testid={`board-plate-${s.key}`}>
+                  <span className="br-nm">{plateName(s)}</span>
+                  <span className="br-rl">{s.role}</span>
+                  <span className="br-eq" aria-hidden>
+                    <i />
+                    <i />
+                    <i />
+                    <i />
                   </span>
-                )}
-              </span>
-              <span className="br-nm">{s.short}</span>
-              <span className="br-rl">{s.role}</span>
-              <span className="br-eq" aria-hidden>
-                <i />
-                <i />
-                <i />
-                <i />
-              </span>
+                </span>
+              </button>
+            );
+          })}
+          <div className="br-table" aria-live="polite">
+            {words(true)}
+          </div>
+        </div>
+        <div className="br-caption" data-testid="board-caption">
+          {words(false)}
+        </div>
+        <div role="group" aria-label="Time of day" className="br-looks">
+          {LOOKS.map((k) => (
+            <button key={k} type="button" className="br-look" aria-pressed={look === k} onClick={() => chooseLook(k)} data-testid={`board-look-${k}`}>
+              {k === "day" ? "Golden hour" : "Night"}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </section>
 
       {seats.some((s) => s.role === "STYLE ADVISOR") ? (

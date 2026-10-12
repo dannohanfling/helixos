@@ -87,6 +87,8 @@ export const memberships = sqliteTable(
     boardSeesBody: integer("board_sees_body", { mode: "boolean" }).notNull().default(false),
     /** The coach's own Board may use the Edge Preset; a client's is always standard. */
     boardPreset: text("board_preset", { enum: ["standard", "edge"] }).notNull().default("standard"),
+    /** The photo rooms' look (revs 711, 720, 738): "auto" is night from 19:00 to 06:00 in the member's own time; the toggle sets "day" or "night" and it stays. One setting for the Council Chamber, the Colosseum and the Aqueduct. */
+    sceneLook: text("scene_look", { enum: ["auto", "day", "night"] }).notNull().default("auto"),
     startedAt: text("started_at").notNull().default(sql`(date('now'))`),
     passEnabled: integer("pass_enabled", { mode: "boolean" }).notNull().default(false),
     passName: text("pass_name"),

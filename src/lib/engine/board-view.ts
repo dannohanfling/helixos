@@ -45,3 +45,33 @@ export const SKILL_INSTALL_STEPS = [
   "Switch the Evolve Omega Board skill on.",
   "In any chat, start with \"Board:\" and what you're deciding (or \"Set up my board\"). Download it again whenever your coach updates the Danno Seat.",
 ];
+
+/* ───────────────────────── The Council Chamber (rev 738) ───────────────────────── */
+
+/**
+ * The five chairs, % of the 1680×944 photo (the same in both looks), in the seats' own order: head of the table, left, right,
+ * front right, front left. A preset's seats take the chairs in order (the Edge Preset's five sit where the standard five do).
+ * l/t/w/h is the statue's box; px/py the name plate's centre.
+ */
+export const CHAIRS: { l: number; t: number; w: number; h: number; px: number; py: number }[] = [
+  { l: 45.54, t: 11.65, w: 9.52, h: 21.19, px: 50.3, py: 7.63 },
+  { l: 25.0, t: 22.78, w: 13.1, h: 37.08, px: 27.98, py: 20.13 },
+  { l: 62.2, t: 24.15, w: 14.7, h: 36.76, px: 70.83, py: 21.19 },
+  { l: 57.14, t: 53.5, w: 23.81, h: 42.9, px: 87.2, py: 81.57 },
+  { l: 19.64, t: 52.97, w: 22.32, h: 42.9, px: 12.8, py: 81.57 },
+];
+/** Where the table's text sits on the dark tabletop, % of the room. */
+export const TABLE_BOX = { l: 41.07, t: 42.37, w: 18.45, h: 30.72 };
+
+export type SceneLook = "day" | "night";
+/** The look a member sees: their own choice once made; "auto" is night from 19:00 to 06:00 in their own time. */
+export function sceneLookFor(setting: "auto" | "day" | "night", hour: number): SceneLook {
+  if (setting === "day" || setting === "night") return setting;
+  return hour >= 19 || hour < 6 ? "night" : "day";
+}
+
+/**
+ * Speaking clips (rev 738, optional): public/board/council-{look}-{seat}.mp4 and .webm, listed here once they're in the repo, so a
+ * turn never asks for a clip that isn't there. Empty until Danno adds them.
+ */
+export const COUNCIL_CLIPS: string[] = [];

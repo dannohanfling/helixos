@@ -6,6 +6,7 @@ import { applySetupAction, askBoardAction, checkinAction, shareDecisionAction } 
 import { BoardSetup } from "@/components/board-setup";
 import { seatsFor, type Mode } from "@/lib/engine/board";
 import { Boardroom } from "@/components/boardroom";
+import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
 import { formatDate } from "@/lib/dates";
 import "../boardroom.css";
@@ -99,6 +100,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           </p>
           <Boardroom
             key={latest.id}
+            initialLook={sceneLookFor(v.membership.sceneLook, v.hour)}
             seats={seats}
             answer={latest.answer}
             question={latest.question}
