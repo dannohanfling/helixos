@@ -74,6 +74,7 @@ const ROUTES: Record<string, Route> = {
   "/socrates/scripts/[id]/sheet": { kind: "owned", table: "socratesScripts" },
   "/webinars/[id]": { kind: "owned", table: "webinars" },
   "/webinars/[id]/runsheet": { kind: "owned", table: "webinars" },
+  "/webinars/[id]/magic-funnel": { kind: "owned", table: "webinars" },
   "/join/[code]": { kind: "public", why: "the workspace invite code, entered before any session exists" },
   "/join/team/[code]": { kind: "public", why: "a one-time team invite code (Danno, 6 Oct), matched by its hash before any session exists; spent, cancelled or a week old it names nobody" },
   "/reset/[token]": { kind: "public", why: "a single-use password-reset token, its own secret" },
@@ -87,6 +88,8 @@ const ROUTES: Record<string, Route> = {
   "/api/webinars/[id]/deck": { kind: "owned", table: "webinars" },
   "/api/webhooks/fathom/[connectionId]": { kind: "public", why: "Fathom's signed delivery for one workspace connection: POST only, verified against the connection's sealed secret, 401 unsigned; a GET answers 405 for every id" },
   "/files/[...key]": { kind: "public", why: "the public object store; a private proof file is served by /api/proofs/attachments/[id]" },
+  "/api/mf/[code]": { kind: "public", why: "a Magic funnel page by its 43-character code, read by the member's own GoHighLevel page: only their funnel domains get an answer (CORS), a wrong code is the generic page, rate limited" },
+  "/api/mf/[code]/registered": { kind: "public", why: "the Magic funnel snippet's backup signal on submit: marks that one code registered, only from the member's funnel domains, nothing returned" },
   "/g/[slug]": { kind: "public", why: "a lead magnet's public tracked link, read by strangers" },
   "/m/[slug]": { kind: "public", why: "a lead magnet's public hosted page, read by strangers" },
 };
