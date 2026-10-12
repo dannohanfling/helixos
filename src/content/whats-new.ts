@@ -12,6 +12,25 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 148,
+    date: "2026-10-12",
+    title: "Coach → Late close-outs: the dry run",
+    lines: [
+      "Before the 4am window, a close made after midnight landed on the new day. Coach → Late close-outs counts those closes across your clients and what crediting them to the day they meant would do: days credited, points, streaks, and anything it can't decide. Counts only, no names, and nothing is changed or awarded from this page.",
+    ],
+    audience: "coach",
+  },
+  {
+    n: 147,
+    date: "2026-10-12",
+    title: "Close your day after midnight",
+    lines: [
+      "Working late? Until 4am your time, if yesterday isn't closed yet, Today's card says \"Close yesterday\" and the close counts for yesterday: its points, its streak day and its place on your scoreboard, the same as closing at 11pm. Your morning lock-in is still today's.",
+      "Closing again within 6 hours, before you start the next day, updates that same close-out instead of starting a new one, with no new points. By voice too: today_close says which day it closed.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 146,
     date: "2026-10-12",
     title: "My Board meets in the Council Chamber",

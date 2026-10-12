@@ -7,7 +7,7 @@ import { nowIso } from "@/lib/dates";
 import { POINTS } from "@/lib/engine/points";
 import { closedDates, repairsUsed } from "@/lib/queries/daily";
 import { CLOSE_EXTRA, CLOSE_MONEY, CLOSE_NUMBERS, CLOSE_TEXT, closeDay, lockIn, upsertLog, type Close } from "@/lib/daily-core";
-import { brokenStreak } from "@/lib/engine/streak";
+import { brokenStreak, streakDayOf } from "@/lib/engine/streak";
 import { isWeekday } from "@/lib/dates";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { redirect } from "next/navigation";
@@ -37,17 +37,18 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
     input[k] = m.value ?? 0;
   }
   for (const k of CLOSE_TEXT) input[k] = opt(formData, k);
-  await closeDay(v, input);
+  // The day it lands on (rev 731) is closeDay's to decide; the KPI boxes follow it.
+  const { date } = await closeDay(v, input);
   // The KPIs the close asks for (BG2): each box is the day's value for one of the member's own close-asked KPIs.
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
-  const asked = await closeKpisOf(m, v.today);
+  const asked = await closeKpisOf(m, date);
   for (const k of asked) {
     const raw = str(formData, `kpi_${k.id}`).trim();
     if (!raw) continue;
     const read = readMoney(raw);
     if ("error" in read) redirect(`/today?closeError=${encodeURIComponent(`${k.name}: ${read.error}`)}&field=kpi_${k.id}#close`);
     const kpi = await ownKpi(m, k.id);
-    if (kpi && kpi.source === "close") await putKpiValue(m, kpi, v.today, read.value ?? 0);
+    if (kpi && kpi.source === "close") await putKpiValue(m, kpi, date, read.value ?? 0);
   }
   refresh();
 }
@@ -61,7 +62,7 @@ export async function repairStreakAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
   const date = str(formData, "date");
   const closed = await closedDates(workspaceId, userId);
-  const broken = brokenStreak(closed, v.today);
+  const broken = brokenStreak(closed, streakDayOf(closed, v.today, v.hour));
   if (!broken || !broken.repairable || broken.missed[0] !== date || !isWeekday(date)) return;
   if ((await repairsUsed(workspaceId, userId, v.today.slice(0, 7))) >= 1) return;
   const log = await upsertLog(workspaceId, userId, date);

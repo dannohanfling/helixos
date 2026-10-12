@@ -43,6 +43,12 @@ async function main() {
   const { addDays, isWeekday, todayInTz } = await import("@/lib/dates");
   const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
   const today = todayInTz("America/Los_Angeles");
+  // Between 00:00 and 04:00 in Los Angeles yesterday can still be closed (rev 731), so the missed-day and close checks below
+  // would meet the late close-out instead (it has its own checks further down). London is on the same date then and past
+  // 04:00, so Maya keeps her day, outside the window; the timezone check below puts Los Angeles back.
+  const { LATE_CLOSE_UNTIL_HOUR } = await import("@/lib/engine/streak");
+  const { hourInTz } = await import("@/lib/dates");
+  if (hourInTz("America/Los_Angeles") < LATE_CLOSE_UNTIL_HOUR) await db.update(schema.memberships).set({ timezone: "Europe/London" }).where(eq(schema.memberships.userId, maya.id));
 
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
@@ -202,6 +208,75 @@ async function main() {
     await submit(page, 'form:has(select[name="timezone"]) button:has-text("Save")');
     console.log("✓ member timezone saved and restored");
 
+    // Late close-outs (rev 731, Danno's answers at rev 746). Maya goes to a timezone where it is 01:00 now, with yesterday open:
+    // Today's card is "Close yesterday", the close lands on yesterday with yesterday's points, and the scoreboard counts it there.
+    {
+      const { formatDate, startOfWeek } = await import("@/lib/dates");
+      const { scoreboardFor } = await import("@/lib/scoreboard");
+      const { viewerFor } = await import("@/lib/auth");
+      const { todayClose } = await import("@/lib/mcp/tools/today");
+      const zones = Array.from({ length: 27 }, (_, i) => i - 12).map((n) => (n >= 0 ? `Etc/GMT-${n}` : `Etc/GMT+${-n}`));
+      // An Etc zone where it is 01:00 now and stays inside the window for the next minutes (not 01:59).
+      const zone = zones.find((z) => hourInTz(z) === 1 && new Date().getUTCMinutes() < 50) ?? zones.find((z) => hourInTz(z) === 2)!;
+      const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+      await db.update(schema.memberships).set({ timezone: zone }).where(eq(schema.memberships.id, mm.id));
+      const mt = todayInTz(zone);
+      const y = addDays(mt, -1);
+      const { inArray } = await import("drizzle-orm");
+      // Both days' rows and their close points as they were, put back at the end so the later walks find Maya's days unchanged.
+      const keptLogs = await db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.userId, maya.id), inArray(schema.dailyLogs.date, [y, mt])) });
+      const keptPoints = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), inArray(schema.pointsLedger.type, ["close", "streak", "dm"]), inArray(schema.pointsLedger.refId, [y, mt, `activity:${y}`, `activity:${mt}`])) });
+      await db.update(schema.dailyLogs).set({ eveningDoneAt: null, repairedAt: null, streakDay: 0 }).where(and(eq(schema.dailyLogs.userId, maya.id), inArray(schema.dailyLogs.date, [y, mt])));
+      await db.update(schema.dailyLogs).set({ morningDoneAt: null }).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, mt)));
+      await db.delete(schema.pointsLedger).where(and(eq(schema.pointsLedger.userId, maya.id), inArray(schema.pointsLedger.type, ["close", "streak"]), inArray(schema.pointsLedger.refId, [y, mt])));
+      const which = startOfWeek(y) === startOfWeek(mt) ? "this" : "last";
+      const closesBefore = (await scoreboardFor({ workspaceId: mm.workspaceId, userId: maya.id }, zone, mt, which)).closes;
+      const yName = formatDate(y, { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+
+      await page.goto(`${base}/today`);
+      await page.locator('[data-testid="close-title"]').waitFor({ timeout: 15000 });
+      // The card title is set in capitals by CSS, so compare without case.
+      const title = (await page.locator('[data-testid="close-title"]').innerText()).trim();
+      if (title.toLowerCase() !== `Close yesterday (${yName})`.toLowerCase()) throw new Error(`at 01:00 with yesterday open, the close card is yesterday's: "${title}"`);
+      if (await page.locator('[data-testid="close-early"]').count()) throw new Error("the late close isn't folded away as 'not evening yet'");
+      if (await page.locator('[data-testid="streak-broken"]').count()) throw new Error("yesterday isn't a missed day while it can still be closed");
+      await page.fill('input[name="win"]', "Closed after midnight");
+      await submit(page, '[data-testid="close-form"] button[type="submit"]');
+      const yLog = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, y)) });
+      const tLog = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, mt)) });
+      if (!yLog?.eveningDoneAt || yLog.win !== "Closed after midnight") throw new Error("the close at 01:00 lands on yesterday");
+      if (tLog?.eveningDoneAt) throw new Error("the new day stays open");
+      const paid = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), inArray(schema.pointsLedger.type, ["close", "streak"])) });
+      if (!paid.some((p) => p.type === "close" && p.refId === y) || paid.some((p) => p.refId === mt)) throw new Error("yesterday's points, none for the new day");
+      const closesAfter = (await scoreboardFor({ workspaceId: mm.workspaceId, userId: maya.id }, zone, mt, which)).closes;
+      if (closesAfter !== closesBefore + 1) throw new Error(`the scoreboard counts the late close on yesterday: ${closesBefore} → ${closesAfter}`);
+      if ((await page.locator('[data-testid="close-title"]').innerText()).trim().toLowerCase() !== `Yesterday closed (${yName})`.toLowerCase()) throw new Error("Today shows yesterday closed");
+      console.log(`✓ a close at 01:00 with yesterday open: "${title}", saved on yesterday with its points, counted on yesterday's scoreboard`);
+
+      // The same close-out (rev 746): closing again within 6 hours with no lock-in between edits yesterday's, no new points.
+      const v = (await viewerFor(maya.id, mm.workspaceId))!;
+      const r = await todayClose.handler(v, { win: "Edited by voice" });
+      const yAgain = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, y)) });
+      const tAgain = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, mt)) });
+      const paidAgain = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.userId, maya.id), inArray(schema.pointsLedger.type, ["close", "streak"])) });
+      if (!r.text.startsWith(`Updated ${formatDate(y, { weekday: "long", month: "short", day: "numeric" }).replace(",", "")}`) || yAgain?.win !== "Edited by voice" || tAgain?.eveningDoneAt || paidAgain.length !== paid.length) throw new Error(`today_close again within 6 hours edits yesterday's close-out: ${r.text}`);
+      // The lock-in isn't affected: Maya can still start today, and after it a close is the new day's.
+      if (!(await page.locator('[data-testid="lockin-hero"], [data-testid="lockin-win"]').count())) throw new Error("the morning lock-in is still there for today");
+      await db.update(schema.dailyLogs).set({ morningDoneAt: new Date().toISOString() }).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, mt)));
+      await db.insert(schema.dailyLogs).values({ id: crypto.randomUUID(), workspaceId: mm.workspaceId, userId: maya.id, date: mt, morningDoneAt: new Date().toISOString() }).onConflictDoNothing();
+      const r2 = await todayClose.handler(v, { win: "The new day's" });
+      const tNew = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, mt)) });
+      if (!r2.text.startsWith(`Closed ${mt}`) || tNew?.win !== "The new day's" || !tNew.eveningDoneAt) throw new Error(`after a lock-in, a close is the new day's: ${r2.text}`);
+      console.log("✓ the same close-out within 6 hours edits yesterday's by voice, no new points; after a lock-in the close is the new day's");
+
+      // Clean up: both days and their points as they were, Maya back to Los Angeles.
+      await db.delete(schema.dailyLogs).where(and(eq(schema.dailyLogs.userId, maya.id), inArray(schema.dailyLogs.date, [y, mt])));
+      if (keptLogs.length) await db.insert(schema.dailyLogs).values(keptLogs);
+      await db.delete(schema.pointsLedger).where(and(eq(schema.pointsLedger.userId, maya.id), inArray(schema.pointsLedger.type, ["close", "streak", "dm"]), inArray(schema.pointsLedger.refId, [y, mt, `activity:${y}`, `activity:${mt}`])));
+      if (keptPoints.length) await db.insert(schema.pointsLedger).values(keptPoints);
+      await db.update(schema.memberships).set({ timezone: "America/Los_Angeles" }).where(eq(schema.memberships.id, mm.id));
+    }
+
     // A future stage opens read-only: greyed tasks, what unlocks it in the stage's own words, and the NOW card never follows the preview
     await page.goto(`${base}/pathway`);
     await page.click('a[href="/pathway?stage=optimize"]');
@@ -230,6 +305,36 @@ async function main() {
     const pathCount = await page.locator("main").innerText();
     if (/\/215\b/.test(pathCount)) throw new Error("pathway denominator is still the whole library");
     console.log("✓ coach nudge sent and recorded; pathway denominator is the must-do path");
+
+    // Coach → Late close-outs (rev 731): the dry run, counts only, and it changes nothing. A qualifying close (00:30 Los Angeles,
+    // the day before open) raises "closes found" by one.
+    {
+      const { inArray } = await import("drizzle-orm");
+      const readCount = async () => Number((await page.locator('[data-testid="late-closes-found"]').innerText()).replace(/\D/g, ""));
+      await page.goto(`${base}/coach`);
+      await page.click('[data-testid="coach-late-link"]');
+      await page.waitForURL(/\/coach\/late-closes/);
+      const before = await readCount();
+      const d0 = addDays(today, -40);
+      const d1 = addDays(d0, 1);
+      const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+      const saved = await db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.userId, maya.id), inArray(schema.dailyLogs.date, [d0, d1])) });
+      await db.delete(schema.dailyLogs).where(and(eq(schema.dailyLogs.userId, maya.id), inArray(schema.dailyLogs.date, [d0, d1])));
+      const lateAt = new Date(`${d1}T00:30:00-07:00`);
+      const fixtureId = crypto.randomUUID();
+      await db.insert(schema.dailyLogs).values({ id: fixtureId, workspaceId: mm.workspaceId, userId: maya.id, date: d1, eveningDoneAt: lateAt.toISOString(), win: "Smoke: a late close" });
+      await page.reload();
+      const after = await readCount();
+      const line = (await page.locator('[data-testid="late-line"]').innerText()).trim();
+      const row = await db.query.dailyLogs.findFirst({ where: eq(schema.dailyLogs.id, fixtureId) });
+      const credited = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, d0)) });
+      await db.delete(schema.dailyLogs).where(eq(schema.dailyLogs.id, fixtureId));
+      if (saved.length) await db.insert(schema.dailyLogs).values(saved);
+      if (after !== before + 1) throw new Error(`a qualifying late close is found: ${before} → ${after}`);
+      if (!/^Late close-outs dry run: \d+ closes? found, \d+ members?, \d+ days? credited/.test(line) || /Maya|Torres|@/.test(line)) throw new Error(`the counts line, counts only: ${line}`);
+      if (row?.date !== d1 || row.eveningDoneAt !== lateAt.toISOString() || credited) throw new Error("the dry run changes nothing");
+      console.log(`✓ Coach → Late close-outs: the dry run finds a late close, counts only, and changes nothing (${line})`);
+    }
   } finally {
     await browser.close();
   }

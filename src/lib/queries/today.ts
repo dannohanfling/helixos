@@ -7,11 +7,11 @@ import { addDays } from "@/lib/dates";
 import { nextBestActions, type Action, type Snapshot } from "@/lib/engine/nba";
 import { tierProgress } from "@/lib/engine/tiers";
 import { roadLine, simplePath } from "@/lib/engine/pathway";
-import { closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
+import { closeTargetFor, closedDates, logFor, repairsUsed, streakFor, todayActivity } from "./daily";
 import { ensurePrimaryGoal } from "./plan";
 import { closeKpisOf, primaryGoalBar } from "./kpi";
 import { nowFor, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
-import { brokenStreak } from "@/lib/engine/streak";
+import { brokenStreak, streakDayOf } from "@/lib/engine/streak";
 import { STEPS, buildChecks, nextStep, statusStale } from "@/lib/engine/webinar";
 import { contextFor, knownFor } from "@/lib/queries/webinar";
 import { deckSlides } from "@/lib/engine/deck";
@@ -71,7 +71,7 @@ export async function todayData(v: Viewer) {
   const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal, everLockedIn] =
     await Promise.all([
       logFor(workspaceId, userId, today),
-      streakFor(workspaceId, userId, today),
+      streakFor(workspaceId, userId, today, hour),
       totalPoints(workspaceId, userId),
       db.query.tasks.findMany({
         where: and(eq(schema.tasks.userId, userId), inPlay, eq(schema.tasks.focusDate, today)),
@@ -128,7 +128,12 @@ export async function todayData(v: Viewer) {
     ]);
 
   const [allClosed, used, activity] = await Promise.all([closedDates(workspaceId, userId), repairsUsed(workspaceId, userId, today.slice(0, 7)), todayActivity(workspaceId, userId, today)]);
-  const broken = log?.eveningDoneAt ? null : brokenStreak(allClosed, today);
+  const broken = log?.eveningDoneAt ? null : brokenStreak(allClosed, streakDayOf(allClosed, today, hour));
+  // The close card's day (rev 731): yesterday before 04:00 while it is open, or the last close-out again within 6 hours with
+  // no lock-in since; otherwise today. Its log, activity and KPI boxes are that day's.
+  const closeFor = await closeTargetFor(workspaceId, userId, today, hour);
+  const closeLog = closeFor.date === today ? log : await logFor(workspaceId, userId, closeFor.date);
+  const closeActivity = closeFor.date === today ? activity : await todayActivity(workspaceId, userId, closeFor.date);
   const repairsLeft = Math.max(0, 1 - used);
   const clientRecords = await db.query.clientRecords.findMany({ where: and(eq(schema.clientRecords.userId, userId), eq(schema.clientRecords.status, "active")) });
   const clientsDueCheckin = clientRecords.filter((c) => {
@@ -172,7 +177,8 @@ export async function todayData(v: Viewer) {
     today,
     hour,
     morningDone: Boolean(log?.morningDoneAt),
-    eveningDone: Boolean(log?.eveningDoneAt),
+    eveningDone: Boolean(closeLog?.eveningDoneAt),
+    lateClose: closeFor.late ? closeFor.date : null,
     overdueTasks: overdueTasks.length,
     focusTasksOpen: focusTasks.filter((t) => t.status !== "done").length,
     followUpsDue: followUps.length,
@@ -229,7 +235,9 @@ export async function todayData(v: Viewer) {
     /** The Primary business goal and its first KPI (BG2): the bar reads the plan; before the mirror exists, the goals row itself. */
     goal: await goalBar(workspaceId, userId, today, goal),
     /** The KPIs the close asks for (BG2), with today's value if one was typed. */
-    closeKpis: v.switchedInto ? [] : await closeKpisOf({ workspaceId, userId }, today),
+    closeKpis: v.switchedInto ? [] : await closeKpisOf({ workspaceId, userId }, closeFor.date),
+    /** The day the close card is for, and that day's log (rev 731); `late` titles it "Close yesterday". */
+    close: { ...closeFor, log: closeLog ?? null, activity: closeActivity },
     /** Never locked in: Today shows the welcome card instead of the next-action block. */
     firstSession: !everLockedIn,
     /** When the running streak is 0 and something was lost: what, when, and whether one grace day mends it. */

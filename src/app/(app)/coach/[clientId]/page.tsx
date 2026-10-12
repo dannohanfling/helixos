@@ -13,7 +13,7 @@ import { CopyButton } from "@/components/copy-button";
 import { cookies } from "next/headers";
 import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
-import { runningStreak } from "@/lib/engine/streak";
+import { runningStreak, streakDayOf } from "@/lib/engine/streak";
 import { simplePath } from "@/lib/engine/pathway";
 import { pillarSummary } from "@/lib/engine/pillars";
 import { catalogue } from "@/lib/engine/rewards";
@@ -24,7 +24,7 @@ import { tasksFromNotes } from "@/lib/queries/tasks";
 import { AdjustPointsForm } from "@/components/adjust-points-form";
 import { isNotNull } from "drizzle-orm";
 import { daysSinceNudge } from "@/lib/nudge";
-import { addDays, daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
+import { addDays, daysBetween, formatDate, formatDateTime, todayInTz, hourInTz } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
@@ -125,7 +125,8 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const avatarTop = avatarTree(avatars.rows);
   const adjustments = await db.query.pointsLedger.findMany({ where: and(eq(schema.pointsLedger.workspaceId, ws), eq(schema.pointsLedger.userId, m.userId), isNotNull(schema.pointsLedger.adjustedBy)), orderBy: desc(schema.pointsLedger.createdAt), limit: 10 });
   const tier = tierProgress(points);
-  const streak = runningStreak(closed, today);
+  // Read as of yesterday before 04:00 their time while yesterday is still open (rev 731): a late close-out isn't a missed day.
+  const streak = runningStreak(closed, streakDayOf(closed, today, hourInTz(tz)));
   const todayLog = recent.find((l) => l.date === today);
   const lastActive = [...closed, ...recent.filter((l) => l.morningDoneAt).map((l) => l.date)].sort().at(-1) ?? null;
   const daysSilent = lastActive ? daysBetween(lastActive, today) : null;

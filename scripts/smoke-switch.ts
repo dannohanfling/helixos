@@ -144,6 +144,8 @@ async function main() {
     // ── 3. The client allows Work; the coach works. ──
     await login(page, "As a client");
     await page.goto(`${base}/settings#your-coach`);
+    // Settings streams in after navigation; a tick before it settles is reset when the form re-renders (cold server).
+    await page.waitForLoadState("networkidle");
     await page.locator('[data-testid="coach-work-toggle"]').check();
     await submit(page, '[data-testid="coach-work-save"]');
     if (

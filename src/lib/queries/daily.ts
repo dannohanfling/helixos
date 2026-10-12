@@ -1,6 +1,7 @@
 import { and, eq, gte, isNotNull, isNull, like, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { runningStreak } from "@/lib/engine/streak";
+import { addDays } from "@/lib/dates";
+import { closeTarget, runningStreak, streakDayOf, type CloseTarget } from "@/lib/engine/streak";
 
 /** Every read here is scoped to (workspace, user): a user can belong to more than one workspace and days never cross over. */
 export async function closedDates(workspaceId: string, userId: string, opts: { excludeRepaired?: boolean } = {}): Promise<Set<string>> {
@@ -33,9 +34,19 @@ export async function todayActivity(workspaceId: string, userId: string, today: 
   return { dmsStarted: Math.max(started.length, created.length), conversations: replied.length, posts: posted.length, newLeads: created.length };
 }
 
-export async function streakFor(workspaceId: string, userId: string, today: string): Promise<{ running: number; closed: Set<string> }> {
+/** The running streak, read as of yesterday inside the late close-out window while yesterday is still open (rev 731). */
+export async function streakFor(workspaceId: string, userId: string, today: string, hour: number): Promise<{ running: number; closed: Set<string> }> {
   const closed = await closedDates(workspaceId, userId);
-  return { running: runningStreak(closed, today), closed };
+  return { running: runningStreak(closed, streakDayOf(closed, today, hour)), closed };
+}
+
+/** The day a close-out made now is for (rev 731): the same close-out as the last, yesterday inside the window, or today. */
+export async function closeTargetFor(workspaceId: string, userId: string, today: string, hour: number, now: Date = new Date()): Promise<CloseTarget> {
+  const marks = await db
+    .select({ date: schema.dailyLogs.date, eveningDoneAt: schema.dailyLogs.eveningDoneAt, morningDoneAt: schema.dailyLogs.morningDoneAt, repairedAt: schema.dailyLogs.repairedAt })
+    .from(schema.dailyLogs)
+    .where(and(eq(schema.dailyLogs.workspaceId, workspaceId), eq(schema.dailyLogs.userId, userId), gte(schema.dailyLogs.date, addDays(today, -2)), lte(schema.dailyLogs.date, today)));
+  return closeTarget(marks, today, hour, now);
 }
 
 export async function logFor(workspaceId: string, userId: string, date: string) {

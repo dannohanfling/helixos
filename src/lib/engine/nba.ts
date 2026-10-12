@@ -5,6 +5,8 @@ export type Snapshot = {
   hour: number;
   morningDone: boolean;
   eveningDone: boolean;
+  /** Before 04:00 with yesterday still open (rev 731): yesterday's date, and the close card is for it. */
+  lateClose?: string | null;
   overdueTasks: number;
   focusTasksOpen: number;
   followUpsDue: number;
@@ -175,13 +177,13 @@ export function nextBestActions(s: Snapshot): Action[] {
       points: s.nextPathwayTask.points,
     });
   }
-  if (!s.eveningDone && s.hour >= 15) {
+  if (!s.eveningDone && (s.hour >= 15 || s.lateClose)) {
     out.push({
       key: "close",
-      title: s.streakAlive && s.runningStreak > 0 ? `Close your day and keep the ${s.runningStreak}-day streak` : "Close your day",
+      title: s.lateClose ? "Close yesterday" : s.streakAlive && s.runningStreak > 0 ? `Close your day and keep the ${s.runningStreak}-day streak` : "Close your day",
       why: "Log your numbers. Name the win. Streak bonus is waiting.",
       href: "#close",
-      cta: "Close the day",
+      cta: s.lateClose ? "Close yesterday" : "Close the day",
       tone: "primary",
       points: 20,
     });

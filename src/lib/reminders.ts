@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { addDays, hourInTz, nowIso, todayInTz } from "@/lib/dates";
-import { runningStreak, streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
+import { closeTarget, runningStreak, streakBonus, streakDayOf, weeklyStreakDay } from "@/lib/engine/streak";
 import { nextTier } from "@/lib/engine/tiers";
 import { comebackCopy, eveningCopy, morningCopy } from "@/lib/engine/reminder-copy";
 import { brandedEmail } from "@/lib/branded-email";
@@ -54,7 +54,8 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
       const log = await db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.userId, m.userId), eq(schema.dailyLogs.date, today)) });
       const logs = await db.query.dailyLogs.findMany({ where: eq(schema.dailyLogs.userId, m.userId) });
       const closed = new Set(logs.filter((l) => l.eveningDoneAt).map((l) => l.date));
-      const streak = runningStreak(closed, today);
+      // Read the way Today reads it (rev 731): before 04:00 with yesterday open, as of yesterday, so a late close-out isn't missed.
+      const streak = runningStreak(closed, streakDayOf(closed, today, hour));
       const first = user.name.split(" ")[0];
       const hours = { morning: m.reminderHour, evening: m.eveningReminderHour };
 
@@ -82,9 +83,13 @@ export async function runReminders(now: Date = new Date(), force?: "morning" | "
         const e = brandedEmail(morningCopy({ first, streak, brokenYesterday, points, nextTier: next ? { name: next.name, minPoints: next.minPoints } : null, hours }), { base: appUrl });
         await deliver(out, m, user.email, "morning", e.subject, e.text, e.html);
       }
-      if (wantsEvening && !log?.eveningDoneAt) {
+      // The evening reminder asks about the day a close now would be for (rev 731): yesterday when it is set before 04:00 and
+      // yesterday is open; nothing when the last close-out is still open for edits.
+      const target = closeTarget(logs.filter((l) => l.date >= addDays(today, -2) && l.date <= today), today, hour, now);
+      const targetLog = logs.find((l) => l.date === target.date);
+      if (wantsEvening && !target.same && !targetLog?.eveningDoneAt) {
         // The days already closed; the copy says what tonight's close makes it. The bonus is the weekly escalation for that close.
-        const bonus = streakBonus(weeklyStreakDay(closed, today));
+        const bonus = streakBonus(weeklyStreakDay(closed, target.date));
         const e = brandedEmail(eveningCopy({ first, streak, bonus, hours }), { base: appUrl });
         await deliver(out, m, user.email, "evening", e.subject, e.text, e.html);
       }

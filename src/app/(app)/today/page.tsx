@@ -82,12 +82,18 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const goals = body ? await goalsNow({ workspaceId: v.workspace.id, userId: v.user.id }, v.today) : [];
   // HumanOS's post-workout read (rev 471): once today's session is finished, its lines sit with the day.
   const workout = body ? await workoutReadFor(v.workspace.id, v.user.id, v.today) : null;
-  const streakDayIfClosedNow = d.log?.eveningDoneAt ? d.log.streakDay : weeklyStreakDay(closed, v.today);
+  // The close card's day (rev 731): yesterday before 04:00 while it's open, the last close-out again within 6 hours with no
+  // lock-in since, or today. Everything in the card (numbers, KPIs, points, streak day) is that day's.
+  const cl = d.close;
+  const closeLog = cl.log;
+  const closeDayName = formatDate(cl.date, { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+  const streakDayIfClosedNow = closeLog?.eveningDoneAt ? closeLog.streakDay : weeklyStreakDay(closed, cl.date);
   const bonusIfClosedNow = streakBonus(streakDayIfClosedNow);
   const morningDone = Boolean(d.log?.morningDoneAt);
-  const eveningDone = Boolean(d.log?.eveningDoneAt);
+  const eveningDone = Boolean(closeLog?.eveningDoneAt);
+  const closeTitle = cl.date === v.today ? (eveningDone ? "Day closed" : "Close the day") : eveningDone ? `Yesterday closed (${closeDayName})` : `Close yesterday (${closeDayName})`;
   // HumanOS's end-of-day read (rev 471): in Close the day from the evening on, beside the business numbers. Private to the member.
-  const bodyDayRead = body && (eveningDone || v.hour >= EVENING_HOUR) ? await dayReadFor(v.workspace.id, v.user.id, v.today, v.today, v.hour, v.tz) : null;
+  const bodyDayRead = body && cl.date === v.today && (eveningDone || v.hour >= EVENING_HOUR) ? await dayReadFor(v.workspace.id, v.user.id, v.today, v.today, v.hour, v.tz) : null;
   const openFocus = d.focusTasks.filter((t) => t.status !== "done");
   const doneFocus = d.focusTasks.filter((t) => t.status === "done");
   const boardTasks = [...d.overdueTasks, ...d.dueTasks].filter((t) => t.focusDate !== v.today);
@@ -488,17 +494,17 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             since the 6 Oct layout the 30-day build card's tail sat here, so the board and the close rendered inside it). */}
         <div className="space-y-4">
           {/* Evening close */}
-          <Card id="close" title={eveningDone ? "Day closed" : "Close the day"} action={eveningDone ? <Badge tone="good">Done · streak day {d.log?.streakDay}</Badge> : <Badge tone="accent">+20 {bonusIfClosedNow ? `+${bonusIfClosedNow} streak` : ""}</Badge>}>
-            {eveningDone && d.log ? (
+          <Card id="close" title={<span data-testid="close-title">{closeTitle}</span>} action={eveningDone ? <Badge tone="good">Done · streak day {closeLog?.streakDay}</Badge> : <Badge tone="accent">+20 {bonusIfClosedNow ? `+${bonusIfClosedNow} streak` : ""}</Badge>}>
+            {eveningDone && closeLog ? (
               <div className="space-y-3 text-sm">
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                   {[
-                    ["DMs", d.log.dmsStarted],
-                    ["Convos", d.log.conversations],
-                    ["Calls booked", d.log.callsBooked],
-                    ["Calls held", d.log.callsHeld],
-                    ["Posts", d.log.posts],
-                    ["Cash", `$${d.log.cashCollected.toLocaleString()}`],
+                    ["DMs", closeLog.dmsStarted],
+                    ["Convos", closeLog.conversations],
+                    ["Calls booked", closeLog.callsBooked],
+                    ["Calls held", closeLog.callsHeld],
+                    ["Posts", closeLog.posts],
+                    ["Cash", `$${closeLog.cashCollected.toLocaleString()}`],
                   ].map(([k, val]) => (
                     <div key={String(k)} className="rounded-lg bg-surface-2 p-2 text-center">
                       <div className="text-lg font-semibold tabular">{val}</div>
@@ -506,25 +512,25 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                     </div>
                   ))}
                 </div>
-                {d.log.win ? (
+                {closeLog.win ? (
                   <p>
-                    <span className="font-semibold">Win:</span> {d.log.win}
+                    <span className="font-semibold">Win:</span> {closeLog.win}
                   </p>
                 ) : null}
                 <details open={Boolean(sp.closeError)}>
-                  <summary className="text-xs text-ink-3 underline">Edit today&apos;s numbers</summary>
-                  <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} closeKpis={d.closeKpis} />
+                  <summary className="text-xs text-ink-3 underline">{cl.date === v.today ? "Edit today's numbers" : "Edit yesterday's numbers"}</summary>
+                  <CloseForm log={closeLog} activity={cl.activity} owner={v.switchedInto ? null : v.user.id} today={cl.date} error={sp.closeError} closeKpis={d.closeKpis} />
                 </details>
               </div>
-            ) : v.hour < EVENING_HOUR ? (
+            ) : !cl.late && v.hour < EVENING_HOUR ? (
               <details data-testid="close-early" open={Boolean(sp.closeError)}>
                 <summary className="cursor-pointer text-sm text-ink-2">
                   It&apos;s not evening yet. Come back after {EVENING_HOUR - 12}pm to log your numbers, or <span className="underline">close the day early</span>.
                 </summary>
-                <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} closeKpis={d.closeKpis} />
+                <CloseForm log={closeLog} activity={cl.activity} owner={v.switchedInto ? null : v.user.id} today={cl.date} error={sp.closeError} closeKpis={d.closeKpis} />
               </details>
             ) : (
-              <CloseForm log={d.log} activity={d.activity} owner={v.switchedInto ? null : v.user.id} today={v.today} error={sp.closeError} closeKpis={d.closeKpis} />
+              <CloseForm log={closeLog} activity={cl.activity} owner={v.switchedInto ? null : v.user.id} today={cl.date} error={sp.closeError} closeKpis={d.closeKpis} />
             )}
             {bodyDayRead ? (
               <div className="mt-4 rounded-lg bg-humanos-soft p-3 text-sm" data-testid="today-day-read">

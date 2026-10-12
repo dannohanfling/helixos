@@ -11,7 +11,7 @@ import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { POINTS, closeActivityPoints } from "@/lib/engine/points";
 import { streakBonus, weeklyStreakDay } from "@/lib/engine/streak";
-import { closedDates, logFor, streakFor, todayActivity } from "@/lib/queries/daily";
+import { closeTargetFor, closedDates, logFor, streakFor, todayActivity } from "@/lib/queries/daily";
 import { award, totalPoints } from "@/lib/queries/points";
 
 /** The five energy words, 1 to 5, as the lock-in's buttons say them. */
@@ -89,7 +89,11 @@ export type CloseNumber = (typeof CLOSE_NUMBERS)[number] | (typeof CLOSE_EXTRA)[
 export type CloseText = (typeof CLOSE_TEXT)[number];
 /** A field left out keeps what the day's log already holds; the form sends every field, the connector only what was said. */
 export type Close = Partial<Record<CloseNumber, number>> & Partial<Record<CloseText, string | null>>;
-export type Closed = { firstClose: boolean; streakDay: number; points: { close: number; streak: number; activity: number }; activityLines: string[]; cashDelta: number; log: schema.DailyLog };
+export type Closed = {
+  /** The day the close-out was saved to (rev 731): today, yesterday inside the late window, or the last close-out's own day. */
+  date: string;
+  late: boolean;
+  firstClose: boolean; streakDay: number; points: { close: number; streak: number; activity: number }; activityLines: string[]; cashDelta: number; log: schema.DailyLog };
 
 /**
  * Closes the day: the numbers, Start/Stop/Keep, the win and the gratitude on the day's log. The first close scores the close
@@ -97,9 +101,12 @@ export type Closed = { firstClose: boolean; streakDay: number; points: { close: 
  * as it happened); cash moves the primary $ goal by the change. A repaired day never feeds the weekly escalation.
  */
 export async function closeDay(v: Viewer, input: Close): Promise<Closed> {
-  const { today } = v;
   const workspaceId = v.workspace.id;
   const userId = v.user.id;
+  // The day it is for (rev 731): the last close-out again (under 6 hours, no lock-in since), yesterday before 04:00 while it is
+  // still open, or today. `today` below is that day, so its points, streak and numbers all land where the member meant them.
+  const target = await closeTargetFor(workspaceId, userId, v.today, v.hour);
+  const today = target.date;
   const log = await upsertLog(workspaceId, userId, today);
   const pick = (k: CloseNumber): number => {
     const n = input[k];
@@ -133,7 +140,7 @@ export async function closeDay(v: Viewer, input: Close): Promise<Closed> {
     const goal = await db.query.goals.findFirst({ where: and(eq(schema.goals.userId, userId), eq(schema.goals.primary, true)) });
     if (goal && goal.unit === "$") await db.update(schema.goals).set({ actual: Math.max(0, goal.actual + cashDelta) }).where(eq(schema.goals.id, goal.id));
   }
-  return { firstClose, streakDay, points, activityLines: activity.lines.map((l) => `${l.label} +${l.points}`), cashDelta, log: (await db.query.dailyLogs.findFirst({ where: eq(schema.dailyLogs.id, log.id) }))! };
+  return { date: today, late: target.late, firstClose, streakDay, points, activityLines: activity.lines.map((l) => `${l.label} +${l.points}`), cashDelta, log: (await db.query.dailyLogs.findFirst({ where: eq(schema.dailyLogs.id, log.id) }))! };
 }
 
 /** One ledger row per day for close activity, adjusted to the latest total. Zero total removes it. */
@@ -160,6 +167,7 @@ export async function monthCash(v: Viewer): Promise<{ month: string; cash: numbe
 
 /** The day as the lock-in card shows it, for the connector's read. */
 export async function lockInState(v: Viewer) {
-  const [log, streak, points] = await Promise.all([logFor(v.workspace.id, v.user.id, v.today), streakFor(v.workspace.id, v.user.id, v.today), totalPoints(v.workspace.id, v.user.id)]);
-  return { log: log ?? null, streak: streak.running, points };
+  const [log, streak, points] = await Promise.all([logFor(v.workspace.id, v.user.id, v.today), streakFor(v.workspace.id, v.user.id, v.today, v.hour), totalPoints(v.workspace.id, v.user.id)]);
+  const target = await closeTargetFor(v.workspace.id, v.user.id, v.today, v.hour);
+  return { log: log ?? null, streak: streak.running, points, target };
 }

@@ -8,8 +8,11 @@ import type { Viewer } from "@/lib/auth";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { CLOSE_NUMBERS, ENERGY_WORDS, closeDay, energyFrom, energyWord, lockIn, lockInState, monthCash, type Close } from "@/lib/daily-core";
 import { openTasks, taskLists } from "@/lib/tasks-core";
+import { formatDate } from "@/lib/dates";
 import { taskData } from "./tasks";
 
+/** "Monday Oct 12", the way a late close-out is named back to the member. */
+const dayName = (d: string) => formatDate(d, { weekday: "long", month: "short", day: "numeric" }).replace(",", "");
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const CLOSE_WORDS: Record<(typeof CLOSE_NUMBERS)[number], string> = { dmsStarted: "DMs started", conversations: "conversations", callsBooked: "calls booked", callsHeld: "calls held", posts: "posts", offersMade: "offers made", newLeads: "new leads", cashCollected: "cash collected" };
 
@@ -25,17 +28,19 @@ function resolveTitle(open: { id: string; title: string }[], said: string): { id
 }
 
 async function lockInText(v: Viewer) {
-  const [{ log, streak, points }, l] = await Promise.all([lockInState(v), taskLists(v)]);
+  const [{ log, streak, points, target }, l] = await Promise.all([lockInState(v), taskLists(v)]);
   const locked = Boolean(log?.morningDoneAt);
+  // Before 04:00 with yesterday still open (rev 731), a close now is yesterday's, and the read says so.
+  const lateLine = target.late ? ` ${dayName(target.date)} isn't closed yet; a close now counts for it.` : "";
   const lines = [
     locked ? `Locked in today (${v.today}): energy ${energyWord(log?.energy) ?? "not set"}${log?.intention ? `, committed to "${log.intention}"` : ""}.` : `Not locked in yet today (${v.today}).`,
     `Top 3: ${l.top3.length ? l.top3.map((t) => `${t.status === "done" ? "✓" : "○"} ${t.title}`).join("; ") : "none picked"}.`,
     `Also due today: ${l.dueToday.length ? l.dueToday.map((t) => t.title).join("; ") : "none"}. Overdue: ${l.overdue.length ? l.overdue.map((t) => t.title).join("; ") : "none"}.`,
-    `${log?.eveningDoneAt ? "The day is closed." : "The day isn't closed yet."} Streak: ${streak} day${streak === 1 ? "" : "s"}. Points: ${points.toLocaleString("en-US")}.`,
+    `${log?.eveningDoneAt ? "The day is closed." : "The day isn't closed yet."}${lateLine} Streak: ${streak} day${streak === 1 ? "" : "s"}. Points: ${points.toLocaleString("en-US")}.`,
   ];
   return {
     text: lines.join("\n"),
-    data: { today: v.today, lockedIn: locked, energy: energyWord(log?.energy), commitment: log?.intention ?? null, top3: l.top3.map(taskData), dueToday: l.dueToday.map(taskData), overdue: l.overdue.map(taskData), closed: Boolean(log?.eveningDoneAt), streak, points },
+    data: { today: v.today, lockedIn: locked, energy: energyWord(log?.energy), commitment: log?.intention ?? null, top3: l.top3.map(taskData), dueToday: l.dueToday.map(taskData), overdue: l.overdue.map(taskData), closed: Boolean(log?.eveningDoneAt), closeFor: target.date, streak, points },
   };
 }
 
@@ -85,7 +90,7 @@ export const todayClose = defineTool({
   name: "today_close",
   scope: "today",
   kind: "write",
-  description: "Closes the member's day with the evening numbers (any of: DMs started, conversations, calls booked, calls held, posts, offers made, new leads, cash collected), Start/Stop/Keep, the biggest win and what they're grateful for. A number or line left out keeps what's already there. Answers with the points scored and the month's cash against the goal. Closing again corrects the day.",
+  description: "Closes the member's day with the evening numbers (any of: DMs started, conversations, calls booked, calls held, posts, offers made, new leads, cash collected), Start/Stop/Keep, the biggest win and what they're grateful for. A number or line left out keeps what's already there. Answers with the points scored and the month's cash against the goal. Closing again within 6 hours, with no new lock-in between, corrects that same close-out. Before 4am with yesterday still open, it closes yesterday and says so.",
   input: {
     dms_started: z.number().int().min(0).max(10000).optional(),
     conversations: z.number().int().min(0).max(10000).optional(),
@@ -109,11 +114,11 @@ export const todayClose = defineTool({
     const m = await monthCash(v);
     const scored = r.points.close + r.points.streak;
     const lines = [
-      `${r.firstClose ? "Closed" : "Updated"} ${v.today}: ${CLOSE_NUMBERS.map((k) => `${k === "cashCollected" ? money(r.log.cashCollected) : r.log[k]} ${CLOSE_WORDS[k]}`).join(", ")}.`,
+      `${r.firstClose ? "Closed" : "Updated"} ${r.date === v.today ? v.today : dayName(r.date)}: ${CLOSE_NUMBERS.map((k) => `${k === "cashCollected" ? money(r.log.cashCollected) : r.log[k]} ${CLOSE_WORDS[k]}`).join(", ")}.`,
       r.firstClose ? `+${r.points.close} for closing${r.points.streak ? `, +${r.points.streak} for streak day ${r.streakDay}` : ""}${r.points.activity ? `, and ${r.points.activity} for the day's activity (${r.activityLines.join(", ")})` : ""}.` : `The close was already scored; activity points now total ${r.points.activity} for the day.`,
       `${m.month}: ${money(m.cash)} collected${m.goal ? ` toward "${m.goal.title}", ${money(m.goal.actual)} of ${money(m.goal.target)}` : ""}.`,
     ];
     if (r.log.win) lines.push(`Win: ${r.log.win}.`);
-    return { text: lines.join("\n"), data: { date: v.today, firstClose: r.firstClose, streakDay: r.streakDay, points: { ...r.points, scored }, numbers: Object.fromEntries(CLOSE_NUMBERS.map((k) => [k, r.log[k]])), start: r.log.start, stop: r.log.stop, keep: r.log.keep, win: r.log.win, gratefulFor: r.log.gratitude, month: m } };
+    return { text: lines.join("\n"), data: { date: r.date, late: r.late, firstClose: r.firstClose, streakDay: r.streakDay, points: { ...r.points, scored }, numbers: Object.fromEntries(CLOSE_NUMBERS.map((k) => [k, r.log[k]])), start: r.log.start, stop: r.log.stop, keep: r.log.keep, win: r.log.win, gratefulFor: r.log.gratitude, month: m } };
   },
 });

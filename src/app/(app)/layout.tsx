@@ -27,7 +27,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const viewer = await requireViewer({ team: "allow" });
   const [points, streak, voice, due, chat, recordingsEnabled, choices] = await Promise.all([
     totalPoints(viewer.workspace.id, viewer.user.id),
-    streakFor(viewer.workspace.id, viewer.user.id, viewer.today),
+    streakFor(viewer.workspace.id, viewer.user.id, viewer.today, viewer.hour),
     voiceState(viewer.workspace.id, viewer.user.id),
     intentionsDueFor(viewer.workspace.id, viewer.user.id, viewer.today),
     chatWidgetProps(viewer),

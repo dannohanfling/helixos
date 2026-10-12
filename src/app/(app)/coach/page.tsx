@@ -17,11 +17,11 @@ import { ESSENCE_SECTIONS, normalizeEssence } from "@/lib/engine/essence";
 import { EVIDENCE_DAILY_LIMIT, EVIDENCE_DEGRADED_LIMIT, EVIDENCE_DEGRADE_AT, EVIDENCE_GLOBAL_BUDGET, lastDays, quotaState, utcDay } from "@/lib/engine/evidence";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
-import { runningStreak } from "@/lib/engine/streak";
+import { runningStreak, streakDayOf } from "@/lib/engine/streak";
 import { checkinMarks, coachBodyColumn } from "@/lib/queries/body";
 import { KIT_STATUS_WORDS, kitStatus, kitsByMember } from "@/lib/queries/brand-kit";
 import { setClientHumanosAction } from "@/lib/actions/body";
-import { daysBetween, formatDate, formatDateTime, todayInTz } from "@/lib/dates";
+import { daysBetween, formatDate, formatDateTime, todayInTz, hourInTz } from "@/lib/dates";
 import { keyResultTally, lateForWeek, weekOf } from "@/lib/engine/intentions";
 import { lateForMonth, monthOf } from "@/lib/engine/month-intentions";
 import { MonthAnswers } from "@/components/month-card";
@@ -105,14 +105,17 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
       const closed = new Set(mine.filter((l) => l.eveningDoneAt).map((l) => l.date));
       const lastActive = mine.map((l) => l.date).sort().at(-1) ?? null;
       const pts = points.filter((p) => p.userId === m.userId).reduce((a, p) => a + p.points, 0);
-      const todayLog = mine.find((l) => l.date === v.today);
-      const daysSilent = lastActive ? daysBetween(lastActive, v.today) : 999;
+      // Each client's own day and hour (rev 731), not the coach's: a late close-out isn't a missed day on the roster.
+      const ctz = m.timezone || v.workspace.timezone;
+      const ctoday = todayInTz(ctz);
+      const todayLog = mine.find((l) => l.date === ctoday);
+      const daysSilent = lastActive ? daysBetween(lastActive, ctoday) : 999;
       return {
         m,
         u,
         pts,
         tier: tierFor(pts),
-        streak: runningStreak(closed, v.today),
+        streak: runningStreak(closed, streakDayOf(closed, ctoday, hourInTz(ctz))),
         lastActive,
         daysSilent,
         verified: verified.filter((p) => p.userId === m.userId).length,
@@ -158,7 +161,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/headshots" className="btn btn-ghost btn-sm" data-testid="coach-headshots-link">Client headshots</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/coach/teaching" className="btn btn-ghost btn-sm" data-testid="coach-teaching-link">Teaching library</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
+      <PageHeader title="Coach view" subtitle={`${members.length} clients · ${submitted.length} submissions waiting · ${atRisk.length} quiet for 3+ days`} action={<span className="flex gap-2"><Link href="/coach/office-hours" className="btn btn-ghost btn-sm" data-testid="coach-ooh-link">Office Hours requests</Link><Link href="/coach/feedback" className="btn btn-ghost btn-sm" data-testid="coach-feedback-link">Monthly feedback{feedbackNew ? <span className="badge badge-accent" data-testid="coach-feedback-new">{feedbackNew} new</span> : null}</Link><Link href="/coach/reports" className="btn btn-ghost btn-sm" data-testid="coach-reports-link">Issues and ideas{reportsNew ? <span className="badge badge-accent" data-testid="coach-reports-new">{reportsNew} new</span> : null}</Link><Link href="/coach/community" className="btn btn-ghost btn-sm" data-testid="coach-community-link">Community posts</Link><Link href="/coach/move" className="btn btn-ghost btn-sm" data-testid="coach-move-link">Move to a client</Link><Link href="/coach/import" className="btn btn-ghost btn-sm" data-testid="coach-import-link">Import from Airtable</Link><Link href="/coach/headshots" className="btn btn-ghost btn-sm" data-testid="coach-headshots-link">Client headshots</Link><Link href="/coach/late-closes" className="btn btn-ghost btn-sm" data-testid="coach-late-link">Late close-outs</Link><Link href="/coach/recordings" className="btn btn-ghost btn-sm" data-testid="coach-recordings-link">Recordings</Link><Link href="/coach/teaching" className="btn btn-ghost btn-sm" data-testid="coach-teaching-link">Teaching library</Link><Link href="/settings" className="btn btn-ghost btn-sm">Invite links</Link></span>} />
       <Card className="mb-4" title="My bot" action={<Link href="/brain" className="text-xs underline">Your bot →</Link>}>
         <p className="mb-2 text-sm text-ink-2">Your own Community Loyalty bot, with the same fields a client&apos;s row carries. Your bot page can send nothing until the token is here.</p>
         <form action={setMyBotAction} className="flex flex-wrap items-center gap-2" data-testid="my-bot">
