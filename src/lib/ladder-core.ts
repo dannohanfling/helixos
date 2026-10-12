@@ -4,7 +4,6 @@
  * caller says no its own way (the page by sending the member back, the connector in a sentence).
  */
 import { and, eq } from "drizzle-orm";
-import { randomBytes } from "node:crypto";
 import { db, schema } from "@/db";
 import type { Viewer } from "@/lib/auth";
 import { draft } from "@/lib/ai";
@@ -16,7 +15,7 @@ import { evidenceLines } from "@/lib/engine/evidence";
 import { LADDER_FORMATS, channelBodies, checklist, formatFor, keywordOf, masterBlock, outputContract, parseLadderOutput, perPostInput, publishBlockers, scaffold, targetWords, withoutKeyword, type Brief, type LadderFormatKey, type Parsed } from "@/lib/engine/ladder";
 import { LADDER_FORMAT_KEYS } from "@/db/schema";
 import { rungsQueuedLine } from "@/lib/engine/rung-drip";
-import { graphicPublicPath, shipRuns } from "@/lib/engine/ship";
+import { shipRuns } from "@/lib/engine/ship";
 import { libraryBlock } from "@/lib/engine/teaching";
 import { connectionFor } from "@/lib/ghl";
 import { newId } from "@/lib/ids";
@@ -144,8 +143,8 @@ export async function createLadder(m: Member, brief: Brief & { leadMagnetId: str
 export type ShipOutcome = { held: true } | { held: false; notes: string[]; keywordBlocked: string | null; ran: string[] };
 
 /**
- * Ship, the one way it runs (rev 583 #1, rev 625): the public address minted once, the posts pushed to the Social Planner
- * with the graphic and read back, the rungs handed to the rungs-only webhook once both posts read back as published, and the
+ * Ship, the one way it runs (rev 583 #1, rev 625, rev 840): the posts pushed to the Social Planner with the graphic (through
+ * the member's own Media Library) and read back, the rungs handed to the rungs-only webhook once both posts read back as published, and the
  * keyword written to the bot. The caller has already refused a ladder whose checks fail.
  */
 /** `only`: the channels a preview named (the connector); left out, every channel Ship would run (the page). */
@@ -154,11 +153,6 @@ export async function shipLadder(v: Viewer, ladder: schema.Ladder, postAt: strin
   const userId = v.user.id;
   let l = ladder;
   const notes: string[] = [];
-  // The public address, once: the token carries nothing of the member and dies on Revoke.
-  if (l.graphicImageId && !l.graphicPublicToken) {
-    await db.update(schema.ladders).set({ graphicPublicToken: randomBytes(16).toString("hex") }).where(and(eq(schema.ladders.id, l.id), eq(schema.ladders.userId, userId)));
-    l = (await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, l.id), eq(schema.ladders.userId, userId)) }))!;
-  }
   const first = await shipFacts(v, l);
   const runs = shipRuns(first.steps).filter((k) => !only || (k !== "page" && k !== "instagram") || only.includes(k));
   if (!runs.length) return { held: true };
@@ -166,8 +160,8 @@ export async function shipLadder(v: Viewer, ladder: schema.Ladder, postAt: strin
   // A ladder never sent to the composer gets its post here; read it again so the check after the posts sees them.
   if (l.contentItemId !== itemId) l = (await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, l.id), eq(schema.ladders.userId, userId)) }))!;
   const item = (await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, itemId), eq(schema.contentItems.userId, userId)) }))!;
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
-  const mediaUrl = l.graphicPublicToken ? `${appUrl}${graphicPublicPath(l.graphicPublicToken)}` : null;
+  // The graphic goes with both posts through the member's own GoHighLevel Media Library (rev 840), the same path as the composer.
+  const picture = l.graphicImageId ? `img:${l.graphicImageId}` : null;
   // With the rungs webhook set, the drip posts rung 1, so a shipped post carries no first comment (rev 625).
   const dripOn = rungsSetup(v.membership).on;
   const conn = await connectionFor(userId);
@@ -178,11 +172,11 @@ export async function shipLadder(v: Viewer, ladder: schema.Ladder, postAt: strin
     const variant = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.contentItemId, itemId), eq(schema.contentVariants.channel, channel), eq(schema.contentVariants.groupId, "")) });
     if (!variant) { notes.push(`${channel}: no draft`); continue; }
     await db.update(schema.contentVariants).set({ status: postAt ? "scheduled" : "posted", postAt, ...(postAt ? {} : { postedAt: nowIso() }) }).where(eq(schema.contentVariants.id, variant.id));
-    const sent = await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: variant.id, channel, body: variant.subject ? `${variant.subject}\n\n${variant.body}` : variant.body, postAt, mediaUrl, title: item.title, followUpComment: dripOn ? null : item.firstComment });
-    notes.push(`${channel}: ${sent ? "sent" : "refused"}${mediaUrl ? " with the graphic" : ""}`);
+    const sent = await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: variant.id, channel, body: variant.subject ? `${variant.subject}\n\n${variant.body}` : variant.body, postAt, picture, title: item.title, followUpComment: dripOn ? null : item.firstComment });
+    notes.push(`${channel}: ${sent ? "sent" : "refused"}${picture ? " with the graphic" : ""}`);
     if (sent && conn) {
       const after = await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, variant.id) });
-      if (after?.externalId) await recordReadback(after, conn, Boolean(mediaUrl));
+      if (after?.externalId) await recordReadback(after, conn, Boolean(picture));
     }
   }
   await db.update(schema.contentItems).set({ status: postAt ? "scheduled" : "posted" }).where(eq(schema.contentItems.id, itemId));

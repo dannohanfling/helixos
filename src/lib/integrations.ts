@@ -201,7 +201,12 @@ export async function pushContact(ctx: { workspaceId: string; userId: string }, 
  * A variant the Social Planner already holds as scheduled is edited in place under the same id, so re-scheduling or
  * pushing an update never leaves a second copy in the planner.
  */
-export async function pushSocialPost(ctx: { workspaceId: string; userId: string; tz: string }, post: { variantId: string; channel: string; body: string; postAt: string | null; mediaUrl?: string | null; title?: string; followUpComment?: string | null }): Promise<boolean> {
+/**
+ * `picture` (rev 840): the post's own picture by its attachment id ("img:<id>" from Images, or a Proof attachment). It goes into
+ * the member's own GoHighLevel Media Library first and the post carries GoHighLevel's address for it; a channel that should
+ * carry it and can't is held with the reason, never posted text-only. A typed public `mediaUrl` is sent as it is.
+ */
+export async function pushSocialPost(ctx: { workspaceId: string; userId: string; tz: string }, post: { variantId: string; channel: string; body: string; postAt: string | null; mediaUrl?: string | null; picture?: string | null; title?: string; followUpComment?: string | null }): Promise<boolean> {
   const { connectionFor, createPost, updatePost, freshAccounts } = await import("@/lib/ghl");
   const { PUBLISHABLE, healAccountId, mediaTypeFor, postTypeFor, shortAccountId } = await import("@/lib/engine/ghl-map");
   const { refusedField } = await import("@/lib/engine/ghl-errors");
@@ -235,7 +240,8 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
     accountId = healed;
     return true;
   };
-  if (channel === "stories" && !post.mediaUrl) return skip("Stories need a photo or video", "failed");
+  if (channel === "stories" && !post.mediaUrl && !post.picture) return skip("Stories need a photo or video", "failed");
+  if (channel === "instagram" && !post.mediaUrl && !post.picture) return skip("Instagram needs a picture with the post, and none went with it. Make the graphic or pick one, then send it again.", "failed");
   // The Social Planner requires the posting user (CreatePostDTO: type, accountIds, userId). Without one the post is refused
   // with a validation error, so it is refused here first, with the place to fix it.
   if (!conn.ghlUserId?.trim()) return skip("Add your GHL user ID on Settings → Publishing; the Social Planner won't take a post without it", "failed");
@@ -254,23 +260,38 @@ export async function pushSocialPost(ctx: { workspaceId: string; userId: string;
   const held = variant?.externalId && (variant.externalStatus === "scheduled" || variant.externalStatus === "accepted") ? variant.externalId : null;
   const event = held ? "social.update" : "social.schedule";
   await heal();
-  const draftFor = () => ({ accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: post.mediaUrl ? [{ url: post.mediaUrl, type: mediaTypeFor(post.mediaUrl) }] : [], followUpComment: post.followUpComment });
+  // The picture (rev 840): a typed public address as it is; the post's own picture through the member's Media Library.
+  const { PICTURE_CHANNELS, held: pictureHeld, instagramCause } = await import("@/lib/engine/post-picture");
+  let media: { url: string; type: string } | null = post.mediaUrl?.trim() ? { url: post.mediaUrl.trim(), type: mediaTypeFor(post.mediaUrl.trim()) } : null;
+  if (!media && post.picture && PICTURE_CHANNELS.has(post.channel)) {
+    const { pictureFor } = await import("@/lib/post-picture");
+    const pic = await pictureFor(conn, ctx, post.picture);
+    if (!pic.ok) {
+      const note = pic.permission ? pic.reason : pictureHeld(pic.reason);
+      await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event: "social.media", payload: { channel: post.channel, postAt: post.postAt }, status: "failed", note: pic.permission ? "Picture didn't attach: the token has no medias.write" : note });
+      await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: note, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
+      return false;
+    }
+    media = { url: pic.url, type: pic.type };
+  }
+  const draftFor = () => ({ accountId, summary: post.body, type: postTypeFor(channel), scheduleDate, media: media ? [media] : [], followUpComment: post.followUpComment });
   const send = () => (held ? updatePost(conn, held, draftFor()) : createPost(conn, draftFor()));
   let r = await send();
   if (!r.ok && r.status === 422 && refusedField(r.detail ?? "") === "accountIds") {
     const sent = accountId;
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: post.mediaUrl ? 1 : 0, accountId: sent, ghlPostId: held ?? undefined }, status: "failed", note: `${r.error} Account id sent: ${shortAccountId(sent)}. Reading the connected accounts again.` });
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: media ? 1 : 0, accountId: sent, ghlPostId: held ?? undefined }, status: "failed", note: `${r.error} Account id sent: ${shortAccountId(sent)}. Reading the connected accounts again.` });
     if (await heal(true)) r = await send();
   }
   if (!r.ok) {
     // A refused account names the id that was sent, so the log and the card say which one GoHighLevel no longer knows.
-    const error = r.status === 422 && refusedField(r.detail ?? "") === "accountIds" ? `${r.error} Account id sent: ${shortAccountId(accountId)}.` : r.error;
-    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: post.mediaUrl ? 1 : 0, accountId, ghlPostId: held ?? undefined }, status: "failed", note: error });
+    const igCause = channel === "instagram" || channel === "stories" ? instagramCause(r.detail ?? "", { caption: post.body, hasPicture: Boolean(media) }) : null;
+    const error = r.status === 422 && refusedField(r.detail ?? "") === "accountIds" ? `${r.error} Account id sent: ${shortAccountId(accountId)}.` : (igCause ?? r.error);
+    await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: media ? 1 : 0, accountId, ghlPostId: held ?? undefined }, status: "failed", note: error });
     // The post's failure is said on the post (Distribute page) and in the sync log; the connection itself is not marked broken by it.
     await db.update(schema.contentVariants).set({ externalStatus: "failed", externalError: error, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));
     return false;
   }
-  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: post.mediaUrl ? 1 : 0, accountId, ghlPostId: r.data.id ?? undefined }, status: "sent", note: r.data.id ? `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Accepted by"} Social Planner · ${r.data.id}` : "Accepted by the Social Planner without an id; found from its list on the next check" });
+  await logSync({ workspaceId: ctx.workspaceId, userId: ctx.userId, provider: "gohighlevel", direction: "out", event, payload: { channel: post.channel, postAt: post.postAt, scheduleDate, media: media ? 1 : 0, accountId, ghlPostId: r.data.id ?? undefined }, status: "sent", note: r.data.id ? `${held ? "Updated in" : scheduleDate ? "Scheduled via" : "Accepted by"} Social Planner · ${r.data.id}` : "Accepted by the Social Planner without an id; found from its list on the next check" });
   // Accepted is not published: an immediate post is "in_progress" until the readback (Check status) says it went out; a
   // 2xx with no id is "accepted" until the planner's list gives the id back.
   await db.update(schema.contentVariants).set({ externalId: r.data.id, externalStatus: r.data.id ? (scheduleDate ? "scheduled" : "in_progress") : "accepted", externalError: null, externalSyncedAt: nowIso() }).where(eq(schema.contentVariants.id, post.variantId));

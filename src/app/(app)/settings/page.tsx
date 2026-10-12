@@ -14,6 +14,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { STARTER_KIT } from "@/lib/engine/deck";
 import { CopyButton } from "@/components/copy-button";
+import { ADD_PERMISSION } from "@/lib/engine/post-picture";
 import { BotConnectionCard } from "@/components/bot-connection-card";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
@@ -189,6 +190,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <PageHeader title="Settings" />
       <Card id="publishing" className="mb-4 scroll-mt-20" title="🚀 Publishing (your GoHighLevel sub-account)">
         <p className="mb-3 text-sm text-ink-2">Connect your own GoHighLevel sub-account once. Posts you schedule in the composer land in your Social Planner and go out on their own. Your token is encrypted and only ever used for your sub-account.</p>
+        {conn?.mediaScopeMissingAt ? (
+          <p className="mb-3 rounded-lg border border-warn bg-warn-soft p-2 text-sm" role="status" data-testid="ghl-add-permission">
+            {ADD_PERMISSION}
+          </p>
+        ) : null}
         <GhlConnect conn={conn ?? null} tz={v.tz} role={v.role} open={onboardingOpen(ghlIntegration?.config)} />
       </Card>
       <div className="mb-4" id="ai">

@@ -85,6 +85,7 @@ export const MEMBER_TABLES = {
   socrates_questions: schema.socratesQuestions,
   socrates_scripts: schema.socratesScripts,
   social_connections: schema.socialConnections,
+  ghl_media: schema.ghlMedia,
   community_shares: schema.communityShares,
   // Body (rev 179): health data, private to the member. The member's own export has it; a coach's export of a client never
   // does (BODY_LABELS below). Deletion on request removes it with everything else.

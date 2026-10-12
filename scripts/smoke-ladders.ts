@@ -473,17 +473,17 @@ async function main() {
     await Promise.all([page.waitForURL(/ship=ran/, { timeout: 90000 }), page.locator('[data-testid="ship-button"]').click()]);
     await page.locator('[data-testid="ship-ran"]').waitFor({ timeout: 20000 });
     const shipped = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
-    if (!shipped.graphicPublicToken || !/^[0-9a-f]{32}$/.test(shipped.graphicPublicToken) || !shipped.shippedAt) throw new Error("Ship mints the public token and marks the ladder shipped");
-    const publicUrl = `${base}/api/graphics/${shipped.graphicPublicToken}.png`;
-    // The two posts reached the Planner with the graphic at its public address; the address serves the master to anyone, no session.
-    const plannerPosts = ((await (await fetch(`http://localhost:${ghlPort}/__posts`, { headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } })).json()) as { posts: { _id: string; accountIds: string[]; media?: { url: string }[]; summary: string; followUpComment?: string }[] }).posts;
-    const shippedPosts = plannerPosts.filter((p) => p.media?.[0]?.url === publicUrl);
-    if (shippedPosts.length !== 2 || !shippedPosts.some((p) => p.accountIds.some((a) => a.includes("fbpage"))) || !shippedPosts.some((p) => p.accountIds.some((a) => a.includes("_ig_")))) throw new Error(`the Page and Instagram posts carry the graphic's public address: ${JSON.stringify(plannerPosts.map((p) => [p.accountIds, p.media?.[0]?.url]))}`);
+    if (shipped.graphicPublicToken || !shipped.shippedAt) throw new Error("Ship marks the ladder shipped and makes no public address (rev 840)");
+    // The two posts reached the Planner with the graphic from Maya's own Media Library (rev 840): one upload, a JPEG, shared.
+    const uploads = ((await (await fetch(`http://localhost:${ghlPort}/__uploads`)).json()) as { uploads: { loc: string; type: string; url: string }[] }).uploads.filter((u) => u.loc === "loc_maya");
+    if (uploads.length !== 1 || uploads[0].type !== "image/jpeg") throw new Error(`one JPEG upload into Maya's own Media Library: ${JSON.stringify(uploads)}`);
+    const mediaRow = (await db.query.ghlMedia.findFirst({ where: and(eq(schema.ghlMedia.userId, maya.id), eq(schema.ghlMedia.source, `img:${shipped.graphicImageId}`)) }))!;
+    if (!mediaRow || mediaRow.url !== uploads[0].url || mediaRow.locationId !== "loc_maya" || mediaRow.width !== 1080 || mediaRow.height !== 1350) throw new Error(`the upload is remembered for the graphic at 1080 × 1350: ${JSON.stringify(mediaRow)}`);
+    const plannerPosts = ((await (await fetch(`http://localhost:${ghlPort}/__posts`, { headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } })).json()) as { posts: { _id: string; accountIds: string[]; media?: { url: string; type: string }[]; summary: string; followUpComment?: string }[] }).posts;
+    const shippedPosts = plannerPosts.filter((p) => p.media?.[0]?.url === uploads[0].url && p.media[0].type === "image/jpeg");
+    if (shippedPosts.length !== 2 || !shippedPosts.some((p) => p.accountIds.some((a) => a.includes("fbpage"))) || !shippedPosts.some((p) => p.accountIds.some((a) => a.includes("_ig_")))) throw new Error(`the Page and Instagram posts carry the graphic from her Media Library: ${JSON.stringify(plannerPosts.map((p) => [p.accountIds, p.media?.[0]?.url]))}`);
     if (shippedPosts.some((p) => p.followUpComment)) throw new Error("a shipped ladder post carries no first comment: rung 1 is the drip's");
-    const pub = await fetch(publicUrl);
-    const pubMeta = await sharp(Buffer.from(await pub.arrayBuffer())).metadata();
-    if (pub.status !== 200 || pubMeta.width !== 2160 || pubMeta.format !== "png" || !(pub.headers.get("cache-control") ?? "").includes("public")) throw new Error(`the public address serves the master with no session: ${pub.status} ${pubMeta.width} ${pub.headers.get("cache-control")}`);
-    // A token that is not live, and one that is not a token at all, read the same 404; a traversal never reaches a private route (the signed-in route answers for itself).
+    // The old public route stays for posts shipped before: a token that is not live, and one that is not a token, read 404.
     if ((await fetch(`${base}/api/graphics/${"0".repeat(32)}.png`)).status !== 404 || (await fetch(`${base}/api/graphics/not-a-token.png`)).status !== 404) throw new Error("a token that is not live reads 404");
     if ((await fetch(`${base}/api/graphics/../deck-images/x`, { redirect: "manual" })).status === 200) throw new Error("a traversal never serves a private picture");
     // Read back as published, the rungs went to the drip naming the two posts; the keyword reached the bot.
@@ -520,12 +520,56 @@ async function main() {
     if (!(await page.locator("main").innerText()).includes("Posted without the picture")) throw new Error("the page says the post went out without its picture");
     await page.goto(`${base}/content/ladders/${demoId}`);
     console.log("✓ Ship: both posts sent with the graphic and read back with it; one the platform let out bare says \"Posted without the picture\" on the post");
-    // Revoke: the address dies, the graphic stays.
-    await Promise.all([page.waitForURL(/ship=revoked/, { timeout: 20000 }), page.locator('[data-testid="ship-revoke"]').click()]);
-    if ((await fetch(publicUrl)).status !== 404) throw new Error("a revoked address reads 404");
-    const revoked = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, demoId) }))!;
-    if (revoked.graphicPublicToken || !revoked.graphicImageId) throw new Error("Revoke clears the token and keeps the graphic");
-    console.log("✓ Ship: the Page and Instagram posts through GoHighLevel with the graphic at its public address (served with no session, 404 otherwise), read back, the rungs handed to the drip naming both posts, the keyword on the bot, every step done; Revoke kills the address");
+    // Rev 840, the composer's path: a photo from Images on an Instagram post scheduled two hours ahead goes up once and rides
+    // with the post; a token without medias.write holds the channel with "Add one permission" and posts nothing text-only.
+    {
+      const { pushSocialPost } = await import("@/lib/integrations");
+      const { nowWallInTz } = await import("@/lib/dates");
+      const { ADD_PERMISSION } = await import("@/lib/engine/post-picture");
+      const igRow = (await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.channel, "instagram"), eq(schema.contentVariants.groupId, ""), eq(schema.contentVariants.userId, maya.id)) }))!;
+      const igItem = (await db.query.contentItems.findFirst({ where: eq(schema.contentItems.id, igRow.contentItemId) }))!;
+      // Each copy is its own post, so one channel version per post holds.
+      const copy = async () => {
+        const id = newId();
+        const itemId = newId();
+        await db.insert(schema.contentItems).values({ ...igItem, id: itemId });
+        await db.insert(schema.contentVariants).values({ ...igRow, id, contentItemId: itemId, status: "scheduled", postedAt: null, externalId: null, externalStatus: null, externalError: null, externalSyncedAt: null });
+        return id;
+      };
+      const ahead = nowWallInTz("America/Los_Angeles", new Date(Date.now() + 2 * 3600_000));
+      const v1 = await copy();
+      if (!(await pushSocialPost({ workspaceId: ws, userId: maya.id, tz: "America/Los_Angeles" }, { variantId: v1, channel: "instagram", body: "Two hours ahead, with the photo.", postAt: ahead, picture: `img:${otherId}` }))) throw new Error("the scheduled Instagram post with a photo from Images is sent");
+      const all = ((await (await fetch(`http://localhost:${ghlPort}/__uploads`)).json()) as { uploads: { loc: string; url: string }[] }).uploads;
+      const photoUp = all.filter((u) => u.loc === "loc_maya");
+      const planner = ((await (await fetch(`http://localhost:${ghlPort}/__posts`, { headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } })).json()) as { posts: { summary: string; scheduleDate?: string; media?: { url: string }[] }[] }).posts;
+      const ig = planner.find((p) => p.summary === "Two hours ahead, with the photo.");
+      if (photoUp.length !== 2 || !ig?.scheduleDate || ig.media?.[0]?.url !== photoUp[1].url) throw new Error(`the scheduled post carries the photo from her own Media Library: ${JSON.stringify({ uploads: photoUp.length, ig })}`);
+      // Again for the same photo: no second upload.
+      const v2 = await copy();
+      await pushSocialPost({ workspaceId: ws, userId: maya.id, tz: "America/Los_Angeles" }, { variantId: v2, channel: "instagram", body: "Same photo again.", postAt: ahead, picture: `img:${otherId}` });
+      if (((await (await fetch(`http://localhost:${ghlPort}/__uploads`)).json()) as { uploads: { loc: string }[] }).uploads.filter((u) => u.loc === "loc_maya").length !== 2) throw new Error("the same photo is uploaded once");
+      // No medias.write: held, said, nothing posted; and her own upload for another account is never reused there.
+      const { upsertConnection } = await import("@/lib/ghl");
+      const before = (await db.query.socialConnections.findFirst({ where: eq(schema.socialConnections.userId, maya.id) }))!;
+      if (!(await upsertConnection({ workspaceId: ws, userId: maya.id, locationId: "loc_nomedia", ghlUserId: "JD8kLxeYM3FqbWLQXC4p", manualToken: "pit-loc_nomedia" })).ok) throw new Error("the second connection saves");
+      // The other account's own Instagram, as Settings → Publishing would map it.
+      await db.update(schema.socialConnections).set({ mapping: { ...before.mapping, instagram: "loc_nomedia_ig_1", fb_page: "loc_nomedia_fbpage_1" } }).where(eq(schema.socialConnections.userId, maya.id));
+      const v3 = await copy();
+      const sent = await pushSocialPost({ workspaceId: ws, userId: maya.id, tz: "America/Los_Angeles" }, { variantId: v3, channel: "instagram", body: "No permission yet.", postAt: ahead, picture: `img:${otherId}` });
+      const heldRow = (await db.query.contentVariants.findFirst({ where: eq(schema.contentVariants.id, v3) }))!;
+      const nomediaPosts = ((await (await fetch(`http://localhost:${ghlPort}/__posts`, { headers: { Authorization: "Bearer pit-loc_nomedia", Version: "2021-07-28" } })).json()) as { posts: { summary: string }[] }).posts;
+      if (sent || heldRow.externalStatus !== "failed" || heldRow.externalError !== ADD_PERMISSION || nomediaPosts.some((p) => p.summary === "No permission yet.")) throw new Error(`without medias.write the channel is held with Add one permission, nothing posted: ${JSON.stringify({ sent, status: heldRow.externalStatus, error: heldRow.externalError })}`);
+      if (!(await db.query.socialConnections.findFirst({ where: eq(schema.socialConnections.userId, maya.id) }))!.mediaScopeMissingAt) throw new Error("the connection remembers the missing permission");
+      await page.goto(`${base}/settings`);
+      await page.locator('[data-testid="ghl-add-permission"]').waitFor({ timeout: 15000 });
+      await page.goto(`${base}/content/${heldRow.contentItemId}/repurpose`);
+      await page.locator('[data-testid="failed-banner"]', { hasText: "Add one permission" }).waitFor({ timeout: 15000 });
+      await upsertConnection({ workspaceId: ws, userId: maya.id, locationId: "loc_maya", ghlUserId: "JD8kLxeYM3FqbWLQXC4p", manualToken: "pit-loc_maya" });
+      await db.update(schema.socialConnections).set({ mapping: before.mapping, mediaScopeMissingAt: null }).where(eq(schema.socialConnections.userId, maya.id));
+      await db.delete(schema.contentVariants).where(and(eq(schema.contentVariants.userId, maya.id), eq(schema.contentVariants.id, v3)));
+    }
+    console.log("✓ rev 840: a photo from Images rides with an Instagram post scheduled two hours ahead, uploaded once; without medias.write the channel holds with Add one permission and nothing posts text-only");
+    console.log("✓ Ship: the Page and Instagram posts through GoHighLevel with the graphic from her own Media Library (one JPEG upload, no public address), read back, the rungs handed to the drip naming both posts, the keyword on the bot, every step done");
   } finally {
     await browser.close();
     for (const m of [blob, ghl, uchat]) if (m.pid) try { process.kill(-m.pid, "SIGTERM"); } catch { /* already gone */ }

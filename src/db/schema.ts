@@ -2411,10 +2411,35 @@ export const socialConnections = sqliteTable(
     connectedAt: text("connected_at"),
     lastSyncAt: text("last_sync_at"),
     lastError: text("last_error"),
+    /** When GoHighLevel last refused a picture upload for want of medias.write (rev 840); cleared by the next upload that works. */
+    mediaScopeMissingAt: text("media_scope_missing_at"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("social_connections_user_provider").on(t.userId, t.provider)],
 );
+
+/**
+ * A picture put into the member's own GoHighLevel Media Library (rev 840), so a post carries it: one upload per picture and
+ * GoHighLevel account, shared by every channel and every retry. `source` is the post's attachment id ("img:<id>" for Images,
+ * else a Proof attachment's id). The URL is GoHighLevel's own storage, there at publish time for a scheduled post.
+ */
+export const ghlMedia = sqliteTable(
+  "ghl_media",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    locationId: text("location_id").notNull(),
+    source: text("source").notNull(),
+    ghlFileId: text("ghl_file_id").notNull(),
+    url: text("url").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("ghl_media_source").on(t.workspaceId, t.userId, t.locationId, t.source)],
+);
+export type GhlMedia = typeof ghlMedia.$inferSelect;
 
 export type SocialAccount = { id: string; name: string; platform: string; type: string; isExpired: boolean; avatar?: string | null };
 export type SocialConnection = typeof socialConnections.$inferSelect;

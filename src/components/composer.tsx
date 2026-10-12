@@ -9,7 +9,7 @@ import { pushLadderUpdateAction } from "@/lib/actions/ladders";
 import { channelTargets, draftFor, groupTargets, localIso, staggerSchedule, type Draft, type GroupTarget, type Target, type TargetKey, scheduleNotice } from "@/lib/engine/compose";
 import { hashtagsFor } from "@/lib/engine/repurpose";
 import { explainFabricated, findFabricated } from "@/lib/engine/blacklist";
-import { PRIVATE_MEDIA_NOTE, STORIES_MEDIA_NOTE, instagramImageProblem, mediaBlock, mediaUrlProblem, mediaWarning, type ComposerMedia } from "@/lib/engine/compose-media";
+import { PRIVATE_MEDIA_NOTE, instagramImageProblem, mediaBlock, mediaUrlProblem, mediaWarning, type ComposerMedia } from "@/lib/engine/compose-media";
 import { ChannelPreview, type Persona } from "./channel-previews";
 import { AiStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
@@ -98,7 +98,6 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
   const urlProblem = mediaUrlProblem(mediaUrl);
   // Instagram with no picture is refused here, before scheduling (rev 515), never at publish time.
   const instagramProblem = instagramImageProblem(schedulable.map((t) => t.channel), { attachment: mediaAttachment, mediaUrl });
-  const storiesPicked = mediaAttachment && selected.includes("ch:stories" as TargetKey);
   const mediaWarn = mediaWarning(mediaAttachment);
   // The preview shows the picked file through the signed-in read route; the typed URL is the fallback. Only the URL ever leaves here.
   const previewMedia = mediaAttachment?.url ?? (mediaUrl || undefined);
@@ -412,11 +411,6 @@ export function Composer({ groups, persona, hashtag, today, aiEnabled, socialCon
                       <a href={mediaAttachment.downloadUrl} className="underline">
                         Download
                       </a>
-                    </p>
-                  ) : null}
-                  {storiesPicked ? (
-                    <p className="rounded-lg bg-warn-soft p-2 text-xs" data-testid="media-stories-note" role="status">
-                      {STORIES_MEDIA_NOTE}
                     </p>
                   ) : null}
                 </div>

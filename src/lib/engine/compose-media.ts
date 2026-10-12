@@ -4,7 +4,7 @@
  * form, so it carries the ladder's own check (same key, same label, same marker) and scheduling or posting waits until the
  * post says it is illustrative. One warns: an image with no alt text goes out, but the client hears that a screen reader will
  * say nothing about it. The file itself lives in private storage and is read through the signed-in route; it is never a
- * public address, so it is never sent to the Social Planner (that note is here too).
+ * public address. Since rev 840 it goes with the post through the member's own GoHighLevel Media Library (src/lib/post-picture.ts).
  */
 
 /** The ladder's checklist label for the same rule, verbatim (src/lib/engine/ladder.ts, key "illustrative"). */
@@ -12,8 +12,8 @@ export const ILLUSTRATIVE_LABEL = "Dollar figures are real numbers or marked ill
 /** The marker the client adds to a post, verbatim. */
 export const ILLUSTRATIVE_MARK = "(Illustrative. Your numbers will differ.)";
 export const ALT_WARNING = "This image goes out with no alt text. A screen reader will say nothing about it.";
-export const PRIVATE_MEDIA_NOTE = "GoHighLevel needs a public address for media. This file lives in private storage: download it and add it in the Social Planner. It is not sent from here.";
-export const STORIES_MEDIA_NOTE = "Stories need a photo or video the Social Planner can fetch. This private file does not count for Stories: paste a public address or take Stories off the list.";
+/** Rev 840: the picked file goes with the post. HelixOS puts it into the member's own Media Library first; nothing public is made. */
+export const PRIVATE_MEDIA_NOTE = "Sent with the post: HelixOS puts this picture into your own GoHighLevel Media Library first, then posts it to your Facebook Page, Instagram, LinkedIn and Threads. For a personal profile or a group, download it and add it by hand.";
 export const PRIVATE_URL_REFUSAL = "That address is a private file in HelixOS, which the Social Planner cannot fetch. Pick it from a proof instead, or paste a public address that starts with https://.";
 export const NOT_A_URL_REFUSAL = "The photo or video address must be a web address, starting with http:// or https://.";
 /** Instagram's feed takes no post without a picture (rev 515): said before scheduling, never at publish time. */

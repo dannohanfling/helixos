@@ -69,7 +69,7 @@ describe("the words are verbatim", () => {
     expect(ILLUSTRATIVE_LABEL).toBe("Dollar figures are real numbers or marked illustrative");
     expect(ILLUSTRATIVE_MARK).toBe("(Illustrative. Your numbers will differ.)");
     expect(ALT_WARNING).toBe("This image goes out with no alt text. A screen reader will say nothing about it.");
-    expect(PRIVATE_MEDIA_NOTE).toBe("GoHighLevel needs a public address for media. This file lives in private storage: download it and add it in the Social Planner. It is not sent from here.");
+    expect(PRIVATE_MEDIA_NOTE).toBe("Sent with the post: HelixOS puts this picture into your own GoHighLevel Media Library first, then posts it to your Facebook Page, Instagram, LinkedIn and Threads. For a personal profile or a group, download it and add it by hand.");
   });
   it("the label and the marker are the ladder's own, so the two gates cannot drift apart", () => {
     const ladder = readFileSync(join(__dirname, "..", "ladder.ts"), "utf8");

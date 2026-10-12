@@ -7,6 +7,7 @@
  *  - GET  /social-media-posting/{locationId}/posts/{id} → results.post (status, error, postId, publishedAt)
  *  - PUT  /social-media-posting/{locationId}/posts/{id} → edits a scheduled post in place (same body as create)
  *  - POST /social-media-posting/{locationId}/posts/list → results.posts[] (read-only listing, used by the coach's planner audit)
+ *  - POST /medias/upload-file (apps/medias.json, medias.write) → { fileId, url }: a picture into the location's Media Library (rev 840)
  * Tokens are encrypted at rest (src/lib/crypto.ts) and decrypted only for the request.
  */
 import { and, eq } from "drizzle-orm";
@@ -35,10 +36,10 @@ function logGhl(what: string, detail: Record<string, unknown>): void {
   console.error(`[ghl] ${what}`, JSON.stringify(detail));
 }
 
-async function call<T>(base: string, token: string, path: string, init: RequestInit = {}): Promise<GhlResult<T>> {
+async function call<T>(base: string, token: string, path: string, init: RequestInit = {}, timeoutMs = 8000): Promise<GhlResult<T>> {
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
     const res = await fetch(`${base.replace(/\/$/, "")}${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, Version: VERSION, Accept: "application/json", ...(init.headers ?? {}) }, signal: ctrl.signal });
     clearTimeout(t);
     const text = await res.text();
@@ -327,4 +328,20 @@ export async function upsertConnection(input: { workspaceId: string; userId: str
     await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: input.workspaceId, userId: input.userId, provider: "gohighlevel", locationId: input.locationId, ghlUserId: input.ghlUserId, manualToken: token });
   }
   return { ok: true, data: (await connectionFor(input.userId))! };
+}
+
+/**
+ * Puts one picture into the member's own Media Library (rev 840), with their own token, so a post can carry it: GoHighLevel
+ * keeps it and gives back its address. Nothing public is made by HelixOS. Needs medias.write.
+ */
+export async function uploadMedia(conn: SocialConnection, file: { bytes: Buffer; name: string; type: string }): Promise<GhlResult<{ fileId: string; url: string }>> {
+  const cred = await credentials(conn);
+  if (!cred.ok) return cred;
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(file.bytes)], { type: file.type }), file.name);
+  form.append("name", file.name);
+  const r = await call<{ fileId?: string; url?: string }>(cred.data.base, cred.data.token, "/medias/upload-file", { method: "POST", body: form }, 30_000);
+  if (!r.ok) return r;
+  if (!r.data?.url || !/^https:\/\//.test(r.data.url)) return { ok: false, error: "GoHighLevel took the picture but gave back no address for it." };
+  return { ok: true, data: { fileId: String(r.data.fileId ?? ""), url: r.data.url } };
 }

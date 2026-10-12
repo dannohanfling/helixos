@@ -56,7 +56,7 @@ export function OutcomeHeadline({ outcomes, className = "" }: { outcomes: Channe
  * `inForm`: the rows sit inside another form (a version's own), so the check is a button with its own action rather than a
  * nested form, which HTML does not allow and which made the browser re-nest the page and React regenerate it on the client.
  */
-export function OutcomeRows({ outcomes, checkAction, repostAction, compact = false, inForm = false, contentId }: { outcomes: ChannelOutcome[]; checkAction?: (formData: FormData) => Promise<void>; /** "Post again to this channel" on a published row (rev 567): a deliberate second post, never the ordinary save. */ repostAction?: (formData: FormData) => Promise<void>; compact?: boolean; inForm?: boolean; /** The post, when known: a failed row then carries its Fix it link (friction walk C1). */ contentId?: string }) {
+export function OutcomeRows({ outcomes, checkAction, repostAction, retryAction, compact = false, inForm = false, contentId }: { outcomes: ChannelOutcome[]; checkAction?: (formData: FormData) => Promise<void>; /** "Post again to this channel" on a published row (rev 567): a deliberate second post, never the ordinary save. */ repostAction?: (formData: FormData) => Promise<void>; /** Retry on a channel held for its picture (rev 840). */ retryAction?: (formData: FormData) => Promise<void>; compact?: boolean; inForm?: boolean; /** The post, when known: a failed row then carries its Fix it link (friction walk C1). */ contentId?: string }) {
   if (!outcomes.length) return null;
   return (
     <ul className={`divide-y ${compact ? "text-xs" : "text-sm"}`} data-testid="channel-outcomes">
@@ -71,10 +71,29 @@ export function OutcomeRows({ outcomes, checkAction, repostAction, compact = fal
               {o.reason}
             </span>
           ) : null}
-          {o.state === "failed" && o.fix && contentId ? (
+          {o.state === "failed" && o.fix && contentId && !(retryAction && o.canRetry && o.fix.where === "again") ? (
             <Link href={fixHref(o.fix, contentId)} className="underline" data-testid="outcome-fix">
               {o.fix.label} →
             </Link>
+          ) : null}
+          {retryAction && o.canRetry ? (
+            <span className="ml-auto">
+              {inForm ? (
+                <>
+                  <input type="hidden" name="variantId" value={o.id} />
+                  <SubmitButton className="btn btn-ghost btn-xs" formAction={retryAction} pendingText="Sending…" data-testid="retry-channel" title="Send this channel again, with its picture">
+                    Retry
+                  </SubmitButton>
+                </>
+              ) : (
+                <form action={retryAction}>
+                  <input type="hidden" name="variantId" value={o.id} />
+                  <SubmitButton className="btn btn-ghost btn-xs" pendingText="Sending…" data-testid="retry-channel" title="Send this channel again, with its picture">
+                    Retry
+                  </SubmitButton>
+                </form>
+              )}
+            </span>
           ) : null}
           {repostAction && o.canRepost ? (
             <span className={checkAction && o.canCheck ? "" : "ml-auto"}>

@@ -241,7 +241,7 @@ export async function pushLadderUpdateAction(formData: FormData): Promise<void> 
   const dripOn = dripSetup(v.membership).on;
   for (const s of stale) {
     await db.update(schema.contentVariants).set({ body: s.body, generatedBy: "ladder", origin: "rule" }).where(eq(schema.contentVariants.id, s.variantId));
-    if (s.inGhl && !(dripOn && s.channel === "threads") && (await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: s.variantId, channel: s.channel, body: s.body, postAt: s.postAt, mediaUrl: item?.mediaUrl, title: item?.title }))) pushed++;
+    if (s.inGhl && !(dripOn && s.channel === "threads") && (await pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: s.variantId, channel: s.channel, body: s.body, postAt: s.postAt, mediaUrl: item?.mediaUrl, picture: item?.mediaAttachmentId, title: item?.title }))) pushed++;
   }
   refresh();
   const sep = back.includes("?") ? "&" : "?";

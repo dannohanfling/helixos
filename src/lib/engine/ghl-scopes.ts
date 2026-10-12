@@ -19,7 +19,7 @@ export const GHL_SCOPES: GhlScope[] = [
   { scope: "socialplanner/comments.readonly", why: "the comments endpoints: reading the author comments under a ladder post", use: "next" },
   { scope: "socialplanner/comments.write", why: "the comments endpoints: posting a rung as a comment", use: "next" },
   { scope: "medias.readonly", why: "GET /medias/files: the client's own Media Storage, where rendered graphics would live in their account", use: "next" },
-  { scope: "medias.write", why: "POST /medias/upload-file: putting a rendered graphic into the client's Media Storage for the Social Planner to reference", use: "next" },
+  { scope: "medias.write", why: "POST /medias/upload-file: a post's picture (a made graphic, a photo from Images or Proof) into the client's own Media Storage, so the post carries it (rev 840)", use: "now" },
   { scope: "emails/builder.readonly", why: "GET /emails/builder: the client's email templates", use: "next" },
   { scope: "emails/builder.write", why: "POST /emails/builder and /emails/builder/data: HelixOS writes the client's marketing email template", use: "next" },
   { scope: "contacts.readonly", why: "GET /contacts/ (the search's total): a client's contact count for the 10 Million Lives tracker, pulled only when the member confirms it; not called today, on the list now while no client has connected (Danno, rev 464)", use: "next" },

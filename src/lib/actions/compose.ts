@@ -171,7 +171,7 @@ export async function saveComposeAction(payload: ComposePayload): Promise<Compos
     if (!groupId && vStatus !== "draft") {
       pushed++;
       // The first comment rides on the Facebook page and Instagram posts only: the two the comment ladder lives on.
-      background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId, channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, title, followUpComment: t.channel === "fb_page" || t.channel === "instagram" ? item.firstComment : null }));
+      background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId, channel: t.channel, body: t.subject ? `${t.subject}\n\n${t.body}` : t.body, postAt: row.postAt, mediaUrl: item.mediaUrl, picture: item.mediaAttachmentId, title, followUpComment: t.channel === "fb_page" || t.channel === "instagram" ? item.firstComment : null }));
     }
   }
   // Nothing new went out (every channel was already posted): the post keeps the status it had rather than reading "Scheduled"
@@ -198,9 +198,26 @@ export async function repostChannelAction(formData: FormData): Promise<void> {
   // The post that went out stays known: the sync log names it as superseded, so the planner audit never lists it as untracked.
   if (variant.externalId) await logSync({ workspaceId, userId, provider: "gohighlevel", direction: "out", event: "social.repost", payload: { channel: variant.channel, supersededId: variant.externalId }, status: "sent", note: `Posted again to ${variant.channel}; the earlier planner post ${variant.externalId} stays as it went out` });
   await db.update(schema.contentVariants).set({ status: "posted", postedAt: nowIso(), postAt: null, externalId: null, externalStatus: null, externalError: null, externalSyncedAt: null }).where(eq(schema.contentVariants.id, variant.id));
-  background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: variant.id, channel: variant.channel, body: variant.subject ? `${variant.subject}\n\n${variant.body}` : variant.body, postAt: null, mediaUrl: item.mediaUrl, title: item.title, followUpComment: variant.channel === "fb_page" || variant.channel === "instagram" ? item.firstComment : null }));
+  background(pushSocialPost({ workspaceId, userId, tz: v.tz }, { variantId: variant.id, channel: variant.channel, body: variant.subject ? `${variant.subject}\n\n${variant.body}` : variant.body, postAt: null, mediaUrl: item.mediaUrl, picture: item.mediaAttachmentId, title: item.title, followUpComment: variant.channel === "fb_page" || variant.channel === "instagram" ? item.firstComment : null }));
   refresh();
   redirect(`/content/${item.id}/repurpose?reposted=${encodeURIComponent(variant.channel)}`);
+}
+
+/**
+ * Retry (rev 840): a channel held because its picture didn't attach is sent again, with the picture, at its own time: a
+ * scheduled one keeps its time while that is still ahead, else it goes now. Only a held channel; never a second post.
+ */
+export async function retryChannelAction(formData: FormData): Promise<void> {
+  const { v, userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves.", team: "allow" });
+  const variant = await db.query.contentVariants.findFirst({ where: and(eq(schema.contentVariants.id, str(formData, "variantId")), eq(schema.contentVariants.userId, userId)) });
+  if (!variant || variant.externalStatus !== "failed" || !/^(Picture didn't attach|Add one permission)/.test(variant.externalError ?? "")) return;
+  const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, variant.contentItemId), eq(schema.contentItems.userId, userId)) });
+  if (!item || variant.groupId || !isChannel(variant.channel) || !PUBLISHABLE[variant.channel]?.via) return;
+  const ahead = variant.postAt && variant.postAt > nowWallInTz(v.tz) ? variant.postAt : null;
+  await db.update(schema.contentVariants).set({ externalStatus: null, externalError: null, externalSyncedAt: null, ...(ahead ? {} : { postAt: null, status: "posted", postedAt: nowIso() }) }).where(eq(schema.contentVariants.id, variant.id));
+  await pushSocialPost({ workspaceId: v.workspace.id, userId, tz: v.tz }, { variantId: variant.id, channel: variant.channel, body: variant.subject ? `${variant.subject}\n\n${variant.body}` : variant.body, postAt: ahead, mediaUrl: item.mediaUrl, picture: item.mediaAttachmentId, title: item.title, followUpComment: variant.channel === "fb_page" || variant.channel === "instagram" ? item.firstComment : null });
+  refresh();
+  redirect(`/content/${item.id}/repurpose?retried=${encodeURIComponent(variant.channel)}`);
 }
 
 /** Claude rewrites each target's draft in the coach's voice, respecting channel limits and group rules. Returns only the targets it improved. */

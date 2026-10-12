@@ -45,7 +45,7 @@ export type Now = { wall: string; iso: string; today: string; tz: string };
 export const nowFor = (v: { tz: string; today: string }, at: Date = new Date()): Now => ({ wall: nowWallInTz(v.tz, at), iso: at.toISOString(), today: v.today, tz: v.tz });
 /** Where a failure is put right (friction walk C1, 7 Oct): the Publishing card on Settings, the post itself, or a second send. */
 export type OutcomeFix = { where: "publishing" | "post" | "again"; label: string };
-export type ChannelOutcome = { id: string; channel: string; label: string; state: OutcomeState; word: string; when: string | null; reason: string | null; canCheck: boolean; /** A published channel the planner posts to: "Post again to this channel" is offered (rev 567). */ canRepost?: boolean; /** On a failure: where the Fix it button goes. */ fix?: OutcomeFix | null };
+export type ChannelOutcome = { id: string; channel: string; label: string; state: OutcomeState; word: string; when: string | null; reason: string | null; canCheck: boolean; /** A published channel the planner posts to: "Post again to this channel" is offered (rev 567). */ canRepost?: boolean; /** Held for its picture (rev 840): Retry sends it again with the picture, at its own time. */ canRetry?: boolean; /** On a failure: where the Fix it button goes. */ fix?: OutcomeFix | null };
 
 /**
  * The fix a failure's sentence points at: the connection and its accounts live on Settings → Publishing; the text, the media
@@ -53,6 +53,9 @@ export type ChannelOutcome = { id: string; channel: string; label: string; state
  */
 export function fixFor(reason: string | null): OutcomeFix {
   const r = reason ?? "";
+  // Held for its picture (rev 840): a missing permission is put right in GoHighLevel and Publishing; anything else is a Retry.
+  if (/^Add one permission/.test(r)) return { where: "publishing", label: "Add the permission" };
+  if (/^Picture didn't attach/.test(r)) return { where: "again", label: "Retry" };
   if (/photo or video|media|shorten|character|too long|the text|schedule time|hashtag/i.test(r)) return { where: "post", label: "Fix the post" };
   if (/deleted in the Social Planner|lost track|logged why/i.test(r)) return { where: "again", label: "Send it again" };
   return { where: "publishing", label: "Fix it in Publishing" };
@@ -94,7 +97,7 @@ export function outcomeOf(row: OutcomeRow, now: Now, cutoffMinutes = SENDING_CUT
   }
   if (ext === "failed" || (ext === "manual" && fixableSkip(row.externalError))) {
     const reason = plainReason(row.externalError?.trim() || UNMAPPED_FAILURE);
-    return { ...base, state: "failed", word: OUTCOME_WORD.failed, when: null, reason, fix: fixFor(reason) };
+    return { ...base, state: "failed", word: OUTCOME_WORD.failed, when: null, reason, fix: fixFor(reason), canRetry: /^(Picture didn't attach|Add one permission)/.test(reason) };
   }
   // Accepted or still on its way: scheduled while its time is ahead; sending until the cutoff after it; then lost track.
   const accepted = ext === "scheduled" || ext === "in_progress" || ext === "pending" || ext === "in_review" || ext === "notification_sent" || ext === "accepted";

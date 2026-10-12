@@ -8,6 +8,8 @@ const port = Number(process.argv[2] ?? 4010);
 const posts = new Map<string, Record<string, unknown>>();
 const drips: { path: string; body: Record<string, unknown>; at: string }[] = [];
 const contacts = new Map<string, Record<string, unknown>>();
+/** Files put into a location's Media Library (rev 840): which token's location, the name, the type and size. */
+const uploads: { loc: string; name: string; type: string; bytes: number; url: string }[] = [];
 let n = 0;
 /** A walk hook (rev 567): Instagram reconnected in GoHighLevel. Its composite id gets a new OAuth prefix; the old id is refused with a 422. */
 let igGeneration = 1;
@@ -25,6 +27,7 @@ createServer((req, res) => {
       res.end(JSON.stringify(body));
     };
     if (url.startsWith("/__drips") && req.method === "GET") return json(200, { drips }); // walk introspection
+    if (url.startsWith("/__uploads") && req.method === "GET") return json(200, { uploads }); // walk introspection
     if (url.startsWith("/__delete/") && req.method === "POST") {
       posts.delete(url.slice("/__delete/".length)); // a post deleted by hand in the planner
       return json(200, { ok: true });
@@ -49,6 +52,7 @@ createServer((req, res) => {
       posts.clear();
       drips.length = 0;
       contacts.clear();
+      uploads.length = 0;
       igGeneration = 1;
       return json(200, { ok: true });
     }
@@ -87,6 +91,22 @@ createServer((req, res) => {
       if (loc.includes("noname") || token === "pit-noscope") return json(403, { message: "The token does not have access to this scope: locations.readonly" });
       if (token !== `pit-${loc}`) return json(404, { message: `Location not found: ${loc}` });
       return json(200, { location: { id: loc, companyId: "co_mock", name: `${loc.replace(/^loc_/, "").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} Coaching`, timezone: "Australia/Sydney" } });
+    }
+    // POST /medias/upload-file (medias.write; rev 840): multipart with the file and its name, into the token's own location.
+    // A location whose id says "nomedia" refuses it as GoHighLevel refuses a token without the scope.
+    if (url.startsWith("/medias/upload-file") && req.method === "POST") {
+      if (!token.startsWith("pit-") || token === "pit-noscope") return json(401, { message: "Invalid JWT" });
+      const loc = token.slice(4);
+      if (loc.includes("nomedia")) return json(403, { statusCode: 403, message: "The token does not have access to this scope: medias.write" });
+      const raw = Buffer.concat(chunks);
+      const text = raw.toString("latin1");
+      if (!/multipart\/form-data/.test(String(req.headers["content-type"] ?? "")) || !/name="file"/.test(text)) return json(422, { statusCode: 422, message: ["file should not be empty"] });
+      const name = text.match(/name="name"\r\n\r\n([^\r]*)/)?.[1] ?? "file";
+      const type = text.match(/name="file"[^\r]*\r\nContent-Type: ([^\r]+)/)?.[1] ?? "application/octet-stream";
+      const fileId = `file_${++n}`;
+      const fileUrl = `https://storage.googleapis.com/mock-ghl/${loc}/${fileId}.jpg`;
+      uploads.push({ loc, name, type, bytes: raw.length, url: fileUrl });
+      return json(200, { fileId, url: fileUrl });
     }
     const m = url.match(/^\/social-media-posting\/([^/]+)\/(accounts|posts)(?:\/([^/?]+))?/);
     if (!m) return json(404, { message: "Not found" });

@@ -10,7 +10,7 @@ import { acceptVariantAction, generateVariantsAction, updateVariantAction } from
 import { gateLine, isUnreviewed, variantName } from "@/lib/engine/provenance";
 import { GateBlock, UnreviewedMark } from "@/components/provenance";
 import { generateGroupVariantsAction } from "@/lib/actions/groups";
-import { distributeAllAction, repostChannelAction } from "@/lib/actions/compose";
+import { distributeAllAction, repostChannelAction, retryChannelAction } from "@/lib/actions/compose";
 import { ILLUSTRATIVE_LABEL, ILLUSTRATIVE_MARK, INSTAGRAM_NEEDS_IMAGE, PRIVATE_URL_REFUSAL } from "@/lib/engine/compose-media";
 import { checkAllPostStatusAction, syncPostStatusAction } from "@/lib/actions/social";
 import { nowFor, outcomeOf, outcomesFor, type ChannelOutcome } from "@/lib/engine/channel-outcome";
@@ -63,7 +63,7 @@ function VariantForm({ var_, maxChars, email = false, outcome }: { var_: Content
           Save
         </SubmitButton>
       </div>
-      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} repostAction={repostChannelAction} compact inForm contentId={contentId} /> : null}
+      {outcome ? <OutcomeRows outcomes={[outcome]} checkAction={syncPostStatusAction} repostAction={repostChannelAction} retryAction={retryChannelAction} compact inForm contentId={contentId} /> : null}
       {var_.status === "posted" ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["reactions", "comments", "dms", "leads"] as const).map((k) => (

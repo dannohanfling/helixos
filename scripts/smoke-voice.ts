@@ -132,9 +132,9 @@ async function main() {
     const shipped = await tool(publisher, "ladder_ship", { ladder: ladderId, preview_token: String(preview.data?.preview_token), confirm: true });
     must(!shipped.isError && shipped.text === "Facebook: posted · Instagram: posted · Rungs queued: 5, first one in about 5 minutes", `the readback: ${shipped.text}`);
     row = (await db.query.ladders.findFirst({ where: eq(schema.ladders.id, ladderId) }))!;
-    must(row.shippedAt && row.graphicPublicToken, "marked shipped, the graphic at its public address");
+    must(row.shippedAt && !row.graphicPublicToken, "marked shipped, with no public address (rev 840)");
     const posts = ((await (await fetch(`http://localhost:${ghlPort}/__posts`, { headers: { Authorization: "Bearer pit-loc_maya", Version: "2021-07-28" } })).json()) as { posts: { media?: { url: string }[] }[] }).posts;
-    must(posts.filter((p) => p.media?.[0]?.url?.endsWith(`/api/graphics/${row.graphicPublicToken}.png`)).length === 2, "two posts in the Planner with the graphic");
+    must(posts.filter((p) => p.media?.[0]?.url?.startsWith("https://storage.googleapis.com/mock-ghl/loc_maya/")).length === 2, "two posts in the Planner with the graphic from her own Media Library");
     const drips = ((await (await fetch(`http://localhost:${ghlPort}/__drips`)).json()) as { drips: { path: string; body: { rungs?: string[] } }[] }).drips;
     must(drips.some((d) => d.path.endsWith("ru0123456789abcdef0123456789abcd") && d.body.rungs?.length === 5), "the five rungs handed to the rungs-only webhook");
     const again = await tool(publisher, "ladder_ship", { ladder: ladderId, preview_token: String(preview.data?.preview_token), confirm: true });

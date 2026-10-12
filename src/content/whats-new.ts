@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 159,
+    date: "2026-10-12",
+    title: "Your picture now goes with your post",
+    lines: [
+      "Post now and Schedule in the composer, and Ship on a ladder, now send the picture with the post: your made graphic, a photo from Images or one from your Proof Bank. HelixOS puts it into your own GoHighLevel Media Library first, then posts it to your Facebook Page, Instagram (feed and Stories), LinkedIn and Threads. No downloading and adding it in the Social Planner.",
+      "If the picture can't go, that channel waits and says why, with a Retry button. It never goes out text-only. Instagram's refusals now name the real cause: no picture, a caption over 2,200 characters, or the picture's size.",
+      "If Settings → Publishing says \"Add one permission\", make a new key in GoHighLevel with every item on the list ticked (GoHighLevel can't add a permission to an old key) and paste it there, as the steps say.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 158,
     date: "2026-10-12",
     title: "Edge Preset, one tap from Choose your council",
