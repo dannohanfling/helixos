@@ -22,7 +22,8 @@ describe("My Board: the spec, ported", () => {
   });
 
   it("exactly five seats for clients, named as the profile names them, with their icons; the Edge Preset only by preset", () => {
-    expect(SEATS.map((s) => s.name)).toEqual(["Danno", "Alex, the Strategist", "Jordan, the Operator", "Morgan, the Antagonist", "Riley, the Customer Champion"]);
+    // In chair order (rev 756): head, left, right, front left, front right.
+    expect(SEATS.map((s) => s.name)).toEqual(["Danno", "Alex, the Strategist", "Jordan, the Operator", "Riley, the Customer Champion", "Morgan, the Antagonist"]);
     for (const s of SEATS) expect(BOARD_PROFILE_MD).toContain(`## ${s.name} ${s.emoji}`);
     for (const s of SEATS) expect(read(`public${s.icon}`)).toContain(`aria-label="${s.name}"`);
     expect(seatsFor("standard")).toBe(SEATS);

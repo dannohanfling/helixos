@@ -108,7 +108,7 @@ async function main() {
       await page.waitForTimeout(250);
     }
     const took = Date.now() - (at[1] ?? t0);
-    must(heard.join() === "danno,alex,jordan,morgan,riley", `the seats speak in order: ${heard.join()}`);
+    must(heard.join() === "danno,alex,jordan,riley,morgan", `the seats speak in order: ${heard.join()}`);
     must(rowsWhile.join() === "1,2,3,4,5", `each row appears as its advisor speaks, earlier rows staying: ${rowsWhile.join()}`);
     must(took > 4 * SPEAK_MS - 1000 && took < 4 * SPEAK_MS + 3000, `about ${SPEAK_MS} ms a speaker: ${took} ms from the second speaker to the recommendation`);
     must((await page.locator('[data-testid="board-table-recommends"]').innerText()).startsWith("THE BOARD RECOMMENDS"), "the table ends on the recommendation");
@@ -481,6 +481,76 @@ async function main() {
     await call("board_ask", { decision: "Should I raise the price of my offer?" });
     must(!(await lastUser()).includes("HumanOS"), "a decision that doesn't touch energy, health or time: no HumanOS");
     console.log("✓ HumanOS: nothing with the Board's switch off; with it on, Body's own AI switch still decides; read only for an energy, health or time decision");
+
+    // Choose your council, the library (rev 756): Coach → Board seats, the switch, a council in the room at three widths, the
+    // answer sitting with exactly those five, no "I am {Name}", and each answer keeping the version it used.
+    {
+      const seatId = async (slug: string) => (await db.query.boardSeats.findFirst({ where: and(eq(schema.boardSeats.workspaceId, ws), eq(schema.boardSeats.slug, slug)) }))!.id;
+      await logout(page);
+      await login(page, "As the coach");
+      await page.goto(`${base}/coach/board-seats`);
+      must((await page.locator('[data-testid="seat-row"]').count()) === 66, "the library: 62 expert seats and the 4 archetypes");
+      must((await page.locator('[data-testid="seats-live"]').innerText()).includes("Off"), "Expert seats live is off at launch");
+      await page.goto(`${base}/coach/board-seats?area=${encodeURIComponent("Habits & productivity")}`);
+      must((await page.locator('[data-testid="seat-row"]').count()) === 5, "filtered by area");
+      await page.locator('[data-testid="seat-row"][data-slug="james-clear"] [data-testid="seat-edit"]').click();
+      await page.locator('[data-testid="seat-card"]').waitFor();
+      await page.locator('[data-testid="seat-card"]').fill("Builds small habits into systems that make the next step automatic.");
+      await press(page, '[data-testid="seat-save"]');
+      must((await page.locator('[data-testid="seat-row"][data-slug="james-clear"]').getAttribute("data-version")) === "2", "an edit bumps the version");
+      // Maya's council, set directly here (her own picker is the next commit): two expert seats, Riley, and an operator expert.
+      const council = [await seatId("alex-hormozi"), await seatId("james-clear"), await seatId("riley"), await seatId("seth-godin")];
+      await db.update(schema.memberships).set({ boardCouncil: council }).where(eq(schema.memberships.id, m.id));
+      await logout(page);
+      await login(page, "As a client");
+      await page.goto(`${base}/my-board`);
+      for (const k of ["alex", "jordan", "riley", "morgan"]) must(await page.locator(`[data-testid="board-plate-${k}"]`).count(), `while expert seats are off, ${k} sits in`);
+      must((await page.locator('[data-testid="board-paused"]').innerText()).includes("Paused while expert seats are off"), "the paused chairs are said");
+      await logout(page);
+      await login(page, "As the coach");
+      await page.goto(`${base}/coach/board-seats`);
+      await press(page, '[data-testid="seats-live-toggle"]');
+      must((await page.locator('[data-testid="seats-live"]').innerText()).includes("Live"), "the switch on");
+      await logout(page);
+      await login(page, "As a client");
+      const names: Record<string, string> = { "alex-hormozi": "Alex Hormozi style", "james-clear": "James Clear style", riley: "Riley", "seth-godin": "Seth Godin style" };
+      for (const width of [1440, 1024, 390]) {
+        await page.setViewportSize({ width, height: 950 });
+        await page.goto(`${base}/my-board`);
+        for (const [k, n] of Object.entries(names)) must((await page.locator(`[data-testid="board-plate-${k}"]`).innerText()).includes(n), `${width} wide: the plate shows ${n}`);
+        must(!(await page.locator('[data-testid="board-paused"]').count()), `${width} wide: nothing paused once live`);
+        must((await page.locator('[data-testid="board-style-note"]').innerText()).includes("not affiliated with or endorsed by them"), `${width} wide: the style-advisor line`);
+      }
+      await page.setViewportSize({ width: 1280, height: 950 });
+      await page.goto(`${base}/my-board`);
+      await page.locator('[data-testid="board-question"]').fill("Should I raise my price or add a guarantee first?");
+      await page.locator('[data-testid="board-submit"]').click();
+      await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
+      const cid = page.url().split("/my-board/")[1].split(/[?#]/)[0];
+      const cd = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, cid) }))!;
+      must(JSON.stringify(cd.seats?.map((s) => s.key)) === JSON.stringify(["danno", "alex-hormozi", "james-clear", "riley", "seth-godin"]), `the answer sat with exactly her five: ${JSON.stringify(cd.seats?.map((s) => s.key))}`);
+      must(cd.seats!.find((s) => s.key === "james-clear")!.version === 2 && cd.seats!.find((s) => s.key === "james-clear")!.operator, "the operator's version is recorded");
+      must(JSON.stringify(cd.answer?.advisors.map((a) => a.seat)) === JSON.stringify(cd.seats!.map((s) => s.key)), "all five answered");
+      must(!cd.answer!.advisors.some((a) => /\bI am (Alex Hormozi|James Clear|Seth Godin)\b/.test(a.text)) && cd.notes.some((n) => n.includes("style advisors never do")), `no "I am {Name}" reaches the member: ${JSON.stringify(cd.notes)}`);
+      const sent = ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] }).system.map((b) => b.text).join("\n");
+      must(sent.includes("## Alex Hormozi style") && sent.includes("James Clear style is the operator: they own the action steps.") && !sent.includes("No celebrity or real-person seats"), "the profile the AI reads is her council's");
+      // An edit after the answer: the past answer still shows the version it used.
+      await logout(page);
+      await login(page, "As the coach");
+      await page.goto(`${base}/coach/board-seats?edit=${await seatId("james-clear")}#edit`);
+      await page.locator('[data-testid="seat-voice"]').fill("Calm, practical, one small step at a time.");
+      await press(page, '[data-testid="seat-save"]');
+      must((await page.locator('[data-testid="seat-row"][data-slug="james-clear"]').getAttribute("data-version")) === "3", "a second edit, version 3");
+      await logout(page);
+      await login(page, "As a client");
+      await page.goto(`${base}/my-board/${cid}`);
+      const sat = await page.locator('[data-testid="board-sat-with"]').innerText();
+      must(sat.includes("James Clear style (version 2)"), `the past answer keeps the version it used: ${sat}`);
+      // Back as it was for the other walks.
+      await db.update(schema.memberships).set({ boardCouncil: null }).where(eq(schema.memberships.id, m.id));
+      await db.update(schema.workspaces).set({ expertSeatsLive: false }).where(eq(schema.workspaces.id, ws));
+      console.log("✓ the seat library: 66 seats, an edit bumps the version; paused while off, her council's names at 1440, 1024 and 390 once live; the answer sat with exactly her five, no \"I am {Name}\", and keeps the version it used");
+    }
 
     if (failures.length) throw new Error(`server errors: ${failures.join(", ")}`);
     console.log("\nboard walk passed");

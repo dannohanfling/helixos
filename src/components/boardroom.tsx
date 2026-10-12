@@ -9,7 +9,7 @@
  */
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CHAIRS, COUNCIL_CLIPS, MODES, MODE_INFO, SPEAK_MS, takesWords, type Mode, type SceneLook } from "@/lib/engine/board-view";
+import { CHAIRS, CHAIR_KEYS, COUNCIL_CLIPS, MODES, MODE_INFO, SPEAK_MS, takesWords, type Mode, type SceneLook } from "@/lib/engine/board-view";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
@@ -40,7 +40,7 @@ type Props = {
 const LOOKS: SceneLook[] = ["day", "night"];
 /** The photo behind a speaking statue's copy: WebP where the browser takes it, the JPG otherwise. */
 const photoVar = (k: SceneLook) => `image-set(url("/board/council-${k}.webp") type("image/webp"), url("/board/council-${k}.jpg") type("image/jpeg"))`;
-/** A plate shows the name: "Alex", "Danno", or an Edge style advisor's name without the word "Advisor". */
+/** A plate shows the name: "Alex", "Danno", or an expert seat's "{Name} style". */
 const plateName = (s: Seat) => s.short.replace(/ Advisor$/, "");
 
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
@@ -114,7 +114,9 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
       <div className="br-says-line br-quiet">{answer ? "" : "Say what you're deciding, and the Board will sit."}</div>
     );
   // A speaking clip plays for the speaker's turn when one is in the repo, never with reduced motion; only the next one preloads.
-  const clipFor = (k: string | undefined | null) => (k && !still ? COUNCIL_CLIPS.find((x) => x === `/board/council-${look}-${k}.mp4`) ?? null : null);
+  // A clip belongs to the chair, whoever sits in it (rev 756).
+  const chairOf = (k: string) => CHAIR_KEYS[seats.findIndex((s) => s.key === k)] ?? null;
+  const clipFor = (k: string | undefined | null) => (k && !still ? COUNCIL_CLIPS.find((x) => x === `/board/council-${look}-${chairOf(k)}.mp4`) ?? null : null);
   const clip = clipFor(speaker);
   const nextClip = phase === "playing" ? clipFor(spoken[idx + 1]) : null;
   const rowShown = (k: string) => (phase === "playing" ? spoken.indexOf(k) <= idx : phase === "done");
@@ -228,7 +230,7 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
 
       {seats.some((s) => s.role === "STYLE ADVISOR") ? (
         <p className="br-quiet" style={{ margin: "-24px 0 0", textAlign: "center", fontSize: 13 }} data-testid="board-edge-note">
-          Edge Preset: {seats.filter((s) => s.role === "STYLE ADVISOR").map((s) => s.short.replace(/ Advisor$/, "")).join(", ")} sit as style advisors, in their manner only. They aren&apos;t the people and never speak as them. Yours alone.
+          Edge Preset: {seats.filter((s) => s.role === "STYLE ADVISOR").map((s) => s.short.replace(/ (Advisor|style)$/, "")).join(", ")} sit as style advisors, in their manner only. They aren&apos;t the people and never speak as them. Yours alone.
         </p>
       ) : null}
 

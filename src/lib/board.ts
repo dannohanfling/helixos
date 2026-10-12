@@ -16,7 +16,8 @@ import { monthProgress, monthOf } from "@/lib/engine/targets";
 import { simplePath } from "@/lib/engine/pathway";
 import { weekOf } from "@/lib/engine/intentions";
 import { STAGE_WORDS } from "@/lib/engine/voice-pack";
-import { boardTask, checkAnswer, seatsFor, type BoardAnswer, type Mode, type Preset, type Principle } from "@/lib/engine/board";
+import { boardTask, checkAnswer, operatorSeat, seatsUsed, type BoardAnswer, type Mode, type Preset, type Principle } from "@/lib/engine/board";
+import { councilFor } from "@/lib/board-seats";
 import { scoreboardFor } from "@/lib/scoreboard";
 import { bodyAiContext } from "@/lib/queries/body";
 import { principlesFor } from "@/lib/board-principles";
@@ -216,15 +217,22 @@ export async function askBoard(v: Viewer, input: { question: string; mode: Mode;
   if (input.parentId && !parent) return { ok: false, error: "That decision isn't yours or isn't there any more." };
   // Edge Preset only ever for a coach's own Board.
   const preset: Preset = v.role === "coach" && !v.switchedInto && v.membership.boardPreset === "edge" ? "edge" : "standard";
-  const seats = seatsFor(preset);
-  const focus = input.mode === "focus" ? (seats.find((s) => s.key === input.focus)?.key ?? null) : null;
+  // The member's council (rev 756): Danno and their four chairs, paused expert seats already swapped for the archetypes.
+  const seats = await councilFor(v);
+  // Focus by key, or by name as said aloud ("Hormozi", "Jordan").
+  const said = (input.focus ?? "").trim().toLowerCase();
+  const focus = input.mode === "focus" && said ? (seats.find((s) => s.key === said) ?? seats.find((s) => s.name.toLowerCase().includes(said)))?.key ?? null : null;
   if (input.mode === "focus" && !focus) return { ok: false, error: "Pick the advisor to hear from." };
   const coachWs = v.workspace.id;
   const principles = asPrinciples(await principlesFor(coachWs));
   const { sections, gaps, essence } = await boardContext(v, question, input.mode);
   const firstQuestion = !parent;
   // The set-up shape rides with the server's prompt only (engine/board stays light for the Boardroom's client bundle).
-  const task = `${boardTask({ mode: input.mode, focus, preset, principles, hours, today: v.today, firstQuestion })}\n\n${SETUP_SHAPE}`;
+  const task = `${boardTask({ mode: input.mode, focus, preset, seats, principles, hours, today: v.today, firstQuestion })}\n\n${SETUP_SHAPE}`;
+  // A check-in needs the operator for a stuck step and Morgan for a dropped one (rev 664 §6): the council's operator stands in
+  // for Jordan, and a council without Morgan leaves the kind question to whoever answers.
+  const op = operatorSeat(seats);
+  const need = (input.need ?? []).map((k) => (k === "jordan" ? (op?.key ?? null) : seats.some((s) => s.key === k) ? k : null)).filter((k): k is string => Boolean(k));
   const earlier = parent?.answer ? `# The decision so far\nQuestion: ${parent.question}\nRecommendation: ${parent.answer.recommendation}\nSteps: ${parent.answer.steps.map((s) => s.do).join("; ")}\n\n` : "";
   const user = `${earlier}# The member asks (${input.mode})\n${question}\n\n${contextText(sections, gaps)}`;
   const known = sections.map((s) => s.text).join("\n");
@@ -239,7 +247,7 @@ export async function askBoard(v: Viewer, input: { question: string; mode: Mode;
     } catch {
       raw = null;
     }
-    checked = checkAnswer(raw, { mode: input.mode, focus, preset, hours, today: v.today, firstQuestion, question, known, need: input.need });
+    checked = checkAnswer(raw, { mode: input.mode, focus, preset, seats, hours, today: v.today, firstQuestion, question, known, need });
     setup = raw && typeof raw === "object" ? (raw as Record<string, unknown>).setup : null;
     if (!checked.problem) break;
   }
@@ -247,7 +255,7 @@ export async function askBoard(v: Viewer, input: { question: string; mode: Mode;
   const id = newId();
   // "Set it up for me" (rev 660): the proposals under a good answer, checked against the member's own rows; nothing applied yet.
   const built = checked && !checked.problem ? buildProposals(checked.answer, setup, await setupLook(v, parent?.id ?? id, question, known)) : { proposals: [], notes: [] };
-  await db.insert(schema.boardDecisions).values({ id, ...m, parentId: parent?.id ?? null, question, mode: input.mode, focus, preset, answer: checked && !checked.problem ? checked.answer : null, notes: checked ? [...(checked.problem ? [checked.problem] : []), ...checked.notes, ...built.notes] : [], used, proposals: built.proposals });
+  await db.insert(schema.boardDecisions).values({ id, ...m, parentId: parent?.id ?? null, question, mode: input.mode, focus, preset, answer: checked && !checked.problem ? checked.answer : null, seats: seatsUsed(seats), notes: checked ? [...(checked.problem ? [checked.problem] : []), ...checked.notes, ...built.notes] : [], used, proposals: built.proposals });
   const decision = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, id) }))!;
   if (checked?.problem) return { ok: false, error: `The Board's answer didn't pass its checks (${checked.problem}). Ask again; your question is kept.`, decision };
   if (parent) await db.update(schema.boardDecisions).set({ updatedAt: nowIso() }).where(eq(schema.boardDecisions.id, parent.id));

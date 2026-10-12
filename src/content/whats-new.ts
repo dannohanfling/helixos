@@ -12,6 +12,25 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 152,
+    date: "2026-10-12",
+    title: "Coach → Board seats: the council library",
+    lines: [
+      "The 62 approved expert style-advisor seats in 12 skill areas, plus the four archetypes, are in Coach → Board seats. Filter by area, see how many members sit with each, edit any field (each edit is a new version; past answers keep the one they used), add a seat, or turn one off.",
+      "\"Expert seats live\" is off until your legal review: members keep the archetypes, and any expert pick is paused, its chair sitting with the classic archetype until you turn it on. Your Edge Preset's Tony, Dean and Igor now use their library profiles.",
+    ],
+    audience: "coach",
+  },
+  {
+    n: 151,
+    date: "2026-10-12",
+    title: "My Board: who sat at the table",
+    lines: [
+      "The Board now speaks chair by chair around the table: Danno, then left, right, front left and front right, so Riley speaks before Morgan. Each past decision says who sat with it, and your skill download for Claude carries your own council.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 150,
     date: "2026-10-12",
     title: "My Board: the chair is now called Danno",

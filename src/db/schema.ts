@@ -27,6 +27,8 @@ export const workspaces = sqliteTable("workspaces", {
   airtableBaseId: text("airtable_base_id"),
   /** Soft cap on AI calls per member per day, on the member's own key. A runaway loop on a client's money gets blamed on HelixOS. */
   aiDailyCap: integer("ai_daily_cap").notNull().default(40),
+  /** "Expert seats live" (rev 756 §4): off at launch; while off, members' expert seats pause and their chairs take the archetypes. */
+  expertSeatsLive: integer("expert_seats_live", { mode: "boolean" }).notNull().default(false),
   /** Open Office Hours (rev 124): the categories a member picks from, and who can be responsible for a request. Coach-edited. */
   oohCategories: text("ooh_categories", { mode: "json" }).$type<string[]>().notNull().default(OOH_CATEGORIES_DEFAULT),
   oohHosts: text("ooh_hosts", { mode: "json" }).$type<string[]>().notNull().default(OOH_HOSTS_DEFAULT),
@@ -89,6 +91,8 @@ export const memberships = sqliteTable(
     boardPreset: text("board_preset", { enum: ["standard", "edge"] }).notNull().default("standard"),
     /** The photo rooms' look (revs 711, 720, 738): "auto" is night from 19:00 to 06:00 in the member's own time; the toggle sets "day" or "night" and it stays. One setting for the Council Chamber, the Colosseum and the Aqueduct. */
     sceneLook: text("scene_look", { enum: ["auto", "day", "night"] }).notNull().default("auto"),
+    /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
+    boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
     startedAt: text("started_at").notNull().default(sql`(date('now'))`),
     passEnabled: integer("pass_enabled", { mode: "boolean" }).notNull().default(false),
     passName: text("pass_name"),
@@ -3967,6 +3971,8 @@ export const boardDecisions = sqliteTable(
     /** The tasks the steps became, by step index; null for a step not set up. */
     stepTasks: text("step_tasks", { mode: "json" }).$type<(string | null)[]>().notNull().default([]),
     checkins: text("checkins", { mode: "json" }).$type<BoardCheckin[]>().notNull().default([]),
+    /** The seats this answer sat with (rev 756 §5), chair by chair, with the version each used. Null on answers before it. */
+    seats: text("seats", { mode: "json" }).$type<BoardSeatUsed[]>(),
     sharedAt: text("shared_at"),
     createdAt: createdAt(),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
@@ -3974,6 +3980,39 @@ export const boardDecisions = sqliteTable(
   (t) => [index("board_decisions_member").on(t.workspaceId, t.userId, t.createdAt), index("board_decisions_parent").on(t.parentId)],
 );
 export type BoardDecision = typeof boardDecisions.$inferSelect;
+
+/** One seat an answer sat with: enough to name it as it was then. */
+export type BoardSeatUsed = { id: string | null; key: string; name: string; short: string; role: string; kind: "chair" | "expert" | "archetype" | "custom" | "edge"; version: number; operator: boolean; paused?: boolean; retired?: boolean };
+
+/**
+ * My Board's seat library (rev 756 §6), the coach workspace's own: the 62 approved expert seats seeded word for word from
+ * docs/board/board-seat-library-v1.md, the four archetypes from board-profile.md, and members' custom seats (owner set, at most
+ * two each, private to them and their coach). An edit bumps the version; answers keep the version they used.
+ */
+export const boardSeats = sqliteTable(
+  "board_seats",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: ["expert", "archetype", "custom"] }).notNull(),
+    /** A custom seat's member; null for the library. */
+    ownerUserId: text("owner_user_id"),
+    areas: text("areas", { mode: "json" }).$type<string[]>().notNull().default([]),
+    card: text("card").notNull().default(""),
+    profile: text("profile", { mode: "json" }).$type<import("@/lib/engine/board-seats").SeatProfile>().notNull(),
+    isOperator: integer("is_operator", { mode: "boolean" }).notNull().default(false),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    version: integer("version").notNull().default(1),
+    /** A custom seat named after a real person (it must end in "style"); with no sources it runs as "my read" only. */
+    realPerson: integer("real_person", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [uniqueIndex("board_seats_slug").on(t.workspaceId, t.slug), index("board_seats_owner").on(t.workspaceId, t.ownerUserId)],
+);
+export type BoardSeat = typeof boardSeats.$inferSelect;
 
 /** Danno's principles (rev 664 §8), the coach's to edit, seeded from docs/board/danno-source-pack.md. */
 export const boardPrinciples = sqliteTable(

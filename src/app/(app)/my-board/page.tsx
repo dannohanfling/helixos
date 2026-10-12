@@ -2,7 +2,9 @@ import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { decisionsFor, stepStatus } from "@/lib/board";
 import { askBoardAction, setBoardHoursAction, setBoardPresetAction, setBoardSeesBodyAction } from "@/lib/actions/board";
-import { seatsFor } from "@/lib/engine/board";
+import { councilFor } from "@/lib/board-seats";
+import { forRoom } from "@/lib/engine/board";
+import { BoardCouncilNote } from "@/components/board-council-note";
 import { Boardroom } from "@/components/boardroom";
 import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
@@ -20,7 +22,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const hours = v.membership.boardHours;
   const preset = v.role === "coach" && !v.switchedInto && v.membership.boardPreset === "edge" ? "edge" : "standard";
-  const seats = seatsFor(preset);
+  const seats = forRoom(await councilFor(v));
   const canAsk = !v.switchedInto && !v.team;
   const decisions = await decisionsFor(v, 20);
   const statuses = await Promise.all(decisions.map((x) => stepStatus(v.user.id, x.decision)));
@@ -52,6 +54,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
       ) : (
         <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} seats={seats} answer={null} question="" used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
       )}
+      {hours ? <BoardCouncilNote seats={seats} /> : null}
       {!canAsk ? <p className="br-wrap br-muted">The Board answers {v.user.name.split(" ")[0]} on their own AI key, so only they can ask it. Their decisions are below.</p> : null}
 
       <section className="br-wrap" id="decisions" style={{ marginTop: 44 }} aria-label="Decisions">

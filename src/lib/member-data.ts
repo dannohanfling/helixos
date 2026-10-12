@@ -190,6 +190,9 @@ export const WORKSPACE_TABLES = {
   headshot_reviews: schema.headshotReviews,
   // Danno's principles (rev 664): the coach's, read by every client's Board.
   board_principles: schema.boardPrinciples,
+  // My Board's seat library (rev 756): the coach workspace's library, read by every client's council. Members' own custom seats
+  // (Choose your council, the next commit) go out and away with them, by owner.
+  board_seats: schema.boardSeats,
 } as const;
 
 /** Tables that are no member's data, each with the reason; the coverage test needs every table placed somewhere. */

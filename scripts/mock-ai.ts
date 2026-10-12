@@ -89,7 +89,7 @@ function reply(system: string, user: string): string {
       dean: "Keep the offer simple enough to say in one line.",
       igor: "Play the long game with your community.",
     };
-    const seats = focus ? [focus] : keys.length ? keys : ["danno", "alex", "jordan", "morgan", "riley"];
+    const seats = focus ? [focus] : keys.length ? keys : ["danno", "alex", "jordan", "riley", "morgan"];
     return JSON.stringify({
       decision: "Mock decision: where to put this month's hours",
       assumptions: [{ text: "You can give the hours you said", guess: false }, { text: "Your list is warm enough to reply", guess: true }],

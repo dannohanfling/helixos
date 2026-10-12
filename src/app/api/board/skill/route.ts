@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { apiViewer } from "@/lib/auth";
 import { principlesFor } from "@/lib/board-principles";
 import { boardSkillFiles } from "@/lib/engine/board";
+import { councilFor } from "@/lib/board-seats";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,8 @@ export async function GET() {
   if (!v) return NextResponse.json({ error: "sign in first" }, { status: 401 });
   const principles = (await principlesFor(v.workspace.id)).map((p) => ({ title: p.title, body: p.body, goodFor: p.goodFor }));
   const zip = new JSZip();
-  for (const f of boardSkillFiles(principles)) zip.file(f.path, f.text);
+  // The member's current council (rev 756 §5): Danno and their four seats' profiles, not the fixed five.
+  for (const f of boardSkillFiles(principles, await councilFor(v))) zip.file(f.path, f.text);
   const bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
   return new NextResponse(Buffer.from(bytes), {
     headers: { "content-type": "application/zip", "content-disposition": 'attachment; filename="evolve-omega-board.skill"', "cache-control": "no-store" },

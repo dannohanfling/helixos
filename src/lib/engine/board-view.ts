@@ -49,17 +49,19 @@ export const SKILL_INSTALL_STEPS = [
 /* ───────────────────────── The Council Chamber (rev 738) ───────────────────────── */
 
 /**
- * The five chairs, % of the 1680×944 photo (the same in both looks), in the seats' own order: head of the table, left, right,
- * front right, front left. A preset's seats take the chairs in order (the Edge Preset's five sit where the standard five do).
+ * The five chairs, % of the 1680×944 photo (the same in both looks), in speaking order (rev 756): head of the table, left,
+ * right, front left, front right. A council's seats take the chairs in order (the Edge Preset's five sit where the standard five do).
  * l/t/w/h is the statue's box; px/py the name plate's centre.
  */
 export const CHAIRS: { l: number; t: number; w: number; h: number; px: number; py: number }[] = [
   { l: 45.54, t: 11.65, w: 9.52, h: 21.19, px: 50.3, py: 7.63 },
   { l: 25.0, t: 22.78, w: 13.1, h: 37.08, px: 27.98, py: 20.13 },
   { l: 62.2, t: 24.15, w: 14.7, h: 36.76, px: 70.83, py: 21.19 },
-  { l: 57.14, t: 53.5, w: 23.81, h: 42.9, px: 87.2, py: 81.57 },
   { l: 19.64, t: 52.97, w: 22.32, h: 42.9, px: 12.8, py: 81.57 },
+  { l: 57.14, t: 53.5, w: 23.81, h: 42.9, px: 87.2, py: 81.57 },
 ];
+/** Each chair's name for its speaking clip (rev 756: clips stay per chair, whoever sits there). */
+export const CHAIR_KEYS = ["head", "left", "right", "front-left", "front-right"] as const;
 /** Where the table's text sits on the dark tabletop, % of the room. */
 export const TABLE_BOX = { l: 41.07, t: 42.37, w: 18.45, h: 30.72 };
 
@@ -71,7 +73,8 @@ export function sceneLookFor(setting: "auto" | "day" | "night", hour: number): S
 }
 
 /**
- * Speaking clips (rev 738, optional): public/board/council-{look}-{seat}.mp4 and .webm, listed here once they're in the repo, so a
+ * Speaking clips (rev 738, optional; per chair since rev 756): public/board/council-{look}-{chair}.mp4 and .webm, chair one of
+ * CHAIR_KEYS, listed here once they're in the repo, so a
  * turn never asks for a clip that isn't there. Empty until Danno adds them.
  */
 export const COUNCIL_CLIPS: string[] = [];

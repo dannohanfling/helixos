@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { askBoard, decisionsFor, stepStatus } from "@/lib/board";
-import { MODES, seatsFor, spokenAnswer, type Mode } from "@/lib/engine/board";
+import { MODES, seatsOfDecision, spokenAnswer, type Mode } from "@/lib/engine/board";
 import { setupReadBack } from "@/lib/engine/board-setup";
 import { applySetup } from "@/lib/board-setup";
 import { runCheckin } from "@/lib/board-checkin";
@@ -19,11 +19,11 @@ defineTool({
   scope: "board",
   kind: "write",
   description:
-    "Asks the member's Board (five advisors: Danno, Alex the Strategist, Jordan the Operator, Morgan the Antagonist, Riley the Customer Champion) about a decision, grounded in their own HelixOS. Modes: board, focus (with advisor: danno, alex, jordan, morgan or riley), debate, quick_vote, workaround, leverage, converge, checkin. Read the recommendation first, then the numbered action steps; the member decides. Saved to their decision log. Needs their AI key and their weekly hours set in HelixOS.",
+    "Asks the member's Board (five advisors: Danno at the head and the member's council of four, by default Alex the Strategist, Jordan the Operator, Riley the Customer Champion and Morgan the Antagonist) about a decision, grounded in their own HelixOS. Modes: board, focus (with advisor: danno, or one of the member's four seats by name), debate, quick_vote, workaround, leverage, converge, checkin. Read the recommendation first, then the numbered action steps; the member decides. Saved to their decision log. Needs their AI key and their weekly hours set in HelixOS.",
   input: {
     decision: z.string().min(3).max(4000).describe("What the member is deciding, in their words"),
     mode: z.enum(MODES).optional().describe("board (the default), focus, debate, quick_vote, workaround, leverage, converge or checkin"),
-    advisor: z.string().max(20).optional().describe("For focus: danno, alex, jordan, morgan or riley"),
+    advisor: z.string().max(60).optional().describe("For focus: danno, or one of the member's four seats by name (e.g. jordan)"),
     follow_up_on: z.string().max(60).optional().describe("Optional: a decision's id from decisions_list, to ask more about it"),
   },
   handler: async (v, input): Promise<ToolResult> => {
@@ -33,7 +33,7 @@ defineTool({
     const d = r.decision;
     const link = `${appUrl()}/my-board/${d.parentId ?? d.id}`;
     const setup = d.proposals.length ? `\n\nIt can set this up for you (nothing changes until you say yes; board_apply with the numbers):\n${setupReadBack(d.proposals)}` : "";
-    return { text: `${spokenAnswer(d.answer!, seatsFor(d.preset))}${setup}\n\nOpen it: ${link}`, data: { id: d.id, decision: d.answer!.decision, recommendation: d.answer!.recommendation, steps: d.answer!.steps, notes: d.notes, used: d.used.map((u) => u.label), proposals: d.proposals.map((p, i) => ({ n: i + 1, id: p.id, kind: p.kind, title: p.title, before: p.before ?? null, after: p.after ?? null })), link } };
+    return { text: `${spokenAnswer(d.answer!, seatsOfDecision(d))}${setup}\n\nOpen it: ${link}`, data: { id: d.id, decision: d.answer!.decision, recommendation: d.answer!.recommendation, steps: d.answer!.steps, notes: d.notes, used: d.used.map((u) => u.label), proposals: d.proposals.map((p, i) => ({ n: i + 1, id: p.id, kind: p.kind, title: p.title, before: p.before ?? null, after: p.after ?? null })), link } };
   },
 });
 
@@ -103,6 +103,6 @@ defineTool({
     if (!r.result.ok) throw new Error(r.result.error);
     const d = r.result.decision;
     const link = `${appUrl()}/my-board/${d.parentId ?? d.id}`;
-    return { text: `${r.ticked ? `Ticked ${r.ticked} done on your Tasks. ` : ""}${spokenAnswer(d.answer!, seatsFor(d.preset))}\n\nOpen it: ${link}`, data: { id: d.id, ticked: r.ticked, recommendation: d.answer!.recommendation, steps: d.answer!.steps, link } };
+    return { text: `${r.ticked ? `Ticked ${r.ticked} done on your Tasks. ` : ""}${spokenAnswer(d.answer!, seatsOfDecision(d))}\n\nOpen it: ${link}`, data: { id: d.id, ticked: r.ticked, recommendation: d.answer!.recommendation, steps: d.answer!.steps, link } };
   },
 });

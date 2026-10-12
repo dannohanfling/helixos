@@ -4,7 +4,8 @@ import { requireViewer } from "@/lib/auth";
 import { decisionsFor, ownDecision, stepStatus } from "@/lib/board";
 import { applySetupAction, askBoardAction, checkinAction, shareDecisionAction } from "@/lib/actions/board";
 import { BoardSetup } from "@/components/board-setup";
-import { seatsFor, type Mode } from "@/lib/engine/board";
+import { forRoom, seatsOfDecision, type Mode } from "@/lib/engine/board";
+import { BoardCouncilNote } from "@/components/board-council-note";
 import { Boardroom } from "@/components/boardroom";
 import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
@@ -28,7 +29,8 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const latest = [...all].reverse().find((x) => x.answer) ?? null;
   const failed = all.at(-1)!.answer ? null : all.at(-1)!;
   const earlier = all.filter((x) => x.answer && x.id !== latest?.id);
-  const seats = seatsFor(d.preset);
+  // The seats the shown answer sat with (rev 756): a changed council never rewrites a past discussion.
+  const seats = forRoom(seatsOfDecision(latest ?? d));
   const canAsk = !v.switchedInto && !v.team;
   // The check-in reads the latest answer that has steps; each step's state is its task's, live.
   const withSteps = [...all].reverse().find((x) => x.answer?.steps.length) ?? null;
@@ -116,6 +118,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             stepStates={latest.id === withSteps?.id ? states : []}
             setup={latest.proposals.length ? <BoardSetup key={`${latest.id}-${latest.applied.length}`} decisionId={latest.id} back={d.id} proposals={latest.proposals} applied={latest.applied} canApprove={canAsk} action={applySetupAction} /> : null}
           />
+          <BoardCouncilNote seats={seats} past={Boolean(latest.seats?.length)} />
         </>
       ) : null}
       {withSteps?.answer ? (
