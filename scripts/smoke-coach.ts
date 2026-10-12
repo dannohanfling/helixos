@@ -306,7 +306,23 @@ async function main() {
     const body = await page.locator("main").innerText();
     if (!/This client isn't here anymore\./.test(body) || /Call notes/.test(body)) throw new Error(`unknown membership should show the plain not-found line, got:\n${body.slice(0, 200)}`);
     console.log("✓ access: client redirected, unknown membership answers \"This client isn't here anymore.\"");
+
+    // The Platforms links are the coach's to set (rev 843): a new Academy address and a Community link on Settings → Workspace
+    // reach everyone's menu; a non-https one is not kept.
+    await page.goto(`${base}/settings`);
+    await page.locator('[data-testid="platform-academy"]').waitFor({ timeout: 15000 });
+    await page.fill('[data-testid="platform-academy"]', "https://learn.example.com/academy");
+    await page.fill('[data-testid="platform-community"]', "https://community.example.com");
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Save workspace")')]);
+    await page.waitForLoadState("networkidle");
+    await login(page, "client");
+    await page.goto(`${base}/today`);
+    const hrefs = await page.locator('[data-testid="nav-platform"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+    if (!hrefs.includes("https://learn.example.com/academy") || !hrefs.includes("https://community.example.com/") || hrefs.includes("https://academy.evolveomega.com")) throw new Error(`the client's menu reads the coach's links: ${hrefs.join(", ")}`);
+    console.log("✓ Platforms links: the coach sets Academy and Community on Settings → Workspace; the client's menu follows, Community appearing once it has a link");
   } finally {
+    // Back to the defaults, so the base walk's three links hold whatever ran before it.
+    await db.update(schema.workspaces).set({ platformLinks: {} }).where(eq(schema.workspaces.id, ws));
     await browser.close();
     rmSync(overridePath, { force: true });
   }

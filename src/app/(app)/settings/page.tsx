@@ -21,6 +21,7 @@ import { mfAvailable } from "@/lib/mf/data";
 import { BotConnectionCard } from "@/components/bot-connection-card";
 import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
+import { PLATFORMS } from "@/lib/platforms";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { ScrollToHash } from "@/components/scroll-to-hash";
 import { AiKeyCard } from "@/components/ai-key-card";
@@ -729,6 +730,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Field label="HelixOS Airtable base ID" hint="The base the Pathway, curriculum and DM templates are refreshed from.">
                   <input className="field" name="airtableBaseId" defaultValue={v.workspace.airtableBaseId ?? ""} placeholder="appXXXXXXXXXXXXXX" />
                 </Field>
+                <fieldset className="space-y-2" data-testid="platform-links">
+                  <legend className="label">Platforms menu links</legend>
+                  <p className="text-xs text-ink-3">Where the Platforms section of everyone&apos;s menu points. Leave one blank for the address shown; Community appears once it has a link (a client&apos;s own community link on Community wins for them).</p>
+                  {PLATFORMS.map((p) => (
+                    <label key={p.key} className="block text-sm">
+                      <span className="text-xs text-ink-2">
+                        {p.icon} {p.label}
+                      </span>
+                      <input className="field" name={`platform_${p.key}`} type="url" defaultValue={v.workspace.platformLinks[p.key] ?? ""} placeholder={p.href || "https://"} data-testid={`platform-${p.key}`} />
+                    </label>
+                  ))}
+                </fieldset>
                 <SubmitButton className="btn btn-primary" pendingText="Saving…">
                   Save workspace
                 </SubmitButton>

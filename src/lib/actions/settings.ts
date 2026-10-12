@@ -1,5 +1,7 @@
 "use server";
 
+import { PLATFORMS, cleanPlatformLink } from "@/lib/platforms";
+
 import { readMoney } from "@/lib/engine/money";
 import { queueProgress } from "@/lib/chat-progress";
 import { and, eq } from "drizzle-orm";
@@ -129,6 +131,11 @@ export async function updateWorkspaceAction(formData: FormData): Promise<void> {
       name: str(formData, "name") || coach.workspace.name,
       timezone: str(formData, "timezone") || coach.workspace.timezone,
       airtableBaseId: opt(formData, "airtableBaseId"),
+      // The Platforms menu's addresses (rev 843): https only; a blank or a bad one goes back to the default (none for Community).
+      platformLinks: Object.fromEntries(PLATFORMS.flatMap((p) => {
+        const link = cleanPlatformLink(opt(formData, `platform_${p.key}`));
+        return link ? [[p.key, link]] : [];
+      })),
     })
     .where(eq(schema.workspaces.id, coach.workspace.id));
   refresh();

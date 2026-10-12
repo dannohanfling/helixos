@@ -1,0 +1,1 @@
+ALTER TABLE `workspaces` ADD `platform_links` text DEFAULT '{}' NOT NULL;

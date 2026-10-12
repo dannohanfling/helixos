@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DECK_IMAGE_MAX_BYTES, NO_PEOPLE, consentRecord, consentRequired, consentSatisfied, deckImageKey, deckImageRefusal, deckImageSniff, deckKeyOwner } from "../deck-image";
+import { DECK_IMAGE_ACCEPT, DECK_IMAGE_MAX_BYTES, DECK_IMAGE_STORE_BYTES, NO_PEOPLE, deckImageNeedsReencode, consentRecord, consentRequired, consentSatisfied, deckImageKey, deckImageRefusal, deckImageSniff, deckKeyOwner } from "../deck-image";
 import { DECK_IMAGE_KINDS } from "@/db/schema";
 
 const bytesOf = (...b: number[]) => new Uint8Array(b);
@@ -65,5 +67,15 @@ describe("deck image, the pure rules", () => {
   it("refuses a real image that is over the cap, and accepts one under it", () => {
     expect(deckImageRefusal(PNG, DECK_IMAGE_MAX_BYTES + 1)).toEqual({ error: expect.stringContaining("over") });
     expect(deckImageRefusal(PNG, 1000)).toEqual({ sniffed: { mime: "image/png", ext: "png" } });
+  });
+  it("a phone's HEIC is taken (and converted on record); a video in the same container is not; big photos are re-encoded (rev 843 item 4)", () => {
+    const heic = new Uint8Array(readFileSync(join(__dirname, "fixtures", "tiny.heic")).subarray(0, 4096));
+    expect(deckImageSniff(heic)).toEqual({ mime: "image/heic", ext: "heic" });
+    const mp4 = new Uint8Array([0, 0, 0, 24, ...Buffer.from("ftypisom"), 0, 0, 2, 0, ...Buffer.from("isommp41")]);
+    expect(deckImageSniff(mp4)).toBeNull();
+    expect(deckImageNeedsReencode("image/heic", 1000)).toBe(true);
+    expect(deckImageNeedsReencode("image/jpeg", DECK_IMAGE_STORE_BYTES + 1)).toBe(true);
+    expect(deckImageNeedsReencode("image/png", 1000)).toBe(false);
+    expect(DECK_IMAGE_ACCEPT).toContain(".heic");
   });
 });

@@ -4,15 +4,27 @@ import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { createGroupAction, setGroupSlotAction } from "@/lib/actions/groups";
 import { Badge, Card, Disclosure, Empty, Field, PageHeader, Progress } from "@/components/ui";
-import { groupReadiness } from "@/lib/engine/groups";
+import { groupRating, groupReadiness } from "@/lib/engine/groups";
 import { formatDate } from "@/lib/dates";
 import type { Group } from "@/db/schema";
 import { SubmitButton } from "@/components/submit-button";
 
 export const metadata = { title: "Groups" };
 
+/** A posted date as "Oct 12", or nothing when the stored value can't be read (an imported row), never the error page. */
+function postedOn(at: string | null): string | null {
+  if (!at) return null;
+  try {
+    return formatDate(at.slice(0, 10));
+  } catch {
+    return null;
+  }
+}
+
 function GroupRow({ g, slot }: { g: Group; slot?: string }) {
   const ready = groupReadiness(g);
+  const stars = groupRating(g.rating);
+  const posted = postedOn(g.lastPostedAt);
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5">
       {slot ? <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-xs font-bold text-white">{slot}</span> : null}
@@ -23,8 +35,8 @@ function GroupRow({ g, slot }: { g: Group; slot?: string }) {
         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-ink-3">
           {g.adminName ? <span>Admin: {g.adminName}</span> : null}
           {g.memberCount ? <span>· {g.memberCount.toLocaleString()} members</span> : null}
-          {g.rating ? <span>· {"⭐".repeat(g.rating)}</span> : null}
-          {g.lastPostedAt ? <span>· posted {formatDate(g.lastPostedAt.slice(0, 10))}</span> : <span>· never posted</span>}
+          {stars ? <span>· {"⭐".repeat(stars)}</span> : null}
+          {posted ? <span>· posted {posted}</span> : <span>· never posted</span>}
         </div>
       </div>
       <div className="w-28">
@@ -59,6 +71,11 @@ export default async function GroupsPage() {
   return (
     <>
       <PageHeader title="Groups" subtitle="Your group, the groups you're in, and the three you're prospecting in this month. Every post gets shaped to the group it's going into." />
+      {rows.length ? null : (
+        <p className="mb-4 rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="groups-empty">
+          No groups yet. Start with your own group, then add the ones you&apos;re already in, using the form on this page. When one starts working, move it into a prospect slot.
+        </p>
+      )}
       <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
         <div className="space-y-4">
           <Card title="🏠 My group" action={own.length ? <Badge tone="good">{own.length === 1 ? "set" : `${own.length} groups`}</Badge> : <Badge tone="warn">not set</Badge>}>

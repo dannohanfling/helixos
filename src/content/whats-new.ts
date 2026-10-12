@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 164,
+    date: "2026-10-12",
+    title: "Phone photos in Images, Groups that always opens, and your Platforms links",
+    lines: [
+      "Images now takes photos straight from your phone, including an iPhone's HEIC, up to 20MB; they're kept as JPEGs. Each photo shows its own progress, then \"Added\" or the reason it failed, and one that's too big says so before anything is sent.",
+      "Groups no longer shows an error page when a group's star rating or posted date was saved oddly, and an empty Groups page says where to start.",
+      "Coaches: Settings → Workspace now sets where the menu's Platforms links point (Community Loyalty, Academy, the marketing system) and adds a Community link for everyone once you give it one.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 163,
     date: "2026-10-12",
     title: "The Magic funnel: a registration page written for each person",

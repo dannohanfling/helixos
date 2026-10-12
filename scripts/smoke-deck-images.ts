@@ -179,12 +179,29 @@ async function main() {
     await page.locator('[data-testid="deck-image-no-people"]').nth(0).check();
     await page.click('[data-testid="deck-image-send"]');
     await page.locator('[data-testid="library-image"][data-kind="graphic"]').waitFor({ timeout: 30000 });
-    for (let i = 0; i < 100 && (await page.locator('[data-testid="deck-image-row"]').count()); i++) await page.waitForTimeout(200);
+    // Each photo keeps its line with its own outcome (rev 843 item 4): "Added", or the reason it failed.
+    for (let i = 0; i < 100 && (await page.locator('[data-testid="deck-image-row"]:not([data-state="added"])').count()); i++) await page.waitForTimeout(200);
     const graphics = await imagesOf("graphic");
     const dms = (await imagesOf("screenshot")).filter((s) => s.caption === "A DM, unticked");
     if (graphics.length !== 1 || graphics[0].caption !== "Your first 100 leads" || graphics[0].consentTick || dms.length !== 1 || dms[0].consentName !== NO_PEOPLE) throw new Error(`two files at once, each with its own kind and caption: ${JSON.stringify([graphics, dms])}`);
-    if ((await page.locator('[data-testid="deck-image-row"]').count()) !== 0) throw new Error("sent files leave the list");
-    console.log("✓ §6.2: two files at once, each with its own kind, caption and consent; the batch refused while one screenshot is unticked, then both stored");
+    const statuses = await page.locator('[data-testid="deck-image-row"] [data-testid="deck-image-row-status"]').allInnerTexts();
+    if (statuses.length !== 2 || !statuses.every((t) => t.includes("Added"))) throw new Error(`each sent file says Added on its own line: ${statuses.join(" | ")}`);
+    console.log("✓ §6.2: two files at once, each with its own kind, caption and consent; the batch refused while one screenshot is unticked, then both stored, each saying Added");
+
+    // A phone photo (rev 843 item 4): an iPhone's HEIC is taken, converted to a JPEG on the way in, and kept as one; a file over
+    // the size cap is refused on its own line before anything is sent.
+    await page.setInputFiles('[data-testid="deck-image-file"]', [
+      { name: "IMG_0001.HEIC", mimeType: "image/heic", buffer: readFileSync(join(process.cwd(), "src/lib/engine/__tests__/fixtures/tiny.heic")) },
+      { name: "huge.jpg", mimeType: "image/jpeg", buffer: Buffer.alloc(21 * 1024 * 1024, 0xff) },
+    ]);
+    await page.locator('[data-testid="deck-image-kind"]').first().selectOption("photo");
+    await page.locator('[data-testid="deck-image-caption"]').first().fill("From my phone");
+    if (!/over 20MB/.test(await page.locator('[data-testid="deck-image-row"][data-row="1"] [data-testid="deck-image-row-error"]').innerText())) throw new Error("a file over the cap says so on its own line, before anything is sent");
+    await page.click('[data-testid="deck-image-send"]');
+    await page.locator('[data-testid="deck-image-row"][data-row="0"][data-state="added"]').waitFor({ timeout: 30000 });
+    const phone = (await imagesOf("photo")).find((x) => x.caption === "From my phone");
+    if (!phone || phone.mime !== "image/jpeg" || !phone.blobKey.endsWith(".jpg") || !phone.width) throw new Error(`a HEIC is kept as a JPEG with its size: ${JSON.stringify(phone && { mime: phone.mime, key: phone.blobKey.slice(-8), w: phone.width })}`);
+    console.log("✓ a phone's HEIC is converted and kept as a JPEG, saying Added; a 21MB file is refused on its own line before sending");
 
     // A logo, for the footer bar the webinar below turns on.
     await addImage("logo", { caption: "Wordmark" });

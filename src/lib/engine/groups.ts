@@ -97,6 +97,13 @@ export function alignPost(src: Source, g: GroupProfile): { body: string; checks:
 }
 
 /** Scores how prepared a group profile is for aligned posting (0 to 100). */
+/** A group's star rating as stored and shown: a whole number from 1 to 5, or none. */
+export function groupRating(n: number | null | undefined): number | null {
+  if (typeof n !== "number" || !Number.isFinite(n)) return null;
+  const r = Math.round(n);
+  return r >= 1 ? Math.min(5, r) : null;
+}
+
 export function groupReadiness(g: GroupProfile): number {
   const fields = [g.mission, g.description, g.audience, g.adminName, g.adminValues, g.rules, g.postingNorms, g.whatWorks];
   return Math.round((fields.filter((f) => has(f)).length / fields.length) * 100);

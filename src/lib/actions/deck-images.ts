@@ -2,16 +2,17 @@
 
 import { redirect } from "next/navigation";
 import { deletedTo } from "@/lib/deleted";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { DECK_IMAGE_KINDS, type DeckImageKind } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { consentRecord, consentSatisfied, deckImageRefusal, deckKeyOwner } from "@/lib/engine/deck-image";
+import { DECK_IMAGE_REENCODE_EDGE, consentRecord, consentSatisfied, deckImageNeedsReencode, deckImageRefusal, deckKeyOwner } from "@/lib/engine/deck-image";
 import { redactUrls } from "@/lib/engine/storage-policy";
-import { imageDimensions } from "@/lib/proof-renditions";
-import { deleteProofObject, headProofObject, readProofObject } from "@/lib/proof-storage";
+import { heicToJpeg, imageDimensions } from "@/lib/proof-renditions";
+import sharp from "sharp";
+import { deleteProofObject, headProofObject, putDeckObject, readProofObject } from "@/lib/proof-storage";
 
 const log = (what: string, detail: Record<string, unknown>) => console.error(`[deck-image] ${what}`, redactUrls(JSON.stringify({ ...detail, ...(typeof detail.message === "string" ? { message: detail.message.slice(0, 300) } : {}) })));
 
@@ -55,7 +56,9 @@ export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckIma
   const owner = deckKeyOwner(input.key);
   if (!owner || owner.workspaceId !== workspaceId || owner.userId !== userId) return { ok: false, error: "That file is not under your own deck folder. Choose the image again." };
 
-  const already = await db.query.deckImages.findFirst({ where: eq(schema.deckImages.blobKey, input.key) });
+  // A converted upload (HEIC, or a large photo) is kept beside it as .jpg: a repeat of the same upload finds that row.
+  const keptAs = input.key.replace(/\.[a-z0-9]+$/i, "") + ".jpg";
+  const already = await db.query.deckImages.findFirst({ where: inArray(schema.deckImages.blobKey, [...new Set([input.key, keptAs])]) });
   if (already && already.userId !== userId) return { ok: false, error: "That file is already in someone else's library." };
   // A repeat of a recorded upload still fills the slot it was sent for: returning the row alone left the slide empty, silently.
   if (already) {
@@ -89,6 +92,27 @@ export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckIma
     return { ok: false, error: verdict.error };
   }
 
+  // A phone's HEIC, or a photo over the kept size (rev 843 item 4), is kept as a JPEG at most DECK_IMAGE_REENCODE_EDGE on its long
+  // side: re-encoded here, put beside the upload under the same deck folder, and the upload itself let go.
+  let mime: string = verdict.sniffed.mime;
+  if (deckImageNeedsReencode(mime, object.size)) {
+    try {
+      const wholeRes = await readProofObject(object.url);
+      if (!wholeRes.ok) throw new Error(`read ${wholeRes.status}`);
+      let bytes: Buffer = Buffer.from(await wholeRes.arrayBuffer());
+      if (mime === "image/heic" || mime === "image/heif") bytes = await heicToJpeg(bytes);
+      const jpeg = await sharp(bytes, { failOn: "none" }).rotate().resize({ width: DECK_IMAGE_REENCODE_EDGE, height: DECK_IMAGE_REENCODE_EDGE, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85, mozjpeg: true }).toBuffer();
+      const kept = await putDeckObject(keptAs, jpeg, "image/jpeg");
+      await discard(object.url, "a picture kept as a JPEG");
+      object = { key: kept.key, url: kept.url, size: jpeg.length };
+      mime = "image/jpeg";
+    } catch (e) {
+      log("a phone photo could not be converted; the upload is removed", { key: input.key, message: e instanceof Error ? e.message : String(e) });
+      await discard(object.url, "a failed conversion");
+      return { ok: false, error: "That photo couldn't be converted. On an iPhone, set Settings → Camera → Formats to Most Compatible, or send it as a JPEG, and try again." };
+    }
+  }
+
   let width = 0;
   let height = 0;
   try {
@@ -105,7 +129,7 @@ export async function recordDeckImageAction(raw: unknown): Promise<RecordDeckIma
   const id = newId();
   const consent = consentRecord(input.kind, input.consentName, input.noPeople, nowIso());
   try {
-    await db.insert(schema.deckImages).values({ id, workspaceId, userId, kind: input.kind, blobKey: object.key, blobUrl: object.url, mime: verdict.sniffed.mime, width, height, caption: input.caption.trim() || null, ...consent });
+    await db.insert(schema.deckImages).values({ id, workspaceId, userId, kind: input.kind, blobKey: object.key, blobUrl: object.url, mime, width, height, caption: input.caption.trim() || null, ...consent });
   } catch (e) {
     log("the row could not be written; the object is removed", { key: input.key, message: e instanceof Error ? e.message : String(e) });
     await discard(object.url, "a failed insert");

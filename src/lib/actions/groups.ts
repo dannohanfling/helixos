@@ -8,7 +8,7 @@ import { GROUP_KINDS } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { nowIso } from "@/lib/dates";
 import { draft } from "@/lib/ai";
-import { alignPost, groupSpec, readRules } from "@/lib/engine/groups";
+import { alignPost, groupRating, groupSpec, readRules } from "@/lib/engine/groups";
 import { formatClause } from "@/lib/engine/repurpose";
 import { stripFabricated, stripNote } from "@/lib/engine/blacklist";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
@@ -27,17 +27,17 @@ function fields(fd: FormData) {
     rules: opt(fd, "rules"),
     postingNorms: opt(fd, "postingNorms"),
     whatWorks: opt(fd, "whatWorks"),
-    memberCount: num(fd, "memberCount") || null,
-    postsPerDay: num(fd, "postsPerDay") || null,
-    rating: Math.min(5, num(fd, "rating")) || null,
+    memberCount: Math.max(0, Math.round(num(fd, "memberCount"))) || null,
+    postsPerDay: Math.max(0, num(fd, "postsPerDay")) || null,
+    // 1 to 5 stars or none: a negative rating once saved broke the whole Groups page (rev 843 item 5).
+    rating: groupRating(num(fd, "rating")),
     notes: opt(fd, "notes"),
   };
 }
 
+/** The member's own group, or null: a group that is gone (deleted in another tab) is a quiet no-op, never the error page. */
 async function own(id: string, userId: string) {
-  const g = await db.query.groups.findFirst({ where: and(eq(schema.groups.id, id), eq(schema.groups.userId, userId)) });
-  if (!g) throw new Error("Group not found");
-  return g;
+  return (await db.query.groups.findFirst({ where: and(eq(schema.groups.id, id), eq(schema.groups.userId, userId)) })) ?? null;
 }
 
 /** Keeps the top-3 prospect list honest: ranks 1 to 3 are unique, anything else drops to 0. */
@@ -62,7 +62,7 @@ export async function createGroupAction(formData: FormData): Promise<void> {
 export async function updateGroupAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const id = str(formData, "id");
-  await own(id, userId);
+  if (!(await own(id, userId))) return;
   const f = fields(formData);
   if (!f.name) return;
   if (f.kind !== "prospect") f.rank = 0;
@@ -75,7 +75,7 @@ export async function updateGroupAction(formData: FormData): Promise<void> {
 export async function setGroupSlotAction(formData: FormData): Promise<void> {
   const { userId } = await ctx();
   const id = str(formData, "id");
-  await own(id, userId);
+  if (!(await own(id, userId))) return;
   const slot = str(formData, "slot");
   const [slotKind, slotRank] = slot.includes(":") ? slot.split(":") : [str(formData, "kind"), String(num(formData, "rank"))];
   const kind = GROUP_KINDS.find((k) => k === slotKind) ?? "member";
@@ -95,7 +95,7 @@ export async function deleteGroupAction(formData: FormData): Promise<void> {
 export async function markPostedInGroupAction(formData: FormData): Promise<void> {
   const { userId } = await ctx({ whileSwitched: "refuse", reason: "Nothing is sent or published as {first} from their HelixOS. They can do it themselves." });
   const id = str(formData, "id");
-  await own(id, userId);
+  if (!(await own(id, userId))) return;
   await db.update(schema.groups).set({ lastPostedAt: nowIso() }).where(eq(schema.groups.id, id));
   refresh();
 }

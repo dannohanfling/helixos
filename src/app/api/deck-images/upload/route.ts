@@ -1,7 +1,7 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 import { apiViewer } from "@/lib/auth";
-import { DECK_IMAGE_MAX_BYTES, DECK_IMAGE_MIME, deckKeyOwner } from "@/lib/engine/deck-image";
+import { DECK_IMAGE_MAX_BYTES, DECK_UPLOAD_MIME, deckKeyOwner } from "@/lib/engine/deck-image";
 import { UploadRefusal, redactUrls } from "@/lib/engine/storage-policy";
 import { PROOF_STORAGE_UNCONFIGURED, proofStorageConfigured, proofTokenOptions } from "@/lib/proof-storage";
 
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
         const owner = deckKeyOwner(pathname);
         if (!owner || owner.workspaceId !== v.workspace.id || owner.userId !== v.user.id) throw new UploadRefusal("A deck image goes under your own deck folder and nowhere else.");
         return {
-          allowedContentTypes: [...DECK_IMAGE_MIME],
+          allowedContentTypes: [...DECK_UPLOAD_MIME],
           maximumSizeInBytes: DECK_IMAGE_MAX_BYTES,
           addRandomSuffix: false,
           allowOverwrite: false,

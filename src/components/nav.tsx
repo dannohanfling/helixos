@@ -1,7 +1,8 @@
 "use client";
 
 import { PinToViewport } from "@/components/pin-to-viewport";
-import { NAV_GROUPS, navVisible, type NavItem } from "./nav-groups";
+import { NAV_GROUPS, navVisible, withPlatformLinks, type NavItem } from "./nav-groups";
+import type { PlatformLinks } from "@/lib/platforms";
 import { ComingSoonItem } from "./coming-soon-item";
 const STORAGE_KEY = "helix.nav.collapsed";
 
@@ -42,7 +43,7 @@ function writeCollapsed(next: Record<string, boolean>) {
   listeners.forEach((l) => l());
 }
 
-export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, team = false, badges = {} }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; badges?: Record<string, number> }) {
+export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, team = false, badges = {}, platformLinks = {}, ownCommunity = null }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; badges?: Record<string, number>; platformLinks?: PlatformLinks; ownCommunity?: string | null }) {
   const pathname = usePathname();
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const collapsed = useMemo<Record<string, boolean>>(() => {
@@ -60,7 +61,7 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
   return (
     <nav className="space-y-2">
       {NAV_GROUPS.map((g) => {
-        const items = g.items.filter((n) => navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team }));
+        const items = withPlatformLinks(g.items, platformLinks, ownCommunity).filter((n) => navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team }));
         // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
         if (!items.length) return null;
         const activeItem = items.find((n) => n.href === activeHref);

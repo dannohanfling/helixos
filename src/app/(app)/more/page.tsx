@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
-import { NAV_GROUPS, navVisible } from "@/components/nav-groups";
+import { NAV_GROUPS, navVisible, withPlatformLinks } from "@/components/nav-groups";
 import { ComingSoonItem } from "@/components/coming-soon-item";
 import { DueBadge } from "@/components/nav";
 import { intentionsDueFor } from "@/lib/queries/intentions";
@@ -28,7 +28,7 @@ export default async function MorePage() {
     <>
       <PageHeader title="Everything" />
       <div className="space-y-4">
-        {NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team) })) }))
+        {NAV_GROUPS.map((g) => ({ ...g, items: withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team) })) }))
           // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
           .filter((g) => g.items.length)
           .map((g) => (

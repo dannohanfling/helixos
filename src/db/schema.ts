@@ -25,6 +25,8 @@ export const workspaces = sqliteTable("workspaces", {
   connectedAppsOpen: integer("connected_apps_open", { mode: "boolean" }).notNull().default(true),
   clientInviteCode: text("client_invite_code").notNull().unique(),
   coachInviteCode: text("coach_invite_code").notNull().unique(),
+    /** The Platforms menu's addresses, the coach's to set (rev 843): Community Loyalty, Academy, the marketing system, Community. */
+    platformLinks: text("platform_links", { mode: "json" }).$type<Partial<Record<"cl" | "academy" | "oms" | "community", string>>>().notNull().default({}),
   airtableBaseId: text("airtable_base_id"),
   /** Soft cap on AI calls per member per day, on the member's own key. A runaway loop on a client's money gets blamed on HelixOS. */
   aiDailyCap: integer("ai_daily_cap").notNull().default(40),

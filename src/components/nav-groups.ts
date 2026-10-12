@@ -1,5 +1,5 @@
 /** The navigation model, in a plain module so both client components and server pages can read it. */
-import { PLATFORMS } from "@/lib/platforms";
+import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@/lib/platforms";
 /** `line`: a one-line description shown under the label everywhere, for the two sections a client would otherwise confuse. `hint` shows on the More page only. */
 /** `bodyOnly`: shown only to a member whose HumanOS is switched on (rev 195, per member); `bodyOffOnly`: the one entry shown while it's off (rev 320), leading to the switch. */
 /** `recordingsOnly`: shown to a client only once a recording is published for them (Recordings R1). */
@@ -9,7 +9,7 @@ import { PLATFORMS } from "@/lib/platforms";
  * `comingSoon` (rev 816): a page on its way. Shown greyed with a "Coming soon" pill and its subtitle (`line`), never a link: its
  * `href` is only where it will live. The commit that ships the page drops the flag, and the item becomes a normal link.
  */
-export type NavItem = { href: string; label: string; icon: string; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -104,11 +104,21 @@ export const NAV_GROUPS: NavGroup[] = [
     // Platforms (Danno, 7 Oct): the tools a member works in beside HelixOS, outbound links only, for every role and a team member
     // too. The list is src/lib/platforms.ts; this section is drawn from it.
     label: "Platforms",
-    items: PLATFORMS.map((p) => ({ href: p.href, label: p.label, icon: p.icon, line: p.line, external: true, team: true })),
+    items: PLATFORMS.map((p) => ({ href: p.href, label: p.label, icon: p.icon, line: p.line, external: true, team: true, platformKey: p.key })),
   },
 ];
 
-export const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
+/** Every item with an address of its own; Community (rev 843) has none until a coach sets it, so it is not here. */
+export const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items).filter((n) => n.href);
+
+/** The Platforms items with this workspace's addresses (rev 843); one with no address (Community, until it's set) is left out. */
+export function withPlatformLinks(items: NavItem[], links: PlatformLinks, ownCommunity?: string | null): NavItem[] {
+  return items.flatMap((n) => {
+    if (!n.platformKey) return [n];
+    const href = platformHref(n.platformKey, links, ownCommunity);
+    return href ? [{ ...n, href }] : [];
+  });
+}
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
 export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean };

@@ -35,7 +35,7 @@ export function AppShell({ viewer, chat = null, points, streak, badges = {}, rec
           </div>
         </Link>
         <div className="min-h-0 flex-1 overflow-y-auto px-3">
-          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} badges={badges} />
+          <SideNav role={viewer.role} passEnabled={viewer.membership.passEnabled} bodyEnabled={viewer.membership.bodyEnabled} recordingsEnabled={recordingsEnabled} team={team} badges={badges} platformLinks={viewer.workspace.platformLinks} ownCommunity={viewer.membership.passCommunityUrl} />
         </div>
         <div className="mt-3 space-y-3 border-t px-5 pt-3">
           {coachFirst && !viewer.switchedInto && !team ? <ReportButton coachFirst={coachFirst} /> : null}
