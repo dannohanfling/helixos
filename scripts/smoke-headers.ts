@@ -107,6 +107,23 @@ async function main() {
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
   await visit(PAGES_CLIENT);
+  // Coming soon (rev 816): six greyed items on More, none a link, each disabled for screen readers and at least 44px tall;
+  // a tap shows the subtitle and goes nowhere.
+  {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${base}/more`, { waitUntil: "networkidle" });
+    const soon = page.locator('main [data-testid="nav-coming-soon"]');
+    if ((await soon.count()) !== 6) throw new Error(`six Coming soon items on More: ${await soon.count()}`);
+    for (let i = 0; i < 6; i++) {
+      const it = soon.nth(i);
+      const box = await it.boundingBox();
+      if ((await it.getAttribute("aria-disabled")) !== "true" || (await it.evaluate("(el) => el.closest('a') !== null")) || !box || box.height < 44 || box.x + box.width > 390.5) throw new Error(`a Coming soon item is a link, isn't marked disabled, or is too small or too wide: ${await it.innerText()}`);
+    }
+    const here = page.url();
+    await soon.filter({ hasText: "The Forum" }).click({ force: true }); // aria-disabled: Playwright waits for "enabled", a finger doesn't
+    if (!(await soon.filter({ hasText: "The Forum" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== here) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
+    console.log("✓ Coming soon: six greyed items on More, none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
+  }
   // interact a little so client-side handlers run under the policy
   await page.goto(`${base}/content/compose`, { waitUntil: "networkidle" });
   await page.fill('textarea[placeholder^="Type content"]', "CSP check body");
