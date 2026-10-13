@@ -12,6 +12,8 @@
  *  5. Registering: the confirmation (their name, ticket, PT and ET, the join link, the nocookie video, Google Calendar and the
  *     .ics, the CompleteRegistration beacon); the Magic funnel row registered "helixos" and counted; GoHighLevel has the
  *     contact, ic-registered, ic-<date> and the event date; the page now goes straight to the confirmation.
+ *  5b. H-51, the GoHighLevel contact id a sign-up came with: a hit takes the tags (email untouched, an empty phone filled in);
+ *     an id from another sub-account, or one whose contact has a different email, falls back to email and is flagged.
  *  6. "Not you? Clear the form": a new sign-up; the bot's prospect stays unregistered.
  *  7. Cold: the empty form, the PageView beacon; a sign-up that GoHighLevel refuses still reaches its confirmation, and counts.
  *  8. An unknown code is the cold page; a past call is the quiet page; switched off, mf_prepare goes back to GoHighLevel.
@@ -82,7 +84,7 @@ async function main() {
   const { makeBotKey } = await import("@/lib/bot-mcp/data");
   const { factsFor } = await import("@/lib/mf/data");
   const { callWhen } = await import("@/lib/hermes/when");
-  const { hermesPages } = await import("@/db/schema-hermes");
+  const { hermesContactLinks, hermesPages } = await import("@/db/schema-hermes");
 
   const coach = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
   const mem = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, coach.id) }))!;
@@ -124,7 +126,7 @@ async function main() {
   else await db.insert(schema.integrations).values({ id: newId(), workspaceId: ws, provider: "gohighlevel", enabled: true, config: { apiUrl: `http://localhost:${GHL_PORT}` } });
   await db.delete(schema.socialConnections).where(and(eq(schema.socialConnections.userId, coach.id), eq(schema.socialConnections.provider, "gohighlevel")));
   await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: ws, userId: coach.id, provider: "gohighlevel", locationId: "loc_hermes", manualToken: seal("pit-loc_hermes") });
-  const ghlContacts = async () => ((await (await fetch(`http://localhost:${GHL_PORT}/__contacts`)).json()) as { contacts: { email?: string; phone?: string; tags: string[]; customFields: Record<string, string>; source?: string }[] }).contacts;
+  const ghlContacts = async () => ((await (await fetch(`http://localhost:${GHL_PORT}/__contacts`)).json()) as { contacts: { id: string; locationId: string; email?: string; phone?: string; tags: string[]; customFields: Record<string, string>; source?: string }[] }).contacts;
 
   const logFile = "screenshots/logs/dev.log";
   const logStart = existsSync(logFile) ? statSync(logFile).size : 0;
@@ -146,6 +148,7 @@ async function main() {
   try {
     // 1. No table yet.
     await db.run(sql`drop table if exists hermes_pages`);
+    await db.run(sql`drop table if exists hermes_contact_links`);
     let r = await call(key, "mf_prepare", { contact_id: "cl_h1", first_name: "Sam", last_name: "Lee", email: "sam.hermes@example.com", phone: "+1 555 0101", pain: "reels get likes but no consults", industry: "pilates studio" });
     must(!r.isError, `mf_prepare answers: ${r.text}`);
     let url = new URL((JSON.parse(r.text) as { personal_url: string }).personal_url);
@@ -172,6 +175,9 @@ async function main() {
     const ddl = readFileSync(`drizzle/${migration}`, "utf8").split("--> statement-breakpoint").map((s) => s.trim()).filter(Boolean);
     must(ddl.length === 3, `the migration has its three statements (${ddl.length})`);
     for (const s of ddl) await db.run(sql.raw(s));
+    const links = readdirSync("drizzle").find((f) => /^\d{4}_hermes_contact_links\.sql$/.test(f));
+    must(links, "the hermes_contact_links migration is in drizzle/");
+    for (const s of readFileSync(`drizzle/${links}`, "utf8").split("--> statement-breakpoint").map((x) => x.trim()).filter(Boolean)) await db.run(sql.raw(s));
     await coachPage.reload();
     must(!(await coachPage.locator('[data-testid="hm-no-table"]').count()), "the table is there now");
     await coachPage.check('[data-testid="hm-host-on"]');
@@ -276,6 +282,62 @@ async function main() {
     await page.waitForURL(new RegExp(`/mf/${samCode}/confirmed$`));
     console.log("✓ registered: the confirmation with their ticket, PT and ET, the join link, the video, both calendars; 'helixos' on the row; GoHighLevel tagged with the date field; the page goes straight to the confirmation");
 
+    // 5b. H-51: the sign-up came with a GoHighLevel contact id (CL's CRM Contact ID). By id first, then email, then a new contact.
+    const seed = async (body: Record<string, string>) => ((await (await fetch(`http://localhost:${GHL_PORT}/__seed`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json()) as { id: string }).id;
+    const prepared = async (args: Record<string, unknown>) => {
+      const x = await call(key, "mf_prepare", args);
+      must(!x.isError, `mf_prepare answers: ${x.text}`);
+      return new URL((JSON.parse(x.text) as { personal_url: string }).personal_url).pathname.split("/").pop()!;
+    };
+    const saveSeat = async (code: string, phone: string | null) => {
+      await page.goto(`${base}/mf/${code}`);
+      if (phone) await page.fill('input[name="phone"]', phone);
+      await Promise.all([page.waitForURL(new RegExp(`/mf/${code}/confirmed$`), { timeout: 60000 }), page.locator('[data-testid="hm-submit"]').click()]);
+    };
+    const tagged = async (test: (c: Awaited<ReturnType<typeof ghlContacts>>[number]) => boolean) => {
+      let all: Awaited<ReturnType<typeof ghlContacts>> = [];
+      for (let i = 0; i < 40 && !(all = await ghlContacts()).some((c) => test(c) && c.tags.includes("ic-registered")); i++) await sleep(250);
+      return all;
+    };
+    const noted = async (email: string, text: string) => {
+      let notes = "";
+      for (let i = 0; i < 20 && !notes.includes(text); i++) {
+        await sleep(250);
+        notes = (await db.query.contacts.findFirst({ where: and(eq(schema.contacts.userId, coach.id), eq(schema.contacts.email, email)) }))?.notes ?? "";
+      }
+      return notes.includes(text);
+    };
+    // Pat's contact exists under this id, with Pat's email and no phone: the registration lands on it, the phone is filled in.
+    const patId = await seed({ firstName: "Pat", email: "pat.hermes@example.com" });
+    const patCode = await prepared({ contact_id: "cl_h5", ghl_contact_id: patId, first_name: "Pat", email: "pat.hermes@example.com", pain: "no repeat clients", industry: "massage" });
+    const patRow = (await signup("pat.hermes@example.com"))!;
+    must((await db.select().from(hermesContactLinks).where(eq(hermesContactLinks.signupId, patRow.id)))[0]?.ghlContactId === patId, "mf_prepare kept the contact id with the sign-up");
+    must(!(await page.goto(`${base}/mf/${patCode}`))!.url().includes(patId) && !(await page.content()).includes(patId), "the id is never on the page");
+    await saveSeat(patCode, "+1 555 0303");
+    let all = await tagged((c) => c.id === patId && c.customFields.cf_ic_date === when.isoDay);
+    const pat = all.find((c) => c.id === patId);
+    must(pat && pat.tags.includes("ic-registered") && pat.customFields.cf_ic_date === when.isoDay && pat.email === "pat.hermes@example.com" && pat.phone === "+1 555 0303", `by id: the tags and the date on the contact on file, the empty phone filled in: ${JSON.stringify(pat)}`);
+    must(all.filter((c) => c.email === "pat.hermes@example.com").length === 1, "by id: no second contact made");
+    // Lee's id points at a contact in another sub-account: ignored, Lee registers by email (a new contact here).
+    const leeId = await seed({ firstName: "Lee", email: "lee.hermes@example.com", locationId: "loc_other" });
+    const leeCode = await prepared({ contact_id: "cl_h6", ghl_contact_id: leeId, first_name: "Lee", email: "lee.hermes@example.com", pain: "no leads", industry: "roofing" });
+    await saveSeat(leeCode, null);
+    all = await tagged((c) => c.email === "lee.hermes@example.com" && c.id !== leeId && c.customFields.cf_ic_date === when.isoDay);
+    const leeOther = all.find((c) => c.id === leeId);
+    must(leeOther && !leeOther.tags.length && all.some((c) => c.email === "lee.hermes@example.com" && c.id !== leeId && c.tags.includes("ic-registered")), `an id from another sub-account: left alone, registered by email on a new contact here: ${JSON.stringify(all.filter((c) => c.email === "lee.hermes@example.com"))}`);
+    // Kai's id points at a contact carrying another email: nothing written there, registered by email, the coach is told.
+    const kaiId = await seed({ firstName: "Kai", email: "kai.old@example.com", phone: "+1 555 0404" });
+    const kaiCode = await prepared({ contact_id: "cl_h7", ghl_contact_id: kaiId, first_name: "Kai", email: "kai.hermes@example.com", phone: "+1 555 0404", pain: "no shows", industry: "dentist" });
+    await saveSeat(kaiCode, null);
+    all = await tagged((c) => c.email === "kai.hermes@example.com" && c.customFields.cf_ic_date === when.isoDay);
+    const kaiOld = all.find((c) => c.id === kaiId);
+    const kai = all.find((c) => c.email === "kai.hermes@example.com");
+    must(kaiOld && !kaiOld.tags.length && kaiOld.email === "kai.old@example.com" && kaiOld.phone === "+1 555 0404" && !Object.keys(kaiOld.customFields).length, `an id with another email: that contact untouched: ${JSON.stringify(kaiOld)}`);
+    must(kai && kai.id !== kaiId && kai.tags.includes("ic-registered") && kai.phone !== "+1 555 0404", `registered by email on a new contact, without the phone that sits on the other one: ${JSON.stringify(kai)}`);
+    must(await noted("kai.hermes@example.com", "has a different email"), "the DMs card says the CRM contact on file has a different email");
+    must(!(await noted("pat.hermes@example.com", "GoHighLevel:")), "no note for a clean match by id");
+    console.log("✓ contact id first: a hit takes the tags (email untouched, empty phone filled); another sub-account's id or one with a different email falls back to email and is flagged");
+
     // 6. Not you?
     await page.goto(`${base}/mf/${jo.code}`);
     await page.locator('[data-testid="hm-clear"]').click();
@@ -341,7 +403,7 @@ async function main() {
     must(!failures.length, `no server errors: ${failures.join(", ")}`);
     if (existsSync(logFile)) {
       const log = readFileSync(logFile, "utf8").slice(logStart);
-      for (const s of ["sam.hermes@example.com", "alex.hermes@example.com", "riley.hermes@example.com", "555 0101", "555 0199"]) must(!log.includes(s), `the server log never holds "${s}"`);
+      for (const s of ["sam.hermes@example.com", "alex.hermes@example.com", "riley.hermes@example.com", "pat.hermes@example.com", "kai.hermes@example.com", "kai.old@example.com", "555 0101", "555 0199", "555 0303", "555 0404", patId, kaiId]) must(!log.includes(s), `the server log never holds "${s}"`);
       console.log("✓ the server log holds no email or phone from this walk");
     }
     console.log("\nhermes walk: all checks passed");

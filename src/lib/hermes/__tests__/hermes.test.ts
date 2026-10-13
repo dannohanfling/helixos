@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { callWhen, countdown, dayTag, googleCalendarUrl, icsFile } from "@/lib/hermes/when";
 import { cleanEmail, cleanPixelId, hasNumbers, isPageCode, isWebinarId, pixelBeacon, quoteOnce, youtubeEmbed } from "@/lib/hermes/rules";
 import * as copy from "@/lib/hermes/copy";
+import { cleanGhlContactId } from "@/lib/hermes/ghl-link";
 
 const LA = "America/Los_Angeles";
 // Danno's first Inner Circle call: Friday 23 October 2026, 10:00 in Los Angeles (PDT, UTC-7).
@@ -115,5 +116,15 @@ describe("proof on public pages (H-21 A)", () => {
     expect(quoteOnce("Maria: It changed how I talk to clients.", "Maria")).toBe("It changed how I talk to clients.");
     expect(quoteOnce('"It works." (Maria L.)', "Maria L.")).toBe("It works.");
     expect(quoteOnce("Ask Maria about it, it works.", "Maria")).toBe("Ask Maria about it, it works.");
+  });
+});
+
+describe("the GoHighLevel contact id a sign-up comes with (H-51)", () => {
+  it("keeps a plain id, trimmed", () => {
+    expect(cleanGhlContactId(" ve9EPM428h8vShlRW1KT ")).toBe("ve9EPM428h8vShlRW1KT");
+    expect(cleanGhlContactId("abc_DEF-123")).toBe("abc_DEF-123");
+  });
+  it("refuses anything that isn't one", () => {
+    for (const bad of ["", "short", "a".repeat(41), "has space 123", "x@y.com", "../etc", 42, null, undefined, {}]) expect(cleanGhlContactId(bad)).toBeNull();
   });
 });

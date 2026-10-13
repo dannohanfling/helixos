@@ -51,6 +51,7 @@ import {
 } from "@/lib/engine/magic-funnel";
 import { countRegistered, personInDms, upcoming, type BotMember } from "@/lib/bot-mcp/data";
 import { hostedUrl } from "@/lib/hermes/settings";
+import { rememberGhlContact } from "@/lib/hermes/ghl-link";
 
 type Member = { workspaceId: string; userId: string };
 const mine = <T extends { workspaceId: unknown; userId: unknown }>(t: T, m: Member) => and(eq(t.workspaceId as never, m.workspaceId), eq(t.userId as never, m.userId));
@@ -210,7 +211,7 @@ export async function writeForSignup(signupId: string): Promise<void> {
 
 /* ───────────────────────── mf_prepare ───────────────────────── */
 
-export type PrepareInput = { contactId: string; firstName: string; lastName: string; email: string; phone: string; pain: string; industry: string; summary: string; custom: Record<string, string> };
+export type PrepareInput = { contactId: string; firstName: string; lastName: string; email: string; phone: string; pain: string; industry: string; summary: string; custom: Record<string, string>; ghlContactId?: string | null };
 
 /**
  * mf_prepare: the person in this conversation becomes a prospect for the next webinar with a live Magic funnel. They go into
@@ -238,6 +239,7 @@ export async function mfPrepare(m: BotMember, input: PrepareInput): Promise<{ ok
       .update(schema.webinarSignups)
       .set({ firstName: input.firstName, lastName: input.lastName || had.lastName, phone: input.phone || had.phone, clContactId: input.contactId, contactId, custom: { ...had.custom, ...input.custom }, said, source: "mf", pitchStatus: "writing" })
       .where(eq(schema.webinarSignups.id, had.id));
+    await rememberGhlContact(had.id, input.ghlContactId); // Hermes: keeps the GHL contact id with the sign-up, never on the page
     return { ok: true, signupId: had.id, body: { status: "prepared", title: w.title, personal_url: url(had.pageCode) } };
   }
   const id = newId();
@@ -249,6 +251,7 @@ export async function mfPrepare(m: BotMember, input: PrepareInput): Promise<{ ok
     if (!again) throw new Error("sign-up not saved");
     return { ok: true, signupId: null, body: { status: "prepared", title: w.title, personal_url: url(again.pageCode) } };
   }
+  await rememberGhlContact(id, input.ghlContactId);
   return { ok: true, signupId: id, body: { status: "prepared", title: w.title, personal_url: url(pageCode) } };
 }
 

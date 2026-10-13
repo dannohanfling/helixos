@@ -16,6 +16,7 @@ import { markRegistered } from "@/lib/mf/data";
 import { countRegistered, personInDms } from "@/lib/bot-mcp/data";
 import { callContext, type CallContext } from "@/lib/hermes/data";
 import { registerInGhl } from "@/lib/hermes/ghl";
+import { ghlContactFor } from "@/lib/hermes/ghl-link";
 import { cleanEmail, isPageCode, isWebinarId } from "@/lib/hermes/rules";
 import { hermesPages } from "@/db/schema-hermes";
 
@@ -85,18 +86,25 @@ export async function register(input: RegisterInput, now = new Date()): Promise<
   }
   console.log("[hermes] register", JSON.stringify({ code: `${result.code.slice(0, 6)}…`, outcome: result.fresh ? "registered" : "already registered", from: mine ? (mine.email === email ? "their code" : "cleared form") : "cold" }));
 
-  const lastName = mine && mine.email === email ? mine.lastName : null;
+  const theirs = mine && mine.email === email ? mine : null;
+  const lastName = theirs?.lastName ?? null;
+  // H-51: the GoHighLevel contact id their sign-up came with, if any; a cleared form or a cold sign-up has none.
+  const ghlContactId = theirs ? await ghlContactFor(theirs.id) : null;
   const c = ctx;
   // GoHighLevel runs after the redirect (the route hands this to after()), so a slow or failing GoHighLevel never holds the page.
   const ghl = result.fresh
     ? async () => {
-        const r = await registerInGhl(c.member, { firstName, lastName, email, phone }, c.when);
-        console.log("[hermes] ghl", JSON.stringify({ code: `${result.code.slice(0, 6)}…`, outcome: r.step, dateField: r.dateField }));
+        const r = await registerInGhl(c.member, { firstName, lastName, email, phone, ghlContactId }, c.when);
+        console.log("[hermes] ghl", JSON.stringify({ code: `${result.code.slice(0, 6)}…`, outcome: r.step, dateField: r.dateField, contactId: r.idStep ?? "none" }));
         if (!r.ok) await countGhlFailure(c.webinarId);
-        // H-17: their phone sits on another GoHighLevel contact, left untouched; the coach sees it on their DMs card.
-        if (r.phoneElsewhere) {
+        // H-17 / H-51: a phone or a contact id that points at another GoHighLevel contact is left untouched; the coach sees it on their DMs card.
+        const notes = [
+          r.emailElsewhere ? "GoHighLevel: the CRM contact on file has a different email; registered by email instead." : "",
+          r.phoneElsewhere ? "GoHighLevel: the phone they gave matches another contact. Registered on the contact with their email; the other contact was left as it is." : "",
+        ].filter(Boolean);
+        if (notes.length) {
           const bot = { keyId: "hermes", workspaceId: c.member.workspaceId, userId: c.member.userId, tz: c.tz, membership: c.membership };
-          await personInDms(bot, { firstName, email, contactId: null, note: "GoHighLevel: the phone they gave matches another contact. Registered on the contact with their email; the other contact was left as it is." });
+          await personInDms(bot, { firstName, email, contactId: null, note: notes.join(" ") });
         }
       }
     : null;
