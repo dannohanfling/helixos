@@ -46,6 +46,7 @@ import {
   type SectionSource,
 } from "@/lib/engine/magic-funnel";
 import { countRegistered, personInDms, upcoming, type BotMember } from "@/lib/bot-mcp/data";
+import { hostedUrl } from "@/lib/hermes/settings";
 
 type Member = { workspaceId: string; userId: string };
 const mine = <T extends { workspaceId: unknown; userId: unknown }>(t: T, m: Member) => and(eq(t.workspaceId as never, m.workspaceId), eq(t.userId as never, m.userId));
@@ -193,12 +194,13 @@ export async function mfPrepare(m: BotMember, input: PrepareInput): Promise<{ ok
   if (!w) return { ok: false, line: "There's no webinar scheduled right now." };
   const setup = await setupFor(m, w.id);
   if (!setup?.live) return { ok: false, line: "The next webinar has no Magic funnel live yet." };
-  if (!w.registrationUrl?.trim() || !/^https:\/\//.test(w.registrationUrl.trim())) return { ok: false, line: "The next webinar has no registration page set yet." };
+  const hosted = await hostedUrl(m, w.id); // Hermes: null unless "Host pages in HelixOS" is on for this webinar
+  if (!hosted && (!w.registrationUrl?.trim() || !/^https:\/\//.test(w.registrationUrl.trim()))) return { ok: false, line: "The next webinar has no registration page set yet." };
 
   const email = input.email.toLowerCase();
   const said = { pain: clip(input.pain, MF_MAX.pain), industry: clip(input.industry, MF_MAX.industry), summary: clip(input.summary, MF_MAX.summary) };
   const had = await db.query.webinarSignups.findFirst({ where: and(eq(schema.webinarSignups.webinarId, w.id), eq(schema.webinarSignups.email, email)) });
-  const url = (code: string) => personalUrl(w.registrationUrl!.trim(), code);
+  const url = (code: string) => (hosted ? hosted(code) : personalUrl(w.registrationUrl!.trim(), code));
   const contactId = await personInDms(m, { firstName: input.firstName, email, contactId: input.contactId, note: had?.registeredAt ? `Already signed up for "${w.title}".` : `Sent a Magic funnel page for "${w.title}".` });
 
   if (had) {
@@ -224,7 +226,7 @@ export async function mfPrepare(m: BotMember, input: PrepareInput): Promise<{ ok
 /* ───────────────────────── the public read ───────────────────────── */
 
 /** Marks one sign-up registered, once, and counts it (GHL's webhook and the page's own signal, in commit B). */
-export async function markRegistered(signupId: string, via: "webhook" | "page"): Promise<boolean> {
+export async function markRegistered(signupId: string, via: "webhook" | "page" | "helixos"): Promise<boolean> {
   const done = await db
     .update(schema.webinarSignups)
     .set({ registeredAt: nowIso(), registeredVia: via })

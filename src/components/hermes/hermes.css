@@ -1,0 +1,1039 @@
+/*
+ * Hermes: the HelixOS-hosted Magic funnel pages in Look C, "Evolve Omega gold" (the canvas "Inner Circle Funnel": LandingGold,
+ * ConfirmGold). Near-black #030100, gold #DDA338, light gold #F0C76A, cream #E0CEBA, ivory paper #F6F1E7; Cinzel for headings,
+ * DM Sans for the body. Every class starts hm- so nothing here reaches another page. Phones first: nothing wider than the
+ * screen at 360px, tap targets 44px or more, text 4.5:1 or better on its ground.
+ */
+body:has(.hm-root) {
+  background: #030100;
+}
+.hm-root {
+  --hm-ink: #030100;
+  --hm-gold: #dda338;
+  --hm-gold-light: #f0c76a;
+  --hm-cream: #e0ceba;
+  --hm-paper: #f6f1e7;
+  --hm-paper-ink: #2a241b;
+  --hm-paper-gold: #7a5a14;
+  --hm-muted: #b8a894;
+  --hm-card: #0b0906;
+  background: var(--hm-ink);
+  color: var(--hm-cream);
+  font-family: var(--hm-sans), "DM Sans", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  min-height: 100vh;
+  overflow-x: clip;
+}
+.hm-root *,
+.hm-root *::before,
+.hm-root *::after {
+  box-sizing: border-box;
+}
+.hm-root img {
+  max-width: 100%;
+  display: block;
+}
+.hm-root a {
+  color: var(--hm-gold-light);
+}
+.hm-root a:hover {
+  color: #fff;
+}
+.hm-serif {
+  font-family: var(--hm-serif), Cinzel, Georgia, serif;
+}
+.hm-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+.hm-narrow {
+  max-width: 1100px;
+}
+.hm-letter-wrap {
+  max-width: 980px;
+}
+.hm-gold {
+  color: var(--hm-gold);
+}
+.hm-white {
+  color: #fff;
+}
+.hm-rule {
+  width: 64px;
+  height: 2px;
+  background: var(--hm-gold);
+  align-self: center;
+}
+
+/* The sticky gold bar */
+.hm-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: linear-gradient(180deg, #f0c76a, #dda338);
+  color: var(--hm-ink);
+}
+.hm-bar .hm-wrap {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.hm-bar-text {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  min-width: 0;
+}
+.hm-root .hm-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 8px;
+  background: var(--hm-ink);
+  color: var(--hm-gold-light);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+/* Hero */
+.hm-hero {
+  background: radial-gradient(50% 60% at 30% 40%, rgba(221, 163, 56, 0.22), rgba(3, 1, 0, 0) 70%), repeating-radial-gradient(circle at 80% 20%, rgba(221, 163, 56, 0.05) 0 1px, rgba(3, 1, 0, 0) 1px 26px), #030100;
+}
+.hm-hero > .hm-wrap {
+  padding-top: 40px;
+  padding-bottom: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+.hm-hero-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.hm-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hm-brand img {
+  width: 46px;
+  height: 46px;
+}
+.hm-brand span {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--hm-gold);
+  text-transform: uppercase;
+}
+.hm-eyebrow {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--hm-gold-light);
+}
+.hm-h1 {
+  margin: 0;
+  max-width: 980px;
+  font-weight: 700;
+  font-size: clamp(28px, 6.4vw, 52px);
+  line-height: 1.15;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+.hm-hero-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: center;
+  justify-content: center;
+}
+.hm-hero-photo {
+  margin: 0;
+  flex: 1 1 340px;
+  max-width: 470px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hm-hero-photo img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  object-position: center 45%;
+  border-radius: 16px;
+  border: 1px solid rgba(221, 163, 56, 0.45);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 60px rgba(221, 163, 56, 0.12);
+}
+.hm-hero-photo figcaption {
+  font-size: 18px;
+  color: var(--hm-gold-light);
+  text-align: center;
+}
+.hm-hero-photo figcaption small {
+  display: block;
+  font-family: var(--hm-sans), "DM Sans", sans-serif;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--hm-muted);
+}
+.hm-card {
+  flex: 1 1 340px;
+  max-width: 470px;
+  min-width: 0;
+  background: rgba(11, 9, 6, 0.92);
+  border: 1px solid rgba(221, 163, 56, 0.5);
+  border-radius: 16px;
+  padding: 26px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+}
+.hm-card-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+.hm-card p {
+  margin: 0;
+  font-size: 16px;
+}
+.hm-dateline {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  font-size: 15px;
+  color: #fff;
+}
+.hm-countdown {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 10px;
+  border-radius: 12px;
+  background: var(--hm-ink);
+  border: 1px solid rgba(221, 163, 56, 0.3);
+}
+.hm-countdown-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--hm-gold);
+  line-height: 1.1;
+  text-align: left;
+}
+.hm-countdown-parts {
+  display: flex;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+  align-items: flex-start;
+}
+.hm-countdown-part {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 40px;
+}
+.hm-countdown-part b {
+  font-size: 30px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+.hm-countdown-part small {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--hm-muted);
+}
+.hm-countdown-sep {
+  font-size: 26px;
+  color: var(--hm-gold);
+  line-height: 1;
+}
+.hm-root .hm-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 62px;
+  padding: 8px 24px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f6d98e, #dda338);
+  color: var(--hm-ink);
+  text-decoration: none;
+  box-shadow: 0 10px 34px rgba(221, 163, 56, 0.3);
+  cursor: pointer;
+  font: inherit;
+  width: 100%;
+  text-align: center;
+}
+.hm-root .hm-cta:hover {
+  color: var(--hm-ink);
+  filter: brightness(1.05);
+}
+.hm-cta-inline {
+  align-self: center;
+  width: auto !important;
+  max-width: 100%;
+}
+.hm-cta-label {
+  font-family: var(--hm-serif), Cinzel, Georgia, serif;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.hm-cta-sub {
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.hm-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  font-size: 14px;
+  color: var(--hm-muted);
+}
+
+/* The scrolling strip */
+.hm-strip {
+  overflow: hidden;
+  border-top: 1px solid rgba(221, 163, 56, 0.35);
+  border-bottom: 1px solid rgba(221, 163, 56, 0.35);
+  background: var(--hm-card);
+}
+.hm-track {
+  display: flex;
+  width: max-content;
+  gap: 48px;
+  padding: 14px 0;
+  animation: hm-marquee 45s linear infinite;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 2px;
+  color: var(--hm-gold);
+  white-space: nowrap;
+}
+@keyframes hm-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-track {
+    animation: none;
+  }
+}
+
+/* Sections */
+.hm-section {
+  padding-top: 60px;
+  padding-bottom: 60px;
+}
+.hm-dark {
+  background: var(--hm-ink);
+}
+.hm-glow {
+  background: radial-gradient(60% 70% at 50% 0%, rgba(221, 163, 56, 0.14), rgba(3, 1, 0, 0) 70%), #030100;
+}
+.hm-paper {
+  background: var(--hm-paper);
+  color: var(--hm-paper-ink);
+}
+.hm-paper a {
+  color: var(--hm-paper-gold);
+}
+.hm-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.hm-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.hm-kicker {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--hm-gold);
+}
+.hm-paper .hm-kicker {
+  color: var(--hm-paper-gold);
+}
+.hm-h2 {
+  margin: 0;
+  font-weight: 700;
+  font-size: clamp(28px, 6vw, 40px);
+  line-height: 1.15;
+  color: #fff;
+}
+.hm-paper .hm-h2 {
+  color: var(--hm-ink);
+}
+.hm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 20px;
+}
+.hm-grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+.hm-box {
+  border-radius: 14px;
+  padding: 26px 22px;
+  background: var(--hm-card);
+  border: 1px solid rgba(224, 206, 186, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.hm-box-gold {
+  background: linear-gradient(180deg, rgba(221, 163, 56, 0.18), #0b0906);
+  border: 1px solid rgba(221, 163, 56, 0.5);
+  box-shadow: 0 0 50px rgba(221, 163, 56, 0.12);
+}
+.hm-box-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+.hm-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hm-list li {
+  display: flex;
+  gap: 10px;
+}
+.hm-list li > span:first-child {
+  flex: none;
+}
+.hm-mark-yes {
+  color: var(--hm-gold);
+}
+.hm-mark-no {
+  color: #c9b8a0;
+}
+
+/* The letter */
+.hm-letter-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  align-items: flex-start;
+}
+.hm-letter-col {
+  flex: 1 1 400px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.hm-letter p {
+  margin: 0;
+}
+.hm-desk {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #dccfb8;
+}
+.hm-desk img {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 2px solid var(--hm-gold);
+  flex: none;
+}
+.hm-desk-small {
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #6b5c44;
+}
+.hm-desk-name {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--hm-ink);
+  line-height: 1.1;
+}
+.hm-desk-to {
+  font-size: 15px;
+  color: var(--hm-paper-gold);
+}
+.hm-letter-photo {
+  flex: 1 1 320px;
+  min-width: 0;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+}
+.hm-quote {
+  margin: 8px 0;
+  padding: 20px 22px;
+  border-left: 4px solid var(--hm-gold);
+  border-right: 4px solid var(--hm-gold);
+  background: #efe6d3;
+  font-size: clamp(19px, 4.4vw, 24px);
+  line-height: 1.45;
+  color: var(--hm-ink);
+  text-align: center;
+}
+.hm-quote u {
+  text-decoration-color: var(--hm-gold);
+}
+.hm-sign {
+  font-size: 22px;
+  color: var(--hm-paper-gold);
+}
+
+/* The three shifts */
+.hm-part {
+  display: flex;
+  flex-wrap: wrap;
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  border-left: 4px solid var(--hm-gold);
+  box-shadow: 0 10px 30px rgba(42, 36, 27, 0.08);
+}
+.hm-part img {
+  flex: 1 1 300px;
+  min-width: 0;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+.hm-part-body {
+  flex: 1 1 380px;
+  min-width: 0;
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hm-part-n {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--hm-paper-gold);
+}
+.hm-part-title {
+  font-size: clamp(22px, 5vw, 28px);
+  font-weight: 700;
+  color: var(--hm-ink);
+  line-height: 1.15;
+}
+.hm-label {
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--hm-paper-gold);
+  font-weight: 700;
+}
+.hm-note {
+  padding: 12px 16px;
+  background: var(--hm-paper);
+  border-radius: 8px;
+}
+.hm-note-italic {
+  font-style: italic;
+}
+.hm-note-italic .hm-label {
+  font-style: normal;
+}
+.hm-example {
+  background: #fff;
+  border-radius: 14px;
+  padding: 24px 22px;
+  border: 1px dashed rgba(122, 90, 20, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hm-example-title {
+  font-size: clamp(20px, 4.6vw, 24px);
+  font-weight: 700;
+  color: var(--hm-ink);
+  line-height: 1.2;
+}
+.hm-example p {
+  margin: 0;
+}
+
+/* Why this call fits you */
+.hm-why {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.hm-why-n {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hm-gold);
+  color: var(--hm-ink);
+  font-weight: 700;
+}
+
+/* Proof and why listen */
+.hm-proof {
+  margin: 0;
+  background: #fff;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 10px 30px rgba(42, 36, 27, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hm-proof blockquote {
+  margin: 0;
+  font-size: 18px;
+  color: var(--hm-ink);
+}
+.hm-proof figcaption {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--hm-paper-gold);
+}
+.hm-figure {
+  margin: 0;
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(42, 36, 27, 0.08);
+  min-width: 0;
+}
+.hm-figure img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+.hm-figure figcaption {
+  padding: 16px 18px;
+}
+.hm-figure strong {
+  color: var(--hm-ink);
+}
+
+/* What / When / Why and the FAQ */
+.hm-fact {
+  border-radius: 14px;
+  padding: 22px;
+  background: var(--hm-card);
+  border: 1px solid rgba(221, 163, 56, 0.3);
+  min-width: 0;
+}
+.hm-fact-gold {
+  background: linear-gradient(180deg, rgba(221, 163, 56, 0.2), #0b0906);
+  border-color: rgba(221, 163, 56, 0.5);
+}
+.hm-fact h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--hm-gold);
+}
+.hm-fact p {
+  margin: 6px 0 0;
+}
+.hm-faq {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hm-faq details {
+  border: 1px solid rgba(221, 163, 56, 0.3);
+  border-radius: 10px;
+  background: var(--hm-card);
+}
+.hm-faq summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  color: #fff;
+  min-height: 48px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+}
+.hm-faq summary::-webkit-details-marker {
+  display: none;
+}
+.hm-faq details p {
+  margin: 0;
+  padding: 0 18px 16px;
+}
+
+/* The seat form */
+.hm-seat {
+  background: radial-gradient(60% 80% at 50% 100%, rgba(221, 163, 56, 0.2), rgba(3, 1, 0, 0) 70%), #030100;
+  scroll-margin-top: 60px;
+}
+.hm-seat > .hm-wrap {
+  padding-top: 56px;
+  padding-bottom: 76px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: center;
+}
+.hm-seat-text {
+  flex: 1 1 380px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hm-seat-text p {
+  margin: 0;
+}
+.hm-ps {
+  font-size: 15px;
+  color: var(--hm-muted);
+}
+.hm-ps strong {
+  color: var(--hm-gold-light);
+}
+.hm-form {
+  flex: 1 1 340px;
+  min-width: 0;
+  background: var(--hm-card);
+  border: 1px solid rgba(221, 163, 56, 0.5);
+  border-radius: 16px;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 0 60px rgba(221, 163, 56, 0.12);
+}
+.hm-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--hm-gold-light);
+}
+.hm-form input {
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid rgba(224, 206, 186, 0.45);
+  border-radius: 10px;
+  background: var(--hm-ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  width: 100%;
+}
+.hm-form input::placeholder {
+  color: #9a8c79;
+}
+.hm-form input:focus-visible,
+.hm-root a:focus-visible,
+.hm-root button:focus-visible,
+.hm-faq summary:focus-visible {
+  outline: 3px solid var(--hm-gold-light);
+  outline-offset: 2px;
+}
+.hm-formnote {
+  margin: 0;
+  font-size: 14px;
+  color: var(--hm-muted);
+}
+.hm-root .hm-linkbtn {
+  background: none;
+  border: 0;
+  padding: 0 4px;
+  min-height: 44px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--hm-gold-light);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.hm-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #3a1d12;
+  color: #ffd9c7;
+  font-size: 15px;
+}
+
+/* Footer */
+.hm-footer {
+  border-top: 1px solid rgba(221, 163, 56, 0.25);
+  background: var(--hm-ink);
+}
+.hm-footer .hm-wrap {
+  padding-top: 28px;
+  padding-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--hm-muted);
+}
+.hm-footer img {
+  width: 56px;
+  height: 56px;
+}
+
+/* Confirmation */
+.hm-confirm-hero {
+  background: radial-gradient(55% 60% at 50% 30%, rgba(221, 163, 56, 0.26), rgba(3, 1, 0, 0) 70%), #030100;
+}
+.hm-confirm-hero .hm-wrap {
+  padding-top: 44px;
+  padding-bottom: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+}
+.hm-confirm-hero p {
+  margin: 0;
+  max-width: 620px;
+  font-size: 19px;
+}
+.hm-video {
+  margin-top: 8px;
+  width: 100%;
+  max-width: 760px;
+  aspect-ratio: 16 / 9;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(221, 163, 56, 0.45);
+  box-shadow: 0 0 70px rgba(221, 163, 56, 0.18);
+}
+.hm-video iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+.hm-ticket-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: stretch;
+}
+.hm-ticket {
+  flex: 1 1 400px;
+  min-width: 0;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(221, 163, 56, 0.45);
+  background: var(--hm-card);
+  display: flex;
+  flex-direction: column;
+}
+.hm-ticket-head {
+  padding: 22px 24px;
+  background: linear-gradient(135deg, #dda338, #b9831f);
+  color: var(--hm-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hm-ticket-head small {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.hm-ticket-title {
+  font-weight: 700;
+  font-size: clamp(22px, 5.4vw, 30px);
+  line-height: 1.1;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.hm-ticket-rows {
+  margin: 0;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-bottom: 2px dashed rgba(221, 163, 56, 0.35);
+}
+.hm-ticket-rows div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.hm-ticket-rows dt {
+  margin: 0;
+}
+.hm-ticket-rows dd {
+  margin: 0;
+  color: #fff;
+  font-weight: 700;
+  text-align: right;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.hm-ticket-actions {
+  padding: 20px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.hm-root .hm-pill {
+  flex: 1 1 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--hm-gold);
+  color: var(--hm-ink);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-decoration: none;
+  text-align: center;
+}
+.hm-root .hm-pill-line {
+  background: transparent;
+  border: 1.5px solid var(--hm-gold);
+  color: var(--hm-gold-light);
+}
+.hm-ticket-photo {
+  flex: 0 1 380px;
+  min-width: 0;
+  width: 380px;
+  max-width: 100%;
+  object-fit: cover;
+  border-radius: 22px;
+  border: 1px solid rgba(221, 163, 56, 0.35);
+}
+.hm-ask-n {
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 0.9;
+  color: var(--hm-gold);
+}
+.hm-ask strong {
+  font-size: 19px;
+  color: #fff;
+}
+.hm-bring {
+  flex: 1 1 420px;
+  min-width: 0;
+  border-radius: 22px;
+  padding: 26px 22px;
+  background: radial-gradient(90% 120% at 0% 0%, rgba(221, 163, 56, 0.22), #0b0906 70%);
+  border: 1px solid rgba(221, 163, 56, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hm-bring-title {
+  font-weight: 700;
+  font-size: clamp(22px, 5vw, 30px);
+  color: #fff;
+  text-transform: uppercase;
+}
+.hm-bring ul {
+  margin: 0;
+  padding: 0 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hm-signoff {
+  flex: 1 1 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+}
+.hm-signoff img {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 999px;
+  border: 3px solid var(--hm-gold);
+}
+.hm-signoff p {
+  margin: 0;
+}
+.hm-closing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: center;
+}
+
+/* The coach's preview only: personal sections outlined, as on the canvas. */
+.hm-marks .hm-personal {
+  outline: 2px dashed var(--hm-gold-light);
+  outline-offset: 6px;
+}
+.hm-pixel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.hm-ticket-rows dd a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}

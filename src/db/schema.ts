@@ -3728,7 +3728,7 @@ export const webinarSignups = sqliteTable(
     openedAt: text("opened_at"),
     /** When they registered, and how HelixOS heard: inside the chat, GHL's workflow webhook, or the page's own signal. */
     registeredAt: text("registered_at"),
-    registeredVia: text("registered_via", { enum: ["chat", "webhook", "page"] }),
+    registeredVia: text("registered_via", { enum: ["chat", "webhook", "page", "helixos"] }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("webinar_signups_person").on(t.webinarId, t.email), uniqueIndex("webinar_signups_page").on(t.pageCode), index("webinar_signups_member").on(t.workspaceId, t.userId)],
@@ -4453,3 +4453,5 @@ export const handoffAgents = sqliteTable(
   (t) => [uniqueIndex("handoff_agents_agent").on(t.workspaceId, t.userId, t.agentId)],
 );
 export type HandoffAgent = typeof handoffAgents.$inferSelect;
+
+export * from "./schema-hermes";

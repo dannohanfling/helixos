@@ -75,6 +75,7 @@ const ROUTES: Record<string, Route> = {
   "/webinars/[id]": { kind: "owned", table: "webinars" },
   "/webinars/[id]/runsheet": { kind: "owned", table: "webinars" },
   "/webinars/[id]/magic-funnel": { kind: "owned", table: "webinars" },
+  "/webinars/[id]/helixos-pages": { kind: "owned", table: "webinars" },
   "/join/[code]": { kind: "public", why: "the workspace invite code, entered before any session exists" },
   "/join/team/[code]": { kind: "public", why: "a one-time team invite code (Danno, 6 Oct), matched by its hash before any session exists; spent, cancelled or a week old it names nobody" },
   "/reset/[token]": { kind: "public", why: "a single-use password-reset token, its own secret" },
@@ -93,6 +94,10 @@ const ROUTES: Record<string, Route> = {
   "/api/mf/[code]/hero": { kind: "public", why: "the one hero picture a Magic funnel page's pitch chose from that member's own tagged Images, by the page's code, only while the page is live; a code with none is a 404" },
   "/api/mf/[code]/registered": { kind: "public", why: "the Magic funnel snippet's backup signal on submit: marks that one code registered, only from the member's funnel domains, nothing returned" },
   "/g/[slug]": { kind: "public", why: "a lead magnet's public tracked link, read by strangers" },
+  "/mf/[code]": { kind: "public", why: "Hermes: a HelixOS-hosted Magic funnel page by its 43-character code, the prefill only until they register or the call starts; a wrong code is the cold page; open only while that webinar's switch is on; rate limited" },
+  "/mf/[code]/confirmed": { kind: "public", why: "Hermes: the confirmation page of a registered code (first name, ticket, the call's date); any other code goes back to its page; rate limited" },
+  "/mf/[code]/ics": { kind: "public", why: "Hermes: the call as an .ics file for a registered code, nothing personal in it; any other code is a 404" },
+  "/mf/w/[webinarId]": { kind: "public", why: "Hermes: a webinar's cold page for ads, its default copy and an empty form, only while its HelixOS switch is on" },
   "/m/[slug]": { kind: "public", why: "a lead magnet's public hosted page, read by strangers" },
 };
 

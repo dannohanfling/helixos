@@ -43,6 +43,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 167,
+    date: "2026-10-13",
+    title: "HelixOS pages for the Magic funnel",
+    lines: [
+      "Each webinar's Magic funnel page has a new HelixOS pages link: switch it on and your bot's links open a page HelixOS serves itself, in the Evolve Omega gold design, with the whole page written for that person and the form already filled in from the chat. It's off until you turn it on.",
+      "The page has its own cold version for ads, a confirmation page with your thank-you video, Google Calendar and Apple or Outlook buttons, and an optional Meta Pixel. Every sign-up still reaches GoHighLevel, tagged ic-registered and with the call's date.",
+      "Preview both pages for a made-up prospect before you switch it on.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 166,
     date: "2026-10-13",
     title: "Building with AI: the words, in plain English",

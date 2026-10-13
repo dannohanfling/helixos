@@ -46,7 +46,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
   const counts = { made: mf.filter((x) => x.pitchStatus !== "none" && x.pitchStatus !== "writing").length, opened: mf.filter((x) => x.openedAt).length, registered: mf.filter((x) => x.registeredAt).length, plain: signups.filter((x) => x.source === "chat" && x.registeredAt).length };
   return (
     <>
-      <PageHeader title="Magic funnel" subtitle={`${w.title}: a registration page written for each person your bot sends`} action={<Link href={`/webinars/${w.id}?step=run`} className="btn btn-ghost btn-sm">Back to the webinar</Link>} />
+      <PageHeader title="Magic funnel" subtitle={`${w.title}: a registration page written for each person your bot sends`} action={<span className="flex flex-wrap gap-2"><Link href={`/webinars/${w.id}/helixos-pages`} className="btn btn-ghost btn-sm" data-testid="mf-helixos-pages">HelixOS pages</Link><Link href={`/webinars/${w.id}?step=run`} className="btn btn-ghost btn-sm">Back to the webinar</Link></span>} />
       {!available ? (
         <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" role="status" data-testid="mf-off">
           The Magic funnel isn&apos;t switched on for you yet. Your coach turns it on. You can set it up now; nothing goes live until then.
