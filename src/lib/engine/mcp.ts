@@ -30,12 +30,14 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },
   // The Forum (rev 765): an agent reports what it's doing to the member's own Forum and reads it back. Nothing else.
   forum: { label: "The Forum", line: "Report what your AI agents are doing to your Forum, and read your Forum back." },
+  // The Handoff inbox (rev 769): coach only, never pre-ticked. Agents post and read; only you approve, by hand in HelixOS.
+  inbox: { label: "Handoff inbox", line: "Your agents pass briefs, plans, status and files to each other through your inbox. Only you approve anything, by hand in HelixOS." },
   body: { label: "HumanOS", line: "Your HumanOS numbers and meal log. Only with HumanOS's own AI switch on, and never pre-ticked." },
 };
 
 export const SCOPE_NAMES: readonly Scope[] = MCP_SCOPES;
-/** Never pre-ticked on the consent screen: HumanOS (rev 247, B3) and publishing (rev 638). */
-export const OPT_IN_SCOPES: readonly Scope[] = ["body", "content:publish"];
+/** Never pre-ticked on the consent screen: HumanOS (rev 247, B3), publishing (rev 638) and the Handoff inbox (rev 769). */
+export const OPT_IN_SCOPES: readonly Scope[] = ["body", "content:publish", "inbox"];
 export const isScope = (s: string): s is Scope => (MCP_SCOPES as readonly string[]).includes(s);
 
 /** A space-separated scope string, as OAuth sends it, into known scopes and the rest. */

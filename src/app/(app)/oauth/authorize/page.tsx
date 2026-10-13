@@ -34,7 +34,8 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
   const parsed = parseScopes(p.scope);
   if (parsed.unknown.length) back("invalid_scope", `unknown scope: ${parsed.unknown.join(", ")}`);
   // No scope asked means everything but Body; Body is only ever an explicit ask.
-  const asked: Scope[] = parsed.scopes.length ? parsed.scopes : (Object.keys(SCOPE_WORDS) as Scope[]).filter((s) => s !== "body");
+  // The Handoff inbox (rev 769) is the coach's own: a client is never offered it.
+  const asked: Scope[] = (parsed.scopes.length ? parsed.scopes : (Object.keys(SCOPE_WORDS) as Scope[]).filter((s) => s !== "body")).filter((s) => s !== "inbox" || v.role === "coach");
   if (v.switchedInto) return <Refused title="Not from here" line={`Connected apps are ${v.switchedInto.clientName.split(" ")[0]}'s own. They connect from their own HelixOS.`} state="switched" />;
   if (v.role === "client" && !v.workspace.connectedAppsOpen) return <Refused title="Not open yet" line="Your coach hasn't opened connected apps to clients. Ask them, and try again." state="closed" />;
   const sig = consentSignature({ clientId: client!.id, redirectUri, state: p.state ?? "", codeChallenge: p.code_challenge!, resource: p.resource ?? "", scope: asked.join(" "), userId: v.user.id });

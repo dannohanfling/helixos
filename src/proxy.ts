@@ -7,7 +7,7 @@ import { safeNext } from "@/lib/engine/next-path";
 // The manifest and icons must load without a session: the browser fetches them on the login page and when installing the app.
 // /g (a lead magnet's tracked link), /m (its hosted page) and /files (its public objects, and only those) are read by strangers.
 // /api/public holds feeds made to be read by anyone (a client's loyalty leaderboard, rev 639): no member data beyond what they show.
-const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/mcp", "/api/bot-mcp", "/api/mf", "/api/body/health-weigh-in", "/api/forum/report", "/oauth/register", "/oauth/token", "/oauth/revoke", "/.well-known", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files", "/api/public"];
+const PUBLIC = ["/login", "/join", "/demo", "/setup", "/forgot", "/reset", "/removed", "/api/cron", "/api/health", "/api/webhooks", "/api/chat-link", "/api/csp-report", "/api/mcp", "/api/bot-mcp", "/api/mf", "/api/body/health-weigh-in", "/api/forum/report", "/api/handoff/files", "/oauth/register", "/oauth/token", "/oauth/revoke", "/.well-known", "/api/session", "/manifest.webmanifest", "/icon", "/apple-icon", "/pwa-icon", "/robots.txt", "/g", "/m", "/files", "/api/public"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -58,8 +58,32 @@ createServer((req, res) => {
   req.on("data", (c: Buffer) => chunks.push(c));
   req.on("end", () => {
     const body = Buffer.concat(chunks);
-    const store = storeOf(req.headers.authorization);
+    // A presigned link (rev 769's handoff uploads): no bearer token, the store and scope ride in the delegation the server got
+    // from /signed-token. The mock checks scope, expiry, the operation, the size cap and the type, not the signature.
+    const delegation = url.searchParams.get("vercel-blob-delegation");
+    let scoped: { storeId: string; pathname: string; operations: string[]; validUntil: number } | null = null;
+    if (delegation) {
+      try {
+        scoped = JSON.parse(Buffer.from(delegation.split(".")[0], "base64url").toString("utf8"));
+      } catch {
+        return json(res, 403, { error: { code: "forbidden", message: "bad delegation" } });
+      }
+      const max = Number(url.searchParams.get("vercel-blob-maximum-size-in-bytes") ?? Infinity);
+      const types = (url.searchParams.get("vercel-blob-allowed-content-types") ?? "").split(",").filter(Boolean);
+      const type = String(req.headers["x-content-type"] ?? req.headers["content-type"] ?? "");
+      if (!scoped || scoped.pathname !== url.searchParams.get("pathname") || !scoped.operations.includes(req.method === "PUT" ? "put" : "get") || Date.now() > scoped.validUntil) return json(res, 403, { error: { code: "forbidden", message: "presigned link not valid for this" } });
+      if (body.length > max) return json(res, 400, { error: { code: "file_too_large", message: "too large" } });
+      if (types.length && !types.includes(type)) return json(res, 400, { error: { code: "content_type_not_allowed", message: "type not allowed" } });
+    }
+    const store = scoped ? scoped.storeId : storeOf(req.headers.authorization);
     const authed = store !== null;
+    // The API: a signed token for presigned links, scoped to one pathname and its operations.
+    if (req.method === "POST" && url.pathname === "/signed-token") {
+      if (!authed) return json(res, 403, { error: { code: "forbidden", message: "no token" } });
+      const asked = JSON.parse(body.toString() || "{}") as { pathname?: string; operations?: string[]; validUntil?: number };
+      const payload = { storeId: store, pathname: asked.pathname ?? "*", operations: asked.operations ?? ["get"], validUntil: asked.validUntil ?? Date.now() + 3600_000 };
+      return json(res, 200, { delegationToken: `${Buffer.from(JSON.stringify(payload)).toString("base64url")}.mock`, clientSigningToken: "mock-signing-token", validUntil: payload.validUntil });
+    }
     // The API: an upload
     if (req.method === "PUT" && url.pathname === "/") {
       if (!authed) return json(res, 403, { error: { code: "forbidden", message: "no token" } });
@@ -69,7 +93,7 @@ createServer((req, res) => {
       if (objects.has(keyOf(store!, pathname)) && req.headers["x-allow-overwrite"] !== "1") return json(res, 409, { error: { code: "blob_already_exists", message: "exists" } });
       // Access is the store's, not the object's: a private store refuses a public put, a public store refuses a private one.
       const access = storeAccess(store!);
-      const asked = req.headers["x-vercel-blob-access"] === "private" ? "private" : "public";
+      const asked = req.headers["x-vercel-blob-access"] === "private" || (scoped && !req.headers["x-vercel-blob-access"]) ? "private" : "public";
       if (asked !== access) return json(res, 400, { error: { code: "bad_request", message: `this store is ${access}; access ${asked} is not available in it` } });
       // Test-only: a walk may back-date an object (x-mock-uploaded-at) to stand in for an upload that never finished recording half an hour ago.
       const stamped = req.headers["x-mock-uploaded-at"] ? new Date(String(req.headers["x-mock-uploaded-at"])) : null;

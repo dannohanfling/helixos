@@ -3198,7 +3198,7 @@ export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
  * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
  * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
  */
-export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "essence", "forum", "body"] as const;
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "essence", "forum", "inbox", "body"] as const;
 
 /** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
 export const oauthClients = sqliteTable("oauth_clients", {
@@ -3243,6 +3243,11 @@ export const connectedApps = sqliteTable(
     lastUsedAt: text("last_used_at"),
     lastTool: text("last_tool"),
     revokedAt: text("revoked_at"),
+    /**
+     * The Handoff inbox (rev 769): the Forum agent this connection speaks as, set when the coach ties it (Cowork's claude.ai
+     * connector, which can't send a token) or made with an agent token. Null for an ordinary connection: no inbox tools.
+     */
+    agentId: text("agent_id"),
     createdAt: createdAt(),
   },
   (t) => [index("connected_apps_member").on(t.workspaceId, t.userId)],
@@ -4295,8 +4300,156 @@ export const forumSettings = sqliteTable(
     webhookUsedAt: text("webhook_used_at"),
     /** When a coach's build team was seeded (rev 765 §5), so removing them doesn't bring them back. */
     seededAt: text("seeded_at"),
+    /** The Handoff inbox (rev 769): email the owner when something needs their approval. On until they turn it off. */
+    approvalEmails: integer("approval_emails", { mode: "boolean" }).notNull().default(true),
+    /** Scheduled check-ins (Danno, 13 Oct): Pause all, every agent's check-in answers quiet. */
+    checkinsPaused: integer("checkins_paused", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("forum_settings_member").on(t.workspaceId, t.userId), uniqueIndex("forum_settings_webhook").on(t.webhookHash)],
 );
 export type ForumSettings = typeof forumSettings.$inferSelect;
+
+/**
+ * The Handoff inbox (rev 769): agents pass briefs, plans, status and files through HelixOS, and only the owner (Danno, the
+ * coach) approves, by hand. An agent's identity is its token (or its tied connection), never a name in a message. Messages are
+ * numbered per owner (H-1, H-2 …). A token is stored as its hash only, shown once.
+ */
+export const agentTokens = sqliteTable(
+  "agent_tokens",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    /** The connection row the token acts through, so every call is audited and rate-limited like any connection. */
+    appId: text("app_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    last4: text("last4").notNull(),
+    lastUsedAt: text("last_used_at"),
+    revokedAt: text("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("agent_tokens_hash").on(t.tokenHash), index("agent_tokens_owner").on(t.workspaceId, t.userId)],
+);
+export type AgentToken = typeof agentTokens.$inferSelect;
+
+export const HANDOFF_DECISIONS = ["approved", "changed", "declined"] as const;
+export const handoffMessages = sqliteTable(
+  "handoff_messages",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    seq: integer("seq").notNull(),
+    /** The sending agent; null when the owner wrote it (an answer "from Danno"). */
+    fromAgentId: text("from_agent_id"),
+    /** Agent ids, and "danno" for the owner. */
+    toIds: text("to_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    replyToId: text("reply_to_id"),
+    threadId: text("thread_id"),
+    fileIds: text("file_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    needsApproval: integer("needs_approval", { mode: "boolean" }).notNull().default(false),
+    approvalReasons: text("approval_reasons", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The agent's text claims Danno approved: shown with a "not an approval" tag, never counted. */
+    claimsApproval: integer("claims_approval", { mode: "boolean" }).notNull().default(false),
+    decision: text("decision", { enum: HANDOFF_DECISIONS }),
+    decisionNote: text("decision_note"),
+    decidedAt: text("decided_at"),
+    decidedBy: text("decided_by"),
+    /** On the owner's answer that carries a decision: the message decided. */
+    decisionForId: text("decision_for_id"),
+    /** Danno's own message marked urgent (13 Oct): it gets past an agent's busy check-in. Only the owner can set it. */
+    urgent: integer("urgent", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("handoff_messages_seq").on(t.workspaceId, t.userId, t.seq), index("handoff_messages_thread").on(t.threadId)],
+);
+export type HandoffMessage = typeof handoffMessages.$inferSelect;
+
+/** One recipient's copy: delivered once (the first handoff_inbox that returned it), then acked with an optional note. */
+export const handoffDeliveries = sqliteTable(
+  "handoff_deliveries",
+  {
+    id: id(),
+    messageId: text("message_id").notNull(),
+    /** An agent id, or "danno" for the owner. */
+    recipient: text("recipient").notNull(),
+    deliveredAt: text("delivered_at"),
+    ackedAt: text("acked_at"),
+    ackNote: text("ack_note"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("handoff_deliveries_once").on(t.messageId, t.recipient), index("handoff_deliveries_recipient").on(t.recipient, t.deliveredAt)],
+);
+
+export const handoffFiles = sqliteTable(
+  "handoff_files",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    agentId: text("agent_id"),
+    name: text("name").notNull(),
+    contentType: text("content_type").notNull(),
+    /** The size the agent declared until the upload is checked; the store's own size after. */
+    size: integer("size").notNull(),
+    key: text("key").notNull(),
+    status: text("status", { enum: ["pending", "ready", "rejected"] }).notNull().default("pending"),
+    reason: text("reason"),
+    readyAt: text("ready_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("handoff_files_key").on(t.key), index("handoff_files_owner").on(t.workspaceId, t.userId)],
+);
+export type HandoffFile = typeof handoffFiles.$inferSelect;
+
+/** Every post, file, ack, approval and token change, with who and when: Coach → Inbox → History. */
+export const handoffAudit = sqliteTable(
+  "handoff_audit",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    agentId: text("agent_id"),
+    action: text("action").notNull(),
+    ref: text("ref"),
+    note: text("note"),
+    at: text("at").notNull(),
+  },
+  (t) => [index("handoff_audit_owner").on(t.workspaceId, t.userId, t.at)],
+);
+
+/**
+ * One agent's scheduled check-ins (Danno, 13 Oct): off until the owner turns them on; how often the timer on Danno's Claude
+ * account sends the standing check-in (shown, not enforced here); the active hours in their zone; the session link the Forum's
+ * Nudge opens; the busy note an agent sets for a long job; and the last check-in, its act and the day's count (40 at most).
+ */
+export const handoffAgents = sqliteTable(
+  "handoff_agents",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    checkins: integer("checkins", { mode: "boolean" }).notNull().default(false),
+    everyMinutes: integer("every_minutes").notNull().default(60),
+    activeFrom: text("active_from").notNull().default("07:00"),
+    activeTo: text("active_to").notNull().default("19:00"),
+    activeDays: text("active_days", { mode: "json" }).$type<number[]>().notNull().default([1, 2, 3, 4, 5]),
+    tz: text("tz").notNull().default("America/Los_Angeles"),
+    sessionUrl: text("session_url"),
+    busyNote: text("busy_note"),
+    busySince: text("busy_since"),
+    lastCheckinAt: text("last_checkin_at"),
+    lastAct: text("last_act"),
+    countDay: text("count_day"),
+    countToday: integer("count_today").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("handoff_agents_agent").on(t.workspaceId, t.userId, t.agentId)],
+);
+export type HandoffAgent = typeof handoffAgents.$inferSelect;

@@ -91,6 +91,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach/board-seats", label: "Board seats", icon: "🏛️", coachOnly: true, hint: "the council library" },
       { href: "/coach/feedback", label: "Feedback", icon: "💬", coachOnly: true, hint: "monthly" },
       { href: "/coach/reports", label: "Issues and ideas", icon: "🛟", coachOnly: true, hint: "from members" },
+      { href: "/coach/inbox", label: "Inbox", icon: "📬", coachOnly: true, hint: "your agents' handoffs" },
+      { href: "/coach/agents", label: "Agents", icon: "🔑", coachOnly: true, hint: "tokens and connections" },
       { href: "/coach/glossary", label: "Glossary", icon: "📖", coachOnly: true, hint: "Building with AI" },
       { href: "/coach/community", label: "Community posts", icon: "📣", coachOnly: true, hint: "Monday 3-1-3" },
       { href: "/coach/move", label: "Move to a client", icon: "📦", coachOnly: true, hint: "your items to theirs" },

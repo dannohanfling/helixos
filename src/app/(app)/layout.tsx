@@ -8,6 +8,7 @@ import { TIER_ICONS, tierFor } from "@/lib/engine/tiers";
 import { VoiceProvider } from "@/components/voice-context";
 import { voiceState } from "@/lib/queries/essence";
 import { intentionsDueFor } from "@/lib/queries/intentions";
+import { inboxCount } from "@/lib/handoff";
 import { WHATS_NEW } from "@/content/whats-new";
 import { unseenCount } from "@/lib/engine/whats-new";
 import { chatWidgetProps } from "@/lib/chat";
@@ -48,9 +49,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // Reward claims the coach hasn't marked done and Bot Features waiting to be switched on, on the Coach item.
     coachView ? Promise.all([openClaims(viewer.workspace.id), waitingFeatures(viewer.workspace.id)]).then(([a, b]) => a + b) : Promise.resolve(0),
   ]);
+  // The Handoff inbox (rev 769): what waits for the coach's decision and what's new for them, on the Inbox item.
+  const inboxNew = coachView ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
   const tier = tierFor(points);
   return (
-    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} coachFirst={coachFirst} choices={choices.length} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen }}>
+    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} coachFirst={coachFirst} choices={choices.length} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>

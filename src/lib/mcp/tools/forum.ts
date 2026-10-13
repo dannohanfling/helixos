@@ -4,6 +4,8 @@
  * member's webhook: same fields, same caps, same secret scrub, same 60-a-minute limit.
  */
 import { z } from "zod";
+import { and, eq } from "drizzle-orm";
+import { db, schema } from "@/db";
 import { defineTool, type ToolResult } from "@/lib/mcp/registry";
 import { forumStateFor, reportToForum } from "@/lib/forum";
 import { FORUM_BUILDINGS, FORUM_MAX } from "@/lib/engine/forum";
@@ -29,8 +31,10 @@ defineTool({
     headline: z.string().max(500).optional().describe("One line for the top of the Forum"),
     at: z.string().max(40).optional().describe("When this happened, as a UTC time (2026-10-12T05:35:00Z); leave out to use now"),
   },
-  handler: async (v, input): Promise<ToolResult> => {
-    const r = await reportToForum({ workspaceId: v.workspace.id, userId: v.user.id }, input, "connector");
+  handler: async (v, input, call): Promise<ToolResult> => {
+    // A connection that speaks as one agent (rev 769) reports as that agent, whatever name it sends.
+    const own = call?.agentId ? await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, v.workspace.id), eq(schema.forumAgents.userId, v.user.id), eq(schema.forumAgents.id, call.agentId)), columns: { name: true } }) : null;
+    const r = await reportToForum({ workspaceId: v.workspace.id, userId: v.user.id }, own ? { ...input, agent: own.name } : input, "connector");
     if (!r.ok) throw new Error(r.text);
     return { text: r.text, data: { agent_id: r.agentId, agent: r.agent, created: r.created, removed: r.removed } };
   },

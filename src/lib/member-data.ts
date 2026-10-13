@@ -58,6 +58,12 @@ export const MEMBER_TABLES = {
   forum_events: schema.forumEvents,
   forum_needs: schema.forumNeeds,
   forum_settings: schema.forumSettings,
+  // The Handoff inbox (rev 769): the owner's agent tokens (hashes stripped), messages, files and their history: theirs.
+  agent_tokens: schema.agentTokens,
+  handoff_messages: schema.handoffMessages,
+  handoff_files: schema.handoffFiles,
+  handoff_audit: schema.handoffAudit,
+  handoff_agents: schema.handoffAgents,
   webinar_signups: schema.webinarSignups,
   pathways: schema.pathways,
   webinars: schema.webinars,
@@ -178,6 +184,7 @@ export const CHILD_TABLES = [
   { label: "ladder_material", table: schema.ladderMaterial, fk: "ladderId", parent: "ladders" },
   { label: "coach_notes", table: schema.coachNotes, fk: "membershipId", parent: "membership" },
   { label: "bot_approvals", table: schema.botApprovals, fk: "membershipId", parent: "membership" },
+  { label: "handoff_deliveries", table: schema.handoffDeliveries, fk: "messageId", parent: "handoff_messages" },
 ] as const;
 export type ChildLabel = (typeof CHILD_TABLES)[number]["label"];
 

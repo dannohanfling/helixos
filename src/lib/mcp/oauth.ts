@@ -109,13 +109,15 @@ export async function revokeByToken(token: string): Promise<void> {
   if (row) await revokeApp(row.appId);
 }
 
-export type Grant = { app: schema.ConnectedApp; scopes: Scope[]; viewer: Viewer };
+/** `agentId`: the Forum agent this connection speaks as (rev 769), from its agent token or the owner's tie; null otherwise. */
+export type Grant = { app: schema.ConnectedApp; scopes: Scope[]; viewer: Viewer; agentId: string | null };
 
 /**
  * A bearer token to the member it acts as: the token unexpired and unrevoked, the grant live, the member still in the
  * workspace, and, for a client, the coach's "Connected apps open to clients" still on.
  */
 export async function authenticateBearer(token: string): Promise<Grant | null> {
+  if (token.startsWith("hxa_")) return authenticateAgentToken(token);
   if (!/^mcpa_[A-Za-z0-9_-]{40,50}$/.test(token)) return null;
   const row = await db.query.oauthTokens.findFirst({ where: and(eq(schema.oauthTokens.tokenHash, hashSecret(token)), eq(schema.oauthTokens.kind, "access")) });
   if (!row || row.revokedAt || Date.parse(row.expiresAt) <= Date.now()) return null;
@@ -124,7 +126,22 @@ export async function authenticateBearer(token: string): Promise<Grant | null> {
   const viewer = await viewerFor(app.userId, app.workspaceId);
   if (!viewer || viewer.membership.id !== app.membershipId) return null;
   if (viewer.role === "client" && !viewer.workspace.connectedAppsOpen) return null;
-  return { app, scopes: app.scopes.filter(isScope), viewer };
+  return { app, scopes: app.scopes.filter(isScope), viewer, agentId: app.agentId ?? null };
+}
+
+/**
+ * An agent token (rev 769): made on Coach → Agents, sent as a bearer token by a Code session. It acts through its own
+ * connection row, as the coach, for its one agent and only The Forum and the inbox. Revoking either ends it on the next call.
+ */
+async function authenticateAgentToken(token: string): Promise<Grant | null> {
+  const { agentTokenRow } = await import("@/lib/handoff");
+  const row = await agentTokenRow(token);
+  if (!row) return null;
+  const app = await db.query.connectedApps.findFirst({ where: eq(schema.connectedApps.id, row.appId) });
+  if (!app || app.revokedAt || !app.agentId) return null;
+  const viewer = await viewerFor(app.userId, app.workspaceId);
+  if (!viewer || viewer.membership.id !== app.membershipId || viewer.role !== "coach") return null;
+  return { app, scopes: app.scopes.filter(isScope).filter((s) => s === "forum" || s === "inbox"), viewer, agentId: app.agentId };
 }
 
 /** What the consent form signs, so a POST can only approve the request the page rendered for this member. */

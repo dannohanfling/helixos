@@ -79,6 +79,7 @@ const ROUTES: Record<string, Route> = {
   "/join/team/[code]": { kind: "public", why: "a one-time team invite code (Danno, 6 Oct), matched by its hash before any session exists; spent, cancelled or a week old it names nobody" },
   "/reset/[token]": { kind: "public", why: "a single-use password-reset token, its own secret" },
   "/link-chat/[token]": { kind: "public", why: "a single-use chat-link token, its own secret; the page itself refuses a token from another workspace" },
+  "/api/handoff/files/[id]": { kind: "public", why: "a Handoff inbox file (rev 769) on a link handoff_file signs for 15 minutes, for an agent with no session, or its owner signed in; a wrong or missing signature reads the same as no file" },
   "/api/deck-images/[id]": { kind: "owned", table: "deckImages" },
   "/api/headshots/[membershipId]": { kind: "owned", table: "memberships" },
   "/api/headshots/review/[id]": { kind: "coach" },

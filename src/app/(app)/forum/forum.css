@@ -78,6 +78,7 @@
 .fo-btn[aria-pressed="true"], .fo-primary { background: var(--fo-gold); color: #140f08; border-color: var(--fo-gold); }
 .fo-btn:disabled { opacity: 0.6; }
 .fo-quiet { color: var(--fo-muted); }
+.fo-page a.fo-linkbtn { display: inline-flex; align-items: center; text-decoration: none; }
 .fo-note { margin: 0; padding: 0 16px 12px; font-size: 13px; color: var(--fo-gold-hi); }
 
 .fo-cols { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; }
@@ -114,6 +115,8 @@
 .fo-row { font-size: 14px; overflow-wrap: anywhere; }
 .fo-row b { display: inline-block; min-width: 44px; font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--fo-quiet); font-weight: 700; }
 .fo-cardfoot { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--fo-quiet); }
+.fo-approve .btn { min-height: 40px; }
+.fo-approve .field { background: var(--fo-stone); color: var(--fo-cream); border-color: var(--fo-line); }
 .fo-fine { margin: 0; font-size: 12px; color: var(--fo-quiet); }
 .fo-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .fo-edit summary { cursor: pointer; font-size: 13px; color: var(--fo-gold-hi); min-height: 32px; display: flex; align-items: center; }

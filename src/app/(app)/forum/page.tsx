@@ -13,6 +13,10 @@ import { ForumMap } from "@/components/forum-map";
 import { ForumAddAgent, ForumLive } from "@/components/forum-bits";
 import { GlossaryText } from "@/components/glossary-text";
 import { SubmitButton } from "@/components/submit-button";
+import { CopyButton } from "@/components/copy-button";
+import { ApprovalButtons } from "@/components/handoff-bits";
+import { ownerInbox } from "@/lib/handoff";
+import { NUDGE_LINE } from "@/lib/engine/handoff";
 import "./forum.css";
 
 export const metadata = { title: "The Forum" };
@@ -70,6 +74,11 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
       : Promise.resolve([]),
   ]);
   const canEdit = own && !v.team;
+  // The Handoff inbox (rev 769): the coach's waiting decisions sit in What needs you too, with the same three buttons.
+  const inbox = own && v.role === "coach" ? await ownerInbox(m, 1) : null;
+  // The Nudge opens an agent's saved session link (13 Oct), when there is one.
+  const sessions = inbox ? new Map((await db.query.handoffAgents.findMany({ where: and(eq(schema.handoffAgents.workspaceId, m.workspaceId), eq(schema.handoffAgents.userId, m.userId)), columns: { agentId: true, sessionUrl: true } })).map((r) => [r.agentId, r.sessionUrl])) : new Map<string, string | null>();
+  const approvals = inbox?.waiting ?? [];
   const at = (iso: string) => formatDateTime(iso, v.tz, { zone: true });
   const firstName = (owner?.name ?? "This member").split(" ")[0];
   const rostra = state.waiting.length ? "waiting" : state.agents.some((a) => a.status === "working") ? "working" : "idle";
@@ -116,10 +125,33 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
               What needs you
             </h2>
             <div className="fo-needs" data-testid="forum-needs">
+              {approvals.map((w, i) => (
+                <div key={w.id} className="fo-need" data-testid="forum-approval">
+                  <div className="fo-n">{i + 1}</div>
+                  <div>
+                    <div className="fo-t">
+                      {w.ref}: {w.title}
+                    </div>
+                    <div className="fo-meta">
+                      <span className="fo-w">Needs your approval</span>
+                      <span>
+                        From {w.from}, {at(w.at)} · {w.reasons.join(", ")}
+                      </span>
+                      {w.claimsApproval ? <span>says it&apos;s approved: not an approval</span> : null}
+                    </div>
+                    <div className="fo-approve">
+                      <ApprovalButtons id={w.id} refLabel={w.ref} />
+                    </div>
+                    <Link href="/coach/inbox" className="fo-fine">
+                      Read it in your inbox
+                    </Link>
+                  </div>
+                </div>
+              ))}
               {state.waiting.length ? (
                 state.waiting.map((w, i) => (
                   <div key={w.id} className="fo-need" data-testid="forum-need">
-                    <div className="fo-n">{i + 1}</div>
+                    <div className="fo-n">{approvals.length + i + 1}</div>
                     <div>
                       <div className="fo-t">{w.what}</div>
                       {w.detail ? <div className="fo-d">{w.detail}</div> : null}
@@ -141,7 +173,7 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                     </div>
                   </div>
                 ))
-              ) : (
+              ) : approvals.length ? null : (
                 <div className="fo-empty">Nothing is waiting on you.</div>
               )}
               {canEdit && state.waiting.length ? <p className="fo-fine">Ticking one done only clears it here. Nothing is sent back to the agent.</p> : null}
@@ -232,6 +264,18 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
                       ) : null}
                     </div>
                     {a.builtIn ? <p className="fo-fine">Reads what HelixOS already records.</p> : null}
+                    {inbox && !a.builtIn && a.status === "idle" ? (
+                      <div className="fo-inline">
+                        <span className="fo-fine">Idle. HelixOS can&apos;t wake a session:</span>
+                        {sessions.get(a.id) ? (
+                          <a href={sessions.get(a.id)!} target="_blank" rel="noopener noreferrer" className="fo-btn fo-small-btn fo-linkbtn" data-testid="forum-nudge-link">
+                            Nudge: open its session
+                          </a>
+                        ) : (
+                          <CopyButton text={NUDGE_LINE} label="Nudge: copy the line" className="fo-btn fo-small-btn" />
+                        )}
+                      </div>
+                    ) : null}
                     {canEdit && a.isNew ? (
                       <form action={confirmForumAgentAction} className="fo-inline">
                         <input type="hidden" name="id" value={a.id} />

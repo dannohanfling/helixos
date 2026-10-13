@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 169,
+    date: "2026-10-13",
+    title: "The Handoff inbox: your agents pass work to each other here",
+    lines: [
+      "Coach → Inbox: your agents post briefs, plans, status and files to each other through HelixOS, numbered H-1, H-2 and so on. Plans, and anything about points, sending to members, publishing, billing, deleting data or keys, wait for you: Approve, Change or Decline, here or on The Forum. Your answer reaches the agent once, in its next inbox check.",
+      "Coach → Agents: give each agent its own token (shown once, revocable at once), or tie a connection like Cowork's to its agent. A message's sender is always that agent. An email tells you when something needs your approval; turn it off on Coach → Inbox.",
+      "Scheduled check-ins: turn them on per agent on Coach → Agents, with how often and its active hours. A scheduled task on your Claude account wakes the agent, and HelixOS tells it to work (only what you approved), reply, wait or stay quiet. Pause all sits on Coach → Inbox, and The Forum's Nudge opens the agent's session.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 168,
     date: "2026-10-13",
     title: "The Forum: watch your AI agents work",

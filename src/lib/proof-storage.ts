@@ -9,7 +9,7 @@
  * Access is a property of the store: every object here is private, its URL is unreachable without the token, and reads go
  * through /api/proofs/attachments/[id], which checks membership in the handler and streams the bytes, never CDN-cached.
  */
-import { del, head, list, put } from "@vercel/blob";
+import { del, head, issueSignedToken, list, presignUrl, put } from "@vercel/blob";
 import { proofKeyWorkspace } from "@/lib/engine/proof-attachments";
 import { deckKeyOwner } from "@/lib/engine/deck-image";
 import { headshotKeyOk } from "@/lib/engine/headshots";
@@ -92,4 +92,19 @@ export async function deleteProofObject(url: string, abortSignal?: AbortSignal):
  */
 export async function readProofObject(url: string, range?: string | null): Promise<Response> {
   return fetch(url, { headers: { authorization: `Bearer ${proofToken()}`, ...(range ? { range } : {}) }, cache: "no-store" });
+}
+
+/** A Handoff inbox file's key (rev 769): handoff/<workspace>/<file id>/<name>, nothing else. */
+export const handoffKeyOk = (key: string): boolean => /^handoff\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(key);
+
+/**
+ * A short-lived link an agent PUTs one file to, straight into the PRIVATE store (rev 769: a HelixOS request carries only about
+ * 4.5 MB, a handoff file up to 100 MB). Signed from the proof store's own token, scoped to that one key, the one type, the
+ * size cap, no overwrite, and minutes of life. Nothing is recorded until the upload is read back from the store.
+ */
+export async function presignHandoffUpload(key: string, contentType: string, maxBytes: number, validUntil: number): Promise<string> {
+  if (!handoffKeyOk(key)) throw new Error("refusing to sign an upload outside the handoff tree");
+  const signed = await issueSignedToken({ token: proofToken(), pathname: key, operations: ["put"], validUntil });
+  const { presignedUrl } = await presignUrl(signed, { operation: "put", pathname: key, access: "private", validUntil, allowedContentTypes: [contentType], maximumSizeInBytes: maxBytes, allowOverwrite: false, addRandomSuffix: false });
+  return presignedUrl;
 }

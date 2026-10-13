@@ -17,8 +17,11 @@ export type ToolDef = {
   kind: "read" | "write";
   description: string;
   input: z.ZodRawShape;
-  /** `call`: what this connection may do (whoami names it); a walk calling a handler directly may leave it out. */
-  handler: (v: Viewer, input: Record<string, unknown>, call?: { scopes: readonly Scope[] }) => Promise<ToolResult>;
+  /**
+   * `call`: what this connection may do (whoami names it), and the Forum agent it speaks as (rev 769), if any; a walk calling
+   * a handler directly may leave it out.
+   */
+  handler: (v: Viewer, input: Record<string, unknown>, call?: { scopes: readonly Scope[]; agentId?: string | null }) => Promise<ToolResult>;
 };
 export type ScopeGate = (v: Viewer) => Promise<boolean>;
 

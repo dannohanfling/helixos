@@ -43,8 +43,9 @@ describe("emails from HelixOS: who may be emailed automatically (29 Sep)", () =>
     // the coach, not gated). account: the member's own forgotten password (asked for by them, not gated). bot-features: a
     // feature switched on (rev 618), sent when the coach marks it, gated like the Nudge. scoreboard: the Monday scoreboard and
     // the coach's roster (rev 639), from the same hourly cron, gated like the reminders. connect: the setup link a coach sends
-    // one client by hand (rev 850), asked for like the reset link, not gated.
-    expect(senders).toEqual(["src/lib/actions/account.ts", "src/lib/actions/bot-features.ts", "src/lib/actions/coach.ts", "src/lib/actions/connect.ts", "src/lib/reminders.ts", "src/lib/scoreboard.ts"]);
+    // one client by hand (rev 850), asked for like the reset link, not gated. handoff: the coach's own approval alert (rev 769),
+    // automated, gated like the reminders and behind its own switch.
+    expect(senders).toEqual(["src/lib/actions/account.ts", "src/lib/actions/bot-features.ts", "src/lib/actions/coach.ts", "src/lib/actions/connect.ts", "src/lib/handoff.ts", "src/lib/reminders.ts", "src/lib/scoreboard.ts"]);
     const reminders = readFileSync(join(SRC, "lib/reminders.ts"), "utf8");
     expect(body(reminders, "runReminders")).toMatch(/await canEmail\(m\.id\)/);
     const coach = readFileSync(join(SRC, "lib/actions/coach.ts"), "utf8");
@@ -53,8 +54,10 @@ describe("emails from HelixOS: who may be emailed automatically (29 Sep)", () =>
     expect(features).toMatch(/await canEmail\(m\.id\)/);
     const scoreboard = body(readFileSync(join(SRC, "lib/scoreboard.ts"), "utf8"), "runScoreboards");
     expect(scoreboard).toMatch(/await canEmail\(m\.id\)/);
+    const handoff = body(readFileSync(join(SRC, "lib/handoff.ts"), "utf8"), "alertOwner");
+    expect(handoff).toMatch(/await canEmail\(m\.id\)/);
     // The gate comes before the send in each.
-    for (const b of [body(reminders, "runReminders"), body(coach, "nudgeMemberAction"), features, scoreboard]) expect(b.indexOf("canEmail(")).toBeLessThan(b.search(/deliver\(|sendEmail\(/));
+    for (const b of [body(reminders, "runReminders"), body(coach, "nudgeMemberAction"), features, scoreboard, handoff]) expect(b.indexOf("canEmail(")).toBeLessThan(b.search(/deliver\(|sendEmail\(/));
   });
 
   it("the import creates a client with emails off, and every session write records the first sign-in", () => {
