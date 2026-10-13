@@ -533,3 +533,20 @@ export function publicBody(o: { state: MfState; pitch: MfPitch | null; facts: Mf
     prefill: o.prefill,
   };
 }
+
+/**
+ * Which key writes a member's Magic funnel pages (Danno, 13 Oct), in order: HelixOS's own MAGIC_FUNNEL_ANTHROPIC_KEY when it's
+ * set; otherwise, only for the coach's own pages, the Anthropic key on the coach's own AI drafting card (working, not removed);
+ * otherwise none, and every page is the default copy. A client's pages never use the coach's key.
+ */
+export type MfKeySource = "house" | "own" | "none";
+export function mfKeySource(o: { houseKey: boolean; ownerRole: string | null; ownerRemoved: boolean; card: { provider: string; lastError: string | null } | null }): MfKeySource {
+  if (o.houseKey) return "house";
+  if (o.ownerRole !== "coach" || o.ownerRemoved) return "none";
+  return o.card && o.card.provider === "anthropic" && !o.card.lastError ? "own" : "none";
+}
+export const MF_KEY_WORDS: Record<MfKeySource, string> = {
+  house: "Writing with HelixOS's Magic funnel key, on the small model.",
+  own: "Writing with the Anthropic key on your own AI drafting card in Settings, on the small model.",
+  none: "No writer key yet: every page uses your default copy until one is set.",
+};

@@ -19,6 +19,7 @@ import { FEATURES, MODELS, estimateCost, explainAiError, modelFor, type AiProvid
 import { assembleSystem, type SystemBlock } from "@/lib/engine/essence";
 import { anthropicUserContent, imageRefusal, openaiInput, type DraftImage } from "@/lib/engine/ai-request";
 import { essenceBlockFor } from "@/lib/queries/essence";
+import { mfKeySource, type MfKeySource } from "@/lib/engine/magic-funnel";
 
 export type AiStatus = { hasKey: boolean; provider: AiProvider | null; last4: string; lastError: string | null; callsToday: number; cap: number; exempt: boolean; blocked: boolean };
 
@@ -198,15 +199,28 @@ export async function validateKey(provider: AiProvider, key: string): Promise<{ 
 
 
 /**
- * The Magic funnel's writer (revs 812, 815; rev 837): the one house key in HelixOS, Danno's MAGIC_FUNNEL_ANTHROPIC_KEY in
- * Vercel, on the small model. It never touches a member's own key or their ai_usage cap; the funnel's own daily cap per
- * member is counted by the caller. No key, or any failure: null, and the page uses the member's default copy. Nothing of the
- * prompt, the prospect or the reply is logged.
+ * The Magic funnel's writer (revs 812, 815, 837; Danno, 13 Oct), on the small model. Its key, in order: Danno's
+ * MAGIC_FUNNEL_ANTHROPIC_KEY in Vercel; otherwise, for the coach's own pages only, the Anthropic key on the coach's own AI
+ * drafting card, opened from its seal here and nowhere else; otherwise none, and the page uses the member's default copy. It
+ * never counts against anyone's ai_usage cap; the funnel's own daily cap per member is counted by the caller. Nothing of the
+ * key, the prompt, the prospect or the reply is ever logged, returned or shown.
  */
 export const MAGIC_FUNNEL_MODEL = "claude-haiku-5-5";
-export const magicFunnelKeySet = () => Boolean(process.env.MAGIC_FUNNEL_ANTHROPIC_KEY?.trim());
-export async function magicFunnelCall(system: string, user: string, maxTokens: number): Promise<string | null> {
-  const key = process.env.MAGIC_FUNNEL_ANTHROPIC_KEY?.trim();
+export async function magicFunnelKey(m: { workspaceId: string; userId: string }): Promise<{ source: MfKeySource; key: string | null }> {
+  const house = process.env.MAGIC_FUNNEL_ANTHROPIC_KEY?.trim() || null;
+  const owner = house ? null : await db.query.memberships.findFirst({ where: and(eq(schema.memberships.workspaceId, m.workspaceId), eq(schema.memberships.userId, m.userId)), columns: { role: true, removedAt: true } });
+  const card = house || owner?.role !== "coach" ? null : await credentialFor(m.workspaceId, m.userId);
+  const source = mfKeySource({ houseKey: Boolean(house), ownerRole: owner?.role ?? null, ownerRemoved: Boolean(owner?.removedAt), card: card ? { provider: card.provider, lastError: card.lastError } : null });
+  if (source === "house") return { source, key: house };
+  if (source === "own" && card) {
+    const key = open(card.keyEncrypted);
+    return key ? { source, key } : { source: "none", key: null };
+  }
+  return { source: "none", key: null };
+}
+/** Which key the setup page names; never the key. */
+export const magicFunnelSource = async (m: { workspaceId: string; userId: string }): Promise<MfKeySource> => (await magicFunnelKey(m)).source;
+export async function magicFunnelCall(key: string | null, system: string, user: string, maxTokens: number): Promise<string | null> {
   if (!key) return null;
   try {
     const r = await callAnthropic(key, MAGIC_FUNNEL_MODEL, [{ text: system, cached: true }], user, maxTokens);

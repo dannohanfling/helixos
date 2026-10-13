@@ -16,6 +16,8 @@ import {
   fillPrompt,
   isMfCode,
   lineProblem,
+  MF_KEY_WORDS,
+  mfKeySource,
   originAllowed,
   parseObject,
   personalUrl,
@@ -192,5 +194,26 @@ describe("Magic funnel C: the hero picture and tags", () => {
     const body = publicBody({ state: "personal", pitch, facts, proofs: [], prefill: null, heroUrl: "https://h.example.com/api/mf/abc/hero" }) as { sections: Record<string, unknown> };
     expect(body.sections.hero_image).toBe("https://h.example.com/api/mf/abc/hero");
     expect(JSON.stringify(body)).not.toContain("img_123");
+  });
+});
+
+describe("mfKeySource: which key writes the pages", () => {
+  const card = { provider: "anthropic", lastError: null };
+  it("uses HelixOS's key whenever it is set", () => {
+    expect(mfKeySource({ houseKey: true, ownerRole: "client", ownerRemoved: false, card: null })).toBe("house");
+    expect(mfKeySource({ houseKey: true, ownerRole: "coach", ownerRemoved: false, card })).toBe("house");
+  });
+  it("falls back to the coach's own working Anthropic card", () => {
+    expect(mfKeySource({ houseKey: false, ownerRole: "coach", ownerRemoved: false, card })).toBe("own");
+  });
+  it("never uses a client's card, a removed coach's, an OpenAI card or a failing one", () => {
+    expect(mfKeySource({ houseKey: false, ownerRole: "client", ownerRemoved: false, card })).toBe("none");
+    expect(mfKeySource({ houseKey: false, ownerRole: "coach", ownerRemoved: true, card })).toBe("none");
+    expect(mfKeySource({ houseKey: false, ownerRole: "coach", ownerRemoved: false, card: { provider: "openai", lastError: null } })).toBe("none");
+    expect(mfKeySource({ houseKey: false, ownerRole: "coach", ownerRemoved: false, card: { provider: "anthropic", lastError: "401" } })).toBe("none");
+    expect(mfKeySource({ houseKey: false, ownerRole: "coach", ownerRemoved: false, card: null })).toBe("none");
+  });
+  it("names the source in words, never the key", () => {
+    for (const w of Object.values(MF_KEY_WORDS)) expect(w).not.toMatch(/sk-|\u2014/);
   });
 });

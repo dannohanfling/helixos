@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 170,
+    date: "2026-10-13",
+    title: "Magic funnel: see which key writes your pages",
+    lines: [
+      "The Magic funnel setup page now says which key writes each personal page: HelixOS's own key, or, as a backup, the Anthropic key on your AI drafting card in Settings. Your own key is used only for your pages, never for clients', and it is never shown. With neither, every page uses your default copy, as before.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 169,
     date: "2026-10-13",
     title: "The Handoff inbox: your agents pass work to each other here",

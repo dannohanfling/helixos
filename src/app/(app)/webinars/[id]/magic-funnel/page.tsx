@@ -3,10 +3,10 @@ import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
-import { magicFunnelKeySet } from "@/lib/ai";
+import { magicFunnelSource } from "@/lib/ai";
 import { saveMfSetupAction } from "@/lib/actions/magic-funnel";
 import { factsFor, mfAvailable, pagesToday, setupFor } from "@/lib/mf/data";
-import { DAILY_CAP_DEFAULT, DEFAULT_PROMPT, EMPTY_DEFAULTS, MF_MAX, SECTION_MAX } from "@/lib/engine/magic-funnel";
+import { DAILY_CAP_DEFAULT, DEFAULT_PROMPT, EMPTY_DEFAULTS, MF_KEY_WORDS, MF_MAX, SECTION_MAX } from "@/lib/engine/magic-funnel";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { MfPreview } from "@/components/mf-preview";
@@ -28,11 +28,12 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.workspaceId, v.workspace.id), eq(schema.webinars.userId, v.user.id)) });
   if (!w) notFound();
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
-  const [setup, proofs, today, signups] = await Promise.all([
+  const [setup, proofs, today, signups, keySource] = await Promise.all([
     setupFor(m, w.id),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, m.workspaceId), eq(schema.proofs.userId, m.userId), eq(schema.proofs.status, "approved")), orderBy: desc(schema.proofs.createdAt), columns: { id: true, name: true, who: true, quote: true, shortVersion: true, tags: true, permissionAt: true } }),
     pagesToday(m, v.tz),
     db.query.webinarSignups.findMany({ where: and(eq(schema.webinarSignups.webinarId, id), eq(schema.webinarSignups.userId, v.user.id)), columns: { source: true, pitchStatus: true, openedAt: true, registeredAt: true } }),
+    magicFunnelSource(m),
   ]);
   const facts = factsFor(w, v.tz);
   const available = mfAvailable(v.membership);
@@ -62,7 +63,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
       ) : null}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <Badge tone={setup?.live ? "good" : "neutral"}>{setup?.live ? "Live" : "Not live"}</Badge>
-        <span className="text-ink-3" data-testid="mf-key">{magicFunnelKeySet() ? "Writing with the small model." : "No writer key yet: every page uses your default copy until it's added."}</span>
+        <span className="text-ink-3" data-testid="mf-key" data-source={keySource}>{MF_KEY_WORDS[keySource]}</span>
         <span className="text-ink-3" data-testid="mf-today">
           {today} of {cap} pages today
         </span>

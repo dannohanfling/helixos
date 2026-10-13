@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 import { siteUrl } from "@/lib/app-url";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { magicFunnelCall, magicFunnelKeySet } from "@/lib/ai";
+import { magicFunnelCall, magicFunnelKey } from "@/lib/ai";
 import { allow } from "@/lib/rate-limit";
 import { nowIso, todayInTz, wallTimeToUtc } from "@/lib/dates";
 import { newId } from "@/lib/ids";
@@ -119,10 +119,11 @@ export async function composePage(o: { member: Member; tz: string; cap: number; 
     defaultPitch({ defaults: o.setup.defaults, pillars: o.setup.pillars, agenda: o.setup.agenda, proofIds: rankProof(proofs, o.setup.proofIds, profile).map((p) => p.id), firstName: o.firstName, facts });
   const plain = (note: string, profile: MfProfile | null = null): Written => ({ profile, pitch: fallback(profile), sources: allDefault(), status: "default", note, failed: {} });
 
-  if (!magicFunnelKeySet()) return plain("no key");
+  const writer = await magicFunnelKey(o.member);
+  if (!writer.key) return plain("no key");
   if (!(await withinCap(o.member, o.tz, o.cap))) return plain("daily cap");
 
-  const profile = readProfile(parseObject(await magicFunnelCall(PROFILE_SYSTEM, profileInput({ ...o.said, custom: o.custom }), 600)));
+  const profile = readProfile(parseObject(await magicFunnelCall(writer.key, PROFILE_SYSTEM, profileInput({ ...o.said, custom: o.custom }), 600)));
   if (!profile) return plain("no profile");
 
   const ranked = rankProof(proofs, o.setup.proofIds, profile).slice(0, 8);
@@ -138,14 +139,14 @@ export async function composePage(o: { member: Member; tz: string; cap: number; 
   const system = `${pitchRules({ pillarIds: ctx.pillarIds, agendaIds: ctx.agendaIds, proofIds: ctx.proofIds, urgency: o.setup.urgency })}\n\n<voice>\n${fillPrompt(o.setup.prompt ?? DEFAULT_PROMPT, o.firstName, profile.main_pain)}\n</voice>`;
   const input = pitchInput({ facts, pillars: o.setup.pillars, agenda: o.setup.agenda, objections: o.setup.objections, proofs: ranked.map((p) => ({ id: p.id, who: p.who, tags: p.tags, line: p.quote.slice(0, 400) })), profile, firstName: o.firstName });
 
-  const first = readPitch(parseObject(await magicFunnelCall(system, input, 2500)));
+  const first = readPitch(parseObject(await magicFunnelCall(writer.key, system, input, 2500)));
   const firstCheck = checkSections(first, ctx);
   const failing = (Object.keys(firstCheck) as MfSection[]).filter((s) => firstCheck[s]);
   let retry: MfPitch | null = null;
   let retryCheck: Record<MfSection, string | null> | null = null;
   if (failing.length) {
     const why = failing.map((s) => `${s}: ${firstCheck[s]}`).join("; ");
-    retry = readPitch(parseObject(await magicFunnelCall(system, `${input}\n\nYour last version broke the rules in these sections (${why}). Write the whole JSON again and fix them.`, 2500)));
+    retry = readPitch(parseObject(await magicFunnelCall(writer.key, system, `${input}\n\nYour last version broke the rules in these sections (${why}). Write the whole JSON again and fix them.`, 2500)));
     retryCheck = checkSections(retry, ctx);
   }
   const { pitch, sources } = assemble(first, firstCheck, retry, retryCheck, fallback(profile));
