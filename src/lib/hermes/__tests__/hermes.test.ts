@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { callWhen, countdown, dayTag, googleCalendarUrl, icsFile } from "@/lib/hermes/when";
-import { cleanEmail, cleanPixelId, isPageCode, isWebinarId, pixelBeacon, youtubeEmbed } from "@/lib/hermes/rules";
+import { cleanEmail, cleanPixelId, hasNumbers, isPageCode, isWebinarId, pixelBeacon, quoteOnce, youtubeEmbed } from "@/lib/hermes/rules";
 import * as copy from "@/lib/hermes/copy";
 
 const LA = "America/Los_Angeles";
@@ -101,5 +101,19 @@ describe("the fixed copy (Danno, 13 Oct)", () => {
     expect(files.sort()).toEqual(["danno-coached-dean.jpg", "danno-headshot-lanyard.jpg", "danno-stage-summit.jpg", "danno-teaching-whiteboard.jpg", "danno-videowall.jpg", "danno-workshop-group.jpg", "evolve-omega-logo-320.png", "ic3-serving-future.jpg", "ic3-teach-edge.jpg", "ic3-teach-flow.jpg"]);
     expect(copy.WHY_LISTEN.map((x) => x.photo)).toContain(copy.PHOTO.dean);
     expect([copy.PHOTO.hero, ...copy.PART_PHOTOS]).not.toContain(copy.PHOTO.dean);
+  });
+});
+
+describe("proof on public pages (H-21 A)", () => {
+  it("finds numbers: digits, money, percentages and counts in words", () => {
+    for (const t of ["I made $5k in a month", "Bookings up 40%", "Three new clients in a week", "My calendar doubled", "2 calls booked", "a hundred leads"]) expect(hasNumbers(t), t).toBe(true);
+    for (const t of ["I finally feel like my business is mine", "Danno helped me start real conversations", "One step at a time, it works"]) expect(hasNumbers(t), t).toBe(false);
+  });
+  it("shows the name once: the quote loses its own attribution", () => {
+    expect(quoteOnce("It changed how I talk to clients. — Maria Lopez", "Maria Lopez")).toBe("It changed how I talk to clients.");
+    expect(quoteOnce("It changed how I talk to clients - Maria", "Maria Lopez")).toBe("It changed how I talk to clients");
+    expect(quoteOnce("Maria: It changed how I talk to clients.", "Maria")).toBe("It changed how I talk to clients.");
+    expect(quoteOnce('"It works." (Maria L.)', "Maria L.")).toBe("It works.");
+    expect(quoteOnce("Ask Maria about it, it works.", "Maria")).toBe("Ask Maria about it, it works.");
   });
 });

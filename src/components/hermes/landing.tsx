@@ -5,6 +5,8 @@ import { AFTER, BEFORE, FOOTER_META, FOR_YOU, HOST, LETTER, MARQUEE, NOT_FOR_YOU
 import { Countdown } from "@/components/hermes/countdown";
 import { SeatForm } from "@/components/hermes/seat-form";
 import { Pixel } from "@/components/hermes/pixel";
+import { AutoReload } from "@/components/hermes/auto-reload";
+import { quoteOnce } from "@/lib/hermes/rules";
 
 type Photo = { src: string; width: number; height: number; alt: string };
 const Img = ({ p, className, sizes, priority }: { p: Photo; className?: string; sizes: string; priority?: boolean }) => <Image src={p.src} width={p.width} height={p.height} alt={p.alt} className={className} sizes={sizes} priority={priority} />;
@@ -49,9 +51,11 @@ export type LandingProps = {
   now: number;
   /** The coach's preview: personal sections outlined, the form doesn't post. */
   preview?: boolean;
+  /** A personal page opened before the engine finished: look again and reload once the personal copy lands. */
+  waiting?: boolean;
 };
 
-export function Landing({ ctx, pitch, personal, firstName, prefill, proofs, code, formError, now, preview }: LandingProps) {
+export function Landing({ ctx, pitch, personal, firstName, prefill, proofs, code, formError, now, preview, waiting }: LandingProps) {
   const w = ctx.when;
   const cta = pitch.hero.cta_label?.trim() || (firstName ? `Save my seat, ${firstName}` : "Save my seat");
   const parts = partsFor(pitch, ctx.setup.pillars, personal);
@@ -64,6 +68,7 @@ export function Landing({ ctx, pitch, personal, firstName, prefill, proofs, code
   return (
     <div className={`hm-root${preview ? " hm-marks" : ""}`} data-testid="hm-landing" data-page={code ? "personal" : "cold"} data-copy={personal ? "personal" : "default"}>
       {pixel ? <Pixel id={pixel} event="PageView" /> : null}
+      {waiting && !preview ? <AutoReload /> : null}
       <div className="hm-bar">
         <div className="hm-wrap">
           <span className="hm-bar-text">
@@ -327,7 +332,7 @@ export function Landing({ ctx, pitch, personal, firstName, prefill, proofs, code
               <div className={`hm-grid hm-grid-3${mark(personal)}`} data-testid="hm-proof">
                 {proofs.map((p) => (
                   <figure key={p.id} className="hm-proof">
-                    <blockquote>&ldquo;{p.quote}&rdquo;</blockquote>
+                    <blockquote>&ldquo;{quoteOnce(p.quote, p.who)}&rdquo;</blockquote>
                     {p.who ? <figcaption>{p.who}</figcaption> : null}
                   </figure>
                 ))}

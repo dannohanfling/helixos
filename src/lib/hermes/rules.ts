@@ -48,3 +48,27 @@ export function cleanEmail(raw: unknown): string | null {
   const s = (typeof raw === "string" ? raw : "").trim().toLowerCase();
   return s.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null;
 }
+
+/**
+ * A proof line that states a number: digits, money, a percentage, or a count in words ("three clients", "doubled"). Until Danno
+ * picks the proof for a webinar, public pages hide these (H-21 A): a figure on a page is a claim he hasn't chosen to make.
+ */
+export function hasNumbers(text: string): boolean {
+  return /[\d$€£%]|\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen|double[ds]?|tripled?|percent)\b/i.test(text);
+}
+
+/**
+ * The quote without its own attribution, so the name shows once, under it (H-21 A). Strips a trailing "— Name …", "- Name",
+ * "~ Name" or "(Name)" and a leading "Name:" when Name is who said it (full name or first name).
+ */
+export function quoteOnce(quote: string, who: string): string {
+  const name = who.trim();
+  if (!name) return quote.trim();
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const names = [...new Set([name, name.split(/\s+/)[0]])].filter(Boolean).map(esc).join("|");
+  let q = quote.trim();
+  q = q.replace(new RegExp(`\\s*(?:[-–—~]+\\s*|\\(\\s*)(?:${names})\\b[^"”]*$`, "i"), "");
+  q = q.replace(new RegExp(`^(?:${names})\\s*:\\s*`, "i"), "");
+  q = q.replace(/^["“]+|["”]+$/g, "").trim();
+  return q || quote.trim();
+}

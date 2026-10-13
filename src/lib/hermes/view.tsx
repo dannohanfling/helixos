@@ -25,7 +25,7 @@ export function render(view: PageView, o: { error: string | null }) {
   if (view.kind === "closed") return <Closed />;
   const now = Date.now();
   if (view.kind === "cold") return <Landing ctx={view.ctx} pitch={view.pitch} personal={false} firstName="" prefill={null} proofs={view.proofs} code={null} formError={o.error} now={now} />;
-  return <Landing ctx={view.ctx} pitch={view.pitch} personal={view.ready} firstName={view.firstName} prefill={view.prefill} proofs={view.proofs} code={view.code} formError={o.error} now={now} />;
+  return <Landing ctx={view.ctx} pitch={view.pitch} personal={view.ready} firstName={view.firstName} prefill={view.prefill} proofs={view.proofs} code={view.code} formError={o.error} now={now} waiting={!view.ready} />;
 }
 
 export const formError = (e: string | string[] | undefined) => (typeof e === "string" ? (FORM_ERRORS[e] ?? null) : null);
