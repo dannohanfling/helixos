@@ -1,6 +1,6 @@
 /**
  * Hermes: the HelixOS-hosted Magic funnel pages (/mf/<code>, /mf/w/<webinar>), against the coach's own webinar.
- *  1. No hermes_pages table yet (before Danno merges): the switch reads off; mf_prepare keeps the GoHighLevel link; the pages
+ *  1. No hermes_pages table (a database migration 0153 hasn't reached): the switch reads off; mf_prepare keeps the GoHighLevel link; the pages
  *     are the quiet "no call open" page; the settings page says it can't save yet. Nothing breaks.
  *  2. The table arrives; the coach turns "Host pages in HelixOS" on with a YouTube video and a Meta Pixel.
  *  3. Personal: mf_prepare hands out <HelixOS>/mf/<43-character code> with nothing personal in it; once the engine has written
@@ -19,7 +19,7 @@
  */
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { chromium, type Page } from "@playwright/test";
 
 process.env.SESSION_SECRET ||= "dev-secret-dev-secret-dev-secret-123";
@@ -166,9 +166,11 @@ async function main() {
     await coachPage.locator('[data-testid="hm-no-table"]').waitFor({ timeout: 30000 });
     console.log("✓ no table: switch off, mf_prepare keeps the GoHighLevel link, the pages are the quiet page, settings say they can't save yet");
 
-    // 2. The table arrives (from the held migration); the coach switches it on.
-    const ddl = readFileSync("drizzle-hermes/0151_hermes_pages.sql", "utf8").split("--> statement-breakpoint").map((s) => s.trim()).filter(Boolean);
-    must(ddl.length === 3, `the held migration has its three statements (${ddl.length})`);
+    // 2. The table arrives (from its migration in drizzle/); the coach switches it on.
+    const migration = readdirSync("drizzle").find((f) => /^\d{4}_hermes_pages\.sql$/.test(f));
+    must(migration, "the hermes_pages migration is in drizzle/");
+    const ddl = readFileSync(`drizzle/${migration}`, "utf8").split("--> statement-breakpoint").map((s) => s.trim()).filter(Boolean);
+    must(ddl.length === 3, `the migration has its three statements (${ddl.length})`);
     for (const s of ddl) await db.run(sql.raw(s));
     await coachPage.reload();
     must(!(await coachPage.locator('[data-testid="hm-no-table"]').count()), "the table is there now");

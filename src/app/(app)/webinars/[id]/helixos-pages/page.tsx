@@ -19,7 +19,7 @@ import { hermesFonts } from "@/components/hermes/fonts";
 
 export const metadata = { title: "HelixOS pages" };
 
-/** Is hermes_pages on this database yet? (Hermes's migration lands when Danno merges.) */
+/** Is hermes_pages on this database? (Migration 0153, run on deploy; a database it hasn't reached reads the switch as off.) */
 async function tableReady(): Promise<boolean> {
   try {
     await db.run(sql`select 1 from hermes_pages limit 1`);
@@ -55,7 +55,7 @@ export default async function HelixosPagesPage({ params, searchParams }: { param
   const cold = `${siteUrl()}${coldPath(w.id)}`;
   const preview = ctx ? defaultPitch({ defaults: ctx.setup.defaults, pillars: ctx.setup.pillars, agenda: ctx.setup.agenda, proofIds: [], firstName: "", facts: { title: ctx.title, startsAt: ctx.when.startsAt, when: ctx.when.line, promise: "", learn: [], whoFor: "" } }) : null;
   if (preview && ctx && !ctx.setup.defaults.header?.trim()) preview.hero = { ...preview.hero, header: COLD_HERO.header, subheader: preview.hero.subheader || COLD_HERO.subheader(ctx.when) };
-  const held = sp.held === "table" ? "the HelixOS pages table isn't on this database yet; it arrives when Danno merges Hermes's branch" : sp.held;
+  const held = sp.held === "table" ? "the HelixOS pages table isn't on this database yet; it arrives with the next deploy's migrations" : sp.held;
 
   return (
     <>
@@ -71,7 +71,7 @@ export default async function HelixosPagesPage({ params, searchParams }: { param
       ) : null}
       {!ready ? (
         <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" role="status" data-testid="hm-no-table">
-          These settings can&apos;t be saved on this database yet: they arrive when Danno merges Hermes&apos;s branch. Until then the switch reads off.
+          These settings can&apos;t be saved on this database yet: the table arrives with the next deploy&apos;s migrations. Until then the switch reads off.
           {previewDeploy() ? " On this Preview the pages open for any webinar whose Magic funnel is live, so you can try them." : ""}
         </p>
       ) : null}

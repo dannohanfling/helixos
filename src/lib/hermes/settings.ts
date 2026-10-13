@@ -1,7 +1,7 @@
 /**
  * Hermes's per-webinar settings (hermes_pages) and the one rule every page and mf_prepare follow: is this webinar's HelixOS page
- * open? On production only when "Host pages in HelixOS" is on. A database without the table yet (Hermes's migration lands when
- * Danno merges) reads as "switch off", so nothing breaks. On a Vercel Preview the pages open for any webinar whose Magic funnel
+ * open? On production only when "Host pages in HelixOS" is on. A database the table hasn't reached yet (migration 0153, run on
+ * deploy) reads as "switch off", so nothing breaks. On a Vercel Preview the pages open for any webinar whose Magic funnel
  * is live, so Danno and Scriba can test them before the switch exists; mf_prepare never hands out a Preview address.
  */
 import { and, eq } from "drizzle-orm";

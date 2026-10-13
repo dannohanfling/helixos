@@ -49,7 +49,7 @@ async function countGhlFailure(webinarId: string): Promise<void> {
   try {
     await db.update(hermesPages).set({ ghlFailed: sql`${hermesPages.ghlFailed} + 1` }).where(eq(hermesPages.webinarId, webinarId));
   } catch {
-    // No table yet (before the merge): the sync log still has the row.
+    // No table on this database yet: the sync log still has the row.
   }
 }
 
