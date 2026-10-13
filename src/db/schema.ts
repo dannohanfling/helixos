@@ -951,8 +951,17 @@ export const leaderboardFeeds = sqliteTable(
     /** The host the coach gave (default www.eloyalty.ai); the one that answered 2xx is kept once a check passes. */
     host: text("host").notNull().default("https://www.eloyalty.ai"),
     templateId: text("template_id"),
+    /** A second template read during a pass migration (H-32): members on either pass, nobody counted twice. */
+    templateIdAlt: text("template_id_alt"),
     /** eLoyalty customer ids the client leaves off the board, one per line on their Settings. */
     hidden: text("hidden", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The hosted page's settings (H-28): copy, the pass link, tiers, rewards, the sample marks and the zero rule. JSON, read by src/lib/engine/leaderboard.ts. */
+    pageJson: text("page_json"),
+    /** A pasted Points & Transactions export, already stripped to "First L.", lifetime and available: the board before a key is in. */
+    exportJson: text("export_json"),
+    exportAsOf: text("export_as_of"),
+    /** After a 429 the cron leaves this feed alone until this time (0161). */
+    refreshAfter: text("refresh_after"),
     /** The last check, in words: the host, the member count and the field names seen (names only, never a value). */
     lastCheckAt: text("last_check_at"),
     lastCheckOk: integer("last_check_ok", { mode: "boolean" }),

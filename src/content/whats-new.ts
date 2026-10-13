@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 179,
+    date: "2026-10-14",
+    title: "Your loyalty leaderboard, as a page you can share",
+    lines: [
+      "If your coach has connected your loyalty program, HelixOS now serves your leaderboard as its own page: the black-and-white design with the podium, search, tiers and rewards, ready to share or to put in your own site as an iframe. Members show as first name and last initial, with their points and tier, nothing else.",
+      "On the new Loyalty leaderboard page (linked from Settings) you, your team and your coach set the words, the \"get your pass\" link, the tiers (by lifetime points) and the rewards; they start as samples, marked so, until yours are in. Before the connection is live you can paste a points export instead: only names, initials and points are kept from it. Members with 0 points show by default; you can hide them, or hide anyone by id.",
+      "Visitors never trigger a read of your program: the page and the feed serve a copy that HelixOS refreshes itself every five minutes.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 176,
     date: "2026-10-14",
     title: "The Colosseum: where the work gets seen",

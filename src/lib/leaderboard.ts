@@ -1,22 +1,24 @@
 /**
- * A client's loyalty-pass leaderboard (rev 639) on the server: the eLoyalty (WalletPush) REST API read with the client's key,
- * which the coach pasted on their /coach row. The key is a full admin key, so it is sealed at rest, opened only for the request
- * in hand, and never returned, logged or put in an error. HelixOS only ever reads: GET customers and GET templates.
+ * A client's loyalty-pass leaderboard (rev 639, H-29) on the server: the eLoyalty (WalletPush) REST API read with the client's
+ * key, which the coach pasted on their /coach row. The key is a full admin key, so it is sealed at rest, opened only for the
+ * request in hand, and never returned, logged or put in an error. HelixOS only ever reads: GET customers and GET templates.
  *
- * The board is held here with eLoyalty's customer ids (never served) so the client's hide list applies the moment it changes;
- * the feed is fresh for five minutes, and on a 429 or an error the last good board is served instead.
+ * A visitor never reaches eLoyalty (H-29): the feed and the hosted page serve the held board, then the pasted export, else
+ * nothing. The cron (/api/cron/leaderboards, every five minutes) is the only reader after Connect and check, one feed at a
+ * time, only on a host that has answered 2xx, and it leaves a feed alone for a minute after a 429.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { db, schema } from "@/db";
 import { open, seal } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
-import { boardRows, feedIsClean, feedSlug, fieldNames, publicFeed, type BoardRow, type Customer, type Feed } from "@/lib/engine/leaderboard";
+import { type BoardRow, type Customer, type ExportRow, type Feed, type PageConfig, type PageModel, type Source, SAMPLE_ROWS, boardRows, feedIsClean, feedSlug, fieldNames, mergeCustomers, pageMembersText, pageModel, publicFeed, readPageConfig, textIsClean } from "@/lib/engine/leaderboard";
 
 export const DEFAULT_HOST = "https://www.eloyalty.ai";
 const FALLBACK_HOST = "https://walletpush.io";
 export const FRESH_MS = 5 * 60 * 1000;
+export const BACKOFF_MS = 60 * 1000;
 const MAX_PAGES = 50;
 
 type Got = { status: number; json: unknown };
@@ -46,8 +48,8 @@ export function statusWords(status: number): string {
 }
 
 type Page = { data?: Customer[]; pagination?: { next_cursor?: string | null; has_more?: boolean } };
-/** Every active customer on the template, page by page until has_more is false. */
-async function customers(host: string, key: string, templateId: string | null): Promise<{ ok: true; list: Customer[] } | { ok: false; status: number }> {
+/** Every active customer on one template, page by page until has_more is false. */
+async function customersOn(host: string, key: string, templateId: string | null): Promise<{ ok: true; list: Customer[] } | { ok: false; status: number }> {
   const list: Customer[] = [];
   let cursor: string | null = null;
   for (let i = 0; i < MAX_PAGES; i++) {
@@ -60,6 +62,23 @@ async function customers(host: string, key: string, templateId: string | null): 
     cursor = page.pagination.next_cursor;
   }
   return { ok: true, list };
+}
+
+/** The templates a feed reads: the primary and, during a pass migration (H-32), the second; blank means every pass. */
+export const templatesOf = (feed: Pick<schema.LeaderboardFeed, "templateId" | "templateIdAlt">): (string | null)[] => {
+  const ids = [feed.templateId, feed.templateIdAlt].map((t) => (t ?? "").trim()).filter(Boolean);
+  return ids.length ? [...new Set(ids)] : [null];
+};
+
+/** Every active customer across the feed's templates, merged by customer id so nobody is counted twice. */
+async function customers(host: string, key: string, feed: Pick<schema.LeaderboardFeed, "templateId" | "templateIdAlt">): Promise<{ ok: true; list: Customer[] } | { ok: false; status: number }> {
+  const lists: Customer[][] = [];
+  for (const t of templatesOf(feed)) {
+    const got = await customersOn(host, key, t);
+    if (!got.ok) return got;
+    lists.push(got.list);
+  }
+  return { ok: true, list: mergeCustomers(lists) };
 }
 
 type Template = { id?: string; name?: string };
@@ -79,7 +98,7 @@ const hostWords = (h: string) => h.replace(/^https?:\/\//, "");
 /**
  * Connect and check (and Check again): try the coach's host, then WalletPush's own when the default was used; keep the one that
  * answers; find the template when it's blank; read every member; keep the board and say, in words, the host, how many are on
- * it and the field names eLoyalty sent (names only).
+ * it and the field names eLoyalty sent (names only). A passed check is what lets the cron refresh this feed.
  */
 export async function checkFeed(feed: schema.LeaderboardFeed): Promise<{ ok: boolean; note: string }> {
   const key = open(feed.keyEncrypted);
@@ -108,14 +127,16 @@ export async function checkFeed(feed: schema.LeaderboardFeed): Promise<{ ok: boo
     templateId = t.id;
     templateNote = t.note;
   }
-  const got = await customers(host, key, templateId);
+  const got = await customers(host, key, { templateId, templateIdAlt: feed.templateIdAlt });
   if (!got.ok) return done(false, `${statusWords(got.status)} reading the members on ${hostWords(host)}.`, { host });
   const rows = boardRows(got.list);
-  const note = [`Connected on ${hostWords(host)}: ${rows.length} on the board of ${got.list.length} active`, templateNote, `fields seen: ${fieldNames(got.list[0]).join(", ") || "none (no members yet)"}`].filter(Boolean).join("; ");
-  return done(true, `${note}.`, { host, templateId: templateId ?? null, cacheJson: JSON.stringify(rows), cachedAt: nowIso() });
+  const config = readPageConfig(feed.pageJson);
+  const onBoard = publicFeed(rows, feed.hidden, nowIso(), config).members.length;
+  const note = [`Connected on ${hostWords(host)}: ${onBoard} on the board of ${got.list.length} active`, templateNote, `fields seen: ${fieldNames(got.list[0]).join(", ") || "none (no members yet)"}`].filter(Boolean).join("; ");
+  return done(true, `${note}.`, { host, templateId: templateId ?? null, cacheJson: JSON.stringify(rows), cachedAt: nowIso(), refreshAfter: null });
 }
 
-/** The client's feed row, made on first save with an address of their name and a random tail. */
+/** The feed row for a membership (a client's, or the coach's own program), made on first save with an address of their name and a random tail. */
 export async function feedForMembership(m: schema.Membership, name: string): Promise<schema.LeaderboardFeed> {
   const have = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, m.id) });
   if (have) return have;
@@ -124,43 +145,136 @@ export async function feedForMembership(m: schema.Membership, name: string): Pro
   return (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, row.id) }))!;
 }
 
-/** Saves the coach's entries: a new key sealed (blank keeps the old one), the host, the template. */
-export async function saveFeedSettings(feed: schema.LeaderboardFeed, input: { key: string; host: string; templateId: string }): Promise<schema.LeaderboardFeed> {
-  const host = /^https:\/\/[\w.-]+(:\d+)?$/.test(input.host.trim().replace(/\/$/, "")) || (process.env.NODE_ENV !== "production" && /^http:\/\/localhost:\d+$/.test(input.host.trim())) ? input.host.trim().replace(/\/$/, "") : DEFAULT_HOST;
+const tidyHost = (h: string) => h.trim().replace(/\/$/, "");
+const hostOk = (h: string) => /^https:\/\/[\w.-]+(:\d+)?$/.test(h) || (process.env.NODE_ENV !== "production" && /^http:\/\/localhost:\d+$/.test(h));
+const tidyTemplate = (t: string) => (/^[\w-]{1,80}$/.test(t.trim()) ? t.trim() : null);
+
+/** Saves the coach's entries: a new key sealed (blank keeps the old one), the host, the templates. A changed host has to answer again before the cron uses it. */
+export async function saveFeedSettings(feed: schema.LeaderboardFeed, input: { key: string; host: string; templateId: string; templateIdAlt?: string }): Promise<schema.LeaderboardFeed> {
+  const host = hostOk(tidyHost(input.host)) ? tidyHost(input.host) : DEFAULT_HOST;
   const key = input.key.trim();
   await db
     .update(schema.leaderboardFeeds)
-    .set({ host, templateId: input.templateId.trim() || null, ...(key ? { keyEncrypted: seal(key), keyLast4: key.slice(-4) } : {}), updatedAt: nowIso() })
+    .set({ host, templateId: tidyTemplate(input.templateId), templateIdAlt: tidyTemplate(input.templateIdAlt ?? ""), ...(key ? { keyEncrypted: seal(key), keyLast4: key.slice(-4) } : {}), ...(host !== feed.host ? { lastCheckOk: null } : {}), updatedAt: nowIso() })
     .where(eq(schema.leaderboardFeeds.id, feed.id));
   return (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, feed.id) }))!;
 }
 
-/** Remove key: the key and the held board go; the address stays, and answers 503 until a key is saved again. */
+/** Remove key: the key and the held board go; the address stays, and the feed falls back to the pasted export or 503. */
 export async function removeFeedKey(feedId: string, workspaceId: string): Promise<void> {
-  await db.update(schema.leaderboardFeeds).set({ keyEncrypted: null, keyLast4: null, cacheJson: null, cachedAt: null, lastCheckOk: null, lastCheckNote: "Key removed.", updatedAt: nowIso() }).where(and(eq(schema.leaderboardFeeds.id, feedId), eq(schema.leaderboardFeeds.workspaceId, workspaceId)));
+  await db.update(schema.leaderboardFeeds).set({ keyEncrypted: null, keyLast4: null, cacheJson: null, cachedAt: null, lastCheckOk: null, lastCheckNote: "Key removed.", refreshAfter: null, updatedAt: nowIso() }).where(and(eq(schema.leaderboardFeeds.id, feedId), eq(schema.leaderboardFeeds.workspaceId, workspaceId)));
+}
+
+/** The client's page settings and export, saved from the editor (the engine has already read them into shape). */
+export async function savePageConfig(feedId: string, workspaceId: string, config: PageConfig): Promise<void> {
+  await db.update(schema.leaderboardFeeds).set({ pageJson: JSON.stringify(config), updatedAt: nowIso() }).where(and(eq(schema.leaderboardFeeds.id, feedId), eq(schema.leaderboardFeeds.workspaceId, workspaceId)));
+}
+export async function saveExport(feedId: string, workspaceId: string, rows: ExportRow[] | null, asOf: string | null): Promise<void> {
+  // Only stripped rows are ever written; the parser has already dropped every other column.
+  if (rows && !textIsClean(JSON.stringify(rows))) rows = null;
+  await db.update(schema.leaderboardFeeds).set({ exportJson: rows ? JSON.stringify(rows) : null, exportAsOf: rows ? asOf : null, updatedAt: nowIso() }).where(and(eq(schema.leaderboardFeeds.id, feedId), eq(schema.leaderboardFeeds.workspaceId, workspaceId)));
+}
+
+const parseRows = <T>(json: string | null): T[] | null => {
+  if (!json) return null;
+  try {
+    const v: unknown = JSON.parse(json);
+    return Array.isArray(v) ? (v as T[]) : null;
+  } catch {
+    return null;
+  }
+};
+
+/** What a feed has to show, in order: the held live board (with a key), the pasted export, nothing. Never a call to eLoyalty. */
+export function heldBoard(feed: schema.LeaderboardFeed): { rows: ExportRow[]; source: Source } | null {
+  const config = readPageConfig(feed.pageJson);
+  if (feed.keyEncrypted && feed.cacheJson && feed.cachedAt) {
+    const rows = parseRows<BoardRow>(feed.cacheJson);
+    if (rows) {
+      const members = publicFeed(rows, feed.hidden, feed.cachedAt, { tiers: config.tiers, showZero: true }).members;
+      return { rows: members.map(({ name, lifetime, available }) => ({ name, lifetime, available })), source: { kind: "live", at: feed.cachedAt } };
+    }
+  }
+  const exported = parseRows<ExportRow>(feed.exportJson);
+  if (exported) return { rows: exported, source: { kind: "export", at: feed.exportAsOf } };
+  return null;
 }
 
 /**
- * The public feed by its address: the held board when it's under five minutes old; else read eLoyalty again and keep it; on a
- * 429 or an error the last good board. Null when there is nothing to serve (503 to the page, which falls back by itself).
+ * The public feed by its address: the held board when there is one, else the pasted export; the hide list and the zero rule
+ * applied now, so a change on the client's Settings shows at once. Null when there is nothing to serve (503 to the page,
+ * which falls back by itself). This never calls eLoyalty: a visitor cannot make HelixOS read a client's program.
  */
 export async function servedFeed(slug: string): Promise<Feed | null> {
   const feed = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.slug, slug) });
   if (!feed) return null;
-  const held = (): Feed | null => {
-    if (!feed.cacheJson || !feed.cachedAt) return null;
-    const out = publicFeed(JSON.parse(feed.cacheJson) as BoardRow[], feed.hidden, feed.cachedAt);
-    return feedIsClean(out) ? out : null;
-  };
-  if (!feed.keyEncrypted) return null;
-  if (feed.cachedAt && Date.now() - Date.parse(feed.cachedAt) < FRESH_MS) return held();
-  const key = open(feed.keyEncrypted);
-  if (!key) return held();
-  const got = await customers(feed.host, key, feed.templateId);
-  if (!got.ok) return held();
-  const rows = boardRows(got.list);
-  const at = nowIso();
-  await db.update(schema.leaderboardFeeds).set({ cacheJson: JSON.stringify(rows), cachedAt: at }).where(eq(schema.leaderboardFeeds.id, feed.id));
-  const out = publicFeed(rows, feed.hidden, at);
+  const held = heldBoard(feed);
+  if (!held) return null;
+  const config = readPageConfig(feed.pageJson);
+  const at = held.source.kind === "live" ? held.source.at : held.source.kind === "export" && held.source.at ? held.source.at : (feed.updatedAt ?? nowIso());
+  const out = publicFeed(
+    held.rows.map((r) => ({ id: "", name: r.name, lifetime: r.lifetime, available: r.available ?? 0 })),
+    [],
+    at,
+    config,
+  );
   return feedIsClean(out) ? out : null;
+}
+
+/** The hosted page's model by its address: the held board, else the export, else the design's sample people marked Sample. Null for no such address. */
+export async function pageFor(slug: string): Promise<PageModel | null> {
+  const feed = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.slug, slug) });
+  if (!feed) return null;
+  return pageModelFor(feed);
+}
+
+export function pageModelFor(feed: schema.LeaderboardFeed): PageModel | null {
+  const config = readPageConfig(feed.pageJson);
+  const held = heldBoard(feed);
+  const model = held ? pageModel(held.rows, config, held.source) : pageModel(SAMPLE_ROWS, config, { kind: "sample" });
+  return textIsClean(pageMembersText(model)) ? model : null;
+}
+
+export type RefreshResult = { slug: string; outcome: "fresh" | "refreshed" | "busy" | "failed" | "waiting" | "unchecked" };
+
+/**
+ * The cron's work: every feed with a key whose last check passed, one at a time. A board under five minutes old is left; a
+ * read that answers is kept; a 429 (or no answer) sets a minute's wait; any other error keeps the last good board and the
+ * note says so. Nothing here is ever triggered by a visitor.
+ */
+export async function refreshFeeds(now = new Date()): Promise<RefreshResult[]> {
+  const feeds = await db.query.leaderboardFeeds.findMany({ where: isNotNull(schema.leaderboardFeeds.keyEncrypted) });
+  const out: RefreshResult[] = [];
+  for (const feed of feeds) {
+    if (!feed.lastCheckOk) {
+      out.push({ slug: feed.slug, outcome: "unchecked" });
+      continue;
+    }
+    if (feed.refreshAfter && Date.parse(feed.refreshAfter) > now.getTime()) {
+      out.push({ slug: feed.slug, outcome: "waiting" });
+      continue;
+    }
+    if (feed.cachedAt && now.getTime() - Date.parse(feed.cachedAt) < FRESH_MS) {
+      out.push({ slug: feed.slug, outcome: "fresh" });
+      continue;
+    }
+    const key = open(feed.keyEncrypted);
+    if (!key) {
+      out.push({ slug: feed.slug, outcome: "failed" });
+      continue;
+    }
+    const got = await customers(feed.host, key, feed);
+    if (!got.ok) {
+      const busy = got.status === 429 || got.status === 0;
+      await db
+        .update(schema.leaderboardFeeds)
+        .set(busy ? { refreshAfter: new Date(now.getTime() + BACKOFF_MS).toISOString() } : { lastCheckNote: `${statusWords(got.status)} at the last refresh; the last good board is still served.`, lastCheckAt: now.toISOString() })
+        .where(eq(schema.leaderboardFeeds.id, feed.id));
+      out.push({ slug: feed.slug, outcome: busy ? "busy" : "failed" });
+      continue;
+    }
+    await db.update(schema.leaderboardFeeds).set({ cacheJson: JSON.stringify(boardRows(got.list)), cachedAt: now.toISOString(), refreshAfter: null }).where(eq(schema.leaderboardFeeds.id, feed.id));
+    out.push({ slug: feed.slug, outcome: "refreshed" });
+  }
+  return out;
 }
