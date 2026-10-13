@@ -9,3 +9,4 @@ import "./ship";
 import "./voice2";
 import "./scoreboard";
 import "./board";
+import "./forum";

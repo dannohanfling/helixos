@@ -28,6 +28,8 @@ export const SCOPE_WORDS: Record<Scope, { label: string; line: string }> = {
   library: { label: "Library", line: "Search your library and assets." },
   webinars: { label: "Webinars", line: "Read your webinars and proofs." },
   essence: { label: "Essence", line: "Read your Essence and propose edits you accept in the app." },
+  // The Forum (rev 765): an agent reports what it's doing to the member's own Forum and reads it back. Nothing else.
+  forum: { label: "The Forum", line: "Report what your AI agents are doing to your Forum, and read your Forum back." },
   body: { label: "HumanOS", line: "Your HumanOS numbers and meal log. Only with HumanOS's own AI switch on, and never pre-ticked." },
 };
 

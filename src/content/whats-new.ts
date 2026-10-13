@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 168,
+    date: "2026-10-13",
+    title: "The Forum: watch your AI agents work",
+    lines: [
+      "A new page under Build, The Forum: a live map of your AI agents (Claude, Codex, Cursor, n8n, your booking bot or any other). Each agent is a building that glows while it works, turns amber when it's waiting on you, and sends gold messengers along the streets when it passes work on.",
+      "Below the map: what needs you, each agent's road, a ledger card per agent with what it's doing now, last and next, and the latest news. Every time shows in your own time zone. Tap two buildings, or drag one onto another, to move your agents around.",
+      "Agents report through the HelixOS connector (tick The Forum when you connect), or through your own Forum webhook for Claude Code hooks, Codex, Zapier, Make, n8n, GoHighLevel and GitHub: make its secret in Settings → The Forum. Your booking bot, Ship, Recordings and My Board show up on their own. Your Forum is private until you turn on Share with my coach, and anything that looks like a key is removed before it's saved.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 166,
     date: "2026-10-13",
     title: "Building with AI: the words, in plain English",

@@ -46,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Build",
     items: [
       { href: "/my-board", label: "My Board", icon: "🧭", line: "Five advisors on a decision" },
+      { href: "/forum", label: "The Forum", icon: "🏛️", line: "watch your AI agents work" },
       { href: "/webinars", label: "Webinars", icon: "🎤", team: true, hint: "wizard" },
       { href: "/images", label: "Images", icon: "🖼️", team: true, line: "Your deck pictures" },
       { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent" },
@@ -61,7 +62,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/proof", label: "Proof Bank", icon: "🏆", line: "Your clients' results" },
       { href: "/evidence", label: "Evidence", icon: "📚", line: "Published research" },
       { href: "/magnets", label: "Lead magnets", icon: "🧲", hint: "keyword + link" },
-      { href: "/forum", label: "The Forum", icon: "🏛️", line: "watch your AI agents work", comingSoon: true },
     ],
   },
   {

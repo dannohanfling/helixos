@@ -55,6 +55,8 @@ import { HeadshotUpload } from "@/components/headshot-upload";
 import { hasHeadshot } from "@/lib/headshots";
 import { removeMyHeadshotAction } from "@/lib/actions/headshots";
 import { SKILL_INSTALL_STEPS } from "@/lib/engine/board-view";
+import { forumSettingsFor } from "@/lib/forum";
+import { ForumWebhookCard } from "@/components/forum-webhook";
 
 export const metadata = { title: "Settings" };
 
@@ -94,6 +96,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const attempted = parseDraft(draft);
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
   const [goal, conn, ghlIntegration, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel"), linkedChats(v.workspace.id, v.user.id)]);
+  const forumHook = await forumSettingsFor({ workspaceId: v.workspace.id, userId: v.user.id });
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
   const appUrl = siteUrl();
   // The owner's team (Danno, 6 Oct): who is on it, the open invites, the seats, and what the team changed. Not while switched.
@@ -470,6 +473,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           ) : (
             <p className="text-sm text-ink-2" data-testid="connected-apps-empty">None yet. <Link href="/connect" className="underline">Connect HelixOS to Claude</Link> to read and write your own HelixOS from a chat.</p>
           )}
+        </Card>
+        <Card id="forum" className="scroll-mt-20" title="🏛️ The Forum" action={<Link href="/forum" className="text-xs text-ink-2 hover:underline">Your Forum →</Link>}>
+          <ForumWebhookCard url={`${appBase()}/api/forum/report`} made={forumHook.webhookCreatedAt ? formatDateTime(forumHook.webhookCreatedAt, v.tz, { zone: true }) : null} usedAt={forumHook.webhookUsedAt ? formatDateTime(forumHook.webhookUsedAt, v.tz, { zone: true }) : null} canChange={!v.switchedInto && !v.team} />
         </Card>
         <Card id="linked-chats" title="Your coach's assistant">
           {/* Community Loyalty chat (rev 241): the member's own switch on progress pushes, then the chats they confirmed as theirs. */}

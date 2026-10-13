@@ -3198,7 +3198,7 @@ export type BodyShareEvent = typeof bodyShareEvents.$inferSelect;
  * connector) registers itself, the member approves scopes on the consent screen, and the app holds tokens that act only as
  * that member. Codes and tokens are stored as sha256 hashes only, like inbound secrets and reset links.
  */
-export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "essence", "body"] as const;
+export const MCP_SCOPES = ["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "essence", "forum", "body"] as const;
 
 /** An app that registered itself (RFC 7591). Public clients only: no secret. Redirect URIs never change after registration. */
 export const oauthClients = sqliteTable("oauth_clients", {
@@ -4194,3 +4194,109 @@ export const glossaryEntries = sqliteTable(
   (t) => [uniqueIndex("glossary_entries_slug").on(t.workspaceId, t.slug)],
 );
 export type GlossaryEntry = typeof glossaryEntries.$inferSelect;
+
+/**
+ * The Forum (rev 765): a member's own map of their AI agents. An agent is a building on one of twelve plots; reports from the connector, the
+ * member's webhook or the member themselves set its status and its now, last and next. `plotId` is the plot it stands on in
+ * the photo forum (one of FORUM_PLOTS, at most one agent each); null lists it under the map, in the Outer districts.
+ * Built-in agents (the booking bot, Ship, Recordings, My Board) are read live from what HelixOS already records and only get
+ * a row here when the member moves one. Everything an agent sends is untrusted text, capped and scrubbed before it lands.
+ */
+export const FORUM_STATUSES = ["working", "waiting", "idle", "done"] as const;
+/** The twelve plots on the forum photo (forum12-plots.json), in the order new agents take them. */
+export const FORUM_PLOTS = ["p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08", "p09", "p10", "p11", "p12"] as const;
+export const FORUM_SOURCES = ["member", "connector", "webhook", "builtin", "seed", "agent"] as const;
+export type ForumMilestone = { name: string; state: "done" | "now" | "queued"; rev?: string };
+export const forumAgents = sqliteTable(
+  "forum_agents",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    /** The name lowercased and trimmed: a report names its agent, and one name is one agent. */
+    nameKey: text("name_key").notNull(),
+    platform: text("platform"),
+    role: text("role"),
+    link: text("link"),
+    plotId: text("plot_id", { enum: FORUM_PLOTS }),
+    /** Set for a built-in agent's row (made only when it's moved): booking, ship, recordings or board. */
+    builtIn: text("built_in"),
+    status: text("status", { enum: FORUM_STATUSES }).notNull().default("idle"),
+    now: text("now"),
+    last: text("last"),
+    next: text("next"),
+    /** A flow on the map: shown for 30 minutes after flowAt, or until this agent's next report clears it. */
+    flowTo: text("flow_to"),
+    flowLabel: text("flow_label"),
+    flowAt: text("flow_at"),
+    queue: text("queue", { mode: "json" }).$type<ForumMilestone[]>().notNull().default([]),
+    createdBy: text("created_by", { enum: FORUM_SOURCES }).notNull().default("member"),
+    /** False for an agent a report made, until the member confirms it ("new" on its card). */
+    confirmed: integer("confirmed", { mode: "boolean" }).notNull().default(true),
+    reportedAt: text("reported_at"),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at"),
+  },
+  (t) => [uniqueIndex("forum_agents_name").on(t.workspaceId, t.userId, t.nameKey), index("forum_agents_member").on(t.workspaceId, t.userId)],
+);
+export type ForumAgent = typeof forumAgents.$inferSelect;
+
+/** The log: one row per report part, kept 90 days. The payload is what was saved (already capped and scrubbed). */
+export const forumEvents = sqliteTable(
+  "forum_events",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    agentId: text("agent_id"),
+    kind: text("kind", { enum: ["status", "flow", "needs_you", "queue", "headline", "removed", "member"] }).notNull(),
+    source: text("source", { enum: FORUM_SOURCES }).notNull(),
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
+    /** When it happened: the report's own time when it sent one (UTC), otherwise when it arrived. */
+    at: text("at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("forum_events_member").on(t.workspaceId, t.userId, t.at)],
+);
+export type ForumEvent = typeof forumEvents.$inferSelect;
+
+/** "What needs you": stays until the member ticks it done or the agent reports it cleared. Ticking sends nothing back. */
+export const forumNeeds = sqliteTable(
+  "forum_needs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    agentId: text("agent_id"),
+    what: text("what").notNull(),
+    detail: text("detail"),
+    when: text("when"),
+    doneAt: text("done_at"),
+    doneBy: text("done_by", { enum: ["member", "agent"] }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("forum_needs_member").on(t.workspaceId, t.userId, t.doneAt)],
+);
+export type ForumNeed = typeof forumNeeds.$inferSelect;
+
+/** One per member: the share switch, the headline, and the webhook's secret as a hash only (shown once when made). */
+export const forumSettings = sqliteTable(
+  "forum_settings",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    shareWithCoach: integer("share_with_coach", { mode: "boolean" }).notNull().default(false),
+    headline: text("headline"),
+    headlineAt: text("headline_at"),
+    webhookHash: text("webhook_hash"),
+    webhookCreatedAt: text("webhook_created_at"),
+    webhookUsedAt: text("webhook_used_at"),
+    /** When a coach's build team was seeded (rev 765 §5), so removing them doesn't bring them back. */
+    seededAt: text("seeded_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("forum_settings_member").on(t.workspaceId, t.userId), uniqueIndex("forum_settings_webhook").on(t.webhookHash)],
+);
+export type ForumSettings = typeof forumSettings.$inferSelect;

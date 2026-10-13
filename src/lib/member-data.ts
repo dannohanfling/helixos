@@ -52,6 +52,12 @@ export const MEMBER_TABLES = {
   // webinars, prospects' names, emails and answers among them: theirs, exported and erased with them.
   bot_keys: schema.botKeys,
   mf_setups: schema.mfSetups,
+  // The Forum (rev 765): the member's own agents, their reports, what needs them and their webhook (its hash only): theirs,
+  // exported and erased with them.
+  forum_agents: schema.forumAgents,
+  forum_events: schema.forumEvents,
+  forum_needs: schema.forumNeeds,
+  forum_settings: schema.forumSettings,
   webinar_signups: schema.webinarSignups,
   pathways: schema.pathways,
   webinars: schema.webinars,
@@ -228,6 +234,6 @@ export const NOT_MEMBER_DATA: Record<string, string> = {
 export const COACH_ONLY_COLUMNS = new Set(["coachNotes"]);
 
 /** Columns that never leave the database in an export: credentials, sealed or not, and hashes that exist only to be matched. */
-export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "clRungsWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl", "graphicPublicToken", "headshotUrl", "headshotDisplayUrl"]);
+export const STRIP_COLUMNS = new Set(["passwordHash", "manualToken", "accessToken", "refreshToken", "sessionVersion", "inboundSecretHash", "keyEncrypted", "tokenHash", "codeHash", "codeChallenge", "clApiToken", "passWebhookUrl", "clDripWebhookUrl", "clRungsWebhookUrl", "textHash", "webhookSecretEncrypted", "screenshotUrl", "graphicPublicToken", "headshotUrl", "headshotDisplayUrl", "webhookHash"]);
 
 export const tableName = (t: SQLiteTable): string => getTableName(t);

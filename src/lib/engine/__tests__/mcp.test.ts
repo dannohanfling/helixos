@@ -35,7 +35,7 @@ describe("MCP server (rev 224): the pure parts", () => {
   });
 
   it("scopes: one per area, Body among them, unknown ones named, and words for each", () => {
-    expect([...MCP_SCOPES]).toEqual(["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "essence", "body"]);
+    expect([...MCP_SCOPES]).toEqual(["today", "tasks", "goals", "offers", "content", "content:write", "content:publish", "dms", "proofs", "sales", "recordings", "office_hours", "board", "library", "webinars", "essence", "forum", "body"]);
     expect(parseScopes("content content:write content:publish")).toEqual({ scopes: ["content", "content:write", "content:publish"], unknown: [] });
     expect(parseScopes("today tasks body")).toEqual({ scopes: ["today", "tasks", "body"], unknown: [] });
     expect(parseScopes("today admin")).toEqual({ scopes: ["today"], unknown: ["admin"] });
