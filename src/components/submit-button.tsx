@@ -87,7 +87,7 @@ function answered(): void {
  * "Sent ✓", from its working label) for about three seconds, announced to screen readers; a refusal (the address names an
  * error) keeps everything the member typed, puts the reason in red beside the field it names, and moves focus there.
  */
-export function SubmitButton({ children, className = "btn btn-primary", pendingText, disabled, onClick, ...rest }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> & { children: ReactNode; pendingText?: string }) {
+export function SubmitButton({ children, className = "btn btn-primary", pendingText, slowAfterMs, disabled, onClick, ...rest }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> & { children: ReactNode; pendingText?: string; slowAfterMs?: number }) {
   const { pending } = useFormStatus();
   const pressed = useRef(false);
   const [mine, setMine] = useState(false);
@@ -130,6 +130,17 @@ export function SubmitButton({ children, className = "btn btn-primary", pendingT
   }, []);
 
   const busy = pending && mine;
+  // A send with no answer after slowAfterMs (H-6): say so and let the person press again, instead of a spinner that never ends.
+  const [slow, setSlow] = useState(false);
+  if (slow && !busy) setSlow(false);
+  useEffect(() => {
+    if (!busy || !slowAfterMs) return;
+    const t = setTimeout(() => {
+      pressed.current = false;
+      setSlow(true);
+    }, slowAfterMs);
+    return () => clearTimeout(t);
+  }, [busy, slowAfterMs]);
   return (
     <>
       <button
@@ -137,9 +148,9 @@ export function SubmitButton({ children, className = "btn btn-primary", pendingT
         ref={self}
         type="submit"
         className={className}
-        disabled={disabled || pending}
-        aria-busy={busy}
-        data-pending={busy ? "true" : undefined}
+        disabled={disabled || (pending && !slow)}
+        aria-busy={busy && !slow}
+        data-pending={busy && !slow ? "true" : undefined}
         onClick={(e) => {
           if (pressed.current) {
             e.preventDefault();
@@ -159,8 +170,13 @@ export function SubmitButton({ children, className = "btn btn-primary", pendingT
         }}
       >
         {/* The spinner is the stylesheet's: every busy .btn draws one after its label. */}
-        {busy ? (pendingText ?? "Saving…") : children}
+        {busy && !slow ? (pendingText ?? "Saving…") : children}
       </button>
+      {slow ? (
+        <span role="alert" className="ml-2 inline-block align-middle text-sm font-medium text-danger" data-testid="save-slow">
+          No answer after {Math.round((slowAfterMs ?? 0) / 1000)} seconds. What you typed is still here; press it again.
+        </span>
+      ) : null}
       {done && !done.toast ? (
         <span role="status" aria-live="polite" className="ml-2 inline-block align-middle text-sm font-medium text-good" data-testid="save-confirm">
           {done.label}

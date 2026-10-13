@@ -83,6 +83,10 @@ async function main() {
     { id: quitHero, workspaceId: ws, userId: maya.id, kind: "photo", blobKey: `deck/${ws}/${maya.id}/mf-quit.jpg`, blobUrl: await putHero("mf-quit"), mime: "image/jpeg", width: 12, height: 8, caption: "MF hero quit", tags: ["quit smoking", "nicotine"], source: "upload" },
     { id: gymHero, workspaceId: ws, userId: maya.id, kind: "photo", blobKey: `deck/${ws}/${maya.id}/mf-gym.jpg`, blobUrl: await putHero("mf-gym"), mime: "image/jpeg", width: 12, height: 8, caption: "MF hero gym", tags: ["fitness"], source: "upload" },
   ]);
+  // One proof to choose in the picker (H-7): approved, with the permission tick, found by its tag.
+  await db.delete(schema.proofs).where(and(eq(schema.proofs.userId, maya.id), like(schema.proofs.name, "MF proof %")));
+  const pickProof = newId();
+  await db.insert(schema.proofs).values({ id: pickProof, workspaceId: ws, userId: maya.id, name: "MF proof Kara", who: "Kara", status: "approved", permissionAt: new Date().toISOString(), tags: ["picker-walk-tag"], quote: "I booked three calls in a week." });
   // The sample GoHighLevel page is a public site calling this HelixOS on localhost, which Chromium holds behind its local-network
   // check (a permission prompt nobody answers in a walk). Production is public to public, so the check is switched off here only.
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium", args: ["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults"] });
@@ -107,10 +111,14 @@ async function main() {
     await page.fill('[data-testid="mf-d-emotional"]', "{first name}, you started this to help people.");
     await page.fill('[data-testid="mf-d-logical"]', "A simple system beats more hours.");
     await page.check('[data-testid="mf-live"]');
+    await page.fill('[data-testid="mf-proof-search"]', "picker-walk");
+    await page.locator('[data-testid="mf-proof-list"] input[type="checkbox"]').first().check({ timeout: 10000 });
+    await page.keyboard.press("Escape");
+    must((await page.locator('[data-testid="mf-proof-chip"]').count()) === 1 && (await page.locator('input[type="checkbox"][name="proofIds"], [data-testid="mf-proof-tags"]').count()) === 0, "the proof picker: one chip chosen by its tag, no list of the whole Proof Bank on the page");
     await press(page, '[data-testid="mf-save"]');
     must((await page.locator('[data-testid="mf-held"]').innerText()).includes("isn't switched on"), "live is held while her switch is off");
     let setup = (await db.query.mfSetups.findFirst({ where: eq(schema.mfSetups.webinarId, webinarId) }))!;
-    must(setup && !setup.live && setup.pillars.length === 3 && setup.agenda.length === 2 && setup.prompt === null, `the setup saved, not live, the prompt left as the default: ${JSON.stringify({ live: setup?.live, p: setup?.pillars.length })}`);
+    must(setup && !setup.live && setup.pillars.length === 3 && setup.agenda.length === 2 && setup.prompt === null && setup.proofIds.join() === pickProof, `the setup saved, not live, the prompt left as the default: ${JSON.stringify({ live: setup?.live, p: setup?.pillars.length })}`);
     const off = await call(key, "mf_prepare", { contact_id: "cl_123", first_name: "Sam", email: "sam@example.com", pain: "not enough clients", industry: "coaching" });
     must(off.isError && off.text.includes("isn't switched on"), `mf_prepare is refused while she's off: ${off.text}`);
     console.log("✓ setup saved with the IGDITD prompt to start; live held and mf_prepare refused while her switch is off");

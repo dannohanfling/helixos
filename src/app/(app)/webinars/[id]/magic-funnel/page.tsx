@@ -10,6 +10,7 @@ import { DAILY_CAP_DEFAULT, DEFAULT_PROMPT, EMPTY_DEFAULTS, MF_KEY_WORDS, MF_MAX
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { MfPreview } from "@/components/mf-preview";
+import { MfProofPicker } from "@/components/mf-proof-picker";
 import { CopyButton } from "@/components/copy-button";
 import { MF_CLASSES, mfSnippet } from "@/lib/engine/mf-snippet";
 import { siteUrl } from "@/lib/app-url";
@@ -143,21 +144,9 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
           </label>
         </Card>
         <Card title="Proof it may show">
-          <p className="mb-2 text-xs text-ink-3">Approved items with the permission tick only, quoted word for word. Tick none to let it pick from all of them; tags matching their industry or pain go first. Edit the tags here; they&apos;re the Proof Bank&apos;s own.</p>
+          <p className="mb-2 text-xs text-ink-3">Approved items with the permission tick only, quoted word for word. Choose none to let it pick from all of them; tags matching their industry or pain go first. Tags are edited in the Proof Bank.</p>
           {consented.length ? (
-            <ul className="grid gap-1 sm:grid-cols-2" data-testid="mf-proofs">
-              {consented.map((p) => (
-                <li key={p.id}>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input type="checkbox" name="proofIds" value={p.id} defaultChecked={(setup?.proofIds ?? []).includes(p.id)} className="mt-1" />
-                    <span className="min-w-0 [overflow-wrap:anywhere]">
-                      <span className="font-medium">{p.who || p.name}</span>
-                    </span>
-                  </label>
-                  <input className="field mt-1 py-1 text-xs" name={`proofTags_${p.id}`} defaultValue={p.tags.join(", ")} placeholder="Tags: industry, pain" aria-label={`Tags for ${p.who || p.name}`} data-testid="mf-proof-tags" />
-                </li>
-              ))}
-            </ul>
+            <MfProofPicker initial={(setup?.proofIds ?? []).flatMap((id) => consented.filter((p) => p.id === id).map((p) => ({ id: p.id, label: p.who || p.name, tags: p.tags })))} max={40} />
           ) : (
             <p className="text-sm text-ink-3">No approved proof with the permission tick yet. The page shows none until there is.</p>
           )}
@@ -220,7 +209,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
             </span>
           </label>
           <div className="mt-3">
-            <SubmitButton className="btn btn-primary" pendingText="Saving…" data-testid="mf-save">
+            <SubmitButton className="btn btn-primary" pendingText="Saving…" slowAfterMs={20000} data-testid="mf-save">
               Save
             </SubmitButton>
           </div>

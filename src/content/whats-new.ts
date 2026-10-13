@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 171,
+    date: "2026-10-13",
+    title: "Magic funnel: choosing proof is one search box, and Save is quick again",
+    lines: [
+      "On the Magic funnel setup page, \"Proof it may show\" is now one dropdown: search your Proof Bank by name, tag or a few words, tick what it may use, and the chosen ones show as chips with their tags. Save sends only what you chose, so it's quick however big your Proof Bank is. Tags are edited in the Proof Bank. If a save gets no answer within 20 seconds, the button says so and you can press it again.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 170,
     date: "2026-10-13",
     title: "Magic funnel: see which key writes your pages",

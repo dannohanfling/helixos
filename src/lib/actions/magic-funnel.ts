@@ -4,7 +4,7 @@
  * The Magic funnel's setup (revs 812, 815; rev 837's answers): Coach → Webinars → Magic funnel per webinar, the preview, the
  * member's funnel domains in Settings, and the coach's switch and daily cap for each client (off until Danno turns it on).
  */
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, or, sql, type AnyColumn } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -13,7 +13,6 @@ import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { composePage, mfAvailable, setupFor } from "@/lib/mf/data";
 import { DAILY_CAP_DEFAULT, DEFAULT_PROMPT, EMPTY_DEFAULTS, MF_MAX, SECTION_MAX, clip, cleanDomain, cleanFirstName, type MfDefaults, type MfPitch, type MfProfile, type MfSection, type SectionSource } from "@/lib/engine/magic-funnel";
-import { parseTags } from "@/lib/engine/magic-funnel";
 
 const line = (fd: FormData, key: string, max: number) => clip(str(fd, key), max);
 const list = (fd: FormData, key: string, max: number, most: number) =>
@@ -73,16 +72,33 @@ export async function saveMfSetupAction(fd: FormData): Promise<void> {
   const wantLive = str(fd, "live") === "1";
   const problems = wantLive ? liveProblems({ available: mfAvailable(v.membership), registrationUrl: w.registrationUrl, pillars: pillars.length, defaults, when: w.scheduledAt }) : [];
   const values = { pillars, agenda, objections, urgency, defaults, proofIds, prompt: !prompt || prompt === DEFAULT_PROMPT ? null : prompt, live: wantLive && !problems.length, updatedAt: nowIso() };
-  // The proof tags edited on this page (Magic funnel C) are the Proof Bank's own: only this member's, only those on the form.
-  for (const [k, raw] of fd.entries()) {
-    if (typeof raw !== "string" || !k.startsWith("proofTags_")) continue;
-    await db.update(schema.proofs).set({ tags: parseTags(raw) }).where(and(eq(schema.proofs.id, k.slice("proofTags_".length)), eq(schema.proofs.workspaceId, workspaceId), eq(schema.proofs.userId, userId)));
-  }
   const had = await setupFor(m, w.id);
   if (had) await db.update(schema.mfSetups).set(values).where(eq(schema.mfSetups.id, had.id));
   else await db.insert(schema.mfSetups).values({ id: newId(), workspaceId, userId, webinarId: w.id, ...values });
   refresh();
   redirect(`/webinars/${w.id}/magic-funnel?${problems.length ? `held=${encodeURIComponent(problems.join("; "))}` : "saved=1"}`);
+}
+
+export type MfProofHit = { id: string; label: string; tags: string[] };
+
+/**
+ * The proof picker's search (H-7): this member's approved proof with the permission tick, matched by name, tag or a few words
+ * of the proof, 20 at a time. The page never lists the whole Proof Bank, and Save sends only the chosen ids.
+ */
+export async function searchMfProofsAction(q: string, offset: number): Promise<{ hits: MfProofHit[]; more: boolean }> {
+  const { workspaceId, userId } = await ctx({ whileSwitched: "noop" });
+  const words = String(q ?? "").toLowerCase().trim().slice(0, 100);
+  const like = `%${words.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  const has = (col: AnyColumn) => sql`lower(coalesce(${col}, '')) like ${like} escape '\\'`;
+  const P = schema.proofs;
+  const rows = await db.query.proofs.findMany({
+    where: and(eq(P.workspaceId, workspaceId), eq(P.userId, userId), eq(P.status, "approved"), isNotNull(P.permissionAt), words ? or(has(P.name), has(P.who), has(P.tags), has(P.quote), has(P.shortVersion)) : undefined),
+    orderBy: desc(P.createdAt),
+    columns: { id: true, name: true, who: true, tags: true },
+    limit: 21,
+    offset: Math.max(0, Math.min(Number(offset) || 0, 100000)),
+  });
+  return { hits: rows.slice(0, 20).map((r) => ({ id: r.id, label: r.who || r.name, tags: r.tags })), more: rows.length > 20 };
 }
 
 export type PreviewResult = { ok: true; profile: MfProfile | null; pitch: MfPitch; sources: Record<MfSection, SectionSource>; status: string; note: string | null; failed: Partial<Record<MfSection, string>> } | { ok: false; error: string };
