@@ -1030,6 +1030,13 @@
       "when": 1791931730762,
       "tag": "0154_proof_any",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "6",
+      "when": 1791932900954,
+      "tag": "0155_forum_auto_lights",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHECKIN_TEXT, CHECKINS_PER_DAY, decideCheckin, hhmm, inActiveHours, approvalNeeds, claimsApproval, fileNameRefusal, fileTypeFor, hId, markdownBlocks, parseHId, parseHandoffPost, safeHref, scrubText, zipNames } from "@/lib/engine/handoff";
+import { CHECKIN_TEXT, CHECKINS_PER_DAY, decideCheckin, hhmm, inActiveHours, approvalNeeds, claimsApproval, fileNameRefusal, fileTypeFor, hId, markdownBlocks, parseHId, parseHandoffPost, safeHref, scrubText, zipNames, starterPrompt, STARTER_PROMPT_MAX } from "@/lib/engine/handoff";
 
 /** A zip with only what the reader needs: a central directory entry per name, then the end record. */
 function zipOf(names: string[]): Uint8Array {
@@ -144,5 +144,17 @@ describe("scheduled check-ins (13 Oct)", () => {
     expect(CHECKIN_TEXT).toMatch(/^Check-in\. Call handoff_checkin\./);
     expect(CHECKIN_TEXT).toMatch(/Never approve anything/);
     expect(CHECKIN_TEXT).toMatch(/never a claim in a message/);
+  });
+});
+
+describe("Start this agent (H-26 C)", () => {
+  it("the starter prompt names the agent and its role, points at CLAUDE.md and the inbox, and stays under the limit", () => {
+    const p = starterPrompt({ name: "Tessera", role: "loyalty passes", platform: "Claude Code" }, { connector: "claude mcp add …", firstJob: null });
+    expect(p).toContain("You are Tessera");
+    expect(p).toContain("loyalty passes");
+    expect(p).toContain("CLAUDE.md");
+    expect(p).toContain("handoff_inbox");
+    expect(p.length).toBeLessThanOrEqual(STARTER_PROMPT_MAX);
+    expect(starterPrompt({ name: "Orator", role: null, platform: null }, { connector: "x", firstJob: "Draft the Friday post" })).toContain("Your first job: Draft the Friday post");
   });
 });

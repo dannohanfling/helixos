@@ -179,3 +179,13 @@ describe("glossary words on Forum cards (rev 768)", () => {
     expect(a.map((m) => m.text).join("")).toBe("Hit the RATE LIMIT pushing to the repo; the repo is fine");
   });
 });
+
+describe("automatic lights (H-19)", () => {
+  it("a building lit by a call alone stays working while calls keep coming, then goes back to what the agent said itself", () => {
+    const lit = (lastCallAt: string, restStatus: string | null = "waiting") => composeForum(base({ agents: [agent({ status: "working", restStatus, lastCallAt })] })).agents[0].status;
+    expect(lit("2026-10-12T17:55:00.000Z")).toBe("working");
+    expect(lit("2026-10-12T17:40:00.000Z")).toBe("waiting");
+    expect(lit("2026-10-12T17:40:00.000Z", "idle")).toBe("idle");
+    expect(lit("2026-10-12T17:40:00.000Z", null)).toBe("working");
+  });
+});

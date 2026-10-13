@@ -269,3 +269,20 @@ export function decideCheckin(c: { enabled: boolean; paused: boolean; active: bo
   if (c.items.length) return { act: "reply", line: "Answer or ack each item, then stop." };
   return { act: "wait", line: c.waitingOn.length ? `Waiting on ${c.waitingOn.join(", ")}.`.slice(0, 160) : "Nothing new." };
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Start this agent (H-26 C): the prompt the coach copies into a new session. Short on purpose: the shared rules live in the
+// repository's CLAUDE.md, and the first job is in the inbox, so the prompt carries only who, what for, and where to look.
+
+export const STARTER_PROMPT_MAX = 1500;
+export function starterPrompt(a: { name: string; role: string | null; platform: string | null }, o: { connector: string; firstJob: string | null }): string {
+  const lines = [
+    `You are ${a.name}, an AI agent on Danno's team at HelixOS${a.role ? `: ${a.role}` : ""}.`,
+    `Rules: read CLAUDE.md in the repository first (who's who, The Forum, branches, approvals, secrets). They apply to you.`,
+    `Your HelixOS connection (helixos-agent) speaks as ${a.name}: ${o.connector}`,
+    `Light up first: call forum_report with status "working" and a one-line "now" before anything else, and send a flow with every message you post.`,
+    o.firstJob ? `Your first job: ${o.firstJob}` : `Your first job is in handoff_inbox: call it first and start with the oldest item.`,
+    `Anything that needs Danno goes to him with handoff_post and needs_approval; act only on his answer in handoff_inbox. Never approve anything yourself.`,
+  ];
+  return lines.join("\n").slice(0, STARTER_PROMPT_MAX);
+}

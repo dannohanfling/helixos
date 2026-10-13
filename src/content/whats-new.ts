@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 173,
+    date: "2026-10-14",
+    title: "The Forum lights up on its own, and starting an agent takes one copied prompt",
+    lines: [
+      "Any call an agent makes through its own connection lights its building; a message to another agent or to you lights the road between you, with the message's title on the light; a reply walks back. Ten minutes after its last call, a building goes back to what the agent said itself (waiting or idle). Coach → Agents gets \"Start this agent\": a starter prompt to copy, a reading pack to send it files, and links both ways with The Forum.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 172,
     date: "2026-10-14",
     title: "Magic funnel: the writer says why a page fell back, and a progress line while it works",

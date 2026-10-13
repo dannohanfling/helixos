@@ -6,10 +6,11 @@
  * and on The Forum. A coach switched into a client is that client here, and requireCoach turns them away.
  */
 import { and, eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { refresh, str } from "@/lib/action-helpers";
-import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, revokeAgentTokens, tieConnection, writeAsOwner } from "@/lib/handoff";
+import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner } from "@/lib/handoff";
 import { CHECKIN_DEFAULTS, CHECKIN_EVERY, hhmm } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
 
@@ -120,4 +121,18 @@ export async function writeToAgentAction(formData: FormData): Promise<void> {
   const kind = str(formData, "kind") === "answer" ? "answer" : "brief";
   await writeAsOwner({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "agentId"), kind, str(formData, "title"), String(formData.get("body") ?? ""), formData.get("urgent") === "on");
   refresh();
+}
+
+/** Start this agent (H-26 C): a reading pack from Danno to one agent, files and all, from his own page only. */
+export async function sendReadingPackAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const files: { name: string; bytes: Buffer; type?: string }[] = [];
+  for (const f of formData.getAll("files")) {
+    if (!(f instanceof File) || !f.name || !f.size) continue;
+    files.push({ name: f.name, bytes: Buffer.from(await f.arrayBuffer()), type: f.type });
+  }
+  const r = await sendReadingPack({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "agentId"), str(formData, "title"), String(formData.get("body") ?? ""), files);
+  refresh();
+  if (!r.ok) redirect(`/coach/agents?error=${encodeURIComponent(r.text)}#agent-${str(formData, "agentId")}`);
+  redirect(`/coach/agents?pack=${r.seq}&packFor=${str(formData, "agentId")}#agent-${str(formData, "agentId")}`);
 }

@@ -15,8 +15,8 @@ import { sendEmail } from "@/lib/email";
 import { canEmail } from "@/lib/email-gate";
 import { newId } from "@/lib/ids";
 import { allow } from "@/lib/rate-limit";
-import { headProofObject, deleteProofObject, presignHandoffUpload, readProofObject } from "@/lib/proof-storage";
-import { reportToForum } from "@/lib/forum";
+import { headProofObject, deleteProofObject, presignHandoffUpload, putHandoffObject, readProofObject } from "@/lib/proof-storage";
+import { drawFlows, reportToForum } from "@/lib/forum";
 import { forumNameKey, looksLikeSecret } from "@/lib/engine/forum";
 import {
   DANNO,
@@ -163,6 +163,9 @@ export async function postHandoff(o: Owner, from: schema.ForumAgent, raw: Record
   await audit(o, from.id, "post", hId(row.seq), p.title);
   // A status message updates the sender's Forum building.
   if (p.kind === "status") await reportToForum(o, { agent: from.name, status: "working", now: p.title }, "agent");
+  // The road lights on its own (H-19): a flow to each recipient, the title as its label; a reply walks back the same road.
+  const names = [...new Set(to)].map((id) => (id === DANNO ? "you" : (agents.find((a) => a.id === id)?.name ?? null))).filter((n): n is string => Boolean(n));
+  await drawFlows(o, from, names, p.title, p.replyTo !== null, hId(row.seq));
   if (reasons.length) await alertOwner(o, row, from.name);
   return { id: row.id, seq: row.seq, needsApproval: reasons.length > 0, reasons, removed: p.removed };
 }
@@ -477,4 +480,35 @@ export async function writeAsOwner(o: Owner, agentId: string, kind: HandoffKind,
   const row = await insertMessage(o, { fromAgentId: null, toIds: [agent.id], kind, title: t, body: scrubText(body.trim().slice(0, HANDOFF_MAX.body)).text, urgent }, [agent.id]);
   await audit(o, null, urgent ? "wrote (urgent)" : "wrote", hId(row.seq), t);
   return true;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Start this agent (H-26 C): the coach sends an agent a reading pack, files and all, as one brief from Danno.
+
+export const READING_PACK_FILE_MAX = 20 * 1024 * 1024;
+/** The files are written from the server (a coach's form, not an agent's PUT), checked by the same name and type rules, and ready at once. */
+export async function sendReadingPack(o: Owner, agentId: string, title: string, body: string, files: { name: string; bytes: Buffer; type?: string }[]): Promise<{ ok: true; seq: number } | { ok: false; text: string }> {
+  const agent = await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, o.workspaceId), eq(schema.forumAgents.userId, o.userId), eq(schema.forumAgents.id, agentId)) });
+  if (!agent || agent.builtIn) return { ok: false, text: "Pick one of your agents." };
+  const t = scrubText(title.replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.title)).text || "Reading pack";
+  if (files.length > HANDOFF_MAX.files) return { ok: false, text: `At most ${HANDOFF_MAX.files} files in one pack.` };
+  const ids: string[] = [];
+  for (const f of files) {
+    const n = f.name.trim();
+    const refusal = fileNameRefusal(n);
+    if (refusal) return { ok: false, text: refusal };
+    const type = fileTypeFor(n);
+    if (!type) return { ok: false, text: `${n}: only images, video, zip, md, csv, json and pdf files travel through the inbox.` };
+    if (!f.bytes.length || f.bytes.length > READING_PACK_FILE_MAX) return { ok: false, text: `${n}: a reading-pack file is at most ${READING_PACK_FILE_MAX / 1024 / 1024} MB.` };
+    if ((await usedBytes(o)) + f.bytes.length > HANDOFF_TOTAL_BYTES) return { ok: false, text: "The inbox's 1 GB of files is full. Delete old files on Coach → Inbox." };
+    if (TEXT_TYPES.has(type) && f.bytes.subarray(0, SCAN_BYTES).toString("utf8").split(/\s+/).some((w) => w && looksLikeSecret(w))) return { ok: false, text: `${n} looks like it holds a key or credentials. Keys never travel through the inbox.` };
+    const id = newId();
+    const key = `handoff/${o.workspaceId}/${id}/${safeFileName(n)}`;
+    await putHandoffObject(key, f.bytes, type);
+    await db.insert(schema.handoffFiles).values({ id, ...o, agentId: null, name: n, contentType: type, size: f.bytes.length, key, status: "ready", readyAt: nowIso() });
+    ids.push(id);
+  }
+  const row = await insertMessage(o, { fromAgentId: null, toIds: [agent.id], kind: "brief", title: t, body: scrubText(body.trim().slice(0, HANDOFF_MAX.body)).text, fileIds: ids }, [agent.id]);
+  await audit(o, null, "reading pack", hId(row.seq), `${t} (${ids.length} file${ids.length === 1 ? "" : "s"})`);
+  return { ok: true, seq: row.seq };
 }

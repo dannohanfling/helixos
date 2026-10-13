@@ -40,7 +40,7 @@ async function main() {
   const blob = spawn("npx", ["tsx", "scripts/mock-blob.ts", String(blobPort)], { stdio: "ignore", detached: true });
   await new Promise((r) => setTimeout(r, 2500));
   const { db, schema } = await import("@/db");
-  const { and, eq, inArray } = await import("drizzle-orm");
+  const { and, desc, eq, inArray } = await import("drizzle-orm");
   const { viewerFor } = await import("@/lib/auth");
   const { registerClient, issueCode, exchangeCode } = await import("@/lib/mcp/oauth");
   const { makeAgentToken, revokeAgentTokens } = await import("@/lib/handoff");
@@ -107,6 +107,13 @@ async function main() {
     r = await tool(bodyToken, "handoff_ack", { id: h1, note: "queued after Bot connection" });
     must(!r.isError && r.text.includes("queued after Bot connection"), `ack with a note: ${r.text}`);
     r = await tool(bodyToken, "handoff_post", { to: "Architectus", kind: "answer", title: "On it", reply_to: h1 });
+    // Automatic lights (H-19): the post drew the road, the reply walks back, and the calls lit both buildings working.
+    const flowsOf = async (id: string) => (await db.query.forumEvents.findMany({ where: and(eq(schema.forumEvents.agentId, id), eq(schema.forumEvents.kind, "flow")), orderBy: desc(schema.forumEvents.at) })).map((e) => e.payload as { to: string; label: string; reply: boolean });
+    const mainFlows = await flowsOf(agent("Architectus").id);
+    must(mainFlows.some((f) => f.to === "Medicus" && f.label === "Pantry export" && f.reply === false), `a post draws a flow to its recipient: ${JSON.stringify(mainFlows[0])}`);
+    must((await flowsOf(agent("Medicus").id)).some((f) => f.to === "Architectus" && f.reply === true), "a reply draws a flow back, marked as a reply");
+    const lit = await db.query.forumAgents.findMany({ where: inArray(schema.forumAgents.id, [agent("Architectus").id, agent("Medicus").id]), columns: { status: true, lastCallAt: true } });
+    must(lit.length === 2 && lit.every((a) => a.status === "working" && a.lastCallAt), `both buildings lit working by their calls: ${JSON.stringify(lit)}`);
     r = await tool(mainToken, "handoff_read", { id: h1 });
     must(((r.data?.thread as { ref: string }[]) ?? []).length === 2, `the thread has the post and the reply: ${r.text.slice(0, 200)}`);
     must((await tool(agentTokenFor(await makeAgentToken({ ...O, membershipId: cm.id }, agent("Orator").id)), "handoff_read", { id: h1 })).isError, "an agent outside the thread can't read it");

@@ -62,6 +62,8 @@ export const FORUM_PLATFORMS = ["Claude Code", "Claude Cowork", "Claude", "OpenA
 export const FORUM_MAX = { name: 40, line: 200, role: 80, platform: 40, link: 300, flowLabel: 40, what: 160, detail: 400, when: 60, headline: 200, milestone: 80, rev: 20, queue: 12 } as const;
 export const FORUM_REPORTS_PER_MINUTE = 60;
 export const FORUM_FLOW_MS = 30 * 60 * 1000;
+/** Automatic lights (H-19): a building lit by calls alone goes back to its reported status after this long without a call. */
+export const FORUM_AUTO_MS = 10 * 60 * 1000;
 export const FORUM_KEEP_DAYS = 90;
 export const FORUM_NEWS = 12;
 
@@ -293,7 +295,7 @@ export type ForumState = {
 };
 
 export type ComposeInput = {
-  agents: { id: string; name: string; platform: string | null; role: string | null; link: string | null; plotId: string | null; builtIn: string | null; status: string; now: string | null; last: string | null; next: string | null; flowTo: string | null; flowLabel: string | null; flowAt: string | null; queue: ForumMilestone[]; confirmed: boolean; reportedAt: string | null; createdAt: string }[];
+  agents: { id: string; name: string; platform: string | null; role: string | null; link: string | null; plotId: string | null; builtIn: string | null; status: string; now: string | null; last: string | null; next: string | null; flowTo: string | null; flowLabel: string | null; flowAt: string | null; queue: ForumMilestone[]; confirmed: boolean; reportedAt: string | null; createdAt: string; lastCallAt?: string | null; restStatus?: string | null }[];
   builtIns: Partial<Record<BuiltInKey, BuiltInEvent[]>>;
   needs: { id: string; agentId: string | null; what: string; detail: string | null; when: string | null; createdAt: string }[];
   events: { agentId: string | null; kind: string; payload: Record<string, unknown>; at: string }[];
@@ -303,6 +305,11 @@ export type ComposeInput = {
 };
 
 const statusOf = (s: string): ForumStatus => ((FORUM_STATUSES as readonly string[]).includes(s) ? (s as ForumStatus) : "idle");
+/** Lit by a call alone (restStatus set): working while calls keep coming, its own reported status after FORUM_AUTO_MS without one. */
+export function liveStatus(a: { status: string; restStatus?: string | null; lastCallAt?: string | null }, now: Date): ForumStatus {
+  if (a.restStatus && a.lastCallAt && now.getTime() - Date.parse(isoOf(a.lastCallAt)) > FORUM_AUTO_MS) return statusOf(a.restStatus);
+  return statusOf(a.status);
+}
 
 /** A database stamp ("2026-10-12 05:35:00", UTC) or an ISO instant, as an ISO instant. */
 export const isoOf = (stamp: string): string => (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(stamp) ? `${stamp.replace(" ", "T")}Z` : stamp);
@@ -320,7 +327,7 @@ export function composeForum(input: ComposeInput): ForumState {
       platform: a.platform,
       role: a.role,
       link: a.link,
-      status: live ? live.status : statusOf(a.status),
+      status: live ? live.status : liveStatus(a, now),
       now: live ? live.now : a.now,
       last: live ? live.last : a.last,
       next: builtIn ? null : a.next,

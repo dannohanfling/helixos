@@ -5,6 +5,7 @@
  * row with the tool and the outcome, never the arguments.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { agentCalled } from "@/lib/forum";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -30,6 +31,8 @@ function textResult(text: string, isError = false) {
   return { content: [{ type: "text" as const, text }], isError };
 }
 
+const SELF_LIT = new Set(["forum_report", "handoff_busy", "handoff_checkin", "whoami"]);
+
 /** One tool call: the gate, the handler, the audit row, in the app's own plain words on failure. */
 async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
   const t0 = Date.now();
@@ -52,6 +55,9 @@ async function run(grant: Grant, def: ToolDef, args: Record<string, unknown>) {
     text = e instanceof Error ? e.message : "Something went wrong.";
   }
   const ms = Date.now() - t0;
+  // Automatic lights (H-19): a call through an agent's own connection lights its building. Not the tools that set or read the
+  // light themselves, and not a scheduled check-in, which isn't work until it says "work".
+  if (ok && grant.agentId && !SELF_LIT.has(def.name)) await agentCalled({ workspaceId: grant.viewer.workspace.id, userId: grant.viewer.user.id }, grant.agentId).catch(() => undefined);
   await db.insert(schema.mcpCalls).values({ id: newId(), workspaceId: grant.viewer.workspace.id, userId: grant.viewer.user.id, appId: grant.app.id, tool: def.name, ok, error, ms });
   await db.update(schema.connectedApps).set({ lastUsedAt: nowIso(), lastTool: def.name }).where(eq(schema.connectedApps.id, grant.app.id));
   return textResult(text, !ok);

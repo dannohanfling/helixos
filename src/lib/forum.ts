@@ -11,23 +11,7 @@ import { safeEqual } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { allow } from "@/lib/rate-limit";
-import {
-  BUILT_INS,
-  FORUM_KEEP_DAYS,
-  FORUM_REPORTS_PER_MINUTE,
-  composeForum,
-  forumNameKey,
-  isBuiltIn,
-  isForumPlot,
-  parseForumReport,
-  plotFor,
-  FORUM_SEED,
-  type BuiltInEvent,
-  type BuiltInKey,
-  type ForumPlot,
-  type ForumReport,
-  type ForumState,
-} from "@/lib/engine/forum";
+import { BUILT_INS, cleanLine, composeForum, FORUM_KEEP_DAYS, FORUM_MAX, FORUM_REPORTS_PER_MINUTE, FORUM_SEED, forumNameKey, isBuiltIn, isForumPlot, parseForumReport, plotFor, type BuiltInEvent, type BuiltInKey, type ForumPlot, type ForumReport, type ForumState } from "@/lib/engine/forum";
 
 export type ForumMember = { workspaceId: string; userId: string };
 type Source = "connector" | "webhook" | "member" | "agent";
@@ -102,8 +86,9 @@ export async function reportToForum(member: ForumMember, raw: unknown, source: S
 }
 
 async function applyReport(m: ForumMember, agent: schema.ForumAgent, r: ForumReport, source: Source, at: string): Promise<void> {
-  const set: Partial<typeof schema.forumAgents.$inferInsert> = { reportedAt: at, updatedAt: nowIso(), flowTo: null, flowLabel: null, flowAt: null };
-  if (r.status) set.status = r.status;
+  const set: Partial<typeof schema.forumAgents.$inferInsert> = { reportedAt: at, updatedAt: nowIso(), flowTo: null, flowLabel: null, flowAt: null, lastCallAt: at };
+  // A status the agent reports itself is the truth: it ends any automatic light (H-19).
+  if (r.status) Object.assign(set, { status: r.status, restStatus: null });
   if (r.has.now) set.now = r.now;
   if (r.has.last) set.last = r.last;
   if (r.has.next) set.next = r.next;
@@ -299,4 +284,27 @@ export async function memberForWebhook(secret: string): Promise<ForumMember | nu
   if (!membership || membership.removedAt) return null;
   await db.update(schema.forumSettings).set({ webhookUsedAt: nowIso() }).where(eq(schema.forumSettings.id, row.id));
   return { workspaceId: row.workspaceId, userId: row.userId };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Automatic lights (H-19, H-26 B): any call through an agent's own connection lights its building; a post lights the road.
+
+/** A call just came through this agent's connection: working now, and the status it reported itself kept to go back to. */
+export async function agentCalled(m: ForumMember, agentId: string): Promise<void> {
+  const a = await db.query.forumAgents.findFirst({ where: and(mineAgents(m), eq(schema.forumAgents.id, agentId)), columns: { id: true, status: true, restStatus: true } });
+  if (!a) return;
+  const now = nowIso();
+  await db.update(schema.forumAgents).set(a.status === "working" ? { lastCallAt: now } : { lastCallAt: now, restStatus: a.restStatus ?? a.status, status: "working", updatedAt: now }).where(eq(schema.forumAgents.id, a.id));
+}
+
+/**
+ * A message from one agent to others, or to the member, draws its flows on the map without a separate report: one event per
+ * recipient (the title as the label, a reply marked so it can walk back), and the sender's own flow pointing at the first.
+ */
+export async function drawFlows(m: ForumMember, from: { id: string }, toNames: string[], label: string, reply: boolean, ref: string | null): Promise<void> {
+  if (!toNames.length) return;
+  const at = nowIso();
+  const clean = cleanLine(label, FORUM_MAX.flowLabel) ?? "";
+  await db.insert(schema.forumEvents).values(toNames.map((to) => ({ id: newId(), ...m, agentId: from.id, kind: "flow" as const, source: "agent" as const, payload: { to, label: clean, reply, ref }, at })));
+  await db.update(schema.forumAgents).set({ flowTo: toNames[0], flowLabel: clean, flowAt: at, lastCallAt: at }).where(eq(schema.forumAgents.id, from.id));
 }

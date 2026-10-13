@@ -24,7 +24,7 @@ export function ForumLive({ updatedAt }: { updatedAt: string | null }) {
 }
 
 /** A new agent takes the lowest free plot (Danno, 13 Oct); the member swaps plots on the map. */
-export function ForumAddAgent({ platforms }: { platforms: readonly string[] }) {
+export function ForumAddAgent({ platforms, agentsHref }: { platforms: readonly string[]; agentsHref?: string }) {
   const [state, action] = useActionState<ForumFormState, FormData>(addForumAgentAction, null);
   const [platform, setPlatform] = useState(platforms[0]);
   return (
@@ -66,6 +66,14 @@ export function ForumAddAgent({ platforms }: { platforms: readonly string[] }) {
         ) : state?.ok ? (
           <span role="status" className="fo-ok" data-testid="forum-add-ok">
             {state.ok}
+            {agentsHref ? (
+              <>
+                {" "}
+                <a href={`${agentsHref}${state.agentId ? `#agent-${state.agentId}` : ""}`} data-testid="forum-add-next">
+                  Next: connect it on the Agents page →
+                </a>
+              </>
+            ) : null}
           </span>
         ) : null}
       </div>

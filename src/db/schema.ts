@@ -4242,6 +4242,9 @@ export const forumAgents = sqliteTable(
     /** False for an agent a report made, until the member confirms it ("new" on its card). */
     confirmed: integer("confirmed", { mode: "boolean" }).notNull().default(true),
     reportedAt: text("reported_at"),
+    /** Automatic lights (H-19): the last call through this agent's own connection, and the status it reported itself when a call lit it working. */
+    lastCallAt: text("last_call_at"),
+    restStatus: text("rest_status", { enum: FORUM_STATUSES }),
     createdAt: createdAt(),
     updatedAt: text("updated_at"),
   },

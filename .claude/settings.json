@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash scripts/forum-light.sh working 'working in Claude Code'", "timeout": 3 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash scripts/forum-light.sh working 'working in Claude Code'", "timeout": 3 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash scripts/forum-light.sh waiting 'waiting for the next message'", "timeout": 3 }
+        ]
+      }
+    ]
+  }
+}

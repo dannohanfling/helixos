@@ -97,6 +97,13 @@ export async function readProofObject(url: string, range?: string | null): Promi
 /** A Handoff inbox file's key (rev 769): handoff/<workspace>/<file id>/<name>, nothing else. */
 export const handoffKeyOk = (key: string): boolean => /^handoff\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(key);
 
+/** A reading-pack file the coach sends an agent (H-26 C), written from the server: private, the proof store's token, the handoff tree only. */
+export async function putHandoffObject(key: string, bytes: Buffer, contentType: string): Promise<ProofObject> {
+  if (!handoffKeyOk(key)) throw new Error("refusing to write a handoff object outside the handoff tree");
+  const blob = await put(key, bytes, { access: "private", token: proofToken(), contentType, addRandomSuffix: false });
+  return { key, url: blob.url, size: bytes.length, contentType };
+}
+
 /**
  * A short-lived link an agent PUTs one file to, straight into the PRIVATE store (rev 769: a HelixOS request carries only about
  * 4.5 MB, a handoff file up to 100 MB). Signed from the proof store's own token, scoped to that one key, the one type, the

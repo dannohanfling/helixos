@@ -20,7 +20,7 @@ const text = (fd: FormData, key: string, max: number): string | null => {
   return s && !looksLikeSecret(s) ? s : null;
 };
 
-export type ForumFormState = { error?: string; ok?: string; secret?: string } | null;
+export type ForumFormState = { error?: string; ok?: string; secret?: string; agentId?: string } | null;
 
 export async function addForumAgentAction(_prev: ForumFormState, fd: FormData): Promise<ForumFormState> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: THEIRS });
@@ -31,10 +31,11 @@ export async function addForumAgentAction(_prev: ForumFormState, fd: FormData): 
   if (await db.query.forumAgents.findFirst({ where: and(eq(schema.forumAgents.workspaceId, m.workspaceId), eq(schema.forumAgents.userId, m.userId), eq(schema.forumAgents.nameKey, key)) })) return { error: `You already have an agent called ${name}.` };
   const platform = str(fd, "platform") === "Other" ? text(fd, "platformOther", FORUM_MAX.platform) : text(fd, "platform", FORUM_MAX.platform);
   const taken = (await db.query.forumAgents.findMany({ where: and(eq(schema.forumAgents.workspaceId, m.workspaceId), eq(schema.forumAgents.userId, m.userId)), columns: { plotId: true } })).map((a) => a.plotId);
-  await db.insert(schema.forumAgents).values({ id: newId(), ...m, name, nameKey: key, platform, role: text(fd, "role", FORUM_MAX.role), link: cleanLink(str(fd, "link")), plotId: plotFor(taken), createdBy: "member", confirmed: true });
+  const agentId = newId();
+  await db.insert(schema.forumAgents).values({ id: agentId, ...m, name, nameKey: key, platform, role: text(fd, "role", FORUM_MAX.role), link: cleanLink(str(fd, "link")), plotId: plotFor(taken), createdBy: "member", confirmed: true });
   await db.insert(schema.forumEvents).values({ id: newId(), ...m, kind: "member", source: "member", payload: { text: `added ${name}` }, at: nowIso() });
   refresh();
-  return { ok: `${name} is on your Forum.` };
+  return { ok: `${name} is on your Forum.`, agentId };
 }
 
 export async function editForumAgentAction(fd: FormData): Promise<void> {
