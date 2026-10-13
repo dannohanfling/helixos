@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 166,
+    date: "2026-10-13",
+    title: "Building with AI: the words, in plain English",
+    lines: [
+      "A new page under Build, Building with AI: the words agents use when they build software (brief, plan, the gate, commit, deploy, API key, webhook and more), each in a sentence or two, with a search box and a link for every word.",
+      "Your coach can reword, hide or add an entry, and you see the change the next time you open it.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 165,
     date: "2026-10-12",
     title: "Magic funnel: a hero picture for their industry",

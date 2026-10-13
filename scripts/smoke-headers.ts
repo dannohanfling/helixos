@@ -46,8 +46,8 @@ function routedPages(dir: string, prefix = ""): string[] {
   return out.sort();
 }
 // The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
-const PAGES_CLIENT = ["/today", "/bot-features", "/intentions", "/connect", "/connect-tools", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/goals", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/my-board", "/my-board/council", "/offers", "/avatars", "/pathway", "/courses", "/recordings", "/doctrine", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/goals", "/rewards", "/more", "/settings", "/whats-new"];
-const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/headshots", "/coach/late-closes", "/coach/teaching", "/coach/bot-features", "/coach/backfill", "/coach/office-hours", "/coach/board", "/coach/board-seats", "/coach/recordings", "/coach/recordings/rules", "/coach/reports", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
+const PAGES_CLIENT = ["/today", "/bot-features", "/intentions", "/connect", "/connect-tools", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/goals", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/my-board", "/my-board/council", "/offers", "/avatars", "/pathway", "/courses", "/recordings", "/doctrine", "/glossary", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/goals", "/rewards", "/more", "/settings", "/whats-new"];
+const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/headshots", "/coach/late-closes", "/coach/teaching", "/coach/bot-features", "/coach/backfill", "/coach/office-hours", "/coach/board", "/coach/board-seats", "/coach/recordings", "/coach/recordings/rules", "/coach/reports", "/coach/glossary", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {
   const routed = routedPages("src/app/(app)");
@@ -107,22 +107,22 @@ async function main() {
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
   await visit(PAGES_CLIENT);
-  // Coming soon (rev 816): six greyed items on More, none a link, each disabled for screen readers and at least 44px tall;
+  // Coming soon (rev 816): five greyed items on More, none a link, each disabled for screen readers and at least 44px tall;
   // a tap shows the subtitle and goes nowhere.
   {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}/more`, { waitUntil: "networkidle" });
     const soon = page.locator('main [data-testid="nav-coming-soon"]');
-    if ((await soon.count()) !== 6) throw new Error(`six Coming soon items on More: ${await soon.count()}`);
-    for (let i = 0; i < 6; i++) {
+    if ((await soon.count()) !== 5) throw new Error(`five Coming soon items on More: ${await soon.count()}`);
+    for (let i = 0; i < 5; i++) {
       const it = soon.nth(i);
       const box = await it.boundingBox();
       if ((await it.getAttribute("aria-disabled")) !== "true" || (await it.evaluate("(el) => el.closest('a') !== null")) || !box || box.height < 44 || box.x + box.width > 390.5) throw new Error(`a Coming soon item is a link, isn't marked disabled, or is too small or too wide: ${await it.innerText()}`);
     }
     const here = page.url();
-    await soon.filter({ hasText: "The Forum" }).click({ force: true }); // aria-disabled: Playwright waits for "enabled", a finger doesn't
-    if (!(await soon.filter({ hasText: "The Forum" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== here) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
-    console.log("✓ Coming soon: six greyed items on More, none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
+    await soon.filter({ hasText: "The Colosseum" }).click({ force: true }); // aria-disabled: Playwright waits for "enabled", a finger doesn't
+    if (!(await soon.filter({ hasText: "The Colosseum" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== here) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
+    console.log("✓ Coming soon: five greyed items on More, none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
   }
   // interact a little so client-side handlers run under the policy
   await page.goto(`${base}/content/compose`, { waitUntil: "networkidle" });

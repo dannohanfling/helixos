@@ -4172,3 +4172,25 @@ export const boardPrinciples = sqliteTable(
   (t) => [index("board_principles_ws").on(t.workspaceId, t.order)],
 );
 export type BoardPrinciple = typeof boardPrinciples.$inferSelect;
+
+/**
+ * Building with AI: the words (rev 768). The seed lives in src/content/glossary.ts; a row here is a coach's change to one entry
+ * of their workspace's glossary (same slug: edited or hidden) or an entry they added (a new slug). The page reads the seed with
+ * these on top, so an edit shows on the next load.
+ */
+export const glossaryEntries = sqliteTable(
+  "glossary_entries",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    slug: text("slug").notNull(),
+    heading: text("heading").notNull(),
+    term: text("term").notNull(),
+    meaning: text("meaning").notNull(),
+    hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: text("updated_at"),
+  },
+  (t) => [uniqueIndex("glossary_entries_slug").on(t.workspaceId, t.slug)],
+);
+export type GlossaryEntry = typeof glossaryEntries.$inferSelect;
