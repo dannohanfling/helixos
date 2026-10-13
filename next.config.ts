@@ -36,7 +36,8 @@ const csp = [
   `font-src 'self' data: ${chatHosts} https://fonts.gstatic.com`,
   // Rev 843: the SDK's live connection for replies (Ask Danno froze, replies came later); by name, like the rest.
   `connect-src 'self' ${blobApiSource} ${chatHosts} ${chatSdkHosts} wss://communityloyalty.io wss://*.communityloyalty.io wss://sdk.dfktv2.com${dev ? " ws: wss:" : ""}`,
-  `frame-src 'self' ${chatHosts} ${chatFrameHosts}`,
+  // Hermes: the thank-you video on a HelixOS-hosted Magic funnel page, an unlisted YouTube video played from youtube-nocookie.com.
+  `frame-src 'self' ${chatHosts} ${chatFrameHosts} https://www.youtube-nocookie.com https://www.youtube.com`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
