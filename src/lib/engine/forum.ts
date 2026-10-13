@@ -64,6 +64,8 @@ export const FORUM_REPORTS_PER_MINUTE = 60;
 export const FORUM_FLOW_MS = 30 * 60 * 1000;
 /** Automatic lights (H-19): a building lit by calls alone goes back to its reported status after this long without a call. */
 export const FORUM_AUTO_MS = 10 * 60 * 1000;
+/** H-52: at most this many lights on the map at once, newest first. */
+export const FORUM_FLOWS_SHOWN = 20;
 export const FORUM_KEEP_DAYS = 90;
 export const FORUM_NEWS = 12;
 
@@ -287,7 +289,7 @@ export type ForumState = {
   headline: string | null;
   agents: ForumStateAgent[];
   /** From and to are places ("rostra" for the member), so the map can walk the streets between them. */
-  flows: { from: ForumPlot | "rostra"; to: ForumPlot | "rostra"; label: string; agentId: string }[];
+  flows: { id: string; from: ForumPlot | "rostra"; to: ForumPlot | "rostra"; label: string; agentId: string; fromName: string; toName: string; at: string; reply: boolean }[];
   /** The road: each agent's milestones, in agent order. */
   queue: (ForumMilestone & { agentId: string; agent: string })[];
   waiting: { id: string; what: string; detail: string | null; when: string | null; agent: string | null; at: string }[];
@@ -299,6 +301,8 @@ export type ComposeInput = {
   builtIns: Partial<Record<BuiltInKey, BuiltInEvent[]>>;
   needs: { id: string; agentId: string | null; what: string; detail: string | null; when: string | null; createdAt: string }[];
   events: { agentId: string | null; kind: string; payload: Record<string, unknown>; at: string }[];
+  /** H-52: the flow events of the last 30 minutes, newest first (the page reads up to FORUM_FLOWS_SHOWN); without them, each agent's own last flow. */
+  flows?: { id: string; agentId: string | null; payload: Record<string, unknown>; at: string }[];
   headline: string | null;
   headlineAt: string | null;
   now?: Date;
@@ -350,16 +354,32 @@ export function composeForum(input: ComposeInput): ForumState {
   const byName = new Map(agents.map((a) => [forumNameKey(a.name), a]));
 
   const flows: ForumState["flows"] = [];
-  for (const a of rows) {
-    if (!a.flowTo || !a.flowAt || now.getTime() - Date.parse(isoOf(a.flowAt)) > FORUM_FLOW_MS) continue;
-    const from = byId.get(a.id);
-    if (!from) continue;
-    const toKey = forumNameKey(a.flowTo);
-    const toAgent = byName.get(toKey);
-    const to = ["you", "me", "rostra", "danno", "the member"].includes(toKey) ? "rostra" : toAgent?.plot ?? null;
-    const fromPlace = from.plot;
-    if (!fromPlace || !to || to === fromPlace) continue;
-    flows.push({ from: fromPlace, to, label: a.flowLabel ?? "", agentId: a.id });
+  const toPlace = (name: string): { place: ForumPlot | "rostra" | null; label: string } => {
+    const key = forumNameKey(name);
+    if (["you", "me", "rostra", "danno", "the member"].includes(key)) return { place: "rostra", label: "you" };
+    const a = byName.get(key);
+    return { place: a?.plot ?? null, label: a?.name ?? name };
+  };
+  if (input.flows) {
+    // Every conversation of the last 30 minutes (H-52), newest first, each light its own.
+    for (const e of [...input.flows].sort((a, b) => Date.parse(isoOf(b.at)) - Date.parse(isoOf(a.at)))) {
+      if (flows.length >= FORUM_FLOWS_SHOWN) break;
+      const age = now.getTime() - Date.parse(isoOf(e.at));
+      if (!(age >= 0 && age <= FORUM_FLOW_MS)) continue;
+      const from = e.agentId ? byId.get(e.agentId) : null;
+      const to = toPlace(String(e.payload.to ?? ""));
+      if (!from?.plot || !to.place || to.place === from.plot) continue;
+      flows.push({ id: e.id, from: from.plot, to: to.place, label: String(e.payload.label ?? ""), agentId: from.id, fromName: from.name, toName: to.label, at: isoOf(e.at), reply: e.payload.reply === true });
+    }
+  } else {
+    for (const a of rows) {
+      if (!a.flowTo || !a.flowAt || now.getTime() - Date.parse(isoOf(a.flowAt)) > FORUM_FLOW_MS) continue;
+      const from = byId.get(a.id);
+      if (!from) continue;
+      const to = toPlace(a.flowTo);
+      if (!from.plot || !to.place || to.place === from.plot) continue;
+      flows.push({ id: a.id, from: from.plot, to: to.place, label: a.flowLabel ?? "", agentId: a.id, fromName: from.name, toName: to.label, at: isoOf(a.flowAt), reply: false });
+    }
   }
 
   const queue: ForumState["queue"] = [];

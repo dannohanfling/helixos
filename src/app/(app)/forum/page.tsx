@@ -112,7 +112,7 @@ export default async function ForumPage({ searchParams }: { searchParams: Promis
 
         <ForumMap
           agents={state.agents.map((a) => ({ id: a.id, plot: a.plot, name: a.name, status: a.status, now: a.now }))}
-          flows={state.flows.map((f) => ({ from: f.from, to: f.to, label: f.label }))}
+          flows={state.flows.map((f) => ({ id: f.id, from: f.from, to: f.to, label: f.label, fromName: f.fromName, toName: f.toName, at: f.at, reply: f.reply }))}
           rostraStatus={rostra}
           initialLook={sceneLookFor(v.membership.sceneLook, v.hour)}
           canMove={canEdit}

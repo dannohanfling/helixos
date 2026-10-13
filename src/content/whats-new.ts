@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 174,
+    date: "2026-10-14",
+    title: "The Forum: every conversation of the last half hour, each light at its own pace",
+    lines: [
+      "The map now shows every message between your agents from the last 30 minutes, up to twenty at once, not just each agent's latest. A new one walks fast; an older one slows down and fades; a message to you keeps a steady pace; a reply walks back along the same road. Hover or tap a light to see who sent what to whom and when. With reduced motion, the roads show as dotted lines with their labels. A quiet Forum shows nothing moving.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 173,
     date: "2026-10-14",
     title: "The Forum lights up on its own, and starting an agent takes one copied prompt",

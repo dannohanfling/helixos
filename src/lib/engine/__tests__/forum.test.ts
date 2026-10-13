@@ -120,9 +120,9 @@ describe("the map (Danno's 12 plots, 13 Oct)", () => {
 describe("the composed state, in the mockup's shape", () => {
   it("a flow shows for 30 minutes, to an agent's building or the Rostra, and not after", () => {
     const fresh = composeForum(base({ agents: [agent({ flowTo: "you", flowLabel: "plan ready", flowAt: "2026-10-12T17:45:00.000Z" })] }));
-    expect(fresh.flows).toEqual([{ from: "p06", to: "rostra", label: "plan ready", agentId: "a1" }]);
+    expect(fresh.flows).toMatchObject([{ from: "p06", to: "rostra", label: "plan ready", agentId: "a1" }]);
     const old = composeForum(base({ agents: [agent({ flowTo: "you", flowLabel: "plan ready", flowAt: "2026-10-12T17:00:00.000Z" })] }));
-    expect(old.flows).toEqual([]);
+    expect(old.flows).toMatchObject([]);
     const toAgent = composeForum(base({ agents: [agent({ flowTo: "cowork", flowLabel: "question", flowAt: "2026-10-12T17:59:00.000Z" }), agent({ id: "a2", name: "Cowork", plotId: "p02", createdAt: "2026-10-02 00:00:00" })] }));
     expect(toAgent.flows[0]).toMatchObject({ from: "p06", to: "p02" });
   });
@@ -187,5 +187,25 @@ describe("automatic lights (H-19)", () => {
     expect(lit("2026-10-12T17:40:00.000Z")).toBe("waiting");
     expect(lit("2026-10-12T17:40:00.000Z", "idle")).toBe("idle");
     expect(lit("2026-10-12T17:40:00.000Z", null)).toBe("working");
+  });
+});
+
+describe("many flows at once (H-52)", () => {
+  const ev = (i: number, over: Partial<{ agentId: string; to: string; label: string; at: string; reply: boolean }> = {}) => ({ id: `e${i}`, agentId: over.agentId ?? "a1", payload: { to: over.to ?? "you", label: over.label ?? `msg ${i}`, reply: over.reply ?? false }, at: over.at ?? `2026-10-12T17:${String(59 - i).padStart(2, "0")}:00.000Z` });
+  const two = [agent(), agent({ id: "a2", name: "Cowork", plotId: "p02", createdAt: "2026-10-02 00:00:00" })];
+  it("draws every flow event of the last 30 minutes, newest first, twenty at most, and none older", () => {
+    const many = Array.from({ length: 25 }, (_, i) => ev(i));
+    const st = composeForum(base({ agents: two, flows: [...many, ev(99, { at: "2026-10-12T17:00:00.000Z" })] }));
+    expect(st.flows).toHaveLength(20);
+    expect(st.flows[0].id).toBe("e0");
+    expect(st.flows.every((f) => f.to === "rostra" && f.toName === "you")).toBe(true);
+  });
+  it("a reply from the other agent walks the same road back, marked as a reply; a flow to nobody known is skipped", () => {
+    const st = composeForum(base({ agents: two, flows: [ev(1, { to: "Cowork", label: "question" }), ev(2, { agentId: "a2", to: "Main", label: "On it", reply: true }), ev(3, { to: "Nobody" })] }));
+    expect(st.flows.map((f) => [f.from, f.to, f.reply])).toEqual([
+      ["p06", "p02", false],
+      ["p02", "p06", true],
+    ]);
+    expect(st.flows[1].fromName).toBe("Cowork");
   });
 });

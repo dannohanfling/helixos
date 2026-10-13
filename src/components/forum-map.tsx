@@ -12,14 +12,26 @@ import { useRouter } from "next/navigation";
 import { moveForumAgentAction } from "@/lib/actions/forum";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import { FORUM_PLOTS } from "@/db/schema";
-import { FORUM_BUILDINGS, FORUM_PLOT_XY, ROSTRA_XY, streetPath, type ForumPlot } from "@/lib/engine/forum";
+import { FORUM_BUILDINGS, FORUM_FLOW_MS, FORUM_PLOT_XY, ROSTRA_XY, forumAgo, streetPath, type ForumPlot } from "@/lib/engine/forum";
 
 export type MapAgent = { id: string; plot: ForumPlot | null; name: string; status: "working" | "waiting" | "idle" | "done"; now: string | null };
-type Flow = { from: ForumPlot | "rostra"; to: ForumPlot | "rostra"; label: string };
+type Flow = { id: string; from: ForumPlot | "rostra"; to: ForumPlot | "rostra"; label: string; fromName: string; toName: string; at: string; reply: boolean };
 type Look = "day" | "night";
 type Spot = { agent: string | null; plot: ForumPlot | null };
 
 const SAYS: Record<MapAgent["status"], string> = { working: "working", waiting: "waiting on you", idle: "idle", done: "done" };
+/** A light's own ±20% (H-52), fixed by its id so nothing moves in lockstep and nothing jumps when the page refreshes. */
+const jitter = (id: string) => {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return 0.8 + (h % 41) / 100;
+};
+/** Newer walks faster (about 6 s a trip), older slows to about 16 s and fades; a message to you keeps a steady middle pace. */
+function pace(f: Flow, now: number): { dur: number; fade: number } {
+  const age = Math.min(1, Math.max(0, (now - Date.parse(f.at)) / FORUM_FLOW_MS));
+  const dur = (f.to === "rostra" ? 9000 : 6000 + 10000 * age) * jitter(f.id);
+  return { dur, fade: 1 - 0.6 * age };
+}
 const plateWidth = (label: string) => Math.max(150, label.length * 15 + 70);
 
 export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ownLook }: { agents: MapAgent[]; flows: Flow[]; rostraStatus: MapAgent["status"]; initialLook: Look; canMove: boolean; ownLook: boolean }) {
@@ -30,6 +42,13 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
   const [picked, setPicked] = useState<Spot | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
+  // The page's own moment, for each light's pace: set once the page is up, so the server and the browser draw the same map.
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setNowMs(Date.now()), 0);
+    return () => clearTimeout(t);
+  }, [flows]);
   const layer = useRef<SVGGElement>(null);
   const drag = useRef<(Spot & { x: number; y: number }) | null>(null);
   const byPlot = useMemo(() => new Map(agents.filter((a) => a.plot).map((a) => [a.plot as ForumPlot, a])), [agents]);
@@ -44,17 +63,17 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
   // Messengers: one per live flow, door → square → door, fading at both ends; at rest mid-street with reduced motion.
   useEffect(() => {
     const g = layer.current;
-    if (!g) return;
+    if (!g || !nowMs) return;
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const runners = [...g.querySelectorAll<SVGGElement>("[data-runner]")].map((r, i) => {
+    const runners = [...g.querySelectorAll<SVGGElement>("[data-runner]")].map((r) => {
       const p = r.querySelector<SVGPathElement>("path")!;
       const len = p.getTotalLength();
-      p.setAttribute("stroke-dasharray", `60 ${len + 60}`);
-      return { r, p, len, off: i * 0.27, dur: 6000 + i * 500 };
+      p.setAttribute("stroke-dasharray", reduce ? "6 14" : `60 ${len + 60}`);
+      return { r, p, len, off: Number(r.dataset.off ?? 0), dur: Number(r.dataset.dur ?? 8000), fade: Number(r.dataset.fade ?? 1) };
     });
     const put = (x: (typeof runners)[number], u: number) => {
       const pt = x.p.getPointAtLength(x.len * u);
-      const o = reduce ? 1 : u < 0.08 ? u / 0.08 : u > 0.92 ? (1 - u) / 0.08 : 1;
+      const o = x.fade * (reduce ? 1 : u < 0.08 ? u / 0.08 : u > 0.92 ? (1 - u) / 0.08 : 1);
       x.r.querySelectorAll<SVGCircleElement>("circle").forEach((c) => {
         c.setAttribute("cx", pt.x.toFixed(1));
         c.setAttribute("cy", pt.y.toFixed(1));
@@ -63,10 +82,11 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
       x.r.querySelector("g")?.setAttribute("transform", `translate(${pt.x.toFixed(1)},${pt.y.toFixed(1)})`);
       x.r.querySelector("g")?.setAttribute("opacity", o.toFixed(2));
       x.p.setAttribute("stroke-dashoffset", (-(x.len * u) + 60).toFixed(1));
-      x.p.style.opacity = reduce ? "0" : (0.35 * o).toFixed(2);
+      x.p.style.opacity = reduce ? "0.5" : (0.35 * o).toFixed(2);
     };
     if (reduce) {
-      runners.forEach((x) => put(x, 0.5));
+      // Static dotted roads with the labels, each light at rest somewhere along its road.
+      runners.forEach((x) => put(x, 0.3 + 0.4 * x.off));
       return;
     }
     let raf = 0;
@@ -84,7 +104,7 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", wake);
     };
-  }, [flows]);
+  }, [flows, nowMs]);
 
   function chooseLook(k: Look) {
     setLook(k);
@@ -187,17 +207,25 @@ export function ForumMap({ agents, flows, rostraStatus, initialLook, canMove, ow
           </g>
           <g ref={layer} aria-hidden="true" className="fo-passive">
             {flows.map((f, i) => {
-              const w = Math.max(80, f.label.length * 10 + 30);
+              const full = `${f.fromName} → ${f.toName} · ${f.label || "a message"}${nowMs ? ` · ${forumAgo(f.at, new Date(nowMs))}` : ""}`;
+              const shown = hovered === f.id ? full : f.label;
+              const w = Math.max(80, shown.length * 10 + 30);
+              const { dur, fade } = pace(f, nowMs);
+              // Several lights on one road start spaced out along it rather than on top of each other.
+              const road = [f.from, f.to].sort().join("-");
+              const mates = flows.filter((x) => [x.from, x.to].sort().join("-") === road);
+              const off = mates.length > 1 ? mates.findIndex((x) => x.id === f.id) / mates.length : (i * 0.27) % 1;
               return (
-                <g key={`${f.from}-${f.to}-${i}`} data-runner="1" data-testid="forum-messenger">
+                <g key={f.id} data-runner="1" data-dur={Math.round(dur)} data-off={off.toFixed(3)} data-fade={fade.toFixed(2)} data-testid="forum-messenger" data-reply={f.reply ? "1" : undefined}>
+                  <title>{full}</title>
                   <path d={streetPath(f.from, f.to)} className="fo-trail" />
                   <circle r={26} className="fo-msgglow" fill="url(#fo-mglow)" />
-                  <circle r={8} className="fo-msg" />
-                  {f.label ? (
+                  <circle r={8} className={f.reply ? "fo-msg fo-reply" : "fo-msg"} onPointerEnter={() => setHovered(f.id)} onPointerLeave={() => setHovered(null)} onClick={() => setHovered((h) => (h === f.id ? null : f.id))} />
+                  {shown ? (
                     <g className="fo-pill">
                       <rect x={-w / 2} y={-46} width={w} height={30} rx={15} />
                       <text x={0} y={-25}>
-                        {f.label}
+                        {shown}
                       </text>
                     </g>
                   ) : null}

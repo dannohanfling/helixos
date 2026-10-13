@@ -226,6 +226,11 @@ async function main() {
       const b1 = await moving.getAttribute("cx");
       await page.waitForTimeout(700);
       must(b1 !== (await moving.getAttribute("cx")), "without it, a messenger walks");
+      // H-52: each light carries its own pace and fade, and the hover line names who sent what to whom.
+      const runner = page.locator('[data-testid="forum-messenger"]').first();
+      const dur = Number(await runner.getAttribute("data-dur"));
+      must(dur >= 4000 && dur <= 20000 && Number(await runner.getAttribute("data-fade")) > 0, `a light has its own pace and fade: ${dur}`);
+      must(/ → .* · /.test((await runner.locator("title").textContent()) ?? ""), "the hover line reads who → whom · what");
       console.log("✓ reduced motion: messengers rest mid-street, no breathing; otherwise they walk");
 
       // Settings: the secret is shown once.

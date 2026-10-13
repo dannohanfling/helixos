@@ -11,7 +11,7 @@ import { safeEqual } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
 import { allow } from "@/lib/rate-limit";
-import { BUILT_INS, cleanLine, composeForum, FORUM_KEEP_DAYS, FORUM_MAX, FORUM_REPORTS_PER_MINUTE, FORUM_SEED, forumNameKey, isBuiltIn, isForumPlot, parseForumReport, plotFor, type BuiltInEvent, type BuiltInKey, type ForumPlot, type ForumReport, type ForumState } from "@/lib/engine/forum";
+import { BUILT_INS, cleanLine, composeForum, FORUM_FLOW_MS, FORUM_FLOWS_SHOWN, FORUM_KEEP_DAYS, FORUM_MAX, FORUM_REPORTS_PER_MINUTE, FORUM_SEED, forumNameKey, isBuiltIn, isForumPlot, parseForumReport, plotFor, type BuiltInEvent, type BuiltInKey, type ForumPlot, type ForumReport, type ForumState } from "@/lib/engine/forum";
 
 export type ForumMember = { workspaceId: string; userId: string };
 type Source = "connector" | "webhook" | "member" | "agent";
@@ -198,14 +198,17 @@ function isoStamp(s: string): string {
 
 /** The whole Forum for one member, in the mockup's shape. */
 export async function forumStateFor(m: ForumMember): Promise<ForumState> {
-  const [agents, needs, events, settings, builtIns] = await Promise.all([
+  const since = new Date(Date.now() - FORUM_FLOW_MS).toISOString();
+  const [agents, needs, events, flows, settings, builtIns] = await Promise.all([
     db.query.forumAgents.findMany({ where: mineAgents(m) }),
     db.query.forumNeeds.findMany({ where: and(eq(schema.forumNeeds.workspaceId, m.workspaceId), eq(schema.forumNeeds.userId, m.userId), isNull(schema.forumNeeds.doneAt)) }),
     db.query.forumEvents.findMany({ where: and(eq(schema.forumEvents.workspaceId, m.workspaceId), eq(schema.forumEvents.userId, m.userId)), orderBy: desc(schema.forumEvents.at), limit: 40 }),
+    // Every conversation of the last 30 minutes (H-52), newest first; stamps are ISO, so the text compare holds.
+    db.query.forumEvents.findMany({ where: and(eq(schema.forumEvents.workspaceId, m.workspaceId), eq(schema.forumEvents.userId, m.userId), eq(schema.forumEvents.kind, "flow"), gte(schema.forumEvents.at, since)), orderBy: desc(schema.forumEvents.at), limit: FORUM_FLOWS_SHOWN, columns: { id: true, agentId: true, payload: true, at: true } }),
     forumSettingsFor(m),
     builtInEvents(m),
   ]);
-  return composeForum({ agents, needs, events, builtIns, headline: settings.headline, headlineAt: settings.headlineAt });
+  return composeForum({ agents, needs, events, flows, builtIns, headline: settings.headline, headlineAt: settings.headlineAt });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

@@ -66,7 +66,9 @@
 /* Messengers, plates and the drawn ground never take a tap: a messenger walking past must not swallow a press on a building. */
 .fo-passive { pointer-events: none; }
 .fo-trail { fill: none; stroke: var(--fo-gold-hi); stroke-width: 5; stroke-linecap: round; opacity: 0; }
-.fo-msg { fill: #fff3d0; }
+.fo-msg { fill: #fff3d0; pointer-events: auto; cursor: default; }
+/* A reply walking back (H-52): a ring instead of a full dot. */
+.fo-reply { fill: rgba(255, 243, 208, 0.25); stroke: #fff3d0; stroke-width: 3; }
 .fo-pill rect { fill: rgba(14, 11, 7, 0.82); stroke: var(--fo-gold); stroke-width: 1.2; }
 .fo-pill text { font-size: 17px; font-weight: 700; fill: var(--fo-gold-hi); text-anchor: middle; }
 @keyframes fo-breathe { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
