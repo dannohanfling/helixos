@@ -261,9 +261,9 @@ export default async function CoachClientPage({ params, searchParams }: { params
           <span>
             <strong>Their team:</strong> <span className="text-ink-3" data-testid="client-team-seats">{seatsLine({ cap: m.teamCap, members: team.length, invites: teamInvites.length })}</span>
           </span>
-          <form action={setTeamCapAction} className="flex items-center gap-2" data-testid="team-cap-form">
+          <form action={setTeamCapAction} className="flex shrink-0 items-center gap-2" data-testid="team-cap-form">
             <input type="hidden" name="membershipId" value={m.id} />
-            <label className="text-xs text-ink-3" htmlFor="team-cap">
+            <label className="whitespace-nowrap text-xs text-ink-3" htmlFor="team-cap">
               Seats
             </label>
             <input id="team-cap" className="field w-20" name="cap" type="number" min={0} max={TEAM_CAP_MAX} defaultValue={m.teamCap} data-testid="team-cap" />

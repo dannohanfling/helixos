@@ -69,9 +69,10 @@ export async function saveMfSetupAction(fd: FormData): Promise<void> {
   // A textarea posts its line breaks as CRLF: the default comes back unchanged only once they are LF again.
   const prompt = str(fd, "prompt").replace(/\r\n?/g, "\n").slice(0, MF_MAX.prompt).trim();
   const proofIds = fd.getAll("proofIds").map(String).filter(Boolean).slice(0, 40);
+  const proofAny = str(fd, "proofAny") !== "none";
   const wantLive = str(fd, "live") === "1";
   const problems = wantLive ? liveProblems({ available: mfAvailable(v.membership), registrationUrl: w.registrationUrl, pillars: pillars.length, defaults, when: w.scheduledAt }) : [];
-  const values = { pillars, agenda, objections, urgency, defaults, proofIds, prompt: !prompt || prompt === DEFAULT_PROMPT ? null : prompt, live: wantLive && !problems.length, updatedAt: nowIso() };
+  const values = { pillars, agenda, objections, urgency, defaults, proofIds, proofAny, prompt: !prompt || prompt === DEFAULT_PROMPT ? null : prompt, live: wantLive && !problems.length, updatedAt: nowIso() };
   const had = await setupFor(m, w.id);
   if (had) await db.update(schema.mfSetups).set(values).where(eq(schema.mfSetups.id, had.id));
   else await db.insert(schema.mfSetups).values({ id: newId(), workspaceId, userId, webinarId: w.id, ...values });

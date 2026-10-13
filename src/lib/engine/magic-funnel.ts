@@ -550,3 +550,18 @@ export const MF_KEY_WORDS: Record<MfKeySource, string> = {
   own: "Writing with the Anthropic key on your own AI drafting card in Settings, on the small model.",
   none: "No writer key yet: every page uses your default copy until one is set.",
 };
+
+/**
+ * Why the writer gave nothing (H-11), in the coach's words: the reply cut at the token limit, Anthropic's per-minute limit,
+ * an overloaded model, a key refused, a call that timed out, or a plain status. Shown on the preview and kept on the sign-up.
+ */
+export function mfWhy(o: { cut?: boolean; maxTokens?: number; status?: number | null; name?: string }): string {
+  if (o.cut) return `reply cut at ${o.maxTokens ?? "the"} tokens`;
+  if (o.status === 429) return "Anthropic's per-minute limit (429); try again in a minute";
+  if (o.status === 529 || o.status === 503) return `Anthropic overloaded (${o.status})`;
+  if (o.status === 401 || o.status === 403) return `the key was refused (${o.status})`;
+  if (o.status === 400) return "the request was refused (400)";
+  if (o.status) return `Anthropic answered ${o.status}`;
+  if (/timeout|abort/i.test(o.name ?? "")) return "the call timed out";
+  return "the call failed";
+}

@@ -5,6 +5,8 @@ import { handleBotMcpRequest } from "@/lib/bot-mcp/server";
  * stateless, one message per POST, with the member's bot key as the Bearer token. Never the member connector (/api/mcp).
  */
 export const dynamic = "force-dynamic";
+/** The page is written after the bot's reply (after()): two model calls need more than the default few seconds (H-15). */
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   return handleBotMcpRequest(request);

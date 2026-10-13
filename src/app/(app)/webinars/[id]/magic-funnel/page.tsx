@@ -11,11 +11,15 @@ import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { MfPreview } from "@/components/mf-preview";
 import { MfProofPicker } from "@/components/mf-proof-picker";
+import { FormProgress } from "@/components/progress-line";
 import { CopyButton } from "@/components/copy-button";
 import { MF_CLASSES, mfSnippet } from "@/lib/engine/mf-snippet";
 import { siteUrl } from "@/lib/app-url";
 
 export const metadata = { title: "Magic funnel" };
+/** The preview runs two model calls in this page's action (H-11). */
+export const maxDuration = 120;
+const SAVE_STEPS = [{ label: "Saving your setup…", until: 100, seconds: 3 }];
 
 /**
  * Coach → Webinars → Magic funnel (revs 812, 815; rev 837's answers), per webinar: the facts the AI may use (the webinar's own
@@ -33,7 +37,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
     setupFor(m, w.id),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, m.workspaceId), eq(schema.proofs.userId, m.userId), eq(schema.proofs.status, "approved")), orderBy: desc(schema.proofs.createdAt), columns: { id: true, name: true, who: true, quote: true, shortVersion: true, tags: true, permissionAt: true } }),
     pagesToday(m, v.tz),
-    db.query.webinarSignups.findMany({ where: and(eq(schema.webinarSignups.webinarId, id), eq(schema.webinarSignups.userId, v.user.id)), columns: { source: true, pitchStatus: true, openedAt: true, registeredAt: true } }),
+    db.query.webinarSignups.findMany({ where: and(eq(schema.webinarSignups.webinarId, id), eq(schema.webinarSignups.userId, v.user.id)), columns: { firstName: true, source: true, pitchStatus: true, pitchNote: true, pitchAt: true, createdAt: true, openedAt: true, registeredAt: true }, orderBy: desc(schema.webinarSignups.createdAt) }),
     magicFunnelSource(m),
   ]);
   const facts = factsFor(w, v.tz);
@@ -77,6 +81,23 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
           <div><dt className="text-xs text-ink-3">Registered in the chat</dt><dd className="tabular text-lg font-semibold" data-testid="mf-count-plain">{counts.plain}</dd></div>
           <div><dt className="text-xs text-ink-3">Attended</dt><dd className="text-sm text-ink-3">once attendance tags come in</dd></div>
         </dl>
+        {mf.length ? (
+          <details className="mt-3 text-sm" data-testid="mf-latest">
+            <summary className="cursor-pointer text-xs text-ink-3">Latest pages: how each one was written</summary>
+            <ul className="mt-2 divide-y rounded-lg border">
+              {mf.slice(0, 8).map((x, i) => (
+                <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1 text-xs" data-testid="mf-latest-row" data-status={x.pitchStatus}>
+                  <span className="font-medium">{x.firstName}</span>
+                  <span className={x.pitchStatus === "personal" ? "text-good" : x.pitchStatus === "writing" ? "text-ink-3" : "text-warn"}>
+                    {x.pitchStatus === "personal" ? "written for them" : x.pitchStatus === "partial" ? "partly written for them" : x.pitchStatus === "writing" ? "still being written" : "your default copy"}
+                  </span>
+                  {x.pitchNote ? <span className="text-ink-3">({x.pitchNote})</span> : null}
+                  <span className="ml-auto text-ink-3">{new Date(x.pitchAt ?? x.createdAt).toLocaleString("en-US", { timeZone: v.tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </Card>
       <Card className="mb-4" title="Your GoHighLevel page">
         <p className="text-sm text-ink-2">Paste this into a Custom Code element on your registration page and on its thank-you page. Then mark the blocks it fills with these CSS classes (Advanced → CSS class in the builder). Add a hidden form field named mf_code for the workflow webhook. A block you don&apos;t mark stays as it is.</p>
@@ -144,7 +165,14 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
           </label>
         </Card>
         <Card title="Proof it may show">
-          <p className="mb-2 text-xs text-ink-3">Approved items with the permission tick only, quoted word for word. Choose none to let it pick from all of them; tags matching their industry or pain go first. Tags are edited in the Proof Bank.</p>
+          <p className="mb-2 text-xs text-ink-3">Approved items with the permission tick only, quoted word for word; tags matching their industry or pain go first. Tags are edited in the Proof Bank.</p>
+          <label className="mb-2 block text-sm">
+            <span className="label">When none is chosen</span>
+            <select className="field" name="proofAny" defaultValue={setup?.proofAny === false ? "none" : "any"} data-testid="mf-proof-any">
+              <option value="any">Let it pick from all my proof with the permission tick</option>
+              <option value="none">Show no proof on the page</option>
+            </select>
+          </label>
           {consented.length ? (
             <MfProofPicker initial={(setup?.proofIds ?? []).flatMap((id) => consented.filter((p) => p.id === id).map((p) => ({ id: p.id, label: p.who || p.name, tags: p.tags })))} max={40} />
           ) : (
@@ -209,6 +237,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
             </span>
           </label>
           <div className="mt-3">
+            <FormProgress steps={SAVE_STEPS} testId="mf-save-progress" />
             <SubmitButton className="btn btn-primary" pendingText="Saving…" slowAfterMs={20000} data-testid="mf-save">
               Save
             </SubmitButton>
@@ -216,7 +245,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
         </Card>
       </form>
       <Card className="mt-4" title="Preview a person's page">
-        {setup ? <MfPreview webinarId={w.id} pillars={setup.pillars.map((p) => ({ id: p.id, title: p.title }))} proofs={consented.map((p) => ({ id: p.id, line: `${p.who || p.name}: "${(p.quote ?? p.shortVersion ?? "").slice(0, 140)}"` }))} /> : <p className="text-sm text-ink-3">Save the setup first, then preview it.</p>}
+        {setup ? <MfPreview webinarId={w.id} pillars={setup.pillars.map((p) => ({ id: p.id, title: p.title }))} agenda={setup.agenda} proofs={consented.map((p) => ({ id: p.id, line: `${p.who || p.name}: "${(p.quote ?? p.shortVersion ?? "").slice(0, 140)}"` }))} /> : <p className="text-sm text-ink-3">Save the setup first, then preview it.</p>}
       </Card>
     </>
   );

@@ -1,0 +1,1 @@
+ALTER TABLE `mf_setups` ADD `proof_any` integer DEFAULT true NOT NULL;

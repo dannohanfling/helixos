@@ -28,6 +28,7 @@ import {
   fillPrompt,
   originAllowed,
   parseObject,
+  SECTIONS,
   personalUrl,
   pickHero,
   pitchInput,
@@ -117,17 +118,20 @@ export async function composePage(o: { member: Member; tz: string; cap: number; 
   const facts = factsFor(o.webinar, o.tz);
   const proofs = await proofsFor(o.member);
   const fallback = (profile: MfProfile | null) =>
-    defaultPitch({ defaults: o.setup.defaults, pillars: o.setup.pillars, agenda: o.setup.agenda, proofIds: rankProof(proofs, o.setup.proofIds, profile).map((p) => p.id), firstName: o.firstName, facts });
+    defaultPitch({ defaults: o.setup.defaults, pillars: o.setup.pillars, agenda: o.setup.agenda, proofIds: (o.setup.proofIds.length || o.setup.proofAny ? rankProof(proofs, o.setup.proofIds, profile) : []).map((p) => p.id), firstName: o.firstName, facts });
   const plain = (note: string, profile: MfProfile | null = null): Written => ({ profile, pitch: fallback(profile), sources: allDefault(), status: "default", note, failed: {} });
 
   const writer = await magicFunnelKey(o.member);
   if (!writer.key) return plain("no key");
   if (!(await withinCap(o.member, o.tz, o.cap))) return plain("daily cap");
 
-  const profile = readProfile(parseObject(await magicFunnelCall(writer.key, PROFILE_SYSTEM, profileInput({ ...o.said, custom: o.custom }), 600)));
-  if (!profile) return plain("no profile");
+  const prof = await magicFunnelCall(writer.key, "profile", PROFILE_SYSTEM, profileInput({ ...o.said, custom: o.custom }), 600);
+  const profile = readProfile(parseObject(prof.text));
+  if (!profile) return plain(prof.why ? `no profile: ${prof.why}` : "no profile: no JSON in the reply");
 
-  const ranked = rankProof(proofs, o.setup.proofIds, profile).slice(0, 8);
+  // Proof on the page (H-9): the chosen items, else any with the permission tick when the setup allows it, else none.
+  const pool = o.setup.proofIds.length || o.setup.proofAny ? rankProof(proofs, o.setup.proofIds, profile) : [];
+  const ranked = pool.slice(0, 8);
   const ctx: CheckContext = {
     pillarIds: o.setup.pillars.map((p) => p.id),
     agendaIds: o.setup.agenda.map((a) => a.id),
@@ -140,15 +144,28 @@ export async function composePage(o: { member: Member; tz: string; cap: number; 
   const system = `${pitchRules({ pillarIds: ctx.pillarIds, agendaIds: ctx.agendaIds, proofIds: ctx.proofIds, urgency: o.setup.urgency })}\n\n<voice>\n${fillPrompt(o.setup.prompt ?? DEFAULT_PROMPT, o.firstName, profile.main_pain)}\n</voice>`;
   const input = pitchInput({ facts, pillars: o.setup.pillars, agenda: o.setup.agenda, objections: o.setup.objections, proofs: ranked.map((p) => ({ id: p.id, who: p.who, tags: p.tags, line: p.quote.slice(0, 400) })), profile, firstName: o.firstName });
 
-  const first = readPitch(parseObject(await magicFunnelCall(writer.key, system, input, 2500)));
+  // The page (H-11): one call; a reply that was cut, refused or never came gets one plain second try (a bigger limit when
+  // it was cut, a pause when Anthropic was busy), never a "you broke the rules" retry against a reply nobody read.
+  let r = await magicFunnelCall(writer.key, "pitch", system, input, 2000);
+  if (!r.text) {
+    if (/429|overloaded/.test(r.why ?? "")) await new Promise((res) => setTimeout(res, 2500));
+    r = await magicFunnelCall(writer.key, "pitch", system, input, /cut at/.test(r.why ?? "") ? 3500 : 2000);
+  }
+  let firstRaw = parseObject(r.text);
+  if (r.text && !firstRaw) r = { ...(await magicFunnelCall(writer.key, "pitch", system, `${input}\n\nReply with the JSON object only.`, 2000)) };
+  if (r.text && !firstRaw) firstRaw = parseObject(r.text);
+  const writerWhy = !r.text ? r.why : !firstRaw ? "no JSON in the reply" : null;
+  if (writerWhy) return { ...plain(writerWhy, profile), failed: Object.fromEntries(SECTIONS.map((s) => [s, `writer: ${writerWhy}`])) as Partial<Record<MfSection, string>> };
+  const first = readPitch(firstRaw);
   const firstCheck = checkSections(first, ctx);
   const failing = (Object.keys(firstCheck) as MfSection[]).filter((s) => firstCheck[s]);
   let retry: MfPitch | null = null;
   let retryCheck: Record<MfSection, string | null> | null = null;
   if (failing.length) {
     const why = failing.map((s) => `${s}: ${firstCheck[s]}`).join("; ");
-    retry = readPitch(parseObject(await magicFunnelCall(writer.key, system, `${input}\n\nYour last version broke the rules in these sections (${why}). Write the whole JSON again and fix them.`, 2500)));
-    retryCheck = checkSections(retry, ctx);
+    const again = await magicFunnelCall(writer.key, "pitch", system, `${input}\n\nYour last version broke the rules in these sections (${why}). Write the whole JSON again and fix them.`, 2500);
+    retry = again.text ? readPitch(parseObject(again.text)) : null;
+    retryCheck = retry ? checkSections(retry, ctx) : null;
   }
   const { pitch, sources } = assemble(first, firstCheck, retry, retryCheck, fallback(profile));
   // The hero picture (Magic funnel C): one of their own Images tagged for this industry, or none.
@@ -174,8 +191,11 @@ export async function writeForSignup(signupId: string): Promise<void> {
   try {
     const r = await composePage({ member: m, tz, cap: membership.mfDailyCap ?? DAILY_CAP_DEFAULT, webinar: w, setup, firstName: s.firstName, said: s.said ?? { pain: "", industry: "", summary: "" }, custom: s.custom });
     await db.update(schema.webinarSignups).set({ profile: r.profile, pitch: r.pitch, pitchSources: r.sources, pitchStatus: r.status, pitchNote: r.note, pitchAt: nowIso() }).where(eq(schema.webinarSignups.id, s.id));
-  } catch {
-    await db.update(schema.webinarSignups).set({ pitchStatus: "default", pitchNote: "failed", pitchAt: nowIso() }).where(eq(schema.webinarSignups.id, s.id));
+  } catch (e) {
+    // The reason stays on the row for the coach's page (H-15), the error's name in the log, never the prospect's words.
+    const name = (e as { name?: string; status?: number })?.name ?? "error";
+    console.error("[mf] write failed", JSON.stringify({ name, status: (e as { status?: number })?.status ?? null }));
+    await db.update(schema.webinarSignups).set({ pitchStatus: "default", pitchNote: `write failed: ${name}`, pitchAt: nowIso() }).where(eq(schema.webinarSignups.id, s.id));
   }
 }
 

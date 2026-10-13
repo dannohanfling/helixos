@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
+import { useActionState, useState } from "react";
 import { previewMfAction, type PreviewResult } from "@/lib/actions/magic-funnel";
 import { SubmitButton } from "@/components/submit-button";
+import { ProgressLine } from "@/components/progress-line";
 import { SECTIONS, type MfPitch, type MfSection } from "@/lib/engine/magic-funnel";
 
 const LABEL: Record<MfSection, string> = {
@@ -19,7 +21,7 @@ const LABEL: Record<MfSection, string> = {
   confirmation: "Thank-you page",
 };
 
-function sectionText(p: MfPitch, s: MfSection, pillarTitle: (id: string) => string, proofLine: (id: string) => string): string {
+function sectionText(p: MfPitch, s: MfSection, pillarTitle: (id: string) => string, proofLine: (id: string) => string, agendaLine: (id: string) => string): string {
   switch (s) {
     case "hero":
       return `${p.hero.header}\n${p.hero.subheader}\n[${p.hero.cta_label}]`;
@@ -34,7 +36,7 @@ function sectionText(p: MfPitch, s: MfSection, pillarTitle: (id: string) => stri
     case "objection":
       return `${p.objection.objection}\n${p.objection.answer}`;
     case "agenda":
-      return `${p.agenda.id}: ${p.agenda.why}`;
+      return [agendaLine(p.agenda.id), p.agenda.why].filter(Boolean).join(" · ");
     case "confirmation":
       return `${p.confirmation.ticket_title}\n${p.confirmation.bring.map((b) => `• ${b}`).join("\n")}`;
     default:
@@ -47,10 +49,12 @@ function sectionText(p: MfPitch, s: MfSection, pillarTitle: (id: string) => stri
  * personal or default copy, with the reason a section fell back. Regenerate runs it again. Nothing is stored; it counts toward
  * today's cap.
  */
-export function MfPreview({ webinarId, pillars, proofs }: { webinarId: string; pillars: { id: string; title: string }[]; proofs: { id: string; line: string }[] }) {
+export function MfPreview({ webinarId, pillars, agenda, proofs }: { webinarId: string; pillars: { id: string; title: string }[]; agenda: { id: string; line: string }[]; proofs: { id: string; line: string }[] }) {
   const [state, act] = useActionState<PreviewResult | null, FormData>(previewMfAction, null);
   const pillarTitle = (id: string) => pillars.find((p) => p.id === id)?.title ?? id;
   const proofLine = (id: string) => proofs.find((p) => p.id === id)?.line ?? id;
+  // The agenda item itself, never its id (H-9).
+  const agendaLine = (id: string) => agenda.find((a) => a.id === id)?.line ?? "";
   return (
     <div className="space-y-3" data-testid="mf-preview">
       <form action={act} className="grid gap-2 sm:grid-cols-2">
@@ -72,6 +76,7 @@ export function MfPreview({ webinarId, pillars, proofs }: { webinarId: string; p
           <textarea className="field" name="summary" rows={3} maxLength={1000} data-testid="mf-preview-summary" />
         </label>
         <div className="sm:col-span-2">
+          <PreviewProgress error={state && !state.ok ? state.error : null} />
           <SubmitButton className="btn btn-primary btn-sm" pendingText="Writing their page…" data-testid="mf-preview-run">
             {state?.ok ? "Regenerate" : "Preview their page"}
           </SubmitButton>
@@ -100,12 +105,33 @@ export function MfPreview({ webinarId, pillars, proofs }: { webinarId: string; p
                   <span className={state.sources[s] === "personal" ? "text-good" : "text-ink-3"}>{state.sources[s] === "personal" ? "personal" : "your default"}</span>
                   {state.failed[s] ? <span className="text-warn">fell back: {state.failed[s]}</span> : null}
                 </div>
-                <p className="mt-1 whitespace-pre-line [overflow-wrap:anywhere]">{sectionText(state.pitch, s, pillarTitle, proofLine)}</p>
+                <p className="mt-1 whitespace-pre-line [overflow-wrap:anywhere]">{sectionText(state.pitch, s, pillarTitle, proofLine, agendaLine)}</p>
               </li>
             ))}
           </ol>
         </div>
       ) : null}
     </div>
+  );
+}
+
+const PREVIEW_STEPS = [
+  { label: "Building their profile…", until: 30, seconds: 5 },
+  { label: "Writing their page…", until: 85, seconds: 25 },
+  { label: "Checking it…", until: 100, seconds: 6 },
+];
+/** The 0 to 100% line for the preview (H-10): the profile, the page, the checks, as estimates; red with the error when it fails. */
+function PreviewProgress({ error }: { error: string | null }) {
+  const { pending } = useFormStatus();
+  const [ran, setRan] = useState(false);
+  if (pending && !ran) setRan(true);
+  return (
+    <ProgressLine
+      active={pending}
+      done={!pending && ran && !error}
+      error={!pending && error ? error : null}
+      steps={PREVIEW_STEPS}
+      testId="mf-preview-progress"
+    />
   );
 }

@@ -131,5 +131,6 @@ describe("avatars (rev 501, built by Body at rev 508)", () => {
     }
     const tools = read("src/lib/mcp/tools/avatars.ts");
     expect(tools).not.toMatch(/from "@\/db"|\.insert\(|\.update\(|\.delete\(|archiveAvatar|importFromOffers/);
-  });
+  // Loads every connector tool (a whole module tree): fine alone, near the 5 s default under a full parallel run.
+  }, 20000);
 });

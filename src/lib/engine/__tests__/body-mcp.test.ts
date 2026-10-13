@@ -17,7 +17,8 @@ describe("Body's MCP tools (rev 237 phase 4)", () => {
       expect(t.description.length, t.name).toBeGreaterThan(40);
     }
     expect(mine.filter((t) => t.kind === "write").map((t) => t.name).sort()).toEqual(["body_add_exercise", "body_add_food", "body_add_habit", "body_checkin", "body_goal_set", "body_log_activity", "body_log_described_food", "body_log_exercise", "body_log_food", "body_log_habit", "body_log_meal", "body_log_med", "body_log_set", "body_log_sleep", "body_log_weigh_in", "body_mark_warmups", "body_merge_exercises", "body_note_add", "body_pantry_add_many", "body_save_meal", "body_set_day_type", "body_set_next_weight", "body_update_pantry", "push_to_instacart_cart"]);
-  });
+  // Loads every connector tool (a whole module tree): fine alone, near the 5 s default under a full parallel run.
+  }, 20000);
   it("wired into the server's index; every handler checks Body's switch first; nothing of a coach's comments, photos or injuries", () => {
     expect(read("src/lib/mcp/tools/index.ts")).toMatch(/import "\.\/body";/);
     const src = read("src/lib/mcp/tools/body.ts");

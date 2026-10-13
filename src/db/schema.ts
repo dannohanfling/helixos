@@ -3758,6 +3758,8 @@ export const mfSetups = sqliteTable(
     defaults: text("defaults", { mode: "json" }).$type<MfDefaults>().notNull().default(EMPTY_DEFAULTS),
     /** The Proof Bank items it may pick from; empty means every approved item with the permission tick. */
     proofIds: text("proof_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** With none chosen (H-9): any approved proof with the permission tick, or none at all when off. */
+    proofAny: integer("proof_any", { mode: "boolean" }).notNull().default(true),
     createdAt: createdAt(),
     updatedAt: text("updated_at"),
   },

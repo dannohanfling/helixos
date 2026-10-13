@@ -287,6 +287,9 @@ async function main() {
     await page.click('[data-testid="mf-preview-run"]');
     await page.locator('[data-testid="mf-preview-result"]').waitFor({ timeout: 60000 });
     const sources = Object.fromEntries(await page.locator('[data-testid="mf-preview-section"]').evaluateAll((els) => els.map((e) => [e.getAttribute("data-section"), e.getAttribute("data-source")])));
+    const agendaShown = await page.locator('[data-testid="mf-preview-section"][data-section="agenda"]').innerText();
+    must(!/\ba[0-9]+:/.test(agendaShown), `the agenda highlight shows the item, never its id (H-9): ${agendaShown.slice(0, 80)}`);
+    must((await page.locator('[data-testid="mf-preview-progress"]').count()) <= 1, "one progress line for the preview");
     must(sources.urgency === "default" && sources.emotional === "personal" && sources.hero === "personal", `urgency falls back alone: ${JSON.stringify(sources)}`);
     await page.setViewportSize({ width: 390, height: 844 });
     must((await page.evaluate(() => document.documentElement.scrollWidth)) <= 390, "the setup page fits a phone");

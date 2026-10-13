@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 172,
+    date: "2026-10-14",
+    title: "Magic funnel: the writer says why a page fell back, and a progress line while it works",
+    lines: [
+      "When the Magic funnel can't write a personal page, the preview now says why in plain words (Anthropic's per-minute limit, a reply cut short, a key refused) instead of \"failed\", and it gives the writer one more try. The setup page lists your latest pages with how each was written. A thin gold line shows the preview and Save working, 0 to 100%, and turns red with the reason if something fails.",
+      "Proof: choose what the page may show, or set \"When none is chosen\" to show no proof at all. The agenda highlight in the preview shows the item itself, not its id.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 171,
     date: "2026-10-13",
     title: "Magic funnel: choosing proof is one search box, and Save is quick again",

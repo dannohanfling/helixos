@@ -17,6 +17,7 @@ import {
   isMfCode,
   lineProblem,
   MF_KEY_WORDS,
+  mfWhy,
   mfKeySource,
   originAllowed,
   parseObject,
@@ -215,5 +216,20 @@ describe("mfKeySource: which key writes the pages", () => {
   });
   it("names the source in words, never the key", () => {
     for (const w of Object.values(MF_KEY_WORDS)) expect(w).not.toMatch(/sk-|\u2014/);
+  });
+});
+
+describe("mfWhy: why the writer gave nothing (H-11)", () => {
+  it("names the token limit, Anthropic's limits, a refused key and a timeout in plain words", () => {
+    expect(mfWhy({ cut: true, maxTokens: 2000 })).toBe("reply cut at 2000 tokens");
+    expect(mfWhy({ status: 429 })).toContain("per-minute limit (429)");
+    expect(mfWhy({ status: 529 })).toContain("overloaded");
+    expect(mfWhy({ status: 401 })).toContain("key was refused");
+    expect(mfWhy({ name: "APIConnectionTimeoutError" })).toBe("the call timed out");
+    expect(mfWhy({})).toBe("the call failed");
+  });
+  it("accepts a page with no proof when the setup allows none (H-9)", () => {
+    expect(checkSections({ ...good, proof_ids: [] }, ctx({ proofIds: [] })).proof_ids).toBeNull();
+    expect(checkSections({ ...good, proof_ids: ["pr1"] }, ctx({ proofIds: [] })).proof_ids).toBe("proof that isn't in the bank");
   });
 });

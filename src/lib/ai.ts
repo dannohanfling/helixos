@@ -19,7 +19,7 @@ import { FEATURES, MODELS, estimateCost, explainAiError, modelFor, type AiProvid
 import { assembleSystem, type SystemBlock } from "@/lib/engine/essence";
 import { anthropicUserContent, imageRefusal, openaiInput, type DraftImage } from "@/lib/engine/ai-request";
 import { essenceBlockFor } from "@/lib/queries/essence";
-import { mfKeySource, type MfKeySource } from "@/lib/engine/magic-funnel";
+import { mfKeySource, mfWhy, type MfKeySource } from "@/lib/engine/magic-funnel";
 
 export type AiStatus = { hasKey: boolean; provider: AiProvider | null; last4: string; lastError: string | null; callsToday: number; cap: number; exempt: boolean; blocked: boolean };
 
@@ -71,11 +71,11 @@ export async function hasAiKey(): Promise<boolean> {
 type Result = { text: string; inputTokens: number; outputTokens: number; cacheWriteTokens: number; cacheReadTokens: number; cut: boolean };
 
 /** The Essence block carries a cache marker: it is the same prefix on every call, which is what prompt caching is for. */
-async function callAnthropic(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number, images?: DraftImage[]): Promise<Result | null> {
+async function callAnthropic(key: string, model: string, system: SystemBlock[], user: string, maxTokens: number, images?: DraftImage[], opts?: { timeout: number; maxRetries: number }): Promise<Result | null> {
   const client = new Anthropic({ apiKey: key, baseURL: baseURL() });
   const blocks: Anthropic.TextBlockParam[] = system.map((b) => (b.cached ? { type: "text", text: b.text, cache_control: { type: "ephemeral" } } : { type: "text", text: b.text }));
   // With no images the user turn is the plain string it always was (rev 201: byte-for-byte); with images, their blocks then the text.
-  const stream = client.messages.stream({ model, max_tokens: maxTokens, system: blocks, messages: [{ role: "user", content: anthropicUserContent(user, images) as Anthropic.MessageParam["content"] }] });
+  const stream = client.messages.stream({ model, max_tokens: maxTokens, system: blocks, messages: [{ role: "user", content: anthropicUserContent(user, images) as Anthropic.MessageParam["content"] }] }, opts);
   const message = await stream.finalMessage();
   if (message.stop_reason === "refusal") return null;
   const text = message.content
@@ -220,14 +220,22 @@ export async function magicFunnelKey(m: { workspaceId: string; userId: string })
 }
 /** Which key the setup page names; never the key. */
 export const magicFunnelSource = async (m: { workspaceId: string; userId: string }): Promise<MfKeySource> => (await magicFunnelKey(m)).source;
-export async function magicFunnelCall(key: string | null, system: string, user: string, maxTokens: number): Promise<string | null> {
-  if (!key) return null;
+/** The writer's reply, or why there is none: a reason in plain words for the coach's page and the log, never the text. */
+export type MfReply = { text: string; why: null; outputTokens: number } | { text: null; why: string; outputTokens: number };
+export async function magicFunnelCall(key: string | null, step: "profile" | "pitch", system: string, user: string, maxTokens: number): Promise<MfReply> {
+  if (!key) return { text: null, why: "no key", outputTokens: 0 };
+  const t0 = Date.now();
+  let out: MfReply;
+  let status: number | null = null;
   try {
-    const r = await callAnthropic(key, MAGIC_FUNNEL_MODEL, [{ text: system, cached: true }], user, maxTokens);
-    return r && !r.cut ? r.text : null;
+    const r = await callAnthropic(key, MAGIC_FUNNEL_MODEL, [{ text: system, cached: true }], user, maxTokens, undefined, { timeout: 90_000, maxRetries: 2 });
+    out = !r ? { text: null, why: "refused", outputTokens: 0 } : r.cut ? { text: null, why: mfWhy({ cut: true, maxTokens }), outputTokens: r.outputTokens } : { text: r.text, why: null, outputTokens: r.outputTokens };
   } catch (e) {
-    const err = e as { status?: number };
-    console.error("[ai] magic funnel call failed", JSON.stringify({ model: MAGIC_FUNNEL_MODEL, status: err.status ?? null }));
-    return null;
+    const err = e as { status?: number; name?: string };
+    status = err.status ?? null;
+    out = { text: null, why: mfWhy({ status, name: err.name }), outputTokens: 0 };
   }
+  // The cause only (H-11): step, reason, status, tokens and time. Never the prompt, the prospect or the reply.
+  if (out.why) console.error("[mf] writer", JSON.stringify({ step, why: out.why, status, outputTokens: out.outputTokens, ms: Date.now() - t0 }));
+  return out;
 }
