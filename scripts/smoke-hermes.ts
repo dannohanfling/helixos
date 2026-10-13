@@ -124,7 +124,7 @@ async function main() {
   else await db.insert(schema.integrations).values({ id: newId(), workspaceId: ws, provider: "gohighlevel", enabled: true, config: { apiUrl: `http://localhost:${GHL_PORT}` } });
   await db.delete(schema.socialConnections).where(and(eq(schema.socialConnections.userId, coach.id), eq(schema.socialConnections.provider, "gohighlevel")));
   await db.insert(schema.socialConnections).values({ id: newId(), workspaceId: ws, userId: coach.id, provider: "gohighlevel", locationId: "loc_hermes", manualToken: seal("pit-loc_hermes") });
-  const ghlContacts = async () => ((await (await fetch(`http://localhost:${GHL_PORT}/__contacts`)).json()) as { contacts: { email?: string; tags: string[]; customFields: Record<string, string>; source?: string }[] }).contacts;
+  const ghlContacts = async () => ((await (await fetch(`http://localhost:${GHL_PORT}/__contacts`)).json()) as { contacts: { email?: string; phone?: string; tags: string[]; customFields: Record<string, string>; source?: string }[] }).contacts;
 
   const logFile = "screenshots/logs/dev.log";
   const logStart = existsSync(logFile) ? statSync(logFile).size : 0;
@@ -236,7 +236,8 @@ async function main() {
     must((await page.locator('[data-testid="hm-header"]').innerText()) === "Ready now: your page, Jo", "the personal copy on the next open");
     console.log(`✓ opened before the engine finished: waited ${waited} ms, then the default copy; the personal copy on the next open`);
 
-    // 5. Registering on Sam's page.
+    // 5. Registering on Sam's page. H-17: the phone Sam types sits on someone else's older contact; the email has none yet.
+    await fetch(`http://localhost:${GHL_PORT}/__seed`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ firstName: "Sam", email: "someone.else@example.com", phone: "+1 555 0199" }) });
     await page.goto(`${base}/mf/${samCode}`);
     await page.fill('input[name="phone"]', "+1 555 0199");
     await Promise.all([page.waitForURL(new RegExp(`/mf/${samCode}/confirmed$`), { timeout: 60000 }), page.locator('[data-testid="hm-submit"]').click()]);
@@ -260,6 +261,15 @@ async function main() {
     for (let i = 0; i < 40 && !(contacts = await ghlContacts()).some((c) => c.email === "sam.hermes@example.com" && c.tags.includes("ic-registered")); i++) await sleep(250);
     const c = contacts.find((x) => x.email === "sam.hermes@example.com");
     must(c && c.tags.includes("ic-registered") && c.tags.includes(`ic-${when.isoDay}`) && c.customFields.cf_ic_date === when.isoDay, `GoHighLevel has the contact, both tags and the event date: ${JSON.stringify(c)}`);
+    const other = contacts.find((x) => x.email === "someone.else@example.com");
+    must(other && !other.tags.length && other.email === "someone.else@example.com" && !Object.keys(other.customFields).length, `email first: the other contact with Sam's phone is untouched: ${JSON.stringify(other)}`);
+    must(c && c.phone !== "+1 555 0199" && contacts.filter((x) => x.email === "sam.hermes@example.com").length === 1, "the phone stays on its own contact, never moved across");
+    let samLead = "";
+    for (let i = 0; i < 20 && !samLead.includes("matches another contact"); i++) {
+      await sleep(250);
+      samLead = (await db.query.contacts.findFirst({ where: and(eq(schema.contacts.userId, coach.id), eq(schema.contacts.email, "sam.hermes@example.com")) }))?.notes ?? "";
+    }
+    must(samLead.includes("matches another contact"), "the mismatch is noted on their DMs card");
     must(beacons.some((b) => b.includes("ev=CompleteRegistration") && b.includes("id=1234567890123456")) && !beacons.some((b) => /sam|example|555/i.test(b)), "CompleteRegistration, nothing personal in it");
     await page.goto(`${base}/mf/${samCode}`);
     await page.waitForURL(new RegExp(`/mf/${samCode}/confirmed$`));

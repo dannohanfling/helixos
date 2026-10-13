@@ -34,6 +34,12 @@ createServer((req, res) => {
       failing = url.endsWith("/on");
       return json(200, { failing });
     }
+    // A contact that already exists in the sub-account (H-17's case: someone else's contact with this phone).
+    if (url.startsWith("/__seed") && req.method === "POST") {
+      const id = `hc_seed_${++n}`;
+      contacts.set(id, { id, email: body.email as string | undefined, phone: body.phone as string | undefined, firstName: body.firstName as string | undefined, tags: [], customFields: {} });
+      return json(200, { id });
+    }
     if (url.startsWith("/__reset")) {
       contacts.clear();
       failing = false;
@@ -56,6 +62,20 @@ createServer((req, res) => {
       contacts.set(id, { id, email: body.email as string | undefined, phone: body.phone as string | undefined, firstName: body.firstName as string | undefined, lastName: body.lastName as string | undefined, source: body.source as string | undefined, tags, customFields: {} });
       return json(201, { new: true, contact: { id } });
     }
+    // GoHighLevel's duplicate search, one key at a time: ?email= or ?number=.
+    if (url.startsWith("/contacts/search/duplicate") && req.method === "GET") {
+      if (failing) return json(500, { message: "Internal error" });
+      const q = new URL(url, "http://x").searchParams;
+      const email = q.get("email");
+      const number = q.get("number");
+      const hit = [...contacts.values()].find((c) => (email && c.email === email) || (number && c.phone === number));
+      return json(200, { contact: hit ? { id: hit.id, email: hit.email ?? null, phone: hit.phone ?? null } : null });
+    }
+    if (url === "/contacts/" && req.method === "POST") {
+      const id = `hc_${++n}`;
+      contacts.set(id, { id, email: body.email as string | undefined, phone: body.phone as string | undefined, firstName: body.firstName as string | undefined, lastName: body.lastName as string | undefined, source: body.source as string | undefined, tags: [], customFields: {} });
+      return json(201, { contact: { id } });
+    }
     const tagged = url.match(/^\/contacts\/([^/?]+)\/tags$/);
     if (tagged && req.method === "POST") {
       const c = contacts.get(tagged[1]);
@@ -72,6 +92,7 @@ createServer((req, res) => {
       const c = contacts.get(one[1]);
       if (!c) return json(404, { message: "Contact not found" });
       for (const f of (body.customFields as { id: string; field_value: string }[]) ?? []) c.customFields[f.id] = f.field_value;
+      if (typeof body.email === "string") c.email = body.email;
       return json(200, { contact: { id: c.id } });
     }
     return json(404, { message: `mock-ghl-hermes: no route ${req.method} ${url}` });

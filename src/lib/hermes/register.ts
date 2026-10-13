@@ -93,6 +93,11 @@ export async function register(input: RegisterInput, now = new Date()): Promise<
         const r = await registerInGhl(c.member, { firstName, lastName, email, phone }, c.when);
         console.log("[hermes] ghl", JSON.stringify({ code: `${result.code.slice(0, 6)}…`, outcome: r.step, dateField: r.dateField }));
         if (!r.ok) await countGhlFailure(c.webinarId);
+        // H-17: their phone sits on another GoHighLevel contact, left untouched; the coach sees it on their DMs card.
+        if (r.phoneElsewhere) {
+          const bot = { keyId: "hermes", workspaceId: c.member.workspaceId, userId: c.member.userId, tz: c.tz, membership: c.membership };
+          await personInDms(bot, { firstName, email, contactId: null, note: "GoHighLevel: the phone they gave matches another contact. Registered on the contact with their email; the other contact was left as it is." });
+        }
       }
     : null;
   return { ok: true, code: result.code, outcome: result.fresh ? "registered" : "already registered", fresh: result.fresh, ctx, ghl };
