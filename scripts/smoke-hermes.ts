@@ -232,8 +232,9 @@ async function main() {
     must((await landing.getAttribute("data-copy")) === "default" && (await page.locator('[data-testid="hm-header"]').innerText()).startsWith("If you are posting every day"), "then the default copy");
     must((await page.locator('[data-testid="hm-hero-cta"]').innerText()).toUpperCase().includes("SAVE MY SEAT, JO"), "with their name on the button");
     await db.update(schema.webinarSignups).set({ pitch: { ...sam.pitch!, hero: { ...sam.pitch!.hero, header: "Ready now: your page, Jo" } }, pitchStatus: "personal" }).where(eq(schema.webinarSignups.id, jo.id));
-    await page.goto(`${base}/mf/${jo.code}`);
-    must((await page.locator('[data-testid="hm-header"]').innerText()) === "Ready now: your page, Jo", "the personal copy on the next open");
+    // H-15: the open page looks again by itself and reloads once the personal copy is there, no tap needed.
+    await page.locator('[data-testid="hm-landing"][data-copy="personal"]').waitFor({ timeout: 45000 });
+    must((await page.locator('[data-testid="hm-header"]').innerText()) === "Ready now: your page, Jo", "the page reloaded itself to the personal copy");
     console.log(`✓ opened before the engine finished: waited ${waited} ms, then the default copy; the personal copy on the next open`);
 
     // 5. Registering on Sam's page. H-17: the phone Sam types sits on someone else's older contact; the email has none yet.

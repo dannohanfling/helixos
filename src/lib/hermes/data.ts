@@ -12,7 +12,7 @@ import { factsFor, mfAvailable, setupFor } from "@/lib/mf/data";
 import { COLD_HERO } from "@/lib/hermes/copy";
 import { callWhen, CALL_MINUTES, type CallWhen } from "@/lib/hermes/when";
 import { hermesFor, hostedWebinarIds, pagesOpen, previewDeploy } from "@/lib/hermes/settings";
-import { cleanPixelId, isPageCode, youtubeEmbed } from "@/lib/hermes/rules";
+import { cleanPixelId, hasNumbers, isPageCode, quoteOnce, youtubeEmbed } from "@/lib/hermes/rules";
 import type { HermesPage } from "@/db/schema-hermes";
 
 export type Member = { workspaceId: string; userId: string };
@@ -101,10 +101,19 @@ async function proofRows(m: Member) {
   return rows.map((r) => ({ id: r.id, who: r.who?.trim() || r.name, quote: (r.quote ?? r.shortVersion ?? r.resultAfter ?? "").trim(), tags: r.tags ?? [], status: r.status, permissionAt: r.permissionAt })).filter((r) => r.quote && r.permissionAt);
 }
 
-async function proofsById(m: Member, ids: string[]): Promise<Proof[]> {
+/**
+ * What a public page may show of a proof item (H-21 A): its quote with the name once, under it; and, until Danno has picked the
+ * webinar's proof (its Magic funnel setup's list), nothing that states a number.
+ */
+const shown = (picked: boolean) => (r: { id: string; who: string; quote: string }): Proof | null => {
+  const quote = quoteOnce(r.quote, r.who);
+  return !picked && hasNumbers(quote) ? null : { id: r.id, who: r.who, quote };
+};
+
+async function proofsById(m: Member, ids: string[], picked: boolean): Promise<Proof[]> {
   if (!ids.length) return [];
   const rows = await proofRows(m);
-  return ids.map((id) => rows.find((r) => r.id === id)).filter((r): r is NonNullable<typeof r> => Boolean(r)).slice(0, 3).map((r) => ({ id: r.id, who: r.who, quote: r.quote }));
+  return ids.map((id) => rows.find((r) => r.id === id)).filter((r): r is NonNullable<typeof r> => Boolean(r)).map(shown(picked)).filter((p): p is Proof => Boolean(p)).slice(0, 3);
 }
 
 /** The webinar's default copy through the engine, with the canvas's cold hero where the setup leaves the hero empty. */
@@ -114,7 +123,7 @@ async function coldPitch(ctx: CallContext, firstName: string): Promise<{ pitch: 
   const pitch = defaultPitch({ defaults: ctx.setup.defaults, pillars: ctx.setup.pillars, agenda: ctx.setup.agenda, proofIds: ranked.map((p) => p.id), firstName, facts });
   if (!ctx.setup.defaults.header?.trim()) pitch.hero = { ...pitch.hero, header: COLD_HERO.header };
   if (!ctx.setup.defaults.subheader?.trim()) pitch.hero = { ...pitch.hero, subheader: COLD_HERO.subheader(ctx.when) };
-  return { pitch, proofs: ranked.slice(0, 3).map((r) => ({ id: r.id, who: r.who, quote: r.quote })) };
+  return { pitch, proofs: ranked.map(shown(ctx.setup.proofIds.length > 0)).filter((p): p is Proof => Boolean(p)).slice(0, 3) };
 }
 
 /** The cold page for the soonest open, upcoming webinar of this member (or of anyone, for an unknown code); else "closed". */
@@ -180,7 +189,7 @@ export async function personalView(code: string, o: { now?: Date; waitMs?: numbe
     console.log("[hermes] page", JSON.stringify({ code: `${code.slice(0, 6)}…`, outcome: "default copy", pitch: s.pitchStatus }));
     return { kind: "personal", code, ctx, firstName: s.firstName, prefill, ready: false, ...(await coldPitch(ctx, s.firstName)) };
   }
-  return { kind: "personal", code, ctx, pitch: s.pitch, firstName: s.firstName, prefill, ready: true, proofs: await proofsById(m, s.pitch.proof_ids) };
+  return { kind: "personal", code, ctx, pitch: s.pitch, firstName: s.firstName, prefill, ready: true, proofs: await proofsById(m, s.pitch.proof_ids, ctx.setup.proofIds.length > 0) };
 }
 
 /** The confirmation page by code: the signed-up person's first name and their ticket and lines. Only once registered. */
