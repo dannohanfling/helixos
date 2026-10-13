@@ -5,6 +5,7 @@
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { newId } from "@/lib/ids";
 import { hermesContactLinks } from "@/db/schema-hermes";
 
 /** A GoHighLevel contact id as the bot sends it: trimmed, 8 to 40 of [A-Za-z0-9_-], else null. */
@@ -17,7 +18,7 @@ export function cleanGhlContactId(raw: unknown): string | null {
 export async function rememberGhlContact(signupId: string, ghlContactId: string | null | undefined): Promise<void> {
   if (!ghlContactId) return;
   try {
-    await db.insert(hermesContactLinks).values({ signupId, ghlContactId }).onConflictDoUpdate({ target: hermesContactLinks.signupId, set: { ghlContactId } });
+    await db.insert(hermesContactLinks).values({ id: newId(), signupId, ghlContactId }).onConflictDoUpdate({ target: hermesContactLinks.signupId, set: { ghlContactId } });
   } catch {
     // mf_prepare never fails because of the link; registration then goes by email.
   }

@@ -33,8 +33,14 @@ export type HermesPage = typeof hermesPages.$inferSelect;
  * registration the contact is found by this id first, then by email. One row per sign-up that had one; the id never reaches a
  * URL or a page. A sign-up without one registers by email as before.
  */
-export const hermesContactLinks = sqliteTable("hermes_contact_links", {
-  signupId: text("signup_id").primaryKey(),
-  ghlContactId: text("ghl_contact_id").notNull(),
-  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-});
+export const hermesContactLinks = sqliteTable(
+  "hermes_contact_links",
+  {
+    id: text("id").primaryKey(),
+    /** The webinar_signups row; one link per sign-up. A child of that row for the member's export and deletion on request. */
+    signupId: text("signup_id").notNull(),
+    ghlContactId: text("ghl_contact_id").notNull(),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [uniqueIndex("hermes_contact_links_signup").on(t.signupId)],
+);
