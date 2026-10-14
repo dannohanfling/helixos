@@ -15,6 +15,8 @@ main() {
   # typecheck read a half-written validator (14 Oct). The fresh start after the build writes them again.
   scripts/dev-server.sh stop
   rm -rf .next/dev/types
+  # The route types are written again from the tree as it stands: the build's copy can name files that moved.
+  npx next typegen
   scripts/verify.sh --build
   # The build above replaces .next; the auth walk's helper servers run `next start` from it, so restart the dev server
   # afterwards rather than before. From a clean .next/dev: the dev server's cache kept from before a build can lose a route

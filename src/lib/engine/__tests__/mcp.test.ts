@@ -125,7 +125,7 @@ describe("MCP server: the auth holds where it must", () => {
 
   it("the token endpoint never caches, and the 401 points at the resource metadata", () => {
     expect(read("lib/mcp/metadata.ts")).toMatch(/"cache-control": "no-store"/);
-    expect(read("app/oauth/token/route.ts")).toMatch(/headers: jsonHeaders/);
+    expect(read("app/(app)/oauth/token/route.ts")).toMatch(/headers: jsonHeaders/);
     expect(read("lib/mcp/server.ts")).toMatch(/resource_metadata="\$\{iss\}\/\.well-known\/oauth-protected-resource"/);
   });
 });

@@ -1,5 +1,11 @@
 /* The Colosseum (rev 699 §2): light, typography-led, hairlines and few boxes. Cormorant Garamond for headings and names, Manrope for text. */
 .co-page { --co-ground: #f7f2e8; --co-ink: #1f1a14; --co-muted: #6b6253; --co-gold-text: #8a6418; --co-gold: #a87b24; --co-gold-2: #c9a24a; --co-line: #e4daca; color: var(--co-ink); font-family: Manrope, "Helvetica Neue", Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding-bottom: 32px; }
+/* On the dark shell (the app's own scheme, H-96): the app's light ink and muted, a gold that reads on dark (6.9:1 on #1a1d24), hairlines from the theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .co-page { --co-ground: var(--surface); --co-ink: var(--ink); --co-muted: var(--ink-2); --co-gold-text: #e2bd62; --co-gold: #d9b25a; --co-gold-2: #e6c97a; --co-line: var(--line); }
+  :root:not(.light) .co-btn { border-color: #6b5a30; }
+  :root:not(.light) .co-btn.co-on, :root:not(.light) .co-btn.co-primary { background: var(--co-gold); color: #1a1407; border-color: var(--co-gold); }
+}
 .co-page a { color: var(--co-gold-text); }
 .co-page a:hover { color: var(--co-ink); }
 .co-head { text-align: center; margin: 4px 0 16px; }

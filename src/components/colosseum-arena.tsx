@@ -19,6 +19,13 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
   const [look, setLook] = useState<Look>(initialLook);
   const [paused, setPaused] = useState(initialPaused);
   const [picked, setPicked] = useState<string | null>(null);
+  const [broken, setBroken] = useState<Set<Look>>(() => new Set());
+  const photo = useRef<HTMLImageElement>(null);
+  // A picture that failed before React attached its handler (the error fires while the HTML loads) is caught here.
+  useEffect(() => {
+    const el = photo.current;
+    if (el && el.complete && el.naturalWidth === 0) setBroken((b) => new Set(b).add(look));
+  }, [look]);
   const box = useRef<HTMLDivElement>(null);
   const all = useMemo(() => rings.flat(), [rings]);
   const byId = useMemo(() => new Map([...all, ...champs].map((s) => [s.id, s])), [all, champs]);
@@ -89,10 +96,14 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
   return (
     <div className="co-wrap">
       <div ref={box} className={`co-arena co-${look}`} data-testid="arena" data-look={look} data-paused={paused ? "1" : "0"}>
-        <picture>
-          <source srcSet={`/colosseum/colosseum-${look}.webp`} type="image/webp" />
-          <img className="co-bg" src={`/colosseum/colosseum-${look}.jpg`} alt="" width={1680} height={944} decoding="async" />
-        </picture>
+        {broken.has(look) ? null : (
+          <picture>
+            <source srcSet={`/colosseum/colosseum-${look}.avif`} type="image/avif" />
+            <source srcSet={`/colosseum/colosseum-${look}.webp`} type="image/webp" />
+            {/* A picture that fails to load hides itself (H-96): the dark fallback shows, never a broken-image icon. */}
+            <img ref={photo} className="co-bg" src={`/colosseum/colosseum-${look}.jpg`} alt="" width={1680} height={944} decoding="async" onError={() => setBroken((b) => new Set(b).add(look))} data-testid="arena-photo" />
+          </picture>
+        )}
         {rings.map((ring, r) =>
           ring.map((s) => {
             const p = seatPlace(r, seatAngle(r, s.index, s.of, 0));

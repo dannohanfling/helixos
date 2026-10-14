@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 180,
+    date: "2026-10-14",
+    title: "The Colosseum: the arena pictures, and readable in the dark",
+    lines: [
+      "The golden-hour and night photos of the arena are in the build now (AVIF, WebP and JPG). If a picture ever fails to load, the arena shows its plain dark floor rather than a broken-image icon.",
+      "The page follows your colour scheme: the brief's parchment and ink in light mode, the app's own light ink and a gold that reads on dark in dark mode.",
+    ],
+    audience: "everyone",
+    version: "pending",
+  },
+  {
     n: 179,
     date: "2026-10-14",
     title: "Your loyalty leaderboard, as a page you can share",

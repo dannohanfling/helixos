@@ -187,6 +187,31 @@ async function main() {
     must((await page.locator('[data-testid="week-day"]').count()) === 7, "My week has seven days");
     console.log("✓ a win with an email is refused; a shared win shows on the feed and the Arena tab, and comes down again; My week has seven days");
 
+    // ── H-96: the pictures are in the build (AVIF, WebP, JPG); a broken one hides itself; the text reads in both schemes. ──
+    await page.goto(`${base}/colosseum`, { waitUntil: "networkidle" });
+    for (const f of ["day.avif", "day.webp", "day.jpg", "night.avif", "night.webp", "night.jpg"]) must((await page.request.get(`${base}/colosseum/colosseum-${f}`)).status() === 200, `the picture colosseum-${f} is served`);
+    must((await page.locator('[data-testid="arena-photo"]').evaluate((el) => (el as HTMLImageElement).naturalWidth)) === 1680, "the arena photo shows at its full width");
+    const dark = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark", storageState: await ctx.storageState() });
+    const dp = await dark.newPage();
+    await dp.route(/\/colosseum\/colosseum-.*\.(avif|webp|jpg)$/, (r) => r.fulfill({ status: 404, body: "" }));
+    await dp.goto(`${base}/colosseum`, { waitUntil: "networkidle" });
+    await dp.waitForTimeout(400);
+    must((await dp.locator('[data-testid="arena-photo"]').count()) === 0 && (await dp.locator('[data-testid="arena"]').count()) === 1, "a picture that fails to load hides itself: the dark fallback, never a broken-image icon");
+    await dp.unroute(/\/colosseum\//);
+    const CONTRAST = `(() => {
+      const lum = (c) => { const [r, g, b] = c.match(/\\d+(\\.\\d+)?/g).slice(0, 3).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const bgOf = (el) => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && !/rgba\\(0, 0, 0, 0\\)/.test(c) && c !== "transparent") return c; } return getComputedStyle(document.body).backgroundColor; };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+      return [".co-title", ".co-rankword", ".co-h2", ".co-stats dd", ".co-sub", ".co-eyebrow", ".co-item .co-name"].map((sel) => { const el = document.querySelector(sel); return el ? { sel, ratio: Math.round(ratio(getComputedStyle(el).color, bgOf(el)) * 100) / 100 } : { sel, ratio: null }; });
+    })()`;
+    for (const [name, p2] of [["dark", dp], ["light", page]] as const) {
+      await p2.goto(`${base}/colosseum?tab=standings`, { waitUntil: "networkidle" });
+      const rows = (await p2.evaluate(CONTRAST)) as { sel: string; ratio: number | null }[];
+      for (const r of rows) must(r.ratio !== null && r.ratio >= (r.sel === ".co-stats dd" || r.sel === ".co-rankword" || r.sel === ".co-title" ? 3 : 4.5), `${name} scheme: ${r.sel} reads against its background (${r.ratio}:1)`);
+    }
+    await dark.close();
+    console.log("✓ the pictures are served in AVIF, WebP and JPG; a broken one hides itself; the text reads in the dark and the light scheme");
+
     must(failures.length === 0, `no server errors: ${failures.join(", ")}`);
     console.log("Colosseum smoke passed");
   } finally {
