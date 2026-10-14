@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
@@ -43,7 +44,7 @@ export default async function RewardsPage() {
 
   return (
     <>
-      <PageHeader title="Rewards" subtitle="Points are proof of work. Tiers open doors." />
+      <PageHeader title="Rewards" subtitle="Points are proof of work. Tiers open doors." action={v.workspace.colosseumOn ? <Link href="/colosseum" className="btn btn-ghost btn-sm" data-testid="rewards-colosseum">🏟️ The Colosseum</Link> : undefined} />
       {items.some((i) => i.earnable && !i.bookingUrl) ? (
         <p className="-mt-3 mb-4 text-sm text-ink-2" data-testid="rewards-openness">{SOME_RUNGS_NOT_OPEN}</p>
       ) : null}

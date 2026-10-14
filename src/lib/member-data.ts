@@ -28,6 +28,7 @@ export const MEMBER_TABLES = {
   kpi_values: schema.kpiValues,
   daily_logs: schema.dailyLogs,
   weekly_intentions: schema.weeklyIntentions,
+  colosseum_wins: schema.colosseumWins,
   monthly_intentions: schema.monthlyIntentions,
   office_hours_requests: schema.officeHoursRequests,
   monthly_feedback: schema.monthlyFeedback,

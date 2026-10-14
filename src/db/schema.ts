@@ -23,6 +23,8 @@ export const workspaces = sqliteTable("workspaces", {
   timezone: text("timezone").notNull().default("America/Los_Angeles"),
   /** "Connected apps open to clients" (MCP, rev 247 B5): whether clients may connect Claude to their HelixOS. On by default; coaches always may. */
   connectedAppsOpen: integer("connected_apps_open", { mode: "boolean" }).notNull().default(true),
+  /** The Colosseum (rev 699): off until the coach turns it on for the workspace. */
+  colosseumOn: integer("colosseum_on", { mode: "boolean" }).notNull().default(false),
   clientInviteCode: text("client_invite_code").notNull().unique(),
   coachInviteCode: text("coach_invite_code").notNull().unique(),
     /** The Platforms menu's addresses, the coach's to set (rev 843): Community Loyalty, Academy, the marketing system, Community. */
@@ -94,6 +96,10 @@ export const memberships = sqliteTable(
     boardPreset: text("board_preset", { enum: ["standard", "edge"] }).notNull().default("standard"),
     /** The photo rooms' look (revs 711, 720, 738): "auto" is night from 19:00 to 06:00 in the member's own time; the toggle sets "day" or "night" and it stays. One setting for the Council Chamber, the Colosseum and the Aqueduct. */
     sceneLook: text("scene_look", { enum: ["auto", "day", "night"] }).notNull().default("auto"),
+    /** The Colosseum (rev 699 §6): the member's own photo in the arena (off; only they turn it on), hiding from the arena and standings, and Pause remembered. */
+    arenaPhoto: integer("arena_photo", { mode: "boolean" }).notNull().default(false),
+    arenaHidden: integer("arena_hidden", { mode: "boolean" }).notNull().default(false),
+    arenaPaused: integer("arena_paused", { mode: "boolean" }).notNull().default(false),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
     /** The Magic funnel (rev 812 §8): a client's switch, off until Danno turns it on for that client; the coach's own is always on. */
@@ -2507,6 +2513,21 @@ export const passwordResets = sqliteTable(
   },
   (t) => [index("password_resets_user").on(t.userId)],
 );
+
+/** A win a member shares on the Colosseum (rev 699 §5): business or community, their own words, newest first on the feed. */
+export const colosseumWins = sqliteTable(
+  "colosseum_wins",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    kind: text("kind", { enum: ["business", "community"] }).notNull(),
+    text: text("text").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("colosseum_wins_workspace").on(t.workspaceId, t.createdAt)],
+);
+export type ColosseumWin = typeof colosseumWins.$inferSelect;
 
 /**
  * A login-email change (H-47): the new address holds the link (sha256 of the token only), 24 hours, single use; the change

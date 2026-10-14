@@ -43,7 +43,7 @@ function writeCollapsed(next: Record<string, boolean>) {
   listeners.forEach((l) => l());
 }
 
-export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, team = false, badges = {}, platformLinks = {}, ownCommunity = null }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; badges?: Record<string, number>; platformLinks?: PlatformLinks; ownCommunity?: string | null }) {
+export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = false, team = false, colosseumOn = false, badges = {}, platformLinks = {}, ownCommunity = null }: { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; badges?: Record<string, number>; platformLinks?: PlatformLinks; ownCommunity?: string | null }) {
   const pathname = usePathname();
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const collapsed = useMemo<Record<string, boolean>>(() => {
@@ -56,12 +56,12 @@ export function SideNav({ role, passEnabled, bodyEnabled, recordingsEnabled = fa
   const toggle = (label: string) => writeCollapsed({ ...collapsed, [label]: !collapsed[label] });
   // The most specific item wins: on /body/foods that's Nutrition, not Log (/body) as well (a prefix match alone lit both).
   const activeHref = NAV_GROUPS.flatMap((g) => g.items)
-    .filter((n) => !n.external && !n.comingSoon && navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team }) && isActive(pathname, n.href))
+    .filter((n) => !n.external && !n.comingSoon && navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team, colosseumOn }) && isActive(pathname, n.href))
     .reduce<string | null>((best, n) => (!best || n.href.length > best.length ? n.href : best), null);
   return (
     <nav className="space-y-2">
       {NAV_GROUPS.map((g) => {
-        const items = withPlatformLinks(g.items, platformLinks, ownCommunity).filter((n) => navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team }));
+        const items = withPlatformLinks(g.items, platformLinks, ownCommunity).filter((n) => navVisible(n, { role, passEnabled, bodyEnabled, recordingsEnabled, team, colosseumOn }));
         // A section with nothing this member may see (HumanOS without Body) isn't drawn at all, header included.
         if (!items.length) return null;
         const activeItem = items.find((n) => n.href === activeHref);

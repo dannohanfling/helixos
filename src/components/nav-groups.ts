@@ -9,7 +9,7 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
  * `comingSoon` (rev 816): a page on its way. Shown greyed with a "Coming soon" pill and its subtitle (`line`), never a link: its
  * `href` is only where it will live. The commit that ships the page drops the flag, and the item becomes a normal link.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; passOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -82,7 +82,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/numbers", label: "Numbers", icon: "📊" },
       { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives" },
       { href: "/rewards", label: "Rewards", icon: "🏆" },
-      { href: "/colosseum", label: "The Colosseum", icon: "🏟️", line: "wins, ranks and challenges", comingSoon: true },
+      { href: "/colosseum", label: "The Colosseum", icon: "🏟️", line: "wins, ranks and challenges", colosseumOnly: true },
       { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak", comingSoon: true },
       { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", comingSoon: true },
       { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
@@ -124,7 +124,8 @@ export function withPlatformLinks(items: NavItem[], links: PlatformLinks, ownCom
 }
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
-export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean };
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
+  (!n.colosseumOnly || Boolean(m.colosseumOn)) &&
   (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 

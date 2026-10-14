@@ -1,5 +1,5 @@
 /** Security headers walk: visits every main page as client and coach and fails on any Content-Security-Policy violation or page error the browser reports. Also prints the headers. */
-import { readdirSync, existsSync, rmSync } from "node:fs";
+import { readdirSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { chromium } from "@playwright/test";
@@ -46,7 +46,7 @@ function routedPages(dir: string, prefix = ""): string[] {
   return out.sort();
 }
 // The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
-const PAGES_CLIENT = ["/today", "/bot-features", "/intentions", "/connect", "/connect-tools", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/goals", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/my-board", "/my-board/council", "/forum", "/offers", "/avatars", "/pathway", "/courses", "/recordings", "/doctrine", "/glossary", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/goals", "/rewards", "/more", "/settings", "/whats-new"];
+const PAGES_CLIENT = ["/today", "/bot-features", "/intentions", "/connect", "/connect-tools", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/goals", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/my-board", "/my-board/council", "/forum", "/offers", "/avatars", "/pathway", "/courses", "/recordings", "/doctrine", "/glossary", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/goals", "/rewards", "/colosseum", "/more", "/settings", "/whats-new"];
 const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/headshots", "/coach/late-closes", "/coach/teaching", "/coach/bot-features", "/coach/backfill", "/coach/office-hours", "/coach/board", "/coach/board-seats", "/coach/recordings", "/coach/recordings/rules", "/coach/reports", "/coach/glossary", "/coach/inbox", "/coach/agents", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {
@@ -60,9 +60,8 @@ async function main() {
   // few; so the coach's pages start from a fresh server too, each half well under the limit.
   const fresh = async () => {
     if (base === "http://localhost:3000") {
-      execFileSync("scripts/dev-server.sh", ["stop"], { stdio: "pipe" });
-      rmSync(".next/dev", { recursive: true, force: true });
-      execFileSync("scripts/dev-server.sh", ["start"], { stdio: "pipe" });
+      // fresh: stopped gently, both caches cleared (.next/dev and Turbopack's persistent one), started again.
+      execFileSync("scripts/dev-server.sh", ["fresh"], { stdio: "pipe" });
     }
     for (let i = 0; i < 40; i++) {
       const ok = await fetch(`${base}/login`).then((r) => r.ok).catch(() => false);
@@ -103,26 +102,34 @@ async function main() {
   };
   // Body ships dark (rev 195): switched on for the demo client, by the same script used in production, so its pages load and count.
   execFileSync("npx", ["tsx", "scripts/body-flag.ts", "client@demo.helixos.app", "on", "--apply"], { stdio: "pipe" });
+  // The Colosseum (rev 699) is off until the coach turns it on: on for the demo workspace here, so its page loads and counts.
+  {
+    const { db, schema } = await import("@/db");
+    const { eq } = await import("drizzle-orm");
+    const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
+    const mm = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
+    await db.update(schema.workspaces).set({ colosseumOn: true }).where(eq(schema.workspaces.id, mm.workspaceId));
+  }
   await page.goto(`${base}/login`, { waitUntil: "networkidle" });
   await page.click('button:has-text("As a client")');
   await page.waitForURL(/\/today/);
   await visit(PAGES_CLIENT);
-  // Coming soon (rev 816): four greyed items on More, none a link, each disabled for screen readers and at least 44px tall;
+  // Coming soon (rev 816): three greyed items on More (the Colosseum went live, rev 699), none a link, each disabled for screen readers and at least 44px tall;
   // a tap shows the subtitle and goes nowhere.
   {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${base}/more`, { waitUntil: "networkidle" });
     const soon = page.locator('main [data-testid="nav-coming-soon"]');
-    if ((await soon.count()) !== 4) throw new Error(`four Coming soon items on More: ${await soon.count()}`);
-    for (let i = 0; i < 4; i++) {
+    if ((await soon.count()) !== 3) throw new Error(`three Coming soon items on More: ${await soon.count()}`);
+    for (let i = 0; i < 3; i++) {
       const it = soon.nth(i);
       const box = await it.boundingBox();
       if ((await it.getAttribute("aria-disabled")) !== "true" || (await it.evaluate("(el) => el.closest('a') !== null")) || !box || box.height < 44 || box.x + box.width > 390.5) throw new Error(`a Coming soon item is a link, isn't marked disabled, or is too small or too wide: ${await it.innerText()}`);
     }
     const here = page.url();
-    await soon.filter({ hasText: "The Colosseum" }).click({ force: true }); // aria-disabled: Playwright waits for "enabled", a finger doesn't
-    if (!(await soon.filter({ hasText: "The Colosseum" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== here) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
-    console.log("✓ Coming soon: four greyed items on More, none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
+    await soon.filter({ hasText: "The Aqueduct" }).click({ force: true }); // aria-disabled: Playwright waits for "enabled", a finger doesn't
+    if (!(await soon.filter({ hasText: "The Aqueduct" }).locator('[data-testid="nav-coming-soon-line"]').isVisible()) || page.url() !== here) throw new Error("tapping a Coming soon item should show its subtitle and go nowhere");
+    console.log("✓ Coming soon: three greyed items on More, none a link, disabled for screen readers, 44px or taller, within the screen; a tap shows the subtitle and stays put");
   }
   // interact a little so client-side handlers run under the policy
   await page.goto(`${base}/content/compose`, { waitUntil: "networkidle" });

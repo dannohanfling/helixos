@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 176,
+    date: "2026-10-14",
+    title: "The Colosseum: where the work gets seen",
+    lines: [
+      "A new page under Grow, once your coach turns it on: an overhead arena, golden hour or night, with every member on the stands by rank (Centurion and above in the front rows, then Alchemist and Sentinel, then Sage, then Artisan and Philosopher), slowly circling, and this week's top three standing on the sand. Your seat in the stands shows your rank, points, this week and what's left to the next rank. Below it: Standings, Wins (share one, business or community), Challenges and My week, which only you see.",
+      "Privacy: you're shown by your initials unless you turn on \"Show my photo in the Colosseum\" in Settings, and you can hide from the arena entirely. Nothing from HumanOS, no emails or phone numbers. Pause the arena if you'd rather it kept still.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 175,
     date: "2026-10-14",
     title: "Change the email you sign in with, and a note after a decision in the inbox",

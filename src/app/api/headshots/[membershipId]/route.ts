@@ -15,8 +15,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ memb
   const v = await apiViewer();
   if (!v) return new NextResponse("Sign in first.", { status: 401, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" } });
   const { membershipId } = await params;
-  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, v.workspace.id)), columns: { userId: true, headshotUrl: true, headshotDisplayUrl: true, headshotMime: true } });
-  const allowed = m && (m.userId === v.user.id || (v.role === "coach" && !v.switchedInto));
+  const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, membershipId), eq(schema.memberships.workspaceId, v.workspace.id)), columns: { userId: true, headshotUrl: true, headshotDisplayUrl: true, headshotMime: true, arenaPhoto: true } });
+  // The Colosseum (rev 699 §6): a member who turned on "Show my photo in the Colosseum" is seen by the whole workspace, the display size only.
+  const allowed = m && (m.userId === v.user.id || (v.role === "coach" && !v.switchedInto) || m.arenaPhoto);
   if (!m || !allowed) return notHere();
   const original = new URL(request.url).searchParams.get("size") === "original";
   const url = original ? m.headshotUrl : m.headshotDisplayUrl;

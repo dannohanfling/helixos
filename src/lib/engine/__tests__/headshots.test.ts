@@ -62,7 +62,7 @@ describe("client headshots", () => {
     const root = path.join(process.cwd(), "src");
     const walk = (d: string, out: string[] = []): string[] => { for (const e of readdirSync(d)) { const f = path.join(d, e); if (statSync(f).isDirectory()) { if (e !== "__tests__") walk(f, out); } else if (/\.tsx?$/.test(e)) out.push(f); } return out; };
     const naming = walk(root).filter((f) => /\b(headshotUrl|headshotDisplayUrl|photoUrl)\b/.test(readFileSync(f, "utf8"))).map((f) => path.relative(root, f).replaceAll("\\", "/")).sort();
-    expect(naming).toEqual(["app/api/headshots/[membershipId]/route.ts", "db/schema.ts", "lib/actions/headshots.ts", "lib/erase.ts", "lib/headshots.ts", "lib/member-data.ts", "components/app-shell.tsx"].sort());
+    expect(naming).toEqual(["app/api/headshots/[membershipId]/route.ts", "db/schema.ts", "lib/actions/headshots.ts", "lib/colosseum.ts", "lib/erase.ts", "lib/headshots.ts", "lib/member-data.ts", "components/app-shell.tsx"].sort());
     for (const f of naming) expect(readFileSync(path.join(root, f), "utf8")).not.toMatch(/^\s*["']use client["']/m);
     const route = readFileSync(path.join(root, "app/api/headshots/[membershipId]/route.ts"), "utf8");
     expect(route).toMatch(/m\.userId === v\.user\.id \|\| \(v\.role === "coach" && !v\.switchedInto\)/);

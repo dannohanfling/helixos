@@ -58,6 +58,7 @@ import { removeMyHeadshotAction } from "@/lib/actions/headshots";
 import { SKILL_INSTALL_STEPS } from "@/lib/engine/board-view";
 import { forumSettingsFor } from "@/lib/forum";
 import { ForumWebhookCard } from "@/components/forum-webhook";
+import { setArenaHiddenAction, setArenaPhotoAction, setColosseumOnAction } from "@/lib/actions/colosseum";
 
 export const metadata = { title: "Settings" };
 
@@ -239,6 +240,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <form action={removeMyHeadshotAction}>
                     <SubmitButton className="btn btn-ghost btn-xs text-danger" pendingText="Removing…" data-testid="photo-remove">Remove my photo</SubmitButton>
                   </form>
+                ) : null}
+                {v.workspace.colosseumOn && !v.switchedInto ? (
+                  <div className="space-y-2 border-t pt-2" data-testid="arena-settings">
+                    <form action={setArenaPhotoAction} className="flex flex-wrap items-center gap-2 text-sm">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" name="arenaPhoto" defaultChecked={v.membership.arenaPhoto} data-testid="arena-photo" /> Show my photo in the Colosseum
+                      </label>
+                      <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="arena-photo-save">Save</SubmitButton>
+                    </form>
+                    <form action={setArenaHiddenAction} className="flex flex-wrap items-center gap-2 text-sm">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" name="arenaHidden" defaultChecked={v.membership.arenaHidden} data-testid="arena-hidden" /> Hide me from the arena and the standings
+                      </label>
+                      <SubmitButton className="btn btn-soft btn-xs" pendingText="Saving…" data-testid="arena-hidden-save">Save</SubmitButton>
+                    </form>
+                    <p className="text-xs text-ink-3">Off, the Colosseum shows your initials. Only you can turn your photo on there; your coach can&apos;t.</p>
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -448,6 +466,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Card id="connected-apps" title="Connected apps">
           {/* The MCP server (rev 224): the apps this member let act as them, and the way to cut each one. */}
           {appsNote ? <p className="mb-2 text-sm text-good" data-testid="apps-note">{appsNote}</p> : null}
+          {v.role === "coach" ? (
+            <form action={setColosseumOnAction} className="mb-3 flex flex-wrap items-center gap-3 text-sm" data-testid="colosseum-on" data-on={v.workspace.colosseumOn ? "1" : "0"}>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" name="colosseumOn" defaultChecked={v.workspace.colosseumOn} data-testid="colosseum-on-toggle" /> The Colosseum is on for your workspace
+              </label>
+              <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="colosseum-on-save">
+                Save
+              </SubmitButton>
+            </form>
+          ) : null}
           {v.role === "coach" ? (
             <form action={setConnectedAppsOpenAction} className="mb-3 flex flex-wrap items-center gap-3 text-sm" data-testid="apps-open" data-on={v.workspace.connectedAppsOpen ? "1" : "0"}>
               <label className="flex items-center gap-2">
