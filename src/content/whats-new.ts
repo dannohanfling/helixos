@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 181,
+    date: "2026-10-14",
+    title: "Your leaderboard page gets an address you choose",
+    lines: [
+      "On the Loyalty leaderboard page, \"Page address\" lets you (or your team, or your coach) pick the end of your board's link, for example /lb/compounding-kindness: lowercase letters, numbers and hyphens, 3 to 40 characters, and unlike any other board's. The embed code and the links update at once.",
+      "Every address your board has had keeps working: an old link sends people to the new one, and a page still reading the old feed address keeps its numbers.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 180,
     date: "2026-10-14",
     title: "The Colosseum: the arena pictures, and readable in the dark",
