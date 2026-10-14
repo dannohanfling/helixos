@@ -1,0 +1,36 @@
+/* The Aqueduct (rev 711): the picture keeps 1680:944; the live layer is one SVG stretched over it; calm, no red. */
+.aq-page { max-width: 1100px; margin: 0 auto; padding-bottom: 32px; }
+.aq-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 24px; margin: 4px 0 14px; }
+.aq-eyebrow { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.7; }
+.aq-title { margin: 2px 0 0; font-size: clamp(30px, 4vw, 40px); line-height: 1; font-weight: 700; }
+.aq-sub { margin: 4px 0 0; font-size: 14px; opacity: 0.75; }
+.aq-scene { position: relative; width: 100%; aspect-ratio: 1680 / 944; border-radius: 20px; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #2b3140 0%, #171a22 70%); }
+.aq-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.aq-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.aq-dash { animation: aq-flow 1.6s linear infinite; }
+.aq-falling { animation: aq-flow 1.2s linear infinite; }
+.aq-ripple { transform-box: fill-box; transform-origin: center; animation: aq-ripple 2.4s ease-out infinite; }
+.aq-ripple-2 { animation-delay: 1.2s; }
+.aq-still .aq-dash, .aq-still .aq-falling, .aq-still .aq-ripple { animation-play-state: paused; }
+@keyframes aq-flow { to { stroke-dashoffset: -28; } }
+@keyframes aq-ripple { 0% { transform: scale(0.4); opacity: 0.85; } 100% { transform: scale(1.5); opacity: 0; } }
+.aq-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 10px; }
+.aq-ctrl { display: flex; flex-wrap: wrap; gap: 8px; }
+.aq-looks { display: inline-flex; gap: 6px; }
+.aq-period { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.aq-panel { margin-top: 20px; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+.aq-panel h2 { margin: 4px 0 6px; font-size: 24px; font-weight: 700; line-height: 1.15; }
+.aq-detail { margin: 0 0 12px; font-size: 15px; opacity: 0.85; }
+.aq-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.aq-quiet { margin: 10px 0 0; font-size: 13px; opacity: 0.7; }
+.aq-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+.aq-table th, .aq-table td { text-align: left; padding: 8px 6px; border-top: 1px solid var(--line); }
+.aq-table th { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; border-top: 0; }
+.aq-table td.aq-num { text-align: right; font-variant-numeric: tabular-nums; }
+.aq-table tr.aq-leak td { background: rgba(150, 78, 22, 0.1); }
+@media (max-width: 760px) {
+  .aq-tags { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aq-dash, .aq-falling, .aq-ripple { animation: none; }
+}

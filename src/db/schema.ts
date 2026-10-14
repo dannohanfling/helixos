@@ -103,6 +103,9 @@ export const memberships = sqliteTable(
     /** My Helix (rev 707): "Pause the helix", remembered; and the rungs the member has already seen lit, so the once-glow never repeats. */
     helixPaused: integer("helix_paused", { mode: "boolean" }).notNull().default(false),
     helixSeen: text("helix_seen", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** The Aqueduct (rev 711): "Pause the water", and the period (30 or 7 days), both remembered. */
+    aqueductPaused: integer("aqueduct_paused", { mode: "boolean" }).notNull().default(false),
+    aqueductPeriod: integer("aqueduct_period").notNull().default(30),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
     /** The Magic funnel (rev 812 §8): a client's switch, off until Danno turns it on for that client; the coach's own is always on. */

@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 181,
+    date: "2026-10-14",
+    title: "The Aqueduct: where your leads flow, and where they leak",
+    lines: [
+      "Grow → The Aqueduct: your pipeline as a Roman aqueduct, golden hour or night. The water runs from posts to clients, each stretch as wide as its count; the arch where your rate fell the most against last period is the leak, with its waterfall. Nothing is invented: a stage with no count yet shows a dash.",
+      "Under the scene: about how many people slipped through that arch, the rate now against your usual, Repair this arch with the tool for that step, and Ask My Board how to fix it. Compare the last 30 days or the last 7; Pause the water if you like.",
+    ],
+    audience: "everyone",
+    version: "pending",
+  },
+  {
     n: 180,
     date: "2026-10-14",
     title: "The Colosseum: the arena pictures, and readable in the dark",

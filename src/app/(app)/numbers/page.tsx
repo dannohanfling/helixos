@@ -91,6 +91,9 @@ export default async function NumbersPage({ searchParams }: { searchParams: Prom
         subtitle="Inputs you control. Outputs follow."
         action={
           <div className="flex items-center gap-2 text-sm">
+            <Link href="/aqueduct" className="btn btn-ghost btn-sm" data-testid="numbers-aqueduct">
+              🌊 The Aqueduct
+            </Link>
             <Link href={`/numbers?week=${prevStart}&metric=${metric}`} className="btn btn-ghost btn-sm">
               ←
             </Link>

@@ -1,0 +1,151 @@
+import { sceneLookFor, type SceneLook } from "@/lib/engine/board-view";
+
+/**
+ * The Aqueduct (rev 711): the member's lead pipeline as a Roman aqueduct, the leak at the weakest step. Pure: the stages and
+ * steps, the period windows, each step's rate, the leak rule (the step whose rate fell the most against the previous period,
+ * by at least five points, skipping any step with a zero denominator), which picture, the water's geometry and colours, the
+ * waterfall per picture, the tags' anchors and the words under the scene. Nothing here invents a count.
+ */
+export const STAGES = ["Posts", "Comments", "DMs started", "Conversations", "Calls booked", "Calls held", "Offers made", "Clients"] as const;
+/** Step b runs from stage b+1 to stage b+2: six steps, comments → DMs through offers → clients. Comments per post are not a step. */
+export const STEP_LABELS = ["to DMs", "to conversations", "booked a call", "showed up", "heard an offer", "became clients"] as const;
+export const STEP_TOOLS = [
+  { name: "comment ladders", href: "/content/ladders" },
+  { name: "Conversations", href: "/conversations" },
+  { name: "the DM library", href: "/conversations/playbook" },
+  { name: "calls", href: "/socrates" },
+  { name: "the Call sheet", href: "/socrates/scripts" },
+  { name: "offers", href: "/offers" },
+] as const;
+export const PERIODS = [30, 7] as const;
+export type PeriodDays = (typeof PERIODS)[number];
+export const MIN_DROP_POINTS = 5;
+export const NARROW_PX = 760;
+export const PICTURE = { width: 1680, height: 944 } as const;
+
+/** A stage's count over a period; null when HelixOS has no data for it yet. */
+export type Counts = (number | null)[];
+
+/** The windows, inclusive YYYY-MM-DD: the last `days` days ending today, and the `days` before them. */
+export function windows(today: string, days: PeriodDays): { now: [string, string]; before: [string, string] } {
+  const d = (n: number) => {
+    const t = new Date(`${today}T00:00:00Z`);
+    t.setUTCDate(t.getUTCDate() - n);
+    return t.toISOString().slice(0, 10);
+  };
+  return { now: [d(days - 1), today], before: [d(2 * days - 1), d(days)] };
+}
+
+/** Step b's rate, stage b+2 ÷ stage b+1; null when either count is missing or the denominator is zero. */
+export function stepRate(counts: Counts, b: number): number | null {
+  const from = counts[b + 1];
+  const to = counts[b + 2];
+  if (from === null || from === undefined || to === null || to === undefined || from <= 0) return null;
+  return to / from;
+}
+
+export type Leak = { step: number; nowRate: number; wasRate: number; drop: number };
+/** The leak: the step whose rate fell the most in percentage points, by at least five, with both periods' rates known. */
+export function leakOf(now: Counts, before: Counts): Leak | null {
+  let best: Leak | null = null;
+  for (let b = 0; b < 6; b++) {
+    const nowRate = stepRate(now, b);
+    const wasRate = stepRate(before, b);
+    if (nowRate === null || wasRate === null) continue;
+    // In points, settled to a millionth so a drop of exactly five is five and not 4.999999.
+    const drop = Math.round((wasRate - nowRate) * 100 * 1e6) / 1e6;
+    if (drop < MIN_DROP_POINTS) continue;
+    if (!best || drop > best.drop) best = { step: b, nowRate, wasRate, drop };
+  }
+  return best;
+}
+
+export const aqueductLook = (setting: "auto" | "day" | "night", hour: number): SceneLook => sceneLookFor(setting, hour);
+/** The picture, without its extension: the leak's step, or the intact aqueduct with a full fountain. */
+export const pictureFor = (look: SceneLook, leak: Leak | null): string => `/aqueduct/aqueduct-${look}-${leak ? leak.step : "none"}`;
+
+/** "About N people slipped through this arch": what the previous rate would have carried, less what did; at least one. And E, the usual. */
+export function slipped(now: Counts, leak: Leak): { n: number; expected: number } {
+  const from = now[leak.step + 1] ?? 0;
+  const to = now[leak.step + 2] ?? 0;
+  const expected = Math.round(from * leak.wasRate);
+  return { n: Math.max(1, expected - to), expected };
+}
+
+/** The water along the channel, the same for all 14 pictures: each segment's path and the stage whose count sets its width. */
+export const SEGMENTS = [
+  { key: "src", d: "M185,266 C240,280 300,293 360,300", stage: 1 },
+  { key: "s0", d: "M360,300 C420,305 470,307 520,309", stage: 2 },
+  { key: "s1", d: "M520,309 L700,312", stage: 3 },
+  { key: "s2", d: "M700,312 L880,312", stage: 4 },
+  { key: "s3", d: "M880,312 L1060,310", stage: 5 },
+  { key: "s4", d: "M1060,310 L1240,306", stage: 6 },
+  { key: "out", d: "M1240,306 L1378,303 C1440,330 1500,480 1528,598", stage: 7 },
+] as const;
+/** 3 + 11·√(count ÷ comments) px; the thinnest water when comments are unknown or none. */
+export function waterWidth(count: number | null | undefined, comments: number | null | undefined): number {
+  if (!count || !comments || comments <= 0) return 3;
+  return Math.round((3 + 11 * Math.sqrt(count / comments)) * 100) / 100;
+}
+export const DASH = { fraction: 0.35, array: "10 18", seconds: 1.6 } as const;
+export const WATER = {
+  day: { glow: "#8FD3F0", glowAlpha: 0.45, dash: "#FFFFFF", dashAlpha: 0.8, blend: "normal" },
+  night: { glow: "#7FE3FF", glowAlpha: 0.45, dash: "#E6FBFF", dashAlpha: 0.8, blend: "screen" },
+} as const;
+
+/** The waterfall per picture, [x, top, bottom, poolCx, poolCy, poolRx, poolRy], matched to the one painted in. */
+export const FALLS: Record<SceneLook, number[][]> = {
+  day: [
+    [440, 400, 780, 445, 790, 95, 28],
+    [565, 520, 760, 600, 768, 85, 24],
+    [735, 505, 750, 750, 768, 90, 26],
+    [897, 395, 760, 920, 768, 95, 28],
+    [1165, 470, 690, 1165, 690, 70, 20],
+    [1213, 420, 690, 1205, 692, 60, 15],
+  ],
+  night: [
+    [416, 396, 780, 417, 790, 58, 18],
+    [528, 395, 750, 523, 770, 57, 17],
+    [624, 420, 730, 624, 738, 40, 13],
+    [890, 392, 760, 910, 768, 72, 22],
+    [1038, 400, 690, 1057, 705, 34, 11],
+    [1185, 381, 730, 1193, 745, 42, 13],
+  ],
+};
+export const RIPPLE = { from: 0.4, to: 1.5, seconds: 2.4, secondDelay: 1.2 } as const;
+/** Stage pills, anchored bottom-centre, stages 0 to 7. */
+export const STAGE_TAG_AT = [
+  [165, 125],
+  [360, 286],
+  [520, 294],
+  [700, 297],
+  [880, 297],
+  [1060, 295],
+  [1240, 291],
+  [1505, 410],
+] as const;
+/** Step tags, centred, steps 0 to 5. */
+export const STEP_TAG_AT = [
+  [440, 470],
+  [610, 470],
+  [790, 470],
+  [970, 470],
+  [1150, 470],
+  [1300, 455],
+] as const;
+export const LEAK_TAG = "rgba(150,78,22,.88)";
+
+export const pct = (r: number | null): string => (r === null ? "—" : `${Math.round(r * 100)}%`);
+export const count = (n: number | null | undefined): string => (n === null || n === undefined ? "—" : n.toLocaleString());
+
+/** One quiet line for the stages with no data yet, or null. */
+export function missingLine(counts: Counts): string | null {
+  const names = STAGES.filter((_, i) => counts[i] === null || counts[i] === undefined);
+  if (!names.length) return null;
+  return `No count yet for ${names.join(", ")}: the steps either side are left out until there is one.`;
+}
+
+/** The question "Ask My Board how to fix it" opens with. */
+export function boardQuestion(leak: Leak): string {
+  return `My ${STAGES[leak.step + 1].toLowerCase()} → ${STAGES[leak.step + 2].toLowerCase()} rate fell from ${pct(leak.wasRate)} to ${pct(leak.nowRate)}. What should I change first?`;
+}

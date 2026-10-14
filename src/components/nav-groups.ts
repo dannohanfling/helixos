@@ -83,7 +83,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives" },
       { href: "/rewards", label: "Rewards", icon: "🏆" },
       { href: "/colosseum", label: "The Colosseum", icon: "🏟️", line: "wins, ranks and challenges", colosseumOnly: true },
-      { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak", comingSoon: true },
+      { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak" },
       { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", comingSoon: true },
       { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },

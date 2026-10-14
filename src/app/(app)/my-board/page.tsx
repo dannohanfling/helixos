@@ -18,7 +18,7 @@ export const metadata = { title: "My Board" };
 const setUp = (d: { applied: unknown[] }, followUps: { applied: unknown[] }[]) => d.applied.length + followUps.reduce((n, f) => n + f.applied.length, 0);
 
 /** My Board, the Boardroom (revs 664, 698): five advisors on a decision, grounded in the member's own HelixOS. */
-export default async function MyBoardPage({ searchParams }: { searchParams: Promise<{ error?: string; council?: string }> }) {
+export default async function MyBoardPage({ searchParams }: { searchParams: Promise<{ error?: string; council?: string; ask?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const hours = v.membership.boardHours;
@@ -82,7 +82,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
           </form>
         </div>
       ) : (
-        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} seats={seats} answer={null} question="" used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
+        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} seats={seats} answer={null} question={(sp.ask ?? "").slice(0, 300)} used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
       )}
       {hours ? <BoardCouncilNote seats={seats} /> : null}
       {hours && preset === "standard" ? (
