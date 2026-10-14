@@ -7,6 +7,9 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import { chromium, type Browser, type Page } from "@playwright/test";
 
+/** The demo client's login email, changed by the email-change step (H-47) and used by every sign-in after it. */
+let clientEmail = "client@demo.helixos.app";
+
 const base = process.argv[2] ?? "http://localhost:3000";
 const scratch = process.env.SMOKE_SCRATCH ?? "/tmp/helixos-smoke-auth";
 mkdirSync(scratch, { recursive: true });
@@ -169,6 +172,37 @@ async function resetWalk(browser: Browser) {
   await other.goto(`${base}/today`);
   await other.waitForURL(/\/login/);
   console.log("✓ change password: current required, other session invalidated, own session kept");
+
+  // Change the login email (H-47): the password is checked, the link goes to the new address, nothing changes until it's clicked.
+  await page.goto(`${base}/settings#login-email`);
+  await page.fill('[data-testid="email-new"]', "client-new@demo.helixos.app");
+  await page.fill('[data-testid="email-password"]', "wrong-current");
+  await page.click('[data-testid="email-send"]');
+  await expectText(page, "isn't your current password", "email change: wrong password rejected");
+  // React resets the form once its action answers, so both fields are typed again.
+  await page.fill('[data-testid="email-new"]', "client-new@demo.helixos.app");
+  await page.fill('[data-testid="email-password"]', "changed-pass-123");
+  await page.click('[data-testid="email-send"]');
+  await expectText(page, "a confirmation link is on its way", "email change: the same words either way");
+  const devLink = await page.locator('[data-testid="email-dev-link"]').getAttribute("href");
+  if (!devLink) throw new Error("email change: no dev link (email logged, not sent, outside production)");
+  await other.goto(`${base}/login`);
+  await other.fill('input[name="email"]', "client-new@demo.helixos.app");
+  await other.fill('input[name="password"]', "changed-pass-123");
+  await other.click('button:has-text("Sign in")');
+  await other.waitForTimeout(800);
+  if (/\/today/.test(other.url())) throw new Error("email change: the new email signs in before the link is clicked");
+  await page.goto(devLink);
+  await page.click('[data-testid="email-confirm"]');
+  await expectText(page, "From now on you sign in as", "email change: confirmed at the new address");
+  await page.goto(devLink);
+  await expectText(page, "expired or was already used", "email change: the link is single use");
+  await other.goto(`${base}/login`);
+  await other.fill('input[name="email"]', "client-new@demo.helixos.app");
+  await other.fill('input[name="password"]', "changed-pass-123");
+  await Promise.all([other.waitForURL(/\/today/), other.click('button:has-text("Sign in")')]);
+  clientEmail = "client-new@demo.helixos.app";
+  console.log("✓ change email: password required, link to the new address, single use, the new email signs in");
 }
 
 /**
@@ -207,8 +241,8 @@ async function signInWalk(browser: Browser) {
     await fresh.waitForLoadState("networkidle").catch(() => undefined);
   };
   for (let round = 0; round < 2; round++) {
-    for (let i = 0; i < 7; i++) await tryOnce("client@demo.helixos.app", `wrong-${i}`);
-    await tryOnce("client@demo.helixos.app", "changed-pass-123");
+    for (let i = 0; i < 7; i++) await tryOnce(clientEmail, `wrong-${i}`);
+    await tryOnce(clientEmail, "changed-pass-123");
     await fresh.waitForURL(/\/today/);
     await fresh.context().clearCookies();
   }

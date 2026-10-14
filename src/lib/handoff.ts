@@ -280,6 +280,22 @@ export async function answerHandoff(o: Owner, messageId: string, body: string): 
   return true;
 }
 
+/**
+ * A note after a decision (H-47): an answer from Danno to the sender, tied to the decided message, shown under it. The decision
+ * itself never changes; only a decided message takes a note.
+ */
+export async function noteDecision(o: Owner, messageId: string, note: string): Promise<{ ok: boolean; text: string }> {
+  const row = await db.query.handoffMessages.findFirst({ where: and(mine(o), eq(schema.handoffMessages.id, messageId)) });
+  const text = scrubText(note.replace(/\s+/g, " ").trim().slice(0, HANDOFF_MAX.change)).text;
+  if (!row || !row.decision) return { ok: false, text: "That message hasn't been decided." };
+  if (!text) return { ok: false, text: "Write the note first." };
+  if (!row.fromAgentId) return { ok: false, text: "That message is your own." };
+  const word = row.decision === "approved" ? "Approved" : row.decision === "changed" ? "Change" : "Declined";
+  const answer = await insertMessage(o, { fromAgentId: null, toIds: [row.fromAgentId], kind: "answer", title: `Note on ${hId(row.seq)} (${word}): ${text}`.slice(0, HANDOFF_MAX.title), body: text, replyToId: row.id, threadId: row.threadId ?? row.id, decisionForId: row.id }, [row.fromAgentId]);
+  await audit(o, null, "note", hId(row.seq), text.slice(0, HANDOFF_MAX.note));
+  return { ok: true, text: `Note sent as ${hId(answer.seq)}.` };
+}
+
 /** The owner's view: messages newest first, the waiting decisions, and the menu count (waiting decisions and unread for Danno). */
 export async function ownerInbox(o: Owner, limit = 60): Promise<{ items: InboxItem[]; waiting: InboxItem[]; acks: Map<string, { recipient: string; note: string | null; at: string }[]> }> {
   const rows = await db.query.handoffMessages.findMany({ where: mine(o), orderBy: desc(schema.handoffMessages.seq), limit });

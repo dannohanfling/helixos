@@ -2509,6 +2509,28 @@ export const passwordResets = sqliteTable(
 );
 
 /**
+ * A login-email change (H-47): the new address holds the link (sha256 of the token only), 24 hours, single use; the change
+ * happens when it's clicked. Who started it (the member, or their coach) and the masked old and new addresses stay as the log.
+ */
+export const emailChanges = sqliteTable(
+  "email_changes",
+  {
+    id: id(),
+    userId: text("user_id").notNull(),
+    newEmail: text("new_email").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    /** The user who started it: the member themselves, or the coach from the client's page. */
+    startedBy: text("started_by").notNull(),
+    oldMasked: text("old_masked").notNull(),
+    newMasked: text("new_masked").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("email_changes_user").on(t.userId)],
+);
+
+/**
  * Evidence: published research, each client's own. A study is citable only once the client has confirmed that what came back
  * is what they asked for; `citationQuality` starts unverified and only their confirmation moves it. `askedFor` keeps the
  * request beside the result so the two are always shown side by side.

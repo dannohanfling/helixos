@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { refresh, str } from "@/lib/action-helpers";
-import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner } from "@/lib/handoff";
+import { agentSettings, answerHandoff, decideHandoff, makeAgentToken, noteDecision, revokeAgentTokens, sendReadingPack, tieConnection, writeAsOwner } from "@/lib/handoff";
 import { CHECKIN_DEFAULTS, CHECKIN_EVERY, hhmm } from "@/lib/engine/handoff";
 import { forumSettingsFor } from "@/lib/forum";
 
@@ -135,4 +135,12 @@ export async function sendReadingPackAction(formData: FormData): Promise<void> {
   refresh();
   if (!r.ok) redirect(`/coach/agents?error=${encodeURIComponent(r.text)}#agent-${str(formData, "agentId")}`);
   redirect(`/coach/agents?pack=${r.seq}&packFor=${str(formData, "agentId")}#agent-${str(formData, "agentId")}`);
+}
+
+/** A note after a decision (H-47), from Danno's own page only. */
+export async function noteDecisionAction(_prev: HandoffFormState, formData: FormData): Promise<HandoffFormState> {
+  const coach = await requireCoach();
+  const r = await noteDecision({ workspaceId: coach.workspace.id, userId: coach.user.id }, str(formData, "id"), String(formData.get("note") ?? ""));
+  refresh();
+  return r.ok ? { ok: r.text } : { error: r.text };
 }

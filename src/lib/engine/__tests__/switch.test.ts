@@ -34,8 +34,9 @@ describe("switch to client: the words in the client's log (rev 216)", () => {
 });
 
 describe("switch to client: no write escapes the gate", () => {
-  // They establish, end or move the session itself, so they have no member to act as.
-  const SESSION = ["setupAction", "forgotAction", "resetAction", "loginAction", "joinAction", "joinTeamAction", "chooseMembershipAction", "logoutAction", "demoLoginAction", "switchToClientAction", "switchBackAction"];
+  // They establish, end or move the session itself, so they have no member to act as (confirmEmailChangeAction acts on a
+  // signed link from any browser, H-47, the same way resetAction does).
+  const SESSION = ["setupAction", "forgotAction", "resetAction", "confirmEmailChangeAction", "loginAction", "joinAction", "joinTeamAction", "chooseMembershipAction", "logoutAction", "demoLoginAction", "switchToClientAction", "switchBackAction"];
   it("every action goes through ctx() (the gate) or requireCoach() (a switched session is a client to it), or moves the session", () => {
     const loose = actions.filter((a) => !/await ctx\(|await requireCoach\(/.test(a.body) && !SESSION.includes(a.name));
     // The one read that doesn't: it returns nothing while switched (it would read the client's GoHighLevel connection).

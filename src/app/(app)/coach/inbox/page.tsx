@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
-import { ApprovalButtons } from "@/components/handoff-bits";
+import { ApprovalButtons, DecisionNote } from "@/components/handoff-bits";
 import { HandoffMarkdown } from "@/components/handoff-markdown";
 import { answerHandoffAction, setApprovalEmailsAction, setCheckinsPausedAction, writeToAgentAction } from "@/lib/actions/handoff";
 import { markOwnerRead, ownerInbox, type InboxItem } from "@/lib/handoff";
@@ -82,6 +82,7 @@ export default async function CoachInboxPage({ searchParams }: { searchParams: P
         </p>
       ))}
       {decide ? <ApprovalButtons id={m.id} refLabel={m.ref} /> : null}
+      {m.decision && !m.fromDanno ? <DecisionNote id={m.id} refLabel={m.ref} /> : null}
       {!decide && !m.fromDanno ? (
         <details className="mt-2 text-sm">
           <summary className="cursor-pointer text-ink-2">Answer {m.from}</summary>

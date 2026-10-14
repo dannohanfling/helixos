@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 175,
+    date: "2026-10-14",
+    title: "Change the email you sign in with, and a note after a decision in the inbox",
+    lines: [
+      "Settings → Login email: type the new address and your password. A confirmation link goes to the new address (24 hours, one use) and nothing changes until it's clicked; your old address gets a heads-up. Your CRM and chatbot keep the email they have. A coach can start the same change from a client's page; the client still confirms it.",
+      "Coach → Inbox: every decided message gets \"Add a note\" (with Duplicate, Replaced by H-__, Not now ready to tap). The note reaches the sender as an answer from you, tied to the decision, which itself never changes.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 174,
     date: "2026-10-14",
     title: "The Forum: every conversation of the last half hour, each light at its own pace",

@@ -1,6 +1,7 @@
 "use server";
 
 import { siteUrl } from "@/lib/app-url";
+import { startEmailChange } from "@/lib/email-change";
 import { deletedTo } from "@/lib/deleted";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -210,4 +211,14 @@ export async function reinstateClientAction(formData: FormData): Promise<void> {
   await logSync({ workspaceId: coach.workspace.id, userId: m.userId, provider: "account", direction: "out", event: "client.reinstated", payload: { by: coach.user.name }, status: "sent", note: `Client reinstated by ${coach.user.name}` });
   refresh();
   redirect(`/coach/${membershipId}?reinstated=1`);
+}
+
+/** The client's page (H-47): the coach starts an email change for a client; the client still confirms at the new address. */
+export async function sendClientEmailChangeAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  const membershipId = str(formData, "membershipId");
+  const m = await clientOf(coach.workspace.id, membershipId);
+  if (!m) redirect("/coach");
+  const r = await startEmailChange({ userId: m.userId, newEmail: str(formData, "email"), by: coach.user.id, byName: coach.user.name });
+  redirect(`/coach/${membershipId}?email=${encodeURIComponent(r.ok ? "sent" : r.text)}#login-email`);
 }

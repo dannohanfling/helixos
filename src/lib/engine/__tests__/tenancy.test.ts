@@ -56,10 +56,11 @@ const sessionScoped = (b: string) => /await ctx\(|requireViewer\(|requireCoach\(
 
 describe("tenancy: no action trusts the request for who owns the data", () => {
   it("only the auth lifecycle runs without a session; everything else derives the caller from ctx()", () => {
-    // These nine establish, end or move a session, so they have none to read yet (chooseMembershipAction reads the cookie's user
-    // and rewrites it whole; joinTeamAction makes it). Named, not skipped; anything else session-less fails here.
+    // These ten establish, end or move a session, so they have none to read yet (chooseMembershipAction reads the cookie's user
+    // and rewrites it whole; joinTeamAction makes it; confirmEmailChangeAction acts on a signed link, like resetAction, H-47).
+    // Named, not skipped; anything else session-less fails here.
     const noSession = all.filter((a) => !sessionScoped(a.body)).map((a) => `${a.file}:${a.name}`).sort();
-    expect(noSession).toEqual(["account.ts:forgotAction", "account.ts:resetAction", "account.ts:setupAction", "auth.ts:chooseMembershipAction", "auth.ts:demoLoginAction", "auth.ts:joinAction", "auth.ts:joinTeamAction", "auth.ts:loginAction", "auth.ts:logoutAction"]);
+    expect(noSession).toEqual(["account.ts:confirmEmailChangeAction", "account.ts:forgotAction", "account.ts:resetAction", "account.ts:setupAction", "auth.ts:chooseMembershipAction", "auth.ts:demoLoginAction", "auth.ts:joinAction", "auth.ts:joinTeamAction", "auth.ts:loginAction", "auth.ts:logoutAction"]);
     // The surface is large and derived from the files: a floor guards against the glob silently returning nothing (first rule).
     expect(all.length).toBeGreaterThanOrEqual(150);
   });

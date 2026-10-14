@@ -17,6 +17,7 @@ import { writeSession } from "@/lib/session";
 import { cookies } from "next/headers";
 import { SETUP_RESULT_COOKIE, anyWorkspaceExists, createWorkspace } from "@/lib/setup";
 import { hashToken, issueResetToken } from "@/lib/reset-link";
+import { confirmEmailChange, startEmailChange } from "@/lib/email-change";
 import { ctx } from "@/lib/action-helpers";
 
 export type SetupState = { error?: string } | undefined;
@@ -137,4 +138,22 @@ export async function changePasswordAction(_prev: PasswordState, formData: FormD
   await markSignedIn(v.user.id);
   await writeSession({ userId: v.user.id, workspaceId: v.workspace.id, role: v.role, sv: sessionVersion });
   return { ok: true };
+}
+
+export type EmailState = { error?: string; said?: string; devLink?: string } | undefined;
+/** Settings → Account (H-47): a member changes their own login email, confirming with their password; a team member only their own. */
+export async function changeEmailAction(_prev: EmailState, formData: FormData): Promise<EmailState> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: "{first}'s name, email, password and time zone are their own account settings.", team: "allow" });
+  if (!(await verifyPassword(String(formData.get("current") ?? ""), v.user.passwordHash))) return { error: "That isn't your current password." };
+  const r = await startEmailChange({ userId: v.user.id, newEmail: String(formData.get("email") ?? ""), by: v.user.id });
+  return r.ok ? { said: r.said, ...(r.devLink ? { devLink: r.devLink } : {}) } : { error: r.text };
+}
+
+export type ConfirmEmailState = { error?: string; email?: string } | undefined;
+/** The link in the new inbox (H-47): single use, 24 hours; the login email switches here and nowhere else. */
+export async function confirmEmailChangeAction(_prev: ConfirmEmailState, formData: FormData): Promise<ConfirmEmailState> {
+  const ip = await clientIp();
+  if (!(await allow(`emailconfirm:ip:${ip}`, 10, 15 * 60000))) return { error: "Too many attempts. Wait 15 minutes and try again." };
+  const r = await confirmEmailChange(String(formData.get("token") ?? ""));
+  return r.ok ? { email: r.email } : { error: r.text };
 }

@@ -40,7 +40,7 @@ async function main() {
   const blob = spawn("npx", ["tsx", "scripts/mock-blob.ts", String(blobPort)], { stdio: "ignore", detached: true });
   await new Promise((r) => setTimeout(r, 2500));
   const { db, schema } = await import("@/db");
-  const { and, desc, eq, inArray } = await import("drizzle-orm");
+  const { and, desc, eq, inArray, isNull } = await import("drizzle-orm");
   const { viewerFor } = await import("@/lib/auth");
   const { registerClient, issueCode, exchangeCode } = await import("@/lib/mcp/oauth");
   const { makeAgentToken, revokeAgentTokens } = await import("@/lib/handoff");
@@ -170,6 +170,19 @@ async function main() {
     const after = (await db.query.handoffMessages.findFirst({ where: eq(schema.handoffMessages.id, planRow.id) }))!;
     must(after.decision === "approved" && after.decidedBy === coach.id, "the decision is Danno's signed-in action");
     console.log("✓ 'Danno approved' in a message stays unapproved and tagged; Danno's Approve arrives once in Main's next read");
+    // A note after the decision (H-47): to the sender, from Danno, tied to the decision; the decision itself unchanged.
+    await page.goto(`${base}/coach/inbox`, { waitUntil: "networkidle" });
+    const decided = page.locator(`[data-testid="handoff-messages"] [data-ref="${plan}"]`);
+    await decided.locator('[data-testid="handoff-note-open"]').click();
+    await decided.locator('[data-testid="handoff-note-quick"]', { hasText: "Duplicate" }).click();
+    await decided.locator('[data-testid="handoff-note-send"]').click();
+    await decided.locator('[data-testid="handoff-noted"]').waitFor({ timeout: 10000 });
+    const note = await db.query.handoffMessages.findFirst({ where: and(eq(schema.handoffMessages.decisionForId, planRow.id), eq(schema.handoffMessages.kind, "answer"), isNull(schema.handoffMessages.decision)) });
+    must(note !== undefined && note.fromAgentId === null && note.body === "Duplicate" && note.replyToId === planRow.id, `the note is an answer from Danno tied to the decision: ${JSON.stringify(note && { body: note.body, from: note.fromAgentId })}`);
+    must((await db.query.handoffMessages.findFirst({ where: eq(schema.handoffMessages.id, planRow.id) }))!.decision === "approved", "and the decision itself is unchanged");
+    r = await tool(mainToken, "handoff_inbox");
+    must((r.data?.messages as { fromDanno: boolean; title: string }[]).some((m) => m.fromDanno && m.title.startsWith(`Note on ${plan}`)), `the note reaches Main as from Danno: ${r.text.slice(0, 120)}`);
+    console.log("✓ a note after a decision reaches the sender from Danno, tied to the decision, which stays as it was");
 
     // ── Change, from The Forum's What needs you. ──
     r = await tool(bodyToken, "handoff_post", { to: "danno", kind: "brief", title: "Email all members the new link" });

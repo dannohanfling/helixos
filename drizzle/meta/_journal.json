@@ -1037,6 +1037,13 @@
       "when": 1791932900954,
       "tag": "0155_forum_auto_lights",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "6",
+      "when": 1791934462814,
+      "tag": "0156_email_changes",
+      "breakpoints": true
     }
   ]
 }

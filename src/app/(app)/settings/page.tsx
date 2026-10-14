@@ -23,6 +23,7 @@ import { Card, Field, PageHeader } from "@/components/ui";
 import { GhlConnect } from "@/components/ghl-connect";
 import { PLATFORMS } from "@/lib/platforms";
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { ChangeEmailForm } from "@/components/change-email-form";
 import { ScrollToHash } from "@/components/scroll-to-hash";
 import { AiKeyCard } from "@/components/ai-key-card";
 import { FathomKeyCard } from "@/components/fathom-key-card";
@@ -222,6 +223,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <Card className="min-w-0" title="Password">
           <ChangePasswordForm />
+        </Card>
+        <Card id="login-email" className="min-w-0" title="Login email">
+          <ChangeEmailForm current={v.user.email} />
         </Card>
         {v.team ? null : (
           <Card id="photo" className="min-w-0" title="Your photo" action={<span className="text-xs text-ink-3" data-testid="photo-source">{v.membership.headshotSource === "upload" ? "your own" : v.membership.headshotSource === "import" ? "from your coach's records" : v.membership.headshotSource === "removed" ? "removed" : "none yet"}</span>}>

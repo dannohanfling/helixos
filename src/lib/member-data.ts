@@ -192,6 +192,8 @@ export type ChildLabel = (typeof CHILD_TABLES)[number]["label"];
 /** Keyed by the user alone: they follow the account, so they go only with the user row. */
 export const USER_TABLES = {
   password_resets: schema.passwordResets,
+  /** A login-email change (H-47): the log of who started it and the masked addresses; its token is only a hash (STRIP_COLUMNS). */
+  email_changes: schema.emailChanges,
   evidence_hidden: schema.evidenceHidden,
   evidence_searches: schema.evidenceSearches,
 } as const;

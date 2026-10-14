@@ -5,7 +5,9 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { switchToClientAction } from "@/lib/actions/switch";
-import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientResetAction, setClientEmailsAction } from "@/lib/actions/coach";
+import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction } from "@/lib/actions/coach";
+import { lastEmailChange } from "@/lib/email-change";
+import { EMAIL_CHANGE_CRM_NOTE, EMAIL_CHANGE_SAID } from "@/lib/engine/account";
 import { emailBlock } from "@/lib/engine/email-gate";
 import { COACH_RESET_COOKIE } from "@/lib/reset-link";
 import { ConfirmDelete } from "@/components/confirm-delete";
@@ -61,20 +63,21 @@ const CHAIR_NAMES = ["Left", "Right", "Front left", "Front right"];
  * One client, before a call. The page answers "what do I say to this person today": where they are, what they wrote in
  * their own words, what's stuck, what they claimed, what they've built. Then the call's decisions go back in as tasks.
  */
-export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string; template?: string; error?: string; team?: string }> }) {
+export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string; template?: string; error?: string; team?: string; email?: string }> }) {
   const v = await requireCoach();
   const { clientId } = await params;
   const sp = await searchParams;
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, clientId), eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client")) });
   if (!m) notFound();
   const u = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
-  // Bot Features (rev 618): where the client stands, and the milestones HelixOS sees for itself beside the coach's ticks.
+    // Bot Features (rev 618): where the client stands, and the milestones HelixOS sees for itself beside the coach's ticks.
   const [featureViews, seenBehaviors] = await Promise.all([featuresFor(m), behaviorsOf(m.workspaceId, m.userId, [])]);
   // An Essence over the cap (an import brings it in whole) is flagged here with its trim-to-fit, read-only.
   const essence = await essenceFor(v.workspace.id, m.userId);
   // Emails from HelixOS (29 Sep): the coach's switch, and why nothing goes out even when it's on.
   const emailsBlocked = emailBlock({ emailsEnabled: m.emailsEnabled, removedAt: m.removedAt, firstSignedInAt: u?.firstSignedInAt ?? null });
   if (!u) notFound();
+  const emailChange = await lastEmailChange(u.id);
   // The client's team (Danno, 6 Oct): who is on it, with "added by" and "last active", the open invites, and the seat cap.
   const [team, teamInvites] = await Promise.all([teamOf(m.id), openInvites(m.id)]);
   const switches = await db.query.coachChanges.findMany({ where: and(eq(schema.coachChanges.clientMembershipId, m.id), eq(schema.coachChanges.coachUserId, v.user.id), inArray(schema.coachChanges.kind, ["switch_in", "switch_out"])), orderBy: [desc(schema.coachChanges.createdAt)], limit: 20 });
@@ -296,6 +299,33 @@ export default async function CoachClientPage({ params, searchParams }: { params
         )}
       </div>
       {sp.reset === "emailed" ? <p className="mb-4 rounded-xl bg-good-soft p-3 text-sm" data-testid="reset-emailed">A reset link is on its way to {u.email}.</p> : null}
+      {sp.email ? (
+        <p className={`mb-4 rounded-xl p-3 text-sm ${sp.email === "sent" ? "bg-good-soft" : "bg-warn-soft"}`} role="status" data-testid="client-email-said">
+          {sp.email === "sent" ? EMAIL_CHANGE_SAID : sp.email}
+        </p>
+      ) : null}
+      <Card id="login-email" className="mb-4" title="Login email">
+        <p className="text-sm">
+          Signs in as <b data-testid="client-email-current">{u.email}</b>.
+          {emailChange ? (
+            <span className="text-ink-3" data-testid="client-email-last">
+              {" "}
+              Changed {formatDateTime(emailChange.at, v.tz)} from {emailChange.oldMasked} to {emailChange.newMasked}, started by {emailChange.byUser ? u.name.split(" ")[0] : "you"}.
+            </span>
+          ) : null}
+        </p>
+        <form action={sendClientEmailChangeAction} className="mt-2 flex flex-wrap items-end gap-2" data-testid="client-email-form">
+          <input type="hidden" name="membershipId" value={m.id} />
+          <label className="block">
+            <span className="label">New email</span>
+            <input className="field" name="email" type="email" required data-testid="client-email-new" />
+          </label>
+          <SubmitButton className="btn btn-soft btn-sm" pendingText="Sending…" data-testid="client-email-send">
+            Send an email-change link
+          </SubmitButton>
+        </form>
+        <p className="mt-2 text-xs text-ink-3">The link goes to the new address and works for 24 hours; {u.name.split(" ")[0]} confirms it there. The old address gets a heads-up. {EMAIL_CHANGE_CRM_NOTE}</p>
+      </Card>
       {sp.reset === "failed" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm" data-testid="reset-failed">The reset email could not be sent. Try again, or send the link with email off to copy it by hand.</p> : null}
       {sp.reset === "rate" ? <p className="mb-4 rounded-xl bg-warn-soft p-3 text-sm">Too many reset links just now. Wait a few minutes and try again.</p> : null}
       {sp.reset === "copy" && copyLink ? (
