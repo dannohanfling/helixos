@@ -2,7 +2,7 @@ import type { schema } from "@/db";
 import { CopyButton } from "@/components/copy-button";
 import { SubmitButton } from "@/components/submit-button";
 import { Card } from "@/components/ui";
-import { saveLeaderboardExportAction, saveLeaderboardHiddenAction, saveLeaderboardPageAction } from "@/lib/actions/leaderboard";
+import { saveLeaderboardExportAction, saveLeaderboardHiddenAction, saveLeaderboardPageAction, saveLeaderboardSlugAction } from "@/lib/actions/leaderboard";
 import { MAX_REWARDS, MAX_TIERS, readPageConfig, rewardsText, tiersText } from "@/lib/engine/leaderboard";
 
 /**
@@ -11,7 +11,7 @@ import { MAX_REWARDS, MAX_TIERS, readPageConfig, rewardsText, tiersText } from "
  * coach may edit the page; the hide list is the owner's and the coach's alone. The eLoyalty key is set on the coach's own
  * page and is nowhere here.
  */
-export function LeaderboardEditor({ feed, base, canHide, exportRows }: { feed: schema.LeaderboardFeed; base: string; canHide: boolean; exportRows: number | null }) {
+export function LeaderboardEditor({ feed, base, canHide, exportRows, aliases = [], slugError, slugChanged = false }: { feed: schema.LeaderboardFeed; base: string; canHide: boolean; exportRows: number | null; aliases?: string[]; slugError?: string | null; slugChanged?: boolean }) {
   const c = readPageConfig(feed.pageJson);
   const pageUrl = `${base}/lb/${feed.slug}`;
   const feedUrl = `${base}/api/public/leaderboard/${feed.slug}`;
@@ -39,6 +39,30 @@ export function LeaderboardEditor({ feed, base, canHide, exportRows }: { feed: s
           <CopyButton text={feedUrl} label="Copy" className="btn btn-ghost btn-xs" />
         </div>
         <p className="mt-2 text-xs text-ink-3">Share the page link, or put it in your own site as an iframe. Members show as first name and last initial, with their points and tier, nothing else.</p>
+        <form action={saveLeaderboardSlugAction} className="mt-3 space-y-1" id="address" data-testid="leaderboard-slug-form">
+          <label className="label" htmlFor="leaderboard-slug">
+            Page address
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-ink-3">{base}/lb/</span>
+            <input id="leaderboard-slug" className="field w-64 font-mono text-xs" name="slug" defaultValue={feed.slug} minLength={3} maxLength={40} pattern="[a-z0-9]+(-[a-z0-9]+)*" required aria-invalid={slugError ? true : undefined} data-testid="lb-slug" />
+            <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="lb-slug-save">
+              Change address
+            </SubmitButton>
+          </div>
+          {slugError ? (
+            <p className="text-xs text-danger" data-testid="lb-slug-error">
+              {slugError}
+            </p>
+          ) : slugChanged ? (
+            <p className="text-xs text-good" data-testid="lb-slug-changed">
+              Address changed. The old one redirects here.
+            </p>
+          ) : null}
+          <p className="text-xs text-ink-3">
+            Lowercase letters, numbers and hyphens, 3 to 40 characters, unlike any other board&apos;s.{aliases.length ? ` Earlier addresses still work and redirect here: ${aliases.map((a) => `/lb/${a}`).join(", ")}.` : ""}
+          </p>
+        </form>
         <details className="mt-3 text-xs" data-testid="leaderboard-embed">
           <summary className="cursor-pointer text-ink-3">Embed code</summary>
           <code className="mt-1 block break-all rounded bg-surface-2 px-2 py-1">{`<iframe src="${pageUrl}" style="width:100%;min-height:1200px;border:0;background:#000" title="Leaderboard" loading="lazy"></iframe>`}</code>

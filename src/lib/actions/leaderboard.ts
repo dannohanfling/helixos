@@ -1,12 +1,13 @@
 "use server";
 
 import { and, eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { ctx, refresh, str } from "@/lib/action-helpers";
 import { nowIso } from "@/lib/dates";
 import { pageConfigFromForm, parseExport, readHidden } from "@/lib/engine/leaderboard";
-import { checkFeed, feedForMembership, removeFeedKey, saveExport, saveFeedSettings, savePageConfig } from "@/lib/leaderboard";
+import { checkFeed, feedForMembership, removeFeedKey, saveExport, saveFeedSettings, savePageConfig, setFeedSlug } from "@/lib/leaderboard";
 
 /** One of this coach's clients, by membership, or the coach's own membership (their own program, H-29). */
 async function programOf(coach: { workspace: { id: string }; membership: { id: string } }, membershipId: string) {
@@ -84,4 +85,18 @@ export async function saveLeaderboardExportAction(formData: FormData): Promise<v
     await saveExport(feed.id, v.workspace.id, rows, asOf);
   }
   refresh();
+}
+
+/**
+ * The page address (H-109): the owner's, their team's and their coach's to set. A problem (shape, a reserved word, an address
+ * another board has or had) sends them back to /loyalty with the reason beside the field; the old address keeps redirecting.
+ */
+export async function saveLeaderboardSlugAction(formData: FormData): Promise<void> {
+  const { v } = await ctx({ team: "allow" });
+  const feed = await own(v.membership.id);
+  if (!feed) return;
+  const problem = await setFeedSlug(feed, str(formData, "slug"));
+  if (problem) redirect(`/loyalty?slugError=${encodeURIComponent(problem)}#address`);
+  refresh();
+  redirect("/loyalty?slug=changed#address");
 }

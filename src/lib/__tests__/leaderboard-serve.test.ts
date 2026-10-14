@@ -8,19 +8,63 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 process.env.SESSION_SECRET ??= "test-secret-test-secret-test-secret-1234";
 
 type Row = Record<string, unknown>;
-const state: { feed: Row } = { feed: {} };
+/** One feed row, its aliases, and (for the address tests) another board's slug and alias, all in memory. */
+const state: { feed: Row; aliases: Row[]; otherSlug: string | null; otherAlias: string | null } = { feed: {}, aliases: [], otherSlug: null, otherAlias: null };
 const sets: Row[] = [];
 vi.mock("@/db", () => {
   const where = () => Promise.resolve();
+  // The real drizzle `eq(column, value)` builds SQL we never run. With the mock schema's string "columns" the chunks are
+  // StringChunk glue around two plain strings: the column's name, then the value asked for.
+  const params = (cond: unknown): string[] => {
+    const q = cond as { queryChunks?: unknown[] } | undefined;
+    return (q?.queryChunks ?? []).filter((c): c is string => typeof c === "string");
+  };
+  const colOf = (cond: unknown): string => params(cond)[0] ?? "";
+  const valueOf = (cond: unknown): string => params(cond)[1] ?? "";
   return {
-    schema: { leaderboardFeeds: { id: "id", slug: "slug", keyEncrypted: "key_encrypted", membershipId: "membership_id", workspaceId: "workspace_id" } },
+    schema: {
+      leaderboardFeeds: { id: "id", slug: "slug", keyEncrypted: "key_encrypted", membershipId: "membership_id", workspaceId: "workspace_id" },
+      leaderboardSlugAliases: { id: "alias_id", feedId: "feed_id", slug: "alias_slug" },
+    },
     db: {
-      query: { leaderboardFeeds: { findFirst: async () => state.feed, findMany: async () => [state.feed] } },
+      query: {
+        leaderboardFeeds: {
+          findFirst: async ({ where: w }: { where?: unknown } = {}) => {
+            if (!w) return state.feed;
+            const v = valueOf(w);
+            const col = colOf(w);
+            if (col === "slug") return v === state.feed.slug ? state.feed : v === state.otherSlug ? { id: "other", slug: v } : undefined;
+            if (col === "id") return v === state.feed.id ? state.feed : undefined;
+            return state.feed;
+          },
+          findMany: async () => [state.feed],
+        },
+        leaderboardSlugAliases: {
+          findFirst: async ({ where: w }: { where?: unknown }) => {
+            const v = valueOf(w);
+            const mine = state.aliases.find((a) => (colOf(w) === "alias_id" ? a.id === v : a.slug === v));
+            if (mine) return mine;
+            return v === state.otherAlias ? { id: "oa", feedId: "other", slug: v } : undefined;
+          },
+          findMany: async () => state.aliases,
+        },
+      },
       update: () => ({
         set: (v: Row) => {
           sets.push(v);
           Object.assign(state.feed, v);
           return { where };
+        },
+      }),
+      insert: () => ({
+        values: async (v: Row) => {
+          state.aliases.push(v);
+        },
+      }),
+      delete: () => ({
+        where: async (w: unknown) => {
+          const v = valueOf(w);
+          state.aliases = state.aliases.filter((a) => a.id !== v);
         },
       }),
     },
@@ -131,5 +175,62 @@ describe("the cron is the one reader", () => {
     expect(state.feed.cacheJson).toBe(held);
     expect(String(state.feed.lastCheckNote)).toMatch(/answered 500 .* last good board/);
     expect(JSON.stringify(sets)).not.toContain(KEY);
+  });
+});
+
+describe("the page address and its earlier addresses (H-109)", () => {
+  beforeEach(() => {
+    sets.length = 0;
+    state.aliases = [];
+    state.otherSlug = null;
+    state.otherAlias = null;
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("a bad shape, a reserved word, another board's address or another board's old address are refused in words; nothing changes", async () => {
+    const { setFeedSlug } = await import("@/lib/leaderboard");
+    state.feed = fresh();
+    state.otherSlug = "passport-diner";
+    state.otherAlias = "turas-old";
+    const feed = state.feed as unknown as import("@/db").schema.LeaderboardFeed;
+    expect(await setFeedSlug(feed, "ab")).toMatch(/3 to 40/);
+    expect(await setFeedSlug(feed, "coach")).toMatch(/reserved/);
+    expect(await setFeedSlug(feed, "passport-diner")).toBe("That address is taken.");
+    expect(await setFeedSlug(feed, "turas-old")).toBe("That address is taken.");
+    expect(state.feed.slug).toBe("christian-abc123");
+    expect(state.aliases).toEqual([]);
+    expect(sets).toEqual([]);
+  });
+
+  it("a new address keeps the old one as an alias; the page resolves both and knows which is current; the feed answers on both; taking an own alias back swaps", async () => {
+    const { setFeedSlug, resolveFeed, servedFeed, feedAliases } = await import("@/lib/leaderboard");
+    state.feed = fresh({ exportJson: JSON.stringify([{ name: "Aisha P.", lifetime: 1105, available: 405 }]), exportAsOf: "9 Oct 2026", hidden: ["cus_004"] });
+    const feed = () => state.feed as unknown as import("@/db").schema.LeaderboardFeed;
+    expect(await setFeedSlug(feed(), " Compounding-Kindness ")).toBeNull();
+    expect(state.feed.slug).toBe("compounding-kindness");
+    expect(state.aliases.map((a) => a.slug)).toEqual(["christian-abc123"]);
+    expect(await feedAliases("f1")).toEqual(["christian-abc123"]);
+    expect((await resolveFeed("compounding-kindness"))?.current).toBe(true);
+    const old = await resolveFeed("christian-abc123");
+    expect(old?.current).toBe(false);
+    expect(old?.feed.slug).toBe("compounding-kindness");
+    expect(await resolveFeed("nobody-here")).toBeNull();
+    const a = await servedFeed("christian-abc123");
+    const b = await servedFeed("compounding-kindness");
+    expect(a).toEqual(b);
+    expect(a?.members.map((m) => m.name)).toEqual(["Aisha P."]);
+    // The hide list and settings sit on the feed row, so they carry over unchanged.
+    expect(state.feed.hidden).toEqual(["cus_004"]);
+    // Another change: both earlier addresses are aliases now.
+    expect(await setFeedSlug(feed(), "kindness-koin")).toBeNull();
+    expect(state.aliases.map((a) => a.slug).sort()).toEqual(["christian-abc123", "compounding-kindness"]);
+    expect((await resolveFeed("christian-abc123"))?.feed.slug).toBe("kindness-koin");
+    // Taking back an own alias swaps the two.
+    expect(await setFeedSlug(feed(), "compounding-kindness")).toBeNull();
+    expect(state.feed.slug).toBe("compounding-kindness");
+    expect(state.aliases.map((a) => a.slug).sort()).toEqual(["christian-abc123", "kindness-koin"]);
+    // Setting the same address again is a no-op.
+    expect(await setFeedSlug(feed(), "compounding-kindness")).toBeNull();
   });
 });

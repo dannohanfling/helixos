@@ -254,6 +254,21 @@ export const fieldNames = (c: Customer | undefined): string[] => (c ? Object.key
 /** "One per line" from the client's Settings into ids: trimmed, once each, at most 500. */
 export const readHidden = (text: string): string[] => [...new Set(text.split(/[\n,]+/).map((x) => x.trim()).filter((x) => /^[\w-]{1,80}$/.test(x)))].slice(0, 500);
 
+/**
+ * A chosen page address (H-109): lowercase a–z, 0–9 and hyphens, 3 to 40 characters, no hyphen at either end, and none of the
+ * words HelixOS keeps for itself. Returns the problem in plain words, or null when the address is fine.
+ */
+export const RESERVED_SLUGS = new Set(["api", "admin", "coach", "new", "lb", "loyalty", "settings", "login", "demo", "today", "mf", "m", "g", "files", "preview", "sample", "test", "null", "undefined", "www", "helixos", "evolve-omega"]);
+export const normalizeSlug = (text: string): string => text.trim().toLowerCase();
+export function slugProblem(text: string): string | null {
+  const s = normalizeSlug(text);
+  if (!s) return "Type an address.";
+  if (s.length < 3 || s.length > 40) return "An address is 3 to 40 characters.";
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(s)) return "Lowercase letters, numbers and single hyphens only, not at the ends.";
+  if (RESERVED_SLUGS.has(s)) return "That address is reserved.";
+  return null;
+}
+
 /** A feed address from the client's name and a random tail: "christian-raphael-k3f9q2". */
 export function feedSlug(name: string, tail: string): string {
   const base = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "leaderboard";
