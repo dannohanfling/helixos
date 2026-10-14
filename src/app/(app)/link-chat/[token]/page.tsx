@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { chatLinkByToken, stamp } from "@/lib/chat";
 import { CHANNEL_LABELS, LINK_MESSAGES, linkState } from "@/lib/engine/chat";
 import { confirmChatLinkAction } from "@/lib/actions/chat";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Link your chat" };
 
@@ -18,7 +18,7 @@ export default async function LinkChatPage({ params, searchParams }: { params: P
   const [{ token }, { error }] = await Promise.all([params, searchParams]);
   const row = await chatLinkByToken(token);
   // A token that was never issued is a missing item, like any other unknown id in the app.
-  if (!row) notFound();
+  if (!row) return <ItemGone what="This link" href="/settings" list="your settings" />;
   // The clock read once, outside the render's own rules, by the same helper the actions use.
   const state = linkState(row!, v.workspace.id, Date.parse(stamp()));
   const first = v.user.name.split(" ")[0];

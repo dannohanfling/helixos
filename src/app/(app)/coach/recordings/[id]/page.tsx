@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -13,6 +12,7 @@ import { RecordingSummary } from "@/components/recording-summary";
 import { SubmitButton } from "@/components/submit-button";
 import { MemberPicker } from "@/components/member-picker";
 import { CoachActionItems } from "@/components/coach-action-items";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Review a recording" };
 
@@ -28,7 +28,7 @@ export default async function ReviewRecordingPage({ params, searchParams }: { pa
   const { id } = await params;
   const sp = await searchParams;
   const r = await db.query.recordings.findFirst({ where: and(eq(schema.recordings.id, id), eq(schema.recordings.workspaceId, v.workspace.id)) });
-  if (!r) notFound();
+  if (!r) return <ItemGone what="This recording" href="/coach/recordings" list="Recordings" />;
   const rc = await reviewContext(v.workspace.id);
   const { group, onCall, suggestion, clearTitle, attendees, minutes } = reviewOf(r, rc);
   const nameOf = new Map(rc.members.map((m) => [m.userId, m.name]));

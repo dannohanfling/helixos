@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { BotConnectionCard } from "@/components/bot-connection-card";
-import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -9,6 +8,7 @@ import { YourBotPanel } from "@/components/your-bot";
 import { PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { setMfClientAction } from "@/lib/actions/magic-funnel";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Their bot" };
 
@@ -21,10 +21,10 @@ export default async function BotPushPage({ params, searchParams }: { params: Pr
   const { clientId } = await params;
   const sp = await searchParams;
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, clientId), eq(schema.memberships.workspaceId, v.workspace.id)) });
-  if (!m) notFound();
+  if (!m) return <ItemGone what="This client" href="/coach" list="the Coach page" />;
   const own = m.id === v.membership.id;
   const u = own ? v.user : await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
-  if (!u) notFound();
+  if (!u) return <ItemGone what="This client" href="/coach" list="the Coach page" />;
   const [preview, changed, line] = await Promise.all([stage1Preview(m), changedSinceLastPush(m), lastPushedLine(m, v.user.id, v.workspace.timezone)]);
   const whose = own ? "your bot" : `${u.name}'s bot`;
   return (

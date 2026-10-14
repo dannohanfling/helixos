@@ -12,6 +12,19 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 177,
+    date: "2026-10-14",
+    title: "My Helix: your climb through the program, turning",
+    lines: [
+      "Daily → My Helix: a 3D double helix of the 67 rungs in the program, ten phases from Essence at the bottom to the conversion event at the top. A rung lights up in its phase's colour when HelixOS sees it done; the rest stay grey, and the first one still to build pulses with a Work on it now link.",
+      "Most rungs read what you already do here: your offers, avatars, lead magnets, ladders, content, the daily log's leads and calls, your webinars. Where HelixOS can't see it, tap the phase and mark the rung done yourself; your coach can too.",
+      "Pause the helix if you'd rather it sat still; it remembers. Coaches: Coach → My Helix rungs renames a rung, moves it or changes what it reads, with no deploy.",
+    ],
+    audience: "everyone",
+    version: "pending",
+  },
+
+  {
     n: 176,
     date: "2026-10-14",
     title: "The Colosseum: where the work gets seen",

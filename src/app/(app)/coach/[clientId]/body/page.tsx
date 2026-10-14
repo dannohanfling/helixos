@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireCoach } from "@/lib/auth";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -10,6 +9,7 @@ import { bodyDay, coachDayExtras, coachMeds, dayComposition, sharedClient, train
 import { fmtMetric } from "@/lib/engine/body-scale";
 import { fmtSet } from "@/lib/engine/body-training";
 import { addBodyCommentAction } from "@/lib/actions/body";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Client's HumanOS" };
 
@@ -23,7 +23,7 @@ export default async function CoachClientBodyPage({ params, searchParams }: { pa
   const { clientId } = await params;
   const sp = await searchParams;
   const client = await sharedClient(v, clientId);
-  if (!client) notFound();
+  if (!client) return <ItemGone what="This client" href="/coach" list="the Coach page" />;
   if (!client.shared) {
     return (
       <>

@@ -220,7 +220,7 @@ describe("Body ships dark: a member without the flag sees none of it (rev 195)",
     const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
     const routed = walk(join(process.cwd(), "src/app/(app)/body")).filter((f) => f.endsWith("page.tsx")).map((f) => f.slice(process.cwd().length + 1)).sort();
     expect(routed).toEqual([...pages].sort());
-    expect(read("src/app/(app)/coach/[clientId]/body/page.tsx")).toMatch(/const client = await sharedClient\(v, clientId\);\n  if \(!client\) notFound\(\);/);
+    expect(read("src/app/(app)/coach/[clientId]/body/page.tsx")).toMatch(/const client = await sharedClient\(v, clientId\);\n  if \(!client\) return <ItemGone what="This client" href="\/coach" list="the Coach page" \/>;/);
     expect(read("src/lib/queries/body.ts")).toMatch(/if \(!m \|\| !m\.bodyEnabled\) return null;/);
     expect(read("src/app/api/export/route.ts")).toMatch(/if \(bodyOnly && !v\.membership\.bodyEnabled\) return NextResponse\.json\(\{ error: "not found" \}, \{ status: 404 \}\);/);
     expect(read("src/lib/queries/body.ts")).toMatch(/export async function todayBody\(v: Viewer\) \{\n  if \(!v\.membership\.bodyEnabled\) return null;/);

@@ -1,0 +1,51 @@
+/* My Helix (rev 707, rev 710): a dark stage for the helix, the app's own type around it. */
+.hx-page { max-width: 1100px; margin: 0 auto; padding-bottom: 32px; }
+.hx-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; margin: 4px 0 16px; }
+.hx-eyebrow { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.7; }
+.hx-title { margin: 2px 0 0; font-size: clamp(30px, 4vw, 40px); line-height: 1; font-weight: 700; }
+.hx-stats { display: flex; gap: 28px; margin: 0; }
+.hx-stats dd { margin: 0; font-size: 28px; font-weight: 700; line-height: 1; }
+.hx-stats dt { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.7; margin-top: 4px; }
+.hx-zone { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+.hx-stagewrap { min-width: 0; }
+.hx-stage { position: relative; overflow: hidden; border-radius: 20px; background: radial-gradient(ellipse at 50% 30%, #1d2130 0%, #0e1016 70%); }
+.hx-helix { position: absolute; left: 50%; bottom: 40px; width: 0; height: 940px; transform-style: preserve-3d; animation: hx-turn linear infinite; }
+.hx-still .hx-helix, .hx-still .hx-end { animation-play-state: paused; }
+.hx-rung { position: absolute; left: 0; width: 0; height: 0; transform-style: preserve-3d; }
+.hx-bar { position: absolute; left: -120px; top: -2.5px; width: 240px; height: 5px; border-radius: 3px; }
+.hx-end { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
+.hx-end > .hx-ball { position: absolute; left: -6.5px; top: -6.5px; border-radius: 50%; display: block; animation: hx-counter linear infinite reverse; animation-duration: 30s; }
+.hx-ball.hx-small { width: 7px !important; height: 7px !important; left: -3.5px; top: -3.5px; }
+.hx-next { animation: hx-counter 30s linear infinite reverse, hx-pulse 1.8s ease-in-out infinite !important; }
+.hx-fresh { animation: hx-counter 30s linear infinite reverse, hx-glow 1.2s ease-out 1 !important; }
+@keyframes hx-turn { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+@keyframes hx-counter { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+@keyframes hx-pulse { 0%, 100% { outline: 2px solid rgba(255, 255, 255, 0.15); outline-offset: 2px; } 50% { outline: 2px solid rgba(255, 255, 255, 0.9); outline-offset: 5px; } }
+@keyframes hx-glow { 0% { filter: brightness(2.2) drop-shadow(0 0 14px #fff); } 100% { filter: none; } }
+.hx-bar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 10px; }
+.hx-fine { font-size: 12px; opacity: 0.7; margin: 0; }
+.hx-side { display: grid; gap: 14px; }
+.hx-card { border: 1px solid var(--line, rgba(127, 127, 127, 0.3)); border-radius: 14px; padding: 14px 16px; }
+.hx-nextname { margin: 4px 0 0; font-size: 20px; font-weight: 700; line-height: 1.2; }
+.hx-phases { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.hx-phasebtn { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.hx-phasebtn:hover, .hx-open > .hx-phasebtn { background: rgba(127, 127, 127, 0.12); }
+.hx-phasebtn:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.hx-swatch { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.hx-phasename { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; }
+.hx-phasecount { font-size: 12px; opacity: 0.7; white-space: nowrap; }
+.hx-rungs { list-style: none; margin: 2px 0 8px 32px; padding: 0; display: grid; gap: 2px; }
+.hx-rungrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 40px; }
+.hx-mark { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid currentColor; opacity: 0.45; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+.hx-mark.hx-tick { opacity: 1; background: currentColor; color: var(--surface, #fff); }
+.hx-rungtext { display: grid; min-width: 0; font-size: 14px; }
+.hx-rungtext a { text-decoration: none; color: inherit; font-weight: 600; }
+.hx-rungtext a:hover { text-decoration: underline; }
+@media (max-width: 860px) {
+  .hx-zone { grid-template-columns: minmax(0, 1fr); }
+  .hx-stage { height: 694px !important; }
+  .hx-helix { transform-origin: 50% 100%; bottom: 28px; scale: 0.68; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hx-helix, .hx-end > .hx-ball, .hx-next, .hx-fresh { animation: none !important; }
+}

@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireCoach } from "@/lib/auth";
 import { eraseMemberAction } from "@/lib/actions/erase";
 import { planErase } from "@/lib/erase";
 import { SubmitButton } from "@/components/submit-button";
 import { Card, PageHeader } from "@/components/ui";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Delete their data" };
 
@@ -17,7 +17,7 @@ export default async function EraseMemberPage({ params, searchParams }: { params
   const { clientId } = await params;
   const sp = await searchParams;
   const plan = await planErase(v.workspace.id, clientId);
-  if (!plan) notFound();
+  if (!plan) return <ItemGone what="This client" href="/coach" list="the Coach page" />;
   const self = plan.userId === v.user.id;
   const rows = Object.entries(plan.counts).filter(([, n]) => n > 0).sort(([a], [b]) => a.localeCompare(b));
   const total = rows.reduce((a, [, n]) => a + n, 0);

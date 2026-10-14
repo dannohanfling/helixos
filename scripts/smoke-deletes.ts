@@ -5,7 +5,7 @@
  * sends. The person lands on the list, never the old address, with one short line saying what went, and the line is taken off
  * the address so a reload does not repeat it. The old address then answers with the plain "isn't here anymore" line, inside the
  * app's layout, with the way back to its list. Every detail route in the app is swept the same way with an id that does not
- * exist: each has its own not-found page (checked on disk) and answers with the plain line and a link to its own list. The
+ * exist: each has its own "gone" view (checked on disk) and answers with the plain line and a link to its own list. The
  * routes come from src/app, never a list typed here. Run with the dev server up.
  */
 import { randomUUID } from "node:crypto";
@@ -31,7 +31,13 @@ function detailRoutes(): { pattern: string; dir: string }[] {
 }
 /** The not-found page a route answers with: its own segment's, else the nearest ancestor's inside the app layout. */
 function notFoundFor(dir: string): string | null {
-  for (let d = dir; d.startsWith(APP); d = dirname(d)) if (existsSync(join(d, "not-found.tsx"))) return join(d, "not-found.tsx");
+  // A dynamic segment's "gone" view is in its own page.tsx (an <ItemGone .../> returned in place of notFound(), 14 Oct: a
+  // not-found.tsx inside a dynamic segment made the dev router lose that segment's static siblings); else the nearest
+  // not-found.tsx above it inside the app layout.
+  for (let d = dir; d.startsWith(APP); d = dirname(d)) {
+    if (existsSync(join(d, "page.tsx")) && /<ItemGone\b/.test(readFileSync(join(d, "page.tsx"), "utf8"))) return join(d, "page.tsx");
+    if (existsSync(join(d, "not-found.tsx"))) return join(d, "not-found.tsx");
+  }
   return null;
 }
 
@@ -137,7 +143,7 @@ async function main() {
         failures.push(`${r.pattern} has no not-found page of its own or above it inside the app`);
         continue;
       }
-      const href = readFileSync(nf, "utf8").match(/href="([^"]+)"/)?.[1];
+      const href = readFileSync(nf, "utf8").match(/<ItemGone[^>]*href="([^"]+)"/)?.[1];
       const who = r.pattern.startsWith("/coach/") ? coachPage : page;
       await who.goto(`${base}${r.pattern.replace(/\[[^\]]+\]/g, randomUUID())}`);
       const box = who.locator('[data-testid="item-gone"]');

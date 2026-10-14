@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { KIT_STATUS_WORDS, kitFor, kitStatus } from "@/lib/queries/brand-kit";
-import { notFound } from "next/navigation";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
@@ -54,6 +53,7 @@ import { BEHAVIORS, BEHAVIOR_SOURCE, BEHAVIOR_WORDS } from "@/lib/engine/bot-fea
 import { setBotUnlocksAction } from "@/lib/actions/bot-features";
 import { councilChairs, customSeatsOf } from "@/lib/board-seats";
 import { operatorOf } from "@/lib/engine/board-seats";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Client" };
 
@@ -68,7 +68,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const { clientId } = await params;
   const sp = await searchParams;
   const m = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, clientId), eq(schema.memberships.workspaceId, v.workspace.id), eq(schema.memberships.role, "client")) });
-  if (!m) notFound();
+  if (!m) return <ItemGone what="This client" href="/coach" list="the Coach page" />;
   const u = await db.query.users.findFirst({ where: eq(schema.users.id, m.userId) });
     // Bot Features (rev 618): where the client stands, and the milestones HelixOS sees for itself beside the coach's ticks.
   const [featureViews, seenBehaviors] = await Promise.all([featuresFor(m), behaviorsOf(m.workspaceId, m.userId, [])]);
@@ -76,7 +76,7 @@ export default async function CoachClientPage({ params, searchParams }: { params
   const essence = await essenceFor(v.workspace.id, m.userId);
   // Emails from HelixOS (29 Sep): the coach's switch, and why nothing goes out even when it's on.
   const emailsBlocked = emailBlock({ emailsEnabled: m.emailsEnabled, removedAt: m.removedAt, firstSignedInAt: u?.firstSignedInAt ?? null });
-  if (!u) notFound();
+  if (!u) return <ItemGone what="This client" href="/coach" list="the Coach page" />;
   const emailChange = await lastEmailChange(u.id);
   // The client's team (Danno, 6 Oct): who is on it, with "added by" and "last active", the open invites, and the seat cap.
   const [team, teamInvites] = await Promise.all([teamOf(m.id), openInvites(m.id)]);

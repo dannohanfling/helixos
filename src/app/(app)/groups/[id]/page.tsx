@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import { and, desc, eq } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { deleteGroupAction, markPostedInGroupAction, updateGroupAction } from "@/lib/actions/groups";
@@ -11,6 +10,7 @@ import { Badge, Card, Field, PageHeader, Progress } from "@/components/ui";
 import { alignPost, groupReadiness, readRules } from "@/lib/engine/groups";
 import { formatDate } from "@/lib/dates";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -21,7 +21,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
   const v = await requireViewer();
   const { id } = await params;
   const g = await db.query.groups.findFirst({ where: and(eq(schema.groups.id, id), eq(schema.groups.userId, v.user.id)) });
-  if (!g) notFound();
+  if (!g) return <ItemGone what="This group" href="/groups" list="your groups" />;
   const [variants, recent] = await Promise.all([
     db.query.contentVariants.findMany({ where: and(eq(schema.contentVariants.userId, v.user.id), eq(schema.contentVariants.groupId, id)), orderBy: desc(schema.contentVariants.createdAt), limit: 10 }),
     db.query.contentItems.findMany({ where: eq(schema.contentItems.userId, v.user.id), orderBy: desc(schema.contentItems.createdAt), limit: 5 }),

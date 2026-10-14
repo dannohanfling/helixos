@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import { and, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
@@ -27,6 +26,7 @@ import { AiPromise } from "@/components/ai-promise";
 import { SubmitButton } from "@/components/submit-button";
 import { materialUsedFor } from "@/lib/teaching";
 import { STATUS_WORDS, momentOf, type StoryStatus } from "@/lib/engine/teaching";
+import { ItemGone } from "@/components/item-gone";
 
 function HeadlinePreview({ headline, handle }: { headline: string; handle?: string | null }) {
   const h = headlineParts(headline);
@@ -66,7 +66,7 @@ export default async function LadderPage({ params, searchParams }: { params: Pro
   const { id } = await params;
   const l = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.id, id), eq(schema.ladders.userId, v.user.id)) });
   const magnet = l?.leadMagnetId ? await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, l.leadMagnetId), eq(schema.leadMagnets.userId, v.user.id)) }) : null;
-  if (!l) notFound();
+  if (!l) return <ItemGone what="This comment ladder" href="/content/ladders" list="your comment ladders" />;
   const [profile, proofs] = await Promise.all([
     db.query.ladderProfiles.findFirst({ where: and(eq(schema.ladderProfiles.workspaceId, v.workspace.id), eq(schema.ladderProfiles.userId, v.user.id)) }),
     db.query.proofs.findMany({ where: and(eq(schema.proofs.workspaceId, v.workspace.id), eq(schema.proofs.userId, v.user.id), eq(schema.proofs.status, "approved")) }),

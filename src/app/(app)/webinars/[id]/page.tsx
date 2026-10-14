@@ -6,7 +6,7 @@ import Link from "next/link";
 import { formatDateTime } from "@/lib/dates";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { and, asc, desc, eq } from "drizzle-orm";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
@@ -85,6 +85,7 @@ import { AiPromise } from "@/components/ai-promise";
 import { SubmitButton } from "@/components/submit-button";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { MoneyInput } from "@/components/money-input";
+import { ItemGone } from "@/components/item-gone";
 
 const ACT_ICON: Record<string, string> = {
   opening: "🎬",
@@ -142,7 +143,7 @@ export default async function WebinarWizardPage({
       eq(schema.webinars.userId, v.user.id),
     ),
   });
-  if (!w) notFound();
+  if (!w) return <ItemGone what="This webinar" href="/webinars" list="your webinars" />;
   // Sign-ups made by the member's bot (Bot connection, rev 808), newest first.
   const signups = await db.query.webinarSignups.findMany({ where: and(eq(schema.webinarSignups.webinarId, w.id), eq(schema.webinarSignups.userId, v.user.id)), orderBy: [desc(schema.webinarSignups.createdAt)], limit: 200 });
   const [

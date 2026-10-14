@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { AVATAR_FIELDS, type AvatarField } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { ownInterview } from "@/lib/avatar-interview";
@@ -10,6 +9,7 @@ import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { db, schema } from "@/db";
 import { and, eq } from "drizzle-orm";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Avatar interview" };
 
@@ -22,7 +22,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
   const { id } = await params;
   const sp = await searchParams;
   const row = await ownInterview(v, id);
-  if (!row) notFound();
+  if (!row) return <ItemGone what="This interview" href="/avatars" list="your avatars" />;
   const avatar = row.avatarId ? await db.query.avatars.findFirst({ where: and(eq(schema.avatars.workspaceId, v.workspace.id), eq(schema.avatars.userId, v.user.id), eq(schema.avatars.id, row.avatarId)) }) : null;
   const fields: AvatarField[] = row.avatarId ? [...new Set([...row.turns.map((t) => t.field), ...fieldsToAsk(avatar ?? null)])] : [...AVATAR_FIELDS];
   const open = openTurn(row.turns);

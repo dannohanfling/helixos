@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import Link from "next/link";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { acceptContentAction, deleteContentAction, setContentStatusAction } from "@/lib/actions/content";
@@ -14,6 +13,7 @@ import { ContentForm } from "@/components/content-form";
 import { CopyButton } from "@/components/copy-button";
 import { Card, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -25,7 +25,7 @@ export default async function ContentDetailPage({ params, searchParams }: { para
   const { id } = await params;
   const sp = await searchParams;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
-  if (!item) notFound();
+  if (!item) return <ItemGone what="This post" href="/content" list="your posts" />;
   const fullText = [item.hook, item.body, item.cta].filter(Boolean).join("\n\n");
   // The status gate: this post, when its AI draft has not been read. Shown only after a status change to scheduled or posted asked for it.
   const gate = gateFor([{ name: item.title, origin: item.origin }]);

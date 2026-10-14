@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { markSeen, stepGroupsFor, stepsFor, visibleRecording } from "@/lib/recordings";
 import { itemMoment, timestampLabel, type ItemGroup } from "@/lib/engine/recording-members";
@@ -10,6 +10,7 @@ import { formatDateTime } from "@/lib/dates";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { RecordingSummary } from "@/components/recording-summary";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Recording" };
 
@@ -24,7 +25,7 @@ export default async function RecordingPage({ params, searchParams }: { params: 
   const { id } = await params;
   const sp = await searchParams;
   const r = await visibleRecording(v.workspace.id, id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role });
-  if (!r) notFound();
+  if (!r) return <ItemGone what="This recording" href="/recordings" list="your recordings" />;
   const [steps, groups] = await Promise.all([stepsFor(v.user.id, [r.id]), stepGroupsFor(v, r)]);
   // Opening it here is seeing it (rev 498); a coach switched in marks nothing for the member.
   if (!v.switchedInto) await markSeen(v.workspace.id, v.user.id, r.id);

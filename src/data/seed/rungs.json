@@ -1,0 +1,538 @@
+[
+  {
+    "key": "p0-superpower",
+    "phase": 0,
+    "order": 1,
+    "label": "Your superpower",
+    "signal": "tick",
+    "href": "/essence"
+  },
+  {
+    "key": "p0-seven-levels",
+    "phase": 0,
+    "order": 2,
+    "label": "7 Levels Deep: your why",
+    "signal": "tick",
+    "href": "/essence"
+  },
+  {
+    "key": "p0-mission",
+    "phase": 0,
+    "order": 3,
+    "label": "Mission, goals and values",
+    "signal": "essence:mission",
+    "href": "/essence"
+  },
+  {
+    "key": "p0-clarity",
+    "phase": 0,
+    "order": 4,
+    "label": "Clarity Tool: one-year goals",
+    "signal": "tick",
+    "href": "/essence"
+  },
+  {
+    "key": "p0-niche",
+    "phase": 0,
+    "order": 5,
+    "label": "Niche narrowed",
+    "signal": "tick",
+    "href": "/essence"
+  },
+  {
+    "key": "p0-brand-story",
+    "phase": 0,
+    "order": 6,
+    "label": "Brand story: before, shift, after",
+    "signal": "essence:stories",
+    "href": "/essence"
+  },
+  {
+    "key": "p0-needle-movers",
+    "phase": 0,
+    "order": 7,
+    "label": "Needle movers",
+    "signal": "tick",
+    "href": "/essence"
+  },
+  {
+    "key": "p1-avatar",
+    "phase": 1,
+    "order": 1,
+    "label": "Ideal avatar",
+    "signal": "avatar",
+    "href": "/avatars"
+  },
+  {
+    "key": "p1-big-promise",
+    "phase": 1,
+    "order": 2,
+    "label": "Big Promise",
+    "signal": "offer:promise",
+    "href": "/offers"
+  },
+  {
+    "key": "p1-framework",
+    "phase": 1,
+    "order": 3,
+    "label": "Framework",
+    "signal": "offer:framework",
+    "href": "/offers"
+  },
+  {
+    "key": "p1-container-price",
+    "phase": 1,
+    "order": 4,
+    "label": "Offer container and price",
+    "signal": "offer:container-price",
+    "href": "/offers"
+  },
+  {
+    "key": "p1-objection-crusher",
+    "phase": 1,
+    "order": 5,
+    "label": "Objection Crusher",
+    "signal": "offer:objections",
+    "href": "/offers"
+  },
+  {
+    "key": "p1-offer-shared",
+    "phase": 1,
+    "order": 6,
+    "label": "Offer shared in the group",
+    "signal": "tick",
+    "href": "/offers"
+  },
+  {
+    "key": "p2-freebie",
+    "phase": 2,
+    "order": 1,
+    "label": "Freebie",
+    "signal": "offer:tier:freebie",
+    "href": "/offers"
+  },
+  {
+    "key": "p2-starter",
+    "phase": 2,
+    "order": 2,
+    "label": "Starter offer",
+    "signal": "offer:tier:starter",
+    "href": "/offers"
+  },
+  {
+    "key": "p2-core",
+    "phase": 2,
+    "order": 3,
+    "label": "Core offer",
+    "signal": "offer:tier:core",
+    "href": "/offers"
+  },
+  {
+    "key": "p2-premium",
+    "phase": 2,
+    "order": 4,
+    "label": "Premium offer",
+    "signal": "offer:tier:premium",
+    "href": "/offers"
+  },
+  {
+    "key": "p2-journey",
+    "phase": 2,
+    "order": 5,
+    "label": "Customer journey mapped",
+    "signal": "pathway:2",
+    "href": "/offers"
+  },
+  {
+    "key": "p2-diagnostics",
+    "phase": 2,
+    "order": 6,
+    "label": "Four diagnostics answered",
+    "signal": "tick",
+    "href": "/offers"
+  },
+  {
+    "key": "p3-profile-primed",
+    "phase": 3,
+    "order": 1,
+    "label": "Personal profile primed",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p3-group-presence",
+    "phase": 3,
+    "order": 2,
+    "label": "Group presence in 2 to 3 groups",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p3-secondary-profile",
+    "phase": 3,
+    "order": 3,
+    "label": "Secondary profile",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p3-story-sandwich",
+    "phase": 3,
+    "order": 4,
+    "label": "Story Sandwich",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p3-funnel-audit",
+    "phase": 3,
+    "order": 5,
+    "label": "Profile funnel audit",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p3-first-ladder",
+    "phase": 3,
+    "order": 6,
+    "label": "First comment ladder posted",
+    "signal": "ladder:launched",
+    "href": "/content/ladders"
+  },
+  {
+    "key": "p3-visibility-streak",
+    "phase": 3,
+    "order": 7,
+    "label": "7-day Visibility streak",
+    "signal": "posts:streak:7",
+    "href": "/today"
+  },
+  {
+    "key": "p4-magnet-quick-win",
+    "phase": 4,
+    "order": 1,
+    "label": "Lead magnet quick win",
+    "signal": "magnet:any",
+    "href": "/magnets"
+  },
+  {
+    "key": "p4-magnet-live",
+    "phase": 4,
+    "order": 2,
+    "label": "Lead magnet live with its CTA",
+    "signal": "magnet:published",
+    "href": "/magnets"
+  },
+  {
+    "key": "p4-comment-to-dm",
+    "phase": 4,
+    "order": 3,
+    "label": "Comment-to-DM trigger flow",
+    "signal": "tick",
+    "href": "/magnets"
+  },
+  {
+    "key": "p4-lead-1",
+    "phase": 4,
+    "order": 4,
+    "label": "First lead",
+    "signal": "log:newLeads:1",
+    "href": "/magnets"
+  },
+  {
+    "key": "p4-lead-10",
+    "phase": 4,
+    "order": 5,
+    "label": "10 leads",
+    "signal": "log:newLeads:10",
+    "href": "/magnets"
+  },
+  {
+    "key": "p4-lead-50",
+    "phase": 4,
+    "order": 6,
+    "label": "50 leads",
+    "signal": "log:newLeads:50",
+    "href": "/magnets"
+  },
+  {
+    "key": "p4-leads-100",
+    "phase": 4,
+    "order": 7,
+    "label": "100 Leads Challenge",
+    "signal": "tick",
+    "href": "/magnets"
+  },
+  {
+    "key": "p5-pillars",
+    "phase": 5,
+    "order": 1,
+    "label": "Three content pillars",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p5-ideas-15",
+    "phase": 5,
+    "order": 2,
+    "label": "15 ideas across five prompt types",
+    "signal": "content:15",
+    "href": "/content"
+  },
+  {
+    "key": "p5-theme-rotation",
+    "phase": 5,
+    "order": 3,
+    "label": "4-week theme rotation",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p5-follow-up-goal",
+    "phase": 5,
+    "order": 4,
+    "label": "Follow-up goal",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p5-follow-up-messages",
+    "phase": 5,
+    "order": 5,
+    "label": "Three follow-up messages",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p5-follow-up-tested",
+    "phase": 5,
+    "order": 6,
+    "label": "Follow-up loaded and tested",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p5-trainings",
+    "phase": 5,
+    "order": 7,
+    "label": "4 weekly trainings planned",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p6-dm-ladder",
+    "phase": 6,
+    "order": 1,
+    "label": "Book 'Em Danno DM ladder",
+    "signal": "log:dmsStarted:1",
+    "href": "/today"
+  },
+  {
+    "key": "p6-call-sheet",
+    "phase": 6,
+    "order": 2,
+    "label": "Call sheet ready",
+    "signal": "script:any",
+    "href": "/socrates/scripts"
+  },
+  {
+    "key": "p6-call-booked",
+    "phase": 6,
+    "order": 3,
+    "label": "First call booked",
+    "signal": "log:callsBooked:1",
+    "href": "/today"
+  },
+  {
+    "key": "p6-call-held",
+    "phase": 6,
+    "order": 4,
+    "label": "First call held",
+    "signal": "log:callsHeld:1",
+    "href": "/today"
+  },
+  {
+    "key": "p6-offer-made",
+    "phase": 6,
+    "order": 5,
+    "label": "First offer made",
+    "signal": "log:offersMade:1",
+    "href": "/today"
+  },
+  {
+    "key": "p6-first-client",
+    "phase": 6,
+    "order": 6,
+    "label": "First client",
+    "signal": "client:any",
+    "href": "/clients"
+  },
+  {
+    "key": "p7-chatbot-goal",
+    "phase": 7,
+    "order": 1,
+    "label": "Chatbot goal",
+    "signal": "tick",
+    "href": "/bot-features"
+  },
+  {
+    "key": "p7-welcome-sequence",
+    "phase": 7,
+    "order": 2,
+    "label": "Welcome sequence",
+    "signal": "tick",
+    "href": "/bot-features"
+  },
+  {
+    "key": "p7-qualification",
+    "phase": 7,
+    "order": 3,
+    "label": "Qualification questions",
+    "signal": "tick",
+    "href": "/bot-features"
+  },
+  {
+    "key": "p7-subflows",
+    "phase": 7,
+    "order": 4,
+    "label": "Subflows",
+    "signal": "tick",
+    "href": "/bot-features"
+  },
+  {
+    "key": "p7-tag-route",
+    "phase": 7,
+    "order": 5,
+    "label": "Tag and route rules",
+    "signal": "tick",
+    "href": "/bot-features"
+  },
+  {
+    "key": "p7-handoff-human",
+    "phase": 7,
+    "order": 6,
+    "label": "Handoff to a human",
+    "signal": "tick",
+    "href": "/bot-features"
+  },
+  {
+    "key": "p7-chatbot-live",
+    "phase": 7,
+    "order": 7,
+    "label": "Chatbot activated",
+    "signal": "bot:live",
+    "href": "/settings"
+  },
+  {
+    "key": "p8-weekly-themes",
+    "phase": 8,
+    "order": 1,
+    "label": "Weekly themes in your cadence",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p8-week-scheduled",
+    "phase": 8,
+    "order": 2,
+    "label": "First week scheduled",
+    "signal": "content:scheduled",
+    "href": "/content"
+  },
+  {
+    "key": "p8-auto-published",
+    "phase": 8,
+    "order": 3,
+    "label": "First post auto-published",
+    "signal": "content:posted",
+    "href": "/content"
+  },
+  {
+    "key": "p8-ladder-workflow",
+    "phase": 8,
+    "order": 4,
+    "label": "Ladder runs by workflow",
+    "signal": "ladder:shipped",
+    "href": "/content/ladders"
+  },
+  {
+    "key": "p8-email-automation",
+    "phase": 8,
+    "order": 5,
+    "label": "Email automation workflow",
+    "signal": "tick",
+    "href": "/content"
+  },
+  {
+    "key": "p9-format",
+    "phase": 9,
+    "order": 1,
+    "label": "Format chosen",
+    "signal": "webinar:any",
+    "href": "/webinars"
+  },
+  {
+    "key": "p9-name-promise",
+    "phase": 9,
+    "order": 2,
+    "label": "Name and promise",
+    "signal": "webinar:named",
+    "href": "/webinars"
+  },
+  {
+    "key": "p9-day-by-day",
+    "phase": 9,
+    "order": 3,
+    "label": "Day-by-day flow to Decision Day",
+    "signal": "tick",
+    "href": "/webinars"
+  },
+  {
+    "key": "p9-registration",
+    "phase": 9,
+    "order": 4,
+    "label": "Registration page and reminders",
+    "signal": "webinar:registration",
+    "href": "/webinars"
+  },
+  {
+    "key": "p9-runway",
+    "phase": 9,
+    "order": 5,
+    "label": "7 to 10 day promo runway",
+    "signal": "tick",
+    "href": "/webinars"
+  },
+  {
+    "key": "p9-delivered",
+    "phase": 9,
+    "order": 6,
+    "label": "Event delivered",
+    "signal": "webinar:delivered",
+    "href": "/webinars"
+  },
+  {
+    "key": "p9-offer-transition",
+    "phase": 9,
+    "order": 7,
+    "label": "Offer transition",
+    "signal": "webinar:offers",
+    "href": "/webinars"
+  },
+  {
+    "key": "p9-conversion-audit",
+    "phase": 9,
+    "order": 8,
+    "label": "First conversion audit",
+    "signal": "webinar:debrief",
+    "href": "/webinars"
+  },
+  {
+    "key": "p9-event-client",
+    "phase": 9,
+    "order": 9,
+    "label": "First client from the event",
+    "signal": "webinar:sale",
+    "href": "/webinars"
+  }
+]

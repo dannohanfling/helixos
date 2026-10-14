@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { AVATAR_FIELDS } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { avatarData } from "@/lib/avatars";
@@ -11,6 +10,7 @@ import { AVATAR_FIELD_INFO, IMPORTED_NOTE, offersOf } from "@/lib/engine/avatars
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { DraftKeeper } from "@/components/draft-keeper";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Avatar" };
 
@@ -22,7 +22,7 @@ export default async function AvatarPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   const { rows, links, offers } = await avatarData({ workspaceId: v.workspace.id, userId: v.user.id });
   const a = rows.find((x) => x.id === id);
-  if (!a) notFound();
+  if (!a) return <ItemGone what="This avatar" href="/avatars" list="your avatars" />;
   const parent = a.parentId ? rows.find((x) => x.id === a.parentId) : undefined;
   const hasSubs = rows.some((x) => x.parentId === a.id && !x.archivedAt);
   const parents = rows.filter((x) => !x.archivedAt && !x.parentId && x.id !== a.id);

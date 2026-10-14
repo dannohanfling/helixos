@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import Link from "next/link";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { notFound } from "next/navigation";
 import { identityOf, stageNeedsIdentity } from "@/lib/engine/contact-sync";
 import { db, schema } from "@/db";
 import { CONTACT_STAGES } from "@/db/schema";
@@ -16,6 +15,7 @@ import { addDays, formatDateTime } from "@/lib/dates";
 import { templatesFor } from "@/lib/queries/templates";
 import { STAGE_META } from "@/lib/stage-meta";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -27,7 +27,7 @@ export default async function ContactPage({ params, searchParams }: { params: Pr
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const contact = await db.query.contacts.findFirst({ where: and(eq(schema.contacts.id, id), eq(schema.contacts.userId, v.user.id)) });
-  if (!contact) notFound();
+  if (!contact) return <ItemGone what="This conversation" href="/conversations" list="your conversations" />;
   const [messages, templates, mfRow] = await Promise.all([
     db.query.messages.findMany({ where: eq(schema.messages.contactId, id), orderBy: asc(schema.messages.sentAt) }),
     templatesFor(v.workspace.id),

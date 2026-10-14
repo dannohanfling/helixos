@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { and, eq, sql } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { db, schema } from "@/db";
@@ -19,6 +18,7 @@ import { AiPromise } from "@/components/ai-promise";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Lead magnet" };
 
@@ -31,7 +31,7 @@ export default async function MagnetEditorPage({ params, searchParams }: { param
   const { id } = await params;
   const sp = await searchParams;
   const m = await db.query.leadMagnets.findFirst({ where: and(eq(schema.leadMagnets.id, id), eq(schema.leadMagnets.userId, v.user.id)) });
-  if (!m) notFound();
+  if (!m) return <ItemGone what="This lead magnet" href="/magnets" list="your lead magnets" />;
   const [ai, offers, membership, hits, urlOf] = await Promise.all([
     hasAiKey(),
     db.query.offers.findMany({ where: eq(schema.offers.userId, v.user.id) }),

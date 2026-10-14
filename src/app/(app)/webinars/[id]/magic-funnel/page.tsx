@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { magicFunnelSource } from "@/lib/ai";
@@ -15,6 +14,7 @@ import { FormProgress } from "@/components/progress-line";
 import { CopyButton } from "@/components/copy-button";
 import { MF_CLASSES, mfSnippet } from "@/lib/engine/mf-snippet";
 import { siteUrl } from "@/lib/app-url";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Magic funnel" };
 /** The preview runs two model calls in this page's action (H-11). */
@@ -31,7 +31,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
   const { id } = await params;
   const sp = await searchParams;
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.workspaceId, v.workspace.id), eq(schema.webinars.userId, v.user.id)) });
-  if (!w) notFound();
+  if (!w) return <ItemGone what="This webinar" href="/webinars" list="your webinars" />;
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
   const [setup, proofs, today, signups, keySource] = await Promise.all([
     setupFor(m, w.id),

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { PLAN_STATUSES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
 import { ownTitle } from "@/lib/page-title";
@@ -16,6 +15,7 @@ import { TaskRow } from "@/components/task-row";
 import { SubmitButton } from "@/components/submit-button";
 import { db, schema } from "@/db";
 import { and, eq, inArray } from "drizzle-orm";
+import { ItemGone } from "@/components/item-gone";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -32,7 +32,7 @@ export default async function PlanRecordPage({ params, searchParams }: { params:
   const sp = await searchParams;
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
   const r = await ownRecord(m, id);
-  if (!r || r.archivedAt) notFound();
+  if (!r || r.archivedAt) return <ItemGone what="This record" href="/goals" list="your Business goals" />;
   const { records, links, tasks, reads, logs, values } = await planData(m, v.today);
   const byId = new Map(records.map((x) => [x.id, x]));
   const { down, up } = linksOf(r.id, links);

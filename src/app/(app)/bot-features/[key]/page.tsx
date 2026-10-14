@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { featuresFor } from "@/lib/bot-features";
 import { featureOf } from "@/lib/engine/bot-features";
@@ -8,6 +7,7 @@ import { requestFeatureAction } from "@/lib/actions/bot-features";
 import { CheckIcon, Chip, FeatureIcon } from "@/components/bot-feature-icon";
 import { SubmitButton } from "@/components/submit-button";
 import "../bot-features.css";
+import { ItemGone } from "@/components/item-gone";
 
 export async function generateMetadata({ params }: { params: Promise<{ key: string }> }): Promise<Metadata> {
   return { title: featureOf((await params).key)?.name ?? "Bot Features" };
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ key: stri
 export default async function BotFeaturePage({ params, searchParams }: { params: Promise<{ key: string }>; searchParams: Promise<{ sent?: string; error?: string; field?: string; [k: string]: string | undefined }> }) {
   const v = await requireViewer({ team: "allow" });
   const feature = featureOf((await params).key);
-  if (!feature) notFound();
+  if (!feature) return <ItemGone what="This feature" href="/bot-features" list="Bot Features" />;
   const sp = await searchParams;
   const view = (await featuresFor(v.membership)).find((x) => x.feature.key === feature.key)!;
   const viewOnly = Boolean(v.team) || Boolean(v.switchedInto);

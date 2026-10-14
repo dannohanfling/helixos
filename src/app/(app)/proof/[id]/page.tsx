@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { and, eq } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { PROOF_TYPES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
@@ -17,6 +16,7 @@ import { AttachmentConsentForm } from "@/components/attachment-consent-form";
 import { attachmentsFor, storageQuota } from "@/lib/queries/proof-attachments";
 import { PROOF_STORAGE_UNCONFIGURED, proofStorageConfigured } from "@/lib/proof-storage";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 const TYPE_LABEL: Record<string, string> = { result: "Result", testimonial: "Testimonial", screenshot: "Screenshot", case_study: "Case study", stat: "Stat", story: "Story" };
 const SHAPE_LABEL: Record<string, string> = { shortVersion: "short version", longVersion: "long version" };
@@ -26,7 +26,7 @@ export default async function ProofDetailPage({ params, searchParams }: { params
   const { id } = await params;
   const sp = await searchParams;
   const p = await db.query.proofs.findFirst({ where: and(eq(schema.proofs.id, id), eq(schema.proofs.userId, v.user.id)) });
-  if (!p) notFound();
+  if (!p) return <ItemGone what="This proof" href="/proof" list="your Proof Bank" />;
   const harvested = Boolean(p.quote);
   const oneLiner = p.shortVersion ?? p.resultAfter ?? p.name;
   const slide = [p.who ? `${p.who}` : "", p.problemBefore ? `Before: ${p.problemBefore}` : "", p.resultAfter ? `After: ${p.resultAfter}` : "", p.shift ? `The shift: ${p.shift}` : ""].filter(Boolean).join("\n");

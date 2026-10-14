@@ -17,7 +17,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Daily",
     items: [
       { href: "/today", label: "Today", icon: "☀️", team: true },
-      { href: "/my-helix", label: "My Helix", icon: "🌀", line: "your progress at a glance", comingSoon: true },
+      { href: "/my-helix", label: "My Helix", icon: "🌀", line: "your progress at a glance" },
       { href: "/intentions", label: "Intentions", icon: "🌱", hint: "week + month" },
       { href: "/tasks", label: "Tasks", icon: "✅", team: true },
       { href: "/content", label: "Content", icon: "✍️", team: true, hint: "post + repurpose" },
@@ -97,6 +97,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/coach/community", label: "Community posts", icon: "📣", coachOnly: true, hint: "Monday 3-1-3" },
       { href: "/coach/move", label: "Move to a client", icon: "📦", coachOnly: true, hint: "your items to theirs" },
       { href: "/coach/import", label: "Import from Airtable", icon: "📥", coachOnly: true, hint: "a client's base into HelixOS" },
+      { href: "/coach/helix", label: "My Helix rungs", icon: "🌀", coachOnly: true, hint: "the 67 rungs and what each reads" },
       { href: "/coach/recordings", label: "Recordings", icon: "🎥", coachOnly: true, hint: "from Fathom" },
       { href: "/integrations", label: "Integrations", icon: "🔌", coachOnly: true },
       { href: "/whats-new", label: "What's new", icon: "✨", team: true, hint: "latest changes" },

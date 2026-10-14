@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import { asc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
@@ -13,6 +12,7 @@ import { principlePost, principleReel, principleTraining } from "@/lib/engine/do
 import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 const TABS = [
   { key: "doctrine", label: "Doctrine" },
@@ -42,7 +42,7 @@ export default async function PrinciplePage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const decoded = decodeURIComponent(code);
   const [p, all] = await Promise.all([db.query.principles.findFirst({ where: eq(schema.principles.code, decoded) }), db.query.principles.findMany({ orderBy: asc(schema.principles.order) })]);
-  if (!p) notFound();
+  if (!p) return <ItemGone what="This principle" href="/doctrine" list="your doctrine" />;
   const tab = TABS.find((t) => t.key === sp.tab)?.key ?? "doctrine";
   const idx = all.findIndex((x) => x.code === p.code && x.name === p.name);
   const prev = all[idx - 1];

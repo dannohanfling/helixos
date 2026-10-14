@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import { and, asc, eq } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { OFFER_CONTAINERS } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
@@ -20,6 +19,7 @@ import { MoneyInput } from "@/components/money-input";
 import { DraftKeeper } from "@/components/draft-keeper";
 import { OfferAvatars } from "@/components/offer-avatars";
 import { avatarData, importFromOffers } from "@/lib/avatars";
+import { ItemGone } from "@/components/item-gone";
 
 function T({ name, label, value, hint, placeholder }: { name: string; label: string; value: string | null; hint?: string; placeholder?: string }) {
   return (
@@ -41,7 +41,7 @@ export default async function OfferWizardPage({ params, searchParams }: { params
   const v = await requireViewer();
   const { id } = await params;
   const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, id), eq(schema.offers.userId, v.user.id)) });
-  if (!offer) notFound();
+  if (!offer) return <ItemGone what="This offer" href="/offers" list="your offers" />;
   // The first-visit import Avatars runs (friction walk O2, 7 Oct: an offer said no avatar was linked while Avatars, opened
   // later, showed one linked by this import): run it here too, so the two pages agree whichever is opened first.
   if (!v.switchedInto) await importFromOffers({ workspaceId: v.workspace.id, userId: v.user.id });

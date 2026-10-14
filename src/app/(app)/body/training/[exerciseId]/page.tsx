@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { Card } from "@/components/ui";
 import { HumanosHeader } from "@/components/body/humanos-header";
@@ -7,6 +6,7 @@ import { TrendLine } from "@/components/body/trend-line";
 import { addDays, formatDate } from "@/lib/dates";
 import { fmtSet } from "@/lib/engine/body-training";
 import { exerciseHistory, requireBodyEnabled } from "@/lib/queries/body";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "HumanOS · Exercise history" };
 
@@ -22,7 +22,7 @@ export default async function ExerciseHistoryPage({ params, searchParams }: { pa
   const { exerciseId } = await params;
   const sp = await searchParams;
   const h = await exerciseHistory(v.workspace.id, v.user.id, exerciseId);
-  if (!h) notFound();
+  if (!h) return <ItemGone what="This page" href="/today" list="Today" />;
   const bw = h.exercise.kind === "bodyweight";
   // Longer views (phase 10b): the chart and the list over 90 days, a year or everything.
   const span = SPANS.find((x) => x.key === sp.range) ?? SPANS[2];

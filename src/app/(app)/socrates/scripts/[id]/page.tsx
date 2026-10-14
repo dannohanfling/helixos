@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { requireViewer } from "@/lib/auth";
 import { deleteScriptAction, saveBeatAction, saveFillsAction, updateScriptAction } from "@/lib/actions/socrates";
@@ -10,6 +9,7 @@ import { QuestionPicker } from "@/components/question-picker";
 import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Disclosure, Field, PageHeader, Progress } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Script" };
 
@@ -18,7 +18,7 @@ export default async function ScriptPage({ params, searchParams }: { params: Pro
   const { id } = await params;
   const sp = await searchParams;
   const s = await ownScript(id, v.user.id);
-  if (!s) notFound();
+  if (!s) return <ItemGone what="This script" href="/socrates/scripts" list="your scripts" />;
   const all = await visibleQuestions(v.user.id);
   const p = progress(s.beats);
   const assembled = assemble(s.beats, all);

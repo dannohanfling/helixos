@@ -2,6 +2,7 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "./index";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
+import rungs from "@/data/seed/rungs.json";
 import curriculum from "@/data/seed/curriculum.json";
 import dmLibrary from "@/data/seed/dm_library.json";
 import { newId } from "@/lib/ids";
@@ -46,7 +47,11 @@ export async function seedLibrary(): Promise<void> {
       trainingUrl: t.trainingUrl ?? null,
     };
     await db.insert(schema.libraryTasks).values(row).onConflictDoUpdate({ target: schema.libraryTasks.key, set: row });
+  }  // My Helix's 67 rungs (rev 710): seeded once, then the coach's to edit, so a reseed keeps their labels, links and signals.
+  for (const r of rungs as { key: string; phase: number; order: number; label: string; signal: string; href: string }[]) {
+    await db.insert(schema.helixRungs).values(r).onConflictDoNothing();
   }
+
   for (const c of curriculum) {
     const row = { day: c.day, week: c.week, title: c.title, type: c.type, instructions: c.instructions ?? "", estTime: c.estTime ?? null, points: c.points ?? 10, why: c.why ?? null };
     await db.insert(schema.curriculumDays).values(row).onConflictDoUpdate({ target: schema.curriculumDays.day, set: row });

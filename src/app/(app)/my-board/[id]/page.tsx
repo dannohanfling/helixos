@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireViewer } from "@/lib/auth";
 import { decisionsFor, ownDecision, stepStatus } from "@/lib/board";
 import { applySetupAction, askBoardAction, checkinAction, shareDecisionAction } from "@/lib/actions/board";
@@ -11,6 +10,7 @@ import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
 import { formatDate } from "@/lib/dates";
 import "../boardroom.css";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "A Board decision" };
 
@@ -23,7 +23,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
   const { id } = await params;
   const sp = await searchParams;
   const d = await ownDecision(v, id);
-  if (!d || d.parentId) notFound();
+  if (!d || d.parentId) return <ItemGone what="This decision" href="/my-board#decisions" list="your decisions" />;
   const thread = (await decisionsFor(v, 200)).find((x) => x.decision.id === d.id);
   const all = [d, ...(thread?.followUps ?? [])];
   const latest = [...all].reverse().find((x) => x.answer) ?? null;

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { and, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { composerContext } from "@/lib/queries/compose";
@@ -9,6 +8,7 @@ import { CHANNEL_SPECS } from "@/lib/engine/repurpose";
 import { FIRST_COMMENT_LOCKED } from "@/lib/engine/rung-drip";
 import { Composer, type StaleNotice } from "@/components/composer";
 import { PageHeader } from "@/components/ui";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Edit post" };
 
@@ -17,7 +17,7 @@ export default async function EditComposePage({ params, searchParams }: { params
   const { id } = await params;
   const { pushed, ghl } = await searchParams;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
-  if (!item) notFound();
+  if (!item) return <ItemGone what="This post" href="/content" list="your posts" />;
   const [c, variants, ladder] = await Promise.all([composerContext(v), db.query.contentVariants.findMany({ where: eq(schema.contentVariants.contentItemId, id) }), ladderForItem(id, v.user.id)]);
   // The seam: this post came from a ladder, and a scheduled channel version still carries text older than the ladder's.
   const staleRows = ladder ? await staleScheduledFor(ladder) : [];

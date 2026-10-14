@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
-import { notFound } from "next/navigation";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { CONTENT_TYPES, LIBRARY_KINDS } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
@@ -10,6 +9,7 @@ import { CopyButton } from "@/components/copy-button";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { libraryPostFor } from "@/lib/queries/library-posts";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -20,7 +20,7 @@ export default async function LibraryEntryPage({ params }: { params: Promise<{ i
   const v = await requireViewer({ team: "allow" });
   const { id } = await params;
   const p = await libraryPostFor(id, v.workspace.id, v.user.id);
-  if (!p) notFound();
+  if (!p) return <ItemGone what="This library post" href="/library" list="your library" />;
   const mine = p.userId === v.user.id;
   const coachOwned = v.role === "coach" && p.workspaceId === v.workspace.id && p.userId === null;
   const canEdit = mine || coachOwned;

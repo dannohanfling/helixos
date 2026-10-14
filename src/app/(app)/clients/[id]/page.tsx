@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import { and, desc, eq } from "drizzle-orm";
 import { ConfirmDelete } from "@/components/confirm-delete";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { CLIENT_STATUSES } from "@/db/schema";
 import { requireViewer } from "@/lib/auth";
@@ -15,6 +14,7 @@ import { formatDate, formatDateTime } from "@/lib/dates";
 import { TIER_ICONS, tierProgress } from "@/lib/engine/tiers";
 import { SubmitButton } from "@/components/submit-button";
 import { MoneyInput } from "@/components/money-input";
+import { ItemGone } from "@/components/item-gone";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -26,7 +26,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const { id } = await params;
   const sp = await searchParams;
   const c = await db.query.clientRecords.findFirst({ where: and(eq(schema.clientRecords.id, id), eq(schema.clientRecords.userId, v.user.id)) });
-  if (!c) notFound();
+  if (!c) return <ItemGone what="This client" href="/clients" list="your clients" />;
   const [checkins, offers, points] = await Promise.all([
     db.query.clientCheckins.findMany({ where: eq(schema.clientCheckins.clientRecordId, id), orderBy: desc(schema.clientCheckins.date) }),
     db.query.offers.findMany({ where: eq(schema.offers.userId, v.user.id) }),

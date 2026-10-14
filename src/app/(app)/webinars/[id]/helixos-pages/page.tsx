@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { and, eq, sql } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { siteUrl } from "@/lib/app-url";
@@ -16,6 +15,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { CopyButton } from "@/components/copy-button";
 import { HermesPreview } from "@/components/hermes/preview";
 import { hermesFonts } from "@/components/hermes/fonts";
+import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "HelixOS pages" };
 
@@ -39,7 +39,7 @@ export default async function HelixosPagesPage({ params, searchParams }: { param
   const { id } = await params;
   const sp = await searchParams;
   const w = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.id, id), eq(schema.webinars.workspaceId, v.workspace.id), eq(schema.webinars.userId, v.user.id)), columns: { id: true, title: true } });
-  if (!w) notFound();
+  if (!w) return <ItemGone what="This webinar" href="/webinars" list="your webinars" />;
   const m = { workspaceId: v.workspace.id, userId: v.user.id };
   const [row, ready, ctx, signups] = await Promise.all([
     hermesFor(w.id),

@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { ownTitle } from "@/lib/page-title";
 import { and, asc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
 import { hasAiKey } from "@/lib/ai";
@@ -28,6 +27,7 @@ import { AiFormStatus } from "@/components/ai-status";
 import { AiPromise } from "@/components/ai-promise";
 import { LIVE_POSTING_HOUR } from "@/lib/engine/ladder";
 import { SubmitButton } from "@/components/submit-button";
+import { ItemGone } from "@/components/item-gone";
 
 function VariantForm({ var_, maxChars, email = false, outcome }: { var_: ContentVariant; maxChars: number; email?: boolean; outcome?: ChannelOutcome }) {
   const contentId = var_.contentItemId;
@@ -128,7 +128,7 @@ export default async function RepurposePage({ params, searchParams }: { params: 
   // The page's own sentences, chosen by a code: a block on the one-click send is never silent and never free text from the address bar.
   const blockedLine = blocked === "threads" ? THREADS_EXCLUSIVE : blocked === "instagram" ? `${INSTAGRAM_NEEDS_IMAGE} Nothing was scheduled.` : blocked === "media" ? `${ILLUSTRATIVE_LABEL}\nAn attached file shows a result. Add ${ILLUSTRATIVE_MARK} to the post, in every version that goes out. Nothing was scheduled.` : blocked === "url" ? `${PRIVATE_URL_REFUSAL} Nothing was scheduled.` : blocked === "fabricated" ? "A statistic in this post is on the blacklist, so nothing was scheduled. Open it in the composer to see which one and what to say instead." : null;
   const item = await db.query.contentItems.findFirst({ where: and(eq(schema.contentItems.id, id), eq(schema.contentItems.userId, v.user.id)) });
-  if (!item) notFound();
+  if (!item) return <ItemGone what="This post" href="/content" list="your posts" />;
   const [variants, groups] = await Promise.all([
     db.query.contentVariants.findMany({ where: eq(schema.contentVariants.contentItemId, id) }),
     db.query.groups.findMany({ where: eq(schema.groups.userId, v.user.id), orderBy: [asc(schema.groups.kind), asc(schema.groups.rank)] }),

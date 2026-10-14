@@ -100,6 +100,9 @@ export const memberships = sqliteTable(
     arenaPhoto: integer("arena_photo", { mode: "boolean" }).notNull().default(false),
     arenaHidden: integer("arena_hidden", { mode: "boolean" }).notNull().default(false),
     arenaPaused: integer("arena_paused", { mode: "boolean" }).notNull().default(false),
+    /** My Helix (rev 707): "Pause the helix", remembered; and the rungs the member has already seen lit, so the once-glow never repeats. */
+    helixPaused: integer("helix_paused", { mode: "boolean" }).notNull().default(false),
+    helixSeen: text("helix_seen", { mode: "json" }).$type<string[]>().notNull().default([]),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
     /** The Magic funnel (rev 812 §8): a client's switch, off until Danno turns it on for that client; the coach's own is always on. */
@@ -4503,3 +4506,34 @@ export const handoffAgents = sqliteTable(
 export type HandoffAgent = typeof handoffAgents.$inferSelect;
 
 export * from "./schema-hermes";
+
+/**
+ * My Helix (rev 707 with rev 710's curriculum): the 67 rungs as data, not code, seeded from src/data/seed/rungs.json and
+ * editable by the coach without a deploy; and a member's ticks for the rungs no signal covers.
+ */
+export const helixRungs = sqliteTable("helix_rungs", {
+  key: text("key").primaryKey(),
+  phase: integer("phase").notNull(),
+  order: integer("order").notNull(),
+  label: text("label").notNull(),
+  /** One of the engine's SIGNALS keys; "tick" when the member (or the coach for them) marks it. */
+  signal: text("signal").notNull().default("tick"),
+  href: text("href").notNull().default("/today"),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+export type HelixRungRow = typeof helixRungs.$inferSelect;
+
+export const helixTicks = sqliteTable(
+  "helix_ticks",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    rungKey: text("rung_key").notNull(),
+    /** Who ticked it: the member, or the coach switched in (then also logged as the coach's change). */
+    byUserId: text("by_user_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("helix_ticks_member_rung").on(t.workspaceId, t.userId, t.rungKey)],
+);
+export type HelixTick = typeof helixTicks.$inferSelect;
