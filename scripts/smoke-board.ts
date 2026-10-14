@@ -348,8 +348,10 @@ async function main() {
     const verifier = randomBytes(32).toString("base64url");
     const code = await issueCode({ v, clientId: client.id, redirectUri: CALLBACK, codeChallenge: createHash("sha256").update(verifier).digest("base64url"), resource: null, scopes: ["board"] as never });
     const pair = (await exchangeCode({ code, verifier, clientId: client.id, redirectUri: CALLBACK, resource: null, expectedResource: `${base}/api/mcp` })) as { access_token: string };
+    // connection: close. Between two calls the walk imports the tool registry (seconds); the server drops an idle kept-alive
+    // socket after five, and a request sent on it fails with "other side closed" (14 Oct). One connection per call, no race.
     const call = async (name: string, args: Record<string, unknown>) => {
-      const res = (await (await fetch(`${base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${pair.access_token}`, "mcp-protocol-version": "2025-06-18" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) })).json()) as { result?: { content?: { text: string }[]; isError?: boolean } };
+      const res = (await (await fetch(`${base}/api/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${pair.access_token}`, "mcp-protocol-version": "2025-06-18", connection: "close" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) })).json()) as { result?: { content?: { text: string }[]; isError?: boolean } };
       return { text: res.result?.content?.[0]?.text ?? "", isError: Boolean(res.result?.isError) };
     };
     const r = await call("board_ask", { decision: "Should I post daily or three times a week?" });

@@ -47,7 +47,9 @@ const must = (ok: unknown, msg: string) => {
   if (!ok) throw new Error(msg);
 };
 /** Not found, as the app says it: the dev server streams the shell first, so a notFound() page answers 200 carrying the 404 fallback in its body. */
-const gone = (text: string) => text.includes("NEXT_HTTP_ERROR_FALLBACK;404");
+// "Gone" is either Next's 404 fallback or the in-page gone view (14 Oct: a detail page returns <ItemGone> in place of notFound(),
+// so another member's record and a missing id both answer 200 with the same line and no name).
+const gone = (text: string) => text.includes("NEXT_HTTP_ERROR_FALLBACK;404") || text.includes('data-testid="item-gone"');
 /** A request that reached nothing: a redirect (a removed member is sent to /removed before the shell, in the headers or in the streamed body), a 4xx, or the not-found body. */
 const blocked = (status: number, text: string) => status >= 300 || gone(text) || text.includes("NEXT_REDIRECT");
 /** The page opens for this person: no not-found, no redirect away from it, its own address kept. */
