@@ -14,6 +14,7 @@ import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { brandKitProblems, normaliseHex } from "@/lib/engine/subject";
 import { syncFieldTasks } from "@/lib/queries/pathway";
 import { syncPrimaryKpi } from "@/lib/queries/kpi";
+import { isOneEmoji } from "@/lib/engine/emoji";
 
 /** A picked logo's id when it is one of this member's own images of kind logo; otherwise null, so the kit keeps no logo. */
 async function ownLogo(workspaceId: string, userId: string, picked: string): Promise<string | null> {
@@ -208,4 +209,14 @@ export async function saveBrandKitAction(formData: FormData): Promise<void> {
   else await db.insert(schema.brandKits).values({ id: newId(), workspaceId, userId, ...kit, graphicUseHeadshot: useHeadshot });
   refresh();
   redirect("/settings?brand=saved#brand-kit");
+}
+
+/** The emoji picker (H-94): a pick saves at once; exactly one emoji, the member's own setting. */
+export async function setAvatarEmojiAction(emoji: string): Promise<{ ok: true } | { error: string }> {
+  const { userId } = await ctx({ whileSwitched: "refuse", reason: "{first}'s emoji is their own." });
+  const e = String(emoji ?? "").trim();
+  if (!isOneEmoji(e)) return { error: "One emoji, nothing else." };
+  await db.update(schema.users).set({ avatarEmoji: e }).where(eq(schema.users.id, userId));
+  refresh();
+  return { ok: true };
 }

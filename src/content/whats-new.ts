@@ -34,6 +34,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 178,
+    date: "2026-10-14",
+    title: "Settings: pick your emoji, and your photo cropped square",
+    lines: [
+      "Settings → You: the emoji is a picker now. Tap it for a grid of sixty in five groups with a search box; a pick saves at once. Other… still takes one you type.",
+      "Settings → Your photo: Take photo, Upload photo (JPG, PNG, WebP or HEIC, up to 10 MB) or Choose from my media, your own Images only. Then a square preview with zoom and drag, and Use this photo saves it. Replace or Remove any time; the Colosseum opt-in sits right under it.",
+    ],
+    audience: "everyone",
+    version: "pending",
+  },
+  {
     n: 177,
     date: "2026-10-14",
     title: "My Helix: your climb through the program, turning",

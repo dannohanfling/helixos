@@ -23,9 +23,12 @@ export async function POST(request: Request) {
     return say(400, "That upload couldn't be read. Choose the photo again.");
   }
   if (!file || !file.size) return say(400, "Choose a photo first.");
-  if (file.size > 4 * 1024 * 1024) return say(413, "Pick a photo under 4 MB.");
+  if (file.size > 10 * 1024 * 1024) return say(413, "Pick a photo under 10 MB.");
   const stored = await storeHeadshot(v.workspace.id, v.membership.id, Buffer.from(await file.arrayBuffer()));
-  if ("error" in stored) return say(400, stored.error);
+  if ("error" in stored) {
+    console.error("[headshots] upload refused", { bytes: file.size, type: file.type, why: stored.error });
+    return say(400, stored.error);
+  }
   const m = (await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, v.membership.id), eq(schema.memberships.workspaceId, v.workspace.id)) }))!;
   await setMemberHeadshot(m, stored, "upload", null);
   return NextResponse.json({ ok: true }, { headers: { "cache-control": "private, no-store" } });

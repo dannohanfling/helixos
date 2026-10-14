@@ -414,11 +414,12 @@ async function main() {
       if ((await page.request.get(`${base}/api/headshots/${maya1.id}`)).status() !== 200) throw new Error("her own photo is hers to see");
       await page.goto(`${base}/settings#photo`);
       if ((await page.locator('[data-testid="photo-source"]').innerText()) !== "from your coach's records") throw new Error("Settings says where the photo came from");
-      if (!(await page.locator('[data-testid="headshot-save"]').isDisabled())) throw new Error("Save waits for a photo");
+      // H-94: Use this photo appears with the square preview, only once a photo is chosen.
+      if ((await page.locator('[data-testid="headshot-crop"], [data-testid="headshot-save"]').count()) !== 0) throw new Error("Use this photo waits for a photo");
       const own = await sharp({ create: { width: 640, height: 480, channels: 3, background: { r: 10, g: 120, b: 200 } } }).jpeg().toBuffer();
       await page.waitForLoadState("networkidle");
       await page.locator('[data-testid="headshot-file"]').setInputFiles({ name: "me.jpg", mimeType: "image/jpeg", buffer: own });
-      await page.locator('[data-testid="headshot-file-picker"][data-count="1"]').waitFor({ timeout: 10000 });
+      await page.locator('[data-testid="headshot-crop"]').waitFor({ timeout: 10000 });
       await Promise.all([page.waitForResponse((r) => r.url().includes("/api/headshots/upload")), page.locator('[data-testid="headshot-save"]').click()]);
       await page.waitForFunction(() => document.querySelector('[data-testid="photo-source"]')?.textContent === "your own", null, { timeout: 15000 });
       const maya2 = await mem("client@demo.helixos.app");

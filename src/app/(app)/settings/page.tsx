@@ -52,6 +52,7 @@ import { TEAM_INVITE_COOKIE, openInvites, seatsLeft, teamOf } from "@/lib/team";
 import { TEAM_INVITE_DAYS, lastActiveWords, seatsLine } from "@/lib/engine/team";
 import { MemberAvatar } from "@/components/member-avatar";
 import { HeadshotUpload } from "@/components/headshot-upload";
+import { EmojiPicker } from "@/components/emoji-picker";
 import { hasHeadshot } from "@/lib/headshots";
 import { removeMyHeadshotAction } from "@/lib/actions/headshots";
 import { SKILL_INSTALL_STEPS } from "@/lib/engine/board-view";
@@ -65,6 +66,8 @@ const TIMEZONES = ["America/Los_Angeles", "America/Denver", "America/Chicago", "
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ fathom?: string; brand?: string; draft?: string; chat?: string; apps?: string; goalError?: string; field?: string; team?: string; photo?: string; botError?: string; cl?: string; mf?: string; mfError?: string }> }) {
   const v = await requireViewer({ team: "allow" });
+  // H-94: the member's own Images, for "Choose from my media" on the photo card (never while a coach is switched in).
+  const ownMedia = v.switchedInto ? [] : await db.query.deckImages.findMany({ where: and(eq(schema.deckImages.workspaceId, v.workspace.id), eq(schema.deckImages.userId, v.user.id)), columns: { id: true, caption: true, kind: true }, orderBy: (t, { desc }) => [desc(t.createdAt)], limit: 96 });
   // A team member (Danno, 6 Oct): their own sign-in, nothing of the owner's.
   // A client's loyalty leaderboard (rev 639, H-28), once the coach has set one up: whether it's connected and where its page
   // and feed live. Its words, tiers, rewards, export and hide list are edited on /loyalty. The key is never on this page.
@@ -233,7 +236,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <MemberAvatar membershipId={v.membership.id} hasPhoto={hasHeadshot(v.membership)} emoji={v.user.avatarEmoji} size={72} version={v.membership.headshotUpdatedAt} name={v.user.name} />
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-xs text-ink-3">Shown to you and your coach inside HelixOS. A photo you add replaces the one from your coach&apos;s records, and their import never overwrites it. Using it on a published graphic is your choice, on your Brand kit.</p>
-                {v.switchedInto ? <p className="text-xs text-ink-3">The client adds their own photo.</p> : <HeadshotUpload />}
+                {v.switchedInto ? <p className="text-xs text-ink-3">The client adds their own photo.</p> : <HeadshotUpload media={ownMedia} replace={hasHeadshot(v.membership)} />}
                 {hasHeadshot(v.membership) && !v.switchedInto ? (
                   <form action={removeMyHeadshotAction}>
                     <SubmitButton className="btn btn-ghost btn-xs text-danger" pendingText="Removing…" data-testid="photo-remove">Remove my photo</SubmitButton>
@@ -263,9 +266,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Card id="you" className="min-w-0" title="You">
           <form action={updateProfileAction} className="space-y-3">
             <div className="grid grid-cols-[4rem_1fr] gap-3">
-              <Field label="Emoji">
-                <input className="field text-center" name="avatarEmoji" defaultValue={v.user.avatarEmoji} maxLength={4} />
-              </Field>
+              {/* Not a Field: its label would re-activate the button on every tap inside the picker's grid. */}
+              <div className="block">
+                <span className="label" id="emoji-label">Emoji</span>
+                <EmojiPicker current={v.user.avatarEmoji || "🧭"} />
+              </div>
               <Field label="Name">
                 <input className="field" name="name" defaultValue={v.user.name} />
               </Field>
