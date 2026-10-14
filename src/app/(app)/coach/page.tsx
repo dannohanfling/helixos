@@ -349,6 +349,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                       <input className="field min-w-40 flex-1 py-1 text-xs" name="key" type="password" autoComplete="off" data-testid="leaderboard-key" placeholder={feedOf.get(r.m.id)?.keyEncrypted ? `eLoyalty key: saved, ending ${feedOf.get(r.m.id)!.keyLast4} (blank keeps it)` : "eLoyalty key"} aria-label="eLoyalty key" />
                       <input className="field w-52 py-1 text-xs" name="host" defaultValue={feedOf.get(r.m.id)?.host ?? "https://www.eloyalty.ai"} aria-label="eLoyalty web address" data-testid="leaderboard-host" />
                       <input className="field w-40 py-1 text-xs" name="templateId" defaultValue={feedOf.get(r.m.id)?.templateId ?? ""} placeholder="template id (optional)" aria-label="Template id" data-testid="leaderboard-template" />
+                      <input className="field w-40 py-1 text-xs" name="templateIdAlt" defaultValue={feedOf.get(r.m.id)?.templateIdAlt ?? ""} placeholder="2nd template (during a pass move)" aria-label="Second template id" data-testid="leaderboard-template-alt" />
                       <SubmitButton className="btn btn-ghost btn-xs" pendingText="Checking…" data-testid="leaderboard-connect">Connect and check</SubmitButton>
                     </form>
                     {feedOf.get(r.m.id) ? (
@@ -360,7 +361,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                             <form action={removeLeaderboardKeyAction}><input type="hidden" name="id" value={feedOf.get(r.m.id)!.id} /><SubmitButton className="btn btn-ghost btn-xs" pendingText="Removing…" data-testid="leaderboard-remove">Remove key</SubmitButton></form>
                           </>
                         ) : null}
-                        <code className="basis-full break-all text-[11px] text-ink-3" data-testid="leaderboard-feed">/api/public/leaderboard/{feedOf.get(r.m.id)!.slug}</code>
+                        <code className="basis-full break-all text-[11px] text-ink-3" data-testid="leaderboard-feed">/lb/{feedOf.get(r.m.id)!.slug} · /api/public/leaderboard/{feedOf.get(r.m.id)!.slug}</code>
                       </div>
                     ) : null}
                   </details>

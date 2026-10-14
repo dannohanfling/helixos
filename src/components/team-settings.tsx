@@ -6,7 +6,7 @@ import { Card, PageHeader } from "@/components/ui";
  * Team access (Danno, 6 Oct): Settings to a team member. The owner's account, consent, keys, connections, data and team are
  * none of theirs, so none is shown, set or not set. What is here is their own sign-in and the way back.
  */
-export function TeamSettings({ v }: { v: Viewer }) {
+export function TeamSettings({ v, loyalty = false }: { v: Viewer; loyalty?: boolean }) {
   const first = v.team!.ownerName.split(" ")[0];
   return (
     <>
@@ -25,8 +25,16 @@ export function TeamSettings({ v }: { v: Viewer }) {
           </li>
           <li className="flex flex-wrap justify-between gap-2">
             <span>Open to you</span>
-            <span className="text-ink-2">Content, DMs, tasks, webinars and contacts</span>
+            <span className="text-ink-2">Content, DMs, tasks, webinars and contacts{loyalty ? ", and the loyalty leaderboard page" : ""}</span>
           </li>
+          {loyalty ? (
+            <li className="flex flex-wrap justify-between gap-2">
+              <span>Loyalty leaderboard</span>
+              <Link href="/loyalty" className="underline" data-testid="team-loyalty-link">
+                Edit the page&apos;s words, tiers and rewards
+              </Link>
+            </li>
+          ) : null}
         </ul>
         <p className="mt-3 text-xs text-ink-3">
           To change your password, log out and use{" "}

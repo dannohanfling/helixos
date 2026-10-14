@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "091eff46-65d0-4422-b2b4-16233b4a7527",
+  "id": "cfd70d43-0d48-44db-adcd-fde00275325d",
   "prevId": "bcf58ccd-cae5-4280-b293-38f7726350ae",
   "tables": {
     "agent_tokens": {
@@ -10844,131 +10844,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "helix_rungs": {
-      "name": "helix_rungs",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "phase": {
-          "name": "phase",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "order": {
-          "name": "order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "signal": {
-          "name": "signal",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'tick'"
-        },
-        "href": {
-          "name": "href",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'/today'"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(datetime('now'))"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "helix_ticks": {
-      "name": "helix_ticks",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "rung_key": {
-          "name": "rung_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "by_user_id": {
-          "name": "by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(datetime('now'))"
-        }
-      },
-      "indexes": {
-        "helix_ticks_member_rung": {
-          "name": "helix_ticks_member_rung",
-          "columns": [
-            "workspace_id",
-            "user_id",
-            "rung_key"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "integrations": {
       "name": "integrations",
       "columns": {
@@ -12135,6 +12010,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "template_id_alt": {
+          "name": "template_id_alt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "hidden": {
           "name": "hidden",
           "type": "text",
@@ -12142,6 +12024,34 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'[]'"
+        },
+        "page_json": {
+          "name": "page_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "export_json": {
+          "name": "export_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "export_as_of": {
+          "name": "export_as_of",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refresh_after": {
+          "name": "refresh_after",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "last_check_at": {
           "name": "last_check_at",
@@ -13322,22 +13232,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
-        },
-        "helix_paused": {
-          "name": "helix_paused",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "helix_seen": {
-          "name": "helix_seen",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
         },
         "board_council": {
           "name": "board_council",

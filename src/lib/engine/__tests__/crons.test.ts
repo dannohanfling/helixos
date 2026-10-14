@@ -14,7 +14,9 @@ describe("the crons", () => {
     expect(crons).toContainEqual({ path: "/api/cron/reminders", schedule: "0 * * * *" });
     // The hourly WHOOP catch-up (rev 473), at twenty past so it never shares a minute with the reminders.
     expect(crons).toContainEqual({ path: "/api/cron/whoop", schedule: "20 * * * *" });
-    expect(crons).toHaveLength(3);
+    // The loyalty leaderboards' refresh (H-29): every five minutes, the one reader of a client's eLoyalty program after Connect and check.
+    expect(crons).toContainEqual({ path: "/api/cron/leaderboards", schedule: "*/5 * * * *" });
+    expect(crons).toHaveLength(4);
   });
   it("the health route reads the database, so the ping warms the connection too, and returns no data", () => {
     const route = readFileSync(join(process.cwd(), "src/app/api/health/route.ts"), "utf8");
