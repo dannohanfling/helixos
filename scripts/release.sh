@@ -11,6 +11,10 @@ set -euo pipefail
 main() {
   cd "$(dirname "$0")/.."
 
+  # The dev server stops before the checks, and its generated types go: while it runs it rewrites .next/dev/types, and the
+  # typecheck read a half-written validator (14 Oct). The fresh start after the build writes them again.
+  scripts/dev-server.sh stop
+  rm -rf .next/dev/types
   scripts/verify.sh --build
   # The build above replaces .next; the auth walk's helper servers run `next start` from it, so restart the dev server
   # afterwards rather than before. From a clean .next/dev: the dev server's cache kept from before a build can lose a route

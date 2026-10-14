@@ -79,6 +79,7 @@ const ROUTES: Record<string, Route> = {
   "/join/[code]": { kind: "public", why: "the workspace invite code, entered before any session exists" },
   "/join/team/[code]": { kind: "public", why: "a one-time team invite code (Danno, 6 Oct), matched by its hash before any session exists; spent, cancelled or a week old it names nobody" },
   "/reset/[token]": { kind: "public", why: "a single-use password-reset token, its own secret" },
+  "/email-change/[token]": { kind: "public", why: "a single-use email-change confirmation token (rev H-47), its own secret; a wrong or spent token is a plain page" },
   "/link-chat/[token]": { kind: "public", why: "a single-use chat-link token, its own secret; the page itself refuses a token from another workspace" },
   "/api/handoff/files/[id]": { kind: "public", why: "a Handoff inbox file (rev 769) on a link handoff_file signs for 15 minutes, for an agent with no session, or its owner signed in; a wrong or missing signature reads the same as no file" },
   "/api/deck-images/[id]": { kind: "owned", table: "deckImages" },
@@ -383,7 +384,10 @@ async function main() {
 
     // ── Action sweep: a mutating action per owned table, called as A with B's id, changes nothing. ──
     // The dev server compiles a page's actions on first visit: open A's own Training pages so the Body actions are registered.
-    for (const p of ["/body/training", "/body/training/routines"]) await page.goto(`${base}${p}`);
+    // On a fresh server (the gate clears both caches first, 14 Oct) nothing is compiled yet: open every page whose tree imports a
+    // probed action, as A, so each is registered before the sweep. A's own ladder page carries the ladder actions.
+    const aLadder = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.workspaceId, ws), eq(schema.ladders.userId, A.id)), columns: { id: true } });
+    for (const p of ["/body/training", "/body/training/routines", "/content", "/offers", "/goals", "/groups", "/conversations", "/proof", "/clients", "/magnets", "/library", "/content/ladders", ...(aLadder ? [`/content/ladders/${aLadder.id}`] : []), "/body/practices", "/body/training/health"]) await page.goto(`${base}${p}`);
     const actionMap = buildActionMap();
     const byName = Object.fromEntries(Object.entries(actionMap).map(([id, n]) => [n, id]));
     // An action is posted to a page whose tree imports it (the dev server registers actions per page): Today for most, Settings
