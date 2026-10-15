@@ -103,21 +103,21 @@ async function main() {
     await page.waitForURL(/\/login/);
     await page.click('button:has-text("As a client")');
     await page.waitForURL(/\/today/);
-    await page.goto(`${base}/settings`);
-    await expectText(page, "Publishing setup isn't open yet", "a client is not walked through the setup before the list is final");
-    if (await page.locator('input[name="manualToken"]').count()) throw new Error("no token field while the setup is closed");
+    // Open to every member from the start (H-226): no "isn't open yet", the Connect steps on Settings and on Connect your tools,
+    // and no switch for the coach to find on Integrations.
+    for (const where of ["/settings", "/connect-tools"]) {
+      await page.goto(`${base}${where}`);
+      if (await page.locator('[data-testid="ghl-not-open"]').count()) throw new Error(`${where}: a client should never read "isn't open yet"`);
+      if (!(await page.locator('[data-testid="ghl-howto"]').count())) throw new Error(`${where}: a client with no connection sees the Connect steps`);
+    }
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
     await page.click('button:has-text("As the coach")');
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/integrations`);
-    await page.locator('[data-testid="integration-onboardingOpen"]').check();
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('form:has(input[name="provider"][value="gohighlevel"])').first().locator('button:has-text("Save")').click()]);
-    await page.waitForLoadState("networkidle");
-    await page.reload();
-    if (!(await page.locator('[data-testid="integration-onboardingOpen"]').isChecked())) throw new Error("the switch is saved");
+    if (await page.locator('[data-testid="integration-onboardingOpen"]').count()) throw new Error("the Open Publishing setup switch is gone");
     await expectText(page, "Client sub-accounts", "coach sees connection status list");
-    console.log("✓ coach: GoHighLevel enabled without any agency credential");
+    console.log("✓ coach: GoHighLevel enabled without any agency credential; the setup is open to every client, with no switch to find");
 
     // Member: token validation with real reasons
     await page.goto(`${base}/settings`);
@@ -131,14 +131,42 @@ async function main() {
     await expectText(page, "Connect your own GoHighLevel once.", "Danno's words for the GoHighLevel step");
     await expectText(page, "Settings → Private Integrations", "the numbered steps");
     if (!(await page.locator('[data-testid="ghl-token"]').isVisible())) throw new Error("the key box sits beside the steps");
-    if (!(await page.locator('[data-testid="ghl-steps"] button:has-text("Copy the list")').count())) throw new Error("Copy the list puts the names on the clipboard");
-    const listedScopes = await page.locator('[data-testid="ghl-scope-list"] li').evaluateAll((els) => els.map((e) => e.textContent?.trim()));
-    if (listedScopes.length !== 20 || !listedScopes.includes("users.readonly") || !listedScopes.includes("locations.readonly") || !listedScopes.includes("contacts.readonly") || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
+    // H-233: one row per permission, each with the picker's name, the search text, its own Copy and a tick; the list is the one list.
+    if (await page.locator('[data-testid="ghl-steps"] button:has-text("Copy the list")').count()) throw new Error("Copy the list is gone: GoHighLevel takes permissions one at a time");
+    await expectText(page, "GoHighLevel adds permissions one at a time", "the one-at-a-time line above the rows");
+    const listedScopes = await page.locator('[data-testid="ghl-scope-list"] li').evaluateAll((els) => els.map((e) => e.getAttribute("data-scope")));
+    if (listedScopes.length !== 21 || !listedScopes.includes("users.readonly") || !listedScopes.includes("locations.readonly") || !listedScopes.includes("contacts.readonly") || !listedScopes.includes("locations/customFields.write") || !listedScopes.includes("locations/customFields.readonly") || !listedScopes.includes("emails/builder.write") || !listedScopes.includes("opportunities.readonly")) throw new Error(`the page lists the one scope list: ${listedScopes.join(",")}`);
+    if ((await page.locator('[data-testid="ghl-scope-list"] li button:has-text("Copy")').count()) !== 21 || (await page.locator('[data-testid="ghl-scope-tick"]').count()) !== 21) throw new Error("every row has its own Copy and its own tick");
+    const postRow = page.locator('[data-testid="ghl-scope-list"] li[data-scope="socialplanner/post.write"]');
+    if (!(await postRow.innerText()).includes("Edit Social Planner Posts") || (await postRow.locator('[data-testid="ghl-scope-search"]').innerText()) !== "Social Planner Post") throw new Error("a row shows the picker's name and the text to search for");
+    await page.locator('[data-testid="ghl-scope-tick"]').nth(0).check();
+    await page.locator('[data-testid="ghl-scope-tick"]').nth(1).check();
+    await page.locator('[data-testid="ghl-scope-tick"]').nth(2).check();
+    if ((await page.locator('[data-testid="ghl-scope-count"]').innerText()).trim().startsWith("3 of 21 added") !== true) throw new Error(`the ticks count: ${await page.locator('[data-testid="ghl-scope-count"]').innerText()}`);
+    await page.reload();
+    if ((await page.locator('[data-testid="ghl-scope-count"]').getAttribute("data-done")) !== "0") throw new Error("the ticks are a checklist in the page alone and reset on leaving");
+    // H-240: an email address in the Location ID box (a browser's autofill) gets the line under the box and no call; autofill is off.
+    await page.fill('[data-testid="ghl-location"]', "someone@example.com");
+    await page.locator('[data-testid="ghl-location-shape"]').waitFor({ timeout: 5000 });
+    if (!(await page.locator('[data-testid="ghl-connect"]').isDisabled())) throw new Error("Connect stays off while the Location ID isn't one");
+    for (const box of ["ghl-location", "ghl-token"]) if ((await page.locator(`[data-testid="${box}"]`).getAttribute("autocomplete")) !== "off") throw new Error(`autofill is off on ${box}`);
+    {
+      const { db: db1, schema: s1 } = await import("@/db");
+      const { eq: eq1 } = await import("drizzle-orm");
+      const maya1 = await db1.query.users.findFirst({ where: eq1(s1.users.email, "client@demo.helixos.app") });
+      if (await db1.query.socialConnections.findFirst({ where: eq1(s1.socialConnections.userId, maya1!.id) })) throw new Error("an email in the box is never saved and never sent to GoHighLevel");
+    }
+    await page.fill('[data-testid="ghl-location"]', "loc_maya");
+    if (await page.locator('[data-testid="ghl-location-shape"]').count()) throw new Error("a Location ID that is one has no line under it");
     await saveConnection(page, "loc_maya", "wrong-token");
     await expectText(page, "That key didn't work. Make a new one and copy it straight away.", "bad token reason, in plain words");
+    if (!(await page.locator('[data-testid="ghl-status"]').count()) || (await page.locator('[data-testid="ghl-connected-badge"]').count())) throw new Error("one state: Not connected yet with the reason, never Connected beside it");
+    // H-237: a key made in the agency view, or in another sub-account, is named as such, not as a bad key.
+    await saveConnection(page, "loc_maya", "pit-agency");
+    await expectText(page, "This key was made in a different GoHighLevel account.", "a key from another account is named as such");
     await saveConnection(page, "loc_maya", "pit-noscope");
     await expectText(page, "Your key is missing one permission: socialplanner/account.readonly", "the missing permission is named");
-    if (!(await page.locator('[data-testid="ghl-error"] button:has-text("Copy the list")').count())) throw new Error("Copy the list sits beside the missing-permissions reason");
+    if (!(await page.locator('[data-testid="ghl-scope-rows"]').count())) throw new Error("the rows sit under the missing-permissions reason");
     await saveConnection(page, "loc_other", "pit-loc_maya");
     await expectText(page, "That Location ID doesn't match this token", "wrong location reason, in plain words");
     await saveConnection(page, "loc_maya", "pit-loc_maya");

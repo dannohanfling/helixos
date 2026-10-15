@@ -49,13 +49,10 @@ export const PROVIDER_META: Record<Provider, { name: string; icon: string; blurb
     blurb: "Social Planner publishing and contacts, through each client's own sub-account. Every member pastes their own location-level Private Integration token on Settings → Publishing; nothing agency-level is needed or stored.",
     fields: [
       { key: "apiUrl", label: "API base URL (advanced)", hint: "https://services.leadconnectorhq.com" },
-      // Scopes are granted once. Until the list is final, no client is walked through creating a Private Integration.
-      { key: "onboardingOpen", label: "Open Publishing setup to clients", hint: "Off until the scope list is final: a token made early has to be made again when a scope is added. Coaches always see the setup.", toggle: true },
+      // The "Open Publishing setup to clients" switch of rev 333 is gone (H-226): every member sees the Connect steps from the start.
     ],
   },
 };
-/** Whether a client may be walked through creating their Private Integration: the coach's switch, off by default. */
-export const onboardingOpen = (config: Record<string, string> | undefined) => config?.onboardingOpen === "1";
 
 const BUILT_IN_HOSTS: Record<Provider, string[]> = {
   gohighlevel: ["services.leadconnectorhq.com"],

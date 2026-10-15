@@ -117,14 +117,31 @@ async function main() {
     await page.locator('[data-testid="settings-connect-tools"]').waitFor({ timeout: 5000 });
     console.log("✓ Settings carries the same card and links to Connect your tools");
 
-    // On a phone nothing is wider than the screen.
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${base}/connect-tools`);
-    await page.locator('[data-testid="connect-progress"]').waitFor({ timeout: 15000 });
-    const wide = await page.evaluate(() => document.documentElement.scrollWidth);
-    if (wide > 390) throw new Error(`at 390px the page never scrolls sideways: ${wide}px`);
-    await page.setViewportSize({ width: 1280, height: 900 });
-    console.log("✓ at 390px nothing is wider than the screen");
+    // On a phone nothing is wider than the screen. The GoHighLevel rows (H-233) at 390 and 1440: one Copy per permission, the
+    // tick count, the one-at-a-time line. The demo client's GoHighLevel connection is set aside for it and put back after.
+    const ghlRow = await db.query.socialConnections.findFirst({ where: eq(schema.socialConnections.userId, maya.id) });
+    if (ghlRow) await db.delete(schema.socialConnections).where(eq(schema.socialConnections.id, ghlRow.id));
+    try {
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: width < 800 ? 844 : 900 });
+        await page.goto(`${base}/connect-tools`);
+        await page.locator('[data-testid="connect-progress"]').waitFor({ timeout: 15000 });
+        const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+        if (wide > width) throw new Error(`at ${width}px the page never scrolls sideways: ${wide}px`);
+        const rows = page.locator('[data-testid="ghl-scope-list"] li');
+        const n = await rows.count();
+        if (n < 20 || (await page.locator('[data-testid="ghl-scope-list"] li button:has-text("Copy")').count()) !== n) throw new Error(`at ${width}px every permission row has its own Copy button (${n} rows)`);
+        if (!(await page.locator('[data-testid="ghl-scope-rows"]').innerText()).includes("GoHighLevel adds permissions one at a time")) throw new Error(`at ${width}px the one-at-a-time line is above the rows`);
+        await page.locator('[data-testid="ghl-scope-tick"]').nth(0).check();
+        await page.locator('[data-testid="ghl-scope-tick"]').nth(1).check();
+        if (!(await page.locator('[data-testid="ghl-scope-count"]').innerText()).startsWith(`2 of ${n} added`)) throw new Error(`at ${width}px the ticks count: ${await page.locator('[data-testid="ghl-scope-count"]').innerText()}`);
+        if (await rows.first().evaluate((el) => el.getBoundingClientRect().right > window.innerWidth)) throw new Error(`at ${width}px a row never runs off the screen`);
+        console.log(`✓ at ${width}px: one Copy per permission, the tick count, the one-at-a-time line, nothing wider than the screen`);
+      }
+    } finally {
+      if (ghlRow) await db.insert(schema.socialConnections).values(ghlRow);
+      await page.setViewportSize({ width: 1280, height: 900 });
+    }
 
     // The coach: GHL and CL at a glance with the date, and the setup link.
     await signIn("coach");

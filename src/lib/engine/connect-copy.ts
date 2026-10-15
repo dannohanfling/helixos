@@ -13,7 +13,7 @@ export const GHL_COPY: ConnectCopy = {
   steps: [
     "Sign in to GoHighLevel and open your account (your business name, top left).",
     "Go to Settings → Private Integrations, then Create new integration.",
-    "Name it HelixOS. On the permissions screen, tick every item in the list below. Use Copy the list if it helps.",
+    "Name it HelixOS. On the permissions screen, add every item in the list below, one at a time: Copy, paste it in the search box there, tick it, then the next.",
     "Create it, then copy the key straight away. GoHighLevel shows it only once.",
     "Paste it below and press Connect. HelixOS makes one small test call and tells you right away if it worked.",
   ],
@@ -52,6 +52,8 @@ export const GHL_HELP = {
 /** The plain errors (rev 850 §3, rev 849 §3, rev 846 §2): no codes, what to do next. */
 export const CONNECT_ERRORS = {
   ghlBadKey: "That key didn't work. Make a new one and copy it straight away.",
+  /** H-237: GoHighLevel refused the key for this location: made in another sub-account, or in the agency view. */
+  ghlWrongAccount: "This key was made in a different GoHighLevel account. Open your own business account (your business name, top left), then Settings → Private Integrations, and make the key there.",
   ghlMissing: (scope: string) => `Your key is missing one permission: ${scope}. Make a new key with everything in the list ticked.`,
   ghlWrongUser: "That user doesn't own your connected pages. Pick the one that does.",
   clBadKey: "Community Loyalty didn't accept that key. Copy it again from API Keys.",

@@ -31,7 +31,6 @@ import { connectionFor, listUsers } from "@/lib/ghl";
 import { CL_COPY, GHL_COPY } from "@/lib/engine/connect-copy";
 import { ClConnect } from "@/components/cl-connect";
 import { agentChoicesFor, clTokenSet } from "@/lib/community-loyalty";
-import { getIntegration, onboardingOpen } from "@/lib/integrations";
 import { reapOrphans, storageQuota } from "@/lib/queries/proof-attachments";
 import { mb } from "@/lib/engine/proof-attachments";
 import { SubmitButton } from "@/components/submit-button";
@@ -98,7 +97,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   };
   const attempted = parseDraft(draft);
   const brandKit: Partial<schema.BrandKit> | undefined = attempted ? { ...(savedKit ?? {}), ...attempted } : (savedKit ?? undefined);
-  const [goal, conn, ghlIntegration, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel"), linkedChats(v.workspace.id, v.user.id)]);
+  const [goal, conn, chats] = await Promise.all([db.query.goals.findFirst({ where: and(eq(schema.goals.userId, v.user.id), eq(schema.goals.primary, true)) }), connectionFor(v.user.id), linkedChats(v.workspace.id, v.user.id)]);
   const forumHook = await forumSettingsFor({ workspaceId: v.workspace.id, userId: v.user.id });
   const apps = await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.workspaceId, v.workspace.id), eq(schema.connectedApps.userId, v.user.id), isNull(schema.connectedApps.revokedAt)), orderBy: desc(schema.connectedApps.createdAt) });
   const appUrl = siteUrl();
@@ -211,7 +210,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             {ADD_PERMISSION}
           </p>
         ) : null}
-        <GhlConnect conn={conn ?? null} tz={v.tz} role={v.role} open={onboardingOpen(ghlIntegration?.config)} users={ghlUsers} />
+        <GhlConnect conn={conn ?? null} tz={v.tz} users={ghlUsers} />
       </Card>
       <Card id="community-loyalty" className="mb-4 scroll-mt-20" title={CL_COPY.title}>
         <ClConnect connected={clTokenSet(v.membership)} m={v.membership} agents={clAgents} notice={clNotice ?? null} back="/settings" tz={v.tz} />

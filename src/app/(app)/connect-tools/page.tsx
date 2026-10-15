@@ -6,7 +6,7 @@ import { ClConnect } from "@/components/cl-connect";
 import { ScrollToHash } from "@/components/scroll-to-hash";
 import { connectionFor, listUsers } from "@/lib/ghl";
 import { agentChoicesFor, clTokenSet } from "@/lib/community-loyalty";
-import { getIntegration, onboardingOpen } from "@/lib/integrations";
+import { getIntegration } from "@/lib/integrations";
 import { CL_COPY, GHL_COPY, connectProgress } from "@/lib/engine/connect-copy";
 
 export const metadata = { title: "Connect your tools" };
@@ -19,7 +19,7 @@ export const metadata = { title: "Connect your tools" };
 export default async function ConnectToolsPage({ searchParams }: { searchParams: Promise<{ cl?: string }> }) {
   const v = await requireViewer();
   const { cl } = await searchParams;
-  const [conn, ghlIntegration] = await Promise.all([connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel")]);
+  const [conn] = await Promise.all([connectionFor(v.user.id), getIntegration(v.workspace.id, "gohighlevel")]);
   const ghl = Boolean(conn && conn.accounts.length && !conn.lastError && conn.ghlUserId?.trim());
   const clOn = clTokenSet(v.membership);
   const progress = connectProgress({ ghl, cl: clOn });
@@ -56,7 +56,7 @@ export default async function ConnectToolsPage({ searchParams }: { searchParams:
         </Link>
       </div>
       <Card id="publishing" className="mb-4 scroll-mt-20" title={`Step 1. ${GHL_COPY.title}`}>
-        <GhlConnect conn={conn ?? null} tz={v.tz} role={v.role} open={onboardingOpen(ghlIntegration?.config)} users={users} />
+        <GhlConnect conn={conn ?? null} tz={v.tz} users={users} />
       </Card>
       <Card id="community-loyalty" className="mb-4 scroll-mt-20" title={`Step 2. ${CL_COPY.title}`}>
         <ClConnect connected={clTokenSet(v.membership)} m={v.membership} agents={agents} notice={cl ?? null} back="/connect-tools" tz={v.tz} />

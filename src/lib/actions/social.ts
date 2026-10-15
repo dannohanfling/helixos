@@ -1,5 +1,7 @@
 "use server";
 
+import { LOCATION_SHAPE, isLocationId } from "@/lib/engine/ghl-location";
+
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { connectionFor, listUsers, refreshAccounts, upsertConnection } from "@/lib/ghl";
@@ -14,9 +16,16 @@ import { redirect } from "next/navigation";
 /** Saves the member's own sub-account and validates the token against GoHighLevel right away. Errors carry the real reason. */
 export async function connectGhlAction(formData: FormData): Promise<void> {
   const { workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "Connections and keys are {first}'s own: they can't be seen or changed from their HelixOS." });
-  const locationId = str(formData, "locationId");
+  const locationId = str(formData, "locationId").trim();
   const ghlUserId = opt(formData, "ghlUserId");
   if (!locationId) return;
+  // H-240: a Location ID that isn't one (an email address, a name) never reaches GoHighLevel; the card says what it should be.
+  if (!isLocationId(locationId)) {
+    const existing = await connectionFor(userId);
+    if (existing) await db.update(schema.socialConnections).set({ lastError: LOCATION_SHAPE }).where(eq(schema.socialConnections.id, existing.id));
+    refresh();
+    return;
+  }
   const r = await upsertConnection({ workspaceId, userId, locationId, ghlUserId, manualToken: opt(formData, "manualToken") });
   if (!r.ok) {
     const existing = await connectionFor(userId);
