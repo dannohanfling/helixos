@@ -582,7 +582,8 @@ async function main() {
     await press(page, '[data-testid="board-forget"]');
     must((await page.locator('[data-testid="board-remember-state"]').innerText()).startsWith("Not remembered"), "left out on request");
     await page.goto(`${base}/my-board`);
-    must((await page.locator('[data-testid="board-discussion-tags"]').first().innerText()).includes("Not remembered") || (await page.locator('[data-testid="board-discussion-tags"]').allInnerTexts()).some((t) => t.includes("Not remembered")), "the row says Not remembered");
+    // textContent, not innerText: the tags are set in small capitals by CSS.
+    must((await page.locator('[data-testid="board-discussion-tags"]').allTextContents()).some((t) => t.includes("Not remembered")), "the row says Not remembered");
     const forgotten = tops.find((t) => t.id === decisionId)!.answer!.decision;
     const remembered = tops.filter((t) => t.id !== decisionId && t.answer).map((t) => t.answer!.decision);
     const afterForget = await askFresh("Should I raise my price next month?");
@@ -597,7 +598,7 @@ async function main() {
     await page.goto(`${base}/my-board`);
     await page.locator('[data-testid="board-start-fresh"] summary').click();
     await press(page, '[data-testid="board-start-fresh-go"]');
-    must((await page.locator('[data-testid="board-fresh-done"]').count()) === 1 && (await page.locator('[data-testid="board-before-fresh"]').innerText()).startsWith("Before your fresh start"), "Start fresh says so and groups the earlier discussions");
+    must((await page.locator('[data-testid="board-fresh-done"]').count()) === 1 && (await page.locator('[data-testid="board-before-fresh"]').textContent())!.startsWith("Before your fresh start"), "Start fresh says so and groups the earlier discussions");
     const topsNow = tops.length + 1;
     must((await rows.count()) === topsNow && (await page.locator('[data-testid="board-discussion"][data-before="1"]').count()) === topsNow, "every discussion kept, all before the fresh start");
     must((await db.query.boardDecisions.findMany({ where: eq(schema.boardDecisions.userId, maya.id) })).length >= topsNow, "nothing deleted");
@@ -644,7 +645,7 @@ async function main() {
     must(example.example && example.answer && !example.stepTasks.some(Boolean), "saved as an example with its answer, no tasks added");
     must((await page.locator('[data-testid="board-example-tag"]').count()) === 1 && !(await page.locator('[data-testid="board-remember"]').count()), "the decision page tags it Example, no remember switch");
     await page.goto(`${base}/my-board`);
-    must((await page.locator('[data-testid="board-discussion-tags"]').first().innerText()).includes("Example"), "the row tagged Example");
+    must((await page.locator('[data-testid="board-discussion-tags"]').first().textContent())!.includes("Example"), "the row tagged Example");
     const coachEvents = await builtInEvents({ workspaceId: ws, userId: coachU.id });
     must(!(coachEvents.board ?? []).some((e) => e.text.includes("Example for a client")), "the Forum never counts an example");
     await page.goto(`${base}/my-board`);
