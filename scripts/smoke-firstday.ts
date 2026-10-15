@@ -153,7 +153,8 @@ async function main() {
     await s3.locator('[data-testid="setup-label"]').fill("Add your photo (a real one)");
     await Promise.all([coach.waitForResponse((r) => r.request().method() === "POST"), s3.locator('[data-testid="setup-save"]').click()]);
     await s3.locator('[data-testid="setup-saved"]').waitFor({ timeout: 10000 });
-    await coach.locator('[data-testid="start-here-url"]').fill("/board/council-night-danno.mp4");
+    // WebM: the bundled Chromium plays VP9, not H.264, so an mp4 would never reach its metadata here.
+    await coach.locator('[data-testid="start-here-url"]').fill("/board/council-night-danno.webm");
     await Promise.all([coach.waitForResponse((r) => r.request().method() === "POST"), coach.locator('[data-testid="start-here-save"]').click()]);
     await coach.locator('[data-testid="start-here-saved"]').waitFor({ timeout: 10000 });
     const sectionOver = await coach.locator('[data-testid="coach-setup"]').evaluate((el) => el.scrollWidth - el.clientWidth);
@@ -165,13 +166,23 @@ async function main() {
     if ((await page.locator('[data-testid="setup-step"][data-key="s3"] [data-testid="setup-step-label"]').innerText()).trim() !== "Add your photo (a real one)") throw new Error("the coach's edit shows the client with no deploy");
     const video = page.locator('[data-testid="welcome"] [data-testid="start-here-video"]');
     if (!(await video.count())) throw new Error("the Start Here video sits in the welcome card");
-    await video.evaluate(async (el) => {
-      const v = el as HTMLVideoElement;
-      await new Promise<void>((done) => { if (v.readyState >= 1) done(); else v.addEventListener("loadedmetadata", () => done(), { once: true }); });
+    // Evaluated from a string: tsx's keepNames rewrites named inner functions to a helper the page doesn't have.
+    const played = (await page.evaluate(`(async () => {
+      const v = document.querySelector('[data-testid="welcome"] [data-testid="start-here-video"]');
+      if (!v) return "no video";
+      const ready = await new Promise((done) => {
+        const t = setTimeout(() => done("no metadata after 15 s (readyState " + v.readyState + ", error " + (v.error ? v.error.code : "none") + ")"), 15000);
+        if (v.readyState >= 1) { clearTimeout(t); done("ok"); return; }
+        v.addEventListener("loadedmetadata", () => { clearTimeout(t); done("ok"); }, { once: true });
+        v.addEventListener("error", () => { clearTimeout(t); done("media error " + (v.error ? v.error.code : "?")); }, { once: true });
+      });
+      if (ready !== "ok") return ready;
       v.muted = true;
       v.currentTime = Math.max(0, v.duration - 0.3);
-      await v.play();
-    });
+      try { await v.play(); } catch (e) { return "play refused: " + e.message; }
+      return "ok";
+    })()`)) as string;
+    if (played !== "ok") throw new Error(`the Start Here video can't play in the walk's browser: ${played}`);
     await page.locator('[data-testid="welcome"] [data-testid="start-here-done"]').waitFor({ timeout: 15000 });
     await page.waitForTimeout(800);
     await page.goto(`${base}/today`);
