@@ -13,7 +13,7 @@ import { db, schema } from "@/db";
 import { open, seal } from "@/lib/crypto";
 import { nowIso } from "@/lib/dates";
 import { newId } from "@/lib/ids";
-import { type BoardRow, type Customer, type ExportRow, type Feed, type PageConfig, type PageModel, type Source, SAMPLE_ROWS, boardRows, feedIsClean, feedSlug, fieldNames, mergeCustomers, pageMembersText, pageModel, publicFeed, readPageConfig, textIsClean } from "@/lib/engine/leaderboard";
+import { type BoardRow, type Customer, type ExportRow, type Feed, type PageConfig, type PageModel, type Source, SAMPLE_ROWS, boardRows, feedIsClean, feedSlug, fieldNames, mergeCustomers, normalizeSlug, pageMembersText, pageModel, publicFeed, readPageConfig, slugProblem, textIsClean } from "@/lib/engine/leaderboard";
 
 export const DEFAULT_HOST = "https://www.eloyalty.ai";
 const FALLBACK_HOST = "https://walletpush.io";
@@ -206,8 +206,9 @@ export function heldBoard(feed: schema.LeaderboardFeed): { rows: ExportRow[]; so
  * which falls back by itself). This never calls eLoyalty: a visitor cannot make HelixOS read a client's program.
  */
 export async function servedFeed(slug: string): Promise<Feed | null> {
-  const feed = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.slug, slug) });
-  if (!feed) return null;
+  const found = await resolveFeed(slug);
+  if (!found) return null;
+  const { feed } = found;
   const held = heldBoard(feed);
   if (!held) return null;
   const config = readPageConfig(feed.pageJson);
@@ -223,9 +224,48 @@ export async function servedFeed(slug: string): Promise<Feed | null> {
 
 /** The hosted page's model by its address: the held board, else the export, else the design's sample people marked Sample. Null for no such address. */
 export async function pageFor(slug: string): Promise<PageModel | null> {
-  const feed = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.slug, slug) });
-  if (!feed) return null;
-  return pageModelFor(feed);
+  const found = await resolveFeed(slug);
+  return found ? pageModelFor(found.feed) : null;
+}
+
+/**
+ * The feed behind an address (H-109): its current slug, or one it had before (an alias). The page redirects an alias to the
+ * current address; the feed answers on both, so a page already reading the old feed URL keeps working.
+ */
+export async function resolveFeed(slug: string): Promise<{ feed: schema.LeaderboardFeed; current: boolean } | null> {
+  const s = normalizeSlug(slug);
+  const feed = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.slug, s) });
+  if (feed) return { feed, current: true };
+  const alias = await db.query.leaderboardSlugAliases.findFirst({ where: eq(schema.leaderboardSlugAliases.slug, s) });
+  if (!alias) return null;
+  const old = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, alias.feedId) });
+  return old ? { feed: old, current: false } : null;
+}
+
+/**
+ * A new page address (H-109): checked for shape and reserved words, then for a clash with any feed's current address or any
+ * alias (another feed's old address stays its own, so a link out there never changes owner). The old address becomes an
+ * alias of this feed; taking back one of this feed's own aliases swaps the two. Returns the problem in words, or null when set.
+ */
+export async function setFeedSlug(feed: schema.LeaderboardFeed, wanted: string): Promise<string | null> {
+  const problem = slugProblem(wanted);
+  if (problem) return problem;
+  const slug = normalizeSlug(wanted);
+  if (slug === feed.slug) return null;
+  const taken = await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.slug, slug), columns: { id: true } });
+  if (taken) return "That address is taken.";
+  const alias = await db.query.leaderboardSlugAliases.findFirst({ where: eq(schema.leaderboardSlugAliases.slug, slug) });
+  if (alias && alias.feedId !== feed.id) return "That address is taken.";
+  if (alias) await db.delete(schema.leaderboardSlugAliases).where(eq(schema.leaderboardSlugAliases.id, alias.id));
+  await db.insert(schema.leaderboardSlugAliases).values({ id: newId(), feedId: feed.id, slug: feed.slug });
+  await db.update(schema.leaderboardFeeds).set({ slug, updatedAt: nowIso() }).where(eq(schema.leaderboardFeeds.id, feed.id));
+  return null;
+}
+
+/** The addresses a feed has had, newest first, for the editor's note. */
+export async function feedAliases(feedId: string): Promise<string[]> {
+  const rows = await db.query.leaderboardSlugAliases.findMany({ where: eq(schema.leaderboardSlugAliases.feedId, feedId) });
+  return rows.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).map((r) => r.slug);
 }
 
 export function pageModelFor(feed: schema.LeaderboardFeed): PageModel | null {

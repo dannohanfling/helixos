@@ -12,8 +12,8 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
-    n: 181,
-    date: "2026-10-14",
+    n: 182,
+    date: "2026-10-15",
     title: "The Aqueduct: where your leads flow, and where they leak",
     lines: [
       "Grow → The Aqueduct: your pipeline as a Roman aqueduct, golden hour or night. The water runs from posts to clients, each stretch as wide as its count; the arch where your rate fell the most against last period is the leak, with its waterfall. Nothing is invented: a stage with no count yet shows a dash.",
@@ -21,6 +21,16 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     ],
     audience: "everyone",
     version: "pending",
+  },
+  {
+    n: 181,
+    date: "2026-10-14",
+    title: "Your leaderboard page gets an address you choose",
+    lines: [
+      "On the Loyalty leaderboard page, \"Page address\" lets you (or your team, or your coach) pick the end of your board's link, for example /lb/compounding-kindness: lowercase letters, numbers and hyphens, 3 to 40 characters, and unlike any other board's. The embed code and the links update at once.",
+      "Every address your board has had keeps working: an old link sends people to the new one, and a page still reading the old feed address keeps its numbers.",
+    ],
+    audience: "everyone",
   },
   {
     n: 180,

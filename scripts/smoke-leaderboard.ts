@@ -29,6 +29,15 @@ async function logout(page: Page) {
   await page.locator('button:has-text("Log out")').first().click();
   await page.waitForURL(/\/login/);
 }
+/** A fill into a field the page may re-render under it (after a submit, mid-hydration) is read back and retried, per the walks' conventions. */
+async function fillExact(page: Page, selector: string, value: string) {
+  for (let i = 0; i < 5; i++) {
+    await page.fill(selector, value);
+    if ((await page.locator(selector).inputValue()) === value) return;
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`${selector} wouldn't hold "${value}"`);
+}
 async function submit(page: Page, selector: string) {
   await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator(selector).first().click()]);
   await page.waitForLoadState("networkidle");
@@ -73,8 +82,10 @@ async function main() {
     let check = await row().locator('[data-testid="leaderboard-check"]').innerText();
     must(check.startsWith(`Connected on localhost:${port}: `) && check.includes("several templates") && check.includes(TEMPLATES[0].name) && !check.includes("Test"), `the check names the templates to choose from: ${check}`);
     // The template pasted, the key left blank (kept): the board is the pass's members (0-point members shown, H-33), the fields named, never a value.
-    await row().locator('[data-testid="leaderboard-template"]').fill(tpl);
+    await fillExact(page, 'li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-template"]', tpl);
     await submit(page, `li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-connect"]`);
+    // The page streams after the action: wait for the new note, not the first check's words.
+    await row().locator('[data-testid="leaderboard-check"]').filter({ hasNotText: "several templates" }).waitFor({ timeout: 20000 });
     check = await row().locator('[data-testid="leaderboard-check"]').innerText();
     must(check.startsWith(`Connected on localhost:${port}: ${expected([]).length} on the board of ${onPass.length} active; fields seen: email, first_name, id,`), `the check: host, count and field names: ${check}`);
     must(!check.includes("@") && !check.includes("Santos"), "the check note carries field names, never a value");
@@ -87,7 +98,7 @@ async function main() {
 
     // The public feed: no session, CORS *, the shape the page reads, tiers from the default gates, nothing that reaches a person.
     const url = `${base}/api/public/leaderboard/${feedRow.slug}`;
-    const pageUrl = `${base}/lb/${feedRow.slug}`;
+    let pageUrl = `${base}/lb/${feedRow.slug}`;
     let res = await fetch(url, { redirect: "manual" });
     let body = await res.text();
     must(res.status === 200 && res.headers.get("access-control-allow-origin") === "*", `the feed answers anyone: ${res.status}`);
@@ -112,7 +123,7 @@ async function main() {
     await page.locator("#ckl-root .l-row").first().waitFor();
     const widths = await page.evaluate(() => ({ rows: document.querySelectorAll("#ckl-root .l-row:not([hidden])").length, pods: document.querySelectorAll("#ckl-root .l-pod").length }));
     must(widths.rows === expected([]).length && widths.pods === 3, `the page shows every member and a podium of three: ${JSON.stringify(widths)}`);
-    await page.fill("#ckl-search", "maria");
+    await fillExact(page, "#ckl-search", "maria");
     must((await page.locator("#ckl-root .l-row:not([hidden])").count()) === 1, "search narrows the rows on the page, with no request");
     const phone = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
     await phone.goto(pageUrl);
@@ -154,10 +165,10 @@ async function main() {
     await page.waitForURL(/\/loyalty/);
     await page.locator('[data-testid="leaderboard-page-form"]').waitFor();
     must(noKey(await page.content()), "the key is nowhere on /loyalty");
-    await page.fill('[data-testid="lb-headline"]', "Maya's Kindness Board");
-    await page.fill('[data-testid="lb-tiers"]', "Seed, 0\nSprout, 500\nTree, 2000");
-    await page.fill('[data-testid="lb-rewards"]', "Hug | 10 | A warm one\nCall | 1000 | With Maya");
-    await page.fill('[data-testid="lb-pass-url"]', "https://loyalty.example.com/pass-1785444472615");
+    await fillExact(page, '[data-testid="lb-headline"]', "Maya's Kindness Board");
+    await fillExact(page, '[data-testid="lb-tiers"]', "Seed, 0\nSprout, 500\nTree, 2000");
+    await fillExact(page, '[data-testid="lb-rewards"]', "Hug | 10 | A warm one\nCall | 1000 | With Maya");
+    await fillExact(page, '[data-testid="lb-pass-url"]', "https://loyalty.example.com/pass-1785444472615");
     await page.uncheck('[data-testid="lb-tiers-sample"]');
     await page.uncheck('[data-testid="lb-show-zero"]');
     await submit(page, '[data-testid="lb-save"]');
@@ -166,13 +177,42 @@ async function main() {
     feed = JSON.parse(await (await fetch(url)).text());
     const gates = [{ name: "Seed", min: 0 }, { name: "Sprout", min: 500 }, { name: "Tree", min: 2000 }];
     must(JSON.stringify(feed.members) === JSON.stringify(buildFeed(onPass, [], "x", { tiers: gates, showZero: false }).members) && !feed.members.some((x) => x.lifetime === 0), `the feed's tiers follow her gates and 0-point members are off: ${JSON.stringify(feed.members)}`);
-    await page.fill('[data-testid="leaderboard-hidden"]', "cus_001\n");
+    await fillExact(page, '[data-testid="leaderboard-hidden"]', "cus_001\n");
     await submit(page, '[data-testid="leaderboard-hide-save"]');
     feed = JSON.parse(await (await fetch(url)).text());
     must(JSON.stringify(feed.members) === JSON.stringify(buildFeed(onPass, ["cus_001"], "x", { tiers: gates, showZero: false }).members), "a hidden member is off the board at once");
     must(!(await (await fetch(pageUrl)).text()).includes(">Maria S.<"), "and off the page");
     console.log("✓ the client's Settings and /loyalty: the links, her words, tiers, rewards, link and hide list on the page and feed at once; never the key");
 
+    // The page address (H-109): reserved and taken are refused in words; a new one works at once; the old one redirects 308 and its feed still answers.
+    await page.goto(`${base}/loyalty`);
+    await page.locator('[data-testid="lb-slug"]').waitFor();
+    const oldSlug = feedRow.slug;
+    await fillExact(page, '[data-testid="lb-slug"]', "coach");
+    await submit(page, '[data-testid="lb-slug-save"]');
+    must((await page.locator('[data-testid="lb-slug-error"]').innerText()).includes("reserved"), "a reserved word is refused in words");
+    const otherFeed = { id: "walk-other-feed", workspaceId: feedRow.workspaceId, userId: "walk-other-user", membershipId: "walk-other-membership", slug: "passport-diner-walk" };
+    await db.insert(schema.leaderboardFeeds).values(otherFeed);
+    await fillExact(page, '[data-testid="lb-slug"]', "passport-diner-walk");
+    await submit(page, '[data-testid="lb-slug-save"]');
+    must((await page.locator('[data-testid="lb-slug-error"]').innerText()).includes("taken"), "another board's address is refused");
+    // The field's own pattern keeps the browser from sending capitals; the server's lowercasing is the unit test's to prove.
+    await fillExact(page, '[data-testid="lb-slug"]', "kindness-walk");
+    await submit(page, '[data-testid="lb-slug-save"]');
+    await page.locator('[data-testid="lb-slug-changed"]').waitFor();
+    const moved = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, feedRow.id) }))!;
+    must(moved.slug === "kindness-walk" && JSON.stringify(moved.hidden) === JSON.stringify(["cus_001"]), `the address changed and the hide list carried over: ${moved.slug}`);
+    must((await page.locator('[data-testid="leaderboard-page-link"]').innerText()).endsWith("/lb/kindness-walk"), "the page link shows the new address");
+    res = await fetch(`${base}/lb/${oldSlug}`, { redirect: "manual" });
+    must(res.status === 308 && (res.headers.get("location") ?? "").endsWith("/lb/kindness-walk"), `the old address is a permanent redirect: ${res.status} ${res.headers.get("location")}`);
+    must((await fetch(`${base}/lb/kindness-walk`)).status === 200, "the new address serves the page");
+    const feedOld = await (await fetch(url)).text();
+    const feedNew = await (await fetch(`${base}/api/public/leaderboard/kindness-walk`)).text();
+    must(feedOld === feedNew && (JSON.parse(feedNew) as { members: unknown[] }).members.length > 0, "the feed answers the same on both addresses");
+    await db.delete(schema.leaderboardFeeds).where(eq(schema.leaderboardFeeds.id, otherFeed.id));
+    console.log("✓ the page address: reserved and taken refused, a new one live at once, the old one a 308 and its feed still answering");
+
+    pageUrl = `${base}/lb/kindness-walk`;
     // Before a key: the coach removes it; the pasted export stands in, stripped on save; with nothing, 503 and the samples.
     await logout(page);
     await login(page, "As the coach");
@@ -187,8 +227,8 @@ async function main() {
     await login(page, "As a client");
     await page.goto(`${base}/loyalty`);
     const csv = "First Name,Last Name,Email,Phone,Customer ID,Lifetime KK,Available KK\nAisha,Patel,aisha@example.com,+1 555 123 4567,cus_901,1105,405\nJohn,Doe,jd@example.com,,cus_902,100,100\nMaria,Santos,maria@example.com,,cus_001,2450,900\nRosa,Garcia,rosa@example.com,,cus_903,40,40";
-    await page.fill('[data-testid="lb-export"]', csv);
-    await page.fill('[data-testid="lb-export-as-of"]', "13 Oct 2026");
+    await fillExact(page, '[data-testid="lb-export"]', csv);
+    await fillExact(page, '[data-testid="lb-export-as-of"]', "13 Oct 2026");
     await submit(page, '[data-testid="lb-export-save"]');
     const stored = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, feedRow.id) }))!;
     must(stored.exportJson === JSON.stringify(parseExport(csv, ["cus_001"]).rows) && clean(stored.exportJson!) && !stored.exportJson!.includes("Patel"), "only First L., lifetime and available are stored from the paste; the hidden id applied once and gone");

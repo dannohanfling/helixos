@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c63fabe6-3d13-4c60-a70d-487f44a52cb4",
-  "prevId": "572333f8-f2f4-4461-ab61-41e7c51a43b3",
+  "id": "b0b27f61-7374-4c03-969b-1ee21fad39d5",
+  "prevId": "c2d89d1e-2ecd-4876-b125-63c7d7261f93",
   "tables": {
     "agent_tokens": {
       "name": "agent_tokens",
@@ -12244,6 +12244,60 @@
             "membership_id"
           ],
           "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "leaderboard_slug_aliases": {
+      "name": "leaderboard_slug_aliases",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "feed_id": {
+          "name": "feed_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "leaderboard_slug_aliases_slug": {
+          "name": "leaderboard_slug_aliases_slug",
+          "columns": [
+            "slug"
+          ],
+          "isUnique": true
+        },
+        "leaderboard_slug_aliases_feed": {
+          "name": "leaderboard_slug_aliases_feed",
+          "columns": [
+            "feed_id"
+          ],
+          "isUnique": false
         }
       },
       "foreignKeys": {},

@@ -188,6 +188,8 @@ export const CHILD_TABLES = [
   { label: "coach_notes", table: schema.coachNotes, fk: "membershipId", parent: "membership" },
   { label: "bot_approvals", table: schema.botApprovals, fk: "membershipId", parent: "membership" },
   { label: "handoff_deliveries", table: schema.handoffDeliveries, fk: "messageId", parent: "handoff_messages" },
+  // A leaderboard's earlier addresses (H-109): slugs only, no member data of their own; they go with the feed row.
+  { label: "leaderboard_slug_aliases", table: schema.leaderboardSlugAliases, fk: "feedId", parent: "leaderboard_feeds" },
 ] as const;
 export type ChildLabel = (typeof CHILD_TABLES)[number]["label"];
 

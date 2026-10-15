@@ -173,3 +173,17 @@ describe("the hosted page's model", () => {
     expect(pageMembersText(m)).not.toContain("1785444472615");
   });
 });
+
+describe("a chosen page address (H-109)", () => {
+  it("accepts lowercase letters, numbers and single hyphens, 3 to 40 long, and nothing reserved", async () => {
+    const { RESERVED_SLUGS, normalizeSlug, slugProblem } = await import("../leaderboard");
+    for (const ok of ["compounding-kindness", "abc", "a1-b2-c3", "x".repeat(40), " Compounding-Kindness "]) expect(slugProblem(ok), ok).toBeNull();
+    expect(normalizeSlug(" Compounding-Kindness ")).toBe("compounding-kindness");
+    expect(slugProblem("")).toMatch(/Type an address/);
+    expect(slugProblem("ab")).toMatch(/3 to 40/);
+    expect(slugProblem("x".repeat(41))).toMatch(/3 to 40/);
+    for (const bad of ["-abc", "abc-", "a--b", "a b", "a_b", "Ab/c", "café"]) expect(slugProblem(bad), bad).toMatch(/Lowercase letters/);
+    for (const r of ["api", "admin", "coach", "new", "loyalty", "settings"]) expect(slugProblem(r), r).toMatch(/reserved/);
+    expect(RESERVED_SLUGS.size).toBeGreaterThan(10);
+  });
+});

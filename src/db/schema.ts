@@ -982,6 +982,22 @@ export const leaderboardFeeds = sqliteTable(
 );
 export type LeaderboardFeed = typeof leaderboardFeeds.$inferSelect;
 
+/**
+ * A leaderboard's earlier addresses (H-109): every slug a feed has had, once replaced, so /lb/<old> keeps redirecting (308) and
+ * the old feed URL keeps answering, however many times the address changes. A slug is unique across feeds and aliases together.
+ */
+export const leaderboardSlugAliases = sqliteTable(
+  "leaderboard_slug_aliases",
+  {
+    id: id(),
+    feedId: text("feed_id").notNull(),
+    slug: text("slug").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("leaderboard_slug_aliases_slug").on(t.slug), index("leaderboard_slug_aliases_feed").on(t.feedId)],
+);
+export type LeaderboardSlugAlias = typeof leaderboardSlugAliases.$inferSelect;
+
 /** Bot Features (rev 618): how each feature unlocks in this workspace, one rule per feature, changed by the coach without code. */
 export const botFeatureRules = sqliteTable(
   "bot_feature_rules",
