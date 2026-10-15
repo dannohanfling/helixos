@@ -11,6 +11,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { GhlScopeRows } from "@/components/ghl-scope-rows";
 import { ConnectBox } from "@/components/connect-box";
 import { GHL_COPY, GHL_HELP } from "@/lib/engine/connect-copy";
+import { GhlConnectForm } from "@/components/ghl-connect-form";
 
 /**
  * The GoHighLevel connect card as a client sees it (rev 333): two states and nothing else. Not connected: one sentence and a
@@ -150,8 +151,9 @@ export function GhlConnect({ conn, tz, users = [] }: { conn: SocialConnection | 
         </div>
       ) : null}
       {conn?.lastError ? (
+        // H-237: one state, never both. The last check failed, so the card says Not connected yet and why; Integrations says the same.
         <p className="rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="ghl-error">
-          {conn.lastError}
+          <span className="font-semibold" data-testid="ghl-status">Not connected yet.</span> {conn.lastError}
         </p>
       ) : null}
       <details open data-testid="ghl-steps">
@@ -161,21 +163,7 @@ export function GhlConnect({ conn, tz, users = [] }: { conn: SocialConnection | 
             <GhlScopeRows scopes={GHL_SCOPES} />
             <p className="mt-3 text-xs text-ink-3">{GHL_COPY.after}</p>
           </ConnectBox>
-          <form action={connectGhlAction} className="space-y-3 text-sm">
-            <Field label="Your GoHighLevel key" hint="Stored encrypted. Never shown again.">
-              <input className="field" name="manualToken" type="password" autoComplete="off" placeholder="pit-…" required={!conn?.manualToken} data-testid="ghl-token" />
-            </Field>
-            <Field label="Location ID" hint={GHL_HELP.location}>
-              <input className="field" name="locationId" defaultValue={conn?.locationId ?? ""} required placeholder="ve9EPM428h8vShlRW1KT" data-testid="ghl-location" />
-            </Field>
-            <input type="hidden" name="ghlUserId" value={conn?.ghlUserId ?? ""} />
-            <div className="flex flex-wrap items-center gap-2">
-              <SubmitButton className="btn btn-primary btn-sm" pendingText="Connecting…">
-                Connect
-              </SubmitButton>
-              <span className="text-xs text-ink-3">One small test call, and you&apos;ll know right away.</span>
-            </div>
-          </form>
+          <GhlConnectForm action={connectGhlAction} locationId={conn?.locationId ?? ""} hasToken={Boolean(conn?.manualToken)} ghlUserId={conn?.ghlUserId ?? ""} />
         </div>
       </details>
     </div>

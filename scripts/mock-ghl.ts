@@ -1,6 +1,7 @@
 /**
  * A tiny stand-in for the GoHighLevel API (the calls HelixOS makes), for smoke tests. `npx tsx scripts/mock-ghl.ts 4010`
- * Tokens: `pit-<locationId>` works for that location; `pit-noscope` is valid but lacks Social Planner scopes; anything else is 401.
+ * Tokens: `pit-<locationId>` works for that location; `pit-noscope` is valid but lacks Social Planner scopes; `pit-agency` is an
+ * agency-view key (401 about the auth class); anything else is 401.
  */
 import { createServer } from "node:http";
 
@@ -120,6 +121,8 @@ createServer((req, res) => {
     if (!m) return json(404, { message: "Not found" });
     const [, loc, kind, id] = m;
     if (token === "pit-noscope") return json(403, { message: "The token does not have access to this scope: socialplanner/account.readonly" });
+    // A key made in the agency view, or in another sub-account (H-237): GoHighLevel refuses it with words about the auth class.
+    if (token === "pit-agency") return json(401, { message: "This authClass type is not allowed to access this scope. Please use a location token." });
     if (!token.startsWith("pit-")) return json(401, { message: "Invalid JWT" });
     if (token !== `pit-${loc}`) return json(404, { message: `Location not found: ${loc}` });
     if (kind === "accounts" && req.method === "GET") {

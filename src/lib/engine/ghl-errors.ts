@@ -28,10 +28,16 @@ export function refusedField(detail: string): "userId" | "accountIds" | "schedul
   return null;
 }
 
+/** GoHighLevel's words for a key that is valid but not for this location: the auth class, the location, "not allowed to access". */
+const wrongAccount = (lower: string): boolean => !lower.includes("scope:") && /authclass|auth class|location|not allowed to access|does not have access to this (?:location|resource)/.test(lower);
+
 export function explainGhl(r: GhlFailure, call: GhlCall): string {
   const lower = (r.detail ?? "").toLowerCase();
   // Rev 850's words: a bad key is made again; a missing permission is named, and fixed with a new key (GoHighLevel can't add
   // a permission to a key that exists).
+  // H-237: a 401 or 403 whose words are about the location or the auth class is a key from another account (or the agency
+  // view), not a bad key; a plain 401 is the key itself.
+  if ((r.status === 401 || r.status === 403) && wrongAccount(lower)) return CONNECT_ERRORS.ghlWrongAccount;
   if (r.status === 401) return CONNECT_ERRORS.ghlBadKey;
   if (r.status === 403 || lower.includes("scope")) {
     const named = scopeNamedIn(r.detail ?? "");

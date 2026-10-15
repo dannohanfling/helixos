@@ -145,8 +145,25 @@ async function main() {
     if ((await page.locator('[data-testid="ghl-scope-count"]').innerText()).trim().startsWith("3 of 21 added") !== true) throw new Error(`the ticks count: ${await page.locator('[data-testid="ghl-scope-count"]').innerText()}`);
     await page.reload();
     if ((await page.locator('[data-testid="ghl-scope-count"]').getAttribute("data-done")) !== "0") throw new Error("the ticks are a checklist in the page alone and reset on leaving");
+    // H-240: an email address in the Location ID box (a browser's autofill) gets the line under the box and no call; autofill is off.
+    await page.fill('[data-testid="ghl-location"]', "someone@example.com");
+    await page.locator('[data-testid="ghl-location-shape"]').waitFor({ timeout: 5000 });
+    if (!(await page.locator('[data-testid="ghl-connect"]').isDisabled())) throw new Error("Connect stays off while the Location ID isn't one");
+    for (const box of ["ghl-location", "ghl-token"]) if ((await page.locator(`[data-testid="${box}"]`).getAttribute("autocomplete")) !== "off") throw new Error(`autofill is off on ${box}`);
+    {
+      const { db: db1, schema: s1 } = await import("@/db");
+      const { eq: eq1 } = await import("drizzle-orm");
+      const maya1 = await db1.query.users.findFirst({ where: eq1(s1.users.email, "client@demo.helixos.app") });
+      if (await db1.query.socialConnections.findFirst({ where: eq1(s1.socialConnections.userId, maya1!.id) })) throw new Error("an email in the box is never saved and never sent to GoHighLevel");
+    }
+    await page.fill('[data-testid="ghl-location"]', "loc_maya");
+    if (await page.locator('[data-testid="ghl-location-shape"]').count()) throw new Error("a Location ID that is one has no line under it");
     await saveConnection(page, "loc_maya", "wrong-token");
     await expectText(page, "That key didn't work. Make a new one and copy it straight away.", "bad token reason, in plain words");
+    if (!(await page.locator('[data-testid="ghl-status"]').count()) || (await page.locator('[data-testid="ghl-connected-badge"]').count())) throw new Error("one state: Not connected yet with the reason, never Connected beside it");
+    // H-237: a key made in the agency view, or in another sub-account, is named as such, not as a bad key.
+    await saveConnection(page, "loc_maya", "pit-agency");
+    await expectText(page, "This key was made in a different GoHighLevel account.", "a key from another account is named as such");
     await saveConnection(page, "loc_maya", "pit-noscope");
     await expectText(page, "Your key is missing one permission: socialplanner/account.readonly", "the missing permission is named");
     if (!(await page.locator('[data-testid="ghl-scope-rows"]').count())) throw new Error("the rows sit under the missing-permissions reason");

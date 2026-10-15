@@ -44,4 +44,11 @@ describe("what GoHighLevel's reply means, by the call that was made", () => {
     expect(refusedField("Instagram account requires reconnecting")).toBeNull();
     expect(refusedField("")).toBeNull();
   });
+
+  it("a 401 about the auth class or the location is a key from another account; a plain 401 is the key (H-237)", () => {
+    expect(explainGhl({ error: "x", status: 401, detail: "This authClass type is not allowed to access this scope. Please use a location token." }, "accounts")).toContain("different GoHighLevel account");
+    expect(explainGhl({ error: "x", status: 403, detail: "The token does not have access to this location" }, "accounts")).toContain("different GoHighLevel account");
+    expect(explainGhl({ error: "x", status: 401, detail: "Invalid JWT" }, "accounts")).toBe("That key didn't work. Make a new one and copy it straight away.");
+    expect(explainGhl({ error: "x", status: 403, detail: "The token does not have access to this scope: socialplanner/post.write" }, "post")).toContain("missing one permission: socialplanner/post.write");
+  });
 });
