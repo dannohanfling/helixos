@@ -32,7 +32,7 @@ describe("My Helix (rev 707, rev 710)", () => {
     const some = helixRungs(RUNGS, { ...EMPTY_FACTS, ticks: ["p0-superpower", "p0-seven-levels"], avatars: 1 });
     expect(nextRung(some)?.key).toBe("p0-mission");
     expect(stats(some)).toEqual({ built: 3, total: 67, pct: 4 });
-    expect(nextRung(helixRungs(RUNGS, { ...EMPTY_FACTS, ticks: RUNGS.map((r) => r.key), avatars: 1, offers: { promise: true, framework: true, containerPrice: true, objections: true, tiers: ["freebie", "starter", "core", "premium"] }, pathwayMax: 2, ladders: { launched: 1, shipped: 1 }, postStreak: 7, magnets: 1, magnetsPublished: 1, log: { newLeads: 50, dmsStarted: 1, callsBooked: 1, callsHeld: 1, offersMade: 1 }, content: { count: 15, scheduled: 1, posted: 1 }, scripts: 1, clients: 1, botLive: true, essence: ["mission_and_vision", "goals_and_objectives", "stories"], webinar: { any: true, named: true, registration: true, delivered: true, offers: true, debrief: true, sale: true } }))).toBeNull();
+    expect(nextRung(helixRungs(RUNGS, { ...EMPTY_FACTS, ticks: RUNGS.map((r) => r.key), avatars: 1, offers: { promise: true, framework: true, containerPrice: true, objections: true, tiers: ["freebie", "starter", "core", "premium"] }, pathwayMax: 2, ladders: { launched: 1, shipped: 1 }, postStreak: 7, magnets: 1, magnetsPublished: 1, log: { newLeads: 50, dmsStarted: 1, callsBooked: 1, callsHeld: 1, offersMade: 1 }, content: { count: 15, scheduled: 1, posted: 1 }, scripts: 1, clients: 1, botLive: true, essence: ["mission_and_vision", "goals_and_objectives", "representative_stories"], webinar: { any: true, named: true, registration: true, delivered: true, offers: true, debrief: true, sale: true } }))).toBeNull();
   });
   it("a signal rung reads its signal, never a tick; a tick rung reads only its tick", () => {
     const lead10 = RUNGS.find((r) => r.key === "p4-lead-10")!;
@@ -44,6 +44,10 @@ describe("My Helix (rev 707, rev 710)", () => {
     expect(rungDone(superpower, { ...EMPTY_FACTS, ticks: ["p0-superpower"] })).toBe(true);
     const mission = RUNGS.find((r) => r.key === "p0-mission")!;
     expect(rungDone(mission, { ...EMPTY_FACTS, essence: ["mission_and_vision"] })).toBe(false);
+    // Docket #5: the stories section is keyed representative_stories; the rung reads that key, not "stories".
+    const stories = RUNGS.find((r) => r.signal === "essence:stories")!;
+    expect(rungDone(stories, { ...EMPTY_FACTS, essence: ["representative_stories"] })).toBe(true);
+    expect(rungDone(stories, { ...EMPTY_FACTS, essence: ["stories"] })).toBe(false);
     expect(rungDone(mission, { ...EMPTY_FACTS, essence: ["mission_and_vision", "goals_and_objectives"] })).toBe(true);
     const core = RUNGS.find((r) => r.key === "p2-core")!;
     expect(rungDone(core, { ...EMPTY_FACTS, offers: { ...EMPTY_FACTS.offers, tiers: ["starter"] } })).toBe(false);

@@ -6,6 +6,8 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { sectionFilled, type EssenceData } from "@/lib/engine/essence";
+import { reframesOf } from "@/lib/engine/objections";
+import { assetsFor } from "@/lib/queries/library";
 import { byPlace, helixRungs, longestRun, nextRung, PHASES, RUNGS, SIGNALS, stats, type HelixFacts, type HelixRung, type Phase, type RungDef } from "@/lib/engine/my-helix";
 import { newId } from "@/lib/ids";
 
@@ -21,10 +23,10 @@ export async function rungDefs(): Promise<RungDef[]> {
 /** What HelixOS knows about one member, read once. */
 export async function factsFor(m: Member): Promise<HelixFacts> {
   const mine = <T extends { workspaceId: unknown; userId: unknown }>(t: T) => and(eq(t.workspaceId as never, m.workspaceId), eq(t.userId as never, m.userId));
-  const [essence, avatars, offers, ladders, logs, magnets, content, scripts, clients, botKeys, webinars, setups, ticks] = await Promise.all([
+  const [essence, avatars, offers, ladders, logs, magnets, content, scripts, clients, botKeys, webinars, setups, ticks, objectionBank] = await Promise.all([
     db.query.essences.findFirst({ where: mine(schema.essences), columns: { data: true } }),
     db.query.avatars.findMany({ where: and(mine(schema.avatars), isNull(schema.avatars.archivedAt)), columns: { who: true, pains: true } }),
-    db.query.offers.findMany({ where: mine(schema.offers), columns: { status: true, promise: true, mechanismName: true, pathSteps: true, container: true, price: true, objTime: true, objMoney: true, objPartner: true, objTriedBefore: true, objDiy: true, pathwayId: true } }),
+    db.query.offers.findMany({ where: mine(schema.offers), columns: { objectionAssetIds: true, status: true, promise: true, mechanismName: true, pathSteps: true, container: true, price: true, objTime: true, objMoney: true, objPartner: true, objTriedBefore: true, objDiy: true, pathwayId: true } }),
     db.query.ladders.findMany({ where: mine(schema.ladders), columns: { launchedAt: true, shippedAt: true } }),
     db.query.dailyLogs.findMany({ where: mine(schema.dailyLogs), columns: { date: true, posts: true, newLeads: true, dmsStarted: true, callsBooked: true, callsHeld: true, offersMade: true } }),
     db.query.leadMagnets.findMany({ where: mine(schema.leadMagnets), columns: { publishedAt: true } }),
@@ -35,6 +37,7 @@ export async function factsFor(m: Member): Promise<HelixFacts> {
     db.query.webinars.findMany({ where: mine(schema.webinars), columns: { id: true, title: true, promise: true, status: true, registrationUrl: true, showed: true, offersMade: true, debriefLeak: true, debriefFix: true, sales: true, revenue: true, isExample: true } }),
     db.query.mfSetups.findMany({ where: mine(schema.mfSetups), columns: { webinarId: true, live: true } }),
     db.query.helixTicks.findMany({ where: mine(schema.helixTicks), columns: { rungKey: true } }),
+    assetsFor(m.workspaceId, m.userId, "objection"),
   ]);
   const data = (essence?.data ?? {}) as EssenceData;
   const live = offers.filter((o) => o.status !== "retired");
@@ -52,7 +55,13 @@ export async function factsFor(m: Member): Promise<HelixFacts> {
       promise: live.some((o) => has(o.promise)),
       framework: live.some((o) => has(o.mechanismName) || (Array.isArray(o.pathSteps) && o.pathSteps.length > 0)),
       containerPrice: live.some((o) => has(o.container) && (o.price ?? 0) > 0),
-      objections: live.some((o) => [o.objTime, o.objMoney, o.objPartner, o.objTriedBefore, o.objDiy].every(has)),
+      // Docket #5 (K.Y.): at least five objections answered, from the bank (linked records that carry a reframe) plus any of the
+      // five older fixed boxes; the five fixed boxes alone still count. "Exactly the five boxes" left a nine-objection offer unticked.
+      objections: live.some((o) => {
+        const fixed = [o.objTime, o.objMoney, o.objPartner, o.objTriedBefore, o.objDiy].filter(has).length;
+        const bank = objectionBank.filter((a) => (o.objectionAssetIds ?? []).includes(a.id) && reframesOf(a).length > 0).length;
+        return fixed === 5 || fixed + bank >= 5;
+      }),
       // The pathway's tiers, read from the offers' prices: a free one is the Freebie; one, two, three priced offers reach Starter, Core, Premium.
       tiers: [...(live.some((o) => (o.price ?? 0) === 0) ? ["freebie"] : []), ...(priced >= 1 ? ["starter"] : []), ...(priced >= 2 ? ["core"] : []), ...(priced >= 3 ? ["premium"] : [])],
     },

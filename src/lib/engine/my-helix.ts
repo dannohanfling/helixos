@@ -155,7 +155,8 @@ export function rungDone(rung: { key: string; signal: string }, f: HelixFacts): 
   const [a, b, c] = s.split(":");
   switch (a) {
     case "essence":
-      return b === "mission" ? f.essence.includes("mission_and_vision") && f.essence.includes("goals_and_objectives") : f.essence.includes("stories");
+      // Docket #5: the stories section is keyed representative_stories; "stories" never matched, so the rung never ticked.
+      return b === "mission" ? f.essence.includes("mission_and_vision") && f.essence.includes("goals_and_objectives") : f.essence.includes("representative_stories");
     case "avatar":
       return f.avatars > 0;
     case "offer":

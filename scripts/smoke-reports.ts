@@ -101,6 +101,11 @@ async function main() {
     // ── 2. An Ask Danno answer from Tasks, with the wish to talk; an idea from More. ──
     await page.goto(`${base}/tasks`);
     await page.locator('[data-testid="report-open"]').first().click();
+    // Docket #2: Start over clears what was typed and the kind; the form stays open for a fresh go.
+    await page.locator('dialog[open] [data-testid="report-kind-suggestion"]').check();
+    await fillChecked(page, 'dialog[open] [data-testid="report-description"]', "Half a thought");
+    await page.locator('dialog[open] [data-testid="report-start-over"]').click();
+    must((await page.locator('dialog[open] [data-testid="report-description"]').inputValue()) === "" && (await page.locator('dialog[open] [data-testid="report-kind-issue"]').isChecked()), "Start over clears the form and goes back to an issue");
     await page.locator('dialog[open] [data-testid="report-kind-ask_danno"]').check();
     await page.locator('dialog[open] [data-testid="report-severity-orange"]').check();
     await fillChecked(page, 'dialog[open] [data-testid="report-question"]', "How many rungs should a comment ladder have?");

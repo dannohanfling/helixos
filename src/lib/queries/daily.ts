@@ -1,7 +1,7 @@
 import { and, eq, gte, isNotNull, isNull, like, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { addDays } from "@/lib/dates";
-import { closeTarget, runningStreak, streakDayOf, type CloseTarget } from "@/lib/engine/streak";
+import { closeTarget, lateOpen, runningStreak, streakDayOf, type CloseTarget } from "@/lib/engine/streak";
 
 /** Every read here is scoped to (workspace, user): a user can belong to more than one workspace and days never cross over. */
 export async function closedDates(workspaceId: string, userId: string, opts: { excludeRepaired?: boolean } = {}): Promise<Set<string>> {
@@ -36,8 +36,8 @@ export async function todayActivity(workspaceId: string, userId: string, today: 
 
 /** The running streak, read as of yesterday inside the late close-out window while yesterday is still open (rev 731). */
 export async function streakFor(workspaceId: string, userId: string, today: string, hour: number): Promise<{ running: number; closed: Set<string> }> {
-  const closed = await closedDates(workspaceId, userId);
-  return { running: runningStreak(closed, streakDayOf(closed, today, hour)), closed };
+  const [closed, logs] = await Promise.all([closedDates(workspaceId, userId), logsBetween(workspaceId, userId, addDays(today, -1), today)]);
+  return { running: runningStreak(closed, streakDayOf(closed, today, hour, lateOpen(logs, today))), closed };
 }
 
 /** The day a close-out made now is for (rev 731): the same close-out as the last, yesterday inside the window, or today. */

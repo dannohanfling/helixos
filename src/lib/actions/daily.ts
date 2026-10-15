@@ -3,11 +3,11 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { newId } from "@/lib/ids";
-import { nowIso } from "@/lib/dates";
+import { addDays, nowIso } from "@/lib/dates";
 import { POINTS } from "@/lib/engine/points";
-import { closedDates, repairsUsed } from "@/lib/queries/daily";
+import { closedDates, logsBetween, repairsUsed } from "@/lib/queries/daily";
 import { CLOSE_EXTRA, CLOSE_MONEY, CLOSE_NUMBERS, CLOSE_TEXT, closeDay, lockIn, upsertLog, type Close } from "@/lib/daily-core";
-import { brokenStreak, streakDayOf } from "@/lib/engine/streak";
+import { brokenStreak, lateOpen, streakDayOf } from "@/lib/engine/streak";
 import { isWeekday } from "@/lib/dates";
 import { ctx, num, opt, refresh, str } from "@/lib/action-helpers";
 import { redirect } from "next/navigation";
@@ -61,8 +61,8 @@ export async function eveningCloseAction(formData: FormData): Promise<void> {
 export async function repairStreakAction(formData: FormData): Promise<void> {
   const { v, workspaceId, userId } = await ctx({ whileSwitched: "refuse", reason: "The lock-in, the close and the streak are {first}'s own." });
   const date = str(formData, "date");
-  const closed = await closedDates(workspaceId, userId);
-  const broken = brokenStreak(closed, streakDayOf(closed, v.today, v.hour));
+  const [closed, logs] = await Promise.all([closedDates(workspaceId, userId), logsBetween(workspaceId, userId, addDays(v.today, -1), v.today)]);
+  const broken = brokenStreak(closed, streakDayOf(closed, v.today, v.hour, lateOpen(logs, v.today)));
   if (!broken || !broken.repairable || broken.missed[0] !== date || !isWeekday(date)) return;
   if ((await repairsUsed(workspaceId, userId, v.today.slice(0, 7))) >= 1) return;
   const log = await upsertLog(workspaceId, userId, date);

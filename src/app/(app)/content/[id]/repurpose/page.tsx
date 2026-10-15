@@ -4,6 +4,7 @@ import { ownTitle } from "@/lib/page-title";
 import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireViewer } from "@/lib/auth";
+import { connectionFor } from "@/lib/ghl";
 import { hasAiKey } from "@/lib/ai";
 import { acceptVariantAction, generateVariantsAction, updateVariantAction } from "@/lib/actions/variants";
 import { gateLine, isUnreviewed, variantName } from "@/lib/engine/provenance";
@@ -154,6 +155,10 @@ export default async function RepurposePage({ params, searchParams }: { params: 
   const posted = variants.filter((x) => x.status === "posted").length;
   const reach = variants.reduce((a, x) => ({ reactions: a.reactions + x.reactions, comments: a.comments + x.comments, dms: a.dms + x.dms, leads: a.leads + x.leads }), { reactions: 0, comments: 0, dms: 0, leads: 0 });
   const ai = await hasAiKey();
+  // Docket #4 (M.F.): with no GoHighLevel connected, one state on phone and desktop alike, instead of a list of channels that
+  // "didn't send": the posts wait for the member, and the way to connect is right there.
+  const ghlConn = await connectionFor(v.user.id);
+  const ghlOn = Boolean(ghlConn && ghlConn.accounts.length && !ghlConn.lastError && ghlConn.ghlUserId?.trim());
   // The gates, shown by the action that asked for them: one version's status moving to scheduled or posted, or the one-click send.
   // The names come from the action that held (the one-click send names what it would have carried), never re-derived here.
   const heldVariant = sp.gate === "variant" && (sp.status === "scheduled" || sp.status === "posted") ? variants.find((x) => x.id === sp.variant) : undefined;
@@ -184,7 +189,16 @@ export default async function RepurposePage({ params, searchParams }: { params: 
           ) : undefined
         }
       />
-      <FailedBanner outcomes={outcomes} contentId={item.id} className="mb-4" />
+      {ghlOn ? (
+        <FailedBanner outcomes={outcomes} contentId={item.id} className="mb-4" />
+      ) : (
+        <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" role="status" data-testid="distribute-not-connected">
+          Not connected to GoHighLevel: these posts wait for you.{" "}
+          <Link href="/connect-tools#publishing" className="font-medium underline">
+            Connect GoHighLevel →
+          </Link>
+        </p>
+      )}
 
       {drip ? (
         <p className="mb-4 rounded-lg border border-warn bg-warn-soft p-3 text-sm" data-testid="drip-refused" role="alert">{drip}</p>
