@@ -585,11 +585,15 @@ async function main() {
     await page.goto(`${base}/my-board`);
     // textContent, not innerText: the tags are set in small capitals by CSS.
     must((await page.locator('[data-testid="board-discussion-tags"]').allTextContents()).some((t) => t.includes("Not remembered")), "the row says Not remembered");
-    const forgotten = tops.find((t) => t.id === decisionId)!.answer!.decision;
-    const remembered = tops.filter((t) => t.id !== decisionId && t.answer).map((t) => t.answer!.decision);
+    // The mock answers every question with the same decision line, so the memory is checked by its count: the Past decisions
+    // heading names how many it read (answered first questions, at most five), and the one left out is one fewer.
+    const answeredTops = async () => (await db.query.boardDecisions.findMany({ where: and(eq(schema.boardDecisions.userId, maya.id), isNull(schema.boardDecisions.parentId)) })).filter((d) => d.answer).length;
+    const pastLine = (text: string) => text.match(/## Past decisions \((\d+)\)/)?.[1] ?? "none";
+    const nBeforeForget = await answeredTops();
+    must(nBeforeForget >= 2, `two or more answered discussions to remember: ${nBeforeForget}`);
     const afterForget = await askFresh("Should I raise my price next month?");
     let sysMemory = await lastSystem();
-    must(!sysMemory.includes(forgotten) && remembered.every((d) => sysMemory.includes(d)) && sysMemory.includes("Past decisions"), `the next discussion reads the others, never the one left out: ${sysMemory.match(/Past decisions[^\n]*\n(?:- [^\n]*\n?)*/)?.[0].slice(0, 300)}`);
+    must(pastLine(sysMemory) === String(Math.min(5, nBeforeForget - 1)), `the next discussion reads the others, never the one left out: Past decisions (${pastLine(sysMemory)}) of ${nBeforeForget}`);
     await page.goto(`${base}/my-board/${decisionId}`);
     await press(page, '[data-testid="board-remember-on"]');
     must((await page.locator('[data-testid="board-remember-state"]').innerText()).startsWith("The Board remembers this"), "remembered again");
@@ -605,7 +609,7 @@ async function main() {
     must((await db.query.boardDecisions.findMany({ where: eq(schema.boardDecisions.userId, maya.id) })).length >= topsNow, "nothing deleted");
     const afterFresh = await askFresh("Should I hire a VA for my DMs?");
     sysMemory = await lastSystem();
-    must(!sysMemory.includes("Past decisions") && !sysMemory.includes(forgotten) && !sysMemory.includes(afterForget), "after Start fresh the prompt carries no earlier decision");
+    must(!sysMemory.includes("Past decisions") && !sysMemory.includes(afterForget), "after Start fresh the prompt carries no earlier decision");
     await page.goto(`${base}/my-board`);
     must((await rows.first().getAttribute("data-before")) === "0" && (await rows.first().innerText()).includes("hire a VA") && (await page.locator('[data-testid="board-discussion"][data-before="1"]').count()) === topsNow, "the new discussion sits above the fresh-start group");
     await page.goto(`${base}/my-board/${decisionId}`);
@@ -613,9 +617,10 @@ async function main() {
     await page.goto(`${base}/my-board`);
     await press(page, '[data-testid="board-fresh-undo"]');
     must((await page.locator('[data-testid="board-fresh-undone"]').count()) === 1 && !(await page.locator('[data-testid="board-before-fresh"]').count()) && !(await page.locator('[data-testid="board-discussion"][data-before="1"]').count()), "Undo: no group, nothing before");
+    const nAfterUndo = await answeredTops();
     await askFresh("Should I keep the Friday calls?");
     sysMemory = await lastSystem();
-    must(sysMemory.includes("Past decisions") && sysMemory.includes(forgotten), "after Undo the earlier decisions are read again");
+    must(pastLine(sysMemory) === String(Math.min(5, nAfterUndo)) && nAfterUndo > nBeforeForget, `after Undo every earlier decision is read again: Past decisions (${pastLine(sysMemory)}) of ${nAfterUndo}`);
     void afterFresh;
     console.log("✓ Start fresh: the earlier discussions kept under Before your fresh start, the next prompt empty of them, an earlier one still opening with Play again; Undo brings them back into the prompt");
 
@@ -654,7 +659,8 @@ async function main() {
     await page.locator('[data-testid="board-submit"]').click();
     await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
     sysMemory = await lastSystem();
-    must(!sysMemory.includes(example.answer!.decision), "the coach's next discussion never reads the example");
+    const coachPlain = (await db.query.boardDecisions.findMany({ where: and(eq(schema.boardDecisions.userId, coachU.id), isNull(schema.boardDecisions.parentId)) })).filter((d) => d.answer && !d.example).length;
+    must(coachPlain >= 1 && pastLine(sysMemory) === String(Math.min(5, coachPlain)), `the coach's next discussion never reads the example: Past decisions (${pastLine(sysMemory)}) of ${coachPlain} plain`);
     const secondId = page.url().split("/my-board/")[1].split(/[?#]/)[0];
     must((await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, secondId) }))!.example === false, "a plain ask is not an example");
     await logout(page);
