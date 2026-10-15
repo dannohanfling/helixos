@@ -523,7 +523,7 @@ async function main() {
     must(thread.length === threadBefore + 1 && thread[0].mode === "checkin" && thread[0].question.startsWith("Check-in on this decision.") && (nSteps < 2 || thread[0].answer?.advisors.some((a) => a.seat === "jordan")), `the Board answers the check-in on the same decision, Jordan there for a stuck step: ${thread[0].question.slice(0, 120)}`);
     const sysCheckin = ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] }).system.map((b) => b.text).join("\n");
     must(sysCheckin.includes("Mode: Check-in"), "asked in Check-in mode");
-    await page.locator('[data-testid="board-table-recommends"]').waitFor({ timeout: 40000 });
+    await page.locator('[data-testid="board-table-recommends"]').waitFor({ timeout: 6 * MAX_TURN_MS + 5000 });
     must((await page.locator('[data-testid="board-checkins"]').innerText()).includes(`1 done, ${nSteps - 1} stuck, 0 dropped`), "the check-in is recorded on the decision");
     console.log("✓ the check-in: Today's line for a step past its date, a ticked task counted on the scoreboard, done and stuck per step, the Board answering in Check-in mode with Jordan");
 
