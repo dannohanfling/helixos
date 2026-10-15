@@ -23,6 +23,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 190,
+    date: "2026-10-15",
+    title: "Four fixes from your reports: the close that went missing, rungs that would not tick, posts that \"didn't send\", a stuck report form",
+    lines: [
+      "Close the day: yesterday stays open until you lock in the new day, not only until 4 am. A close filled in the next morning before your first lock-in is yesterday's, and your streak reads it that way too.",
+      "My Helix: \"Brand story\" ticks when your Essence stories section is filled (it read the wrong key before), and \"Objection Crusher\" counts objections answered from your bank, at least five, not only the five old fixed boxes.",
+      "Distribute: with no GoHighLevel connected, the page says so in one line on phone and desktop, \"Not connected to GoHighLevel: these posts wait for you. Connect GoHighLevel →\", instead of a list of channels that \"didn't send\". The report form gives up after 20 seconds with a plain line, and has a Start over button.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 187,
     date: "2026-10-15",
     title: "Cleanup, part one: one welcome, one-tap lock-in, shorter menus",

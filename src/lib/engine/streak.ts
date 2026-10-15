@@ -101,8 +101,8 @@ export type CloseTarget = { date: string; late: boolean; same: boolean };
 
 /**
  * Which day a close-out made now is for. First, the same close-out: the member's last one (never a repaired day), made less than
- * SAME_CLOSE_HOURS ago, with no lock-in since, takes this one as an edit, on its own date, at any hour. Then the window: before
- * LATE_CLOSE_UNTIL_HOUR with yesterday still open, it is yesterday's. Otherwise it is today's.
+ * SAME_CLOSE_HOURS ago, with no lock-in since, takes this one as an edit, on its own date, at any hour. Then yesterday: before
+ * LATE_CLOSE_UNTIL_HOUR, or until today's lock-in, with yesterday still open, it is yesterday's. Otherwise it is today's.
  */
 export function closeTarget(marks: CloseMark[], today: string, hour: number, now: Date): CloseTarget {
   const last = marks
@@ -116,7 +116,10 @@ export function closeTarget(marks: CloseMark[], today: string, hour: number, now
   }
   const yesterday = addDays(today, -1);
   const closed = (d: string) => marks.some((m) => m.date === d && m.eveningDoneAt);
-  if (hour < LATE_CLOSE_UNTIL_HOUR && !closed(yesterday) && !closed(today)) return { date: yesterday, late: true, same: false };
+  // Docket #3 (D.D., GMT+8): a day she locked in to stays open until she locks in the new day, not only until 04:00. A close
+  // filled in the next morning before the first lock-in is yesterday's, whatever the hour; after a lock-in it is today's. A day
+  // with no lock-in (a weekend, a day off) still closes only inside the window, so nobody is asked to close a day they never began.
+  if ((hour < LATE_CLOSE_UNTIL_HOUR || lateOpen(marks, today)) && !closed(yesterday) && !closed(today)) return { date: yesterday, late: true, same: false };
   return { date: today, late: false, same: false };
 }
 
@@ -124,7 +127,15 @@ export function closeTarget(marks: CloseMark[], today: string, hour: number, now
  * The day the streak is read as of: inside the window with yesterday and today both open, yesterday, so a member who closes at
  * 01:00 never shows a missed day (in the streak, the repair card or a reminder) before they do.
  */
-export function streakDayOf(closed: Set<string>, today: string, hour: number): string {
+export function streakDayOf(closed: Set<string>, today: string, hour: number, stillOpen = false): string {
   const yesterday = addDays(today, -1);
-  return hour < LATE_CLOSE_UNTIL_HOUR && !closed.has(yesterday) && !closed.has(today) ? yesterday : today;
+  // `stillOpen` (docket #3): yesterday was locked in to and today isn't yet, so yesterday is still the day; a caller that only
+  // knows the hour keeps the 04:00 window.
+  return (hour < LATE_CLOSE_UNTIL_HOUR || stillOpen) && !closed.has(yesterday) && !closed.has(today) ? yesterday : today;
+}
+
+/** Docket #3: yesterday was locked in to and today isn't yet, so yesterday is still open for its close whatever the hour. */
+export function lateOpen(marks: CloseMark[], today: string): boolean {
+  const yesterday = addDays(today, -1);
+  return marks.some((m) => m.date === yesterday && m.morningDoneAt) && !marks.some((m) => m.date === today && m.morningDoneAt);
 }

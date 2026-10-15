@@ -65,7 +65,9 @@ async function main() {
       return d;
     })();
     await db.delete(schema.dailyLogs).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, today)));
-    await db.update(schema.dailyLogs).set({ eveningDoneAt: null, repairedAt: null }).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, lastWeekday)));
+    // A missed day is one never begun (docket #3): a day locked in to but not closed stays open for its close until the next
+    // lock-in and breaks nothing yet, so the fixture clears the lock-in as well as the close.
+    await db.update(schema.dailyLogs).set({ eveningDoneAt: null, repairedAt: null, morningDoneAt: null }).where(and(eq(schema.dailyLogs.userId, maya.id), eq(schema.dailyLogs.date, lastWeekday)));
     const closedRows = await db.query.dailyLogs.findMany({ where: and(eq(schema.dailyLogs.userId, maya.id), isNotNull(schema.dailyLogs.eveningDoneAt)) });
     // make sure the run before the missed day is unbroken for at least 2 weekdays
     let d = addDays(lastWeekday, -1);

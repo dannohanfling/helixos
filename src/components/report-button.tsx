@@ -9,6 +9,10 @@ import { SubmitButton } from "@/components/submit-button";
 import { FilePicker } from "@/components/file-picker";
 
 /** The refusal goes in the address the way every form's does, so the shared button puts the typing back and marks the field. */
+/** Docket #2: how long a send may take before the form says so and offers Send again; what you typed stays. */
+export const SEND_TIMEOUT_MS = 20_000;
+export const TOOK_TOO_LONG = "That took too long. Press Send again, or Start over: what you typed is still here.";
+
 function setRefusal(error: string | null, field?: string) {
   const u = new URL(window.location.href);
   u.searchParams.delete("reportError");
@@ -66,6 +70,15 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
     setRefusal(null);
     dialog.current?.showModal();
   };
+  const startOver = () => {
+    form.current?.reset();
+    setKind("issue");
+    if (shot) URL.revokeObjectURL(shot.url);
+    setShot(null);
+    setShotError(null);
+    setResult(null);
+    setRefusal(null);
+  };
   const take = async (blob: Blob) => {
     try {
       const small = await shrink(blob);
@@ -102,12 +115,13 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
       dialog.current?.showModal();
     }
   };
+  // Docket #2 (T.G.): a send that hangs comes back after SEND_TIMEOUT_MS with a plain line, and Start over clears the form.
   const send = async (fd: FormData) => {
     fd.delete("screenshotFile");
     if (shot) fd.set("screenshot", new File([shot.blob], "screenshot.jpg", { type: "image/jpeg" }));
     let r: SendResult;
     try {
-      r = await sendReportAction(fd);
+      r = await Promise.race([sendReportAction(fd), new Promise<SendResult>((resolve) => setTimeout(() => resolve({ ok: false, error: TOOK_TOO_LONG }), SEND_TIMEOUT_MS))]);
     } catch {
       r = { ok: false, error: "That didn't send. Check your connection and press Send again: what you typed is still here." };
     }
@@ -237,7 +251,10 @@ export function ReportButton({ coachFirst, className = "", variant = "sidebar" }
                 {result.error}
               </p>
             ) : null}
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={startOver} data-testid="report-start-over">
+                Start over
+              </button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => dialog.current?.close()}>
                 Cancel
               </button>

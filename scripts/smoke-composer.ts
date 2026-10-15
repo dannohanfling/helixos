@@ -111,6 +111,22 @@ async function main() {
   await page.click('a:has-text("See every version")');
   await page.waitForURL(/\/repurpose/);
   const itemId = page.url().match(/\/content\/([a-z0-9-]+)\/repurpose/i)![1];
+  // Docket #4: with no GoHighLevel connected, one line on phone and desktop says the posts wait, with the way to connect; no failed banner.
+  {
+    const { db: dbx, schema: sx } = await import("@/db");
+    const { eq: eqx } = await import("drizzle-orm");
+    const who = await dbx.query.users.findFirst({ where: eqx(sx.users.email, "client@demo.helixos.app") });
+    const conn = who ? await dbx.query.socialConnections.findFirst({ where: eqx(sx.socialConnections.userId, who.id) }) : null;
+    const ready = Boolean(conn && conn.accounts.length && !conn.lastError && conn.ghlUserId?.trim());
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.reload();
+      const line = page.locator('[data-testid="distribute-not-connected"]');
+      if (ready ? (await line.count()) !== 0 : (await line.count()) !== 1 || !(await line.innerText()).includes("Not connected to GoHighLevel: these posts wait for you") || (await page.locator('[data-testid="failed-banner"]').count())) throw new Error(`at ${width}px the connection state is one line (connected: ${ready})`);
+    }
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await page.reload();
+  }
   await expectText(page, "Custom Instagram caption", "variant saved");
   await expectText(page, "scheduled", "variant scheduled");
   await expectText(page, cta.split("\n")[0].slice(0, 40), "saved versions carry the chosen CTA");

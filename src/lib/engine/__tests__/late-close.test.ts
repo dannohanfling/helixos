@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hourInTz, todayInTz } from "@/lib/dates";
 import { applyLatePlan, lateCountsLine, planLateCloses, readStamp, type LateLog, type LateMember } from "../late-close";
-import { closeTarget, LATE_CLOSE_UNTIL_HOUR, runningStreak, SAME_CLOSE_HOURS, streakDayOf, type CloseMark } from "../streak";
+import { closeTarget, LATE_CLOSE_UNTIL_HOUR, lateOpen, runningStreak, SAME_CLOSE_HOURS, streakDayOf, type CloseMark } from "../streak";
 
 // 2026-10-12 is a Monday. Los Angeles is UTC-7 in October.
 const LA = "America/Los_Angeles";
@@ -79,6 +79,38 @@ describe("late close-outs: which day a close-out is for (rev 731)", () => {
     const london = closeTarget([], todayInTz("Europe/London", now), hourInTz("Europe/London", now), now);
     expect(la).toEqual({ date: "2026-10-12", late: true, same: false });
     expect(london).toEqual({ date: "2026-10-13", late: false, same: false });
+  });
+});
+
+describe("the close stays yesterday's until the new day's lock-in (docket #3, D.D. in GMT+8)", () => {
+  const SG = "Asia/Singapore";
+  const at = (iso: string, marks: CloseMark[] = []) => {
+    const now = new Date(iso);
+    return closeTarget(marks, todayInTz(SG, now), hourInTz(SG, now), now);
+  };
+  it("09:00 the next morning, yesterday locked in to and not closed, no lock-in yet today: yesterday's; after the lock-in, today's", () => {
+    // Tuesday 14 Oct 09:00 in Singapore is 01:00 UTC. Monday was locked in to (01:00 UTC Monday) and never closed.
+    const monday: CloseMark = { date: "2026-10-13", eveningDoneAt: null, morningDoneAt: "2026-10-13T01:00:00Z" };
+    expect(at("2026-10-14T01:00:00Z", [monday])).toEqual({ date: "2026-10-13", late: true, same: false });
+    expect(at("2026-10-14T01:00:00Z", [monday, { date: "2026-10-14", eveningDoneAt: null, morningDoneAt: "2026-10-14T00:30:00Z" }])).toEqual({ date: "2026-10-14", late: false, same: false });
+    // Monday closed already: today's. A Monday never begun (no lock-in): today's after 04:00, as before.
+    expect(at("2026-10-14T01:00:00Z", [{ ...monday, eveningDoneAt: "2026-10-13T12:00:00Z" }])).toEqual({ date: "2026-10-14", late: false, same: false });
+    expect(at("2026-10-14T01:00:00Z", [])).toEqual({ date: "2026-10-14", late: false, same: false });
+  });
+  it("the streak reads as of yesterday while yesterday is still open, so a streak never shows 0 before the late close", () => {
+    const closed = new Set(["2026-10-08", "2026-10-09"]);
+    // Tuesday 13 Oct at 09:00: Monday locked in to, not closed, no lock-in yet today: still Monday's day, so the streak is read
+    // as of Monday and never shows the break before Monday's late close.
+    expect(streakDayOf(closed, "2026-10-13", 9, true)).toBe("2026-10-12");
+    // Once Tuesday is locked in to, the day is Tuesday.
+    expect(streakDayOf(closed, "2026-10-13", 9, false)).toBe("2026-10-13");
+    // A caller that knows only the hour keeps the 04:00 window.
+    expect(streakDayOf(closed, "2026-10-13", 9)).toBe("2026-10-13");
+    expect(streakDayOf(new Set(["2026-10-09"]), "2026-10-13", 1)).toBe("2026-10-12");
+    const monday: CloseMark = { date: "2026-10-12", eveningDoneAt: null, morningDoneAt: "2026-10-12T01:00:00Z" };
+    expect(lateOpen([monday], "2026-10-13")).toBe(true);
+    expect(lateOpen([monday, { date: "2026-10-13", eveningDoneAt: null, morningDoneAt: "2026-10-13T01:00:00Z" }], "2026-10-13")).toBe(false);
+    expect(lateOpen([], "2026-10-13")).toBe(false);
   });
 });
 
