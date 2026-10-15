@@ -26,6 +26,9 @@ import {
   defaultPitch,
   factNumbers,
   fillPrompt,
+  fixPillars,
+  pillarShape,
+  quoteShort,
   originAllowed,
   parseObject,
   SECTIONS,
@@ -109,12 +112,14 @@ export async function heroFor(code: string): Promise<{ url: string; mime: string
 }
 
 export type Written = { profile: MfProfile | null; pitch: MfPitch; sources: Record<MfSection, SectionSource>; status: "personal" | "partial" | "default"; note: string | null; failed: Partial<Record<MfSection, string>> };
+/** What the writer has so far (H-142): the profile when read, the first draft before its checks. The preview streams these. */
+export type ComposeEvent = { kind: "profile"; profile: MfProfile } | { kind: "draft"; pitch: MfPitch };
 
 /**
  * One prospect's page. No key, the cap reached, or no usable profile: the whole page is the default copy. Otherwise every
  * section is checked; the failures are written once more, and whatever still fails takes its default alone.
  */
-export async function composePage(o: { member: Member; tz: string; cap: number; webinar: schema.Webinar; setup: schema.MfSetup; firstName: string; said: { pain: string; industry: string; summary: string }; custom: Record<string, string> }): Promise<Written> {
+export async function composePage(o: { member: Member; tz: string; cap: number; webinar: schema.Webinar; setup: schema.MfSetup; firstName: string; said: { pain: string; industry: string; summary: string }; custom: Record<string, string>; on?: (e: ComposeEvent) => void }): Promise<Written> {
   const facts = factsFor(o.webinar, o.tz);
   const proofs = await proofsFor(o.member);
   const fallback = (profile: MfProfile | null) =>
@@ -128,6 +133,7 @@ export async function composePage(o: { member: Member; tz: string; cap: number; 
   const prof = await magicFunnelCall(writer.key, "profile", PROFILE_SYSTEM, profileInput({ ...o.said, custom: o.custom }), 600);
   const profile = readProfile(parseObject(prof.text));
   if (!profile) return plain(prof.why ? `no profile: ${prof.why}` : "no profile: no JSON in the reply");
+  o.on?.({ kind: "profile", profile });
 
   // Proof on the page (H-9): the chosen items, else any with the permission tick when the setup allows it, else none.
   const pool = o.setup.proofIds.length || o.setup.proofAny ? rankProof(proofs, o.setup.proofIds, profile) : [];
@@ -142,7 +148,7 @@ export async function composePage(o: { member: Member; tz: string; cap: number; 
     customerWords: customerWordsFrom(profile),
   };
   const system = `${pitchRules({ pillarIds: ctx.pillarIds, agendaIds: ctx.agendaIds, proofIds: ctx.proofIds, urgency: o.setup.urgency })}\n\n<voice>\n${fillPrompt(o.setup.prompt ?? DEFAULT_PROMPT, o.firstName, profile.main_pain)}\n</voice>`;
-  const input = pitchInput({ facts, pillars: o.setup.pillars, agenda: o.setup.agenda, objections: o.setup.objections, proofs: ranked.map((p) => ({ id: p.id, who: p.who, tags: p.tags, line: p.quote.slice(0, 400) })), profile, firstName: o.firstName });
+  const input = pitchInput({ facts, pillars: o.setup.pillars, agenda: o.setup.agenda, objections: o.setup.objections, proofs: ranked.map((p) => ({ id: p.id, who: p.who, tags: p.tags, line: quoteShort(p.quote, 400) })), profile, firstName: o.firstName });
 
   // The page (H-11): one call; a reply that was cut, refused or never came gets one plain second try (a bigger limit when
   // it was cut, a pause when Anthropic was busy), never a "you broke the rules" retry against a reply nobody read.
@@ -156,15 +162,18 @@ export async function composePage(o: { member: Member; tz: string; cap: number; 
   if (r.text && !firstRaw) firstRaw = parseObject(r.text);
   const writerWhy = !r.text ? r.why : !firstRaw ? "no JSON in the reply" : null;
   if (writerWhy) return { ...plain(writerWhy, profile), failed: Object.fromEntries(SECTIONS.map((s) => [s, `writer: ${writerWhy}`])) as Partial<Record<MfSection, string>> };
-  const first = readPitch(firstRaw);
+  // The pillars as the writer named them, keyed back to ids (H-142); what it sent is logged by shape when that still fails.
+  const first = fixPillars(readPitch(firstRaw), o.setup.pillars);
+  o.on?.({ kind: "draft", pitch: first });
   const firstCheck = checkSections(first, ctx);
+  if (firstCheck.pillars === "pillars out of order") console.error("[mf] pillars", JSON.stringify(pillarShape(first.pillars.order, o.setup.pillars)));
   const failing = (Object.keys(firstCheck) as MfSection[]).filter((s) => firstCheck[s]);
   let retry: MfPitch | null = null;
   let retryCheck: Record<MfSection, string | null> | null = null;
   if (failing.length) {
     const why = failing.map((s) => `${s}: ${firstCheck[s]}`).join("; ");
     const again = await magicFunnelCall(writer.key, "pitch", system, `${input}\n\nYour last version broke the rules in these sections (${why}). Write the whole JSON again and fix them.`, 2500);
-    retry = again.text ? readPitch(parseObject(again.text)) : null;
+    retry = again.text ? fixPillars(readPitch(parseObject(again.text)), o.setup.pillars) : null;
     retryCheck = retry ? checkSections(retry, ctx) : null;
   }
   const { pitch, sources } = assemble(first, firstCheck, retry, retryCheck, fallback(profile));

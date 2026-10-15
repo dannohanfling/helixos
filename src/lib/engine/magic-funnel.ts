@@ -280,6 +280,112 @@ export function readPitch(raw: Record<string, unknown> | null): MfPitch {
   };
 }
 
+/* ───────────────────────── the pillars, as the writer names them ───────────────────────── */
+
+export type PillarRef = { id: string; title: string };
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/**
+ * The writer's `order` as ids (H-142). It was asked for ["p1", "p2", "p3"] reordered, but it answers in its own ways: the
+ * titles, "Pillar 2", "2", "P1", a title with the id in front. Each entry resolves by id, by title, or by number; a list that
+ * names every pillar once, in any of those forms, is the order. Anything else is null, and the section falls back.
+ */
+export function pillarIdOf(entry: string, pillars: PillarRef[]): string | null {
+  const e = String(entry ?? "").trim();
+  const key = squash(e);
+  if (!key) return null;
+  const byId = pillars.find((p) => squash(p.id) === key);
+  if (byId) return byId.id;
+  const byTitle = pillars.find((p) => squash(p.title) === key);
+  if (byTitle) return byTitle.id;
+  const num = e.match(/^(?:pillar|part|p)?\s*#?\s*([1-9])\b/i)?.[1];
+  if (num && pillars[Number(num) - 1]) return pillars[Number(num) - 1].id;
+  return pillars.find((p) => key.startsWith(squash(p.id)) && key.endsWith(squash(p.title)))?.id ?? null;
+}
+
+export function resolvePillarOrder(raw: string[], pillars: PillarRef[]): string[] | null {
+  if (!pillars.length || raw.length !== pillars.length) return null;
+  const out: string[] = [];
+  for (const entry of raw) {
+    const id = pillarIdOf(entry, pillars);
+    if (!id || out.includes(id)) return null;
+    out.push(id);
+  }
+  return out;
+}
+
+/** The pitch with its pillars keyed by id whatever the writer called them; `lines` keyed the same way. Unresolvable: unchanged. */
+export function fixPillars(p: MfPitch, pillars: PillarRef[]): MfPitch {
+  const order = resolvePillarOrder(p.pillars.order, pillars);
+  const lines: Record<string, string> = { ...p.pillars.lines };
+  for (const [k, v] of Object.entries(p.pillars.lines)) {
+    const id = pillarIdOf(k, pillars);
+    if (id && !lines[id]) lines[id] = v;
+  }
+  return { ...p, pillars: { order: order ?? p.pillars.order, lines } };
+}
+
+/** The shape of what the writer sent for the pillars, for the log when it still fails: kinds and a count, never the words. */
+export function pillarShape(raw: string[], pillars: PillarRef[]): { n: number; kinds: string[] } {
+  const kinds = raw.map((e) => {
+    const key = squash(String(e ?? ""));
+    if (pillars.some((p) => squash(p.id) === key)) return "id";
+    if (pillars.some((p) => squash(p.title) === key)) return "title";
+    if (/^(?:pillar|part|p)?\s*#?\s*[1-9]\b/i.test(String(e ?? "").trim())) return "number";
+    return "other";
+  });
+  return { n: raw.length, kinds };
+}
+
+/* ───────────────────────── fallbacks in words (H-142) ───────────────────────── */
+
+/** Each engine reason as one plain sentence for the coach's collapsed line. Never shown to a prospect. */
+const REASON_WORDS: Record<string, string> = {
+  empty: "the writer left it empty",
+  "too long": "the writer's version ran too long for the page",
+  "not plain text": "the writer put a link, markup or an emoji in it",
+  "a price": "the writer mentioned a price or a discount",
+  "a guarantee": "the writer promised a guarantee",
+  "an invented result": "the writer invented a result or a statistic",
+  "a number in the example": "the writer put a number in the example, which carries none",
+  "a number that isn't in the facts": "the writer used a number that isn't in the webinar facts",
+  "scarcity that isn't real": "the writer claimed seats, a deadline or live-only that aren't set",
+  "the prospect's own words": "the writer repeated the prospect's own words",
+  "written to their customer": "the writer spoke to them as if they were their own customer",
+  "more than three sentences": "the writer wrote more than three sentences",
+  "not three bullets": "the writer didn't give three bullets",
+  "pillars out of order": "the writer named the three pillars in a way the page couldn't match",
+  "proof that isn't in the bank": "the writer picked proof that isn't in your Proof Bank",
+  "the same proof twice": "the writer picked the same proof twice",
+  "not two or three proof items": "the writer didn't pick two or three proof items",
+  "an agenda item that isn't there": "the writer picked an agenda item that isn't in your setup",
+  "not two or three lines to bring": "the writer didn't give two or three lines to bring",
+};
+export function fallbackInWords(reason: string): string {
+  if (reason.startsWith("writer: ")) return `the writer gave nothing usable (${reason.slice(8)})`;
+  return REASON_WORDS[reason] ?? `the writer's version didn't pass the check (${reason})`;
+}
+
+/** Where a coach's preview opens as the real page (H-142). Pure, so the preview component can build the link. */
+export const previewPath = (code: string) => `/mf/p/${code}`;
+
+/* ───────────────────────── proof lines ───────────────────────── */
+
+/**
+ * A quote cut for a short line (H-142): at the last sentence end before the limit, else at a word, never mid-word, with an
+ * ellipsis when something was left off. A quote within the limit is returned whole.
+ */
+export function quoteShort(quote: string, max: number): string {
+  const q = quote.trim().replace(/\s+/g, " ");
+  if (q.length <= max) return q;
+  const head = q.slice(0, max);
+  const ends = [...head.matchAll(/[.!?]["”']?(?=\s|$)/g)];
+  const atSentence = ends.length ? ends[ends.length - 1].index! + ends[ends.length - 1][0].length : 0;
+  if (atSentence >= Math.min(40, max / 2)) return head.slice(0, atSentence).trim();
+  const atWord = head.lastIndexOf(" ");
+  return `${(atWord > 0 ? head.slice(0, atWord) : head).replace(/[,;:\s]+$/, "")}…`;
+}
+
 /* ───────────────────────── the checks ───────────────────────── */
 
 export type CheckContext = {

@@ -5,7 +5,11 @@ import { requireViewer } from "@/lib/auth";
 import { magicFunnelSource } from "@/lib/ai";
 import { saveMfSetupAction } from "@/lib/actions/magic-funnel";
 import { factsFor, mfAvailable, pagesToday, setupFor } from "@/lib/mf/data";
-import { DAILY_CAP_DEFAULT, DEFAULT_PROMPT, EMPTY_DEFAULTS, MF_KEY_WORDS, MF_MAX, SECTION_MAX } from "@/lib/engine/magic-funnel";
+import { previewContext } from "@/lib/hermes/data";
+import { quoteOnce } from "@/lib/hermes/rules";
+import { COLD_HERO } from "@/lib/hermes/copy";
+import { hermesFonts } from "@/components/hermes/fonts";
+import { DAILY_CAP_DEFAULT, DEFAULT_PROMPT, EMPTY_DEFAULTS, MF_KEY_WORDS, MF_MAX, SECTION_MAX, defaultPitch, quoteShort } from "@/lib/engine/magic-funnel";
 import { Badge, Card, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { MfPreview } from "@/components/mf-preview";
@@ -17,9 +21,11 @@ import { siteUrl } from "@/lib/app-url";
 import { ItemGone } from "@/components/item-gone";
 
 export const metadata = { title: "Magic funnel" };
-/** The preview runs two model calls in this page's action (H-11). */
-export const maxDuration = 120;
+/** Save is quick; the preview's writing runs over its own streamed route (H-142), not this page's action. */
+export const maxDuration = 60;
 const SAVE_STEPS = [{ label: "Saving your setup…", until: 100, seconds: 3 }];
+/** The server's clock for the preview's countdown, read outside the component as Hermes's renderer does. */
+const clock = () => Date.now();
 
 /**
  * Coach → Webinars → Magic funnel (revs 812, 815; rev 837's answers), per webinar: the facts the AI may use (the webinar's own
@@ -45,6 +51,16 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
   const d = { ...EMPTY_DEFAULTS, ...(setup?.defaults ?? {}) };
   const pillar = (i: number) => setup?.pillars.find((p) => p.id === `p${i}`);
   const consented = proofs.filter((p) => p.permissionAt);
+  // The preview's page (H-142): the gold design with the default copy, shown before the writer starts; the proof line with the
+  // name once and the quote cut at a sentence, never mid-word.
+  const ctx = setup ? await previewContext(m, w.id) : null;
+  const cold = defaultPitch({ defaults: setup?.defaults ?? EMPTY_DEFAULTS, pillars: setup?.pillars ?? [], agenda: setup?.agenda ?? [], proofIds: [], firstName: "", facts: ctx ? { title: ctx.title, startsAt: ctx.when.startsAt, when: ctx.when.line, promise: "", learn: [], whoFor: "" } : factsFor(w, v.tz) });
+  if (ctx && !setup?.defaults.header?.trim()) cold.hero = { ...cold.hero, header: COLD_HERO.header, subheader: cold.hero.subheader || COLD_HERO.subheader(ctx.when) };
+  const previewProofs = consented.map((p) => {
+    const who = p.who?.trim() || p.name;
+    const quote = quoteOnce((p.quote ?? p.shortVersion ?? "").trim(), who);
+    return { id: p.id, who, quote, line: `${who}: "${quoteShort(quote, 140)}"` };
+  });
   const cap = v.membership.mfDailyCap ?? DAILY_CAP_DEFAULT;
   // Counts only (rev 812 §7): the Magic funnel against plain registration in the chat. Attendance comes with its tags.
   const mf = signups.filter((x) => x.source === "mf");
@@ -245,7 +261,7 @@ export default async function MagicFunnelPage({ params, searchParams }: { params
         </Card>
       </form>
       <Card className="mt-4" title="Preview a person's page">
-        {setup ? <MfPreview webinarId={w.id} pillars={setup.pillars.map((p) => ({ id: p.id, title: p.title }))} agenda={setup.agenda} proofs={consented.map((p) => ({ id: p.id, line: `${p.who || p.name}: "${(p.quote ?? p.shortVersion ?? "").slice(0, 140)}"` }))} /> : <p className="text-sm text-ink-3">Save the setup first, then preview it.</p>}
+        {setup ? <MfPreview webinarId={w.id} ctx={ctx} fonts={hermesFonts} defaultPitch={cold} pillars={setup.pillars.map((p) => ({ id: p.id, title: p.title }))} agenda={setup.agenda} proofs={previewProofs} now={clock()} /> : <p className="text-sm text-ink-3">Save the setup first, then preview it.</p>}
       </Card>
     </>
   );

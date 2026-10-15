@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
 import { db, ensureMigrated, schema } from "./index";
 import stages from "@/data/seed/stages.json";
 import library from "@/data/seed/task_library.json";
@@ -123,6 +123,8 @@ async function wipeDemo(): Promise<void> {
   // next run's cron try every feed it found, and the "tried once" check failed on the second run).
   const feedIds = (await db.query.leaderboardFeeds.findMany({ where: eq(schema.leaderboardFeeds.workspaceId, ws.id), columns: { id: true } })).map((f) => f.id);
   if (feedIds.length) await db.delete(schema.leaderboardSlugAliases).where(inArray(schema.leaderboardSlugAliases.feedId, feedIds));
+  // And any alias whose feed is already gone (made before the seed cleared feeds, H-171): an orphan keeps its address taken.
+  await db.delete(schema.leaderboardSlugAliases).where(notInArray(schema.leaderboardSlugAliases.feedId, db.select({ id: schema.leaderboardFeeds.id }).from(schema.leaderboardFeeds)));
   await db.delete(schema.leaderboardFeeds).where(eq(schema.leaderboardFeeds.workspaceId, ws.id));
   for (const t of byWs) await db.delete(t).where(eq(t.workspaceId, ws.id));
   await db.delete(schema.dmTemplates).where(eq(schema.dmTemplates.workspaceId, ws.id));

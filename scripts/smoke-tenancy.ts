@@ -99,6 +99,7 @@ const ROUTES: Record<string, Route> = {
   "/mf/[code]": { kind: "public", why: "Hermes: a HelixOS-hosted Magic funnel page by its 43-character code, the prefill only until they register or the call starts; a wrong code is the cold page; open only while that webinar's switch is on; rate limited" },
   "/mf/[code]/confirmed": { kind: "public", why: "Hermes: the confirmation page of a registered code (first name, ticket, the call's date); any other code goes back to its page; rate limited" },
   "/mf/[code]/ics": { kind: "public", why: "Hermes: the call as an .ics file for a registered code, nothing personal in it; any other code is a 404" },
+  "/mf/p/[code]": { kind: "public", why: "a coach's preview of a Magic funnel page as the real page (H-142), by a day-long 43-character code: the gold design with the form inert, nothing counted; an unknown or expired code is the quiet closed page; rate limited" },
   "/mf/w/[webinarId]": { kind: "public", why: "Hermes: a webinar's cold page for ads, its default copy and an empty form, only while its HelixOS switch is on" },
   "/m/[slug]": { kind: "public", why: "a lead magnet's public hosted page, read by strangers" },
 };
@@ -340,8 +341,10 @@ async function main() {
     await Promise.all([page.waitForURL(/\/today/), page.click('button[type="submit"]')]);
     console.log(`✓ signed in as A (${A.name}); B is ${B.name}`);
 
+    // connection: close (15 Oct): between two probes the walk reads the database; the server drops an idle kept-alive socket after
+    // five seconds and the next request on it dies with "socket hang up". One connection per probe.
     const getBody = async (url: string) => {
-      const r = await page.request.get(`${base}${url}`, { maxRedirects: 0 });
+      const r = await page.request.get(`${base}${url}`, { maxRedirects: 0, headers: { connection: "close" } });
       return { status: r.status(), loc: r.headers()["location"] ?? "", text: await r.text() };
     };
 
@@ -388,12 +391,18 @@ async function main() {
     // On a fresh server (the gate clears both caches first, 14 Oct) nothing is compiled yet: open every page whose tree imports a
     // probed action, as A, so each is registered before the sweep. A's own ladder page carries the ladder actions.
     const aLadder = await db.query.ladders.findFirst({ where: and(eq(schema.ladders.workspaceId, ws), eq(schema.ladders.userId, A.id)), columns: { id: true } });
-    for (const p of ["/body/training", "/body/training/routines", "/content", "/offers", "/goals", "/groups", "/conversations", "/proof", "/clients", "/magnets", "/library", "/content/ladders", ...(aLadder ? [`/content/ladders/${aLadder.id}`] : []), "/body/practices", "/body/training/health"]) await page.goto(`${base}${p}`);
-    const actionMap = buildActionMap();
-    const byName = Object.fromEntries(Object.entries(actionMap).map(([id, n]) => [n, id]));
+    for (const p of ["/settings", "/body/training", "/body/training/routines", "/content", "/offers", "/goals", "/groups", "/conversations", "/proof", "/clients", "/magnets", "/library", "/content/ladders", ...(aLadder ? [`/content/ladders/${aLadder.id}`] : []), "/body/practices", "/body/training/health"]) await page.goto(`${base}${p}`);
+    let byName: Record<string, string> = {};
+    // The map is read from the dev build; a page opened after it was read (Settings, before the brand kit step) adds its actions,
+    // so a name that isn't there yet is looked up again before it counts as unregistered (15 Oct, fresh server before this walk).
+    const refreshActions = () => {
+      byName = Object.fromEntries(Object.entries(buildActionMap()).map(([id, n]) => [n, id]));
+    };
+    refreshActions();
     // An action is posted to a page whose tree imports it (the dev server registers actions per page): Today for most, Settings
     // for the Settings card's own.
     const post = async (name: string, fields: Record<string, string>, at = "/today") => {
+      if (!byName[name]) refreshActions();
       const id = byName[name];
       if (!id) throw new Error(`no action id for ${name}: the dev build did not register it`);
       const r = await page.request.post(`${base}${at}`, { multipart: { ...fields, [`$ACTION_ID_${id}`]: "" }, maxRedirects: 0 });

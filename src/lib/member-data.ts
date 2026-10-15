@@ -54,6 +54,7 @@ export const MEMBER_TABLES = {
   // webinars, prospects' names, emails and answers among them: theirs, exported and erased with them.
   bot_keys: schema.botKeys,
   mf_setups: schema.mfSetups,
+  mf_previews: schema.mfPreviews,
   hermes_pages: schema.hermesPages,
   // The Forum (rev 765): the member's own agents, their reports, what needs them and their webhook (its hash only): theirs,
   // exported and erased with them.

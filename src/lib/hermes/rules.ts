@@ -65,7 +65,12 @@ export function quoteOnce(quote: string, who: string): string {
   const name = who.trim();
   if (!name) return quote.trim();
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const names = [...new Set([name, name.split(/\s+/)[0]])].filter(Boolean).map(esc).join("|");
+  // The full name, the first name, and the initial forms a Proof Bank entry carries ("Kim Y.", "K. Yates") for the same person (H-142).
+  const parts = name.split(/\s+/).filter(Boolean);
+  const first = parts[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1] : "";
+  const forms = [name, first, last && `${first} ${last[0]}.`, last && `${first} ${last[0]}`, last && `${first[0]}. ${last}`, last && `${first[0]} ${last}`].filter(Boolean) as string[];
+  const names = [...new Set(forms)].map(esc).join("|");
   let q = quote.trim();
   q = q.replace(new RegExp(`\\s*(?:[-–—~]+\\s*|\\(\\s*)(?:${names})\\b[^"”]*$`, "i"), "");
   q = q.replace(new RegExp(`^(?:${names})\\s*:\\s*`, "i"), "");

@@ -86,7 +86,7 @@ async function main() {
   // One proof to choose in the picker (H-7): approved, with the permission tick, found by its tag.
   await db.delete(schema.proofs).where(and(eq(schema.proofs.userId, maya.id), like(schema.proofs.name, "MF proof %")));
   const pickProof = newId();
-  await db.insert(schema.proofs).values({ id: pickProof, workspaceId: ws, userId: maya.id, name: "MF proof Kara", who: "Kara", status: "approved", permissionAt: new Date().toISOString(), tags: ["picker-walk-tag"], quote: "I booked three calls in a week." });
+  await db.insert(schema.proofs).values({ id: pickProof, workspaceId: ws, userId: maya.id, name: "MF proof Kara", who: "Kara Young", status: "approved", permissionAt: new Date().toISOString(), tags: ["picker-walk-tag"], quote: "Kara Y.: I booked three calls in a week from one post. Then I stopped chasing people and then get the one who said no last year. Now the calendar fills itself and my mornings go to coaching instead of chasing." });
   // The sample GoHighLevel page is a public site calling this HelixOS on localhost, which Chromium holds behind its local-network
   // check (a permission prompt nobody answers in a walk). Production is public to public, so the check is switched off here only.
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium", args: ["--disable-features=LocalNetworkAccessChecks,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults"] });
@@ -280,20 +280,80 @@ async function main() {
     must(logs.length && logs.every((l) => !/sam@|example\.com|nicotine|Lee/i.test(`${l.note} ${JSON.stringify(l.payload)}`)), "the log holds the code's start, the webinar and the outcome, no name or email");
     console.log("✓ GET /api/mf: her domain only, no-store, noindex; the prefill until registered, then none; a wrong code generic; rate limited; first open recorded; the log keeps nothing personal");
 
-    // 5. The preview: invented scarcity falls back alone.
-    await page.goto(`${base}/webinars/${webinarId}/magic-funnel`);
+    // 5. The preview, demo-proof (H-142): the page in the gold design before any write, the writing streamed section by
+    // section with an honest status line, one write per click, the reasons coach-only, Open as their page, the proof line.
+    const mfPage = `${base}/webinars/${webinarId}/magic-funnel`;
+    await page.goto(mfPage);
+    await page.goto(mfPage); // warm, so the timing below is the page's own, not the dev server's first compile
+    const html = await (await page.request.get(mfPage)).text();
+    must(html.includes('data-testid="hm-landing"') && html.includes('data-copy="default"'), "the default-copy page is in the server's HTML, before any script runs");
+    await page.locator('[data-testid="mf-preview-page"] [data-testid="hm-landing"]').waitFor({ timeout: 20000 });
+    const paintMs = await page.evaluate(() => Math.round(performance.now() - (performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming).responseEnd));
+    must(paintMs < 1000, `the default page shows under a second after the response: ${paintMs} ms`);
+    const seatForm = page.locator('[data-testid="mf-preview-page"] [data-testid="hm-form"]');
+    must((await seatForm.count()) === 1 && !(await seatForm.getAttribute("action")), "the page's form is there and inert in the preview");
+    const countsBefore = await page.locator('[data-testid="mf-count-registered"]').innerText();
+    const signupsBefore = (await db.query.webinarSignups.findMany({ where: eq(schema.webinarSignups.webinarId, webinarId) })).length;
     await page.fill('[data-testid="mf-preview-industry"]', "fitness coaching");
-    await page.fill('[data-testid="mf-preview-pain"]', "WALK_SCARCITY inconsistent leads");
+    await page.fill('[data-testid="mf-preview-pain"]', "WALK_SCARCITY WALK_TITLES inconsistent leads");
+    const t0 = Date.now();
     await page.click('[data-testid="mf-preview-run"]');
-    await page.locator('[data-testid="mf-preview-result"]').waitFor({ timeout: 60000 });
+    await page.locator('[data-testid="mf-preview"][data-phase="profile"], [data-testid="mf-preview"][data-phase="writing"], [data-testid="mf-preview"][data-phase="checking"]').first().waitFor({ timeout: 10000 });
+    must(await page.locator('[data-testid="mf-preview-run"]').isDisabled(), "the button is off while it writes");
+    await page.locator('[data-testid="mf-preview-run"]').click({ force: true }).catch(() => undefined); // a second click
+    await page.keyboard.press("Enter"); // and Enter in a field
+    const status = await page.locator('[data-testid="mf-preview-status"]').innerText();
+    must(/Reading who they are|Writing their page|Checking every line/.test(status) && /\d+s/.test(status) && !/%/.test(status), `an honest status line with the seconds, no percentage: ${status}`);
+    await page.locator('[data-testid="mf-preview"][data-phase="done"]').waitFor({ timeout: 90000 });
+    must((await page.locator('[data-testid="mf-preview"]').getAttribute("data-runs")) === "1", "a double click and Enter started one write, not two");
+    console.log(`✓ the preview: the default page first (${paintMs} ms after the response), the form inert, one write per click, the status line honest; done in ${Math.round((Date.now() - t0) / 1000)}s`);
+
     const sources = Object.fromEntries(await page.locator('[data-testid="mf-preview-section"]').evaluateAll((els) => els.map((e) => [e.getAttribute("data-section"), e.getAttribute("data-source")])));
-    const agendaShown = await page.locator('[data-testid="mf-preview-section"][data-section="agenda"]').innerText();
+    must(sources.urgency === "default" && sources.emotional === "personal" && sources.hero === "personal" && sources.pillars === "personal", `urgency falls back alone; the pillars named by their titles still match: ${JSON.stringify(sources)}`);
+    must((await page.locator('[data-testid="mf-preview-page"] [data-testid="hm-landing"]').getAttribute("data-copy")) === "personal", "the page shows the personal copy");
+    // The copy list is a collapsed details: its words are read by content, not by what is on screen.
+    const agendaShown = (await page.locator('[data-testid="mf-preview-section"][data-section="agenda"]').evaluate((el) => el.textContent)) ?? "";
     must(!/\ba[0-9]+:/.test(agendaShown), `the agenda highlight shows the item, never its id (H-9): ${agendaShown.slice(0, 80)}`);
-    must((await page.locator('[data-testid="mf-preview-progress"]').count()) <= 1, "one progress line for the preview");
-    must(sources.urgency === "default" && sources.emotional === "personal" && sources.hero === "personal", `urgency falls back alone: ${JSON.stringify(sources)}`);
+    const why = page.locator('[data-testid="mf-preview-why"]');
+    const whyText = (await why.evaluate((el) => el.textContent)) ?? "";
+    must((await why.count()) === 1 && !(await why.evaluate((el) => (el as HTMLDetailsElement).open)) && (await why.locator('[data-testid="mf-preview-why-line"]').count()) === 1 && /Urgency/.test(whyText) && /seats, a deadline or live-only/.test(whyText), `the reason sits in one collapsed line, in words: ${whyText}`);
+    const pageWords = await page.locator('[data-testid="mf-preview-page"]').innerText();
+    must(!/fell back|default copy|scarcity/i.test(pageWords), "no reason and no 'fell back' on the page itself");
+    const proofLine = (await page.locator('[data-testid="mf-preview-section"][data-section="proof_ids"]').evaluate((el) => el.textContent)) ?? "";
+    must(proofLine.includes('Kara Young: "I booked three calls in a week from one post. Then I stopped chasing people and then get the one who said no last year."') && !/Now the calendar|Kara Y\.: Kara|Kara Young: "Kara/.test(proofLine), `the proof line: the name once, the quote cut at the last sentence end before 140 characters: ${proofLine}`);
+    const pageQuote = await page.locator('[data-testid="mf-preview-page"] [data-testid="hm-proof"] blockquote').first().innerText();
+    must(pageQuote.startsWith("“I booked three calls") && !pageQuote.includes("Kara"), `the page's quote carries the name once, under it: ${pageQuote}`);
+    console.log("✓ the preview: scarcity caught and said in words for the coach alone; pillars by title matched; the proof line and the page's quote carry the name once");
+
+    // Open as their page: the gold design at 1440 and 390, the form inert, nothing counted, a day-long code; expired is closed.
+    const href = (await page.locator('[data-testid="mf-preview-open"]').getAttribute("href"))!;
+    must(/^\/mf\/p\/[A-Za-z0-9_-]{43}$/.test(href) && (await page.locator('[data-testid="mf-preview-copy"]').getAttribute("data-link")) === `${base}${href}`, `Open as their page links a 43-character code and Copy link carries the same address: ${href}`);
+    for (const width of [1440, 390]) {
+      const look = await (await browser.newContext({ viewport: { width, height: 900 } })).newPage();
+      const res = await look.goto(`${base}${href}`);
+      must(res?.status() === 200 && (await look.locator('[data-testid="hm-landing"]').getAttribute("data-copy")) === "personal", `the preview page renders the personal page at ${width}`);
+      must((await look.evaluate(() => document.documentElement.scrollWidth)) <= width, `nothing wider than the screen at ${width}`);
+      const form = look.locator('[data-testid="hm-form"]');
+      must((await form.count()) === 1 && !(await form.getAttribute("action")), "the form on the preview page doesn't post");
+      await form.locator('button[type="submit"], [type="submit"]').first().click({ force: true }).catch(() => undefined);
+      await look.waitForTimeout(300);
+      must(look.url() === `${base}${href}`, "a tap on the form goes nowhere");
+      must(!(await look.locator("script[src*='connect.facebook']").count()), "no pixel on a preview page");
+      await look.context().close();
+    }
+    await page.reload();
+    must((await page.locator('[data-testid="mf-count-registered"]').innerText()) === countsBefore && (await db.query.webinarSignups.findMany({ where: eq(schema.webinarSignups.webinarId, webinarId) })).length === signupsBefore, "a preview is no sign-up: the counts don't move");
+    const previewCode = href.slice("/mf/p/".length);
+    const previewRow = (await db.query.mfPreviews.findFirst({ where: eq(schema.mfPreviews.code, previewCode) }))!;
+    must(previewRow && new Date(previewRow.expiresAt).getTime() - Date.now() >= 23 * 3600 * 1000, `the preview lasts a day: expires ${previewRow?.expiresAt}`);
+    await db.update(schema.mfPreviews).set({ expiresAt: new Date(Date.now() - 1000).toISOString() }).where(eq(schema.mfPreviews.id, previewRow.id));
+    const gone = await page.request.get(`${base}${href}`);
+    must(gone.status() === 200 && (await gone.text()).includes('data-testid="hm-closed"') && !(await gone.text()).includes("Sam"), "an expired code shows the quiet closed page, nothing personal");
+    must((await page.request.get(`${base}/mf/p/not-a-code`)).status() === 200 && (await (await page.request.get(`${base}/mf/p/not-a-code`)).text()).includes('data-testid="hm-closed"'), "a malformed code is the closed page too");
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(mfPage);
     must((await page.evaluate(() => document.documentElement.scrollWidth)) <= 390, "the setup page fits a phone");
-    console.log("✓ the preview: invented scarcity caught, urgency on the default copy, every other section personal; the page fits 390");
+    console.log("✓ Open as their page: the gold design at 1440 and 390, the form inert, no pixel, nothing counted, a day-long code; expired or malformed is the closed page");
 
     must(!failures.length, `server errors: ${failures.join(", ")}`);
     console.log("\nmf walk passed");
