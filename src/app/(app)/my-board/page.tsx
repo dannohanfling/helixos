@@ -130,7 +130,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
           </p>
         ) : null}
         {fresh && canAsk ? (
-          <p className="br-quiet" style={{ fontSize: 13, margin: "0 0 12px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }} data-testid="board-fresh-note">
+          <div className="br-quiet" style={{ fontSize: 13, margin: "0 0 12px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }} data-testid="board-fresh-note">
             <span>Fresh start on {formatDate(fresh.slice(0, 10))}: the Board reads only discussions since then.</span>
             {canUndo ? (
               <form action={undoFreshStartAction}>
@@ -139,7 +139,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
                 </SubmitButton>
               </form>
             ) : null}
-          </p>
+          </div>
         ) : null}
         <form action="/my-board" method="get" role="search" className="br-askrow" style={{ marginBottom: 12 }}>
           <input type="search" name="q" defaultValue={q} className="br-field" placeholder="Search your discussions" aria-label="Search your discussions" style={{ flex: "1 1 220px", fontSize: 14 }} data-testid="board-search" />
