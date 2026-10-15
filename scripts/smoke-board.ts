@@ -667,6 +667,20 @@ async function main() {
     await login(page, "As a client");
     console.log("✓ Example mode: the coach's tick only, saved and replayable, tagged Example, no tasks, out of the Forum's count and of the next prompt");
 
+    // Widths and the keyboard: Past discussions at 390, 1024 and 1440 without sideways scroll; Start fresh opens by keyboard.
+    for (const w of [390, 1024, 1440]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await page.goto(`${base}/my-board#discussions`);
+      const over = await page.locator('section[aria-label="Past discussions"]').evaluate((el) => el.scrollWidth - el.clientWidth);
+      must(over <= 0 && (await rows.count()) >= 1, `Past discussions at ${w}: rows shown, no sideways scroll (${over})`);
+    }
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.locator('[data-testid="board-start-fresh"] summary').focus();
+    await page.keyboard.press("Enter");
+    must(await page.locator('[data-testid="board-start-fresh-go"]').isVisible(), "Start fresh opens by keyboard, with its confirm");
+    await page.setViewportSize({ width: 1280, height: 950 });
+    console.log("✓ Past discussions at 390, 1024 and 1440; Start fresh by keyboard");
+
     // board_checkin by voice, and refused to a team member.
     const latestSteps = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.parentId, decisionId), orderBy: desc(schema.boardDecisions.createdAt) }))!.answer!.steps;
     const said = latestSteps.map((_, i) => ({ n: i + 1, state: i === 0 ? "done" : "dropped" }));
