@@ -29,6 +29,13 @@ createServer((req, res) => {
   if (req.headers.authorization !== `Bearer ${ELOYALTY_KEY}`) return json(401, { error: "invalid key" });
   if (forced !== 200) return json(forced, { error: "forced" });
   if (url.pathname === "/api/external/v1/templates") return json(200, { data: TEMPLATES });
+  // The points check's history read: a customer's events, newest change made by hand in the portal for cus_001, by the API for the rest.
+  const ev = url.pathname.match(/^\/api\/public\/admin\/customers\/([^/]+)\/events$/);
+  if (ev) {
+    const id = decodeURIComponent(ev[1]);
+    if (!CUSTOMERS.some((c) => c.id === id)) return json(404, { error: "not found" });
+    return json(200, { data: [{ type: "points_added", points: 100, created_at: "2026-10-01T10:00:00Z", source: "api_key" }, ...(id === "cus_001" ? [{ type: "points_adjusted", points: 50, created_at: "2026-10-05T09:00:00Z", source: "portal", created_by: { name: "Walk Staffer" } }] : [])] });
+  }
   if (url.pathname === "/api/external/v1/customers") {
     const tpl = url.searchParams.get("template_id");
     const active = url.searchParams.get("is_active") === "true";

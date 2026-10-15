@@ -8,6 +8,8 @@ import { ctx, refresh, str } from "@/lib/action-helpers";
 import { nowIso } from "@/lib/dates";
 import { pageConfigFromForm, parseExport, readHidden } from "@/lib/engine/leaderboard";
 import { checkFeed, feedForMembership, removeFeedKey, saveExport, saveFeedSettings, savePageConfig, setFeedSlug } from "@/lib/leaderboard";
+import { parseClExport } from "@/lib/engine/points-check";
+import { clearPointsCheck, runPointsCheck } from "@/lib/points-check";
 
 /** One of this coach's clients, by membership, or the coach's own membership (their own program, H-29). */
 async function programOf(coach: { workspace: { id: string }; membership: { id: string } }, membershipId: string) {
@@ -99,4 +101,39 @@ export async function saveLeaderboardSlugAction(formData: FormData): Promise<voi
   if (problem) redirect(`/loyalty?slugError=${encodeURIComponent(problem)}#address`);
   refresh();
   redirect("/loyalty?slug=changed#address");
+}
+
+const MAX_EXPORT_BYTES = 5 * 1024 * 1024;
+
+/**
+ * The points check (H-102, H-112): the coach uploads the client's Community Loyalty bot-user export once; it is read here,
+ * in memory, to its pass fields, compared with eLoyalty (GET only), and thrown away. One sealed snapshot of "First L." and
+ * numbers stays on the row. A problem comes back in words beside the form. Never a write to either system.
+ */
+export async function runPointsCheckAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) return;
+  const feed = await db.query.leaderboardFeeds.findFirst({ where: and(eq(schema.leaderboardFeeds.id, str(formData, "id")), eq(schema.leaderboardFeeds.workspaceId, coach.workspace.id)) });
+  if (!feed) return;
+  const back = (error?: string) => `/coach?connections=open${error ? `&pointsCheckError=${encodeURIComponent(error)}` : ""}#leaderboard-${feed.id}`;
+  const file = formData.get("export");
+  if (!(file instanceof File) || file.size === 0) redirect(back("Choose the export file first."));
+  if (file.size > MAX_EXPORT_BYTES) redirect(back("That file is over 5MB."));
+  const name = file.name.toLowerCase();
+  if (!name.endsWith(".csv") && !name.endsWith(".txt") && !name.endsWith(".tsv")) redirect(back("Use the CSV export."));
+  const text = Buffer.from(await file.arrayBuffer()).toString("utf8");
+  const parsed = parseClExport(text);
+  if (!parsed.columns.customerId && !parsed.columns.serial) redirect(back("That export has no Loyalty Customer ID or pass serial column; pin them in Community Loyalty and export again."));
+  const r = await runPointsCheck(feed, parsed.records, { columns: parsed.columns, clRows: parsed.rows });
+  if (!r.ok) redirect(back(r.error));
+  refresh();
+  redirect(back());
+}
+
+/** Clear the stored snapshot. */
+export async function clearPointsCheckAction(formData: FormData): Promise<void> {
+  const coach = await requireCoach();
+  if (coach.switchedInto) return;
+  await clearPointsCheck(str(formData, "id"), coach.workspace.id);
+  refresh();
 }

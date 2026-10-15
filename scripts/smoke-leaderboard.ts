@@ -10,7 +10,7 @@
  */
 import { spawn } from "node:child_process";
 import { chromium, type Page } from "@playwright/test";
-import { CUSTOMERS, ELOYALTY_KEY, TEMPLATES } from "./fixtures/eloyalty";
+import { CL_EXPORT_CSV, CUSTOMERS, ELOYALTY_KEY, TEMPLATES } from "./fixtures/eloyalty";
 
 const base = process.argv[2] ?? "http://localhost:3000";
 const port = 4080;
@@ -213,9 +213,30 @@ async function main() {
     console.log("✓ the page address: reserved and taken refused, a new one live at once, the old one a 308 and its feed still answering");
 
     pageUrl = `${base}/lb/kindness-walk`;
-    // Before a key: the coach removes it; the pasted export stands in, stripped on save; with nothing, 503 and the samples.
+
+    // The points check (H-102): the coach uploads the CL export once; the table shows First L. and numbers only; the hide list is counted apart; nothing was written.
     await logout(page);
     await login(page, "As the coach");
+    await page.goto(`${base}/coach?connections=open`);
+    await row().locator('[data-testid="points-check"] summary').click();
+    const writesBefore = (await mockCalls()).writes.length;
+    await row().locator('[data-testid="points-check-file"]').setInputFiles({ name: "wDn-walk-export.csv", mimeType: "text/csv", buffer: Buffer.from(CL_EXPORT_CSV) });
+    await submit(page, `li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="points-check-run"]`);
+    await page.locator('[data-testid="points-check-result"]').first().waitFor({ timeout: 20000 });
+    const counts = await page.locator('[data-testid="points-check-counts"]').first().innerText();
+    // Seven active passes; Maya's hide list holds cus_001 (hidden earlier in this walk), so Maria is counted apart. Ben matches by serial, Ina by customer id; Zero, John Doe, Tess and Rafa have no CL record; Guest has a serial eLoyalty doesn't know; Hannah has no pass field and is read past.
+    must(counts.includes("6 passes;") && counts.includes("2 match a CL record") && counts.includes("0 differ") && counts.includes("4 passes with no CL record") && counts.includes("1 CL records with no pass") && counts.includes("1 team tests counted apart"), `the counts line: ${counts}`);
+    const table = await page.locator('[data-testid="points-check-table"]').first().innerText();
+    must(table.includes("Ben O.") && table.includes("Ina") && table.includes("both agree") && table.includes("team (portal)") && table.includes("API"), `the table: members as First L., the reasons and who made the last change: ${table.slice(0, 200)}`);
+    must(table.includes("Maria S. (test)"), "a hidden member is shown as a test");
+    const checkHtml = await page.content();
+    must(!checkHtml.includes("example.com") && !checkHtml.includes("cus_0") && !checkHtml.includes("SER-") && !checkHtml.includes("Santos") && !checkHtml.includes("f159927"), "no email, id, serial, last name or bot user ns on the coach page");
+    const sealedRow = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, feedRow.id) }))!;
+    must(sealedRow.pointsCheckSealed?.startsWith("enc:v1:") && !sealedRow.pointsCheckSealed.includes("Ben"), "the snapshot is sealed at rest");
+    must((await mockCalls()).writes.length === writesBefore, "the check wrote nothing to eLoyalty");
+    console.log("✓ the points check: the export read once, members as First L. with both balances and the reason, the hide list apart, sealed at rest, nothing written");
+
+    // Before a key: the coach removes it; the pasted export stands in, stripped on save; with nothing, 503 and the samples.
     await page.goto(`${base}/coach?connections=open`);
     must((await page.locator('li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-row"]').getAttribute("open")) !== null, "a client with a feed shows the block open");
     await submit(page, 'li:has(input[name="eoPassUrl"][value*="maya-torres"]) [data-testid="leaderboard-remove"]');

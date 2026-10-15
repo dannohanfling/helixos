@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 183,
+    date: "2026-10-15",
+    title: "Coaches: a read-only points check for a client's loyalty program",
+    lines: [
+      "On a client's row in Coach, under their loyalty leaderboard, \"Points check\" takes a one-time upload of their Community Loyalty bot-user export and compares it, in memory, with the points their pass program holds: per member (first name and initial only) the program's balance, the copy Community Loyalty keeps, the difference, the last change the program recorded and who made it, and a suggested right number with the reason. Passes with no Community Loyalty record and the reverse are listed too; accounts on the hide list are counted apart.",
+      "Nothing is written to either system; the export is read and thrown away, and one sealed result stays on the row so the table can be reopened.",
+    ],
+    audience: "coach",
+  },
+  {
     n: 182,
     date: "2026-10-15",
     title: "The Aqueduct: where your leads flow, and where they leak",

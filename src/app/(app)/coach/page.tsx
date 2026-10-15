@@ -31,6 +31,7 @@ import { catalogue } from "@/lib/engine/rewards";
 import { openClaims } from "@/lib/queries/rewards";
 import { setFeatureOnAction } from "@/lib/actions/bot-features";
 import { checkLeaderboardAction, removeLeaderboardKeyAction, saveLeaderboardAction } from "@/lib/actions/leaderboard";
+import { PointsCheck } from "@/components/leaderboard/points-check";
 import { featureOf } from "@/lib/engine/bot-features";
 import { setClaimDoneAction } from "@/lib/actions/rewards";
 import { loadRewardsConfig } from "@/lib/rewards-config";
@@ -44,7 +45,7 @@ import { hasHeadshot } from "@/lib/headshots";
 
 export const metadata = { title: "Coach" };
 
-export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string }> }) {
+export default async function CoachPage({ searchParams }: { searchParams: Promise<{ claims?: string; connections?: string; pointsCheckError?: string }> }) {
   const v = await requireCoach();
   const sp = await searchParams;
   const claimsShown = sp.claims === "done" ? "done" : "open";
@@ -362,6 +363,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                           </>
                         ) : null}
                         <code className="basis-full break-all text-[11px] text-ink-3" data-testid="leaderboard-feed">/lb/{feedOf.get(r.m.id)!.slug} · /api/public/leaderboard/{feedOf.get(r.m.id)!.slug}</code>
+                        {feedOf.get(r.m.id)!.keyEncrypted ? <PointsCheck feed={feedOf.get(r.m.id)!} error={sp.pointsCheckError} /> : null}
                       </div>
                     ) : null}
                   </details>
