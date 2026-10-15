@@ -7,6 +7,7 @@ import { councilFor } from "@/lib/board-seats";
 import { forRoom } from "@/lib/engine/board";
 import { BoardCouncilNote } from "@/components/board-council-note";
 import { Boardroom } from "@/components/boardroom";
+import { councilClipFiles } from "@/lib/board-clips";
 import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
 import { formatDate } from "@/lib/dates";
@@ -82,7 +83,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
           </form>
         </div>
       ) : (
-        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} seats={seats} answer={null} question={(sp.ask ?? "").slice(0, 300)} used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
+        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} clips={councilClipFiles()} seats={seats} answer={null} question={(sp.ask ?? "").slice(0, 300)} used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
       )}
       {hours ? <BoardCouncilNote seats={seats} /> : null}
       {hours && preset === "standard" ? (

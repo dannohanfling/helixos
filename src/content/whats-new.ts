@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 185,
+    date: "2026-10-15",
+    title: "My Board: the Council speaks on film in the evening",
+    lines: [
+      "In the Council Chamber's Night look, each advisor's statue moves on its turn: a short clip plays in place of the still while they speak, and the room settles back to the still when they finish. Tap a seat mid-discussion and its clip follows the spotlight.",
+      "With reduced motion on, the stills stay as they are. The golden-hour clips come later.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 184,
     date: "2026-10-15",
     title: "Magic funnel: preview a person's page as the page itself",

@@ -57,6 +57,9 @@
 .br-seat { position: absolute; transform: translate(-50%, -50%); min-width: 44px; min-height: 44px; background: none; border: 0; padding: 0; margin: 0; border-radius: 40%; color: inherit; font: inherit; cursor: pointer; }
 .br-live { position: absolute; inset: 0; pointer-events: none; opacity: 0; background-image: var(--br-photo); background-repeat: no-repeat; transform-origin: 50% 85%; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent 100%); mask-image: radial-gradient(closest-side, #000 72%, transparent 100%); transition: opacity 0.5s; }
 .br-seat.br-speaking .br-live { opacity: 1; animation: br-speak 1.7s ease-in-out infinite; }
+/* A clip carries the motion for its turn (H-150): the CSS lean stays off on that seat; the glow and the dimming of the others stay. */
+.br-seat.br-speaking.br-clipped .br-live { opacity: 0; animation: none; }
+.br-clip-next { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 @keyframes br-speak { 0%, 100% { transform: scale(1) translateY(0); filter: brightness(1.05) saturate(1.05); } 35% { transform: scale(1.035) translateY(-1.2%) rotate(-0.4deg); filter: brightness(1.16) saturate(1.12); } 70% { transform: scale(1.02) translateY(-0.6%) rotate(0.3deg); filter: brightness(1.1) saturate(1.08); } }
 .br-glow, .br-shade { position: absolute; inset: -12%; border-radius: 50%; pointer-events: none; opacity: 0; transition: opacity 0.5s; }
 .br-glow { background: radial-gradient(closest-side, rgba(255, 214, 130, 0.55), rgba(255, 200, 110, 0.18) 60%, rgba(255, 200, 110, 0)); mix-blend-mode: screen; }

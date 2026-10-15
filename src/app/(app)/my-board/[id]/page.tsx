@@ -6,6 +6,7 @@ import { BoardSetup } from "@/components/board-setup";
 import { forRoom, seatsOfDecision, type Mode } from "@/lib/engine/board";
 import { BoardCouncilNote } from "@/components/board-council-note";
 import { Boardroom } from "@/components/boardroom";
+import { councilClipFiles } from "@/lib/board-clips";
 import { sceneLookFor } from "@/lib/engine/board-view";
 import { SubmitButton } from "@/components/submit-button";
 import { formatDate } from "@/lib/dates";
@@ -103,6 +104,7 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           <Boardroom
             key={latest.id}
             initialLook={sceneLookFor(v.membership.sceneLook, v.hour)}
+            clips={councilClipFiles()}
             seats={seats}
             answer={latest.answer}
             question={latest.question}
