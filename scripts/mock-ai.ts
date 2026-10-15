@@ -42,10 +42,13 @@ function reply(system: string, user: string): string {
     const nic = /nicotine/i.test(user);
     const name = user.match(/<first_name>([^<]*)<\/first_name>/)?.[1] ?? "there";
     const reordered = order.length ? [order[order.length - 1], ...order.slice(0, -1)] : [];
+    // "WALK_TITLES" in their words (H-142): the pillars named by their titles, as the real writer sometimes does, and "Pillar N" on the retry.
+    const titles = (JSON.parse(user.match(/<pillars>\n([\s\S]*?)\n<\/pillars>/)?.[1] ?? "[]") as { id: string; title: string }[]).map((p) => p.title);
+    const byTitle = /WALK_TITLES/.test(user) ? (retry ? reordered.map((id) => `Pillar ${order.indexOf(id) + 1}`) : reordered.map((id) => titles[order.indexOf(id)] ?? id)) : reordered;
     return JSON.stringify({
       hero: { header: nic ? "Fill your quit-smoking practice without chasing anyone" : "More clients for your coaching business, without sales calls", subheader: "A plain plan for the next ninety days of your business", cta_label: `Save my seat, ${name}` },
       why_you: ["You already help people change", "Your calendar has room for more clients", "You want a way to sell that feels like you"],
-      pillars: { order: reordered, lines: Object.fromEntries(order.map((id) => [id, "How this part grows your business, week by week."])) },
+      pillars: { order: byTitle, lines: Object.fromEntries(order.map((id) => [id, "How this part grows your business, week by week."])) },
       example: { title: nic ? "What this looks like for a quit-smoking coach" : "What this looks like for a fitness coach", text: "A short post brings a conversation. The conversation becomes a call you never had to chase." },
       proof_ids: proofs.slice(0, 2),
       objection: { objection: "I don't have time", answer: "The session shows the few steps that matter first." },

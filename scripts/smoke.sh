@@ -72,6 +72,13 @@ main() {
       echo "smoke: no such walk '$w' ($script)" >&2
       exit 2
     fi
+    # The tenancy walk opens every page whose tree imports a probed action, in one go; after the walks before it the dev
+    # server's compile has climbed past the container's memory (15 Oct: the kernel killed next-server at 13 GB, H-178). A fresh
+    # server, both caches cleared, walks it well under the limit; local only.
+    if [[ "$w" == "tenancy" && "$BASE_URL" == "http://localhost:3000" ]]; then
+      printf '\n== fresh server before tenancy ==\n'
+      scripts/dev-server.sh fresh
+    fi
     printf '\n== reseed ==\n'
     npm run db:seed
     printf '\n== walk: %s ==\n' "$w"

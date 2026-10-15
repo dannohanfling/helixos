@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 184,
+    date: "2026-10-15",
+    title: "Magic funnel: preview a person's page as the page itself",
+    lines: [
+      "On a webinar's Magic funnel, \"Preview a person's page\" now shows the page in the gold design straight away, with your default copy, and rewrites it section by section as the writer goes. The status line says what it is doing and how long it has taken; the button waits until it is done.",
+      "After a write: \"Open as their page\" opens the preview as the real registration page (a day-long link you can copy and show on a phone; the form there doesn't send and nothing is counted). The reasons a section kept your default copy sit in a collapsed line for you alone.",
+      "Proof lines show the name once and cut at the end of a sentence; the writer's three pillars are matched however it names them.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 183,
     date: "2026-10-15",
     title: "Coaches: a read-only points check for a client's loyalty program",

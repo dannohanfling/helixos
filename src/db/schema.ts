@@ -3844,6 +3844,29 @@ export const mfSetups = sqliteTable(
 );
 export type MfSetup = typeof mfSetups.$inferSelect;
 
+/**
+ * A coach's preview of one prospect's page, kept a day so it can open as the real page (H-142): the written pitch for a
+ * made-up person, by a 256-bit code. Never a sign-up: no email, no contact, no counts, no form. Rows past their day are
+ * deleted when the next preview is made.
+ */
+export const mfPreviews = sqliteTable(
+  "mf_previews",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    webinarId: text("webinar_id").notNull(),
+    code: text("code").notNull(),
+    firstName: text("first_name").notNull().default(""),
+    pitch: text("pitch", { mode: "json" }).$type<MfPitch>().notNull(),
+    sources: text("sources", { mode: "json" }).$type<Record<string, "personal" | "default">>().notNull().default({}),
+    createdAt: createdAt(),
+    expiresAt: text("expires_at").notNull(),
+  },
+  (t) => [uniqueIndex("mf_previews_code").on(t.code), index("mf_previews_member").on(t.workspaceId, t.userId)],
+);
+export type MfPreview = typeof mfPreviews.$inferSelect;
+
 export const bodyIngestTokens = sqliteTable(
   "body_ingest_tokens",
   {
