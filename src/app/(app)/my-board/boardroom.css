@@ -140,6 +140,8 @@
 /* H-245: a held turn (a tap on the quote) shows a small mark; the quote itself is the button. */
 .br-says[role="button"] {
   cursor: pointer;
+  /* The table lets taps through to the chairs (pointer-events: none); the quote takes them back while it is the button. */
+  pointer-events: auto;
 }
 .br-says[role="button"]:focus-visible {
   outline: 2px solid var(--accent);

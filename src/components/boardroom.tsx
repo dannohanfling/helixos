@@ -137,7 +137,7 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
       >
         <div className="br-says-label">
           {`${seatOf(speaker)?.short.toUpperCase()} SAYS`}
-          {held ? <span className="br-paused" data-testid="board-held">paused</span> : null}
+          {held ? <span className="br-paused" data-testid={ids ? "board-held" : undefined}>paused</span> : null}
         </div>
         <div className="br-says-line">{card(speaker)!.text}</div>
       </div>
