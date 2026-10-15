@@ -39,11 +39,8 @@ export async function saveSetupStepAction(_prev: SetupFormState, formData: FormD
   const href = str(formData, "href") || "/today";
   if (!href.startsWith("/")) return { error: "The link is a page in HelixOS, starting with /." };
   const needs = str(formData, "needs").split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
-  try {
-    await saveSetupStep({ key, group, order: Math.max(1, Math.round(num(formData, "order") || 1)), label: label.slice(0, 120), href, signal, needs, minutes: Math.max(0, Math.min(600, Math.round(num(formData, "minutes") || 0))) });
-  } catch (e) {
-    return { error: (e as Error).message };
-  }
+  const saved = await saveSetupStep({ key, group, order: Math.max(1, Math.round(num(formData, "order") || 1)), label: label.slice(0, 120), href, signal, needs, minutes: Math.max(0, Math.min(600, Math.round(num(formData, "minutes") || 0))) });
+  if (!saved) return { error: "That step isn't on the list." };
   refresh();
   return { ok: true };
 }

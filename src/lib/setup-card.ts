@@ -47,7 +47,8 @@ export async function setupFactsFor(v: Viewer): Promise<SetupFacts> {
     signedIn: true,
     startHereWatched: Boolean(ms.startHereWatchedAt),
     profileSaved: Boolean(ms.profileSavedAt),
-    photo: Boolean(ms.headshotUrl) && ms.headshotSource !== "removed",
+    // The photo's own addresses stay in the headshot files; who set it is enough here.
+    photo: ms.headshotSource === "upload" || ms.headshotSource === "import",
     firstLockin: Boolean(lockin?.morningDoneAt),
     bigPromise: has(ms.bigPromise) && has(ms.audience),
     goal: Boolean(goal && goal.target > 0),
@@ -95,14 +96,15 @@ export async function markStartHereWatched(membershipId: string): Promise<void> 
 }
 
 /** The coach edits one step: label, group, order, link, what it reads, what it needs first, minutes. Keys never change. */
-export async function saveSetupStep(row: SetupStepDef): Promise<void> {
+export async function saveSetupStep(row: SetupStepDef): Promise<boolean> {
   const defs = await setupDefs();
-  if (!defs.some((d) => d.key === row.key)) throw new Error("That step isn't on the list.");
+  if (!defs.some((d) => d.key === row.key)) return false;
   const needs = row.needs.filter((k) => k !== row.key && defs.some((d) => d.key === k));
   const values = { group: row.group, order: row.order, label: row.label, href: row.href, signal: row.signal, needs, minutes: row.minutes, updatedAt: nowIso() };
   // The table is seeded by the seed; a workspace that has never reseeded gets the file's rows written now, with this edit.
   if (!(await db.query.setupSteps.findFirst({ columns: { key: true } }))) for (const d of SETUP_STEPS) await db.insert(schema.setupSteps).values(d).onConflictDoNothing();
   await db.update(schema.setupSteps).set(values).where(eq(schema.setupSteps.key, row.key));
+  return true;
 }
 
 /** The coach's video slot: a link, or nothing ("Coming soon"). */
