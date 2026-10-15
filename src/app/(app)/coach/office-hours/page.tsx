@@ -52,7 +52,7 @@ export default async function CoachOfficeHoursPage({ searchParams }: { searchPar
               <li key={d.id} className="py-3 text-sm" data-testid="ooh-shared-decision">
                 <details>
                   <summary className="cursor-pointer">
-                    <b>{d.member}</b>: {d.answer?.decision ?? d.question} <span className="text-xs text-ink-3">· shared {formatDate(d.sharedAt.slice(0, 10))}</span>
+                    <b>{d.member}</b>: {d.answer?.decision ?? d.question} <span className="text-xs text-ink-3">· shared {formatDate(d.sharedAt.slice(0, 10))}{d.example ? " · Example" : ""}{!d.example && !d.remembered ? " · Not remembered" : ""}</span>
                   </summary>
                   <div className="mt-2 space-y-1">
                     <p><span className="text-ink-3">They asked:</span> {d.question}</p>

@@ -26,6 +26,8 @@ type Props = {
   action: (fd: FormData) => void | Promise<void>;
   parentId?: string | null;
   canAsk: boolean;
+  /** "This is an example (don't remember it)" on the ask box (H-257): a coach's own Board only. */
+  exampleTick?: boolean;
   /** "Run the discussion" replays a decision that has an answer. */
   decisionView: boolean;
   initialMode?: Mode;
@@ -48,7 +50,7 @@ const plateName = (s: Seat) => s.short.replace(/ Advisor$/, "");
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
 const dayWords = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", DATE_FMT);
 
-export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day", clips = [] }: Props) {
+export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day", clips = [], exampleTick = false }: Props) {
   const spoken = useMemo(() => (answer ? seats.filter((s) => answer.advisors.some((a) => a.seat === s.key)).map((s) => s.key) : []), [seats, answer]);
   const [phase, setPhase] = useState<"idle" | "asking" | "playing" | "done">(answer ? (autoplay ? "playing" : "done") : "idle");
   const [idx, setIdx] = useState(0);
@@ -201,6 +203,11 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
               ))}
             </div>
             {mode === "focus" ? <p className="br-quiet" style={{ margin: 0, fontSize: 13 }} data-testid="board-focus-hint">{spot ? `You'll hear from ${seatOf(spot)?.short}.` : "Tap the advisor you want to hear from."}</p> : null}
+            {exampleTick && !decisionView ? (
+              <label className="br-quiet" style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+                <input type="checkbox" name="example" value="1" data-testid="board-example" /> This is an example (don&rsquo;t remember it)
+              </label>
+            ) : null}
           </form>
         ) : (
           <div className="br-question">{question || "My Board"}</div>

@@ -119,6 +119,10 @@
 .br-foot { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .br-decide { font-family: "Cormorant Garamond", Georgia, serif; font-size: 34px; font-style: italic; color: var(--br-gold-text); }
 .br-log li { border-top: 1px solid var(--br-hair); padding: 12px 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+/* Past discussions (H-257): one line each for the question and the recommendation; the tags Shared with coach, Example, Not remembered. */
+.br-oneline { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.br-tag { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--br-gold-text); border: 1px solid rgba(201, 162, 74, 0.55); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.br-log-group { display: block; }
 .br-field { background: transparent; color: var(--br-cream); border: 0; border-bottom: 1px solid var(--br-rim); font: inherit; min-height: 44px; }
 .br-field option { color: #111; }
 

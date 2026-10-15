@@ -108,6 +108,8 @@ export const memberships = sqliteTable(
     aqueductPeriod: integer("aqueduct_period").notNull().default(30),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
+    /** My Board's memory (H-257): "Start fresh" stamps this; the Board then reads only decisions made after it (a database stamp, UTC). Undo for seven days clears it. */
+    boardFreshStartAt: text("board_fresh_start_at"),
     /** The Magic funnel (rev 812 §8): a client's switch, off until Danno turns it on for that client; the coach's own is always on. */
     mfEnabled: integer("mf_enabled", { mode: "boolean" }).notNull().default(false),
     /** Pages written a day, at most (rev 837: 300, editable in Coach). Past it, pages use the default copy. */
@@ -4230,6 +4232,10 @@ export const boardDecisions = sqliteTable(
     /** The seats this answer sat with (rev 756 §5), chair by chair, with the version each used. Null on answers before it. */
     seats: text("seats", { mode: "json" }).$type<BoardSeatUsed[]>(),
     sharedAt: text("shared_at"),
+    /** "The Board remembers this" (H-257): off keeps the decision out of future discussions; the decision itself stays. */
+    remembered: integer("remembered", { mode: "boolean" }).notNull().default(true),
+    /** An example (H-257): a coach's demo, saved and replayable, out of the Board's memory and the Forum's count. */
+    example: integer("example", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
     updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
   },

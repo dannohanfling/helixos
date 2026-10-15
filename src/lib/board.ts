@@ -24,6 +24,7 @@ import { principlesFor } from "@/lib/board-principles";
 export { principlesFor };
 import { buildProposals, SETUP_SHAPE } from "@/lib/engine/board-setup";
 import { setupLook } from "@/lib/board-setup";
+import { beforeFreshStart, canUndoFreshStart, dbStamp, discussionTags, inMemory, matchesSearch, MEMORY_SIZE, pageOf } from "@/lib/engine/board-memory";
 
 export const FEATURE = "board";
 type Member = { workspaceId: string; userId: string };
@@ -171,8 +172,9 @@ export async function boardContext(v: Viewer, question: string, mode: Mode): Pro
     out.push({ key: "scoreboard", label: "This week's scoreboard", href: "/today", text: `So far this week: ${s.posts.total} posts, ${s.dms.started} DMs, ${s.calls} calls booked, ${s.closes} of ${s.days} days closed.` });
   }
   if (want.has("decisions")) {
-    const past = await db.query.boardDecisions.findMany({ where: and(mine(schema.boardDecisions), isNull(schema.boardDecisions.parentId)), orderBy: desc(schema.boardDecisions.createdAt), limit: 5 });
-    const answered = past.filter((d) => d.answer);
+    // The Board's memory (H-257): the last five remembered decisions made after a fresh start, never an example.
+    const past = await db.query.boardDecisions.findMany({ where: and(mine(schema.boardDecisions), isNull(schema.boardDecisions.parentId)), orderBy: desc(schema.boardDecisions.createdAt), limit: 200, columns: { createdAt: true, answer: true, stepTasks: true, remembered: true, example: true } });
+    const answered = past.filter((d) => d.answer && inMemory(d, v.membership.boardFreshStartAt)).slice(0, MEMORY_SIZE);
     if (answered.length) {
       const ids = answered.flatMap((d) => d.stepTasks.filter((x): x is string => Boolean(x)));
       const done = new Set(ids.length ? (await db.query.tasks.findMany({ where: and(eq(schema.tasks.userId, m.userId), inArray(schema.tasks.id, ids), eq(schema.tasks.status, "done")), columns: { id: true } })).map((t) => t.id) : []);
@@ -207,7 +209,7 @@ export type AskResult = { ok: true; decision: schema.BoardDecision } | { ok: fal
  * message), the server's checks, one more try when an answer fails them, and the decision saved with what it used. A follow-up
  * (parentId) belongs to its decision: the first question hears all five, later ones the few who matter.
  */
-export async function askBoard(v: Viewer, input: { question: string; mode: Mode; focus?: string | null; parentId?: string | null; need?: string[] }): Promise<AskResult> {
+export async function askBoard(v: Viewer, input: { question: string; mode: Mode; focus?: string | null; parentId?: string | null; need?: string[]; example?: boolean }): Promise<AskResult> {
   const question = input.question.trim().slice(0, 4000);
   if (question.length < 3) return { ok: false, error: "Say what you're deciding." };
   const hours = v.membership.boardHours;
@@ -215,6 +217,8 @@ export async function askBoard(v: Viewer, input: { question: string; mode: Mode;
   const m = memberOf(v);
   const parent = input.parentId ? await db.query.boardDecisions.findFirst({ where: and(eq(schema.boardDecisions.workspaceId, m.workspaceId), eq(schema.boardDecisions.userId, m.userId), eq(schema.boardDecisions.id, input.parentId)) }) : null;
   if (input.parentId && !parent) return { ok: false, error: "That decision isn't yours or isn't there any more." };
+  // An example (H-257): a coach's own demo, never a client's; a follow-up on an example is one too.
+  const example = Boolean(parent?.example) || (Boolean(input.example) && v.role === "coach" && !v.switchedInto);
   // Edge Preset only ever for a coach's own Board.
   const preset: Preset = v.role === "coach" && !v.switchedInto && v.membership.boardPreset === "edge" ? "edge" : "standard";
   // The member's council (rev 756): Danno and their four chairs, paused expert seats already swapped for the archetypes.
@@ -255,7 +259,7 @@ export async function askBoard(v: Viewer, input: { question: string; mode: Mode;
   const id = newId();
   // "Set it up for me" (rev 660): the proposals under a good answer, checked against the member's own rows; nothing applied yet.
   const built = checked && !checked.problem ? buildProposals(checked.answer, setup, await setupLook(v, parent?.id ?? id, question, known)) : { proposals: [], notes: [] };
-  await db.insert(schema.boardDecisions).values({ id, ...m, parentId: parent?.id ?? null, question, mode: input.mode, focus, preset, answer: checked && !checked.problem ? checked.answer : null, seats: seatsUsed(seats), notes: checked ? [...(checked.problem ? [checked.problem] : []), ...checked.notes, ...built.notes] : [], used, proposals: built.proposals });
+  await db.insert(schema.boardDecisions).values({ id, ...m, parentId: parent?.id ?? null, question, mode: input.mode, focus, preset, example, answer: checked && !checked.problem ? checked.answer : null, seats: seatsUsed(seats), notes: checked ? [...(checked.problem ? [checked.problem] : []), ...checked.notes, ...built.notes] : [], used, proposals: built.proposals });
   const decision = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, id) }))!;
   if (checked?.problem) return { ok: false, error: `The Board's answer didn't pass its checks (${checked.problem}). Ask again; your question is kept.`, decision };
   if (parent) await db.update(schema.boardDecisions).set({ updatedAt: nowIso() }).where(eq(schema.boardDecisions.id, parent.id));
@@ -273,6 +277,43 @@ export async function decisionsFor(v: Viewer, limit = 30) {
 /** One of the member's decisions, or null. */
 export async function ownDecision(v: Viewer, id: string) {
   return (await db.query.boardDecisions.findFirst({ where: and(eq(schema.boardDecisions.workspaceId, v.workspace.id), eq(schema.boardDecisions.userId, v.user.id), eq(schema.boardDecisions.id, id)) })) ?? null;
+}
+
+/* ───────────────────────── Past discussions and the Board's memory (H-257) ───────────────────────── */
+
+export type Discussion = Awaited<ReturnType<typeof decisionsFor>>[number] & { tags: ReturnType<typeof discussionTags>; before: boolean };
+
+/**
+ * Past discussions: the member's own, newest first, the search over question and recommendation, `show` rows (20 a page,
+ * More adds a page), and the ones made before a fresh start marked so the list can group them.
+ */
+export async function discussionsFor(v: Viewer, q: string, show: number): Promise<{ rows: Discussion[]; more: boolean; found: number; canUndo: boolean }> {
+  const fresh = v.membership.boardFreshStartAt;
+  const all = (await decisionsFor(v, 500)).filter((x) => matchesSearch(x.decision, q)).map((x) => ({ ...x, tags: discussionTags(x.decision), before: beforeFreshStart(x.decision, fresh) }));
+  const page = pageOf(all, show);
+  return { rows: page.rows, more: page.more, found: all.length, canUndo: canUndoFreshStart(fresh, new Date()) };
+}
+
+/** "Start fresh": from now the Board reads only decisions made after this moment. Nothing is deleted. The member's own, never a coach's or a team member's. */
+export async function startFresh(v: Viewer): Promise<boolean> {
+  if (v.team || v.switchedInto) return false;
+  await db.update(schema.memberships).set({ boardFreshStartAt: dbStamp(new Date()) }).where(eq(schema.memberships.id, v.membership.id));
+  return true;
+}
+
+/** Undo the fresh start, within seven days: the earlier decisions are back in the Board's memory. */
+export async function undoFreshStart(v: Viewer): Promise<boolean> {
+  if (v.team || v.switchedInto || !canUndoFreshStart(v.membership.boardFreshStartAt, new Date())) return false;
+  await db.update(schema.memberships).set({ boardFreshStartAt: null }).where(eq(schema.memberships.id, v.membership.id));
+  return true;
+}
+
+/** "The Board remembers this": off keeps one decision out of future discussions; the decision stays. */
+export async function setRemembered(v: Viewer, decisionId: string, on: boolean): Promise<boolean> {
+  if (v.team || v.switchedInto) return false;
+  const m = memberOf(v);
+  const r = await db.update(schema.boardDecisions).set({ remembered: on }).where(and(eq(schema.boardDecisions.workspaceId, m.workspaceId), eq(schema.boardDecisions.userId, m.userId), eq(schema.boardDecisions.id, decisionId))).returning({ id: schema.boardDecisions.id });
+  return r.length > 0;
 }
 
 /** The step status, read live from the tasks the steps became. */

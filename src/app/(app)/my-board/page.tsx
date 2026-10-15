@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
-import { decisionsFor, stepStatus } from "@/lib/board";
-import { askBoardAction, setBoardHoursAction, setBoardPresetAction, setBoardSeesBodyAction } from "@/lib/actions/board";
+import { discussionsFor, stepStatus } from "@/lib/board";
+import { askBoardAction, setBoardHoursAction, setBoardPresetAction, setBoardSeesBodyAction, startFreshAction, undoFreshStartAction } from "@/lib/actions/board";
+import { MODE_INFO, type Mode } from "@/lib/engine/board";
+import { PAGE } from "@/lib/engine/board-memory";
 import { keepClassicCouncilAction } from "@/lib/actions/council";
 import { councilFor } from "@/lib/board-seats";
 import { forRoom } from "@/lib/engine/board";
@@ -19,15 +21,22 @@ export const metadata = { title: "My Board" };
 const setUp = (d: { applied: unknown[] }, followUps: { applied: unknown[] }[]) => d.applied.length + followUps.reduce((n, f) => n + f.applied.length, 0);
 
 /** My Board, the Boardroom (revs 664, 698): five advisors on a decision, grounded in the member's own HelixOS. */
-export default async function MyBoardPage({ searchParams }: { searchParams: Promise<{ error?: string; council?: string; ask?: string }> }) {
+export default async function MyBoardPage({ searchParams }: { searchParams: Promise<{ error?: string; council?: string; ask?: string; q?: string; show?: string; fresh?: string }> }) {
   const v = await requireViewer();
   const sp = await searchParams;
   const hours = v.membership.boardHours;
   const preset = v.role === "coach" && !v.switchedInto && v.membership.boardPreset === "edge" ? "edge" : "standard";
   const seats = forRoom(await councilFor(v));
   const canAsk = !v.switchedInto && !v.team;
-  const decisions = await decisionsFor(v, 20);
+  // Past discussions (H-257): the search, 20 a page with More, the ones before a fresh start grouped at the end.
+  const q = (sp.q ?? "").trim().slice(0, 120);
+  const show = Number(sp.show) || PAGE;
+  const { rows: decisions, more, found, canUndo } = await discussionsFor(v, q, show);
   const statuses = await Promise.all(decisions.map((x) => stepStatus(v.user.id, x.decision)));
+  const fresh = v.membership.boardFreshStartAt;
+  const firstBefore = decisions.findIndex((x) => x.before);
+  const listHref = (extra: Record<string, string>) => `/my-board?${new URLSearchParams({ ...(q ? { q } : {}), ...extra }).toString()}#discussions`;
+  const exampleTick = v.role === "coach" && !v.switchedInto;
   return (
     <div className="br-page" data-testid="board-page">
       {sp.error ? (
@@ -83,7 +92,7 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
           </form>
         </div>
       ) : (
-        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} clips={councilClipFiles()} seats={seats} answer={null} question={(sp.ask ?? "").slice(0, 300)} used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} />
+        <Boardroom initialLook={sceneLookFor(v.membership.sceneLook, v.hour)} clips={councilClipFiles()} seats={seats} answer={null} question={(sp.ask ?? "").slice(0, 300)} used={[]} notes={[]} hours={hours} autoplay={false} action={askBoardAction} canAsk={canAsk} decisionView={false} exampleTick={exampleTick} />
       )}
       {hours ? <BoardCouncilNote seats={seats} /> : null}
       {hours && preset === "standard" ? (
@@ -95,9 +104,11 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
       ) : null}
       {!canAsk ? <p className="br-wrap br-muted">The Board answers {v.user.name.split(" ")[0]} on their own AI key, so only they can ask it. Their decisions are below.</p> : null}
 
-      <section className="br-wrap" id="decisions" style={{ marginTop: 44 }} aria-label="Decisions">
+      <section className="br-wrap" id="discussions" style={{ marginTop: 44 }} aria-label="Past discussions">
         <div className="br-sechead">
-          <h2 className="br-h2">Decisions</h2>
+          <h2 className="br-h2" id="decisions">
+            Past discussions
+          </h2>
           <span style={{ display: "flex", gap: 4 }} aria-hidden>
             {seats.map((s) =>
               s.icon ? (
@@ -109,35 +120,111 @@ export default async function MyBoardPage({ searchParams }: { searchParams: Prom
             )}
           </span>
         </div>
+        {sp.fresh === "1" ? (
+          <p className="br-muted" role="status" style={{ fontSize: 14, margin: "0 0 12px" }} data-testid="board-fresh-done">
+            Fresh start. The Board reads only what you decide from now on; your earlier discussions are kept below.
+          </p>
+        ) : sp.fresh === "0" ? (
+          <p className="br-muted" role="status" style={{ fontSize: 14, margin: "0 0 12px" }} data-testid="board-fresh-undone">
+            Undone. The Board remembers your earlier discussions again.
+          </p>
+        ) : null}
+        {fresh && canAsk ? (
+          <p className="br-quiet" style={{ fontSize: 13, margin: "0 0 12px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }} data-testid="board-fresh-note">
+            <span>Fresh start on {formatDate(fresh.slice(0, 10))}: the Board reads only discussions since then.</span>
+            {canUndo ? (
+              <form action={undoFreshStartAction}>
+                <SubmitButton className="br-tab" pendingText="…" data-testid="board-fresh-undo">
+                  Undo
+                </SubmitButton>
+              </form>
+            ) : null}
+          </p>
+        ) : null}
+        <form action="/my-board" method="get" role="search" className="br-askrow" style={{ marginBottom: 12 }}>
+          <input type="search" name="q" defaultValue={q} className="br-field" placeholder="Search your discussions" aria-label="Search your discussions" style={{ flex: "1 1 220px", fontSize: 14 }} data-testid="board-search" />
+          <SubmitButton className="br-tab" pendingText="…" data-testid="board-search-go">
+            Search
+          </SubmitButton>
+          {q ? (
+            <Link href="/my-board#discussions" className="br-quiet" style={{ fontSize: 13 }} data-testid="board-search-clear">
+              Clear
+            </Link>
+          ) : null}
+        </form>
         {decisions.length ? (
           <ul className="br-log" style={{ listStyle: "none", margin: 0, padding: 0 }} data-testid="board-decisions">
-            {decisions.map(({ decision: d, followUps }, i) => {
+            {decisions.map(({ decision: d, followUps, tags, before }, i) => {
               const done = statuses[i].filter((x) => x === "done").length;
-              return (
-                <li key={d.id}>
-                  <Link href={`/my-board/${d.id}`} className="br-serif" style={{ fontSize: 20, fontWeight: 600 }}>
-                    {d.answer?.decision ?? d.question}
-                  </Link>
+              const row = (
+                <li key={d.id} data-testid="board-discussion" data-before={before ? "1" : "0"}>
                   <span className="br-quiet" style={{ fontSize: 13 }}>
                     {formatDate(d.createdAt.slice(0, 10))}
+                  </span>
+                  <Link href={`/my-board/${d.id}`} className="br-serif br-oneline" style={{ fontSize: 20, fontWeight: 600 }} title={d.question} data-testid="board-discussion-question">
+                    {d.question}
+                  </Link>
+                  <span className="br-quiet" style={{ fontSize: 13 }}>
+                    {MODE_INFO[(d.mode as Mode) in MODE_INFO ? (d.mode as Mode) : "board"].label}
                     {d.answer ? ` · ${done} of ${d.answer.steps.length} steps done` : " · no answer yet"}
                     {followUps.length ? ` · ${followUps.length} follow-up${followUps.length === 1 ? "" : "s"}` : ""}
                     {setUp(d, followUps) ? ` · ${setUp(d, followUps)} set up` : ""}
-                    {d.sharedAt ? " · shared with your coach" : ""}
                   </span>
+                  {tags.length ? (
+                    <span style={{ display: "inline-flex", gap: 6 }} data-testid="board-discussion-tags">
+                      {tags.map((t) => (
+                        <span key={t} className="br-tag">
+                          {t}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
                   {d.answer ? (
-                    <span className="br-muted" style={{ flexBasis: "100%", fontSize: 14 }}>
+                    <span className="br-muted br-oneline" style={{ flexBasis: "100%", fontSize: 14 }} title={d.answer.recommendation}>
                       {d.answer.recommendation}
-                      {d.answer.split ? <span className="br-quiet"> Split: {d.answer.split}</span> : null}
                     </span>
                   ) : null}
                 </li>
               );
+              return i === firstBefore ? (
+                <li key={`before-${d.id}`} className="br-log-group" aria-hidden={false} style={{ display: "block" }}>
+                  <h3 className="br-quiet" style={{ margin: "8px 0 0", fontSize: 13, fontWeight: 400, letterSpacing: 2, textTransform: "uppercase" }} data-testid="board-before-fresh">
+                    Before your fresh start ({formatDate(fresh!.slice(0, 10))})
+                  </h3>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>{row}</ul>
+                </li>
+              ) : i > firstBefore && firstBefore >= 0 ? (
+                <li key={`in-${d.id}`} style={{ display: "block", padding: 0, border: 0 }}>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>{row}</ul>
+                </li>
+              ) : (
+                row
+              );
             })}
           </ul>
         ) : (
-          <p className="br-muted">No decisions yet.</p>
+          <p className="br-muted" data-testid="board-no-discussions">
+            {q ? `Nothing matches "${q}".` : "No discussions yet."}
+          </p>
         )}
+        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", marginTop: 12, fontSize: 13 }}>
+          {more ? (
+            <Link href={listHref({ show: String(decisions.length + PAGE) })} className="br-tab" data-testid="board-more">
+              More ({found - decisions.length} more)
+            </Link>
+          ) : null}
+          {canAsk && decisions.length && !fresh ? (
+            <details data-testid="board-start-fresh">
+              <summary className="br-quiet" style={{ cursor: "pointer" }}>Start fresh</summary>
+              <form action={startFreshAction} style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+                <span className="br-muted">The Board stops reading every discussion before now. They stay here, open, replay and share as before. You can undo for seven days.</span>
+                <SubmitButton className="br-tab" pendingText="…" data-testid="board-start-fresh-go">
+                  Yes, start fresh
+                </SubmitButton>
+              </form>
+            </details>
+          ) : null}
+        </div>
       </section>
 
       {canAsk && hours ? (

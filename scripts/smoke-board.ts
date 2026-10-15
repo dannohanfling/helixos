@@ -41,10 +41,10 @@ async function main() {
   const failures: string[] = [];
   try {
     const { db, schema } = await import("@/db");
-    const { and, desc, eq } = await import("drizzle-orm");
+    const { and, desc, eq, inArray, isNull } = await import("drizzle-orm");
     const { seal } = await import("@/lib/crypto");
     const { newId } = await import("@/lib/ids");
-    const { principlesFromPack, SEATS, MODES, SPEAK_MS } = await import("@/lib/engine/board");
+    const { principlesFromPack, SEATS, MODES, MODE_INFO, SPEAK_MS } = await import("@/lib/engine/board");
     const { MIN_TURN_MS, MAX_TURN_MS, turnMs } = await import("@/lib/engine/board-view");
     const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
     const coachU = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
@@ -547,6 +547,117 @@ async function main() {
     await logout(page);
     await login(page, "As a client");
     console.log("✓ sharing: private until shared, then on the coach's Office Hours card alone, off again when she stops");
+
+    // Past discussions (H-257): every first question as a row (date, question, recommendation, format, tags), the search.
+    const lastSystem = async () => ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] }).system.map((b) => b.text).join("\n");
+    const askFresh = async (question: string) => {
+      await page.goto(`${base}/my-board`);
+      await page.locator('[data-testid="board-question"]').fill(question);
+      await page.locator('[data-testid="board-submit"]').click();
+      await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
+      return page.url().split("/my-board/")[1].split(/[?#]/)[0];
+    };
+    await page.goto(`${base}/my-board`);
+    const rows = page.locator('[data-testid="board-discussion"]');
+    const tops = (await db.query.boardDecisions.findMany({ where: and(eq(schema.boardDecisions.userId, maya.id), isNull(schema.boardDecisions.parentId)), orderBy: desc(schema.boardDecisions.createdAt) }));
+    must(tops.length >= 2 && (await rows.count()) === tops.length, `every first question listed: ${await rows.count()} of ${tops.length}`);
+    const newest = tops[0];
+    const firstRow = await rows.first().innerText();
+    must(firstRow.includes(newest.question.slice(0, 30)) && firstRow.includes(newest.answer!.recommendation.slice(0, 30)) && firstRow.includes(MODE_INFO[newest.mode as keyof typeof MODE_INFO].label), `the row: the question, the recommendation and the format: ${firstRow.slice(0, 200)}`);
+    must(!(await page.locator('[data-testid="board-discussion-tags"]').count()) && !(await page.locator('[data-testid="board-example"]').count()), "no tags yet; the Example tick is never a client's");
+    await page.locator('[data-testid="board-search"]').fill("webinar");
+    await page.locator('[data-testid="board-search-go"]').click();
+    await page.waitForURL(/q=webinar/);
+    must((await rows.count()) === tops.filter((t) => /webinar/i.test(`${t.question} ${t.answer?.decision} ${t.answer?.recommendation}`)).length && (await rows.first().innerText()).toLowerCase().includes("webinar"), "the search keeps the discussions that say webinar");
+    await page.goto(`${base}/my-board?q=zzzz-nothing`);
+    must((await rows.count()) === 0 && (await page.locator('[data-testid="board-no-discussions"]').innerText()).includes("Nothing matches"), "a search with no match says so");
+    await page.locator('[data-testid="board-search-clear"]').click();
+    await page.waitForURL(/\/my-board(#|$)/);
+    must((await rows.count()) === tops.length, "Clear brings every discussion back");
+    console.log("✓ Past discussions: every first question as a row with its date, question, recommendation and format; the search and Clear");
+
+    // "The Board remembers this": off keeps the decision out of the next discussion's prompt and tags the row.
+    await page.goto(`${base}/my-board/${decisionId}`);
+    must((await page.locator('[data-testid="board-remember-state"]').innerText()).startsWith("The Board remembers this"), "remembered by default");
+    await press(page, '[data-testid="board-forget"]');
+    must((await page.locator('[data-testid="board-remember-state"]').innerText()).startsWith("Not remembered"), "left out on request");
+    await page.goto(`${base}/my-board`);
+    must((await page.locator('[data-testid="board-discussion-tags"]').first().innerText()).includes("Not remembered") || (await page.locator('[data-testid="board-discussion-tags"]').allInnerTexts()).some((t) => t.includes("Not remembered")), "the row says Not remembered");
+    const forgotten = tops.find((t) => t.id === decisionId)!.answer!.decision;
+    const remembered = tops.filter((t) => t.id !== decisionId && t.answer).map((t) => t.answer!.decision);
+    const afterForget = await askFresh("Should I raise my price next month?");
+    let sysMemory = await lastSystem();
+    must(!sysMemory.includes(forgotten) && remembered.every((d) => sysMemory.includes(d)) && sysMemory.includes("Past decisions"), `the next discussion reads the others, never the one left out: ${sysMemory.match(/Past decisions[^\n]*\n(?:- [^\n]*\n?)*/)?.[0].slice(0, 300)}`);
+    await page.goto(`${base}/my-board/${decisionId}`);
+    await press(page, '[data-testid="board-remember-on"]');
+    must((await page.locator('[data-testid="board-remember-state"]').innerText()).startsWith("The Board remembers this"), "remembered again");
+    console.log("✓ The Board remembers this: on by default, off keeps that decision out of the next prompt (the others still read) and tags the row, on again");
+
+    // Start fresh: the earlier discussions move under "Before your fresh start", the next prompt carries no past decisions; Undo.
+    await page.goto(`${base}/my-board`);
+    await page.locator('[data-testid="board-start-fresh"] summary').click();
+    await press(page, '[data-testid="board-start-fresh-go"]');
+    must((await page.locator('[data-testid="board-fresh-done"]').count()) === 1 && (await page.locator('[data-testid="board-before-fresh"]').innerText()).startsWith("Before your fresh start"), "Start fresh says so and groups the earlier discussions");
+    const topsNow = tops.length + 1;
+    must((await rows.count()) === topsNow && (await page.locator('[data-testid="board-discussion"][data-before="1"]').count()) === topsNow, "every discussion kept, all before the fresh start");
+    must((await db.query.boardDecisions.findMany({ where: eq(schema.boardDecisions.userId, maya.id) })).length >= topsNow, "nothing deleted");
+    const afterFresh = await askFresh("Should I hire a VA for my DMs?");
+    sysMemory = await lastSystem();
+    must(!sysMemory.includes("Past decisions") && !sysMemory.includes(forgotten) && !sysMemory.includes(afterForget), "after Start fresh the prompt carries no earlier decision");
+    await page.goto(`${base}/my-board`);
+    must((await rows.first().getAttribute("data-before")) === "0" && (await rows.first().innerText()).includes("hire a VA") && (await page.locator('[data-testid="board-discussion"][data-before="1"]').count()) === topsNow, "the new discussion sits above the fresh-start group");
+    await page.goto(`${base}/my-board/${decisionId}`);
+    must((await page.locator('[data-testid="board-decision"]').count()) === 1 && (await page.locator('[data-testid="board-replay"]').count()) === 1, "an earlier discussion still opens, with Play again");
+    await page.goto(`${base}/my-board`);
+    await press(page, '[data-testid="board-fresh-undo"]');
+    must((await page.locator('[data-testid="board-fresh-undone"]').count()) === 1 && !(await page.locator('[data-testid="board-before-fresh"]').count()) && !(await page.locator('[data-testid="board-discussion"][data-before="1"]').count()), "Undo: no group, nothing before");
+    await askFresh("Should I keep the Friday calls?");
+    sysMemory = await lastSystem();
+    must(sysMemory.includes("Past decisions") && sysMemory.includes(forgotten), "after Undo the earlier decisions are read again");
+    void afterFresh;
+    console.log("✓ Start fresh: the earlier discussions kept under Before your fresh start, the next prompt empty of them, an earlier one still opening with Play again; Undo brings them back into the prompt");
+
+    // Paging: 20 a page, More adds a page.
+    const pageRows = Array.from({ length: 25 }, (_, i) => ({ id: newId(), workspaceId: ws, userId: maya.id, question: `Paging walk question ${i + 1}`, createdAt: `2025-01-${String(1 + (i % 28)).padStart(2, "0")} 09:00:00` }));
+    await db.insert(schema.boardDecisions).values(pageRows);
+    await page.goto(`${base}/my-board`);
+    const allTops = topsNow + 2 + pageRows.length;
+    must((await rows.count()) === 20 && (await page.locator('[data-testid="board-more"]').innerText()).includes(`${allTops - 20} more`), `20 a page, More says the rest: ${await page.locator('[data-testid="board-more"]').innerText()}`);
+    await page.locator('[data-testid="board-more"]').click();
+    await page.waitForURL(/show=40/);
+    must((await rows.count()) === allTops && !(await page.locator('[data-testid="board-more"]').count()), `More shows the rest (${allTops}) and then there is no More`);
+    await db.delete(schema.boardDecisions).where(inArray(schema.boardDecisions.id, pageRows.map((r) => r.id)));
+    console.log("✓ paging: 20 a page, More adds the rest");
+
+    // Example mode: the coach's own tick, saved and replayable, tagged, out of the next prompt and the Forum's count, no tasks.
+    const { builtInEvents } = await import("@/lib/forum");
+    await logout(page);
+    await login(page, "As the coach");
+    await page.goto(`${base}/my-board`);
+    must((await page.locator('[data-testid="board-example"]').count()) === 1, "the Example tick on the coach's own ask box");
+    await page.locator('[data-testid="board-question"]').fill("Example for a client: webinar or DMs?");
+    await page.locator('[data-testid="board-example"]').check();
+    await page.locator('[data-testid="board-submit"]').click();
+    await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
+    const exampleId = page.url().split("/my-board/")[1].split(/[?#]/)[0];
+    const example = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, exampleId) }))!;
+    must(example.example && example.answer && !example.stepTasks.some(Boolean), "saved as an example with its answer, no tasks added");
+    must((await page.locator('[data-testid="board-example-tag"]').count()) === 1 && !(await page.locator('[data-testid="board-remember"]').count()), "the decision page tags it Example, no remember switch");
+    await page.goto(`${base}/my-board`);
+    must((await page.locator('[data-testid="board-discussion-tags"]').first().innerText()).includes("Example"), "the row tagged Example");
+    const coachEvents = await builtInEvents({ workspaceId: ws, userId: coachU.id });
+    must(!(coachEvents.board ?? []).some((e) => e.text.includes("Example for a client")), "the Forum never counts an example");
+    await page.goto(`${base}/my-board`);
+    await page.locator('[data-testid="board-question"]').fill("Should I open a second cohort?");
+    await page.locator('[data-testid="board-submit"]').click();
+    await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
+    sysMemory = await lastSystem();
+    must(!sysMemory.includes(example.answer!.decision), "the coach's next discussion never reads the example");
+    const secondId = page.url().split("/my-board/")[1].split(/[?#]/)[0];
+    must((await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, secondId) }))!.example === false, "a plain ask is not an example");
+    await logout(page);
+    await login(page, "As a client");
+    console.log("✓ Example mode: the coach's tick only, saved and replayable, tagged Example, no tasks, out of the Forum's count and of the next prompt");
 
     // board_checkin by voice, and refused to a team member.
     const latestSteps = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.parentId, decisionId), orderBy: desc(schema.boardDecisions.createdAt) }))!.answer!.steps;
