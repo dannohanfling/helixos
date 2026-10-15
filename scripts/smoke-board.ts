@@ -654,12 +654,13 @@ async function main() {
     must((await page.locator('[data-testid="board-discussion-tags"]').first().textContent())!.includes("Example"), "the row tagged Example");
     const coachEvents = await builtInEvents({ workspaceId: ws, userId: coachU.id });
     must(!(coachEvents.board ?? []).some((e) => e.text.includes("Example for a client")), "the Forum never counts an example");
+    // Counted before the ask: the Board reads its memory before the new decision is saved.
+    const coachPlain = (await db.query.boardDecisions.findMany({ where: and(eq(schema.boardDecisions.userId, coachU.id), isNull(schema.boardDecisions.parentId)) })).filter((d) => d.answer && !d.example).length;
     await page.goto(`${base}/my-board`);
     await page.locator('[data-testid="board-question"]').fill("Should I open a second cohort?");
     await page.locator('[data-testid="board-submit"]').click();
     await page.waitForURL(/\/my-board\/[\w-]+\?play=1/, { timeout: 60000 });
     sysMemory = await lastSystem();
-    const coachPlain = (await db.query.boardDecisions.findMany({ where: and(eq(schema.boardDecisions.userId, coachU.id), isNull(schema.boardDecisions.parentId)) })).filter((d) => d.answer && !d.example).length;
     must(coachPlain >= 1 && pastLine(sysMemory) === String(Math.min(5, coachPlain)), `the coach's next discussion never reads the example: Past decisions (${pastLine(sysMemory)}) of ${coachPlain} plain`);
     const secondId = page.url().split("/my-board/")[1].split(/[?#]/)[0];
     must((await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, secondId) }))!.example === false, "a plain ask is not an example");
