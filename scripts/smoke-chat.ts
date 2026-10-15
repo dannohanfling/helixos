@@ -201,7 +201,8 @@ async function main() {
     // ── 3. Switched in: no widget. ──
     await login(page, "As the coach");
     await page.goto(`${base}/coach/${clientM.id}`);
-    await submit(page, '[data-testid="switch-view"]');
+    await page.check('[data-testid="switch-view"]');
+    await submit(page, '[data-testid="switch-open"]');
     await page.goto(`${base}/today`);
     await page.locator('[data-testid="switch-banner"]').waitFor({ timeout: 15000 });
     if (await page.locator('[data-testid="chat-widget"]').count()) throw new Error("no widget while a coach is switched into a client");

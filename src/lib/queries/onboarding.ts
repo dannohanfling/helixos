@@ -25,14 +25,15 @@ export async function seedNewClient(workspaceId: string, userId: string): Promis
     period: "This month",
     primary: true,
   });
-  const starters: { title: string; details: string; urgency: "top3" | "high" | "medium"; category: "sales" | "content" | "community" | "system"; due: number }[] = [
+  // `off`: a starter kept in the code but not given out for now (H-164 §3: the hashtag post is off until Danno says otherwise).
+  const starters: { title: string; details: string; urgency: "top3" | "high" | "medium"; category: "sales" | "content" | "community" | "system"; due: number; off?: boolean }[] = [
     { title: "Reach out to 3 people in your audience", details: "Not a pitch. A real 'I noticed your work on X.' Log each one in Conversations.", urgency: "top3", category: "sales", due: 0 },
-    { title: "Post one update with today's hashtag", details: "What you're working on today. What you finished yesterday. Short beats perfect.", urgency: "top3", category: "content", due: 0 },
+    { title: "Post one update with today's hashtag", details: "What you're working on today. What you finished yesterday. Short beats perfect.", urgency: "top3", category: "content", due: 0, off: true },
     { title: "Write your Big Promise in one sentence", details: "I help [who] go from [pain] to [outcome] in [time] without [thing they hate].", urgency: "high", category: "system", due: 1 },
     { title: "Pick where your community lives", details: "Facebook group, Skool, Slack. Choose one. You can change it later.", urgency: "medium", category: "community", due: 2 },
   ];
   await db.insert(schema.tasks).values(
-    starters.map((s) => ({
+    starters.filter((s) => !s.off).map((s) => ({
       id: newId(),
       workspaceId,
       userId,

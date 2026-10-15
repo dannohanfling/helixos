@@ -174,7 +174,8 @@ async function main() {
 
     // ── 6. A switched coach has no button; the screenshot is the sender's and the coach's only. ──
     await page.goto(`${base}/coach/${mayaM.id}`);
-    await submit(page, '[data-testid="switch-view"]');
+    await page.check('[data-testid="switch-view"]');
+    await submit(page, '[data-testid="switch-open"]');
     await page.locator('[data-testid="switch-banner"]').waitFor({ timeout: 20000 });
     must(!(await page.locator('[data-testid="report-open"]').count()), "switched into a client, there's no button to send as them");
     const switchedShot = await page.request.get(`${base}/api/reports/${issue.id}/screenshot`);

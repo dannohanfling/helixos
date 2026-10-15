@@ -1,12 +1,13 @@
 import { Suspense } from "react";
 import type { Switched } from "@/lib/auth";
-import { switchBackAction } from "@/lib/actions/switch";
+import { switchBackAction, switchToWorkAction } from "@/lib/actions/switch";
 import { SubmitButton } from "@/components/submit-button";
 import { SwitchErrorLine } from "@/components/switch-error-line";
 
 /**
  * "Switch to client" (rev 216): on every page while a coach is in a client's HelixOS, so it is never mistaken for their own.
- * Says whose it is and whether it's View or Work, with the way back. A refused write shows its reason here too.
+ * Says whose it is and whether it's View or Work, with the way back, and Switch to Work while viewing a client who allows it
+ * (H-164 §6). A refused write shows its reason here too.
  */
 export function SwitchBanner({ sw }: { sw: Switched }) {
   const first = sw.clientName.split(" ")[0];
@@ -17,7 +18,15 @@ export function SwitchBanner({ sw }: { sw: Switched }) {
           You&apos;re in {sw.clientName}&apos;s HelixOS as their coach ({sw.mode === "work" ? "Working" : "Viewing"}).
         </span>
         <span className="text-xs text-ink-2">{sw.mode === "work" ? `Every change is shown to ${first} as yours.` : "Nothing can be changed while viewing."}</span>
-        <form action={switchBackAction} className="ml-auto">
+        {sw.mode === "view" && sw.canWork ? (
+          // H-164 §6: Work from the banner, without going back to the roster, when the client allows it.
+          <form action={switchToWorkAction} className="ml-auto">
+            <SubmitButton className="btn btn-soft btn-xs" pendingText="Switching…" data-testid="switch-to-work">
+              Switch to Work
+            </SubmitButton>
+          </form>
+        ) : null}
+        <form action={switchBackAction} className={sw.mode === "view" && sw.canWork ? "" : "ml-auto"}>
           <SubmitButton className="btn btn-primary btn-xs" pendingText="Going back…" data-testid="switch-back">
             Back to my account
           </SubmitButton>

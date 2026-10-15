@@ -389,7 +389,8 @@ async function main() {
     must(((await w4items.textContent()) ?? "").includes("made a task") && ((await w4items.textContent()) ?? "").includes("let go") && !((await w4items.textContent()) ?? "").includes("@"), "what each member did with theirs, and no email address");
     await page.goto(`${base}/coach/recordings?tab=published`);
     await page.goto(`${base}/coach/${mayaM.id}`);
-    await submit(page, '[data-testid="switch-view"]');
+    await page.check('[data-testid="switch-view"]');
+    await submit(page, '[data-testid="switch-open"]');
     await page.locator('[data-testid="switch-banner"]').waitFor({ timeout: 20000 });
     await page.goto(`${base}/recordings/${week4.id}`);
     await page.locator('[data-testid="recording-transcript-hidden"]').waitFor({ timeout: 20000 });
