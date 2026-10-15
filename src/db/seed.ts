@@ -119,6 +119,11 @@ async function wipeDemo(): Promise<void> {
   if (userIds.length) await db.delete(schema.libraryAssets).where(inArray(schema.libraryAssets.userId, userIds));
   if (userIds.length) await db.delete(schema.libraryPosts).where(inArray(schema.libraryPosts.userId, userIds));
   await db.delete(schema.libraryPosts).where(eq(schema.libraryPosts.workspaceId, ws.id));
+  // The leaderboard's feed rows and their old addresses go with the workspace too (H-129: a row left behind by one walk made the
+  // next run's cron try every feed it found, and the "tried once" check failed on the second run).
+  const feedIds = (await db.query.leaderboardFeeds.findMany({ where: eq(schema.leaderboardFeeds.workspaceId, ws.id), columns: { id: true } })).map((f) => f.id);
+  if (feedIds.length) await db.delete(schema.leaderboardSlugAliases).where(inArray(schema.leaderboardSlugAliases.feedId, feedIds));
+  await db.delete(schema.leaderboardFeeds).where(eq(schema.leaderboardFeeds.workspaceId, ws.id));
   for (const t of byWs) await db.delete(t).where(eq(t.workspaceId, ws.id));
   await db.delete(schema.dmTemplates).where(eq(schema.dmTemplates.workspaceId, ws.id));
   if (userIds.length) {
