@@ -9,7 +9,7 @@
  */
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CHAIRS, CHAIR_KEYS, MODES, MODE_INFO, SPEAK_MS, clipFor, takesWords, type Mode, type SceneLook } from "@/lib/engine/board-view";
+import { CHAIRS, CHAIR_KEYS, MODES, MODE_INFO, clipFor, takesWords, turnMs, type Mode, type SceneLook } from "@/lib/engine/board-view";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
@@ -26,6 +26,8 @@ type Props = {
   action: (fd: FormData) => void | Promise<void>;
   parentId?: string | null;
   canAsk: boolean;
+  /** "This is an example (don't remember it)" on the ask box (H-257): a coach's own Board only. */
+  exampleTick?: boolean;
   /** "Run the discussion" replays a decision that has an answer. */
   decisionView: boolean;
   initialMode?: Mode;
@@ -48,7 +50,7 @@ const plateName = (s: Seat) => s.short.replace(/ Advisor$/, "");
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
 const dayWords = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", DATE_FMT);
 
-export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day", clips = [] }: Props) {
+export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day", clips = [], exampleTick = false }: Props) {
   const spoken = useMemo(() => (answer ? seats.filter((s) => answer.advisors.some((a) => a.seat === s.key)).map((s) => s.key) : []), [seats, answer]);
   const [phase, setPhase] = useState<"idle" | "asking" | "playing" | "done">(answer ? (autoplay ? "playing" : "done") : "idle");
   const [idx, setIdx] = useState(0);
@@ -71,23 +73,43 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
     if (canAsk) void setSceneLookAction(k);
   };
 
-  // The playback: one speaker after another, then the recommendation.
+  // The playback: one speaker after another, then the recommendation. Each turn lasts turnMs of its quote (H-245: 10 to 15 s);
+  // a held turn (a tap on the quote) stops the clock and goes on from where it was on the next tap.
+  const [held, setHeld] = useState(false);
+  const leftRef = useRef<number | null>(null);
+  const startedRef = useRef<number>(0);
+  const quoteOf = (k: string | undefined) => (k && answer ? (answer.advisors.find((a) => a.seat === k)?.text ?? "") : "");
+  const turnLength = phase === "playing" ? turnMs(quoteOf(spoken[idx])) : 0;
   useEffect(() => {
-    if (phase !== "playing") return;
+    if (phase !== "playing" || held) return;
+    const wait = idx >= spoken.length ? 0 : (leftRef.current ?? turnLength);
+    leftRef.current = null;
+    startedRef.current = Date.now();
     timer.current = setTimeout(() => {
       if (idx + 1 >= spoken.length) setPhase("done");
       else setIdx(idx + 1);
-    }, idx >= spoken.length ? 0 : SPEAK_MS);
+    }, wait);
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [phase, idx, spoken.length]);
+  }, [phase, idx, spoken.length, held, turnLength]);
+  const toggleHold = () => {
+    if (phase !== "playing") return;
+    if (!held) {
+      if (timer.current) clearTimeout(timer.current);
+      leftRef.current = Math.max(500, turnLength - (Date.now() - startedRef.current));
+      setHeld(true);
+    } else setHeld(false);
+  };
 
   const speaker = phase === "playing" ? spoken[idx] : spot;
   const card = (k: string | null) => (k && answer ? answer.advisors.find((a) => a.seat === k) ?? null : null);
   const seatOf = (k: string) => seats.find((s) => s.key === k);
+  // "▶ Play again" (H-245): the same session from the first speaker, from the answer already saved; no request leaves the page.
   const replay = () => {
     setSpot(null);
+    setHeld(false);
+    leftRef.current = null;
     setIdx(0);
     setPhase("playing");
   };
@@ -103,8 +125,22 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
         …
       </div>
     ) : speaker && card(speaker) ? (
-      <div className="br-says br-rise" key={`${speaker}-${phase}`} data-testid={ids ? "board-speaking" : undefined}>
-        <div className="br-says-label">{`${seatOf(speaker)?.short.toUpperCase()} SAYS`}</div>
+      <div
+        className={`br-says br-rise${held ? " br-held" : ""}`}
+        key={`${speaker}-${phase}`}
+        data-testid={ids ? "board-speaking" : undefined}
+        data-turn-ms={phase === "playing" ? turnLength : undefined}
+        data-held={held ? "1" : "0"}
+        role={phase === "playing" ? "button" : undefined}
+        tabIndex={phase === "playing" ? 0 : undefined}
+        aria-label={phase === "playing" ? (held ? "Paused. Press to go on" : "Press to hold this turn") : undefined}
+        onClick={phase === "playing" ? toggleHold : undefined}
+        onKeyDown={phase === "playing" ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleHold(); } } : undefined}
+      >
+        <div className="br-says-label">
+          {`${seatOf(speaker)?.short.toUpperCase()} SAYS`}
+          {held ? <span className="br-paused" data-testid={ids ? "board-held" : undefined}>paused</span> : null}
+        </div>
         <div className="br-says-line">{card(speaker)!.text}</div>
       </div>
     ) : answer && phase === "done" ? (
@@ -150,8 +186,8 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
               <input type="hidden" name="focus" value={mode === "focus" ? (spot ?? "") : ""} />
               {parentId ? <input type="hidden" name="parentId" value={parentId} /> : null}
               {pillReplays ? (
-                <button type="button" className="br-pill" onClick={replay} data-testid="board-replay">
-                  Run the discussion
+                <button type="button" className="br-pill" onClick={replay} aria-label="Play the discussion again" data-testid="board-replay">
+                  ▶ Play again
                 </button>
               ) : (
                 <SubmitButton className="br-pill" pendingText="The Board is thinking…" data-testid="board-submit">
@@ -167,6 +203,11 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
               ))}
             </div>
             {mode === "focus" ? <p className="br-quiet" style={{ margin: 0, fontSize: 13 }} data-testid="board-focus-hint">{spot ? `You'll hear from ${seatOf(spot)?.short}.` : "Tap the advisor you want to hear from."}</p> : null}
+            {exampleTick && !decisionView ? (
+              <label className="br-quiet" style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+                <input type="checkbox" name="example" value="1" data-testid="board-example" /> This is an example (don&rsquo;t remember it)
+              </label>
+            ) : null}
           </form>
         ) : (
           <div className="br-question">{question || "My Board"}</div>
@@ -363,8 +404,8 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
             {answer.youDecide && answer.youDecide !== "You decide. This is your call." ? `${answer.youDecide} ` : ""}The Board maps the options and the risks. The call is yours. Danno here is guided by Danno&apos;s teaching; it is not Danno live.
           </p>
           {decisionView ? (
-            <button type="button" className="br-tab" onClick={replay} data-testid="board-run-again">
-              Run the discussion again
+            <button type="button" className="br-tab" onClick={replay} aria-label="Play the discussion again" data-testid="board-run-again">
+              ▶ Play again
             </button>
           ) : null}
         </footer>

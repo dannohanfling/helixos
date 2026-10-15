@@ -10,7 +10,7 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
 import { ctx, refresh, str } from "@/lib/action-helpers";
-import { askBoard } from "@/lib/board";
+import { askBoard, setRemembered, startFresh, undoFreshStart } from "@/lib/board";
 import { applySetup } from "@/lib/board-setup";
 import { runCheckin, shareDecision, type StepState } from "@/lib/board-checkin";
 import { MODES, type Mode } from "@/lib/engine/board";
@@ -23,7 +23,7 @@ export async function askBoardAction(fd: FormData): Promise<void> {
   const { v } = await ctx({ whileSwitched: "refuse", reason: OWN });
   const mode = (MODES.find((x) => x === str(fd, "mode")) ?? "board") as Mode;
   const parentId = str(fd, "parentId") || null;
-  const r = await askBoard(v, { question: str(fd, "question"), mode, focus: str(fd, "focus") || null, parentId });
+  const r = await askBoard(v, { question: str(fd, "question"), mode, focus: str(fd, "focus") || null, parentId, example: str(fd, "example") === "1" });
   refresh();
   if (r.ok) go(`/my-board/${r.decision.parentId ?? r.decision.id}`, { play: "1" });
   else if (r.decision) go(`/my-board/${r.decision.parentId ?? r.decision.id}`, { error: r.error }, r.decision.parentId ? `d-${r.decision.id}` : "");
@@ -68,6 +68,33 @@ export async function shareDecisionAction(fd: FormData): Promise<void> {
   await shareDecision(v, id, on);
   refresh();
   go(`/my-board/${id}`, { shared: on ? "1" : "0" });
+}
+
+const MEMORY = "The Board's memory is {first}'s own.";
+
+/** "Start fresh" (H-257): the Board stops reading every decision made before now; they stay, under "Before your fresh start". */
+export async function startFreshAction(): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: MEMORY });
+  await startFresh(v);
+  refresh();
+  go("/my-board", { fresh: "1" }, "discussions");
+}
+
+/** Undo the fresh start, within seven days. */
+export async function undoFreshStartAction(): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: MEMORY });
+  await undoFreshStart(v);
+  refresh();
+  go("/my-board", { fresh: "0" }, "discussions");
+}
+
+/** "The Board remembers this" on one decision: on by default; off leaves it out of future discussions. */
+export async function setRememberedAction(fd: FormData): Promise<void> {
+  const { v } = await ctx({ whileSwitched: "refuse", reason: MEMORY });
+  const id = str(fd, "id");
+  await setRemembered(v, id, str(fd, "on") === "1");
+  refresh();
+  go(`/my-board/${id}`);
 }
 
 /** "Hours I can give my business each week": Jordan keeps every plan within it. */

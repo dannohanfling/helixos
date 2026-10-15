@@ -176,8 +176,8 @@ export async function builtInEvents(m: ForumMember): Promise<Partial<Record<Buil
   }
   if (byRec.size) out.recordings = [...byRec.values()].map((r) => ({ at: isoStamp(r.at), text: `${r.n} action ${r.n === 1 ? "step" : "steps"} from ${quote(r.title, 50)}` }));
 
-  // My Board: a decision made, and the steps it set up.
-  const decisions = await db.query.boardDecisions.findMany({ where: and(eq(schema.boardDecisions.workspaceId, m.workspaceId), eq(schema.boardDecisions.userId, m.userId), gte(schema.boardDecisions.updatedAt, sinceDb)), columns: { question: true, createdAt: true, updatedAt: true, stepTasks: true }, orderBy: desc(schema.boardDecisions.updatedAt), limit: 20 });
+  // My Board: a decision made, and the steps it set up. An example (H-257) never counts.
+  const decisions = await db.query.boardDecisions.findMany({ where: and(eq(schema.boardDecisions.workspaceId, m.workspaceId), eq(schema.boardDecisions.userId, m.userId), eq(schema.boardDecisions.example, false), gte(schema.boardDecisions.updatedAt, sinceDb)), columns: { question: true, createdAt: true, updatedAt: true, stepTasks: true }, orderBy: desc(schema.boardDecisions.updatedAt), limit: 20 });
   const board: BuiltInEvent[] = [];
   for (const d of decisions) {
     if (d.createdAt >= sinceDb) board.push({ at: isoStamp(d.createdAt), text: `Decided on ${quote(d.question, 50)}` });

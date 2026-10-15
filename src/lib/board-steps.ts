@@ -45,7 +45,7 @@ export async function boardStepsFor(m: Member, from: string, to: string, today: 
 
 /* ───────────────────────── Shared with the coach (rev 664 §7) ───────────────────────── */
 
-export type SharedDecision = { id: string; member: string; sharedAt: string; question: string; answer: schema.BoardDecision["answer"]; followUps: { question: string; recommendation: string | null }[] };
+export type SharedDecision = { id: string; member: string; sharedAt: string; question: string; answer: schema.BoardDecision["answer"]; example: boolean; remembered: boolean; followUps: { question: string; recommendation: string | null }[] };
 
 /** The coach's "Office Hours: shared decisions": only what a member chose to share, in this workspace, newest first. */
 export async function sharedDecisionsFor(workspaceId: string): Promise<SharedDecision[]> {
@@ -60,6 +60,8 @@ export async function sharedDecisionsFor(workspaceId: string): Promise<SharedDec
     sharedAt: d.sharedAt!,
     question: d.question,
     answer: d.answer,
+    example: d.example,
+    remembered: d.remembered,
     followUps: follows.filter((f) => f.parentId === d.id && f.userId === d.userId).map((f) => ({ question: f.question, recommendation: f.answer?.recommendation ?? null })),
   }));
 }

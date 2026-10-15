@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireViewer } from "@/lib/auth";
 import { decisionsFor, ownDecision, stepStatus } from "@/lib/board";
-import { applySetupAction, askBoardAction, checkinAction, shareDecisionAction } from "@/lib/actions/board";
+import { applySetupAction, askBoardAction, checkinAction, setRememberedAction, shareDecisionAction } from "@/lib/actions/board";
 import { BoardSetup } from "@/components/board-setup";
 import { forRoom, seatsOfDecision, type Mode } from "@/lib/engine/board";
 import { BoardCouncilNote } from "@/components/board-council-note";
@@ -44,6 +44,11 @@ export default async function DecisionPage({ params, searchParams }: { params: P
           <Link href="/my-board#decisions" style={{ fontSize: 13 }}>
             ← My Board
           </Link>
+          {d.example ? (
+            <span className="br-tag" data-testid="board-example-tag" title="An example: saved and replayable, never read by the Board again, never counted">
+              Example
+            </span>
+          ) : null}
           {canAsk ? (
             <form action={shareDecisionAction} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13 }}>
               <input type="hidden" name="id" value={d.id} />
@@ -65,6 +70,18 @@ export default async function DecisionPage({ params, searchParams }: { params: P
             </span>
           ) : null}
         </div>
+        {canAsk && !d.example ? (
+          <form action={setRememberedAction} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13, marginTop: 8, flexWrap: "wrap" }} data-testid="board-remember">
+            <input type="hidden" name="id" value={d.id} />
+            <input type="hidden" name="on" value={d.remembered ? "0" : "1"} />
+            <span className={d.remembered ? "br-quiet" : "br-goldtext"} data-testid="board-remember-state">
+              {d.remembered ? "The Board remembers this in future discussions." : "Not remembered: future discussions don't read this."}
+            </span>
+            <SubmitButton className="br-tab" pendingText="…" data-testid={d.remembered ? "board-forget" : "board-remember-on"}>
+              {d.remembered ? "Leave it out" : "Remember it again"}
+            </SubmitButton>
+          </form>
+        ) : null}
       </div>
       {sp.error ? (
         <p className="br-wrap" role="alert" data-testid="board-error" style={{ color: "#f5b0a0", marginBottom: 24 }}>

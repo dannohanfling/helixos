@@ -13,7 +13,21 @@ export const SEAT_SPOTS: { left: number; top: number }[] = [
 ];
 
 /** How long each advisor holds the room (rev 698, as in the mockup). */
-export const SPEAK_MS = 3400;
+/**
+ * A speaker's turn (H-245): 10 to 15 seconds by the quote's length, about 200 words a minute plus 2 seconds to settle, so a
+ * short line doesn't sit too long and a long one gets the full 15. Before H-245 every turn was 3.4 seconds flat.
+ */
+export const MIN_TURN_MS = 10_000;
+export const MAX_TURN_MS = 15_000;
+export const WORDS_PER_MINUTE = 200;
+export const SETTLE_MS = 2_000;
+export function turnMs(text: string | null | undefined): number {
+  const words = (text ?? "").trim().split(/\s+/).filter(Boolean).length;
+  const read = (words / WORDS_PER_MINUTE) * 60_000 + SETTLE_MS;
+  return Math.min(MAX_TURN_MS, Math.max(MIN_TURN_MS, Math.round(read)));
+}
+/** Kept for the walks' upper bound: the longest a turn can be. */
+export const SPEAK_MS = MAX_TURN_MS;
 
 export const MODES = ["board", "focus", "debate", "quick_vote", "workaround", "leverage", "converge", "checkin"] as const;
 export type Mode = (typeof MODES)[number];

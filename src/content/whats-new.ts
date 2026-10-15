@@ -12,6 +12,27 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 200,
+    date: "2026-10-15",
+    title: "My Board: Past discussions, Start fresh, and what the Board remembers",
+    lines: [
+      "My Board's list is now Past discussions: each row shows the date, your question, the Board's recommendation and the format, with tags for Shared with coach, Example and Not remembered. A search box, 20 a page with More, and Play again on any of them.",
+      "Start fresh (under the list) stops the Board reading your earlier discussions when it answers a new one. Nothing is deleted: they stay under \"Before your fresh start\", still open and replay, and Undo for seven days puts them back. On any decision, \"The Board remembers this\" can be switched off for just that one.",
+      "Coaches: a tick on the ask box, \"This is an example (don't remember it)\", for a demo. It's saved and tagged Example, never read by your Board again, adds no tasks on its own and doesn't count on the Forum.",
+    ],
+    audience: "everyone",
+  },
+  {
+    n: 199,
+    date: "2026-10-15",
+    title: "Council Chamber: ▶ Play again, longer turns, the clip for the whole turn",
+    lines: [
+      "When a session ends, and on any past decision, ▶ Play again replays it from the first speaker: the same words, the same order, the same clips. No new call to the AI, nothing on your usage.",
+      "Each advisor's turn is now 10 to 15 seconds, by the length of what they say (it was 3.4 seconds flat), and the speaking clip repeats until the turn ends. Tap the quote to hold a turn and read; tap again to go on.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 198,
     date: "2026-10-15",
     title: "Connect GoHighLevel yourself, from day one",

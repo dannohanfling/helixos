@@ -390,7 +390,10 @@ async function main() {
   if ((await page.inputValue('input[name="businessName"]')) !== "Smoke Test Coaching") throw new Error("Settings shows the business name given at sign-up");
   await page.goto(`${base}/today`);
   console.log("✓ sign-up: first and last name kept as one, the business name required (browser and server) and shown on Settings, the mismatch said and refused before sending, Show for both, a refusal keeps every box");
-  await expectText(page, "Lock in your day", "new client today");
+  // H-164 §1 (cleanup slice 1): a member's first session sees the welcome card, with the lock-in inside it and no second card.
+  await expectText(page, "Welcome to HelixOS", "new client today: the welcome card");
+  await expectText(page, "Lock in your first day", "new client today: the lock-in inside the welcome");
+  if (await page.locator('[data-testid="lockin-hero"]').count()) throw new Error("new client today: no second Lock in card while the welcome shows");
   await shot(page, "15-new-client-day-one");
 
   // Cron
