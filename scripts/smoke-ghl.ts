@@ -103,21 +103,21 @@ async function main() {
     await page.waitForURL(/\/login/);
     await page.click('button:has-text("As a client")');
     await page.waitForURL(/\/today/);
-    await page.goto(`${base}/settings`);
-    await expectText(page, "Publishing setup isn't open yet", "a client is not walked through the setup before the list is final");
-    if (await page.locator('input[name="manualToken"]').count()) throw new Error("no token field while the setup is closed");
+    // Open to every member from the start (H-226): no "isn't open yet", the Connect steps on Settings and on Connect your tools,
+    // and no switch for the coach to find on Integrations.
+    for (const where of ["/settings", "/connect-tools"]) {
+      await page.goto(`${base}${where}`);
+      if (await page.locator('[data-testid="ghl-not-open"]').count()) throw new Error(`${where}: a client should never read "isn't open yet"`);
+      if (!(await page.locator('[data-testid="ghl-howto"]').count())) throw new Error(`${where}: a client with no connection sees the Connect steps`);
+    }
     await page.click('button:has-text("Log out")');
     await page.waitForURL(/\/login/);
     await page.click('button:has-text("As the coach")');
     await page.waitForURL(/\/today/);
     await page.goto(`${base}/integrations`);
-    await page.locator('[data-testid="integration-onboardingOpen"]').check();
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.locator('form:has(input[name="provider"][value="gohighlevel"])').first().locator('button:has-text("Save")').click()]);
-    await page.waitForLoadState("networkidle");
-    await page.reload();
-    if (!(await page.locator('[data-testid="integration-onboardingOpen"]').isChecked())) throw new Error("the switch is saved");
+    if (await page.locator('[data-testid="integration-onboardingOpen"]').count()) throw new Error("the Open Publishing setup switch is gone");
     await expectText(page, "Client sub-accounts", "coach sees connection status list");
-    console.log("✓ coach: GoHighLevel enabled without any agency credential");
+    console.log("✓ coach: GoHighLevel enabled without any agency credential; the setup is open to every client, with no switch to find");
 
     // Member: token validation with real reasons
     await page.goto(`${base}/settings`);

@@ -19,17 +19,10 @@ import { GHL_COPY, GHL_HELP } from "@/lib/engine/connect-copy";
  * pages and profiles answered, how many channels will auto-publish, when it was last checked, and Check again and
  * Disconnect; the token and the IDs never show again, and Reconnect replaces the token from inside this state. The GHL user
  * ID is read off GoHighLevel's answer when it carries one and asked for only when it cannot be found. The same card serves
- * the coach's Settings and a client's; the setup opens to clients on Integrations.
+ * the coach's Settings and a client's. Open to every member from the start (Danno, 12 Oct; H-226): the "Open Publishing setup
+ * to clients" switch of rev 333 is gone, so no client ever reads "isn't open yet" while the coach waits to find it.
  */
-export function GhlConnect({ conn, tz, role, open, users = [] }: { conn: SocialConnection | null; tz: string; role: string; open: boolean; users?: { id: string; name: string }[] }) {
-  // Scopes are granted once, so no client is walked through creating a Private Integration until the coach opens the setup.
-  if (role !== "coach" && !open && !conn) {
-    return (
-      <p className="rounded-lg bg-surface-2 p-3 text-sm text-ink-2" data-testid="ghl-not-open">
-        Publishing setup isn&apos;t open yet. Your coach will tell you when to connect your GoHighLevel account; until then, posts you schedule are ready to copy and paste.
-      </p>
-    );
-  }
+export function GhlConnect({ conn, tz, users = [] }: { conn: SocialConnection | null; tz: string; users?: { id: string; name: string }[] }) {
   const connected = Boolean(conn && conn.accounts.length && !conn.lastError);
   const hasUser = Boolean(conn?.ghlUserId?.trim());
   // Nothing publishes without the user id, whatever the map says.
@@ -202,9 +195,6 @@ export function GhlConnect({ conn, tz, role, open, users = [] }: { conn: SocialC
           </form>
         </div>
       </details>
-      {role === "coach" && !open ? (
-        <p className="text-xs text-ink-3" data-testid="ghl-coach-gate-note">Clients don&apos;t see this setup yet. Open it on Integrations once the scope list is final.</p>
-      ) : null}
     </div>
   );
 }

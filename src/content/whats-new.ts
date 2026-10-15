@@ -12,6 +12,15 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 198,
+    date: "2026-10-15",
+    title: "Connect GoHighLevel yourself, from day one",
+    lines: [
+      "Settings → GoHighLevel and Connect your tools show the Connect steps to every member from the start. The old \"Publishing setup isn't open yet\" line, which waited on a switch the coach had to find, is gone. Your coach sees whether you're connected, never your key.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 185,
     date: "2026-10-15",
     title: "My Board: the Council speaks on film in the evening",
