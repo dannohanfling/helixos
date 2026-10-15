@@ -549,7 +549,8 @@ async function main() {
     console.log("✓ sharing: private until shared, then on the coach's Office Hours card alone, off again when she stops");
 
     // Past discussions (H-257): every first question as a row (date, question, recommendation, format, tags), the search.
-    const lastSystem = async () => ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { system: { text: string }[] }).system.map((b) => b.text).join("\n");
+    // The Board's context (Past decisions among it) rides in the user message, after the member's own words.
+    const lastSystem = async () => ((await (await fetch(`http://localhost:${aiPort}/__last`)).json()) as { user: string }).user;
     const askFresh = async (question: string) => {
       await page.goto(`${base}/my-board`);
       await page.locator('[data-testid="board-question"]').fill(question);
