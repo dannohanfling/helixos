@@ -281,6 +281,85 @@ async function main() {
     await page.setViewportSize({ width: 1280, height: 950 });
     console.log("✓ 1440, 1024 and 390 wide in both looks: the room keeps its shape, every statue's button on its chair and at least 44px, no plate over a face, the caption on a phone");
 
+    // Evening clips (H-150): in the Night look each speaker's clip plays over the still for their turn (WebM first, the MP4
+    // beside it, the still as poster), one video at a time, that seat's CSS lean off, the table line naming the speaker; the
+    // last turn over, no video and the still; a tap mid-playback moves the clip to that seat; reduced motion plays none.
+    {
+      const { CHAIR_CLIP_NAMES, CHAIR_KEYS } = await import("@/lib/engine/board-view");
+      const nameOf = (key: string) => CHAIR_CLIP_NAMES[CHAIR_KEYS[SEATS.findIndex((x) => x.key === key)]];
+      const shortOf = (key: string) => SEATS.find((x) => x.key === key)!.short.toUpperCase();
+      type ClipInfo = { videos: number; name: string | null; webm: string | null; mp4: string | null; poster: string | null; paused: boolean | null; seat: string | null; clipped: boolean; lean: string | null; says: string; done: boolean };
+      const read = async (): Promise<ClipInfo> =>
+        JSON.parse(
+          await page.evaluate(() => {
+            const v = document.querySelector('[data-testid="board-clip"]') as HTMLVideoElement | null;
+            const speaking = document.querySelector(".br-seat.br-speaking");
+            return JSON.stringify({
+              videos: document.querySelectorAll('[data-testid="board-clip"]').length,
+              name: v?.getAttribute("data-name") ?? null,
+              webm: v?.querySelector('source[type="video/webm"]')?.getAttribute("src") ?? null,
+              mp4: v?.querySelector('source[type="video/mp4"]')?.getAttribute("src") ?? null,
+              poster: v?.getAttribute("poster") ?? null,
+              paused: v ? v.paused : null,
+              seat: speaking?.getAttribute("data-testid") ?? null,
+              clipped: Boolean(speaking?.classList.contains("br-clipped")),
+              lean: speaking ? getComputedStyle(speaking.querySelector(".br-live")!).opacity : null,
+              says: document.querySelector('[data-testid="board-speaking"] .br-says-label')?.textContent ?? "",
+              done: !speaking,
+            });
+          }),
+        ) as ClipInfo;
+      for (const width of [1440, 1024, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base}/my-board/${decisionId}`);
+        await page.locator('[data-testid="board-look-night"]').click();
+        await page.waitForTimeout(400);
+        await page.goto(`${base}/my-board/${decisionId}?play=1`);
+        await page.locator('[data-testid="board-clip"]').waitFor({ timeout: 15000 });
+        const seen = new Set<string>();
+        let playing = 0;
+        const deadline = Date.now() + 6 * SPEAK_MS + 5000;
+        while (Date.now() < deadline) {
+          const i = await read();
+          if (i.videos) {
+            const key = (i.seat ?? "").replace("board-seat-", "");
+            must(i.videos === 1, `${width}px: one clip at a time (${i.videos})`);
+            must(i.name === nameOf(key) && i.webm === `/board/council-night-${i.name}.webm` && i.mp4 === `/board/council-night-${i.name}.mp4` && i.poster === "/board/council-night.jpg", `${width}px: ${key}'s turn plays its own clip, WebM then MP4, the still as poster: ${JSON.stringify(i)}`);
+            must(i.clipped && i.lean === "0", `${width}px: the CSS lean is off while ${key}'s clip plays: ${JSON.stringify({ clipped: i.clipped, lean: i.lean })}`);
+            must(i.says === `${shortOf(key)} SAYS`, `${width}px: the table line names the speaker: ${i.says}`);
+            if (i.paused === false) playing++;
+            seen.add(key);
+          }
+          if (i.done && seen.size) break;
+          await page.waitForTimeout(120);
+        }
+        must(SEATS.every((x) => seen.has(x.key)), `${width}px: every speaker's clip played in turn; saw ${[...seen].join(", ")}`);
+        must(playing > 0, `${width}px: the clips were playing, not paused`);
+        await page.waitForTimeout(300);
+        const after = await read();
+        must(after.videos === 0 && (await page.locator('[data-testid="board-photo-night"]').isVisible()), `${width}px: the last turn over, no video and the still: ${JSON.stringify(after)}`);
+      }
+      await page.setViewportSize({ width: 1280, height: 950 });
+      // A tap mid-playback: the clip follows the spotlight to that seat, and a second tap returns to the Board and the still.
+      await page.goto(`${base}/my-board/${decisionId}?play=1`);
+      await page.locator('[data-testid="board-clip"]').waitFor({ timeout: 15000 });
+      await page.locator('[data-testid="board-seat-riley"]').click({ force: true });
+      await page.waitForTimeout(400);
+      const tapped = await read();
+      must(tapped.videos === 1 && tapped.name === "riley" && tapped.seat === "board-seat-riley", `a tap mid-playback moves the clip to that seat: ${JSON.stringify(tapped)}`);
+      await page.locator('[data-testid="board-seat-riley"]').click({ force: true });
+      await page.waitForTimeout(400);
+      must((await read()).videos === 0, "a second tap returns to the Board and the still");
+      // Reduced motion: no clip at all, the still and the glow as before.
+      const quiet = await (await browser.newContext({ viewport: { width: 1280, height: 950 }, reducedMotion: "reduce", storageState: await page.context().storageState() })).newPage();
+      await quiet.goto(`${base}/my-board/${decisionId}?play=1`);
+      await quiet.locator(".br-seat.br-speaking").waitFor({ timeout: 5000 });
+      await quiet.waitForTimeout(500);
+      must((await quiet.locator('[data-testid="board-clip"], [data-testid="board-clip-next"]').count()) === 0 && (await quiet.locator('[data-testid="board-room"]').getAttribute("data-look")) === "night", "reduced motion: no clip plays and none preloads; the still stays");
+      await quiet.context().close();
+      console.log("✓ evening clips at 1440, 1024 and 390: each speaker's clip in turn over the still (WebM then MP4, the still as poster), one at a time, the lean off, the line naming the speaker; the still after; a tap moves the clip; reduced motion none");
+    }
+
     // A Focus follow-up: only Morgan.
     await page.goto(`${base}/my-board/${decisionId}`);
     await page.locator('[data-testid="board-question"]').fill("What could go wrong with the DMs plan?");

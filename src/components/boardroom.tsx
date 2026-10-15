@@ -9,7 +9,7 @@
  */
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CHAIRS, CHAIR_KEYS, COUNCIL_CLIPS, MODES, MODE_INFO, SPEAK_MS, takesWords, type Mode, type SceneLook } from "@/lib/engine/board-view";
+import { CHAIRS, CHAIR_KEYS, MODES, MODE_INFO, SPEAK_MS, clipFor, takesWords, type Mode, type SceneLook } from "@/lib/engine/board-view";
 import { setSceneLookAction } from "@/lib/actions/scene";
 import type { BoardAnswer, Seat } from "@/lib/engine/board";
 import { SubmitButton } from "@/components/submit-button";
@@ -35,6 +35,8 @@ type Props = {
   stepStates?: string[];
   /** The Council Chamber's look for this member (rev 738): their own choice, or night from 19:00 to 06:00. */
   initialLook?: SceneLook;
+  /** The speaking clips in the repo, by file name (H-150): the page reads public/board; none means the CSS motion alone. */
+  clips?: string[];
 };
 
 const LOOKS: SceneLook[] = ["day", "night"];
@@ -46,7 +48,7 @@ const plateName = (s: Seat) => s.short.replace(/ Advisor$/, "");
 const DATE_FMT: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
 const dayWords = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", DATE_FMT);
 
-export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day" }: Props) {
+export function Boardroom({ seats, answer, question, used, notes, hours, autoplay, action, parentId, canAsk, decisionView, initialMode = "board", setup, stepStates = [], initialLook = "day", clips = [] }: Props) {
   const spoken = useMemo(() => (answer ? seats.filter((s) => answer.advisors.some((a) => a.seat === s.key)).map((s) => s.key) : []), [seats, answer]);
   const [phase, setPhase] = useState<"idle" | "asking" | "playing" | "done">(answer ? (autoplay ? "playing" : "done") : "idle");
   const [idx, setIdx] = useState(0);
@@ -116,9 +118,9 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
   // A speaking clip plays for the speaker's turn when one is in the repo, never with reduced motion; only the next one preloads.
   // A clip belongs to the chair, whoever sits in it (rev 756).
   const chairOf = (k: string) => CHAIR_KEYS[seats.findIndex((s) => s.key === k)] ?? null;
-  const clipFor = (k: string | undefined | null) => (k && !still ? COUNCIL_CLIPS.find((x) => x === `/board/council-${look}-${chairOf(k)}.mp4`) ?? null : null);
-  const clip = clipFor(speaker);
-  const nextClip = phase === "playing" ? clipFor(spoken[idx + 1]) : null;
+  const clipOf = (k: string | undefined | null) => (k && !still ? clipFor(clips, look, chairOf(k)) : null);
+  const clip = clipOf(speaker);
+  const nextClip = phase === "playing" ? clipOf(spoken[idx + 1]) : null;
   const rowShown = (k: string) => (phase === "playing" ? spoken.indexOf(k) <= idx : phase === "done");
   const minutes = spoken;
   const totalMin = answer?.steps.reduce((a, s) => a + s.takesMinutes, 0) ?? 0;
@@ -179,8 +181,21 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
               <img className="br-photo" src={`/board/council-${k}.jpg`} alt="" hidden={k !== look} loading={k === look ? "eager" : "lazy"} decoding="async" data-testid={`board-photo-${k}`} />
             </picture>
           ))}
-          {clip ? <video key={clip} className="br-photo" src={clip} muted autoPlay loop playsInline aria-hidden data-testid="board-clip" /> : null}
-          {nextClip ? <link rel="preload" as="video" href={nextClip} /> : null}
+          {/* The speaker's clip over the still, the still as its poster (frame 0 and the last frame match it, so no jump either way);
+              WebM first, the MP4 for the rest; muted and inline, looping for the turn. The next speaker's clip warms in a hidden
+              video (browsers ignore a preload link for video). */}
+          {clip ? (
+            <video key={clip.mp4} className="br-photo br-clip" poster={`/board/council-${look}.jpg`} muted autoPlay loop playsInline aria-hidden data-testid="board-clip" data-chair={chairOf(speaker!)} data-name={clip.name}>
+              {clip.webm ? <source src={clip.webm} type="video/webm" /> : null}
+              <source src={clip.mp4} type="video/mp4" />
+            </video>
+          ) : null}
+          {nextClip ? (
+            <video key={`next-${nextClip.mp4}`} className="br-clip-next" preload="auto" muted playsInline aria-hidden tabIndex={-1} data-testid="board-clip-next" data-name={nextClip.name}>
+              {nextClip.webm ? <source src={nextClip.webm} type="video/webm" /> : null}
+              <source src={nextClip.mp4} type="video/mp4" />
+            </video>
+          ) : null}
           {seats.map((s, i) => {
             const g = CHAIRS[i];
             const active = speaker === s.key;
@@ -189,7 +204,7 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
               <button
                 key={s.key}
                 type="button"
-                className={`br-seat${active ? " br-speaking" : ""}${dim ? " br-dim" : ""}`}
+                className={`br-seat${active ? " br-speaking" : ""}${active && clip ? " br-clipped" : ""}${dim ? " br-dim" : ""}`}
                 style={{ left: `${+(g.l + g.w / 2).toFixed(3)}%`, top: `${+(g.t + g.h / 2).toFixed(3)}%`, width: `${g.w}%`, height: `${g.h}%` }}
                 aria-pressed={spot === s.key}
                 aria-label={`${s.short}, ${s.role.toLowerCase()}${card(s.key) || !answer ? "" : " (didn't speak on this one)"}`}

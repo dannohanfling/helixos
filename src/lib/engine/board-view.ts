@@ -73,8 +73,20 @@ export function sceneLookFor(setting: "auto" | "day" | "night", hour: number): S
 }
 
 /**
- * Speaking clips (rev 738, optional; per chair since rev 756): public/board/council-{look}-{chair}.mp4 and .webm, chair one of
- * CHAIR_KEYS, listed here once they're in the repo, so a
- * turn never asks for a clip that isn't there. Empty until Danno adds them.
+ * Speaking clips (rev 738; per chair since rev 756; the evening five since H-150): public/board/council-{look}-{name}.mp4 and
+ * .webm, where {name} is the statue in that chair in the default order (Danno at the head, then Alex, Jordan, Riley, Morgan),
+ * whoever sits there after Choose your council. The page reads the folder and hands the chamber the files that exist, so a
+ * clip plays the moment its file is in the repo and a chair or look without one keeps the CSS motion.
  */
-export const COUNCIL_CLIPS: string[] = [];
+export const CHAIR_CLIP_NAMES: Record<(typeof CHAIR_KEYS)[number], string> = { head: "danno", left: "alex", right: "jordan", "front-left": "riley", "front-right": "morgan" };
+export const CLIP_FILE = /^council-(day|night)-([a-z-]+)\.(mp4|webm)$/;
+export type CouncilClip = { name: string; mp4: string; webm: string | null };
+/** The clip for one chair in one look, from the files present (names as in public/board); null without an MP4. */
+export function clipFor(files: readonly string[], look: SceneLook, chair: (typeof CHAIR_KEYS)[number] | null): CouncilClip | null {
+  if (!chair) return null;
+  const name = CHAIR_CLIP_NAMES[chair];
+  const mp4 = `council-${look}-${name}.mp4`;
+  const webm = `council-${look}-${name}.webm`;
+  if (!files.includes(mp4)) return null;
+  return { name, mp4: `/board/${mp4}`, webm: files.includes(webm) ? `/board/${webm}` : null };
+}
