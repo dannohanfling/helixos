@@ -200,22 +200,24 @@ async function main() {
     await submit(page, '[data-testid="lb-slug-save"]');
     must((await page.locator('[data-testid="lb-slug-error"]').innerText()).includes("taken"), "another board's address is refused");
     // The field's own pattern keeps the browser from sending capitals; the server's lowercasing is the unit test's to prove.
-    await fillExact(page, '[data-testid="lb-slug"]', "kindness-walk");
+    // A slug of this run alone (H-171): on a database that ran the walk before the seed cleared aliases, "kindness-walk" stays taken by an orphaned alias row.
+    const newSlug = `kindness-walk-${Date.now().toString(36)}`;
+    await fillExact(page, '[data-testid="lb-slug"]', newSlug);
     await submit(page, '[data-testid="lb-slug-save"]');
     await page.locator('[data-testid="lb-slug-changed"]').waitFor();
     const moved = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.id, feedRow.id) }))!;
-    must(moved.slug === "kindness-walk" && JSON.stringify(moved.hidden) === JSON.stringify(["cus_001"]), `the address changed and the hide list carried over: ${moved.slug}`);
-    must((await page.locator('[data-testid="leaderboard-page-link"]').innerText()).endsWith("/lb/kindness-walk"), "the page link shows the new address");
+    must(moved.slug === newSlug && JSON.stringify(moved.hidden) === JSON.stringify(["cus_001"]), `the address changed and the hide list carried over: ${moved.slug}`);
+    must((await page.locator('[data-testid="leaderboard-page-link"]').innerText()).endsWith(`/lb/${newSlug}`), "the page link shows the new address");
     res = await fetch(`${base}/lb/${oldSlug}`, { redirect: "manual" });
-    must(res.status === 308 && (res.headers.get("location") ?? "").endsWith("/lb/kindness-walk"), `the old address is a permanent redirect: ${res.status} ${res.headers.get("location")}`);
-    must((await fetch(`${base}/lb/kindness-walk`)).status === 200, "the new address serves the page");
+    must(res.status === 308 && (res.headers.get("location") ?? "").endsWith(`/lb/${newSlug}`), `the old address is a permanent redirect: ${res.status} ${res.headers.get("location")}`);
+    must((await fetch(`${base}/lb/${newSlug}`)).status === 200, "the new address serves the page");
     const feedOld = await (await fetch(url)).text();
-    const feedNew = await (await fetch(`${base}/api/public/leaderboard/kindness-walk`)).text();
+    const feedNew = await (await fetch(`${base}/api/public/leaderboard/${newSlug}`)).text();
     must(feedOld === feedNew && (JSON.parse(feedNew) as { members: unknown[] }).members.length > 0, "the feed answers the same on both addresses");
     await db.delete(schema.leaderboardFeeds).where(eq(schema.leaderboardFeeds.id, otherFeed.id));
     console.log("✓ the page address: reserved and taken refused, a new one live at once, the old one a 308 and its feed still answering");
 
-    pageUrl = `${base}/lb/kindness-walk`;
+    pageUrl = `${base}/lb/${newSlug}`;
 
     // The points check (H-102): the coach uploads the CL export once; the table shows First L. and numbers only; the hide list is counted apart; nothing was written.
     await logout(page);
