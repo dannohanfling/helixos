@@ -67,7 +67,7 @@ async function consent(page: Page, clientId: string, scope: string, tick: string
 
 async function main() {
   const { db, schema } = await import("@/db");
-  const { eq } = await import("drizzle-orm");
+  const { and, eq, isNull } = await import("drizzle-orm");
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium" });
   const failures: string[] = [];
   try {
@@ -146,7 +146,7 @@ async function main() {
 
     // ── 3b. The business tools (rev 380 steps 1 to 3): each called over the route as the member, each checked in the database. ──
     {
-      const { and, desc } = await import("drizzle-orm");
+      const { desc } = await import("drizzle-orm");
       type Called = { text: string; data: Record<string, unknown> | null; isError: boolean };
       const callTool = async (name: string, args: Record<string, unknown>): Promise<Called> => {
         const res = (await (await rpc(tok.access_token, "tools/call", { name, arguments: args })).json()) as { result?: { content?: { text: string }[]; isError?: boolean } };
@@ -296,7 +296,10 @@ async function main() {
       const open = page.locator('[data-testid="connect-open-claude"]');
       if ((await open.getAttribute("target")) !== "_blank" || !(await open.getAttribute("href"))?.startsWith("https://claude.ai/customize/connectors")) throw new Error("Open Claude connectors opens claude.ai in a new tab");
       if (!(await page.locator('button:has-text("Copy the address")').count())) throw new Error("the big Copy for the address");
-      if ((await page.locator('[data-testid="connect-status"]').getAttribute("data-connected")) !== "0" || !(await page.locator('[data-testid="connect-status"]').innerText()).includes("Not connected yet")) throw new Error("a client with no connection reads Not connected yet");
+      // The line reads the same rows as Settings → Connected apps (closing the coach's switch cuts tokens at request time, it revokes no row).
+      const live = (await db.query.connectedApps.findMany({ where: and(eq(schema.connectedApps.userId, client.id), isNull(schema.connectedApps.revokedAt)) })).length;
+      const status = page.locator('[data-testid="connect-status"]');
+      if ((await status.getAttribute("data-connected")) !== (live ? "1" : "0") || !(await status.innerText()).includes(live ? "Connected ✓ on" : "Not connected yet")) throw new Error(`the status line follows the connected-apps list (${live} live): ${await status.innerText()}`);
       if ((await page.locator('[data-testid="connect-try-chip"]').count()) !== 6 || !(await page.locator('[data-testid="connect-phone"]').count()) || !(await page.locator('[data-testid="connect-free"]').count())) throw new Error("six Try saying chips, the phone note and the free-account note");
       if (await page.locator('[data-testid="connect-areas"][open]').count()) throw new Error("What Claude can do is folded");
       const wide = await page.evaluate(() => document.documentElement.scrollWidth);
