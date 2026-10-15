@@ -1,21 +1,21 @@
 import type { SocialConnection } from "@/db/schema";
 import { connectGhlAction, disconnectGhlAction, refreshGhlAccountsAction, setGhlMappingAction } from "@/lib/actions/social";
 import { PUBLISHABLE, candidates, manualChannelsSentence, readiness } from "@/lib/engine/ghl-map";
-import { GHL_SCOPES, REQUIRED_SCOPES } from "@/lib/engine/ghl-scopes";
+import { GHL_SCOPES } from "@/lib/engine/ghl-scopes";
 import { CHANNEL_SPECS, type Channel } from "@/lib/engine/repurpose";
 import { formatDateTime } from "@/lib/dates";
 import { Field } from "./ui";
 import { ConfirmButton } from "./confirm-button";
 import { DISCONNECT_MESSAGE } from "@/lib/engine/ghl-scopes";
 import { SubmitButton } from "@/components/submit-button";
-import { CopyButton } from "@/components/copy-button";
+import { GhlScopeRows } from "@/components/ghl-scope-rows";
 import { ConnectBox } from "@/components/connect-box";
 import { GHL_COPY, GHL_HELP } from "@/lib/engine/connect-copy";
 
 /**
  * The GoHighLevel connect card as a client sees it (rev 333): two states and nothing else. Not connected: one sentence and a
- * Connect button that opens the steps, one at a time, in plain words, with no scope name on screen (Copy the list puts the
- * names on the clipboard; a fold reads them for anyone who wants to). Connected: a green check and "Connected", how many
+ * Connect button that opens the steps, one at a time, in plain words. The permission list is rows (H-233): GoHighLevel's picker
+ * takes permissions one at a time, so each row has the picker's name, the text to search for, its own Copy and a tick. Connected: a green check and "Connected", how many
  * pages and profiles answered, how many channels will auto-publish, when it was last checked, and Check again and
  * Disconnect; the token and the IDs never show again, and Reconnect replaces the token from inside this state. The GHL user
  * ID is read off GoHighLevel's answer when it carries one and asked for only when it cannot be found. The same card serves
@@ -27,7 +27,6 @@ export function GhlConnect({ conn, tz, users = [] }: { conn: SocialConnection | 
   const hasUser = Boolean(conn?.ghlUserId?.trim());
   // Nothing publishes without the user id, whatever the map says.
   const ready = conn && hasUser ? readiness(conn.mapping) : { ...readiness({}), mapped: 0 };
-  const scopeList = REQUIRED_SCOPES.join("\n");
 
   if (connected && conn) {
     return (
@@ -153,29 +152,13 @@ export function GhlConnect({ conn, tz, users = [] }: { conn: SocialConnection | 
       {conn?.lastError ? (
         <p className="rounded-lg border border-danger bg-danger-soft p-3 text-sm" data-testid="ghl-error">
           {conn.lastError}
-          {/missing (one )?permission/i.test(conn.lastError) ? (
-            <>
-              {" "}
-              <CopyButton text={scopeList} label="Copy the list" className="btn btn-ghost btn-xs" />
-            </>
-          ) : null}
         </p>
       ) : null}
       <details open data-testid="ghl-steps">
         <summary className="sr-only" data-testid="ghl-connect-open">Connect GoHighLevel</summary>
         <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
           <ConnectBox copy={GHL_COPY} testId="ghl-howto">
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <CopyButton text={scopeList} label="Copy the list" className="btn btn-soft btn-xs" />
-              <span className="text-xs text-ink-3">{REQUIRED_SCOPES.length} permissions, nothing else.</span>
-            </div>
-            <ul className="mt-2 grid gap-x-4 text-xs sm:grid-cols-2" data-testid="ghl-scope-list">
-              {GHL_SCOPES.map((sc) => (
-                <li key={sc.scope}>
-                  <code className="text-xs">{sc.scope}</code>
-                </li>
-              ))}
-            </ul>
+            <GhlScopeRows scopes={GHL_SCOPES} />
             <p className="mt-3 text-xs text-ink-3">{GHL_COPY.after}</p>
           </ConnectBox>
           <form action={connectGhlAction} className="space-y-3 text-sm">

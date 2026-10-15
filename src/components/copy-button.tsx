@@ -7,7 +7,7 @@ import { useState } from "react";
  * keeps italics and indents and everything else falls back to the plain text. The HTML flavour is the caller's to build from
  * block elements only: a <br> becomes a backslash in a Markdown-storing destination, a <p> boundary becomes a blank line.
  */
-export function CopyButton({ text, html, label = "Copy", className = "btn btn-soft btn-sm", disabled = false, title }: { text: string; html?: string; label?: string; className?: string; disabled?: boolean; title?: string }) {
+export function CopyButton({ text, html, label = "Copy", className = "btn btn-soft btn-sm", disabled = false, title, doneMs = 1500 }: { text: string; html?: string; label?: string; className?: string; disabled?: boolean; title?: string; doneMs?: number }) {
   const [done, setDone] = useState(false);
   return (
     <button
@@ -23,7 +23,7 @@ export function CopyButton({ text, html, label = "Copy", className = "btn btn-so
             await navigator.clipboard.writeText(text);
           }
           setDone(true);
-          setTimeout(() => setDone(false), 1500);
+          setTimeout(() => setDone(false), doneMs);
         } catch {
           /* clipboard unavailable */
         }

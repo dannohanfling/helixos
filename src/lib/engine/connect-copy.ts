@@ -13,7 +13,7 @@ export const GHL_COPY: ConnectCopy = {
   steps: [
     "Sign in to GoHighLevel and open your account (your business name, top left).",
     "Go to Settings → Private Integrations, then Create new integration.",
-    "Name it HelixOS. On the permissions screen, tick every item in the list below. Use Copy the list if it helps.",
+    "Name it HelixOS. On the permissions screen, add every item in the list below, one at a time: Copy, paste it in the search box there, tick it, then the next.",
     "Create it, then copy the key straight away. GoHighLevel shows it only once.",
     "Paste it below and press Connect. HelixOS makes one small test call and tells you right away if it worked.",
   ],

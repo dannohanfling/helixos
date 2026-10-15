@@ -17,6 +17,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     title: "Connect GoHighLevel yourself, from day one",
     lines: [
       "Settings → GoHighLevel and Connect your tools show the Connect steps to every member from the start. The old \"Publishing setup isn't open yet\" line, which waited on a switch the coach had to find, is gone. Your coach sees whether you're connected, never your key.",
+      "GoHighLevel adds permissions one at a time, so the list is now one row per permission: its name as GoHighLevel shows it, the text to search for, a Copy button, and a tick box you tick as you add it (\"3 of 21 added\"). The pipelines permission is on the list now, so the key you make today also serves the Aqueduct's pipeline picker when it ships.",
     ],
     audience: "everyone",
   },
