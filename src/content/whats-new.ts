@@ -12,6 +12,16 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 199,
+    date: "2026-10-15",
+    title: "Council Chamber: ▶ Play again, longer turns, the clip for the whole turn",
+    lines: [
+      "When a session ends, and on any past decision, ▶ Play again replays it from the first speaker: the same words, the same order, the same clips. No new call to the AI, nothing on your usage.",
+      "Each advisor's turn is now 10 to 15 seconds, by the length of what they say (it was 3.4 seconds flat), and the speaking clip repeats until the turn ends. Tap the quote to hold a turn and read; tap again to go on.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 198,
     date: "2026-10-15",
     title: "Connect GoHighLevel yourself, from day one",

@@ -45,6 +45,7 @@ async function main() {
     const { seal } = await import("@/lib/crypto");
     const { newId } = await import("@/lib/ids");
     const { principlesFromPack, SEATS, MODES, SPEAK_MS } = await import("@/lib/engine/board");
+    const { MIN_TURN_MS, MAX_TURN_MS, turnMs } = await import("@/lib/engine/board-view");
     const maya = (await db.query.users.findFirst({ where: eq(schema.users.email, "client@demo.helixos.app") }))!;
     const coachU = (await db.query.users.findFirst({ where: eq(schema.users.email, "coach@demo.helixos.app") }))!;
     const m = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, maya.id) }))!;
@@ -110,7 +111,8 @@ async function main() {
     const took = Date.now() - (at[1] ?? t0);
     must(heard.join() === "danno,alex,jordan,riley,morgan", `the seats speak in order: ${heard.join()}`);
     must(rowsWhile.join() === "1,2,3,4,5", `each row appears as its advisor speaks, earlier rows staying: ${rowsWhile.join()}`);
-    must(took > 4 * SPEAK_MS - 1000 && took < 4 * SPEAK_MS + 3000, `about ${SPEAK_MS} ms a speaker: ${took} ms from the second speaker to the recommendation`);
+    // H-245: each turn is 10 to 15 s by its quote's length; the four turns after the first add up inside those bounds.
+    must(took > 4 * MIN_TURN_MS - 1000 && took < 4 * MAX_TURN_MS + 3000, `10 to 15 s a speaker: ${took} ms from the second speaker to the recommendation`);
     must((await page.locator('[data-testid="board-table-recommends"]').innerText()).startsWith("THE BOARD RECOMMENDS"), "the table ends on the recommendation");
     console.log(`✓ the Boardroom plays it back: ${heard.join(" → ")}, ${took} ms for the last four turns, rows appearing as each speaks, the recommendation last`);
     for (const x of SEATS) must(await page.locator(`[data-testid="board-minute-${x.key}"]`).count(), `the ${x.name} row in the minutes`);
@@ -174,10 +176,36 @@ async function main() {
     must((await db.query.tasks.findMany({ where: eq(schema.tasks.sourceRef, boardRef) })).length === 3 && (await page.locator('[data-testid="board-setup-done"]').count()) === 7 && !(await page.locator('[data-testid="board-setup-approve"]').count()), "nothing set up twice; all seven done");
     console.log("✓ Set it up for me: seven at most, an invented number and person left out, nothing changes before Approve, the steps as tasks (step 1 Top 3), the check-in, a draft offer off the bot; the 3-1-3 swap, a moved follow-up and the Office Hours ask only when ticked");
 
-    // Run the discussion again, and tap a seat during it: the playback stops on that advisor; tap again for the whole Board.
+    // ▶ Play again (H-245): the same session from the saved answer, no request leaving the page, the usage count unchanged; a
+    // turn's length is 10 to 15 s by its quote; a tap on the quote holds the turn and a second tap goes on.
+    const usageBefore = (await db.query.aiUsage.findMany()).length;
+    const requests: string[] = [];
+    const onRequest = (r: { method: () => string; url: () => string }) => { if (r.method() === "POST") requests.push(r.url()); };
+    page.on("request", onRequest);
+    const replayBtn = page.locator('[data-testid="board-replay"]');
+    must((await replayBtn.innerText()).includes("Play again") && (await replayBtn.getAttribute("aria-label")) === "Play the discussion again", "the pill reads ▶ Play again with its label");
+    await replayBtn.click();
+    await page.locator('[data-testid="board-speaking"]').waitFor({ timeout: 5000 });
+    const turn = Number(await page.locator('[data-testid="board-speaking"]').getAttribute("data-turn-ms"));
+    const firstQuote = (await db.query.boardDecisions.findFirst({ where: eq(schema.boardDecisions.id, decisionId) }))!.answer!.advisors[0].text;
+    must(turn >= MIN_TURN_MS && turn <= MAX_TURN_MS && turn === turnMs(firstQuote), `the first turn lasts 10 to 15 s by its quote: ${turn} ms for ${firstQuote.split(/\s+/).length} words`);
+    await page.locator('[data-testid="board-speaking"]').click();
+    must((await page.locator('[data-testid="board-held"]').count()) === 1 && (await page.locator('[data-testid="board-speaking"]').getAttribute("data-held")) === "1", "a tap on the quote holds the turn with a paused mark");
+    const heldSays = await page.locator('[data-testid="board-speaking"] .br-says-label').innerText();
+    await page.waitForTimeout(MAX_TURN_MS + 1500);
+    must((await page.locator('[data-testid="board-speaking"] .br-says-label').innerText()) === heldSays, "a held turn stays past its length");
+    await page.locator('[data-testid="board-speaking"]').click();
+    must((await page.locator('[data-testid="board-held"]').count()) === 0, "a second tap goes on");
+    await page.locator('[data-testid="board-table-recommends"]').waitFor({ timeout: 6 * MAX_TURN_MS + 5000 });
+    page.off("request", onRequest);
+    must(requests.length === 0, `Play again sends no request: ${requests.join(", ")}`);
+    must((await db.query.aiUsage.findMany()).length === usageBefore, "the usage count never moves on Play again");
+    console.log("✓ ▶ Play again replays from the saved answer with no request and no usage; 10 to 15 s turns by quote; a tap holds the turn, a tap goes on");
+
+    // Play again, and tap a seat during it: the playback stops on that advisor; tap again for the whole Board.
     await page.locator('[data-testid="board-replay"]').click();
     await page.locator('[data-testid="board-speaking"]').waitFor({ timeout: 5000 });
-    must(!(await page.locator('[data-testid="board-steps"]').count()), "Run the discussion hides the steps until it ends");
+    must(!(await page.locator('[data-testid="board-steps"]').count()), "Play again hides the steps until it ends");
     await page.locator('[data-testid="board-seat-morgan"]').click();
     const spotLine = await page.locator('[data-testid="board-speaking"] .br-says-label').innerText();
     await page.waitForTimeout(SPEAK_MS + 600);

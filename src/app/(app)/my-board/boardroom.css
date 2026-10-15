@@ -136,3 +136,20 @@
   .br-seat.br-speaking .br-live { opacity: 0; }
   .br-live, .br-glow, .br-shade, .br-plate, .br-minute { transition: none; }
 }
+
+/* H-245: a held turn (a tap on the quote) shows a small mark; the quote itself is the button. */
+.br-says[role="button"] {
+  cursor: pointer;
+}
+.br-says[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.br-paused {
+  margin-left: 0.5rem;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
