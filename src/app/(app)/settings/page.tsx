@@ -58,6 +58,8 @@ import { SKILL_INSTALL_STEPS } from "@/lib/engine/board-view";
 import { forumSettingsFor } from "@/lib/forum";
 import { ForumWebhookCard } from "@/components/forum-webhook";
 import { setArenaHiddenAction, setArenaPhotoAction, setColosseumOnAction } from "@/lib/actions/colosseum";
+import { setupFor } from "@/lib/setup-card";
+import { SetupList } from "@/components/setup-card";
 
 export const metadata = { title: "Settings" };
 
@@ -109,6 +111,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // The invite link just made, from the cookie the action left: shown this once, then the cookie is gone.
   const inviteCode = teamParam === "invited" ? ((await cookies()).get(TEAM_INVITE_COOKIE)?.value ?? null) : null;
   const teamNote = teamParam === "full" ? "No seat is free. Remove a team member or cancel an open invite first, or ask your coach for more seats." : teamParam === "removed" ? "Removed. Their access ended." : teamParam === "revoked" ? "Invite cancelled. That link no longer works." : null;
+  // H-270 §1: every setup step with its tick, folded; the six "When you need them" steps live here once the card retires.
+  const setupList = v.team ? null : <SetupList steps={await setupFor(v)} video={v.workspace.startHereVideo ?? null} canTick={!v.team} coach={Boolean(v.switchedInto)} />;
   const goalCard = (
     <Card id="goal" title="Your one goal" action={<Link href="/goals" className="text-xs text-ink-2 hover:underline" data-testid="goal-plan-link">Your Business goals →</Link>}>
       <form action={updateGoalAction} className="space-y-3">
@@ -189,6 +193,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </ul>
         </Card>
         <div className="grid gap-4 lg:grid-cols-2">
+          {setupList}
           {goalCard}
           <Card id="your-coach" title="Changes by their coach">
             {changesList}
@@ -447,6 +452,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {storage.blocked ? <p className="mt-2 text-xs text-danger" data-testid="storage-blocked">Full. New attachments are refused until something is deleted.</p> : null}
           <p className="mt-2 text-xs text-ink-3">Attachments on your proofs, in private storage.</p>
         </Card>
+        {setupList}
         {goalCard}
         {leaderboard ? (
           <Card id="leaderboard" title="Loyalty leaderboard">

@@ -40,6 +40,8 @@ export const workspaces = sqliteTable("workspaces", {
   /** Office Hours as a member reads it (friction walk OH1, 7 Oct): when, in the workspace's zone, and the link to join. Coach-edited. */
   oohTime: text("ooh_time"),
   oohLink: text("ooh_link"),
+  /** The Start Here orientation (H-270 §1, S1a): the coach's welcome video, a link HelixOS plays itself (mp4, webm) or opens (a Recordings share link). Null shows "Coming soon". */
+  startHereVideo: text("start_here_video"),
   /** Recordings' publishing rules (rev 491): series names and time slots, coach-edited. Null keeps the defaults in recording-rules.ts. */
   recordingRules: text("recording_rules", { mode: "json" }).$type<unknown>(),
   /** When the rules took effect: a call recorded before it is never published by them on its own, only suggested. */
@@ -106,6 +108,9 @@ export const memberships = sqliteTable(
     /** The Aqueduct (rev 711): "Pause the water", and the period (30 or 7 days), both remembered. */
     aqueductPaused: integer("aqueduct_paused", { mode: "boolean" }).notNull().default(false),
     aqueductPeriod: integer("aqueduct_period").notNull().default(30),
+    /** The Setup card (H-270 §1): when the Start Here video played to the end (S1a), and when Settings → You was last saved by the member (S2: the time zone and reminder hours, chosen rather than defaulted). */
+    startHereWatchedAt: text("start_here_watched_at"),
+    profileSavedAt: text("profile_saved_at"),
     /** My Board's four chosen seats (rev 756), board_seats ids in chair order: left, right, front left, front right. Null: the archetypes. */
     boardCouncil: text("board_council", { mode: "json" }).$type<string[]>(),
     /** My Board's memory (H-257): "Start fresh" stamps this; the Board then reads only decisions made after it (a database stamp, UTC). Undo for seven days clears it. */
@@ -4604,3 +4609,38 @@ export const helixTicks = sqliteTable(
   (t) => [uniqueIndex("helix_ticks_member_rung").on(t.workspaceId, t.userId, t.rungKey)],
 );
 export type HelixTick = typeof helixTicks.$inferSelect;
+
+/**
+ * The Setup card (H-270 §1): the 26 setup steps as data, seeded from src/data/seed/setup.json and editable by the coach without
+ * a deploy (label, link, group, order, what it reads, what it needs first, minutes); and a member's ticks for the steps no signal
+ * covers, with the coach's ticks for the two steps that are the coach's to confirm.
+ */
+export const setupSteps = sqliteTable("setup_steps", {
+  key: text("key").primaryKey(),
+  group: text("group").notNull(),
+  order: integer("order").notNull(),
+  label: text("label").notNull(),
+  href: text("href").notNull().default("/today"),
+  /** One of the engine's SETUP_SIGNALS keys; "tick" when the member (or the coach for them) marks it, "coach-tick" for the coach alone. */
+  signal: text("signal").notNull().default("tick"),
+  needs: text("needs", { mode: "json" }).$type<string[]>().notNull().default([]),
+  minutes: integer("minutes").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+export type SetupStepRow = typeof setupSteps.$inferSelect;
+
+export const setupTicks = sqliteTable(
+  "setup_ticks",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull(),
+    userId: text("user_id").notNull(),
+    stepKey: text("step_key").notNull(),
+    /** Who ticked it: the member, or the coach (switched in, or on the client page). */
+    byUserId: text("by_user_id").notNull(),
+    byCoach: integer("by_coach", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("setup_ticks_member_step").on(t.workspaceId, t.userId, t.stepKey)],
+);
+export type SetupTick = typeof setupTicks.$inferSelect;

@@ -100,6 +100,25 @@ async function main() {
     await page.screenshot({ path: "screenshots/fd01-first-today.png", fullPage: true });
     console.log("✓ first Today: welcome card, no admin tasks, no empty goal bar, the road named");
 
+    // H-270 §1, the Setup card: 1 of 20 done at sign-in; the next open steps in needs-first order (S1a, S2, S3; S4 waits for
+    // S2); Start Here says coming soon until the coach sets the video; the Example tick of the card never a client's.
+    const { db, schema } = await import("@/db");
+    const { eq, inArray, and } = await import("drizzle-orm");
+    const { newId } = await import("@/lib/ids");
+    const { CORE_GROUPS } = await import("@/lib/engine/setup");
+    const joined = (await db.query.users.findFirst({ where: eq(schema.users.email, email) }))!;
+    const joinedM = (await db.query.memberships.findFirst({ where: eq(schema.memberships.userId, joined.id) }))!;
+    const card = page.locator('[data-testid="setup-card"]');
+    const nextKeys = async () => page.locator('[data-testid="setup-step"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-key")));
+    const count = async () => (await page.locator('[data-testid="setup-count"]').innerText()).trim();
+    if (!(await card.count())) throw new Error("the Setup card is missing from a new client's Today");
+    if ((await count()) !== "1 of 20 done") throw new Error(`a fresh client: 1 of 20 done, got "${await count()}"`);
+    if ((await nextKeys()).join() !== "s1a,s2,s3") throw new Error(`the next steps follow needs first (S1a, S2, S3), got ${(await nextKeys()).join()}`);
+    if (!(await page.locator('[data-testid="welcome"] [data-testid="start-here-soon"]').count())) throw new Error("Start Here says coming soon in the welcome card until the coach sets the video");
+    const s2 = page.locator('[data-testid="setup-step"][data-key="s2"]');
+    if (!/1 min/.test(await s2.innerText()) || (await s2.locator('[data-testid="setup-step-open"]').getAttribute("href")) !== "/settings#you") throw new Error("S2 shows its minutes and opens Settings → You");
+    console.log("✓ Setup card: 1 of 20 done, S1a then S2 and S3, S4 waiting on S2; Start Here coming soon");
+
     // The three fields complete stage 1 by themselves: promise, audience, goal
     await page.goto(`${base}/settings`);
     await page.fill('textarea[name="bigPromise"]', "I help nutrition coaches fill a group without ads");
@@ -116,6 +135,69 @@ async function main() {
     const roadAfter = await page.locator('[data-testid="road"]').innerText();
     if (!/Stage 2 of 7/.test(roadAfter)) throw new Error(`stage 1 should be done once the three fields are set, road says "${roadAfter}"`);
     console.log("✓ stage 1: Big Promise first; promise + audience + goal complete it; the road moves to stage 2");
+
+    // The card ticks itself: Settings → You saved (S2) and the Big Promise with its audience (S5), the goal (S6); S4 now open.
+    if ((await count()) !== "4 of 20 done") throw new Error(`after You, the promise and the goal: 4 of 20 done, got "${await count()}"`);
+    if (!(await nextKeys()).includes("s4") || (await nextKeys()).includes("s2")) throw new Error(`S4 opens once S2 is saved, S2 leaves the list: ${(await nextKeys()).join()}`);
+    console.log("✓ the card ticks itself from Settings and the goal: 4 of 20, S4 open");
+
+    // The coach: the 26 steps as data at 1440, the Start Here video set, a label edited with no deploy.
+    const coachCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const coach = await coachCtx.newPage();
+    await coach.goto(`${base}/login`);
+    await coach.click('button:has-text("As the coach")');
+    await coach.waitForURL(/\/today/);
+    await coach.goto(`${base}/coach/setup`);
+    if ((await coach.locator('[data-testid="coach-setup-step"]').count()) !== 26) throw new Error(`the coach sees all 26 steps, got ${await coach.locator('[data-testid="coach-setup-step"]').count()}`);
+    const s3 = coach.locator('[data-testid="coach-setup-step"][data-key="s3"]');
+    await s3.locator('[data-testid="setup-label"]').fill("Add your photo (a real one)");
+    await Promise.all([coach.waitForResponse((r) => r.request().method() === "POST"), s3.locator('[data-testid="setup-save"]').click()]);
+    await s3.locator('[data-testid="setup-saved"]').waitFor({ timeout: 10000 });
+    await coach.locator('[data-testid="start-here-url"]').fill("/board/council-night-danno.mp4");
+    await Promise.all([coach.waitForResponse((r) => r.request().method() === "POST"), coach.locator('[data-testid="start-here-save"]').click()]);
+    await coach.locator('[data-testid="start-here-saved"]').waitFor({ timeout: 10000 });
+    const sectionOver = await coach.locator('[data-testid="coach-setup"]').evaluate((el) => el.scrollWidth - el.clientWidth);
+    if (sectionOver > 0) throw new Error(`Coach → Setup steps scrolls sideways at 1440 (${sectionOver}px)`);
+    console.log("✓ coach: 26 steps, a label saved, the Start Here video set, no sideways scroll at 1440");
+
+    // The client sees the edit and the video in the welcome card; played to the end, S1a ticks itself.
+    await page.goto(`${base}/today`);
+    if ((await page.locator('[data-testid="setup-step"][data-key="s3"] [data-testid="setup-step-label"]').innerText()).trim() !== "Add your photo (a real one)") throw new Error("the coach's edit shows the client with no deploy");
+    const video = page.locator('[data-testid="welcome"] [data-testid="start-here-video"]');
+    if (!(await video.count())) throw new Error("the Start Here video sits in the welcome card");
+    await video.evaluate(async (el) => {
+      const v = el as HTMLVideoElement;
+      await new Promise<void>((done) => { if (v.readyState >= 1) done(); else v.addEventListener("loadedmetadata", () => done(), { once: true }); });
+      v.muted = true;
+      v.currentTime = Math.max(0, v.duration - 0.3);
+      await v.play();
+    });
+    await page.locator('[data-testid="welcome"] [data-testid="start-here-done"]').waitFor({ timeout: 15000 });
+    await page.waitForTimeout(800);
+    await page.goto(`${base}/today`);
+    if ((await count()) !== "5 of 20 done" || (await nextKeys()).includes("s1a")) throw new Error(`Start Here played to the end ticks S1a: expected 5 of 20 without S1a, got "${await count()}" ${(await nextKeys()).join()}`);
+    if (!(await db.query.memberships.findFirst({ where: eq(schema.memberships.id, joinedM.id) }))!.startHereWatchedAt) throw new Error("the watched stamp is on the membership");
+    const sidewaysCard = await card.evaluate((el) => el.scrollWidth - el.clientWidth);
+    if (sidewaysCard > 0) throw new Error(`the Setup card scrolls sideways at 390 (${sidewaysCard}px)`);
+    console.log("✓ the client: the edited label, the video in the welcome card, played to the end ticks S1a (5 of 20), no sideways scroll at 390");
+
+    // The card retires once the first 20 are done; every step stays under Settings → Setup. The undone core steps are made
+    // ticks for the fixture (as the coach can on their page), ticked, and their signals put back after.
+    const defs = await db.query.setupSteps.findMany();
+    const core = defs.filter((d) => (CORE_GROUPS as string[]).includes(d.group));
+    const toTick = core.filter((d) => !["signed-in", "profile-saved", "big-promise", "goal", "start-here"].includes(d.signal));
+    await db.update(schema.setupSteps).set({ signal: "tick" }).where(inArray(schema.setupSteps.key, toTick.map((d) => d.key)));
+    for (const d of toTick) await db.insert(schema.setupTicks).values({ id: newId(), workspaceId: joinedM.workspaceId, userId: joined.id, stepKey: d.key, byUserId: joined.id, byCoach: false }).onConflictDoNothing();
+    await page.goto(`${base}/today`);
+    if (await card.count()) throw new Error(`the card retires once the first 20 are done (${await count()})`);
+    await page.goto(`${base}/settings`);
+    const list = page.locator('[data-testid="setup-list"]');
+    if (!(await list.count()) || !/20 of 20 done/.test(await list.locator("summary").innerText())) throw new Error("Settings → Setup keeps every step, 20 of 20 done");
+    if ((await list.locator('[data-testid="setup-list-step"]').count()) !== 26 || (await list.locator('[data-testid="setup-list-step"][data-key="s21"][data-done="0"]').count()) !== 1) throw new Error("the six When you need them steps stay listed, undone");
+    for (const d of toTick) await db.update(schema.setupSteps).set({ signal: d.signal }).where(eq(schema.setupSteps.key, d.key));
+    await db.delete(schema.setupTicks).where(and(eq(schema.setupTicks.userId, joined.id), inArray(schema.setupTicks.stepKey, toTick.map((d) => d.key))));
+    await coachCtx.close();
+    console.log("✓ the card retires at 20 of 20; Settings → Setup keeps all 26 with the six When you need them steps open");
 
     // Pathway: the next step is a real action, admin tasks are extras
     await page.goto(`${base}/pathway`);

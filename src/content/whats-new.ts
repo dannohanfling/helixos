@@ -12,6 +12,17 @@ export type WhatsNewEntry = { n: number; date: string; title: string; lines: str
 
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    n: 201,
+    date: "2026-10-15",
+    title: "Setup first: a Setup card on Today, with Start Here",
+    lines: [
+      "Today now opens with a Setup card: the next one to three setup steps whose needs are already met, each with its minutes and a link straight to it, and \"N of 20 done\". A step ticks itself off from what HelixOS already knows (your photo, your time zone, your Essence, a connected tool); the two your coach sets up wait on their tick. The card retires once the first 20 are done; every step stays under Settings → Setup.",
+      "Start Here: your coach's welcome video sits in the welcome card on day one (what HelixOS is, setup first, then the pathway) and ticks itself when it plays to the end. Until your coach sets it, it says coming soon.",
+      "Coaches: Coach → Setup steps holds the 26 steps as data, like the My Helix rungs: rename one, move it, change its link, what it reads or what it needs first, with no deploy; and the slot for your Start Here video.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 200,
     date: "2026-10-15",
     title: "My Board: Past discussions, Start fresh, and what the Board remembers",
