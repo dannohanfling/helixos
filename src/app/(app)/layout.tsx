@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
+import { hasLeaderboardFeed } from "@/lib/leaderboard";
 import { requireViewer } from "@/lib/auth";
 import { streakFor } from "@/lib/queries/daily";
 import { totalPoints } from "@/lib/queries/points";
@@ -52,8 +53,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // The Handoff inbox (rev 769): what waits for the coach's decision and what's new for them, on the Inbox item.
   const inboxNew = coachView ? await inboxCount({ workspaceId: viewer.workspace.id, userId: viewer.user.id }) : 0;
   const tier = tierFor(points);
+  // The Loyalty leaderboard menu item (H-140): shown where this membership has a board set up.
+  const loyaltyOn = await hasLeaderboardFeed(viewer.membership.id);
   return (
-    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} coachFirst={coachFirst} choices={choices.length} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
+    <AppShell viewer={viewer} chat={chat} points={points} streak={streak.running} recordingsEnabled={recordingsEnabled} loyaltyOn={loyaltyOn} coachFirst={coachFirst} choices={choices.length} badges={{ "/intentions": due.length, "/whats-new": unseenCount(WHATS_NEW, viewer.role, viewer.membership.whatsNewSeen), "/coach/reports": reportsNew, "/coach/feedback": feedbackNew, "/recordings": recordingsNew, "/coach": claimsOpen, "/coach/inbox": inboxNew }}>
       <VoiceProvider ready={voice.ready} filled={voice.filled} total={voice.total}>
         {children}
       </VoiceProvider>

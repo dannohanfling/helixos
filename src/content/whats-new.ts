@@ -34,6 +34,15 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 186,
+    date: "2026-10-15",
+    title: "Loyalty leaderboard in the menu",
+    lines: [
+      "If your workspace has a loyalty leaderboard, \"Loyalty leaderboard\" is now in the side menu under Grow, next to Rewards, for you, your team and your coach working in your HelixOS. A coach also finds \"Open their leaderboard page\" on your row in Coach, and a line to the editor on the Settings view they see in your HelixOS.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 185,
     date: "2026-10-15",
     title: "My Board: the Council speaks on film in the evening",

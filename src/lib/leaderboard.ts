@@ -319,3 +319,8 @@ export async function refreshFeeds(now = new Date()): Promise<RefreshResult[]> {
   }
   return out;
 }
+
+/** Whether this membership has a leaderboard set up (a feed row): what shows the Loyalty leaderboard menu item (H-140). */
+export async function hasLeaderboardFeed(membershipId: string): Promise<boolean> {
+  return Boolean(await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, membershipId), columns: { id: true } }));
+}

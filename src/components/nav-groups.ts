@@ -9,7 +9,7 @@ import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@
  * `comingSoon` (rev 816): a page on its way. Shown greyed with a "Coming soon" pill and its subtitle (`line`), never a link: its
  * `href` is only where it will live. The commit that ships the page drops the flag, and the item becomes a normal link.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; loyaltyOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -84,6 +84,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives" },
       // Rewards and the Colosseum are one page with two tabs (H-164 §4); /colosseum sends to the tab.
       { href: "/rewards", label: "Rewards", icon: "🏆", line: "points, prizes and the arena" },
+      // The loyalty leaderboard's editor (H-140): for any member whose workspace has a connected board, the owner, their team and a switched-in coach alike.
+      { href: "/loyalty", label: "Loyalty leaderboard", icon: "🏅", line: "your members' points and tiers", loyaltyOnly: true, team: true },
       { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak" },
       { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", comingSoon: true },
       { href: "/whats-new", label: "What's new", icon: "✨", team: true, hint: "latest changes" },
@@ -143,8 +145,9 @@ export function withPlatformLinks(items: NavItem[], links: PlatformLinks, ownCom
 }
 
 /** Whether a member sees a nav item: the one rule the side menu and the More page both use. */
-export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean };
+export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean; loyaltyOn?: boolean };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
   (!n.colosseumOnly || Boolean(m.colosseumOn)) &&
+  (!n.loyaltyOnly || Boolean(m.loyaltyOn)) &&
   (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.clientOnly || m.role === "client") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 

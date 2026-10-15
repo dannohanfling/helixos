@@ -91,6 +91,7 @@ async function main() {
     must(!check.includes("@") && !check.includes("Santos"), "the check note carries field names, never a value");
     const coachHtml = await page.content();
     must(!coachHtml.includes(ELOYALTY_KEY) && coachHtml.includes(`…${ELOYALTY_KEY.slice(-4)}`), "the coach sees the key's last four only");
+    must((await row().locator('[data-testid="leaderboard-open-page"]').count()) === 1, "the coach row links to the client's leaderboard page");
     const feedRow = (await db.query.leaderboardFeeds.findFirst({ where: eq(schema.leaderboardFeeds.membershipId, m.id) }))!;
     must(feedRow.keyEncrypted?.startsWith("enc:v1:") && !feedRow.keyEncrypted.includes(ELOYALTY_KEY), "the key is sealed at rest");
     must(feedRow.lastCheckOk === true && feedRow.host === HOST, "a passed check keeps the host that answered");
@@ -160,6 +161,8 @@ async function main() {
     await page.goto(`${base}/settings#leaderboard`);
     await page.locator('[data-testid="leaderboard-state"]').waitFor();
     must((await page.locator('[data-testid="leaderboard-state"]').innerText()).includes("connected") && (await page.locator('[data-testid="leaderboard-page-link"]').innerText()).endsWith(`/lb/${feedRow.slug}`), "Settings says connected, with the page link");
+    // The menu item (H-140): with a board set up, "Loyalty leaderboard" is in the owner's side menu (the Settings card links there too, so two links at least).
+    must((await page.locator('a[href="/loyalty"]').count()) >= 2 && (await page.getByText("Loyalty leaderboard", { exact: true }).count()) >= 1, "the Loyalty leaderboard menu item shows for the owner");
     must(noKey(await page.content()), "the key is nowhere on the client's Settings");
     await page.click('[data-testid="leaderboard-edit-link"]');
     await page.waitForURL(/\/loyalty/);
