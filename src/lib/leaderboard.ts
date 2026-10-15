@@ -21,8 +21,9 @@ export const FRESH_MS = 5 * 60 * 1000;
 export const BACKOFF_MS = 60 * 1000;
 const MAX_PAGES = 50;
 
-type Got = { status: number; json: unknown };
-async function get(host: string, key: string, path: string): Promise<Got> {
+export type Got = { status: number; json: unknown };
+/** One GET to eLoyalty with the client's key: the status and the body as JSON (null when it isn't). Nothing from the body is ever logged. */
+export async function getJson(host: string, key: string, path: string): Promise<Got> {
   try {
     const res = await fetch(`${host.replace(/\/$/, "")}${path}`, { headers: { authorization: `Bearer ${key}`, accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
     const text = await res.text();
@@ -54,7 +55,7 @@ async function customersOn(host: string, key: string, templateId: string | null)
   let cursor: string | null = null;
   for (let i = 0; i < MAX_PAGES; i++) {
     const q = new URLSearchParams({ limit: "100", is_active: "true", ...(templateId ? { template_id: templateId } : {}), ...(cursor ? { cursor } : {}) });
-    const r = await get(host, key, `/api/external/v1/customers?${q}`);
+    const r = await getJson(host, key, `/api/external/v1/customers?${q}`);
     if (r.status < 200 || r.status >= 300) return { ok: false, status: r.status };
     const page = (r.json ?? {}) as Page;
     list.push(...(Array.isArray(page.data) ? page.data : []));
@@ -71,7 +72,7 @@ export const templatesOf = (feed: Pick<schema.LeaderboardFeed, "templateId" | "t
 };
 
 /** Every active customer across the feed's templates, merged by customer id so nobody is counted twice. */
-async function customers(host: string, key: string, feed: Pick<schema.LeaderboardFeed, "templateId" | "templateIdAlt">): Promise<{ ok: true; list: Customer[] } | { ok: false; status: number }> {
+export async function customers(host: string, key: string, feed: Pick<schema.LeaderboardFeed, "templateId" | "templateIdAlt">): Promise<{ ok: true; list: Customer[] } | { ok: false; status: number }> {
   const lists: Customer[][] = [];
   for (const t of templatesOf(feed)) {
     const got = await customersOn(host, key, t);
@@ -84,7 +85,7 @@ async function customers(host: string, key: string, feed: Pick<schema.Leaderboar
 type Template = { id?: string; name?: string };
 /** The template to read when the coach left it blank: the one that isn't a test. Several left over: named, none picked. */
 async function findTemplate(host: string, key: string): Promise<{ id: string | null; note: string | null }> {
-  const r = await get(host, key, "/api/external/v1/templates");
+  const r = await getJson(host, key, "/api/external/v1/templates");
   if (r.status < 200 || r.status >= 300) return { id: null, note: null };
   const raw = (r.json as { data?: Template[] } | Template[] | null) ?? [];
   const all = (Array.isArray(raw) ? raw : (raw.data ?? [])).filter((t) => t.id && !/test/i.test(t.name ?? ""));
@@ -111,7 +112,7 @@ export async function checkFeed(feed: schema.LeaderboardFeed): Promise<{ ok: boo
   let host: string | null = null;
   let last = 0;
   for (const h of hosts) {
-    const r = await get(h, key, "/api/external/v1/customers?limit=1");
+    const r = await getJson(h, key, "/api/external/v1/customers?limit=1");
     last = r.status;
     if (r.status >= 200 && r.status < 300) {
       host = h;

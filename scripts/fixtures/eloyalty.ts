@@ -20,3 +20,13 @@ export const CUSTOMERS = [
   c("cus_007", "Tess", "Testing", 100, 100, null),
   c("cus_008", "Rafa", "Diaz", 640, 640, "Bronze"),
 ];
+
+/** The points check's Community Loyalty export (H-105 shape, invented people): the pinned Loyalty Customer ID and CL Points Balance, a serial-only member, a Guest record and a member with no pass fields. */
+export const CL_EXPORT_CSV = [
+  "User NS,First Name,Last Name,Email,Impact Pass - Serial Number,Loyalty Customer ID,CL Points Balance,Kindness Koins Bank",
+  "f159927u1,maria jose,santos,maria.cus_001@example.com,SER-cus_001,cus_001,650,500",
+  "f159927u2,Ben,Okafor,ben.cus_002@example.com,SER-cus_002,,300,500",
+  "f159927u3,Ina,Lund,ina.cus_003@example.com,,cus_003,10,500",
+  "f159927u4,Guest,,,SER-guest,,,500",
+  "f159927u5,Hannah,Lee,hannah@example.com,,,,500",
+].join("\n");

@@ -968,6 +968,9 @@ export const leaderboardFeeds = sqliteTable(
     exportAsOf: text("export_as_of"),
     /** After a 429 the cron leaves this feed alone until this time (0161). */
     refreshAfter: text("refresh_after"),
+    /** The points check (H-102, 0165): one sealed snapshot, "First L." and numbers only, so the coach can reopen the table; and when it ran. */
+    pointsCheckSealed: text("points_check_sealed"),
+    pointsCheckAt: text("points_check_at"),
     /** The last check, in words: the host, the member count and the field names seen (names only, never a value). */
     lastCheckAt: text("last_check_at"),
     lastCheckOk: integer("last_check_ok", { mode: "boolean" }),
