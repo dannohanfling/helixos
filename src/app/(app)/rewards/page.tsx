@@ -15,13 +15,35 @@ import { formatDateTime, startOfWeek } from "@/lib/dates";
 import prizes from "@/data/seed/prizes.json";
 import rewards from "@/data/seed/rewards.json";
 import { SubmitButton } from "@/components/submit-button";
+import { ColosseumView, colosseumHref, type ColosseumParams } from "@/components/colosseum-view";
 
 export const metadata = { title: "Rewards" };
 
+/** Rewards and the Colosseum as one page with two tabs (H-164 §4); the Colosseum tab only while the workspace has it on. */
+function RewardsTabs({ tab, on }: { tab: "rewards" | "colosseum"; on: boolean }) {
+  if (!on) return null;
+  const cls = (t: string) => `rounded-full px-3 py-1 text-sm font-medium ${tab === t ? "bg-ink text-surface" : "bg-surface-2 text-ink-2 hover:text-ink"}`;
+  return (
+    <nav className="mb-4 flex flex-wrap gap-2" aria-label="Rewards sections" data-testid="rewards-tabs">
+      <Link href="/rewards" className={cls("rewards")} aria-current={tab === "rewards" ? "page" : undefined} data-testid="rewards-tab-rewards">🏆 Rewards</Link>
+      <Link href={colosseumHref()} className={cls("colosseum")} aria-current={tab === "colosseum" ? "page" : undefined} data-testid="rewards-colosseum">🏟️ The Colosseum</Link>
+    </nav>
+  );
+}
+
 const TYPE_ICON: Record<string, string> = { checkin: "☀️", close: "🌙", streak: "🔥", task: "✅", content: "✍️", dm: "💬", call: "📞", pathway: "🛣️", curriculum: "📆", bonus: "🎁", redeem: "🛍️" };
 
-export default async function RewardsPage() {
+export default async function RewardsPage({ searchParams }: { searchParams: Promise<{ tab?: string } & ColosseumParams> }) {
   const v = await requireViewer();
+  const sp = await searchParams;
+  if (sp.tab === "colosseum" && v.workspace.colosseumOn) {
+    return (
+      <>
+        <RewardsTabs tab="colosseum" on />
+        <ColosseumView v={v} sp={sp} />
+      </>
+    );
+  }
   const [points, ledger, claims, board] = await Promise.all([
     totalPoints(v.workspace.id, v.user.id),
     recentLedger(v.workspace.id, v.user.id, 25),
@@ -44,7 +66,8 @@ export default async function RewardsPage() {
 
   return (
     <>
-      <PageHeader title="Rewards" subtitle="Points are proof of work. Tiers open doors." action={v.workspace.colosseumOn ? <Link href="/colosseum" className="btn btn-ghost btn-sm" data-testid="rewards-colosseum">🏟️ The Colosseum</Link> : undefined} />
+      <RewardsTabs tab="rewards" on={v.workspace.colosseumOn} />
+      <PageHeader title="Rewards" subtitle="Points are proof of work. Tiers open doors." />
       {items.some((i) => i.earnable && !i.bookingUrl) ? (
         <p className="-mt-3 mb-4 text-sm text-ink-2" data-testid="rewards-openness">{SOME_RUNGS_NOT_OPEN}</p>
       ) : null}

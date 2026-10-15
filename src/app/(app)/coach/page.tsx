@@ -129,8 +129,9 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
         waiting: submitted.filter((s) => s.userId === m.userId).length,
       };
     })
-    .sort((a, b) => b.daysSilent - a.daysSilent);
-  const atRisk = rows.filter((r) => r.daysSilent >= 3);
+    // Test accounts last (H-164 §8), then the quietest first.
+    .sort((a, b) => Number(a.m.testAccount) - Number(b.m.testAccount) || b.daysSilent - a.daysSilent);
+  const atRisk = rows.filter((r) => r.daysSilent >= 3 && !r.m.testAccount);
   // The weekly 3-1-3 (rev 124), each member's own week by their own clock: who has set it, and, from Tuesday, who hasn't.
   const weekRows = userIds.length ? await db.query.weeklyIntentions.findMany({ where: and(eq(schema.weeklyIntentions.workspaceId, wsId), inArray(schema.weeklyIntentions.userId, userIds)) }) : [];
   const theirToday = (m: (typeof members)[number]) => todayInTz(m.timezone || v.workspace.timezone);
@@ -222,12 +223,12 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
                             </Link>
                             <div className="truncate text-xs text-ink-3" title={r.m.businessName ?? r.m.programTier}>{r.m.businessName ?? r.m.programTier}</div>
                           </div>
-                          {/* Switch to client (rev 216): into their HelixOS as they see it; Work is chosen on the client page. */}
+                          {r.m.testAccount ? <span data-testid="test-badge"><Badge>Test</Badge></span> : null}
+                          {/* One Open per client (H-164 §6): into their HelixOS the way it was last opened, View until a first Work. */}
                           <form action={switchToClientAction} className="ml-auto">
                             <input type="hidden" name="membershipId" value={r.m.id} />
-                            <input type="hidden" name="mode" value="view" />
-                            <SubmitButton className="btn btn-ghost btn-xs" pendingText="Switching…" data-testid="list-switch" aria-label={`Switch to ${r.u?.name ?? "this client"}`}>
-                              Switch to
+                            <SubmitButton className="btn btn-ghost btn-xs" pendingText="Opening…" data-testid="list-switch" data-mode={r.m.coachOpenMode === "work" && r.m.coachCanWork ? "work" : "view"} aria-label={`Open ${r.u?.name ?? "this client"}'s HelixOS`} title={r.m.coachOpenMode === "work" && r.m.coachCanWork ? "Opens in Work, as last time" : "Opens in View"}>
+                              Open{r.m.coachOpenMode === "work" && r.m.coachCanWork ? " · Work" : ""}
                             </SubmitButton>
                           </form>
                         </div>

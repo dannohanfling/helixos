@@ -152,7 +152,8 @@ async function main() {
     await db.update(schema.helixRungs).set({ label: "Your superpower" }).where(eq(schema.helixRungs.key, "p0-superpower"));
     await db.delete(schema.coachChanges).where(eq(schema.coachChanges.userId, maya.id));
     await page.goto(`${base}/coach/${mm.id}`, { waitUntil: "networkidle" });
-    await submit(page, '[data-testid="switch-work"]');
+    await page.check('[data-testid="switch-work"]');
+    await submit(page, '[data-testid="switch-open"]');
     await page.goto(`${base}/my-helix`, { waitUntil: "networkidle" });
     await page.click('[data-testid="helix-phase-0"]');
     await submit(page, '[data-testid="helix-tick"]');

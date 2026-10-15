@@ -44,6 +44,7 @@ import { checkinsDue } from "@/lib/board-steps";
 import { goalsNow } from "@/lib/body-goals";
 import { PACE_LABEL } from "@/lib/engine/kpi";
 import { STATE_WORDS } from "@/lib/engine/body-goals";
+import { logTiming, tick } from "@/lib/timing";
 
 export const metadata = { title: "Today" };
 
@@ -67,24 +68,47 @@ function greeting(hour: number, name: string): string {
 const ENERGY = ["", ...ENERGY_WORDS];
 
 export default async function TodayPage({ searchParams }: { searchParams: Promise<{ weekError?: string; weekSaved?: string; weekReviewed?: string; monthError?: string; monthSaved?: string; feedbackError?: string; feedbackSaved?: string; closeError?: string; field?: string }> }) {
+  const t0 = tick();
   const v = await requireViewer({ team: "allow" });
+  const tViewer = tick();
   // A team member (Danno, 6 Oct) sees the doors open to them, not the owner's day.
   if (v.team) return <TeamHome v={v} />;
   const sp = await searchParams;
-  const d = await todayData(v);
-  // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.
-  const week = (await db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, v.user.id), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) })) ?? null;
-  const share = week ? await shareFor(v.workspace.id, v.user.id, week) : null;
-  // The monthly intention (rev 129): this month's, if set.
-  const month = (await db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, monthOf(v.today))) })) ?? null;
+  // The day's data, the intentions, the closed days, Body's line, the coach's notices and the rest of the page's own reads run
+  // together (H-164 §9: one after another they held "Loading…" for seconds; the timing line below says what each part cost).
+  const [d, week, month, closed, body, featuresOn, boardDue, toolsConn, coachNew, recParts] = await Promise.all([
+    todayData(v),
+    // The weekly 3-1-3 (rev 124): this week's, and whether each of its tasks is done yet.
+    db.query.weeklyIntentions.findFirst({ where: and(eq(schema.weeklyIntentions.workspaceId, v.workspace.id), eq(schema.weeklyIntentions.userId, v.user.id), eq(schema.weeklyIntentions.weekOf, weekOf(v.today))) }).then((w) => w ?? null),
+    // The monthly intention (rev 129): this month's, if set.
+    db.query.monthlyIntentions.findFirst({ where: and(eq(schema.monthlyIntentions.workspaceId, v.workspace.id), eq(schema.monthlyIntentions.userId, v.user.id), eq(schema.monthlyIntentions.month, monthOf(v.today))) }).then((m) => m ?? null),
+    closedDates(v.workspace.id, v.user.id),
+    // Body's one line (rev 179): the member's own, only once they've set Body up. It counts toward nothing on this page.
+    todayBody(v),
+    // Bot Features switched on for this member in the last seven days (rev 618): one line each, to the feature.
+    recentlyOn(v.workspace.id, v.user.id),
+    // My Board (rev 664 §6): a decision whose steps are due or overdue asks for a check-in.
+    v.team ? Promise.resolve([]) : checkinsDue(v),
+    // Connect your tools (rev 850): until both are connected, one line points at the page. Never in a coach's switched-in view.
+    !v.switchedInto && !v.team ? connectionFor(v.user.id) : Promise.resolve(null),
+    // The coach's notice (rev 432 item 4): new monthly feedback and issues not yet opened, so neither can be missed.
+    v.role === "coach" && !v.switchedInto ? Promise.all([newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt), unseenReports(v.workspace.id), openClaims(v.workspace.id), waitingFeatures(v.workspace.id)]) : Promise.resolve(null),
+    // Rev 497: the recordings' action items in Then, read here and shaped below.
+    v.role === "client"
+      ? Promise.all([openItemsFor(v.workspace.id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role, email: v.user.email }), newRecordings(v.workspace.id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role })])
+      : !v.switchedInto
+        ? coachItems(v.workspace.id, addDays(v.today, -COACH_ITEMS_DAYS))
+        : Promise.resolve(null),
+  ]);
+  const tData = tick();
+  const [share, goals, workout] = await Promise.all([
+    week ? shareFor(v.workspace.id, v.user.id, week) : Promise.resolve(null),
+    // Goals (rev 508 §5): the two that need it most, under the HumanOS line.
+    body ? goalsNow({ workspaceId: v.workspace.id, userId: v.user.id }, v.today) : Promise.resolve([]),
+    // HumanOS's post-workout read (rev 471): once today's session is finished, its lines sit with the day.
+    body ? workoutReadFor(v.workspace.id, v.user.id, v.today) : Promise.resolve(null),
+  ]);
   const weekState = intentionPrompt(v.today, week);
-  const closed = await closedDates(v.workspace.id, v.user.id);
-  // Body's one line (rev 179): the member's own, only once they've set Body up. It counts toward nothing on this page.
-  const body = await todayBody(v);
-  // Goals (rev 508 §5): the two that need it most, under the HumanOS line.
-  const goals = body ? await goalsNow({ workspaceId: v.workspace.id, userId: v.user.id }, v.today) : [];
-  // HumanOS's post-workout read (rev 471): once today's session is finished, its lines sit with the day.
-  const workout = body ? await workoutReadFor(v.workspace.id, v.user.id, v.today) : null;
   // The close card's day (rev 731): yesterday before 04:00 while it's open, the last close-out again within 6 hours with no
   // lock-in since, or today. Everything in the card (numbers, KPIs, points, streak day) is that day's.
   const cl = d.close;
@@ -107,30 +131,23 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const thenList = morningDone ? rest : d.actions.filter((a) => a.key !== "checkin").slice(0, 5);
   // Rev 497: the recordings' action items in Then. A member gets a line per call (the two newest) with items still for them to
   // decide, and a line for calls not yet opened (rev 498); the coach one line for the items from the last two weeks' calls.
-  const seer = { userId: v.user.id, programTier: v.membership.programTier, role: v.role };
   const recLines: { key: string; title: string; href: string }[] = [];
-  if (v.role === "client") {
-    const [open, fresh] = await Promise.all([openItemsFor(v.workspace.id, { ...seer, email: v.user.email }), newRecordings(v.workspace.id, seer)]);
+  if (v.role === "client" && Array.isArray(recParts)) {
+    const [open, fresh] = recParts as [Awaited<ReturnType<typeof openItemsFor>>, Awaited<ReturnType<typeof newRecordings>>];
     const day = (iso: string | null) => (iso ? new Intl.DateTimeFormat("en-US", { timeZone: v.tz, weekday: "short" }).format(new Date(iso)) : "a recent");
     const callName = (a: string | null) => (a === "members" || !a ? "one-to-one" : `${programLine(a as "academy")} call`);
     for (const o of open.slice(0, 2)) recLines.push({ key: `rec-${o.recording.id}`, title: `From ${day(o.recording.startedAt)}'s ${callName(o.recording.audience)}: ${o.count} action item${o.count === 1 ? "" : "s"} for you`, href: `/recordings/${o.recording.id}#steps` });
     if (open.length > 2) recLines.push({ key: "rec-more", title: `+${open.length - 2} more call${open.length - 2 === 1 ? "" : "s"} with action items`, href: "/recordings" });
     if (fresh.length) recLines.push({ key: "rec-new", title: `${fresh.length} new recording${fresh.length === 1 ? "" : "s"} to watch`, href: "/recordings" });
-  } else if (!v.switchedInto) {
-    const items = await coachItems(v.workspace.id, addDays(v.today, -COACH_ITEMS_DAYS));
+  } else if (v.role === "coach" && recParts && !Array.isArray(recParts[0])) {
+    const items = recParts as Awaited<ReturnType<typeof coachItems>>;
     const n = items.reduce((a, x) => a + x.open.length, 0);
     if (n) recLines.push({ key: "rec-coach", title: `Action items from your calls: ${n}`, href: "/coach/recordings?tab=items" });
   }
-
-  // The coach's notice (rev 432 item 4): new monthly feedback and issues not yet opened, so neither can be missed.
-  // Bot Features switched on for this member in the last seven days (rev 618): one line each, to the feature.
-  const featuresOn = await recentlyOn(v.workspace.id, v.user.id);
-  // My Board (rev 664 §6): a decision whose steps are due or overdue asks for a check-in.
-  const boardDue = v.team ? [] : await checkinsDue(v);
-  // Connect your tools (rev 850): until both are connected, one line points at the page. Never in a coach's switched-in view.
-  const toolsConn = !v.switchedInto && !v.team ? await connectionFor(v.user.id) : null;
   const tools = !v.switchedInto && !v.team ? connectProgress({ ghl: Boolean(toolsConn && toolsConn.accounts.length && !toolsConn.lastError && toolsConn.ghlUserId?.trim()), cl: clTokenSet(v.membership) }) : null;
-  const coachNew = v.role === "coach" && !v.switchedInto ? await Promise.all([newMonthlyFeedback(v.workspace.id, v.membership.feedbackSeenAt), unseenReports(v.workspace.id), openClaims(v.workspace.id), waitingFeatures(v.workspace.id)]) : null;
+  // One line per render, times only (H-164 §9): how long the viewer, the reads and the page's shaping took.
+  const tRest = tick();
+  logTiming("today", [{ name: "viewer", from: t0, to: tViewer }, { name: "reads", from: tViewer, to: tData }, { name: "rest", from: tData, to: tRest }], { switched: v.switchedInto ? 1 : 0 });
   return (
     <>
       {coachNew && (coachNew[0] || coachNew[1] || coachNew[2] || coachNew[3]) ? (
@@ -242,10 +259,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
               <div className="text-ink-2">90 seconds. Your numbers and your win.</div>
             </li>
           </ol>
-          <p className="mt-3 text-sm text-ink-2">Points, streaks and your pathway all come from that loop. Your top 3 for today are already waiting below.</p>
-          <a href="#checkin" className="btn btn-primary mt-3">
-            Lock in your first day
-          </a>
+          <p className="mt-3 text-sm text-ink-2">Points, streaks and your pathway all come from that loop. Your top 3 for today are already ticked: one button and you&apos;re in.</p>
+          {/* H-164 §1: the welcome is the only card until the first lock-in, and the lock-in itself sits inside it. */}
+          <div id="checkin">
+            <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention="" defaultEnergy={d.lastEnergy} firstDay />
+          </div>
         </section>
       ) : null}
 
@@ -282,7 +300,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
       {/* Before lock-in, the lock-in is the hero, at the content's full width (rev 531: squeezed into the left column it truncated
           the top 3 to eight letters, under a tall hero that only said "Start lock-in"). */}
-      {!morningDone ? (
+      {!morningDone && !d.firstSession ? (
         <section id="checkin" className="card mb-5 border-accent p-5" style={{ background: "var(--accent-soft)" }} data-testid="lockin-hero">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
@@ -292,7 +310,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </div>
             <Badge tone="accent">+10 pts</Badge>
           </div>
-          <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention="" />
+          <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention="" defaultEnergy={d.lastEnergy} />
         </section>
       ) : null}
 
@@ -388,7 +406,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
                 </div>
                 <details>
                   <summary className="text-xs text-ink-3 underline">Edit lock-in</summary>
-                  <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention={d.log?.intention ?? ""} />
+                  <LockInForm openTasks={d.openTasks} stillOpen={d.stillOpen} today={v.today} defaultIntention={d.log?.intention ?? ""} defaultEnergy={d.log?.energy ?? d.lastEnergy} />
                 </details>
               </div>
             </Card>
@@ -706,21 +724,25 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
 
 type PickTask = { id: string; title: string; focusDate: string | null; dueDate: string | null; urgency: string };
 
-function LockInForm({ openTasks, stillOpen, today, defaultIntention }: { openTasks: PickTask[]; stillOpen: { day: string; tasks: PickTask[] } | null; today: string; defaultIntention: string }) {
+function LockInForm({ openTasks, stillOpen, today, defaultIntention, defaultEnergy, firstDay = false }: { openTasks: PickTask[]; stillOpen: { day: string; tasks: PickTask[] } | null; today: string; defaultIntention: string; defaultEnergy: number | null; firstDay?: boolean }) {
   // The last lock-in day's unfinished Top 3 first, unticked, under its own line (rev 418); then the rest, as before.
   const carried = stillOpen?.tasks ?? [];
   const carriedIds = new Set(carried.map((t) => t.id));
   const candidates = [...carried, ...openTasks.filter((t) => !carriedIds.has(t.id)).slice(0, 12)];
   const carriedLabel = stillOpen ? (stillOpen.day === addDays(today, -1) ? "Still open from yesterday" : `Still open from ${formatDate(stillOpen.day, { weekday: "long" })}`) : null;
+  // One-tap lock-in (H-164 §2): three picks come ticked (today's stars, then due today, then the oldest, carried ones left
+  // unticked as before), and the energy is yesterday's. A tap changes any of it.
+  const preTicked = suggestedPicks(candidates, carriedIds, today);
+  const energyDefault = defaultEnergy && defaultEnergy >= 1 && defaultEnergy <= 5 ? defaultEnergy : 3;
   return (
-    <form action={morningCheckinAction} className="mt-2 space-y-4">
+    <form action={morningCheckinAction} className="mt-2 space-y-4" data-testid="lockin-form" data-first-day={firstDay ? "1" : "0"}>
       <div>
         <div className="label">How&apos;s your energy?</div>
         {/* Five equal segments, the emoji over a label that stays on one line (rev 531: "Dragging" spilled, "On fire" wrapped). */}
         <div className="grid grid-cols-5 gap-1.5" data-testid="energy-segments">
           {[1, 2, 3, 4, 5].map((n) => (
             <label key={n} className="min-w-0 cursor-pointer">
-              <input type="radio" name="energy" value={n} defaultChecked={n === 3} className="peer sr-only" />
+              <input type="radio" name="energy" value={n} defaultChecked={n === energyDefault} className="peer sr-only" />
               <span className="block rounded-lg border px-0.5 py-2 text-center font-medium peer-checked:border-accent peer-checked:bg-white/60 peer-checked:ring-1 peer-checked:ring-accent" data-testid="energy-segment">
                 <span className="block text-lg leading-none">{["", "😮‍💨", "😐", "🙂", "😃", "🔥"][n]}</span>
                 <span className="mt-1 block whitespace-nowrap text-[11px] leading-tight sm:text-xs">{ENERGY[n]}</span>
@@ -734,14 +756,23 @@ function LockInForm({ openTasks, stillOpen, today, defaultIntention }: { openTas
       </Field>
       <Top3Picker
         candidates={candidates.map((t) => ({ id: t.id, title: t.title, late: Boolean(t.dueDate && t.dueDate < today), due: t.dueDate ? (t.dueDate === today ? "today" : formatDate(t.dueDate, { day: "numeric", month: "short" })) : undefined }))}
-        initiallyChecked={candidates.filter((t) => t.focusDate === today).map((t) => t.id)}
+        initiallyChecked={preTicked}
         carried={carriedLabel ? { label: carriedLabel, ids: [...carriedIds] } : undefined}
       />
-      <SubmitButton className="btn btn-accent" pendingText="Locking in…">
-        Lock it in · +10
+      <SubmitButton className="btn btn-accent" pendingText="Locking in…" data-testid="lockin-submit">
+        {firstDay ? "Lock in your first day · +10" : "Lock it in · +10"}
       </SubmitButton>
     </form>
   );
+}
+
+/** The three picks ticked before the member touches anything (H-164 §2): today's stars, then due today, then the oldest. */
+function suggestedPicks(candidates: PickTask[], carriedIds: Set<string>, today: string): string[] {
+  const starred = candidates.filter((t) => t.focusDate === today).map((t) => t.id);
+  const rest = candidates.filter((t) => t.focusDate !== today && !carriedIds.has(t.id));
+  const dueToday = rest.filter((t) => t.dueDate === today).map((t) => t.id);
+  const oldest = rest.filter((t) => t.dueDate !== today).map((t) => t.id);
+  return [...starred, ...dueToday, ...oldest].slice(0, 3);
 }
 
 function CloseForm({ log, activity, owner, today, error, closeKpis }: { log: DailyLog | null; activity: TodayActivity; owner: string | null; today: string; error?: string; closeKpis: { id: string; name: string; unit: string; value: number | null }[] }) {

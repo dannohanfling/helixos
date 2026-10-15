@@ -3,7 +3,7 @@ import { KIT_STATUS_WORDS, kitFor, kitStatus } from "@/lib/queries/brand-kit";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireCoach } from "@/lib/auth";
-import { switchToClientAction } from "@/lib/actions/switch";
+import { setTestAccountAction, switchToClientAction } from "@/lib/actions/switch";
 import { addCoachNoteAction, nudgeMemberAction, reinstateClientAction, removeClientAction, sendClientEmailChangeAction, sendClientResetAction, setClientEmailsAction } from "@/lib/actions/coach";
 import { lastEmailChange } from "@/lib/email-change";
 import { EMAIL_CHANGE_CRM_NOTE, EMAIL_CHANGE_SAID } from "@/lib/engine/account";
@@ -63,7 +63,7 @@ const CHAIR_NAMES = ["Left", "Right", "Front left", "Front right"];
  * One client, before a call. The page answers "what do I say to this person today": where they are, what they wrote in
  * their own words, what's stuck, what they claimed, what they've built. Then the call's decisions go back in as tasks.
  */
-export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string; template?: string; error?: string; team?: string; email?: string }> }) {
+export default async function CoachClientPage({ params, searchParams }: { params: Promise<{ clientId: string }>; searchParams: Promise<{ reset?: string; reinstated?: string; emails?: string; template?: string; error?: string; team?: string; email?: string; test?: string }> }) {
   const v = await requireCoach();
   const { clientId } = await params;
   const sp = await searchParams;
@@ -212,22 +212,21 @@ export default async function CoachClientPage({ params, searchParams }: { params
             {m.coachCanWork ? "they let their coach work in their HelixOS." : "view only: they haven't turned on \"Let my coach work in my HelixOS\"."}
           </span>
         </span>
-        <form action={switchToClientAction} className="flex gap-2">
+        {/* One Open (H-164 §6): View or Work, remembered for this client; Work only when they allow it. */}
+        <form action={switchToClientAction} className="flex flex-wrap items-center gap-2" data-testid="client-open" data-remembered={m.coachOpenMode ?? "view"}>
           <input type="hidden" name="membershipId" value={m.id} />
-          <input type="hidden" name="mode" value="view" />
-          <SubmitButton className="btn btn-soft btn-sm" pendingText="Switching…" data-testid="switch-view">
-            View
+          <label className="flex items-center gap-1">
+            <input type="radio" name="mode" value="view" defaultChecked={!(m.coachCanWork && m.coachOpenMode === "work")} data-testid="switch-view" /> View
+          </label>
+          {m.coachCanWork ? (
+            <label className="flex items-center gap-1">
+              <input type="radio" name="mode" value="work" defaultChecked={m.coachOpenMode === "work"} data-testid="switch-work" /> Work
+            </label>
+          ) : null}
+          <SubmitButton className="btn btn-primary btn-sm" pendingText="Opening…" data-testid="switch-open">
+            Open
           </SubmitButton>
         </form>
-        {m.coachCanWork ? (
-          <form action={switchToClientAction}>
-            <input type="hidden" name="membershipId" value={m.id} />
-            <input type="hidden" name="mode" value="work" />
-            <SubmitButton className="btn btn-primary btn-sm" pendingText="Switching…" data-testid="switch-work">
-              Work in their HelixOS
-            </SubmitButton>
-          </form>
-        ) : null}
         {switches.length ? (
           <details className="w-full text-xs text-ink-3">
             <summary className="cursor-pointer">Your switches ({switches.length})</summary>
@@ -241,6 +240,18 @@ export default async function CoachClientPage({ params, searchParams }: { params
           </details>
         ) : null}
       </div>
+      <form action={setTestAccountAction} className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line p-3 text-sm" data-testid="client-test" data-on={m.testAccount ? "1" : "0"}>
+        <input type="hidden" name="membershipId" value={m.id} />
+        <input type="hidden" name="testAccount" value={m.testAccount ? "off" : "on"} />
+        <span>
+          <strong>Test account:</strong> {m.testAccount ? "yes" : "no"}.{" "}
+          <span className="text-ink-3">A test account is labelled Test and sits at the bottom of your client list. Nothing else changes.</span>
+        </span>
+        <SubmitButton className="btn btn-soft btn-sm" pendingText="Saving…" data-testid="client-test-toggle">
+          {m.testAccount ? "Not a test account" : "Mark as a test account"}
+        </SubmitButton>
+        {sp.test ? <span className="text-xs text-good" role="status">Saved ✓</span> : null}
+      </form>
       <form action={setClientEmailsAction} className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line p-3 text-sm" data-testid="client-emails" data-on={m.emailsEnabled ? "1" : "0"}>
         <input type="hidden" name="membershipId" value={m.id} />
         <input type="hidden" name="emails" value={m.emailsEnabled ? "off" : "on"} />

@@ -2,14 +2,14 @@
 import { PLATFORMS, platformHref, type PlatformKey, type PlatformLinks } from "@/lib/platforms";
 /** `line`: a one-line description shown under the label everywhere, for the two sections a client would otherwise confuse. `hint` shows on the More page only. */
 /** `bodyOnly`: shown only to a member whose HumanOS is switched on (rev 195, per member); `bodyOffOnly`: the one entry shown while it's off (rev 320), leading to the switch. */
-/** `recordingsOnly`: shown to a client only once a recording is published for them (Recordings R1). */
+/** `recordingsOnly`: shown to a client only once a recording is published for them (Recordings R1). `clientOnly`: hidden from the coach, whose own copy sits in a coach group. */
 /** `team`: shown to a team member working in the owner's HelixOS (Danno, 6 Oct); everything without it is hidden from them, and closed on the server. */
 /** `external`: an outbound link (the Platforms section, Danno 7 Oct): opens in a new tab with the ↗ mark, and is never the active page. */
 /**
  * `comingSoon` (rev 816): a page on its way. Shown greyed with a "Coming soon" pill and its subtitle (`line`), never a link: its
  * `href` is only where it will live. The commit that ships the page drops the flag, and the item becomes a normal link.
  */
-export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
+export type NavItem = { href: string; label: string; icon: string; platformKey?: PlatformKey; coachOnly?: boolean; clientOnly?: boolean; passOnly?: boolean; colosseumOnly?: boolean; bodyOnly?: boolean; bodyOffOnly?: boolean; recordingsOnly?: boolean; team?: boolean; external?: boolean; comingSoon?: boolean; hint?: string; line?: string };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -18,11 +18,11 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/today", label: "Today", icon: "☀️", team: true },
       { href: "/my-helix", label: "My Helix", icon: "🌀", line: "your progress at a glance" },
-      { href: "/intentions", label: "Intentions", icon: "🌱", hint: "week + month" },
-      { href: "/tasks", label: "Tasks", icon: "✅", team: true },
-      { href: "/content", label: "Content", icon: "✍️", team: true, hint: "post + repurpose" },
-      { href: "/library", label: "Library", icon: "🗂️", team: true, hint: "swipes + hooks" },
-      { href: "/conversations", label: "DMs", icon: "💬", team: true },
+      { href: "/intentions", label: "Intentions", icon: "🌱", line: "this week and this month" },
+      { href: "/tasks", label: "Tasks", icon: "✅", team: true, line: "what's on your plate" },
+      { href: "/content", label: "Content", icon: "✍️", team: true, line: "write, schedule, ship" },
+      { href: "/library", label: "Library", icon: "🗂️", team: true, line: "posts and assets to reuse" },
+      { href: "/conversations", label: "DMs", icon: "💬", team: true, line: "every conversation, logged" },
       { href: "/groups", label: "Groups", icon: "🎯", hint: "top 3" },
       { href: "/office-hours", label: "Office Hours", icon: "🙋", hint: "Fridays" },
     ],
@@ -45,22 +45,23 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Build",
     items: [
-      { href: "/my-board", label: "My Board", icon: "🧭", line: "Five advisors on a decision" },
-      { href: "/forum", label: "The Forum", icon: "🏛️", line: "watch your AI agents work" },
-      { href: "/webinars", label: "Webinars", icon: "🎤", team: true, hint: "wizard" },
-      { href: "/images", label: "Images", icon: "🖼️", team: true, line: "Your deck pictures" },
+      { href: "/my-board", label: "My Board", icon: "🧭", line: "five advisors on a decision" },
+      // The coach finds The Forum under Agents (H-164 §7); a client keeps it here.
+      { href: "/forum", label: "The Forum", icon: "🏛️", line: "watch your AI agents work", clientOnly: true },
+      { href: "/webinars", label: "Webinars", icon: "🎤", team: true, line: "the wizard, start to Run it" },
+      { href: "/images", label: "Images", icon: "🖼️", team: true, line: "photos, logos, graphics" },
       { href: "/brain", label: "Your bot", icon: "🧠", line: "What your bot is sent" },
       { href: "/bot-features", label: "Bot Features", icon: "🔓", team: true, line: "New skills for your bot" },
-      { href: "/offers", label: "Offers", icon: "🎁", hint: "wizard" },
+      { href: "/offers", label: "Offers", icon: "🎁", line: "what you sell, and to whom" },
       { href: "/avatars", label: "Avatars", icon: "🧭", line: "Who each offer is for" },
-      { href: "/pathway", label: "Pathway", icon: "🛣️" },
-      { href: "/courses", label: "Courses", icon: "📚" },
-      { href: "/recordings", label: "Recordings", icon: "🎥", line: "Your coaching calls", recordingsOnly: true },
-      { href: "/doctrine", label: "Doctrine", icon: "🏛️", hint: "principles" },
+      { href: "/pathway", label: "Pathway", icon: "🛣️", line: "the stages of your business, in order" },
+      { href: "/courses", label: "Courses", icon: "📚", line: "the lessons, in order" },
+      { href: "/recordings", label: "Recordings", icon: "🎥", line: "your calls, with action steps", recordingsOnly: true },
+      { href: "/doctrine", label: "Doctrine", icon: "🏛️", line: "the principles behind the method" },
       { href: "/glossary", label: "Building with AI", icon: "📖", line: "the words, in plain English" },
-      { href: "/essence", label: "Essence", icon: "🧬", hint: "your voice" },
+      { href: "/essence", label: "Essence", icon: "🧬", line: "who you are and who you serve" },
       { href: "/proof", label: "Proof Bank", icon: "🏆", line: "Your clients' results" },
-      { href: "/evidence", label: "Evidence", icon: "📚", line: "Published research" },
+      { href: "/evidence", label: "Evidence", icon: "📚", line: "published research" },
       { href: "/magnets", label: "Lead magnets", icon: "🧲", hint: "keyword + link" },
     ],
   },
@@ -79,29 +80,46 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/clients", label: "Clients", icon: "🤝", team: true, hint: "your clients" },
       { href: "/community", label: "Community Pass", icon: "🎟️", passOnly: true, hint: "Elite" },
-      { href: "/numbers", label: "Numbers", icon: "📊" },
+      { href: "/numbers", label: "Numbers", icon: "📊", line: "your counts, week by week" },
       { href: "/goals", label: "Business goals", icon: "🏁", team: true, line: "Goals, key results, initiatives" },
-      { href: "/rewards", label: "Rewards", icon: "🏆" },
-      { href: "/colosseum", label: "The Colosseum", icon: "🏟️", line: "wins, ranks and challenges", colosseumOnly: true },
+      // Rewards and the Colosseum are one page with two tabs (H-164 §4); /colosseum sends to the tab.
+      { href: "/rewards", label: "Rewards", icon: "🏆", line: "points, prizes and the arena" },
       { href: "/aqueduct", label: "The Aqueduct", icon: "🌊", line: "where your leads flow and leak" },
       { href: "/magic-funnel", label: "Magic funnel", icon: "🪄", line: "a personal page for every webinar sign-up", comingSoon: true },
-      { href: "/coach", label: "Coach", icon: "🧑‍🏫", coachOnly: true },
+      { href: "/whats-new", label: "What's new", icon: "✨", team: true, hint: "latest changes" },
+      { href: "/connect", label: "Connect to Claude", icon: "🔌", hint: "HelixOS from a chat" },
+    ],
+  },
+  {
+    // The coach's links in three groups (H-164 §7): People, Agents, Your content. A client sees none of them, so none is drawn.
+    label: "People",
+    items: [
+      { href: "/coach", label: "Clients", icon: "🧑‍🏫", coachOnly: true, hint: "the roster" },
       { href: "/coach/office-hours", label: "OOH requests", icon: "🗓️", coachOnly: true, hint: "by Friday" },
-      { href: "/coach/board", label: "Danno's principles", icon: "🧭", coachOnly: true, hint: "Board principles" },
-      { href: "/coach/board-seats", label: "Board seats", icon: "🏛️", coachOnly: true, hint: "the council library" },
-      { href: "/coach/feedback", label: "Feedback", icon: "💬", coachOnly: true, hint: "monthly" },
-      { href: "/coach/reports", label: "Issues and ideas", icon: "🛟", coachOnly: true, hint: "from members" },
-      { href: "/coach/inbox", label: "Inbox", icon: "📬", coachOnly: true, hint: "your agents' handoffs" },
-      { href: "/coach/agents", label: "Agents", icon: "🔑", coachOnly: true, hint: "tokens and connections" },
-      { href: "/coach/glossary", label: "Glossary", icon: "📖", coachOnly: true, hint: "Building with AI" },
       { href: "/coach/community", label: "Community posts", icon: "📣", coachOnly: true, hint: "Monday 3-1-3" },
       { href: "/coach/move", label: "Move to a client", icon: "📦", coachOnly: true, hint: "your items to theirs" },
       { href: "/coach/import", label: "Import from Airtable", icon: "📥", coachOnly: true, hint: "a client's base into HelixOS" },
+    ],
+  },
+  {
+    label: "Agents",
+    items: [
+      { href: "/coach/inbox", label: "Inbox", icon: "📬", coachOnly: true, hint: "your agents' handoffs" },
+      { href: "/coach/agents", label: "Agents", icon: "🔑", coachOnly: true, hint: "tokens and connections" },
+      { href: "/forum", label: "The Forum", icon: "🏛️", coachOnly: true, hint: "watch your agents work" },
+      { href: "/coach/reports", label: "Issues and ideas", icon: "🛟", coachOnly: true, hint: "from members" },
+      { href: "/coach/feedback", label: "Feedback", icon: "💬", coachOnly: true, hint: "monthly" },
+    ],
+  },
+  {
+    label: "Your content",
+    items: [
+      { href: "/coach/board", label: "Danno's principles", icon: "🧭", coachOnly: true, hint: "Board principles" },
+      { href: "/coach/board-seats", label: "Board seats", icon: "🏛️", coachOnly: true, hint: "the council library" },
+      { href: "/coach/glossary", label: "Glossary", icon: "📖", coachOnly: true, hint: "Building with AI" },
       { href: "/coach/helix", label: "My Helix rungs", icon: "🌀", coachOnly: true, hint: "the 67 rungs and what each reads" },
       { href: "/coach/recordings", label: "Recordings", icon: "🎥", coachOnly: true, hint: "from Fathom" },
       { href: "/integrations", label: "Integrations", icon: "🔌", coachOnly: true },
-      { href: "/whats-new", label: "What's new", icon: "✨", team: true, hint: "latest changes" },
-      { href: "/connect", label: "Connect to Claude", icon: "🔌", hint: "HelixOS from a chat" },
     ],
   },
   {
@@ -128,5 +146,5 @@ export function withPlatformLinks(items: NavItem[], links: PlatformLinks, ownCom
 export type NavMember = { role: "coach" | "client"; passEnabled: boolean; bodyEnabled: boolean; recordingsEnabled?: boolean; team?: boolean; colosseumOn?: boolean };
 export const navVisible = (n: NavItem, m: NavMember): boolean =>
   (!n.colosseumOnly || Boolean(m.colosseumOn)) &&
-  (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
+  (!m.team || Boolean(n.team)) && (!n.coachOnly || m.role === "coach") && (!n.clientOnly || m.role === "client") && (!n.passOnly || m.passEnabled) && (!n.bodyOnly || m.bodyEnabled) && (!n.bodyOffOnly || !m.bodyEnabled) && (!n.recordingsOnly || (m.role === "client" && Boolean(m.recordingsEnabled)));
 

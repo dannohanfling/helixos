@@ -21,13 +21,45 @@ export async function switchToClientAction(formData: FormData): Promise<void> {
   const id = str(formData, "membershipId");
   const cm = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, id), eq(schema.memberships.workspaceId, v.workspace.id)) });
   if (!cm || cm.role !== "client" || cm.removedAt) redirect("/coach?error=" + encodeURIComponent("That client can't be switched into."));
-  const wantsWork = str(formData, "mode") === "work";
-  if (wantsWork && !cm!.coachCanWork) redirect(`/coach/${cm!.id}?error=${encodeURIComponent("This client hasn't let their coach work in their HelixOS. You can still view it.")}`);
-  const mode = wantsWork ? "work" : "view";
+  // One Open per client (H-164 §6): a chosen mode, or, with none sent, the one remembered for this client (View until a first
+  // Work). Work needs the client's consent either way.
+  const asked = str(formData, "mode");
+  const wantsWork = asked === "work" || (!asked && cm!.coachOpenMode === "work");
+  if (asked === "work" && !cm!.coachCanWork) redirect(`/coach/${cm!.id}?error=${encodeURIComponent("This client hasn't let their coach work in their HelixOS. You can still view it.")}`);
+  const mode = wantsWork && cm!.coachCanWork ? "work" : "view";
   const session = (await readSession())!;
   await writeSession({ userId: session.userId, workspaceId: session.workspaceId, role: session.role, sv: session.sv, sw: { m: cm!.id, mode } });
   await logSwitch({ workspaceId: v.workspace.id, clientMembershipId: cm!.id, userId: cm!.userId, coachUserId: v.user.id, kind: "switch_in", mode });
+  if (cm!.coachOpenMode !== mode) await db.update(schema.memberships).set({ coachOpenMode: mode }).where(eq(schema.memberships.id, cm!.id));
   redirect("/today");
+}
+
+/**
+ * "Switch to Work" on the coach banner (H-164 §6): from View to Work inside the same switch, when the client allows it. Logged
+ * like a switch in, and remembered for this client.
+ */
+export async function switchToWorkAction(): Promise<void> {
+  const session = await readSession();
+  if (!session?.sw) redirect("/today");
+  const v = await getViewer();
+  if (!v?.switchedInto || v.switchedInto.mode === "work") redirect("/today");
+  const cm = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, v.switchedInto.membershipId), eq(schema.memberships.workspaceId, v.workspace.id)) });
+  if (!cm || !cm.coachCanWork) redirect(`/today?switchError=${encodeURIComponent("This client hasn't let their coach work in their HelixOS. You can still view it.")}`);
+  await writeSession({ userId: session!.userId, workspaceId: session!.workspaceId, role: session!.role, sv: session!.sv, sw: { m: cm!.id, mode: "work" } });
+  await logSwitch({ workspaceId: v.workspace.id, clientMembershipId: cm!.id, userId: cm!.userId, coachUserId: v.actor.id, kind: "switch_in", mode: "work" });
+  await db.update(schema.memberships).set({ coachOpenMode: "work" }).where(eq(schema.memberships.id, cm!.id));
+  redirect("/today");
+}
+
+/** The Test tick on a client's page (H-164 §8): labelled Test and sorted last on the roster. A coach's own call, never by name. */
+export async function setTestAccountAction(formData: FormData): Promise<void> {
+  const v = await requireCoach();
+  const id = str(formData, "membershipId");
+  const cm = await db.query.memberships.findFirst({ where: and(eq(schema.memberships.id, id), eq(schema.memberships.workspaceId, v.workspace.id)) });
+  if (!cm || cm.role !== "client") redirect("/coach");
+  const on = str(formData, "testAccount") === "on";
+  await db.update(schema.memberships).set({ testAccount: on }).where(eq(schema.memberships.id, cm!.id));
+  redirect(`/coach/${cm!.id}?test=${on ? "on" : "off"}`);
 }
 
 /** Back to the coach's own account, from any page while switched. Logged on the coach's record of switches. */

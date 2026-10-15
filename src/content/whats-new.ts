@@ -23,6 +23,17 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     audience: "everyone",
   },
   {
+    n: 187,
+    date: "2026-10-15",
+    title: "Cleanup, part one: one welcome, one-tap lock-in, shorter menus",
+    lines: [
+      "Your first day: the welcome card is the only card on Today, and it holds the lock-in itself. Your top 3 come ticked, energy starts at yesterday's, and one button locks the day in. After the first lock-in the welcome retires. Rewards and The Colosseum are one page with two tabs, under one menu link, and every menu item that is a name carries a short line under it.",
+      "Connect to Claude is eight numbered steps with Claude's current menu names (Customize → Connectors), a big Copy for the address, an Open Claude connectors button, a live Connected ✓ line, the phone note and six things to try saying.",
+      "For the coach: the roster's button is Open, which remembers View or Work per client; Switch to Work sits on the banner while viewing; the coach links are three groups (People, Agents, Your content); a test account is marked Test and sits last.",
+    ],
+    audience: "everyone",
+  },
+  {
     n: 185,
     date: "2026-10-15",
     title: "My Board: the Council speaks on film in the evening",

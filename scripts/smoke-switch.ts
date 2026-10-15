@@ -97,7 +97,8 @@ async function main() {
     await page.goto(`${base}/coach/${mayaM.id}`);
     if ((await page.locator('[data-testid="client-switch"]').getAttribute("data-can-work")) !== "0" || (await page.locator('[data-testid="switch-work"]').count()))
       throw new Error("with the setting off, the coach can only view");
-    await submit(page, '[data-testid="switch-view"]');
+    await page.check('[data-testid="switch-view"]');
+    await submit(page, '[data-testid="switch-open"]');
     await page.waitForURL(/\/today/);
     const banner = page.locator('[data-testid="switch-banner"]');
     if ((await banner.getAttribute("data-mode")) !== "view" || !(await banner.innerText()).includes(`You're in ${maya.name}'s HelixOS as their coach (Viewing)`))
@@ -138,6 +139,15 @@ async function main() {
     if (await page.locator('[data-testid="switch-banner"]').count()) throw new Error("back in the coach's own account, no banner");
     await page.locator('[data-testid="client-switch"] summary').click();
     if ((await page.locator('[data-testid="client-switches"] li').count()) < 2) throw new Error("the coach's page shows the switch in and out");
+    // H-164 §8: the Test tick labels the account Test and sends it to the bottom of the roster; untick puts it back.
+    await submit(page, '[data-testid="client-test-toggle"]');
+    if ((await page.locator('[data-testid="client-test"]').getAttribute("data-on")) !== "1") throw new Error("the Test tick is saved");
+    await page.goto(`${base}/coach`);
+    const rowsAfter = page.locator("tr", { has: page.locator('[data-testid="client-link"]') });
+    if (!(await rowsAfter.last().locator('[data-testid="test-badge"]').count()) || !(await rowsAfter.last().innerText()).includes("Maya")) throw new Error("a test account is labelled Test and sits last");
+    await page.goto(`${base}/coach/${mayaM.id}`);
+    await submit(page, '[data-testid="client-test-toggle"]');
+    if ((await page.locator('[data-testid="client-test"]').getAttribute("data-on")) !== "0") throw new Error("the Test tick comes off again");
     await logout(page);
     console.log("✓ Back to my account: the coach's own client page, with the switch in and out recorded");
 
@@ -159,8 +169,24 @@ async function main() {
     await db.update(schema.users).set({ firstSignedInAt: null }).where(eq(schema.users.id, maya.id));
     await db.update(schema.memberships).set({ whatsNewSeen: null, celebratedTierLevel: null }).where(eq(schema.memberships.id, mayaM.id));
     await login(page, "As the coach");
+    // H-164 §6: open in View, then Switch to Work from the banner; Work is remembered for this client, and the roster's Open says so.
     await page.goto(`${base}/coach/${mayaM.id}`);
-    await submit(page, '[data-testid="switch-work"]');
+    await page.check('[data-testid="switch-view"]');
+    await submit(page, '[data-testid="switch-open"]');
+    await page.waitForURL(/\/today/);
+    if ((await page.locator('[data-testid="switch-banner"]').getAttribute("data-mode")) !== "view") throw new Error("View first");
+    await submit(page, '[data-testid="switch-to-work"]');
+    await page.waitForURL(/\/today/);
+    if ((await page.locator('[data-testid="switch-banner"]').getAttribute("data-mode")) !== "work") throw new Error("Switch to Work on the banner, once the client allows it");
+    if ((await db.query.memberships.findFirst({ where: eq(schema.memberships.id, mayaM.id) }))!.coachOpenMode !== "work") throw new Error("Work is remembered for this client");
+    await submit(page, '[data-testid="switch-back"]');
+    await page.goto(`${base}/coach`);
+    const openBtn = page.locator("tr", { has: page.locator('[data-testid="client-link"]', { hasText: "Maya" }) }).first().locator('[data-testid="list-switch"]');
+    if ((await openBtn.getAttribute("data-mode")) !== "work" || !(await openBtn.innerText()).includes("Open")) throw new Error("the roster's Open remembers Work for this client");
+    await page.goto(`${base}/coach/${mayaM.id}`);
+    if ((await page.locator('[data-testid="client-open"]').getAttribute("data-remembered")) !== "work" || !(await page.locator('[data-testid="switch-work"]').isChecked())) throw new Error("the client page offers Work first, as remembered");
+    await page.check('[data-testid="switch-work"]');
+    await submit(page, '[data-testid="switch-open"]');
     await page.waitForURL(/\/today/);
     if ((await page.locator('[data-testid="switch-banner"]').getAttribute("data-mode")) !== "work") throw new Error("Work mode once the client allows it");
     await page.goto(`${base}/offers`);
@@ -267,7 +293,8 @@ async function main() {
         await logout(page);
         await login(page, "As the coach");
         await page.goto(`${base}/coach/${jordanM.id}`);
-        await submit(page, '[data-testid="switch-view"]');
+        await page.check('[data-testid="switch-view"]');
+        await submit(page, '[data-testid="switch-open"]');
         await page.waitForURL(/\/today/);
         await page.locator('[data-testid="switch-banner"]').waitFor({ timeout: 15000 });
       };

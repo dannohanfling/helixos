@@ -67,7 +67,8 @@ async function main() {
     // The app shell streams (loading.tsx), so a page that isn't there renders the "isn't here anymore" view, not a bare 404.
     await page.goto(`${base}/colosseum`, { waitUntil: "networkidle" });
     must((await page.locator('[data-testid="item-gone"]').count()) === 1 && (await page.locator('[data-testid="colosseum"]').count()) === 0, "off: the page isn't there");
-    must((await page.locator('a[href="/colosseum"]').count()) === 0, "off: no menu item");
+    await page.goto(`${base}/rewards`, { waitUntil: "networkidle" });
+    must((await page.locator('[data-testid="rewards-colosseum"]').count()) === 0, "off: no Colosseum tab on Rewards");
     await logout(page);
     await login(page, "As the coach");
     await page.goto(`${base}/settings#connected-apps`, { waitUntil: "networkidle" });
@@ -75,8 +76,10 @@ async function main() {
     await submit(page, '[data-testid="colosseum-on-save"]');
     must((await db.query.workspaces.findFirst({ where: eq(schema.workspaces.id, mm.workspaceId) }))!.colosseumOn, "the coach turned the Colosseum on");
     await page.goto(`${base}/rewards`, { waitUntil: "networkidle" });
-    must((await page.locator('[data-testid="rewards-colosseum"]').count()) === 1, "Rewards links to the Colosseum once it's on");
-    console.log("✓ off by default (not there, no menu item); the coach's switch turns it on; Rewards links to it");
+    must((await page.locator('[data-testid="rewards-colosseum"]').count()) === 1, "Rewards has the Colosseum tab once it's on");
+    await page.goto(`${base}/colosseum?tab=wins&kind=business`, { waitUntil: "networkidle" });
+    must(/\/rewards\?tab=colosseum&section=wins&kind=business$/.test(page.url()) && (await page.locator('[data-testid="tab-wins-body"]').count()) === 1, `the old address sends to the tab, section and filter kept: ${page.url()}`);
+    console.log("✓ off by default (not there, no tab); the coach's switch turns it on; Rewards carries it as a tab; /colosseum sends there");
 
     // ── Maya: the arena at three widths, the orbit, Pause, reduced motion. ──
     await logout(page);
@@ -87,7 +90,7 @@ async function main() {
       const box = (await page.locator('[data-testid="arena"]').boundingBox())!;
       must(Math.abs(box.width / box.height - 1680 / 944) < 0.02, `at ${w} the arena keeps its shape: ${box.width}x${box.height}`);
       must((await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")) === true, `at ${w} nothing scrolls sideways`);
-      must((await page.locator('a[href="/colosseum"]').count()) >= 1, `at ${w} the menu has the Colosseum`);
+      must((await page.locator('a[href="/rewards"]').count()) >= 1 && (await page.locator('[data-testid="rewards-colosseum"]').count()) === 1, `at ${w} the menu has Rewards and the page its Colosseum tab`);
     }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${base}/colosseum`, { waitUntil: "networkidle" });

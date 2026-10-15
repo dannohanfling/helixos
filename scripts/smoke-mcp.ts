@@ -267,9 +267,13 @@ async function main() {
     const tok5 = (await (await form({ grant_type: "authorization_code", code: c5.code, code_verifier: k5.verifier, client_id: reg.client_id, redirect_uri: CALLBACK })).json()) as typeof tok;
     const who = (await (await rpc(tok5.access_token, "tools/call", { name: "whoami", arguments: {} })).json()) as { result?: { content?: { text: string }[] } };
     if (!(who.result?.content?.[0]?.text ?? "").includes("(coach)")) throw new Error("the coach connects as the coach");
+    // H-187: the Connect page's live line, read from the same connected-apps list as Settings.
+    await page.goto(`${base}/connect?at=${Date.now()}`);
+    if ((await page.locator('[data-testid="connect-status"]').getAttribute("data-connected")) !== "1" || !(await page.locator('[data-testid="connect-status"]').innerText()).includes("Connected ✓ on")) throw new Error("the coach, connected, reads Connected ✓ with the date");
     // Switched into the client: consent is refused.
     await page.goto(`${base}/coach/${clientM.id}`);
-    await submit(page, '[data-testid="switch-view"]');
+    await page.check('[data-testid="switch-view"]');
+    await submit(page, '[data-testid="switch-open"]');
     await page.goto(u.toString());
     if ((await page.locator('[data-testid="consent-refused"]').getAttribute("data-state")) !== "switched") throw new Error("a coach switched into a client can't connect for them");
     await submit(page, '[data-testid="switch-back"]');
@@ -281,8 +285,24 @@ async function main() {
     await page.waitForURL(/apps=open/);
     await logout(page);
     await login(page, "As a client");
-    await page.goto(`${base}/connect`);
-    if (!(await page.locator('[data-testid="connect-url"]').innerText()).includes("/api/mcp")) throw new Error("the help page shows the address");
+    // H-187: eight numbered steps with Claude's current names, the big Copy, the new-tab link, the live status, the phone and free
+    // notes, six chips, the areas folded; at 390 and 1440 nothing is wider than the screen.
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${base}/connect`);
+      if (!(await page.locator('[data-testid="connect-url"]').innerText()).includes("/api/mcp")) throw new Error("the help page shows the address");
+      if ((await page.locator('[data-testid="connect-step"]').count()) !== 8) throw new Error("eight numbered steps");
+      if (!(await page.locator('[data-testid="connect-steps"]').innerText()).includes("Customize")) throw new Error("Claude's current menu name: Customize → Connectors");
+      const open = page.locator('[data-testid="connect-open-claude"]');
+      if ((await open.getAttribute("target")) !== "_blank" || !(await open.getAttribute("href"))?.startsWith("https://claude.ai/customize/connectors")) throw new Error("Open Claude connectors opens claude.ai in a new tab");
+      if (!(await page.locator('button:has-text("Copy the address")').count())) throw new Error("the big Copy for the address");
+      if ((await page.locator('[data-testid="connect-status"]').getAttribute("data-connected")) !== "0" || !(await page.locator('[data-testid="connect-status"]').innerText()).includes("Not connected yet")) throw new Error("a client with no connection reads Not connected yet");
+      if ((await page.locator('[data-testid="connect-try-chip"]').count()) !== 6 || !(await page.locator('[data-testid="connect-phone"]').count()) || !(await page.locator('[data-testid="connect-free"]').count())) throw new Error("six Try saying chips, the phone note and the free-account note");
+      if (await page.locator('[data-testid="connect-areas"][open]').count()) throw new Error("What Claude can do is folded");
+      const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+      if (wide > width) throw new Error(`at ${width}px the Connect page never scrolls sideways: ${wide}px`);
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
     await logout(page);
     console.log("✓ the coach's switch cuts clients' connections and refuses new consent; the coach connects as the coach; a switched-in coach can't connect for a client");
 

@@ -68,7 +68,7 @@ export async function todayData(v: Viewer) {
   // The one goal is the Primary business goal with its KPI (BG1, BG2): made on first read, never while a coach is switched in.
   if (!v.switchedInto) await ensurePrimaryGoal({ workspaceId, userId }, today);
 
-  const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal, everLockedIn] =
+  const [log, streak, points, focusTasks, dueTasks, overdueTasks, contentDue, contentOverdue, followUps, inbound, revisions, pathwayNext, curriculumDay, goal, everLockedIn, lastEnergyLog] =
     await Promise.all([
       logFor(workspaceId, userId, today),
       streakFor(workspaceId, userId, today, hour),
@@ -125,22 +125,39 @@ export async function todayData(v: Viewer) {
       currentCurriculumDay(userId),
       db.query.goals.findFirst({ where: and(eq(schema.goals.userId, userId), eq(schema.goals.primary, true)) }),
       db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.workspaceId, workspaceId), eq(schema.dailyLogs.userId, userId), isNotNull(schema.dailyLogs.morningDoneAt)) }),
+      // The last energy before today (H-164 §2): the lock-in's default, so one tap locks the day in.
+      db.query.dailyLogs.findFirst({ where: and(eq(schema.dailyLogs.workspaceId, workspaceId), eq(schema.dailyLogs.userId, userId), lt(schema.dailyLogs.date, today), isNotNull(schema.dailyLogs.energy)), orderBy: desc(schema.dailyLogs.date) }),
     ]);
 
-  const [allClosed, used, activity] = await Promise.all([closedDates(workspaceId, userId), repairsUsed(workspaceId, userId, today.slice(0, 7)), todayActivity(workspaceId, userId, today)]);
-  const broken = log?.eveningDoneAt ? null : brokenStreak(allClosed, streakDayOf(allClosed, today, hour));
   // The close card's day (rev 731): yesterday before 04:00 while it is open, or the last close-out again within 6 hours with
-  // no lock-in since; otherwise today. Its log, activity and KPI boxes are that day's.
-  const closeFor = await closeTargetFor(workspaceId, userId, today, hour);
-  const closeLog = closeFor.date === today ? log : await logFor(workspaceId, userId, closeFor.date);
-  const closeActivity = closeFor.date === today ? activity : await todayActivity(workspaceId, userId, closeFor.date);
+  // no lock-in since; otherwise today. Its log, activity and KPI boxes are that day's. Independent reads run together (H-164 §9).
+  const [allClosed, used, activity, closeFor, clientRecords, building, live, brandKit, upcomingTasks, openTasks] = await Promise.all([
+    closedDates(workspaceId, userId),
+    repairsUsed(workspaceId, userId, today.slice(0, 7)),
+    todayActivity(workspaceId, userId, today),
+    closeTargetFor(workspaceId, userId, today, hour),
+    db.query.clientRecords.findMany({ where: and(eq(schema.clientRecords.userId, userId), eq(schema.clientRecords.status, "active")) }),
+    db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["draft", "building"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) }),
+    db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["ready", "scheduled"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) }),
+    db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) }),
+    db.query.tasks.findMany({
+      where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done"), sql`${schema.tasks.dueDate} between ${tomorrow} and ${addDays(today, 7)}`),
+      orderBy: asc(schema.tasks.dueDate),
+      limit: 6,
+    }),
+    db.query.tasks.findMany({
+      where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done")),
+      orderBy: [asc(schema.tasks.dueDate), asc(schema.tasks.createdAt)],
+      limit: 40,
+    }),
+  ]);
+  const broken = log?.eveningDoneAt ? null : brokenStreak(allClosed, streakDayOf(allClosed, today, hour));
+  const [closeLog, closeActivity] = await Promise.all([closeFor.date === today ? log : logFor(workspaceId, userId, closeFor.date), closeFor.date === today ? activity : todayActivity(workspaceId, userId, closeFor.date)]);
   const repairsLeft = Math.max(0, 1 - used);
-  const clientRecords = await db.query.clientRecords.findMany({ where: and(eq(schema.clientRecords.userId, userId), eq(schema.clientRecords.status, "active")) });
   const clientsDueCheckin = clientRecords.filter((c) => {
     const base = c.lastCheckinAt ?? c.startDate;
     return !base || addDays(base, c.checkinCadenceDays) <= today;
   }).length;
-  const building = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["draft", "building"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) });
   let webinarInProgress: Snapshot["webinarInProgress"] = null;
   let shotListSnapshot: Snapshot["shotList"] = null;
   if (building) {
@@ -160,7 +177,6 @@ export async function todayData(v: Viewer) {
   }
   // A webinar already marked ready or scheduled whose checks have since broken: the status does not fall back on its own, so Today says so.
   let webinarBroken: Snapshot["webinarBroken"] = null;
-  const live = await db.query.webinars.findFirst({ where: and(eq(schema.webinars.userId, userId), inArray(schema.webinars.status, ["ready", "scheduled"]), eq(schema.webinars.isExample, false)), orderBy: desc(schema.webinars.createdAt) });
   if (live) {
     const [secs, bels, comps, known] = await Promise.all([
       db.query.webinarSections.findMany({ where: eq(schema.webinarSections.webinarId, live.id) }),
@@ -197,21 +213,21 @@ export async function todayData(v: Viewer) {
   };
   const actions: Action[] = nextBestActions(snapshot);
   // Set your brand kit (rev 568): a member with no kit of their own sees the nudge on Today until they save one.
-  const brandKitStarter = !(await db.query.brandKits.findFirst({ where: and(eq(schema.brandKits.workspaceId, workspaceId), eq(schema.brandKits.userId, userId)) }));
-
-  const upcomingTasks = await db.query.tasks.findMany({
-    where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done"), sql`${schema.tasks.dueDate} between ${tomorrow} and ${addDays(today, 7)}`),
-    orderBy: asc(schema.tasks.dueDate),
-    limit: 6,
-  });
-  const openTasks = await db.query.tasks.findMany({
-    where: and(eq(schema.tasks.userId, userId), inPlay, ne(schema.tasks.status, "done")),
-    orderBy: [asc(schema.tasks.dueDate), asc(schema.tasks.createdAt)],
-    limit: 40,
-  });
+  const brandKitStarter = !brandKit;
+  // The last reads, independent of one another, together (H-164 §9: they ran one after another).
+  const [origins, road, stillOpen, failedPosts, goalBarRead, closeKpis] = await Promise.all([
+    taskOrigins([...focusTasks, ...dueTasks, ...overdueTasks, ...upcomingTasks]),
+    pathwayRoad(userId),
+    stillOpenFocus(v),
+    failedPostsFor(v, userId, today),
+    goalBar(workspaceId, userId, today, goal),
+    v.switchedInto ? Promise.resolve([]) : closeKpisOf({ workspaceId, userId }, closeFor.date),
+  ]);
 
   return {
     brandKitStarter,
+    /** The last energy before today, the lock-in's default (H-164 §2); null for a first day. */
+    lastEnergy: lastEnergyLog?.energy ?? null,
     log: log ?? null,
     streak: streak.running,
     points,
@@ -220,22 +236,22 @@ export async function todayData(v: Viewer) {
     dueTasks,
     overdueTasks,
     upcomingTasks,
-    taskOrigins: await taskOrigins([...focusTasks, ...dueTasks, ...overdueTasks, ...upcomingTasks]),
-    road: await pathwayRoad(userId),
+    taskOrigins: origins,
+    road,
     openTasks,
     /** The last lock-in day's unfinished Top 3, offered first and unticked in the picker. */
-    stillOpen: await stillOpenFocus(v),
+    stillOpen,
     contentDue: [...contentOverdue, ...contentDue],
     /** Posts with a channel that did not send in the last two weeks (friction walk C1): the banner on Today, with its fix. */
-    failedPosts: await failedPostsFor(v, userId, today),
+    failedPosts,
     followUps,
     inbound,
     pathwayNext,
     curriculumDay,
     /** The Primary business goal and its first KPI (BG2): the bar reads the plan; before the mirror exists, the goals row itself. */
-    goal: await goalBar(workspaceId, userId, today, goal),
+    goal: goalBarRead,
     /** The KPIs the close asks for (BG2), with today's value if one was typed. */
-    closeKpis: v.switchedInto ? [] : await closeKpisOf({ workspaceId, userId }, closeFor.date),
+    closeKpis,
     /** The day the close card is for, and that day's log (rev 731); `late` titles it "Close yesterday". */
     close: { ...closeFor, log: closeLog ?? null, activity: closeActivity },
     /** Never locked in: Today shows the welcome card instead of the next-action block. */

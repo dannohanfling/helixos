@@ -189,7 +189,8 @@ async function main() {
     await ctx.clearCookies();
     await login(page, "As the coach");
     await page.goto(`${base}/coach/${mm.id}`, { waitUntil: "networkidle" });
-    await submit(page, '[data-testid="switch-work"]');
+    await page.check('[data-testid="switch-work"]');
+    await submit(page, '[data-testid="switch-open"]');
     await page.goto(`${base}/settings`, { waitUntil: "networkidle" });
     must((await page.locator('[data-testid="headshot-upload"]').count()) === 0 && (await page.locator('[data-testid="headshot-media"]').count()) === 0, "switched in, the coach sees no upload and no media picker");
     await submit(page, '[data-testid="switch-back"]');

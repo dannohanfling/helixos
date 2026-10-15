@@ -69,6 +69,14 @@ async function main() {
     await mark.evaluate((el) => new Promise<void>((done) => { const img = el as HTMLImageElement; if (img.complete && img.currentSrc) done(); else { img.addEventListener("load", () => done(), { once: true }); setTimeout(done, 10000); } }));
     if (!/app-logo-(light|ondark)-80\.png$/.test(await mark.evaluate((el) => (el as HTMLImageElement).currentSrc))) throw new Error("a 40px logo must be served from the 80px file");
     await expectText(page, "Lock in your first day", "welcome cta");
+    // H-164 §1 and §2: the welcome is the only card and holds the lock-in; the picks come ticked; one button.
+    if (await page.locator('[data-testid="lockin-hero"]').count()) throw new Error("no second Lock in card while the welcome shows");
+    if (!(await page.locator('[data-testid="welcome"] [data-testid="lockin-form"][data-first-day="1"]').count())) throw new Error("the welcome card holds the lock-in itself");
+    const preTicked = await page.locator('[data-testid="welcome"] [data-testid="top3-item"] input:checked').count();
+    const offered = await page.locator('[data-testid="welcome"] [data-testid="top3-item"]').count();
+    if (preTicked !== Math.min(3, offered) || !offered) throw new Error(`the top 3 come ticked (${preTicked} of ${offered} offered)`);
+    if ((await page.locator('[data-testid="welcome"] [data-testid="lockin-submit"]').innerText()).indexOf("Lock in your first day") !== 0) throw new Error("one button: Lock in your first day");
+    if ((await page.locator("main").innerText()).includes("hashtag")) throw new Error("the hashtag starter is off for new clients (H-164 §3)");
     const body = await page.locator("main").innerText();
     for (const admin of ["Sign the agreement", "Make your first payment", "Complete your onboarding form", "Confirm your GoHighLevel access", "Confirm your HelixOS access", "Schedule your kickoff call"]) {
       if (body.includes(admin)) throw new Error(`admin task "${admin}" shown to a new client on Today`);
@@ -168,7 +176,7 @@ async function main() {
       await page.fill('[data-testid="top3-new"]', "Double tap test");
       await page.click('[data-testid="top3-add"]');
       await page.locator('[data-testid="top3-item"]', { hasText: "Double tap test" }).waitFor({ timeout: 15000 });
-      await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Lock it in")')]);
+      await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('[data-testid="lockin-submit"]')]);
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(800);
       const dupes = await page.locator('[data-testid="task-row"]', { hasText: "Double tap test" }).count();
@@ -268,7 +276,7 @@ async function main() {
       while (await touchPicker.locator('input[name="focus"]:checked').count()) await touchPicker.locator('input[name="focus"]:checked').first().uncheck();
       await touchPicker.locator('[data-testid="top3-item"]', { hasText: "Touch target test" }).locator("input").check();
     }
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('button:has-text("Lock it in")')]);
+    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.click('[data-testid="lockin-submit"]')]);
     await page.waitForLoadState("networkidle");
     const small = page.locator('[data-testid="task-row"]', { hasText: "Touch target test" }).locator(".btn-xs, .btn-sm").first();
     await small.waitFor({ timeout: 5000 });

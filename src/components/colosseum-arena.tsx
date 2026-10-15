@@ -113,7 +113,7 @@ export function ColosseumArena({ rings, champs, more, initialLook, initialPaused
         {champs.map((c, i) => avatar(c, "", { style: { left: `${CHAMPION_SPOTS[i].x}%`, top: `${CHAMPION_SPOTS[i].y}%` } as unknown as string }))}
         {more.map((n, r) =>
           n > 0 ? (
-            <a key={r} href={`/colosseum?tab=standings&tier=ring${r}`} className="co-more" style={{ left: `${seatPlace(r, Math.PI / 2).x}%`, top: `${seatPlace(r, Math.PI / 2).y + 6}%` }} data-testid="arena-more">
+            <a key={r} href={`/rewards?tab=colosseum&section=standings&tier=ring${r}`} className="co-more" style={{ left: `${seatPlace(r, Math.PI / 2).x}%`, top: `${seatPlace(r, Math.PI / 2).y + 6}%` }} data-testid="arena-more">
               +{n} more
             </a>
           ) : null,

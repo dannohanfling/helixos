@@ -33,7 +33,7 @@ export type Viewer = {
   team: Team | null;
 };
 
-export type Switched = { membershipId: string; mode: "view" | "work"; clientName: string; coachName: string };
+export type Switched = { membershipId: string; mode: "view" | "work"; clientName: string; coachName: string; /** Whether the client lets their coach work, so the banner can offer "Switch to Work" (H-164 §6). */ canWork: boolean };
 export type Team = { teamMemberId: string; ownerMembershipId: string; ownerName: string; teamName: string };
 /** Whether a guard admits a team member. The default is no. */
 export type TeamAccess = { team?: "allow" };
@@ -127,7 +127,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     today: todayInTz(ctz),
     hour: hourInTz(ctz),
     actor: user,
-    switchedInto: { membershipId: cm.id, mode, clientName: cu.name, coachName: user.name },
+    switchedInto: { membershipId: cm.id, mode, clientName: cu.name, coachName: user.name, canWork: cm.coachCanWork },
     team: null,
   };
 });

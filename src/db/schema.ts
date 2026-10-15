@@ -135,6 +135,13 @@ export const memberships = sqliteTable(
      */
     coachCanWork: integer("coach_can_work", { mode: "boolean" }).notNull().default(true),
     /**
+     * One Open per client (H-164 §6): how the coach last opened this client's HelixOS, View or Work, remembered per client so
+     * the list's Open button goes straight there. Null until the first Open (View). Work is still subject to coachCanWork.
+     */
+    coachOpenMode: text("coach_open_mode", { enum: ["view", "work"] }),
+    /** A test account (H-164 §8): labelled Test and sorted to the bottom of the coach's client list; a tick on the client page, never a name. */
+    testAccount: integer("test_account", { mode: "boolean" }).notNull().default(false),
+    /**
      * "Let my coach's assistant know my progress" (Community Loyalty chat, rev 241): whether HelixOS posts a short progress
      * snapshot (pathway stage, goal, this week's 3-1-3, main offer) to the coach's bot. On by default; the member's own switch.
      */
