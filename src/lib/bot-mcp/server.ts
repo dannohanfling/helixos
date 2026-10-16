@@ -15,6 +15,7 @@ import { BOT_STAGES, BUSY_LINE, LIMITS, MAX, cleanCustom, cleanText, isContactId
 import { after } from "next/server";
 import { mfPrepare, writeForSignup } from "@/lib/mf/data";
 import { MF_MAX, cleanFirstName, cleanPhone } from "@/lib/engine/magic-funnel";
+import { cleanGhlContactId } from "@/lib/hermes/ghl-link";
 import { bookingInfo, faqAnswer, leadLog, memberForKey, offerInfo, touchKey, webinarNext, webinarRegister, type BotMember } from "@/lib/bot-mcp/data";
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -125,6 +126,7 @@ function tools(m: BotMember): { name: BotTool; description: string; input: z.Zod
         last_name: field(MAX.name).optional(),
         email: z.string().max(MAX.email).describe("Their email address."),
         phone: z.string().max(MF_MAX.phone * 2).optional().describe("Their phone number, if the contact has one."),
+        ghl_contact_id: z.string().max(40).optional().describe("The person's GoHighLevel contact id (Community Loyalty's CRM Contact ID), if they have one."),
         pain: field(MF_MAX.pain).optional().describe("Their biggest pain in business, in their words."),
         industry: field(MF_MAX.industry).optional().describe("Their industry, in their words."),
         conversation_summary: field(MF_MAX.summary).optional().describe("A short summary of the conversation, 1,000 characters at most."),
@@ -139,7 +141,7 @@ function tools(m: BotMember): { name: BotTool; description: string; input: z.Zod
         if (!firstName) return text("A first name is needed.", true);
         const custom = cleanCustom(a.custom as Record<string, unknown> | undefined);
         if (!custom.ok) return text(custom.error, true);
-        const r = await mfPrepare(m, { contactId, firstName, lastName: cleanText(String(a.last_name ?? "")).slice(0, MF_MAX.lastName), email, phone: cleanPhone(a.phone), pain: String(a.pain ?? ""), industry: String(a.industry ?? ""), summary: String(a.conversation_summary ?? ""), custom: custom.fields });
+        const r = await mfPrepare(m, { contactId, firstName, lastName: cleanText(String(a.last_name ?? "")).slice(0, MF_MAX.lastName), email, phone: cleanPhone(a.phone), pain: String(a.pain ?? ""), industry: String(a.industry ?? ""), summary: String(a.conversation_summary ?? ""), custom: custom.fields, ghlContactId: cleanGhlContactId(a.ghl_contact_id) });
         if (!r.ok) return text(r.line, true);
         if (r.signupId) {
           const id = r.signupId;

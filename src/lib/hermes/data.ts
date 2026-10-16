@@ -118,7 +118,8 @@ async function proofsById(m: Member, ids: string[], picked: boolean): Promise<Pr
 
 /** The webinar's default copy through the engine, with the canvas's cold hero where the setup leaves the hero empty. */
 async function coldPitch(ctx: CallContext, firstName: string): Promise<{ pitch: MfPitch; proofs: Proof[] }> {
-  const ranked = rankProof(await proofRows(ctx.member), ctx.setup.proofIds, null);
+  // proof_any (H-58): with no proof chosen and the tick off, the cold page shows none, as composePage does.
+  const ranked = ctx.setup.proofIds.length || ctx.setup.proofAny ? rankProof(await proofRows(ctx.member), ctx.setup.proofIds, null) : [];
   const facts = { title: ctx.title, startsAt: ctx.when.startsAt, when: ctx.when.line, promise: "", learn: [], whoFor: "" };
   const pitch = defaultPitch({ defaults: ctx.setup.defaults, pillars: ctx.setup.pillars, agenda: ctx.setup.agenda, proofIds: ranked.map((p) => p.id), firstName, facts });
   if (!ctx.setup.defaults.header?.trim()) pitch.hero = { ...pitch.hero, header: COLD_HERO.header };

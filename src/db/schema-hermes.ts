@@ -27,3 +27,20 @@ export const hermesPages = sqliteTable(
   (t) => [uniqueIndex("hermes_pages_webinar").on(t.webinarId), index("hermes_pages_member").on(t.workspaceId, t.userId)],
 );
 export type HermesPage = typeof hermesPages.$inferSelect;
+
+/**
+ * The GoHighLevel contact id a sign-up came with (H-49: Community Loyalty's "CRM Contact ID", passed to mf_prepare): on
+ * registration the contact is found by this id first, then by email. One row per sign-up that had one; the id never reaches a
+ * URL or a page. A sign-up without one registers by email as before.
+ */
+export const hermesContactLinks = sqliteTable(
+  "hermes_contact_links",
+  {
+    id: text("id").primaryKey(),
+    /** The webinar_signups row; one link per sign-up. A child of that row for the member's export and deletion on request. */
+    signupId: text("signup_id").notNull(),
+    ghlContactId: text("ghl_contact_id").notNull(),
+    createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  },
+  (t) => [uniqueIndex("hermes_contact_links_signup").on(t.signupId)],
+);
