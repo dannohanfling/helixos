@@ -1,6 +1,6 @@
 /** Security headers walk: visits every main page as client and coach and fails on any Content-Security-Policy violation or page error the browser reports. Also prints the headers. */
 import { readdirSync, existsSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { join } from "node:path";
 import { chromium } from "@playwright/test";
 
@@ -46,7 +46,7 @@ function routedPages(dir: string, prefix = ""): string[] {
   return out.sort();
 }
 // The two lists say who visits which page; the source of truth is the tree, and the lists are asserted against it before a page is visited.
-const PAGES_CLIENT = ["/today", "/my-helix", "/bot-features", "/intentions", "/connect", "/connect-tools", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/goals", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/my-board", "/my-board/council", "/forum", "/offers", "/avatars", "/pathway", "/courses", "/recordings", "/doctrine", "/glossary", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/goals", "/rewards", "/colosseum", "/aqueduct", "/loyalty", "/more", "/settings", "/whats-new"];
+const PAGES_CLIENT = ["/today", "/my-helix", "/bot-features", "/intentions", "/connect", "/connect-tools", "/oauth/authorize", "/oauth/authorize/return", "/body", "/body/foods", "/body/foods/find", "/body/settings", "/body/training", "/body/training/routines", "/body/weight", "/body/goals", "/body/pantry", "/body/week", "/body/import", "/body/practices", "/body/practices/meds", "/body/sleep", "/body/training/health", "/body/insights", "/body/shopping", "/tasks", "/content", "/content/compose", "/content/ladders", "/content/ladders/profile", "/library", "/conversations", "/conversations/playbook", "/groups", "/office-hours", "/webinars", "/images", "/brain", "/my-board", "/my-board/council", "/forum", "/offers", "/avatars", "/pathway", "/courses", "/recordings", "/doctrine", "/glossary", "/proof", "/proof/harvest", "/evidence", "/essence", "/magnets", "/socrates", "/socrates/foundations", "/socrates/objections", "/socrates/questions", "/socrates/reframes", "/socrates/scripts", "/clients", "/community", "/numbers", "/goals", "/rewards", "/colosseum", "/aqueduct", "/loyalty", "/more", "/settings", "/settings/delete-account", "/settings/delete-humanos", "/whats-new"];
 const PAGES_COACH = ["/coach", "/coach/community", "/coach/feedback", "/coach/move", "/coach/import", "/coach/helix", "/coach/setup", "/coach/headshots", "/coach/late-closes", "/coach/teaching", "/coach/bot-features", "/coach/backfill", "/coach/office-hours", "/coach/board", "/coach/board-seats", "/coach/recordings", "/coach/recordings/rules", "/coach/reports", "/coach/glossary", "/coach/inbox", "/coach/agents", "/integrations", "/integrations/planner-audit", "/certification", "/settings"];
 
 async function main() {
@@ -70,6 +70,12 @@ async function main() {
     }
   };
   await fresh();
+  // Settings → Delete my account lists the member's stored objects through the blob store; the dev server points at
+  // scripts/mock-blob.ts on :4050 (dev-server.sh), and without it the store's client retries for a minute. Up here if needed.
+  const blob = "http://localhost:4050";
+  const blobUp = await fetch(`${blob}/__list`).then((r) => r.ok).catch(() => false);
+  const blobProc = blobUp ? null : spawn("npx", ["tsx", "scripts/mock-blob.ts", "4050"], { stdio: "ignore", detached: true });
+  for (let i = 0; i < 40 && !(await fetch(`${blob}/__list`).then((r) => r.ok).catch(() => false)); i++) await new Promise((r) => setTimeout(r, 250));
   const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
   const problems: string[] = [];
   // A phone, so the pages lay out the way an iPhone lays them out (the security headers are the same at any size).
@@ -153,6 +159,7 @@ async function main() {
   await page.waitForURL(/\/today/);
   await visit(PAGES_COACH);
   await browser.close();
+  if (blobProc?.pid) try { process.kill(-blobProc.pid); } catch { /* already gone */ }
   if (problems.length) {
     console.error("CSP / page problems:\n" + problems.join("\n"));
     process.exit(1);

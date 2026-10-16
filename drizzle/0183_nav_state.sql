@@ -1,0 +1,1 @@
+ALTER TABLE `memberships` ADD `nav_state` text DEFAULT '{}' NOT NULL;

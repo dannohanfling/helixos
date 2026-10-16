@@ -1,0 +1,52 @@
+/* The six public pages (H-331): Scriba's page styles from helixos-legal-pages-v2, scoped under .lg so the app's globals are untouched. Golden hour by default, night under prefers-color-scheme: dark. */
+.lg{--ground:#F7F2E8;--surface:#EFE5D0;--hair:#E4DACA;--rim:#D7C39A;--ink:#1F1A14;--muted:#6B6253;--gold:#C9A24A;--goldt:#7E5A12;--chip:#EFE5D0}
+@media (prefers-color-scheme: dark){.lg:not([data-theme="light"]){--ground:#100D09;--surface:#1A160F;--hair:#3A3022;--rim:#5E4C27;--ink:#F1E6CF;--muted:#A7997F;--gold:#D4AE5A;--goldt:#F0CF86;--chip:#1A160F}}
+.lg[data-theme="dark"]{--ground:#100D09;--surface:#1A160F;--hair:#3A3022;--rim:#5E4C27;--ink:#F1E6CF;--muted:#A7997F;--gold:#D4AE5A;--goldt:#F0CF86;--chip:#1A160F}
+.lg{min-height:100dvh;margin:0;background:var(--ground);color:var(--ink);font:400 16px/1.65 var(--lg-sans),Manrope,"Segoe UI",system-ui,-apple-system,sans-serif}
+.lg a{color:var(--goldt);text-underline-offset:3px}
+.lg a:hover{color:var(--ink)}
+.lg .wrap{max-width:820px;margin:0 auto;padding:0 20px}
+.lg header.site{border-bottom:1px solid var(--hair)}
+.lg header.site .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-top:18px;padding-bottom:18px}
+.lg .brand{font-family:var(--lg-serif),"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:26px;letter-spacing:.5px;color:var(--ink);text-decoration:none}
+.lg .brand span{color:var(--goldt)}
+.lg nav.site{display:flex;flex-wrap:wrap;gap:4px 16px}
+.lg nav.site a{font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;padding:10px 0;border-bottom:2px solid transparent}
+.lg nav.site a:hover{color:var(--ink)}
+.lg nav.site a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--gold)}
+.lg main{padding:44px 0 56px}
+.lg .eyebrow{font-size:12px;line-height:16px;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:var(--goldt);margin:0 0 10px}
+.lg h1{font-family:var(--lg-serif),"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:clamp(38px,7vw,56px);line-height:1.05;margin:0 0 12px}
+.lg .meta{color:var(--muted);font-size:14px;margin:0 0 28px;padding-bottom:22px;border-bottom:1px solid var(--hair)}
+.lg .lead{font-size:18px;line-height:1.6}
+.lg h2{font-family:var(--lg-serif),"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:28px;line-height:1.15;margin:40px 0 10px}
+.lg h3{font-size:16px;font-weight:700;margin:22px 0 6px}
+.lg p{margin:0 0 14px}
+.lg ul, .lg ol{margin:0 0 16px;padding-left:22px}
+.lg li{margin-bottom:8px}
+.lg strong{font-weight:700}
+.lg .toc{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px 22px;margin:0 0 8px}
+.lg .toc p{font-weight:700;margin-bottom:8px}
+.lg .toc ol{margin:0;columns:2;column-gap:28px}
+.lg .toc li{margin-bottom:4px;break-inside:avoid}
+@media (max-width:620px){.lg .toc ol{columns:1}}
+.lg .note{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:16px 20px;margin:18px 0}
+.lg .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:18px 0 8px}
+.lg .card{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px 20px}
+.lg .card h3{margin:0 0 6px;font-family:var(--lg-serif),"Cormorant Garamond",Georgia,serif;font-size:22px}
+.lg .card p{margin:0;color:var(--muted);font-size:15px}
+.lg .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:999px;border:1px solid #7A4E1C;background:linear-gradient(180deg,#FBE7A6 0%,#E8C26A 30%,#C9973F 62%,#9A6526 100%);color:#3A230A;font-weight:800;font-size:14px;letter-spacing:1.2px;text-transform:uppercase;text-decoration:none;text-shadow:0 1px 0 rgba(255,240,200,.6)}
+.lg .btn:hover{color:#3A230A;filter:brightness(1.05)}
+.lg details{border-bottom:1px solid var(--hair);padding:4px 0}
+.lg details summary{cursor:pointer;font-weight:700;padding:12px 0;min-height:44px;list-style:none;display:flex;justify-content:space-between;gap:16px}
+.lg details summary::-webkit-details-marker{display:none}
+.lg details summary::after{content:"+";color:var(--goldt);font-weight:700}
+.lg details[open] summary::after{content:"\2013"}
+.lg details > div{padding:0 0 12px;color:var(--ink)}
+.lg table{width:100%;border-collapse:collapse;margin:8px 0 18px;font-size:15px}
+.lg th, .lg td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+.lg th{font-weight:700;color:var(--muted);font-size:13px;letter-spacing:1px;text-transform:uppercase}
+.lg .tablewrap{overflow-x:auto}
+.lg footer.site{border-top:1px solid var(--hair);padding:26px 0 40px;color:var(--muted);font-size:14px}
+.lg footer.site .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 24px}
+.lg footer.site a{color:var(--muted)}

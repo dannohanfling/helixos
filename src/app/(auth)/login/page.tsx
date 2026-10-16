@@ -13,8 +13,20 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <div className="card p-6">
         <h1 className="text-xl font-bold">Welcome back</h1>
         <p className="mb-4 mt-1 text-sm text-ink-2">Log in, lock in your day, keep the streak alive.</p>
+        {reason === "account-deleted" ? <p data-testid="login-account-deleted" className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">Your account and everything you made in HelixOS were deleted. Thank you for the time here.</p> : null}
         {reason === "signed-out" ? <p data-testid="login-signed-out" className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink-2">You were signed out on this browser. Sign in again and you&apos;ll go straight back to where you were.</p> : null}
         <LoginForm next={next} />
+        <p className="mt-3 text-center text-xs text-ink-3" data-testid="login-terms">
+          By continuing you agree to the{" "}
+          <Link href="/terms" className="underline">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline">
+            Privacy Policy
+          </Link>
+          .
+        </p>
         <p className="mt-3 text-center text-sm">
           <Link href="/forgot" className="text-ink-2 underline">
             Forgot your password?

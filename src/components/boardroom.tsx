@@ -431,7 +431,10 @@ export function Boardroom({ seats, answer, question, used, notes, hours, autopla
             You decide.
           </div>
           <p className="br-quiet" style={{ margin: 0, fontSize: 13, maxWidth: 520 }}>
-            {answer.youDecide && answer.youDecide !== "You decide. This is your call." ? `${answer.youDecide} ` : ""}The Board maps the options and the risks. The call is yours. Danno here is guided by Danno&apos;s teaching; it is not Danno live.
+            {answer.youDecide && answer.youDecide !== "You decide. This is your call." ? `${answer.youDecide} ` : ""}The Board maps the options and the risks. The call is yours. Danno here is guided by Danno&apos;s teaching; it is not Danno live.{" "}
+            <a href="/ai-and-the-board" className="underline" data-testid="board-how-it-works">
+              How the Board works
+            </a>
           </p>
           {decisionView ? (
             <button type="button" className="br-tab" onClick={replay} aria-label="Play the discussion again" data-testid="board-run-again">

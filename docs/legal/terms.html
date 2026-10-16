@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms of Service · HelixOS</title>
+<meta name="description" content="The terms for using HelixOS.">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ground:#F7F2E8;--surface:#EFE5D0;--hair:#E4DACA;--rim:#D7C39A;--ink:#1F1A14;--muted:#6B6253;--gold:#C9A24A;--goldt:#7E5A12;--chip:#EFE5D0}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ground:#100D09;--surface:#1A160F;--hair:#3A3022;--rim:#5E4C27;--ink:#F1E6CF;--muted:#A7997F;--gold:#D4AE5A;--goldt:#F0CF86;--chip:#1A160F}}
+:root[data-theme="dark"]{--ground:#100D09;--surface:#1A160F;--hair:#3A3022;--rim:#5E4C27;--ink:#F1E6CF;--muted:#A7997F;--gold:#D4AE5A;--goldt:#F0CF86;--chip:#1A160F}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 16px/1.65 Manrope,"Segoe UI",system-ui,-apple-system,sans-serif}
+a{color:var(--goldt);text-underline-offset:3px}
+a:hover{color:var(--ink)}
+.wrap{max-width:820px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--hair)}
+header.site .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-top:18px;padding-bottom:18px}
+.brand{font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:26px;letter-spacing:.5px;color:var(--ink);text-decoration:none}
+.brand span{color:var(--goldt)}
+nav.site{display:flex;flex-wrap:wrap;gap:4px 16px}
+nav.site a{font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;padding:10px 0;border-bottom:2px solid transparent}
+nav.site a:hover{color:var(--ink)}
+nav.site a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--gold)}
+main{padding:44px 0 56px}
+.eyebrow{font-size:12px;line-height:16px;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:var(--goldt);margin:0 0 10px}
+h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:clamp(38px,7vw,56px);line-height:1.05;margin:0 0 12px}
+.meta{color:var(--muted);font-size:14px;margin:0 0 28px;padding-bottom:22px;border-bottom:1px solid var(--hair)}
+.lead{font-size:18px;line-height:1.6}
+h2{font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:28px;line-height:1.15;margin:40px 0 10px}
+h3{font-size:16px;font-weight:700;margin:22px 0 6px}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 16px;padding-left:22px}
+li{margin-bottom:8px}
+strong{font-weight:700}
+.toc{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px 22px;margin:0 0 8px}
+.toc p{font-weight:700;margin-bottom:8px}
+.toc ol{margin:0;columns:2;column-gap:28px}
+.toc li{margin-bottom:4px;break-inside:avoid}
+@media (max-width:620px){.toc ol{columns:1}}
+.note{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:16px 20px;margin:18px 0}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:18px 0 8px}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px 20px}
+.card h3{margin:0 0 6px;font-family:"Cormorant Garamond",Georgia,serif;font-size:22px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:999px;border:1px solid #7A4E1C;background:linear-gradient(180deg,#FBE7A6 0%,#E8C26A 30%,#C9973F 62%,#9A6526 100%);color:#3A230A;font-weight:800;font-size:14px;letter-spacing:1.2px;text-transform:uppercase;text-decoration:none;text-shadow:0 1px 0 rgba(255,240,200,.6)}
+.btn:hover{color:#3A230A;filter:brightness(1.05)}
+details{border-bottom:1px solid var(--hair);padding:4px 0}
+details summary{cursor:pointer;font-weight:700;padding:12px 0;min-height:44px;list-style:none;display:flex;justify-content:space-between;gap:16px}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"+";color:var(--goldt);font-weight:700}
+details[open] summary::after{content:"\2013"}
+details > div{padding:0 0 12px;color:var(--ink)}
+table{width:100%;border-collapse:collapse;margin:8px 0 18px;font-size:15px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+th{font-weight:700;color:var(--muted);font-size:13px;letter-spacing:1px;text-transform:uppercase}
+.tablewrap{overflow-x:auto}
+footer.site{border-top:1px solid var(--hair);padding:26px 0 40px;color:var(--muted);font-size:14px}
+footer.site .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 24px}
+footer.site a{color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="site"><div class="wrap">
+<a class="brand" href="https://helixos.evolveomega.com">Helix<span>OS</span></a>
+<nav class="site" aria-label="Legal and support">
+<a href="privacy.html">Privacy</a>
+<a href="terms.html" aria-current="page">Terms</a>
+<a href="support.html">Support</a>
+<a href="delete-account.html">Delete account</a>
+<a href="ai-and-the-board.html">AI and your Board</a>
+<a href="community-guidelines.html">Community</a>
+</nav>
+</div></header>
+<main><div class="wrap">
+<p class="eyebrow">HelixOS</p>
+<h1>Terms of Service</h1>
+<p class="meta">Last updated 16 October 2026</p>
+
+<p class="lead">These Terms of Service ("Terms") are an agreement between you and <strong>Eye To Eye Media LLC</strong>, doing business as Evolve Omega ("we", "us"), for your use of HelixOS. That covers the web app at helixos.evolveomega.com and the HelixOS apps for iPhone and Android. By using HelixOS, you agree to these Terms and to our <a href="privacy.html">Privacy Policy</a>.</p>
+
+<nav class="toc" aria-label="On this page"><p>On this page</p><ol>
+<li><a href="#who">Who can use HelixOS</a></li>
+<li><a href="#account">Your account and access</a></li>
+<li><a href="#content">Your content</a></li>
+<li><a href="#tools">Connected tools</a></li>
+<li><a href="#ai">AI features and your Board</a></li>
+<li><a href="#advice">No professional advice</a></li>
+<li><a href="#results">No guaranteed results</a></li>
+<li><a href="#points">Points, ranks and rewards</a></li>
+<li><a href="#conduct">Community and acceptable use</a></li>
+<li><a href="#ip">Our property</a></li>
+<li><a href="#feedback">Feedback</a></li>
+<li><a href="#changes">Changes and availability</a></li>
+<li><a href="#ending">Ending your use</a></li>
+<li><a href="#disclaimers">Disclaimers</a></li>
+<li><a href="#liability">Limitation of liability</a></li>
+<li><a href="#indemnity">Indemnity</a></li>
+<li><a href="#law">Governing law</a></li>
+<li><a href="#stores">Apple and Google</a></li>
+<li><a href="#general">General</a></li>
+<li><a href="#contact">Contact</a></li>
+</ol></nav>
+
+<h2 id="who">1. Who can use HelixOS</h2>
+<p>You must be at least 18 and able to form a binding contract. HelixOS is for running your own business. If you use it for a company, you confirm you may accept these Terms for that company.</p>
+
+<h2 id="account">2. Your account and access</h2>
+<p>HelixOS comes with your Evolve Omega coaching program. You join with the invite your coach sends and sign in with your email and your own password. Keep your password safe and do not reuse it elsewhere. You are responsible for activity on your account.</p>
+<p>If your coaching program ends, your access to HelixOS may end too. Before that happens, you can export your data. One account is for one person. Please do not share it.</p>
+
+<h2 id="content">3. Your content</h2>
+<p>You own what you put into HelixOS, such as your offers, notes, questions and records ("your content"). You give us a limited licence to host, store, process and display your content only to run HelixOS for you and your coach. That includes sending it to service providers and AI providers when a feature needs to. This licence ends when you delete your content or your account, except for copies in backups, which are removed in our normal backup cycle.</p>
+<p>Only put content into HelixOS that you have the right to use. Do not upload other people's sensitive personal information unless you have the right to.</p>
+
+<h2 id="tools">4. Connected tools</h2>
+<p>HelixOS can connect to tools you use, such as GoHighLevel, Airtable, AI providers and Instacart. When you connect one, you authorise us to use it for you, in the ways the feature describes. Each tool is run by its own company under its own terms. We are not responsible for those tools, for changes to them, or for charges on your own accounts with them, such as AI usage on your own key. You can disconnect a tool at any time.</p>
+
+<h2 id="ai">5. AI features and your Board</h2>
+<ul>
+<li><strong>AI answers can be wrong.</strong> Your Board, suggestions and drafts are generated by AI. They can be incomplete, out of date or wrong. Check anything important. <strong>You decide</strong> what to act on.</li>
+<li><strong>"Style" seats are not the real people.</strong> Some Board seats are named "{Name} style". They are AI personas inspired by that person's publicly available work. They are not that person, do not speak for them, and are not affiliated with or endorsed by them.</li>
+<li><strong>The Danno seat is AI.</strong> It is guided by Danno's teaching, but it is not Danno answering live.</li>
+<li><strong>Do not misuse AI features.</strong> Do not use them to create unlawful, deceptive or harmful content, or to impersonate real people.</li>
+</ul>
+<p>Read more in <a href="ai-and-the-board.html">AI and your Board</a>.</p>
+
+<h2 id="advice">6. No professional advice</h2>
+<p>HelixOS, your coach's materials and AI answers are for general business education and planning. They are not legal, tax, accounting, financial, investment, medical or mental health advice.</p>
+<p><strong>HumanOS is not a medical device.</strong> It does not diagnose, treat or prevent any condition. Talk to a qualified professional before making health, nutrition, medication or exercise decisions. Never ignore professional advice because of something you saw in HelixOS.</p>
+
+<h2 id="results">7. No guaranteed results</h2>
+<p>Results depend on you, your market and many things outside our control. Examples, numbers and other members' wins are not promises of what you will achieve. We do not guarantee any income, leads, clients or other outcome.</p>
+
+<h2 id="points">8. Points, ranks and rewards</h2>
+<p>Points, streaks, ranks, coins, laurels and badges are there to encourage your progress. They have no cash value, cannot be sold, transferred or exchanged, and are not property.</p>
+<p>We may adjust them to correct mistakes or misuse, and we may change how they are earned or what they unlock. We will apply changes fairly and tell you about significant ones. Gaming the system, such as fake activity, may lead to points being removed.</p>
+
+<h2 id="conduct">9. Community and acceptable use</h2>
+<p>Follow our <a href="community-guidelines.html">Community Guidelines</a> wherever other members can see you. When using HelixOS, do not:</p>
+<ul>
+<li>break the law, or help anyone else break it;</li>
+<li>harass, threaten, or post hateful, sexually explicit or violent content;</li>
+<li>impersonate anyone, or misrepresent your results or who you are connected with;</li>
+<li>share other people's personal information without permission;</li>
+<li>send spam, or use HelixOS to market to other members without their consent;</li>
+<li>try to get into other accounts, probe or bypass our security, or scrape data;</li>
+<li>upload harmful code, or overload or disrupt HelixOS;</li>
+<li>copy, resell or reverse engineer HelixOS, except where the law allows.</li>
+</ul>
+<p>We may remove content, or suspend or end access, if we reasonably believe these Terms have been broken. To report something, see <a href="support.html">Support</a>.</p>
+
+<h2 id="ip">10. Our property</h2>
+<p>HelixOS, including its software, design, scenes, text, frameworks, templates and the Evolve Omega and HelixOS names and logos, belongs to Eye To Eye Media LLC or its licensors. While you have access, we give you a personal, non-transferable licence to use HelixOS for your own business. These Terms do not give you any other rights to our property.</p>
+
+<h2 id="feedback">11. Feedback</h2>
+<p>If you send us ideas or feedback, for example through "I have an issue or a suggestion", we may use them to improve HelixOS. We owe you nothing for using them.</p>
+
+<h2 id="changes">12. Changes and availability</h2>
+<p>HelixOS changes often. We may add, change or remove features, including early ("beta") features that may not be finished. We aim to keep HelixOS available, but it may sometimes be down for maintenance or for reasons outside our control.</p>
+<p>We may update these Terms. If we do, we will change the date at the top and tell you about significant changes in HelixOS or by email before they take effect. If you keep using HelixOS after that, you accept the new Terms.</p>
+
+<h2 id="ending">13. Ending your use</h2>
+<p>You can stop using HelixOS and <a href="delete-account.html">delete your account</a> at any time. We may suspend or end your access if you break these Terms, if your coaching program ends, or if we stop offering HelixOS. Where we reasonably can, we will tell you first and give you time to export your data.</p>
+<p>Sections 3, 6, 7, 8, 10 and 14 to 19 continue to apply after your access ends.</p>
+
+<h2 id="disclaimers">14. Disclaimers</h2>
+<p>To the fullest extent the law allows, HelixOS is provided "as is" and "as available", without warranties of any kind. That includes warranties of merchantability, fitness for a particular purpose, accuracy and non-infringement. We do not promise that HelixOS, AI answers or connected tools will be uninterrupted, error-free or secure.</p>
+
+<h2 id="liability">15. Limitation of liability</h2>
+<p>To the fullest extent the law allows, Eye To Eye Media LLC is not liable for indirect, incidental, special, consequential or punitive damages. Nor is it liable for lost profits, revenue, data, goodwill or business opportunities arising from or related to HelixOS, even if we were told they were possible.</p>
+<p>Our total liability for all claims relating to HelixOS is limited to the fullest extent permitted by applicable law. Some places do not allow some of these limits, so they may not all apply to you.</p>
+
+<h2 id="indemnity">16. Indemnity</h2>
+<p>You agree to defend and indemnify Eye To Eye Media LLC and its members, officers, employees and agents against claims, losses and reasonable legal costs arising from your content, your use of HelixOS, or your breaking these Terms or the law.</p>
+
+<h2 id="law">17. Governing law</h2>
+<p>These Terms are governed by the laws of the State of Washington, USA, without regard to its conflict of law rules. The state and federal courts in King County, Washington, have exclusive jurisdiction over any dispute about these Terms or HelixOS, and you consent to that jurisdiction. Before starting any claim, please contact us so we can try to resolve it informally.</p>
+
+<h2 id="stores">18. Apple and Google</h2>
+<p>If you got the HelixOS app from the Apple App Store or Google Play, these Terms are between you and us, not Apple or Google. Apple and Google are not responsible for the app or its content.</p>
+<p>For the iOS app:</p>
+<ul>
+<li>Your licence is to use the app on Apple devices you own or control, as the App Store usage rules allow.</li>
+<li>Apple has no obligation to provide maintenance or support.</li>
+<li>If the app fails a warranty that applies, you may tell Apple, and Apple may refund the price you paid for the app, if any. Apple has no other warranty obligation.</li>
+<li>We, not Apple, are responsible for any claims about the app, including product liability, legal or regulatory compliance, consumer protection and intellectual property claims.</li>
+<li>You confirm you are not in a country under a US government embargo, and you are not on a US government list of prohibited or restricted parties.</li>
+<li>Apple and its subsidiaries are third-party beneficiaries of these Terms and may enforce them against you.</li>
+</ul>
+
+<h2 id="general">19. General</h2>
+<p>These Terms, with our Privacy Policy and Community Guidelines, are the whole agreement between you and us about HelixOS. If a court finds part of them unenforceable, the rest still applies. If we do not enforce a provision, we have not waived it. You may not transfer these Terms without our consent. We may transfer them as part of a merger, acquisition or sale of assets.</p>
+
+<h2 id="contact">20. Contact</h2>
+<p>Eye To Eye Media LLC (Evolve Omega)<br>
+Email: <a href="mailto:danno@evolveomega.com">danno@evolveomega.com</a><br>
+Phone: <a href="tel:+12068984249">(206) 898-4249</a></p>
+
+</div></main>
+<footer class="site"><div class="wrap">
+<span>HelixOS is operated by Eye To Eye Media LLC (Evolve Omega).</span>
+<span><a href="mailto:danno@evolveomega.com">danno@evolveomega.com</a> · <a href="tel:+12068984249">(206) 898-4249</a></span>
+</div></footer>
+</body>
+</html>

@@ -4,6 +4,8 @@ import { requireViewer } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions/auth";
 import { hasLeaderboardFeed } from "@/lib/leaderboard";
 import { NAV_GROUPS, navVisible, withPlatformLinks } from "@/components/nav-groups";
+import { NavGroupCard } from "@/components/nav-group-card";
+import { CollapseAllButton } from "@/components/nav-state";
 import { ComingSoonItem } from "@/components/coming-soon-item";
 import { DueBadge } from "@/components/nav";
 import { intentionsDueFor } from "@/lib/queries/intentions";
@@ -26,16 +28,18 @@ export default async function MorePage() {
   const recordingsEnabled = v.role === "client" && (await hasVisibleRecordings(v.workspace.id, { userId: v.user.id, programTier: v.membership.programTier, role: v.role }));
   const coachFirst = v.role === "client" && !v.switchedInto ? await coachFirstName(v.workspace.id) : null;
   const loyaltyOn = await hasLeaderboardFeed(v.membership.id);
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn })) }))
+          // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
+          .filter((g) => g.items.length);
   return (
     <>
       <PageHeader title="Everything" />
       <div className="space-y-4">
-        {NAV_GROUPS.map((g) => ({ ...g, items: withPlatformLinks(g.items, v.workspace.platformLinks, v.membership.passCommunityUrl).filter((n) => navVisible(n, { role: v.role, passEnabled: v.membership.passEnabled, bodyEnabled: v.membership.bodyEnabled, recordingsEnabled, team: Boolean(v.team), colosseumOn: v.workspace.colosseumOn, loyaltyOn })) }))
-          // A section with nothing this member may see (HumanOS without Body) isn't drawn at all.
-          .filter((g) => g.items.length)
-          .map((g) => (
-          <div key={g.label} className="card p-2">
-            <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink-2">{g.label}</div>
+        <div className="flex justify-end">
+          <CollapseAllButton labels={groups.map((g) => g.label)} />
+        </div>
+        {groups.map((g) => (
+          <NavGroupCard key={g.label} label={g.label}>
             {g.items.map((n) =>
               n.comingSoon ? (
                 <ComingSoonItem key={n.href} item={n} row />
@@ -63,7 +67,7 @@ export default async function MorePage() {
                 </Link>
               ),
             )}
-          </div>
+          </NavGroupCard>
         ))}
         <div className="card p-2">
           {coachFirst ? <ReportButton coachFirst={coachFirst} variant="row" /> : null}

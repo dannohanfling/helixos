@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Community Guidelines · HelixOS</title>
+<meta name="description" content="How we keep the HelixOS community encouraging and safe.">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ground:#F7F2E8;--surface:#EFE5D0;--hair:#E4DACA;--rim:#D7C39A;--ink:#1F1A14;--muted:#6B6253;--gold:#C9A24A;--goldt:#7E5A12;--chip:#EFE5D0}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ground:#100D09;--surface:#1A160F;--hair:#3A3022;--rim:#5E4C27;--ink:#F1E6CF;--muted:#A7997F;--gold:#D4AE5A;--goldt:#F0CF86;--chip:#1A160F}}
+:root[data-theme="dark"]{--ground:#100D09;--surface:#1A160F;--hair:#3A3022;--rim:#5E4C27;--ink:#F1E6CF;--muted:#A7997F;--gold:#D4AE5A;--goldt:#F0CF86;--chip:#1A160F}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 16px/1.65 Manrope,"Segoe UI",system-ui,-apple-system,sans-serif}
+a{color:var(--goldt);text-underline-offset:3px}
+a:hover{color:var(--ink)}
+.wrap{max-width:820px;margin:0 auto;padding:0 20px}
+header.site{border-bottom:1px solid var(--hair)}
+header.site .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-top:18px;padding-bottom:18px}
+.brand{font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:26px;letter-spacing:.5px;color:var(--ink);text-decoration:none}
+.brand span{color:var(--goldt)}
+nav.site{display:flex;flex-wrap:wrap;gap:4px 16px}
+nav.site a{font-size:14px;font-weight:600;color:var(--muted);text-decoration:none;padding:10px 0;border-bottom:2px solid transparent}
+nav.site a:hover{color:var(--ink)}
+nav.site a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--gold)}
+main{padding:44px 0 56px}
+.eyebrow{font-size:12px;line-height:16px;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:var(--goldt);margin:0 0 10px}
+h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:clamp(38px,7vw,56px);line-height:1.05;margin:0 0 12px}
+.meta{color:var(--muted);font-size:14px;margin:0 0 28px;padding-bottom:22px;border-bottom:1px solid var(--hair)}
+.lead{font-size:18px;line-height:1.6}
+h2{font-family:"Cormorant Garamond",Georgia,serif;font-weight:700;font-size:28px;line-height:1.15;margin:40px 0 10px}
+h3{font-size:16px;font-weight:700;margin:22px 0 6px}
+p{margin:0 0 14px}
+ul,ol{margin:0 0 16px;padding-left:22px}
+li{margin-bottom:8px}
+strong{font-weight:700}
+.toc{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px 22px;margin:0 0 8px}
+.toc p{font-weight:700;margin-bottom:8px}
+.toc ol{margin:0;columns:2;column-gap:28px}
+.toc li{margin-bottom:4px;break-inside:avoid}
+@media (max-width:620px){.toc ol{columns:1}}
+.note{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:16px 20px;margin:18px 0}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:18px 0 8px}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:18px 20px}
+.card h3{margin:0 0 6px;font-family:"Cormorant Garamond",Georgia,serif;font-size:22px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:999px;border:1px solid #7A4E1C;background:linear-gradient(180deg,#FBE7A6 0%,#E8C26A 30%,#C9973F 62%,#9A6526 100%);color:#3A230A;font-weight:800;font-size:14px;letter-spacing:1.2px;text-transform:uppercase;text-decoration:none;text-shadow:0 1px 0 rgba(255,240,200,.6)}
+.btn:hover{color:#3A230A;filter:brightness(1.05)}
+details{border-bottom:1px solid var(--hair);padding:4px 0}
+details summary{cursor:pointer;font-weight:700;padding:12px 0;min-height:44px;list-style:none;display:flex;justify-content:space-between;gap:16px}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"+";color:var(--goldt);font-weight:700}
+details[open] summary::after{content:"\2013"}
+details > div{padding:0 0 12px;color:var(--ink)}
+table{width:100%;border-collapse:collapse;margin:8px 0 18px;font-size:15px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+th{font-weight:700;color:var(--muted);font-size:13px;letter-spacing:1px;text-transform:uppercase}
+.tablewrap{overflow-x:auto}
+footer.site{border-top:1px solid var(--hair);padding:26px 0 40px;color:var(--muted);font-size:14px}
+footer.site .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px 24px}
+footer.site a{color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="site"><div class="wrap">
+<a class="brand" href="https://helixos.evolveomega.com">Helix<span>OS</span></a>
+<nav class="site" aria-label="Legal and support">
+<a href="privacy.html">Privacy</a>
+<a href="terms.html">Terms</a>
+<a href="support.html">Support</a>
+<a href="delete-account.html">Delete account</a>
+<a href="ai-and-the-board.html">AI and your Board</a>
+<a href="community-guidelines.html" aria-current="page">Community</a>
+</nav>
+</div></header>
+<main><div class="wrap">
+<p class="eyebrow">HelixOS</p>
+<h1>Community Guidelines</h1>
+<p class="meta">Last updated 16 October 2026</p>
+
+<p class="lead">HelixOS has shared spaces, such as the Colosseum, where members see each other's ranks, points and wins. These guidelines keep those spaces encouraging and safe. They apply wherever other members can see you.</p>
+
+<h2>What we ask</h2>
+<h3>Celebrate honestly</h3>
+<p>Share real wins and real numbers. Don't fake activity, inflate results or game points. It only cheats you, and points can be corrected.</p>
+<h3>Lift each other up</h3>
+<p>Be kind and direct. Disagree with ideas, not people. Everyone here is building something.</p>
+<h3>Protect privacy</h3>
+<p>Don't share another member's information, or your clients' personal details, without permission. What members share in HelixOS stays in HelixOS.</p>
+<h3>No selling to members</h3>
+<p>Don't pitch, recruit or send promotions to other members unless they ask for it.</p>
+<h3>Keep it safe</h3>
+<p>We don't allow:</p>
+<ul>
+<li>harassment, threats or bullying;</li>
+<li>hate speech or discrimination;</li>
+<li>sexual or violent content;</li>
+<li>impersonation;</li>
+<li>scams;</li>
+<li>anything illegal.</li>
+</ul>
+<h3>Your photo is your choice</h3>
+<p>Your photo shows in the Colosseum only if you turn it on. Use a photo of yourself, never of someone else.</p>
+
+<h2>Reporting</h2>
+<p>If something breaks these guidelines, tell us through <strong>I have an issue or a suggestion</strong> in the HelixOS menu, or at <a href="mailto:danno@evolveomega.com">danno@evolveomega.com</a>. We review reports within 24 hours. We won't tell the other member who reported them.</p>
+
+<h2>What happens next</h2>
+<p>Depending on what happened, we may:</p>
+<ul>
+<li>remove content;</li>
+<li>adjust points;</li>
+<li>give a warning;</li>
+<li>pause community features for an account;</li>
+<li>end access under our <a href="terms.html#conduct">Terms</a>.</li>
+</ul>
+<p>Serious or illegal behaviour may be removed straight away and reported to the authorities.</p>
+
+</div></main>
+<footer class="site"><div class="wrap">
+<span>HelixOS is operated by Eye To Eye Media LLC (Evolve Omega).</span>
+<span><a href="mailto:danno@evolveomega.com">danno@evolveomega.com</a> · <a href="tel:+12068984249">(206) 898-4249</a></span>
+</div></footer>
+</body>
+</html>

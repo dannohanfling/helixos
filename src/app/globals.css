@@ -521,3 +521,11 @@ dialog.confirm-delete {
 dialog.confirm-delete::backdrop {
   background: rgba(0, 0, 0, 0.4);
 }
+
+/* The desktop sidebar as a rail (H-333): the full column's parts fold away, the rail's own small parts appear. */
+aside[data-rail="true"] .rail-hide {
+  display: none;
+}
+aside[data-rail="false"] .rail-only {
+  display: none;
+}

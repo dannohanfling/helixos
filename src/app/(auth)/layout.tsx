@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { BrandLogo } from "@/components/brand-logo";
+import { LegalFooter } from "@/components/legal-footer";
 import { APP_DESCRIPTION } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           <span className="text-sm font-semibold tracking-wide text-ink-2">HelixOS</span>
         </div>
         <div className="auth-brand">{children}</div>
+        <LegalFooter />
       </div>
     </div>
   );
